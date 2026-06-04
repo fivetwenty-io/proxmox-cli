@@ -1,0 +1,146 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""End-to-end happy-path sweep of the pve CLI command trees against a target.
+
+Runs the read-only commands of each command tree (default: all) in parallel
+against a configured target (default: `lab`) and reports pass/fail/skip per
+check. Destructive or mutating operations are never executed — they are listed
+as deferred, with the lab isolation contract they must honour.
+
+Usage:
+  scripts/e2e                      # all trees against the `lab` target
+  scripts/e2e qemu cluster         # only the named trees
+  scripts/e2e --target prod        # a different configured target
+  scripts/e2e --list               # list trees + isolation contract
+  scripts/e2e --no-deferred        # hide the deferred section
+  scripts/e2e --mutate             # also run the destructive qemu/lxc verb matrix
+  scripts/e2e --mutate --vm-only   # ... limited to the VM (skip the container)
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+# The package lives next to this script.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from e2e_lib.context import Env  # noqa: E402
+from e2e_lib import runner  # noqa: E402
+from e2e_lib.trees import TREES  # noqa: E402
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="e2e",
+        description="Happy-path e2e sweep of pve CLI command trees.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Trees: " + ", ".join(TREES.keys()),
+    )
+    parser.add_argument(
+        "trees",
+        nargs="*",
+        help="command trees to run (default: all)",
+    )
+    parser.add_argument("--target", "-t", default=os.environ.get("PVE_E2E_TARGET", "lab"),
+                        help="configured target name (default: lab, or $PVE_E2E_TARGET)")
+    parser.add_argument("--binary", help="path to the pve binary (default: ./dist/pve)")
+    parser.add_argument("--no-build", action="store_true",
+                        help="do not auto-build the binary if ./dist/pve is missing")
+    parser.add_argument("--jobs", "-j", type=int, default=min(8, len(TREES)),
+                        help="parallel tree workers (default: min(8, #trees))")
+    parser.add_argument("--timeout", type=int, default=60,
+                        help="per-command timeout in seconds (default: 60)")
+    parser.add_argument("--list", action="store_true",
+                        help="list command trees and the isolation contract, then exit")
+    parser.add_argument("--no-deferred", action="store_true",
+                        help="suppress the deferred-operations section")
+    parser.add_argument("--strict", action="store_true",
+                        help="exit non-zero if the target is not configured (default: skip)")
+    parser.add_argument("--mutate", "-M", action="store_true",
+                        help="after the read-only sweep, run the destructive verb matrix "
+                             "(qemu/lxc guests, pool/task, access, storage, SSH-gated node) "
+                             "on purpose-built isolated resources")
+    parser.add_argument("--vm-only", action="store_true",
+                        help="with --mutate: run only the VM verb matrix")
+    parser.add_argument("--ct-only", action="store_true",
+                        help="with --mutate: run only the container verb matrix")
+    args = parser.parse_args()
+
+    if args.vm_only and args.ct_only:
+        runner.die("--vm-only and --ct-only are mutually exclusive")
+    if (args.vm_only or args.ct_only) and not args.mutate:
+        runner.die("--vm-only/--ct-only require --mutate")
+
+    if args.list:
+        runner.print_listing()
+        return
+
+    unknown = [t for t in args.trees if t not in TREES]
+    if unknown:
+        runner.die(f"unknown tree(s): {', '.join(unknown)}; known: {', '.join(TREES)}")
+    selected = args.trees or list(TREES.keys())
+
+    binary = runner.find_binary(args.binary, build=not args.no_build)
+
+    ok, why = runner.target_configured(binary, args.target)
+    if not ok:
+        msg = f"target {args.target!r} not usable: {why}"
+        if args.strict:
+            runner.die(msg, code=3)
+        print(f"e2e: skipping — {msg}")
+        print("e2e: configure the target (see `pve init config`) or pass --target.")
+        return
+
+    node = runner.discover_node(binary, args.target)
+    env = Env(binary=binary, target=args.target, node=node, timeout_s=args.timeout)
+
+    print(runner.BOLD(f"e2e: target={args.target} node={node or '(none)'} "
+                      f"trees={len(selected)} jobs={args.jobs}"))
+    print()
+
+    # Trees the mutate phase will actually exercise live this invocation — used
+    # to pull their verbs out of the "deferred / not run" report.
+    mutate_covers = frozenset()
+    if args.mutate:
+        # The mutate phase always provisions/tears down the isolated SDN + pool
+        # and exercises the access, storage, and node verb blocks regardless of
+        # --vm-only/--ct-only, so those trees' mutating verbs run on every -M.
+        # (The `api` tree's mutating verbs run in the read-only sweep against a
+        # scratch config, so it is never deferred and not listed here.)
+        covered = {"sdn", "pool", "access", "storage", "node"}
+        if not args.ct_only:
+            covered.add("qemu")
+        if not args.vm_only:
+            covered.add("lxc")
+        mutate_covers = frozenset(covered)
+
+    reports = runner.run_trees(env, selected, args.jobs)
+    rc = runner.print_reports(reports, show_deferred=not args.no_deferred,
+                              mutate_covers=mutate_covers)
+
+    if args.mutate:
+        from e2e_lib import lifecycle  # noqa: E402  (deferred: read-only runs skip it)
+
+        print()
+        print(runner.BOLD("─── mutate phase: destructive qemu/lxc verb matrix ───"))
+        print()
+        mrc = lifecycle.run(
+            target=args.target,
+            binary=binary,
+            build=False,
+            strict=args.strict,
+            skip_ct=args.vm_only,
+            skip_vm=args.ct_only,
+        )
+        rc = rc or mrc
+
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()

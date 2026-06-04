@@ -1,0 +1,18 @@
+# Compiled binaries
+bin/
+# The built `pve` binary at the repo root only — anchored so it does not match
+# the cmd/pve/ source directory.
+/pve
+*.test
+
+# Distribution
+dist/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Build artifacts
+*.o
+*.a
+*.so

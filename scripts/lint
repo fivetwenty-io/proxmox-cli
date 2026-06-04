@@ -1,0 +1,68 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Run golangci-lint; fall back to go vet ./... if linter not installed."""
+
+import argparse
+import shutil
+import subprocess
+import sys
+
+
+def die(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def check_go() -> None:
+    result = subprocess.run(["go", "version"], capture_output=True)
+    if result.returncode != 0:
+        die("'go' not found in PATH — install Go 1.26+")
+
+
+def run_golangci(fix: bool, verbose: bool) -> int:
+    cmd = ["golangci-lint", "run"]
+    if fix:
+        cmd.append("--fix")
+    if verbose:
+        cmd.append("--verbose")
+    cmd += ["./..."]
+    print("lint: running golangci-lint run ./...")
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
+def run_vet(verbose: bool) -> int:
+    cmd = ["go", "vet"]
+    if verbose:
+        cmd.append("-v")
+    cmd += ["./..."]
+    print("lint: golangci-lint not found — falling back to go vet ./...")
+    print("lint: install golangci-lint for full linting: https://golangci-lint.run/usage/install/")
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Lint Go sources using golangci-lint (or go vet fallback).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--fix", action="store_true", help="Auto-fix issues where possible (golangci-lint only)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose linter output")
+    args = parser.parse_args()
+
+    check_go()
+
+    if shutil.which("golangci-lint"):
+        rc = run_golangci(args.fix, args.verbose)
+    else:
+        rc = run_vet(args.verbose)
+
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()

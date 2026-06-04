@@ -1,0 +1,126 @@
+package node
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+
+	"github.com/spf13/cobra"
+
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/output"
+)
+
+// nodeMemUsage decodes the memory/rootfs sub-objects of a node status response.
+type nodeMemUsage struct {
+	Total int64 `json:"total"`
+	Used  int64 `json:"used"`
+}
+
+// nodeCPUInfo decodes the cpuinfo sub-object of a node status response.
+type nodeCPUInfo struct {
+	Model string `json:"model"`
+	Cpus  int64  `json:"cpus"`
+}
+
+// nodeKernel decodes the current-kernel sub-object of a node status response.
+type nodeKernel struct {
+	Sysname string `json:"sysname"`
+	Release string `json:"release"`
+	Version string `json:"version"`
+	Machine string `json:"machine"`
+}
+
+// newStatusCmd builds `pve node <node> status`.
+func newStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status <node>",
+		Short: "Show node status",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			node := args[0]
+
+			resp, err := deps.API.Nodes.ListStatus(cmd.Context(), node)
+			if err != nil {
+				return fmt.Errorf("get status for node %q: %w", node, err)
+			}
+			if resp == nil {
+				return fmt.Errorf("get status for node %q: empty response", node)
+			}
+
+			single := map[string]string{
+				"NODE":        node,
+				"STATUS":      "online",
+				"CPU":         strconv.FormatFloat(resp.Cpu.Float(), 'f', 3, 64),
+				"PVE-VERSION": resp.Pveversion,
+			}
+			if len(resp.Loadavg) > 0 {
+				single["LOADAVG"] = resp.Loadavg[0]
+			}
+			if mem, ok := decodeMemUsage(resp.Memory); ok {
+				single["MEM"] = fmt.Sprintf("%s / %s", fmtBytes(mem.Used), fmtBytes(mem.Total))
+			}
+			if disk, ok := decodeMemUsage(resp.Rootfs); ok {
+				single["DISK"] = fmt.Sprintf("%s / %s", fmtBytes(disk.Used), fmtBytes(disk.Total))
+			}
+			if ci, ok := decodeCPUInfo(resp.Cpuinfo); ok {
+				single["CPUINFO"] = fmt.Sprintf("%s (%d cpus)", ci.Model, ci.Cpus)
+			}
+			if k, ok := decodeKernel(resp.CurrentKernel); ok {
+				single["KERNEL"] = kernelString(k)
+			}
+
+			res := output.Result{Single: single, Raw: resp}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+}
+
+// decodeMemUsage unmarshals a memory/rootfs total+used sub-object. It returns
+// false when the raw payload is empty or cannot be decoded.
+func decodeMemUsage(raw json.RawMessage) (nodeMemUsage, bool) {
+	var m nodeMemUsage
+	if len(raw) == 0 {
+		return m, false
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return m, false
+	}
+	return m, true
+}
+
+// decodeCPUInfo unmarshals the cpuinfo sub-object.
+func decodeCPUInfo(raw json.RawMessage) (nodeCPUInfo, bool) {
+	var c nodeCPUInfo
+	if len(raw) == 0 {
+		return c, false
+	}
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return c, false
+	}
+	return c, true
+}
+
+// decodeKernel unmarshals the current-kernel sub-object.
+func decodeKernel(raw json.RawMessage) (nodeKernel, bool) {
+	var k nodeKernel
+	if len(raw) == 0 {
+		return k, false
+	}
+	if err := json.Unmarshal(raw, &k); err != nil {
+		return k, false
+	}
+	return k, true
+}
+
+// kernelString renders a node kernel sub-object into a one-line summary.
+func kernelString(k nodeKernel) string {
+	if k.Sysname != "" && k.Release != "" {
+		return fmt.Sprintf("%s %s", k.Sysname, k.Release)
+	}
+	if k.Release != "" {
+		return k.Release
+	}
+	return k.Version
+}

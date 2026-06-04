@@ -1,0 +1,141 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Produce release tarballs from dist/ binaries; stub for Debian package generation."""
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+
+
+def die(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def check_go() -> None:
+    result = subprocess.run(["go", "version"], capture_output=True)
+    if result.returncode != 0:
+        die("'go' not found in PATH — install Go 1.26+")
+
+
+def git_version() -> str:
+    result = subprocess.run(
+        ["git", "describe", "--tags", "--exact-match", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    result2 = subprocess.run(
+        ["git", "describe", "--tags", "--always", "--dirty"],
+        capture_output=True,
+        text=True,
+    )
+    if result2.returncode == 0 and result2.stdout.strip():
+        return result2.stdout.strip()
+    return "dev"
+
+
+TARGETS = [
+    ("linux", "amd64"),
+    ("linux", "arm64"),
+    ("darwin", "amd64"),
+    ("darwin", "arm64"),
+]
+
+
+def make_tarball(binary_path: str, version: str, out_dir: str) -> str:
+    """Pack a single binary into a .tar.gz with the canonical pve name inside."""
+    name = os.path.basename(binary_path)
+    # e.g. pve-linux-amd64 -> pve-linux-amd64-<version>.tar.gz
+    tarball_name = f"{name}-{version}.tar.gz"
+    tarball_path = os.path.join(out_dir, tarball_name)
+    with tarfile.open(tarball_path, "w:gz") as tar:
+        tar.add(binary_path, arcname="pve")
+    print(f"package: created {tarball_path}")
+    return tarball_path
+
+
+def make_deb_stub(version: str, out_dir: str) -> None:
+    """Print instructions for Debian packaging; actual deb generation is out of scope."""
+    print(
+        f"\npackage/deb: Debian package generation for pve-cli {version} is not yet automated.\n"
+        "  To build a .deb manually:\n"
+        "    1. Install devscripts, debhelper, and dh-golang.\n"
+        "    2. Populate debian/ directory with control, rules, changelog.\n"
+        "    3. Run: dpkg-buildpackage -us -uc -b\n"
+        f"  The resulting .deb will be placed in {out_dir}/\n"
+        "  See docs/DESIGN.md for packaging guidelines."
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Produce release tarballs from dist/ binaries.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Expects dist/pve-<os>-<arch> binaries produced by 'scripts/release'.\n"
+            "Outputs dist/pve-<os>-<arch>-<version>.tar.gz per target.\n"
+            "Use --deb to print Debian packaging instructions.\n"
+        ),
+    )
+    parser.add_argument(
+        "--dist-dir",
+        default="./dist",
+        help="Directory containing compiled binaries (default: ./dist)",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default="./dist",
+        help="Directory for output tarballs (default: ./dist)",
+    )
+    parser.add_argument(
+        "--version",
+        default="",
+        help="Version string (default: derived from git tags)",
+    )
+    parser.add_argument(
+        "--deb",
+        action="store_true",
+        help="Print Debian packaging instructions and exit",
+    )
+    args = parser.parse_args()
+
+    version = args.version or git_version()
+
+    if args.deb:
+        make_deb_stub(version, args.out_dir)
+        sys.exit(0)
+
+    check_go()
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    found = 0
+    for goos, goarch in TARGETS:
+        binary_name = f"pve-{goos}-{goarch}"
+        binary_path = os.path.join(args.dist_dir, binary_name)
+        if not os.path.isfile(binary_path):
+            print(f"package: skipping {binary_name} (not found in {args.dist_dir})")
+            continue
+        make_tarball(binary_path, version, args.out_dir)
+        found += 1
+
+    if found == 0:
+        print(
+            f"package: no binaries found in {args.dist_dir}\n"
+            "  Run 'make release' first to build cross-platform binaries."
+        )
+        sys.exit(1)
+
+    print(f"package: ok — {found} tarballs created in {args.out_dir}/")
+    make_deb_stub(version, args.out_dir)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,173 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Cross-compile pve CLI for linux/darwin × amd64/arm64 and produce checksums."""
+
+import argparse
+import hashlib
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+def die(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def check_go() -> None:
+    result = subprocess.run(["go", "version"], capture_output=True)
+    if result.returncode != 0:
+        die("'go' not found in PATH — install Go 1.26+")
+
+
+def git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return "unknown"
+    return result.stdout.strip()
+
+
+def git_version() -> str:
+    result = subprocess.run(
+        ["git", "describe", "--tags", "--exact-match", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    result2 = subprocess.run(
+        ["git", "describe", "--tags", "--always", "--dirty"],
+        capture_output=True,
+        text=True,
+    )
+    if result2.returncode == 0 and result2.stdout.strip():
+        return result2.stdout.strip()
+    return "dev"
+
+
+TARGETS = [
+    ("linux", "amd64"),
+    ("linux", "arm64"),
+    ("darwin", "amd64"),
+    ("darwin", "arm64"),
+]
+
+
+def build_target(
+    goos: str,
+    goarch: str,
+    version: str,
+    commit: str,
+    date: str,
+    module: str,
+    out_dir: str,
+) -> str:
+    """Build one target; return path to produced binary."""
+    binary_name = f"pve-{goos}-{goarch}"
+    out_path = os.path.join(out_dir, binary_name)
+    ver_pkg = f"{module}/internal/version"
+    ldflags = (
+        f"-X '{ver_pkg}.Version={version}'"
+        f" -X '{ver_pkg}.Commit={commit}'"
+        f" -X '{ver_pkg}.Date={date}'"
+    )
+    env = os.environ.copy()
+    env["GOOS"] = goos
+    env["GOARCH"] = goarch
+    env["CGO_ENABLED"] = "0"
+    cmd = [
+        "go", "build",
+        "-trimpath",
+        f"-ldflags={ldflags}",
+        "-o", out_path,
+        f"{module}/cmd/pve",
+    ]
+    print(f"release: building {goos}/{goarch} -> {out_path}")
+    result = subprocess.run(cmd, env=env)
+    if result.returncode != 0:
+        die(f"build failed for {goos}/{goarch} (exit {result.returncode})")
+    return out_path
+
+
+def sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def write_checksums(binaries: list[str], out_dir: str) -> str:
+    checksum_path = os.path.join(out_dir, "checksums.sha256")
+    lines = []
+    for path in binaries:
+        digest = sha256_file(path)
+        name = os.path.basename(path)
+        lines.append(f"{digest}  {name}")
+    with open(checksum_path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    return checksum_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Cross-compile pve CLI for all release targets and generate checksums.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Targets: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64\n"
+            "Output:  dist/pve-<os>-<arch> + dist/checksums.sha256\n"
+        ),
+    )
+    parser.add_argument(
+        "--out-dir",
+        default="./dist",
+        help="Output directory for binaries and checksums (default: ./dist)",
+    )
+    parser.add_argument(
+        "--version",
+        default="",
+        help="Override version string (default: derived from git tags)",
+    )
+    parser.add_argument(
+        "--module",
+        default="github.com/fivetwenty-io/pve-cli",
+        help="Go module path",
+    )
+    args = parser.parse_args()
+
+    check_go()
+
+    version = args.version or git_version()
+    commit = git_commit()
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    print(f"release: version={version} commit={commit} date={date}")
+
+    binaries: list[str] = []
+    for goos, goarch in TARGETS:
+        path = build_target(goos, goarch, version, commit, date, args.module, args.out_dir)
+        binaries.append(path)
+
+    checksum_path = write_checksums(binaries, args.out_dir)
+    print(f"release: checksums written to {checksum_path}")
+    print("release: ok")
+
+    # Print summary
+    for path in binaries:
+        size = os.path.getsize(path)
+        digest = sha256_file(path)
+        print(f"  {os.path.basename(path):30s}  {size:>10,} bytes  {digest[:16]}...")
+
+
+if __name__ == "__main__":
+    main()

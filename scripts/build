@@ -1,0 +1,112 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Build pve CLI binary into ./dist/pve with version ldflags injected."""
+
+import argparse
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+def die(msg: str) -> None:
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def check_go() -> None:
+    result = subprocess.run(["go", "version"], capture_output=True)
+    if result.returncode != 0:
+        die("'go' not found in PATH — install Go 1.26+")
+
+
+def git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return "unknown"
+    return result.stdout.strip()
+
+
+def git_version() -> str:
+    result = subprocess.run(
+        ["git", "describe", "--tags", "--exact-match", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    result2 = subprocess.run(
+        ["git", "describe", "--tags", "--always", "--dirty"],
+        capture_output=True,
+        text=True,
+    )
+    if result2.returncode == 0 and result2.stdout.strip():
+        return result2.stdout.strip()
+    return "dev"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Build pve CLI binary with version ldflags injected.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--output", "-o",
+        default="./dist/pve",
+        help="Output binary path (default: ./dist/pve)",
+    )
+    parser.add_argument(
+        "--version",
+        default="",
+        help="Override version string (default: derived from git tags)",
+    )
+    parser.add_argument(
+        "--module",
+        default="github.com/fivetwenty-io/pve-cli",
+        help="Go module path (default: github.com/fivetwenty-io/pve-cli)",
+    )
+    args = parser.parse_args()
+
+    check_go()
+
+    version = args.version or git_version()
+    commit = git_commit()
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ver_pkg = f"{args.module}/internal/version"
+
+    ldflags = (
+        f"-X '{ver_pkg}.Version={version}'"
+        f" -X '{ver_pkg}.Commit={commit}'"
+        f" -X '{ver_pkg}.Date={date}'"
+    )
+
+    out_dir = os.path.dirname(args.output)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    cmd = [
+        "go", "build",
+        "-trimpath",
+        f"-ldflags={ldflags}",
+        "-o", args.output,
+        f"{args.module}/cmd/pve",
+    ]
+
+    print(f"build: version={version} commit={commit} date={date}")
+    print(f"build: output={args.output}")
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        die(f"go build failed with exit code {result.returncode}")
+
+    print(f"build: ok — {args.output}")
+
+
+if __name__ == "__main__":
+    main()
