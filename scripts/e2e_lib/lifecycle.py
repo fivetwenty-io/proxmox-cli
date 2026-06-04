@@ -220,6 +220,32 @@ def _node_count(r: Runner) -> int:
     return 1
 
 
+def _alt_image_storage(r: Runner, exclude: str) -> str:
+    """Return the id of an enabled storage that supports `images` content other
+    than `exclude`, or "" if none exists (single-storage lab). Used so the disk
+    `move` verb relocates to a genuinely different storage."""
+    res = r.pve("storage", "list", json_out=True, node=False)
+    if res.rc != 0:
+        return ""
+    try:
+        rows = res.json()
+    except ValueError:
+        return ""
+    if isinstance(rows, dict) and isinstance(rows.get("rows"), list):
+        # table shape: skip, we need typed content — fall back to no alt.
+        return ""
+    if not isinstance(rows, list):
+        return ""
+    for s in rows:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("storage", ""))
+        content = str(s.get("content", ""))
+        if sid and sid != exclude and "images" in content:
+            return sid
+    return ""
+
+
 def _next_id(r: Runner) -> str:
     res = r.pve("cluster", "next-id", json_out=True, node=False)
     if res.rc != 0:
@@ -460,6 +486,27 @@ def vm_lifecycle(r: Runner) -> None:
                 r.del_step("qemu", "clone delete", f"delete clone {clone_id}",
                            "qemu", "delete", clone_id, "--yes",
                            "--purge", "--destroy-unreferenced-disks")
+
+        # Disk ops on the (stopped) base VM: grow scsi0, relocate it to another
+        # storage when one exists, then detach it. All operate on the isolated
+        # pve-cli VM and its own disk, so nothing else in the lab is touched.
+        r.step("qemu", "disk resize", f"disk resize scsi0 on {vmid} (+1G)",
+               "qemu", "disk", "resize", vmid, "--disk", "scsi0", "--size", "+1G")
+        alt = _alt_image_storage(r, ROOTDIR_STORAGE)
+        if alt:
+            r.soft_step(
+                "qemu", "disk move", f"disk move scsi0 -> {alt}",
+                "qemu", "disk", "move", vmid, "--disk", "scsi0",
+                "--storage", alt, "--delete",
+                skip_markers=("storage", "no such", "not supported",
+                              "same", "content type"),
+                skip_reason="target storage cannot hold the disk",
+            )
+        else:
+            r.cover_skip("qemu", "disk move", f"disk move scsi0 on {vmid}",
+                         "no second images-capable storage available")
+        r.step("qemu", "disk unlink", f"disk unlink scsi0 on {vmid}",
+               "qemu", "disk", "unlink", vmid, "--disk", "scsi0", "--force")
     finally:
         r.undo(f"stop VM {vmid}", "qemu", "stop", vmid)
         r.step("qemu", "delete", f"delete VM {vmid}", "qemu", "delete", vmid, "--yes",

@@ -25,8 +25,8 @@ The most frequently requested day-to-day actions. These complete the create, run
 
 | Feature | Commands | Notes | Status |
 |---|---|---|---|
-| VM clone and migrate | `pve qemu clone`, `pve qemu migrate` | Asynchronous; supports online and offline migration | Planned |
-| VM disk management | `pve qemu disk resize`, `pve qemu disk move`, `pve qemu disk unlink` | Grow, relocate, and detach VM disks | Planned |
+| VM clone and migrate | `pve qemu clone`, `pve qemu migrate` | Asynchronous; supports online and offline migration | Shipped |
+| VM disk management | `pve qemu disk resize`, `pve qemu disk move`, `pve qemu disk unlink` | Grow, relocate, and detach VM disks | Shipped |
 | Container clone and migrate | `pve lxc clone`, `pve lxc migrate` | Local and remote migration | Planned |
 | Container disk management | `pve lxc disk resize`, `pve lxc disk move` | Grow and relocate container volumes | Planned |
 

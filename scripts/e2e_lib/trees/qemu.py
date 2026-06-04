@@ -49,9 +49,12 @@ def run(ctx: Ctx) -> None:
         ctx.check("config get", "qemu", "config", "get", vid, node=n)
         ctx.check("snapshot list", "qemu", "snapshot", "list", vid, node=n)
 
-    # Verify clone and migrate help text parses (command is wired correctly).
+    # Verify clone, migrate, and disk help text parses (commands are wired).
     ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
     ctx.check("migrate --help", "qemu", "migrate", "--help", fmt="")
+    ctx.check("disk resize --help", "qemu", "disk", "resize", "--help", fmt="")
+    ctx.check("disk move --help", "qemu", "disk", "move", "--help", fmt="")
+    ctx.check("disk unlink --help", "qemu", "disk", "unlink", "--help", fmt="")
 
     # The mutating verbs below are not run by the read-only sweep, but are all
     # exercised live on a purpose-built isolated VM by the mutate phase
@@ -84,5 +87,11 @@ def run(ctx: Ctx) -> None:
         "migrate",
         "migrates a VM to another node — covered live by `e2e --mutate` on multi-node clusters",
         "pve qemu migrate <vmid> --target <node>",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "disk resize/move/unlink",
+        "grows, relocates, and detaches VM disks — covered live by `e2e --mutate`",
+        "pve qemu disk resize <vmid> --disk scsi0 --size +1G",
         isolation=True, live_covered=True,
     )
