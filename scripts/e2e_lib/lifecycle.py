@@ -204,6 +204,22 @@ class Runner:
         self.cov.append(Step(guest, verb, SKIP, "cleanup: " + tail[:120]))
 
 
+def _node_count(r: Runner) -> int:
+    """Return number of cluster nodes, or 1 on error (single-node assumption)."""
+    res = r.pve("node", "list", json_out=True, node=False)
+    if res.rc != 0:
+        return 1
+    try:
+        data = res.json()
+        if isinstance(data, list):
+            return max(len(data), 1)
+        if isinstance(data, dict) and isinstance(data.get("rows"), list):
+            return max(len(data["rows"]), 1)
+    except (ValueError, KeyError):
+        pass
+    return 1
+
+
 def _next_id(r: Runner) -> str:
     res = r.pve("cluster", "next-id", json_out=True, node=False)
     if res.rc != 0:
@@ -389,6 +405,61 @@ def vm_lifecycle(r: Runner) -> None:
         else:
             r.cover_skip("infra", "task wait", "task wait",
                          "async start returned no UPID")
+
+        # Clone: stop the VM first (clone works on running VMs too, but a
+        # stopped clone is cleaner to delete and avoids dirty-disk warnings).
+        r.step("qemu", "stop", f"stop VM {vmid} (pre-clone)", "qemu", "stop", vmid)
+        clone_id = _next_id(r)
+        clone_name = Isolation.NAME_PREFIX + "clone"
+        print(DIM(f"  clone_id={clone_id}"))
+        clone_created = False
+        try:
+            r.step("qemu", "clone", f"clone VM {vmid} -> {clone_id}",
+                   "qemu", "clone", vmid,
+                   "--newid", clone_id,
+                   "--name", clone_name,
+                   "--pool", Isolation.POOL,
+                   "--full")
+            clone_created = True
+            r.step("qemu", "clone verify", f"verify clone {clone_id} exists",
+                   "qemu", "status", clone_id, json_out=True)
+
+            # Migrate: only meaningful when the cluster has more than one node.
+            # On a single-node lab, record as SKIP rather than failing.
+            n_nodes = _node_count(r)
+            if n_nodes < 2:
+                r.cover_skip("qemu", "migrate", f"migrate clone {clone_id}",
+                             "single-node cluster — migrate requires a second node")
+            else:
+                # Pick a target node that is not the current node.
+                node_res = r.pve("node", "list", json_out=True, node=False)
+                other = ""
+                if node_res.rc == 0:
+                    try:
+                        for nd in node_res.json():
+                            nd_name = (nd.get("node") or "") if isinstance(nd, dict) else ""
+                            if nd_name and nd_name != r.node:
+                                other = nd_name
+                                break
+                    except (ValueError, KeyError):
+                        pass
+                if not other:
+                    r.cover_skip("qemu", "migrate", f"migrate clone {clone_id}",
+                                 "could not determine a second node name")
+                else:
+                    r.soft_step(
+                        "qemu", "migrate", f"migrate clone {clone_id} -> {other}",
+                        "qemu", "migrate", clone_id, "--target", other,
+                        skip_markers=("shared storage", "local disk", "not supported",
+                                      "cannot migrate", "no route"),
+                        skip_reason="migration blocked by storage or network constraints",
+                    )
+        finally:
+            if clone_created:
+                r.undo(f"stop clone {clone_id}", "qemu", "stop", clone_id)
+                r.del_step("qemu", "clone delete", f"delete clone {clone_id}",
+                           "qemu", "delete", clone_id, "--yes",
+                           "--purge", "--destroy-unreferenced-disks")
     finally:
         r.undo(f"stop VM {vmid}", "qemu", "stop", vmid)
         r.step("qemu", "delete", f"delete VM {vmid}", "qemu", "delete", vmid, "--yes",

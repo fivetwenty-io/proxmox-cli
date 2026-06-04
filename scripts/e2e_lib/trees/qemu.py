@@ -49,6 +49,10 @@ def run(ctx: Ctx) -> None:
         ctx.check("config get", "qemu", "config", "get", vid, node=n)
         ctx.check("snapshot list", "qemu", "snapshot", "list", vid, node=n)
 
+    # Verify clone and migrate help text parses (command is wired correctly).
+    ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
+    ctx.check("migrate --help", "qemu", "migrate", "--help", fmt="")
+
     # The mutating verbs below are not run by the read-only sweep, but are all
     # exercised live on a purpose-built isolated VM by the mutate phase
     # (`scripts/e2e --mutate` / `scripts/lifecycle`). `reboot` is the sole
@@ -70,3 +74,15 @@ def run(ctx: Ctx) -> None:
     ctx.defer("snapshot create/rollback/delete",
               "mutates VM snapshots — covered live by `e2e --mutate`",
               "pve qemu snapshot create <vmid> <name>", isolation=True, live_covered=True)
+    ctx.defer(
+        "clone",
+        "clones a VM — covered live by `e2e --mutate`",
+        f"pve qemu clone <vmid> --newid <id> --pool {Isolation.POOL} --name {Isolation.NAME_PREFIX}clone",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "migrate",
+        "migrates a VM to another node — covered live by `e2e --mutate` on multi-node clusters",
+        "pve qemu migrate <vmid> --target <node>",
+        isolation=True, live_covered=True,
+    )
