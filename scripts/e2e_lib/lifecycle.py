@@ -16,7 +16,7 @@ Isolation — every resource is shielded from other lab efforts:
   * named/hostnamed with the `pve-cli-` prefix,
   * placed in the `pve-cli` resource pool and tagged `pve-cli`,
   * attached to a dedicated `pvecli` simple SDN zone / `pvecli0` vnet on the
-    10.241.0.0/24 subnet — off the host management network.
+    172.30.0.0/24 subnet — off the host management network.
 
 Teardown runs in a `finally` block and is idempotent, so a crashed prior run is
 cleaned up by the next one. Nothing here touches pre-existing lab resources.
@@ -57,7 +57,7 @@ CT_HOST = Isolation.NAME_PREFIX + "ct"
 SNAP_NAME = "pvecli-snap"
 ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
 TMPL_STORAGE = "local"          # holds vztmpl content
-CT_IP = "10.241.0.50/24"
+CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
 
 # Status glyphs for the coverage table.
@@ -308,7 +308,7 @@ def vm_lifecycle(r: Runner) -> None:
            "--net0", f"virtio,bridge={Isolation.SDN_VNET}", "--boot", "order=scsi0",
            "--ostype", "l26", "--pool", Isolation.POOL, "--tags", Isolation.TAG,
            "--ciuser", "pveadmin", "--citype", "nocloud", "--ipconfig0", "ip=dhcp",
-           "--searchdomain", "pve-cli.local", "--nameserver", "10.241.0.1")
+           "--searchdomain", "pve-cli.local", "--nameserver", "172.30.0.1")
     try:
         # Round-trip the cloud-init flags through `config get`: PVE stores each
         # set key verbatim (cipassword is hashed and sshkeys re-encoded, so

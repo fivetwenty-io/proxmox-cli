@@ -30,9 +30,11 @@ class Isolation:
     # off the 172.x management subnet entirely.
     SDN_ZONE = "pvecli"          # PVE zone id: <=8 chars, alnum
     SDN_VNET = "pvecli0"
-    # Private subnet deliberately distinct from the lab's 172.x networks.
-    SDN_SUBNET = "10.241.0.0/24"
-    SDN_GATEWAY = "10.241.0.1"
+    # Private subnet within the 172.16/12 space, deliberately distinct from the
+    # bosh-pve-cpi networks (172.16.5.0/24, 172.31.0.0/24) and off the lab host
+    # management network.
+    SDN_SUBNET = "172.30.0.0/24"
+    SDN_GATEWAY = "172.30.0.1"
 
 
 class Status(enum.Enum):
