@@ -115,8 +115,20 @@ coverage: ## Generate test coverage report (HTML + console summary)
 
 ##@ Release
 
+.PHONY: release-check
+release-check: ## Validate .goreleaser.yaml
+	goreleaser check
+
+.PHONY: release-snapshot
+release-snapshot: ## Build a local cross-platform release into dist/ (no publish)
+	goreleaser release --snapshot --clean
+
+.PHONY: release-publish
+release-publish: ## Publish the GitHub release for the current tag (requires a v* tag + GITHUB_TOKEN)
+	goreleaser release --clean
+
 .PHONY: release
-release: ## Cross-compile for all platforms; generate dist/checksums.sha256
+release: ## (legacy) Cross-compile via scripts/release; prefer release-snapshot
 	$(SCRIPTS)/release
 
 .PHONY: tag

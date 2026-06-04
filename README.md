@@ -29,6 +29,37 @@ command as a table, plain text, JSON, or YAML.
 
 ## Installation
 
+### Download a release binary
+
+Pre-built binaries are published on the [Releases page](https://github.com/fivetwenty-io/pve-cli/releases)
+for `darwin/arm64`, `linux/amd64`, `linux/arm64`, and `windows/amd64`.
+
+```bash
+# Pick your platform; example: macOS Apple Silicon.
+VERSION=1.0.0
+PLATFORM=darwin_arm64   # or linux_amd64, linux_arm64, windows_amd64
+BASE="https://github.com/fivetwenty-io/pve-cli/releases/download/v${VERSION}"
+
+curl -fsSLO "${BASE}/pve_${VERSION}_${PLATFORM}.tar.gz"
+curl -fsSLO "${BASE}/pve_${VERSION}_SHA256SUMS"
+
+# Verify the checksum, then extract and install.
+shasum -a 256 -c pve_${VERSION}_SHA256SUMS --ignore-missing
+tar -xzf "pve_${VERSION}_${PLATFORM}.tar.gz"
+sudo install pve /usr/local/bin/pve
+```
+
+Windows users download `pve_${VERSION}_windows_amd64.zip`, verify against the
+`SHA256SUMS` file, and place `pve.exe` on their `PATH`.
+
+### Install with `go install`
+
+```bash
+go install github.com/fivetwenty-io/pve-cli/cmd/pve@latest
+```
+
+### Build from source
+
 ```bash
 make build      # builds ./dist/pve with version ldflags
 make install    # installs pve to $GOPATH/bin (or ~/go/bin)

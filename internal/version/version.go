@@ -8,7 +8,8 @@ import (
 
 // Version is the human-readable release string. Override at build time via
 // -ldflags "-X github.com/fivetwenty-io/pve-cli/internal/version.Version=<ver>".
-const Version = "0.1.0-dev"
+// It is a var (not a const) so the linker's -X flag can inject the release tag.
+var Version = "0.1.0-dev"
 
 // Commit is the VCS commit hash injected at build time via ldflags.
 // Falls back to "unknown" when the binary is built without ldflags.
