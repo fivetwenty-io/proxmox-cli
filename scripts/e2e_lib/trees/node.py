@@ -67,11 +67,41 @@ def run(ctx: Ctx) -> None:
             ctx.skip("task log", "no task in the node task list")
             ctx.skip("task wait", "no task in the node task list")
 
+        # Host firewall: the rule list is an array (empty when the node has no
+        # host rules); options is a key/value object. Both are read-only and
+        # safe to query directly. The firewall is node-scoped, so the node is
+        # supplied through the --node selector rather than a positional arg.
+        def is_list(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), list) else "expected a JSON array"
+
+        ctx.check("firewall rules list", "node", "firewall", "rules", "list",
+                  node=n, validate=is_list)
+        ctx.check("firewall options get", "node", "firewall", "options", "get", node=n)
+        ctx.check("firewall rules create --help", "node", "firewall", "rules", "create",
+                  "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
     ctx.defer("task stop", "aborts a running task — covered live by `e2e --mutate`",
               "pve node task stop <node> <upid>", live_covered=True)
+
+    # The mutate phase appends a disabled host firewall rule tagged with the
+    # pve-cli comment, finds it by comment, then deletes it — covered live
+    # there. The host firewall OPTIONS are read only (enabling the host
+    # firewall could cut the node off the network).
+    ctx.defer(
+        "firewall rule create/delete",
+        "appends then removes a disabled host firewall rule — covered live by `e2e --mutate`",
+        "pve node firewall rules create --node <node> --type in --action ACCEPT --enable 0 --comment pve-cli-e2e",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "firewall options set",
+        "changes the host firewall policy — could cut the node off the network; not exercised live",
+        "pve node firewall options set --node <node> --enable 1",
+        isolation=False, live_covered=False,
+    )
 
     # exec/ssh/rsync are exercised live by the mutate phase, SSH-gated: it
     # probes reachability and records SKIP if the host is unreachable.

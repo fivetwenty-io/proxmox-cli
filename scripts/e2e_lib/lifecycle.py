@@ -1320,6 +1320,74 @@ def _cluster_rule_pos_by_comment(r: Runner, comment: str) -> str | None:
     return None
 
 
+def _node_rule_pos_by_comment(r: Runner, comment: str) -> str | None:
+    """Return the position of the host firewall rule whose comment matches, or
+    None. Mirrors the cluster helper: PVE inserts new rules at position 0, so
+    the throwaway rule is located by its comment rather than a fixed index."""
+    res = r.pve("node", "firewall", "rules", "list", json_out=True)
+    if res.rc != 0:
+        return None
+    try:
+        rows = res.json()
+    except ValueError:
+        return None
+    if not isinstance(rows, list):
+        return None
+    for rule in rows:
+        if isinstance(rule, dict) and rule.get("comment") == comment:
+            pos = rule.get("pos")
+            if pos is not None:
+                return str(pos)
+    return None
+
+
+def node_firewall_lifecycle(r: Runner) -> None:
+    """Exercise the host firewall of the resolved node: append a disabled rule
+    tagged with the pve-cli comment, read it back, then delete it.
+
+    Isolation: the rule is created DISABLED (--enable 0) with a `pve-cli-e2e`
+    comment and removed in the same run, so the node's active firewall policy is
+    never changed. Host firewall *options* are read only — never set — because
+    enabling the host firewall could cut the node off the network. The rule is
+    removed in the finally block.
+    """
+    print(BOLD("node: host firewall rule (disabled, isolated)"))
+
+    # Best-effort clean of a rule left by a crashed prior run (never raises).
+    stale = _node_rule_pos_by_comment(r, CL_FW_COMMENT)
+    if stale is not None:
+        r.undo(f"pre-clean host rule pos {stale}",
+               "node", "firewall", "rules", "delete", stale, "--yes")
+
+    created_pos: str | None = None
+    try:
+        # Host firewall options: read only (never mutated — could isolate the host).
+        r.step("node", "firewall options get", "firewall options get",
+               "node", "firewall", "options", "get", json_out=True)
+
+        # A disabled rule is inert; it never affects live traffic on the host.
+        r.step("node", "firewall rules create", "firewall rules create (disabled)",
+               "node", "firewall", "rules", "create",
+               "--type", "in", "--action", "ACCEPT", "--proto", "tcp",
+               "--dport", "22", "--enable", "0", "--comment", CL_FW_COMMENT)
+        r.step("node", "firewall rules list", "firewall rules list",
+               "node", "firewall", "rules", "list", json_out=True)
+
+        created_pos = _node_rule_pos_by_comment(r, CL_FW_COMMENT)
+        if created_pos is not None:
+            r.step("node", "firewall rules get", f"firewall rules get {created_pos}",
+                   "node", "firewall", "rules", "get", created_pos, json_out=True)
+        else:
+            r.cover_skip("node", "firewall rules get", "firewall rules get",
+                         "created rule not found by comment")
+    finally:
+        if created_pos is None:
+            created_pos = _node_rule_pos_by_comment(r, CL_FW_COMMENT)
+        if created_pos is not None:
+            r.del_step("node", "firewall rules delete", f"firewall rules delete {created_pos}",
+                       "node", "firewall", "rules", "delete", created_pos, "--yes")
+
+
 def cluster_firewall_lifecycle(r: Runner) -> None:
     """Exercise the cluster-wide firewall: a security group with one rule, a
     disabled top-level rule, an IP set with a member, and an address alias.
@@ -1462,6 +1530,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         backup_lifecycle(r)
         print()
         cluster_firewall_lifecycle(r)
+        print()
+        node_firewall_lifecycle(r)
         print()
 
         if not skip_vm:
