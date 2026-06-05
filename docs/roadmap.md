@@ -45,7 +45,7 @@ Capabilities that production operators depend on for protection, isolation, and 
 | Two-factor authentication | `pve access tfa` | List, inspect, delete TFA entries, and unlock locked-out users | Shipped |
 | Cluster firewall | `pve cluster firewall rules\|group\|ipset\|alias\|options` | Cluster-wide security policy | Shipped |
 | Node firewall | `pve node firewall rules\|options` | Per-node firewall management | Shipped |
-| Cluster configuration | `pve cluster options`, `pve cluster config`, `pve cluster replication` | Global options, membership, and storage replication jobs | Planned |
+| Cluster configuration | `pve cluster options`, `pve cluster config`, `pve cluster replication` | Global options, membership, and storage replication jobs | Shipped |
 | Node network | `pve node network` | Interface and bridge configuration | Planned |
 | Storage transfer | `pve storage upload`, `pve storage download-url` | Push local files and pull ISOs or templates from URLs | Planned |
 
