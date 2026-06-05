@@ -40,7 +40,7 @@ Capabilities that production operators depend on for protection, isolation, and 
 | Container firewall | `pve lxc firewall rules\|ipset\|alias\|options` | Per-container firewall management | Shipped |
 | Guest consoles | `pve qemu console`, `pve lxc console` | VNC, terminal, and SPICE proxy tickets | Shipped |
 | Backup management | `pve cluster backup`, `pve node vzdump`, `pve storage prune` | Schedules, on-demand backups, coverage audits, and pruning | Shipped |
-| High availability | `pve cluster ha resource\|group\|rule\|status` | Resource and group management, manual migrate and relocate, arm and disarm | Planned |
+| High availability | `pve cluster ha resource\|group\|rule\|status` | Resource, group, and rule management, manual migrate and relocate, manager status, arm and disarm | Shipped |
 | Authentication realms | `pve access domain`, `pve access tfa`, `pve access role` | Realm management and sync, two-factor administration, role lifecycle | Planned |
 | Cluster firewall | `pve cluster firewall rules\|group\|ipset\|alias\|options` | Cluster-wide security policy | Planned |
 | Node firewall | `pve node firewall rules\|options` | Per-node firewall management | Planned |

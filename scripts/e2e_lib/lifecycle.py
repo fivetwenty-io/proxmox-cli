@@ -1015,6 +1015,26 @@ def backup_lifecycle(r: Runner) -> None:
                    "cluster", "backup", "delete", BACKUP_JOB, "--yes")
 
 
+def _err_reason(res, fallback: str) -> str:
+    """Distil a short, human-readable skip reason from a failed command's output.
+    The CLI prints the API message followed by a trailing ` (code: N)` line, so the
+    last line is noise; pick the longest meaningful line instead."""
+    text = (res.err.strip() or res.out.strip())
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    lines = [ln for ln in lines if not ln.lower().startswith("(code:")]
+    if not lines:
+        return fallback
+    line = max(lines, key=len)
+    # The wrapped error reads "<context>: API request failed: <message>"; the
+    # trailing API message is the informative part, so prefer it over the prefix.
+    for marker in ("api request failed:", "api error:"):
+        idx = line.lower().rfind(marker)
+        if idx != -1:
+            line = line[idx + len(marker):].strip()
+            break
+    return line[:80]
+
+
 def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
     """Place an isolated guest under HA management, read it back, update it, then
     remove it again. HA needs a quorate cluster; a standalone or non-quorate lab
@@ -1026,8 +1046,7 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
     create = r.pve("cluster", "ha", "resource", "create", sid,
                    "--state", "started", "--comment", "pve-cli-e2e")
     if create.rc != 0:
-        detail = (create.err.strip() or create.out.strip()).splitlines()
-        reason = detail[-1][:80] if detail else "HA stack unavailable"
+        reason = _err_reason(create, "HA stack unavailable")
         for verb in ("ha resource create", "ha resource get",
                      "ha resource set", "ha resource delete"):
             r.cover_skip(guest, verb, f"{verb} {sid}", reason)
@@ -1042,12 +1061,74 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
                "cluster", "ha", "resource", "get", sid, json_out=True)
         r.step(guest, "ha resource set", f"ha resource set {sid}",
                "cluster", "ha", "resource", "set", sid, "--comment", "pve-cli-e2e-upd")
+        _ha_config_lifecycle(r, guest, sid)
         if _node_count(r) < 2:
             r.cover_skip(guest, "ha resource migrate", f"ha resource migrate {sid}",
                          "needs a second node as the migration target")
     finally:
         r.del_step(guest, "ha resource delete", f"ha resource delete {sid}",
                    "cluster", "ha", "resource", "delete", sid, "--yes", "--purge")
+
+
+def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
+    """Exercise HA group and rule CRUD against the quorate lab, referencing the
+    live HA resource `sid`. A node-affinity rule constrains where `sid` may run; a
+    group (pre-PVE-9) pins resources to a node set. Both are namespaced (pve-cli-*)
+    and torn down before the parent resource the rule references. HA groups were
+    migrated to rules in PVE 9, so `ha group create` is recorded as a SKIP there —
+    which must NOT suppress the rule lifecycle, since rules are the replacement and
+    still work. A non-quorate lab never reaches here (the parent create already
+    skipped), so a group failure is an environment limitation, not a bug."""
+    group = Isolation.NAME_PREFIX + "ha"
+    rule = Isolation.NAME_PREFIX + "rule"
+    grp_create = r.pve("cluster", "ha", "group", "create", group, "--nodes", r.node)
+    grp_created = grp_create.rc == 0
+    if not grp_created:
+        reason = _err_reason(grp_create, "HA group create rejected")
+        for verb in ("ha group create", "ha group get", "ha group set", "ha group delete"):
+            r.cover_skip(guest, verb, f"{verb} {group}", reason)
+    else:
+        print(f"  {GREEN('✓')} ha group create {group}")
+        r.cov.append(Step(guest, "ha group create", PASS))
+    try:
+        if grp_created:
+            r.step(guest, "ha group list", "ha group list",
+                   "cluster", "ha", "group", "list", json_out=True)
+            r.step(guest, "ha group get", f"ha group get {group}",
+                   "cluster", "ha", "group", "get", group, json_out=True)
+            r.step(guest, "ha group set", f"ha group set {group}",
+                   "cluster", "ha", "group", "set", group, "--comment", "pve-cli-e2e")
+        _ha_rule_lifecycle(r, guest, sid, rule)
+    finally:
+        if grp_created:
+            r.del_step(guest, "ha group delete", f"ha group delete {group}",
+                       "cluster", "ha", "group", "delete", group, "--yes")
+
+
+def _ha_rule_lifecycle(r: Runner, guest: str, sid: str, rule: str) -> None:
+    """Create a node-affinity rule constraining `sid`, read/update it, then remove
+    it. Driven inside the group lifecycle so the rule is torn down before both the
+    group and the parent HA resource it references."""
+    rule_create = r.pve("cluster", "ha", "rule", "create", rule,
+                        "--type", "node-affinity", "--resources", sid, "--nodes", r.node)
+    if rule_create.rc != 0:
+        reason = _err_reason(rule_create, "HA rule create rejected")
+        for verb in ("ha rule create", "ha rule get", "ha rule set", "ha rule delete"):
+            r.cover_skip(guest, verb, f"{verb} {rule}", reason)
+        return
+    print(f"  {GREEN('✓')} ha rule create {rule}")
+    r.cov.append(Step(guest, "ha rule create", PASS))
+    try:
+        r.step(guest, "ha rule list", "ha rule list",
+               "cluster", "ha", "rule", "list", json_out=True)
+        r.step(guest, "ha rule get", f"ha rule get {rule}",
+               "cluster", "ha", "rule", "get", rule, json_out=True)
+        r.step(guest, "ha rule set", f"ha rule set {rule}",
+               "cluster", "ha", "rule", "set", rule, "--type", "node-affinity",
+               "--comment", "pve-cli-e2e")
+    finally:
+        r.del_step(guest, "ha rule delete", f"ha rule delete {rule}",
+                   "cluster", "ha", "rule", "delete", rule, "--yes")
 
 
 def node_ops(r: Runner) -> None:

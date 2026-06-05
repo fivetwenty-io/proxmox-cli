@@ -12,16 +12,20 @@ import (
 )
 
 // newHaCmd builds the `pve cluster ha` sub-tree: high-availability management.
-// Today it exposes HA resource management; group, rule, and status verbs are
-// added by later iterations.
+// It exposes HA resources, groups, rules, and the cluster-wide manager status.
 func newHaCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ha",
 		Short: "Manage cluster high availability",
-		Long: "Manage high-availability resources: list, create, inspect, update, and delete " +
-			"HA-managed guests, and request a manual migrate or relocate to another node.",
+		Long: "Manage high availability: HA-managed resources (with manual migrate/relocate), HA " +
+			"groups, HA rules, and the cluster-wide HA manager status (arm/disarm).",
 	}
-	cmd.AddCommand(newHaResourceCmd())
+	cmd.AddCommand(
+		newHaResourceCmd(),
+		newHaGroupCmd(),
+		newHaRuleCmd(),
+		newHaStatusCmd(),
+	)
 	return cmd
 }
 

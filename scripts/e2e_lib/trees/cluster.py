@@ -66,6 +66,39 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=False,
     )
 
+    # HA rules: the list is an array (empty on a fresh cluster). HA groups were
+    # migrated to rules in PVE 9, so GET /cluster/ha/groups returns a 500 on a 9.x
+    # lab — record a skip there rather than a failure (the group CLI wiring still
+    # serves older clusters and is covered by unit tests).
+    grp = ctx.run("cluster", "ha", "group", "list")
+    grp_err = (grp.stderr or grp.stdout).lower()
+    if grp.rc != 0 and "migrated to rules" in grp_err:
+        ctx.skip("ha group list", "HA groups were migrated to rules in PVE 9")
+    else:
+        ctx.check("ha group list", "cluster", "ha", "group", "list", validate=is_list)
+    ctx.check("ha rule list", "cluster", "ha", "rule", "list", validate=is_list)
+    # The mutate phase creates a pve-cli- namespaced node-affinity rule bound to
+    # the isolated guest (and an HA group where the cluster still supports them),
+    # exercises get/set, and removes them — covered live there.
+    ctx.defer(
+        "ha group + rule create/set/delete",
+        "creates a namespaced HA rule bound to the isolated guest (and a group pre-PVE-9) — covered live by `e2e --mutate`",
+        "pve cluster ha rule create pve-cli-rule --type node-affinity --resources vm:<id> --nodes <node>",
+        isolation=True, live_covered=True,
+    )
+
+    # HA status views are read-only and safe to query directly.
+    ctx.check("ha status", "cluster", "ha", "status", "list", validate=is_list)
+    ctx.check("ha status current", "cluster", "ha", "status", "current", validate=is_list)
+    # arm/disarm flip the cluster-wide HA stack and would disrupt every HA-managed
+    # resource on the lab, so they are parsed-and-deferred, never run live.
+    ctx.defer(
+        "ha status arm/disarm",
+        "toggles the cluster-wide HA stack — would disrupt every HA-managed resource on the lab",
+        "pve cluster ha status disarm --yes --resource-mode freeze",
+        isolation=False, live_covered=False,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")
