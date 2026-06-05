@@ -47,7 +47,7 @@ Capabilities that production operators depend on for protection, isolation, and 
 | Node firewall | `pve node firewall rules\|options` | Per-node firewall management | Shipped |
 | Cluster configuration | `pve cluster options`, `pve cluster config`, `pve cluster replication` | Global options, membership, and storage replication jobs | Shipped |
 | Node network | `pve node network` | Interface and bridge configuration | Shipped |
-| Storage transfer | `pve storage upload`, `pve storage download-url` | Push local files and pull ISOs or templates from URLs | Planned |
+| Storage transfer | `pve storage upload`, `pve storage download-url` | Push local files and pull ISOs or templates from URLs | Shipped |
 
 ## P3 — Platform Management
 

@@ -6,12 +6,13 @@ import (
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/clusterstorage"
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/pools"
+	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/storage"
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/tasks"
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/version"
 	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
 )
 
-// APIClient holds all 7 service handles plus the raw pve client.
+// APIClient holds all 8 service handles plus the raw pve client.
 // It is constructed once in the cobra root PersistentPreRunE and passed via
 // cobra.Command context to every sub-command.
 type APIClient struct {
@@ -33,6 +34,10 @@ type APIClient struct {
 	// Pools is the /pools namespace service.
 	Pools pools.Service
 
+	// Storage is the node-scoped storage service (multipart file upload and
+	// volume operations on /nodes/{node}/storage/{storage}).
+	Storage storage.Service
+
 	// Tasks is the task-wait helper service.
 	Tasks tasks.Service
 
@@ -41,7 +46,7 @@ type APIClient struct {
 }
 
 // NewAPIClient constructs an APIClient from a pre-built pve.Options.
-// It creates the raw pve.Client and wires all 7 service handles; no network
+// It creates the raw pve.Client and wires all 8 service handles; no network
 // calls are made during construction.
 //
 // When ticket authentication carries a CSRF prevention token, that token is
@@ -66,6 +71,7 @@ func NewAPIClient(opts pve.Options) (*APIClient, error) {
 		ClusterStorage: clusterstorage.New(raw),
 		Nodes:          nodes.New(raw),
 		Pools:          pools.New(raw),
+		Storage:        storage.New(raw),
 		Tasks:          tasks.New(raw),
 		Version:        version.New(raw),
 	}, nil

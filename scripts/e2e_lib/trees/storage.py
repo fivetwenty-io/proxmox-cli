@@ -56,6 +56,15 @@ def run(ctx: Ctx) -> None:
         ctx.skip("prune dry-run", "no backup-capable storage or node discovered")
     ctx.check("prune --help", "storage", "prune", "--help", fmt="")
 
+    # Transfer verbs move bytes onto a storage (upload pushes a local file;
+    # download-url has the node pull a URL). Both create a real volume and there
+    # is no CLI verb yet to delete a single volume, so exercising them live would
+    # leave a namespaced artifact behind on shared lab storage. They are checked
+    # read-only via --help here and deferred live until a `storage volume` delete
+    # verb exists to clean up after them.
+    ctx.check("upload --help", "storage", "upload", "--help", fmt="")
+    ctx.check("download-url --help", "storage", "download-url", "--help", fmt="")
+
     # The mutate phase backs up the isolated guest then prunes its own archive
     # (keep-last=0, scoped to that vmid) — covered live by `e2e --mutate`.
     ctx.defer(
@@ -78,3 +87,19 @@ def run(ctx: Ctx) -> None:
               isolation=True, live_covered=True)
     ctx.defer("delete", "removes a storage definition — covered live by `e2e --mutate`",
               f"pve storage delete {Isolation.NAME_PREFIX}store", isolation=True, live_covered=True)
+
+    # Transfer verbs are not exercised live: there is no CLI verb yet to delete a
+    # single storage volume, so a live upload/download would leave a namespaced
+    # file on shared lab storage with no way to clean it up through the CLI.
+    ctx.defer(
+        "upload",
+        "pushes a local file onto a storage — no CLI volume-delete verb yet to remove the artifact; not exercised live",
+        f"pve storage upload local --file ./{Isolation.NAME_PREFIX}test.iso --content iso",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "download-url",
+        "downloads a URL onto a storage — no CLI volume-delete verb yet to remove the artifact; not exercised live",
+        f"pve storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}test.iso --content iso",
+        isolation=True, live_covered=False,
+    )
