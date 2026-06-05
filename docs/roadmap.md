@@ -37,7 +37,7 @@ Capabilities that production operators depend on for protection, isolation, and 
 | Feature | Commands | Notes | Status |
 |---|---|---|---|
 | VM firewall | `pve qemu firewall rules\|ipset\|alias\|options` | Per-VM rule, IP set, and alias management | Shipped |
-| Container firewall | `pve lxc firewall rules\|ipset\|alias\|options` | Per-container firewall management | Planned |
+| Container firewall | `pve lxc firewall rules\|ipset\|alias\|options` | Per-container firewall management | Shipped |
 | Guest consoles | `pve qemu console`, `pve lxc console` | VNC, terminal, and SPICE proxy tickets | Planned |
 | Backup management | `pve cluster backup`, `pve node vzdump`, `pve storage prune` | Schedules, on-demand backups, coverage audits, and pruning | Planned |
 | High availability | `pve cluster ha resource\|group\|rule\|status` | Resource and group management, manual migrate and relocate, arm and disarm | Planned |

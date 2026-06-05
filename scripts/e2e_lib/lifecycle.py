@@ -690,6 +690,42 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
         else:
             r.cover_skip("lxc", "disk move", f"disk move rootfs on {ctid}",
                          "no second rootdir-capable storage available")
+
+        # Firewall ops on the isolated CT's own config: enable the firewall,
+        # add/inspect/remove a rule, an IP set with one member, and an address
+        # alias. Every object is scoped to this throwaway container and uses
+        # pve-cli names plus the e2e subnet, so no other workload's policy is touched.
+        r.step("lxc", "firewall options set", f"firewall options set on {ctid}",
+               "lxc", "firewall", "options", "set", ctid, "--enable", "--policy-in", "ACCEPT")
+        r.step("lxc", "firewall options get", f"firewall options get on {ctid}",
+               "lxc", "firewall", "options", "get", ctid, json_out=True)
+        r.step("lxc", "firewall rules create", f"firewall rule add on {ctid}",
+               "lxc", "firewall", "rules", "create", ctid,
+               "--type", "in", "--action", "ACCEPT", "--proto", "tcp",
+               "--dport", "22", "--comment", "pve-cli-e2e")
+        r.step("lxc", "firewall rules list", "firewall rules list",
+               "lxc", "firewall", "rules", "list", ctid, json_out=True)
+        r.step("lxc", "firewall rules get", "firewall rule get pos 0",
+               "lxc", "firewall", "rules", "get", ctid, "0", json_out=True)
+        r.del_step("lxc", "firewall rules delete", "firewall rule delete pos 0",
+                   "lxc", "firewall", "rules", "delete", ctid, "0", "--yes")
+        r.step("lxc", "firewall ipset create", f"firewall ipset create {FW_IPSET}",
+               "lxc", "firewall", "ipset", "create", ctid, FW_IPSET, "--comment", "pve-cli-e2e")
+        r.step("lxc", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
+               "lxc", "firewall", "ipset", "add", ctid, FW_IPSET, Isolation.SDN_SUBNET)
+        r.step("lxc", "firewall ipset list", "firewall ipset member list",
+               "lxc", "firewall", "ipset", "list", ctid, FW_IPSET, json_out=True)
+        r.del_step("lxc", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
+                   "lxc", "firewall", "ipset", "remove", ctid, FW_IPSET, Isolation.SDN_SUBNET, "--yes")
+        r.del_step("lxc", "firewall ipset delete", f"firewall ipset delete {FW_IPSET}",
+                   "lxc", "firewall", "ipset", "delete", ctid, FW_IPSET, "--yes", "--force")
+        r.step("lxc", "firewall alias create", f"firewall alias create {FW_ALIAS}",
+               "lxc", "firewall", "alias", "create", ctid, FW_ALIAS, "172.30.0.99",
+               "--comment", "pve-cli-e2e")
+        r.step("lxc", "firewall alias list", "firewall alias list",
+               "lxc", "firewall", "alias", "list", ctid, json_out=True)
+        r.del_step("lxc", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
+                   "lxc", "firewall", "alias", "delete", ctid, FW_ALIAS, "--yes")
     finally:
         r.undo(f"stop CT {ctid}", "lxc", "stop", ctid)
         r.step("lxc", "delete", f"delete CT {ctid}", "lxc", "delete", ctid, "--yes",

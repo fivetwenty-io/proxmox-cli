@@ -43,17 +43,28 @@ def run(ctx: Ctx) -> None:
         ctx.skip("status", "no container on node")
         ctx.skip("config get", "no container on node")
         ctx.skip("snapshot list", "no container on node")
+        ctx.skip("firewall rules list", "no container on node")
+        ctx.skip("firewall options get", "no container on node")
     else:
         cid = str(ctid)
         ctx.check("status", "lxc", "status", cid, node=n, validate=has_status)
         ctx.check("config get", "lxc", "config", "get", cid, node=n)
         ctx.check("snapshot list", "lxc", "snapshot", "list", cid, node=n)
+        # Read-only firewall inspection: rules list returns an array, and the
+        # options object is always present even when the firewall is disabled.
+        ctx.check("firewall rules list", "lxc", "firewall", "rules", "list", cid,
+                  node=n, validate=is_list)
+        ctx.check("firewall options get", "lxc", "firewall", "options", "get", cid, node=n)
 
-    # Verify clone, migrate, and disk help text parses (commands are wired).
+    # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "lxc", "clone", "--help", fmt="")
     ctx.check("migrate --help", "lxc", "migrate", "--help", fmt="")
     ctx.check("disk resize --help", "lxc", "disk", "resize", "--help", fmt="")
     ctx.check("disk move --help", "lxc", "disk", "move", "--help", fmt="")
+    ctx.check("firewall rules create --help", "lxc", "firewall", "rules", "create", "--help", fmt="")
+    ctx.check("firewall ipset add --help", "lxc", "firewall", "ipset", "add", "--help", fmt="")
+    ctx.check("firewall alias create --help", "lxc", "firewall", "alias", "create", "--help", fmt="")
+    ctx.check("firewall options set --help", "lxc", "firewall", "options", "set", "--help", fmt="")
 
     # Every mutating verb below — including the full power-state matrix and
     # snapshot create/rollback/delete — is exercised live on a purpose-built
@@ -95,5 +106,11 @@ def run(ctx: Ctx) -> None:
         "disk move",
         "relocates a container volume — covered live by `e2e --mutate` when a second rootdir storage exists",
         "pve lxc disk move <ctid> --volume rootfs --storage <other>",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "firewall rules/ipset/alias create-delete + options set",
+        "mutates a CT's firewall config — covered live by `e2e --mutate` on the isolated container",
+        "pve lxc firewall rules create <ctid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
     )
