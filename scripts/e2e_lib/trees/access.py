@@ -28,6 +28,20 @@ def run(ctx: Ctx) -> None:
 
     ctx.check("permissions (self)", "access", "permissions", validate=is_perm_tree)
 
+    # Authentication realms (domains). `pam` and `pve` always exist, so a get of
+    # the first listed realm is unconditional.
+    domains = ctx.check("domain list", "access", "domain", "list", validate=is_list)
+    realm = None
+    if domains.rc == 0:
+        try:
+            realm = ctx.first(domains.json(), "realm")
+        except ValueError:
+            realm = None
+    if realm:
+        ctx.check("domain get", "access", "domain", "get", str(realm))
+    else:
+        ctx.skip("domain get", "no realm returned")
+
     uid = None
     if users.rc == 0:
         try:
@@ -95,4 +109,10 @@ def run(ctx: Ctx) -> None:
               isolation=True, live_covered=True)
     ctx.defer("password set", "changes a user password — covered live by `e2e --mutate`",
               f"pve access password set --userid {Isolation.NAME_PREFIX}probe@pve",
+              isolation=True, live_covered=True)
+    ctx.defer("domain create/set/delete", "creates an auth realm — covered live by `e2e --mutate`",
+              f"pve access domain create {Isolation.NAME_PREFIX}realm --type ldap",
+              isolation=True, live_covered=True)
+    ctx.defer("domain sync", "syncs users from an ldap/ad realm — covered live by `e2e --mutate`",
+              f"pve access domain sync {Isolation.NAME_PREFIX}realm --dry-run",
               isolation=True, live_covered=True)

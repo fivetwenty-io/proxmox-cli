@@ -885,6 +885,53 @@ def access_lifecycle(r: Runner) -> None:
                    "access", "group", "delete", group, "--yes")
 
 
+def domain_lifecycle(r: Runner) -> None:
+    """Create an isolated ldap realm, exercise get/set/sync, then delete it.
+
+    Isolation: the realm id is `pve-cli-realm` (NAME_PREFIX + "realm"), fully
+    namespaced and distinct from the built-in pam/pve realms. It points at a
+    dummy LDAP server that is never contacted on create or set — PVE only probes
+    connectivity when `--check-connection` is given, which it is not. Sync DOES
+    contact the server, so it is a soft_step: an unreachable dummy host records
+    SKIP (the command path and arg parsing are still exercised), while any other
+    failure is a real bug. The realm is removed in the finally block.
+    """
+    print(BOLD("access: domain (realm) create / get / set / sync / delete"))
+    realm = Isolation.NAME_PREFIX + "realm"   # pve-cli-realm
+    updated = "pve-cli e2e updated"
+
+    # Best-effort clean of a realm left by a crashed prior run so create is
+    # idempotent (never raises, not coverage-recorded).
+    r.undo(f"pre-clean {realm}", "access", "domain", "delete", realm, "--yes")
+    try:
+        r.step("access", "domain create", f"domain create {realm}",
+               "access", "domain", "create", realm, "--type", "ldap",
+               "--server1", "ldap.invalid.pve-cli.local", "--port", "389",
+               "--base-dn", "dc=pve-cli,dc=local", "--user-attr", "uid",
+               "--comment", "pve-cli e2e")
+        got = r.step("access", "domain get", f"domain get {realm}",
+                     "access", "domain", "get", realm, json_out=True)
+        if "ldap" not in got.out:
+            raise LifecycleError(f"domain get did not report the ldap realm type for {realm}")
+        r.step("access", "domain set", f"domain set {realm}",
+               "access", "domain", "set", realm, "--comment", updated)
+        got = r.step("access", "domain get", f"domain get {realm} (after set)",
+                     "access", "domain", "get", realm, json_out=True)
+        if updated not in got.out:
+            raise LifecycleError(f"domain set comment not reflected in get for {realm}")
+        # sync contacts the (dummy, unreachable) LDAP server; --dry-run guarantees
+        # nothing is written even on an unexpected connection. Tolerate the
+        # expected connection failure as a SKIP.
+        r.soft_step("access", "domain sync", f"domain sync {realm} (dry-run)",
+                    "access", "domain", "sync", realm, "--dry-run", "--scope", "users",
+                    skip_markers=("connect", "connection", "timeout", "unable to",
+                                  "contact", "resolve", "no route", "ldap", "host"),
+                    skip_reason="dummy ldap server unreachable (expected)")
+    finally:
+        r.del_step("access", "domain delete", f"domain delete {realm}",
+                   "access", "domain", "delete", realm, "--yes")
+
+
 def auth_lifecycle(r: Runner) -> None:
     """Exercise `api auth login`/`refresh`/`logout` against the live server using
     a throwaway pve-realm user and a scratch `--config` file.
@@ -1238,6 +1285,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         # Access + storage verb blocks run regardless of --vm-only/--ct-only:
         # they are independent of the guests and isolated by the pve-cli prefix.
         access_lifecycle(r)
+        print()
+        domain_lifecycle(r)
         print()
         auth_lifecycle(r)
         print()
