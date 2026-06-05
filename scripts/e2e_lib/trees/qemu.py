@@ -55,6 +55,7 @@ def run(ctx: Ctx) -> None:
         ctx.skip("firewall rules list", "no VM on node")
         ctx.skip("firewall options get", "no VM on node")
         ctx.skip("console vnc ticket", "no VM on node")
+        ctx.skip("cloudinit pending", "no VM on node")
     else:
         vid = str(vmid)
         ctx.check("status", "qemu", "status", vid, node=n, validate=has_status)
@@ -68,6 +69,11 @@ def run(ctx: Ctx) -> None:
         # ephemeral proxy the same way the web GUI does and changes no VM state.
         ctx.check("console vnc ticket", "qemu", "console", vid, "--type", "vnc",
                   node=n, validate=has_ticket)
+        # cloud-init pending reads the VM's current vs pending cloud-init config.
+        # It is non-mutating and returns an array whether or not the VM carries a
+        # cloud-init drive, so it is safe against any existing VM.
+        ctx.check("cloudinit pending", "qemu", "cloudinit", "pending", vid,
+                  node=n, validate=is_list)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
@@ -80,6 +86,10 @@ def run(ctx: Ctx) -> None:
     ctx.check("firewall alias create --help", "qemu", "firewall", "alias", "create", "--help", fmt="")
     ctx.check("firewall options set --help", "qemu", "firewall", "options", "set", "--help", fmt="")
     ctx.check("console --help", "qemu", "console", "--help", fmt="")
+    ctx.check("agent --help", "qemu", "agent", "--help", fmt="")
+    ctx.check("cloudinit dump --help", "qemu", "cloudinit", "dump", "--help", fmt="")
+    ctx.check("cloudinit update --help", "qemu", "cloudinit", "update", "--help", fmt="")
+    ctx.check("template --help", "qemu", "template", "--help", fmt="")
 
     # The mutating verbs below are not run by the read-only sweep, but are all
     # exercised live on a purpose-built isolated VM by the mutate phase
@@ -131,4 +141,25 @@ def run(ctx: Ctx) -> None:
         "opening the proxied console session needs an interactive viewer — the "
         "CLI only returns the ticket, which the read-only sweep validates",
         "pve qemu console <vmid> --type spice",
+    )
+    ctx.defer(
+        "agent <command>",
+        "runs guest-agent verbs (ping/get-*/fstrim/...) — requires a running "
+        "guest agent; ping is exercised live (soft) on the isolated VM by `e2e --mutate`",
+        "pve qemu agent <vmid> ping",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "cloudinit dump/update",
+        "dumps/regenerates the cloud-init drive — exercised live (soft) on the "
+        "isolated VM by `e2e --mutate` (skips when the VM has no cloud-init drive)",
+        "pve qemu cloudinit update <vmid>",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "template",
+        "converts a VM into a template — irreversible, so it is never run on the "
+        "shared lab (it would destroy the reusable isolated VM); covered by unit tests",
+        "pve qemu template <vmid> --yes",
+        isolation=True, live_covered=False,
     )

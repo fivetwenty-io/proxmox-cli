@@ -1,0 +1,114 @@
+package qemu
+
+import (
+	"bytes"
+	"net/http"
+	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
+
+	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+)
+
+func TestQemuCloudinitPending_Table(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotMethod, gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/cloudinit", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		testhelper.WriteData(w, []any{
+			map[string]any{"key": "ciuser", "value": "root", "pending": "admin"},
+		})
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "cloudinit", "pending", "100"))
+
+	require.Equal(t, http.MethodGet, gotMethod)
+	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/cloudinit", gotPath)
+	out := buf.String()
+	require.Contains(t, out, "ciuser")
+	require.Contains(t, out, "admin")
+}
+
+func TestQemuCloudinitDump(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotMethod, gotPath, gotType string
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/cloudinit/dump", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		gotType = r.URL.Query().Get("type")
+		testhelper.WriteData(w, "#cloud-config\nhostname: web\n")
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "cloudinit", "dump", "100", "--type", "user"))
+
+	require.Equal(t, http.MethodGet, gotMethod)
+	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/cloudinit/dump", gotPath)
+	require.Equal(t, "user", gotType)
+	require.Contains(t, buf.String(), "#cloud-config")
+}
+
+func TestQemuCloudinitDump_DefaultType(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotType string
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/cloudinit/dump", func(w http.ResponseWriter, r *http.Request) {
+		gotType = r.URL.Query().Get("type")
+		testhelper.WriteData(w, "data")
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "cloudinit", "dump", "100"))
+	require.Equal(t, "user", gotType)
+}
+
+func TestQemuCloudinitUpdate(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotMethod, gotPath string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/cloudinit", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		testhelper.WriteData(w, nil)
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "cloudinit", "update", "100"))
+
+	require.Equal(t, http.MethodPut, gotMethod)
+	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/cloudinit", gotPath)
+	require.Contains(t, buf.String(), "Regenerated cloud-init drive")
+}
+
+func TestQemuCloudinitRequiresNode(t *testing.T) {
+	_, ac := newFakeClient(t)
+	depsFor(t, ac, output.FormatTable, "", false)
+
+	var buf bytes.Buffer
+	err := run(&buf, "cloudinit", "pending", "100")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no node specified")
+}
+
+func TestQemuCloudinitCommandTree(t *testing.T) {
+	cmd := newGroupCmd(nil)
+	var ci *cobra.Command
+	for _, c := range cmd.Commands() {
+		if c.Name() == "cloudinit" {
+			ci = c
+			break
+		}
+	}
+	require.NotNil(t, ci, "cloudinit command should be registered")
+
+	sub := map[string]bool{}
+	for _, c := range ci.Commands() {
+		sub[c.Name()] = true
+	}
+	for _, want := range []string{"pending", "dump", "update"} {
+		require.True(t, sub[want], "cloudinit should register %q", want)
+	}
+}

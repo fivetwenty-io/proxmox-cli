@@ -404,6 +404,27 @@ def vm_lifecycle(r: Runner) -> None:
                "qemu", "config", "set", vmid, "--description", "pve-cli-e2e")
         r.step("qemu", "config pending", f"config pending VM {vmid}",
                "qemu", "config", "pending", vmid, json_out=True)
+        # cloud-init exposure: the VM carries cloud-init config keys (set at
+        # create) but no cloud-init drive and no guest OS. `cloudinit pending`
+        # reads the config diff and always works; `dump`/`update` need a real
+        # cloud-init drive, and `agent ping` needs a running guest agent — both
+        # are soft-skipped on this diskless VM.
+        r.step("qemu", "cloudinit pending", f"cloudinit pending VM {vmid}",
+               "qemu", "cloudinit", "pending", vmid, json_out=True)
+        r.soft_step("qemu", "cloudinit dump", f"cloudinit dump user VM {vmid}",
+                    "qemu", "cloudinit", "dump", vmid, "--type", "user",
+                    skip_markers=("cloudinit", "cloud-init", "no such", "not found"),
+                    skip_reason="VM has no cloud-init drive")
+        r.soft_step("qemu", "cloudinit update", f"cloudinit update VM {vmid}",
+                    "qemu", "cloudinit", "update", vmid,
+                    skip_markers=("cloudinit", "cloud-init", "no such", "not found",
+                                  "not configured"),
+                    skip_reason="VM has no cloud-init drive to regenerate")
+        r.soft_step("qemu", "agent ping", f"agent ping VM {vmid}",
+                    "qemu", "agent", vmid, "ping",
+                    skip_markers=("guest agent", "agent", "not running", "timeout",
+                                  "no such"),
+                    skip_reason="guest agent not installed/running on diskless VM")
         # Pause/resume operate on the running qemu process — no guest OS needed.
         r.step("qemu", "suspend", f"suspend VM {vmid}", "qemu", "suspend", vmid)
         r.step("qemu", "resume", f"resume VM {vmid}", "qemu", "resume", vmid)
