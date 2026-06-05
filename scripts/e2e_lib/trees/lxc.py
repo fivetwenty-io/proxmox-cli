@@ -39,12 +39,22 @@ def run(ctx: Ctx) -> None:
         missing = [k for k in ("status", "vmid") if k not in data]
         return f"status response missing keys: {missing}" if missing else None
 
+    def has_ticket(res: CmdResult) -> str | None:
+        # Validate the proxy ticket's shape only. The response carries a
+        # short-lived secret; assert on key presence and never echo values.
+        data = res.json()
+        if not isinstance(data, dict):
+            return "expected a JSON object"
+        missing = [k for k in ("ticket", "port") if k not in data]
+        return f"console response missing keys: {missing}" if missing else None
+
     if ctid is None:
         ctx.skip("status", "no container on node")
         ctx.skip("config get", "no container on node")
         ctx.skip("snapshot list", "no container on node")
         ctx.skip("firewall rules list", "no container on node")
         ctx.skip("firewall options get", "no container on node")
+        ctx.skip("console vnc ticket", "no container on node")
     else:
         cid = str(ctid)
         ctx.check("status", "lxc", "status", cid, node=n, validate=has_status)
@@ -55,6 +65,10 @@ def run(ctx: Ctx) -> None:
         ctx.check("firewall rules list", "lxc", "firewall", "rules", "list", cid,
                   node=n, validate=is_list)
         ctx.check("firewall options get", "lxc", "firewall", "options", "get", cid, node=n)
+        # Requesting a VNC proxy ticket is non-disruptive — it spawns an
+        # ephemeral proxy the same way the web GUI does and changes no CT state.
+        ctx.check("console vnc ticket", "lxc", "console", cid, "--type", "vnc",
+                  node=n, validate=has_ticket)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "lxc", "clone", "--help", fmt="")
@@ -65,6 +79,7 @@ def run(ctx: Ctx) -> None:
     ctx.check("firewall ipset add --help", "lxc", "firewall", "ipset", "add", "--help", fmt="")
     ctx.check("firewall alias create --help", "lxc", "firewall", "alias", "create", "--help", fmt="")
     ctx.check("firewall options set --help", "lxc", "firewall", "options", "set", "--help", fmt="")
+    ctx.check("console --help", "lxc", "console", "--help", fmt="")
 
     # Every mutating verb below — including the full power-state matrix and
     # snapshot create/rollback/delete — is exercised live on a purpose-built
@@ -113,4 +128,10 @@ def run(ctx: Ctx) -> None:
         "mutates a CT's firewall config — covered live by `e2e --mutate` on the isolated container",
         "pve lxc firewall rules create <ctid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "console connect (websocket/spice viewer)",
+        "opening the proxied console session needs an interactive viewer — the "
+        "CLI only returns the ticket, which the read-only sweep validates",
+        "pve lxc console <ctid> --type spice",
     )

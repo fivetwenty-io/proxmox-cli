@@ -39,12 +39,22 @@ def run(ctx: Ctx) -> None:
         missing = [k for k in ("status", "vmid") if k not in data]
         return f"status response missing keys: {missing}" if missing else None
 
+    def has_ticket(res: CmdResult) -> str | None:
+        # Validate the proxy ticket's shape only. The response carries a
+        # short-lived secret; assert on key presence and never echo values.
+        data = res.json()
+        if not isinstance(data, dict):
+            return "expected a JSON object"
+        missing = [k for k in ("ticket", "port") if k not in data]
+        return f"console response missing keys: {missing}" if missing else None
+
     if vmid is None:
         ctx.skip("status", "no VM on node")
         ctx.skip("config get", "no VM on node")
         ctx.skip("snapshot list", "no VM on node")
         ctx.skip("firewall rules list", "no VM on node")
         ctx.skip("firewall options get", "no VM on node")
+        ctx.skip("console vnc ticket", "no VM on node")
     else:
         vid = str(vmid)
         ctx.check("status", "qemu", "status", vid, node=n, validate=has_status)
@@ -54,6 +64,10 @@ def run(ctx: Ctx) -> None:
         ctx.check("firewall rules list", "qemu", "firewall", "rules", "list", vid,
                   node=n, validate=is_list)
         ctx.check("firewall options get", "qemu", "firewall", "options", "get", vid, node=n)
+        # Requesting a VNC proxy ticket is non-disruptive — it spawns an
+        # ephemeral proxy the same way the web GUI does and changes no VM state.
+        ctx.check("console vnc ticket", "qemu", "console", vid, "--type", "vnc",
+                  node=n, validate=has_ticket)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
@@ -65,6 +79,7 @@ def run(ctx: Ctx) -> None:
     ctx.check("firewall ipset add --help", "qemu", "firewall", "ipset", "add", "--help", fmt="")
     ctx.check("firewall alias create --help", "qemu", "firewall", "alias", "create", "--help", fmt="")
     ctx.check("firewall options set --help", "qemu", "firewall", "options", "set", "--help", fmt="")
+    ctx.check("console --help", "qemu", "console", "--help", fmt="")
 
     # The mutating verbs below are not run by the read-only sweep, but are all
     # exercised live on a purpose-built isolated VM by the mutate phase
@@ -110,4 +125,10 @@ def run(ctx: Ctx) -> None:
         "mutates a VM's firewall config — covered live by `e2e --mutate` on the isolated VM",
         "pve qemu firewall rules create <vmid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "console connect (websocket/spice viewer)",
+        "opening the proxied console session needs an interactive viewer — the "
+        "CLI only returns the ticket, which the read-only sweep validates",
+        "pve qemu console <vmid> --type spice",
     )

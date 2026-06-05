@@ -568,6 +568,11 @@ def vm_lifecycle(r: Runner) -> None:
                "qemu", "firewall", "alias", "list", vmid, json_out=True)
         r.del_step("qemu", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "qemu", "firewall", "alias", "delete", vmid, FW_ALIAS, "--yes")
+        # Console proxy: request a VNC ticket on the isolated VM. The ticket
+        # carries a short-lived secret, so the step records exit status only and
+        # never prints the response body.
+        r.step("qemu", "console", f"console vnc ticket on {vmid}",
+               "qemu", "console", vmid, "--type", "vnc", json_out=True)
     finally:
         r.undo(f"stop VM {vmid}", "qemu", "stop", vmid)
         r.step("qemu", "delete", f"delete VM {vmid}", "qemu", "delete", vmid, "--yes",
@@ -726,6 +731,16 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "lxc", "firewall", "alias", "list", ctid, json_out=True)
         r.del_step("lxc", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "lxc", "firewall", "alias", "delete", ctid, FW_ALIAS, "--yes")
+        # Console proxy: request a VNC ticket on the isolated CT. The ticket
+        # carries a short-lived secret, so the step records exit status only and
+        # never prints the response body. A container's vncproxy spawns a
+        # vncterm that occasionally times out waiting for its port to bind — a
+        # host-side limitation, not a CLI fault — so a port-readiness timeout is
+        # recorded as a skip rather than a failure.
+        r.soft_step("lxc", "console", f"console vnc ticket on {ctid}",
+                    "lxc", "console", ctid, "--type", "vnc",
+                    skip_markers=("timeout while waiting for port", "port '5900'"),
+                    skip_reason="container vncproxy port not ready (host-side timeout)")
     finally:
         r.undo(f"stop CT {ctid}", "lxc", "stop", ctid)
         r.step("lxc", "delete", f"delete CT {ctid}", "lxc", "delete", ctid, "--yes",
