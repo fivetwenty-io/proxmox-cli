@@ -35,6 +35,7 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 		newRoleCmd(),
 		newACLCmd(),
 		newDomainCmd(),
+		newTfaCmd(),
 		newPermissionsCmd(),
 		newPasswordCmd(),
 	)

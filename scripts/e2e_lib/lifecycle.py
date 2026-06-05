@@ -869,6 +869,15 @@ def access_lifecycle(r: Runner) -> None:
                      "access", "user", "token", "get", user, token, json_out=True)
         if updated not in got.out:
             raise LifecycleError(f"token set not reflected in token get for {user}!{token}")
+        # Clearing the TFA lockout on the probe user exercises the unlock path
+        # live. The probe has no TFA configured, so depending on the server this
+        # is a no-op success or a benign "no such entry"/permission rejection;
+        # tolerate the latter as a SKIP rather than a failure.
+        r.soft_step("access", "tfa unlock", f"tfa unlock {user}",
+                    "access", "tfa", "unlock", user, "--yes",
+                    skip_markers=("tfa", "permission", "not found", "no such",
+                                  "lock", "realm", "does not exist"),
+                    skip_reason="probe user has no tfa lockout to clear")
         # Grant the probe user a read-only role on our own pool path.
         r.step("access", "acl set", f"acl set {acl_path}",
                "access", "acl", "set", "--path", acl_path,
@@ -930,6 +939,44 @@ def domain_lifecycle(r: Runner) -> None:
     finally:
         r.del_step("access", "domain delete", f"domain delete {realm}",
                    "access", "domain", "delete", realm, "--yes")
+
+
+def role_lifecycle(r: Runner) -> None:
+    """Create an isolated custom role, change its privileges, then delete it.
+
+    Isolation: the role id is `pve-cli-role` (NAME_PREFIX + "role"), namespaced
+    and distinct from the built-in roles. Privileges are read-only audit privs so
+    the role grants nothing harmful even if it lingered. The round-trip asserts a
+    `role set` is reflected by `role get`. The role is removed in the finally block.
+    """
+    print(BOLD("access: role create / get / set / delete"))
+    # PVE reserves the (case-insensitive) 'PVE' role-ID namespace, so the usual
+    # `pve-cli-` prefix is rejected here; prefix with `e2e-` instead. Still
+    # uniquely namespaced (`e2e-pve-cli-role`) and safe to leave behind.
+    role = "e2e-" + Isolation.NAME_PREFIX + "role"   # e2e-pve-cli-role
+
+    # Best-effort clean of a role left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {role}", "access", "role", "delete", role, "--yes")
+    try:
+        r.step("access", "role create", f"role create {role}",
+               "access", "role", "create", role, "--privs", "VM.Audit,Datastore.Audit")
+        got = r.step("access", "role get", f"role get {role}",
+                     "access", "role", "get", role, json_out=True)
+        if "VM.Audit" not in got.out:
+            raise LifecycleError(f"role get did not report the granted privilege for {role}")
+        # Replace the privilege set (no --append), then prove the new priv is
+        # present and the old one is gone.
+        r.step("access", "role set", f"role set {role}",
+               "access", "role", "set", role, "--privs", "Sys.Audit")
+        got = r.step("access", "role get", f"role get {role} (after set)",
+                     "access", "role", "get", role, json_out=True)
+        if "Sys.Audit" not in got.out:
+            raise LifecycleError(f"role set not reflected in role get for {role}")
+        if "VM.Audit" in got.out:
+            raise LifecycleError(f"role set did not replace the prior privileges for {role}")
+    finally:
+        r.del_step("access", "role delete", f"role delete {role}",
+                   "access", "role", "delete", role, "--yes")
 
 
 def auth_lifecycle(r: Runner) -> None:
@@ -1287,6 +1334,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         access_lifecycle(r)
         print()
         domain_lifecycle(r)
+        print()
+        role_lifecycle(r)
         print()
         auth_lifecycle(r)
         print()

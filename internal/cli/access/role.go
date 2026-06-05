@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -14,10 +15,16 @@ import (
 func newRoleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "role",
-		Short: "Inspect roles and their privileges",
-		Long:  "List roles and show the privileges granted by a role.",
+		Short: "Manage roles and their privileges",
+		Long:  "List, inspect, create, update, and delete roles and the privileges they grant.",
 	}
-	cmd.AddCommand(newRoleListCmd(), newRoleGetCmd())
+	cmd.AddCommand(
+		newRoleListCmd(),
+		newRoleGetCmd(),
+		newRoleCreateCmd(),
+		newRoleSetCmd(),
+		newRoleDeleteCmd(),
+	)
 	return cmd
 }
 
@@ -91,6 +98,93 @@ func newRoleGetCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
 		},
 	}
+}
+
+// newRoleCreateCmd builds `pve access role create <roleid> [--privs <csv>]`.
+func newRoleCreateCmd() *cobra.Command {
+	var privs string
+	cmd := &cobra.Command{
+		Use:   "create <roleid>",
+		Short: "Create a role",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			roleid := args[0]
+
+			params := &access.CreateRolesParams{Roleid: roleid}
+			setIfChanged(cmd, "privs", &params.Privs, privs)
+
+			if err := deps.API.Access.CreateRoles(cmd.Context(), params); err != nil {
+				return fmt.Errorf("create role %q: %w", roleid, err)
+			}
+
+			result := output.Result{Message: fmt.Sprintf("Role '%s' created.", roleid)}
+			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&privs, "privs", "", "comma-separated list of privileges to grant")
+	return cmd
+}
+
+// newRoleSetCmd builds `pve access role set <roleid> --privs <csv> [--append]`.
+// Without --append the privilege list replaces the role's existing privileges.
+func newRoleSetCmd() *cobra.Command {
+	var privs string
+	var appendPrivs bool
+	cmd := &cobra.Command{
+		Use:   "set <roleid> --privs <csv>",
+		Short: "Update a role's privileges",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			roleid := args[0]
+
+			if !cmd.Flags().Changed("privs") {
+				return fmt.Errorf("--privs is required")
+			}
+
+			params := &access.UpdateRolesParams{}
+			setIfChanged(cmd, "privs", &params.Privs, privs)
+			setBoolIfChanged(cmd, "append", &params.Append, appendPrivs)
+
+			if err := deps.API.Access.UpdateRoles(cmd.Context(), roleid, params); err != nil {
+				return fmt.Errorf("update role %q: %w", roleid, err)
+			}
+
+			result := output.Result{Message: fmt.Sprintf("Role '%s' updated.", roleid)}
+			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&privs, "privs", "", "comma-separated list of privileges (required)")
+	cmd.Flags().BoolVar(&appendPrivs, "append", false, "add the privileges to the role instead of replacing them")
+	return cmd
+}
+
+// newRoleDeleteCmd builds `pve access role delete <roleid>`.
+func newRoleDeleteCmd() *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "delete <roleid>",
+		Short: "Delete a role",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			roleid := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete role %q without --yes/-y", roleid)
+			}
+
+			if err := deps.API.Access.DeleteRoles(cmd.Context(), roleid); err != nil {
+				return fmt.Errorf("delete role %q: %w", roleid, err)
+			}
+
+			result := output.Result{Message: fmt.Sprintf("Role '%s' deleted.", roleid)}
+			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion")
+	return cmd
 }
 
 // enabledPrivs re-marshals the typed role response into a name→bool map and

@@ -42,6 +42,20 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.skip("domain get", "no realm returned")
 
+    # Two-factor authentication entries. The list is server-wide; labs commonly
+    # have no entries, so `tfa get` of the first user is conditional (◑).
+    tfa = ctx.check("tfa list", "access", "tfa", "list", validate=is_list)
+    tfa_user = None
+    if tfa.rc == 0:
+        try:
+            tfa_user = ctx.first(tfa.json(), "userid")
+        except ValueError:
+            tfa_user = None
+    if tfa_user:
+        ctx.check("tfa get", "access", "tfa", "get", str(tfa_user))
+    else:
+        ctx.skip("tfa get", "no user has a tfa entry")
+
     uid = None
     if users.rc == 0:
         try:
@@ -115,4 +129,10 @@ def run(ctx: Ctx) -> None:
               isolation=True, live_covered=True)
     ctx.defer("domain sync", "syncs users from an ldap/ad realm — covered live by `e2e --mutate`",
               f"pve access domain sync {Isolation.NAME_PREFIX}realm --dry-run",
+              isolation=True, live_covered=True)
+    ctx.defer("role create/set/delete", "mutates a role definition — covered live by `e2e --mutate`",
+              f"pve access role create e2e-{Isolation.NAME_PREFIX}role --privs VM.Audit",
+              isolation=True, live_covered=True)
+    ctx.defer("tfa unlock", "clears a user's tfa lockout — covered live by `e2e --mutate`",
+              f"pve access tfa unlock {Isolation.NAME_PREFIX}probe@pve --yes",
               isolation=True, live_covered=True)
