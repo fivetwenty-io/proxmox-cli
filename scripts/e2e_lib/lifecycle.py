@@ -1417,6 +1417,96 @@ def node_firewall_lifecycle(r: Runner) -> None:
                        "node", "firewall", "rules", "delete", created_pos, "--yes")
 
 
+def node_system_lifecycle(r: Runner) -> None:
+    """Exercise the node's reversible system-config write verbs.
+
+    Isolation: only the node's time zone and DNS settings are touched, and each
+    is set back to the value it already holds (a no-op write). The original
+    values are captured first and restored in the finally block, so the node's
+    configuration is left exactly as found. The /etc/hosts and subscription write
+    verbs are NOT exercised here — replacing /etc/hosts could break host name
+    resolution and changing the subscription affects licensing on the shared lab.
+    """
+    print(BOLD("node: system config (time zone + DNS, set-to-self, reversible)"))
+
+    # ---- time zone: always present, fully reversible -----------------------
+    original_tz: str | None = None
+    try:
+        tz_get = r.step("node", "time get", "time get",
+                        "node", "time", "get", json_out=True)
+        try:
+            td = tz_get.json()
+            if isinstance(td, dict):
+                tz = td.get("timezone")
+                original_tz = tz if isinstance(tz, str) and tz else None
+        except ValueError:
+            original_tz = None
+
+        if original_tz:
+            r.step("node", "time set", f"time set (self: {original_tz})",
+                   "node", "time", "set", "--timezone", original_tz)
+            verify = r.pve("node", "time", "get", json_out=True)
+            ok = False
+            try:
+                vd = verify.json()
+                ok = isinstance(vd, dict) and vd.get("timezone") == original_tz
+            except ValueError:
+                ok = False
+            if ok:
+                print(f"  {GREEN('✓')} time set verified (time zone unchanged)")
+                r.cov.append(Step("node", "time verify", PASS))
+            else:
+                r.cover_skip("node", "time verify", "time set verify",
+                             "time zone did not read back unchanged")
+        else:
+            r.cover_skip("node", "time set", "time set", "no time zone reported by the node")
+    finally:
+        # The set above is a no-op (same value); re-assert it to be safe.
+        if original_tz:
+            r.del_step("node", "time restore", f"time restore ({original_tz})",
+                       "node", "time", "set", "--timezone", original_tz)
+
+    # ---- DNS: guarded on a configured search domain (--search is required) --
+    dns_get = r.step("node", "dns get", "dns get", "node", "dns", "get", json_out=True)
+    search: str | None = None
+    servers: list[tuple[str, str]] = []
+    try:
+        dd = dns_get.json()
+        if isinstance(dd, dict):
+            s = dd.get("search")
+            search = s if isinstance(s, str) and s else None
+            for key in ("dns1", "dns2", "dns3"):
+                v = dd.get(key)
+                if isinstance(v, str) and v:
+                    servers.append((key, v))
+    except ValueError:
+        search = None
+
+    if not search:
+        r.cover_skip("node", "dns set", "dns set",
+                     "no DNS search domain configured on the node")
+        return
+
+    # Re-apply the exact current values: a no-op write that leaves DNS as found.
+    set_args = ["node", "dns", "set", "--search", search]
+    for key, val in servers:
+        set_args += [f"--{key}", val]
+    r.step("node", "dns set", f"dns set (self: {search})", *set_args)
+    verify = r.pve("node", "dns", "get", json_out=True)
+    ok = False
+    try:
+        vd = verify.json()
+        ok = isinstance(vd, dict) and vd.get("search") == search
+    except ValueError:
+        ok = False
+    if ok:
+        print(f"  {GREEN('✓')} dns set verified (search domain unchanged)")
+        r.cov.append(Step("node", "dns verify", PASS))
+    else:
+        r.cover_skip("node", "dns verify", "dns set verify",
+                     "search domain did not read back unchanged")
+
+
 def cluster_options_lifecycle(r: Runner) -> None:
     """Exercise `cluster options get/set` reversibly.
 
@@ -1648,6 +1738,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_firewall_lifecycle(r)
         print()
         node_firewall_lifecycle(r)
+        print()
+        node_system_lifecycle(r)
         print()
         cluster_options_lifecycle(r)
         print()

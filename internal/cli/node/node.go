@@ -38,6 +38,13 @@ func newNodeCmd(_ *cli.Deps) *cobra.Command {
 		newDisksCmd(),
 		newScanCmd(),
 		newHardwareCmd(),
+		newDnsCmd(),
+		newHostsCmd(),
+		newTimeCmd(),
+		newSyslogCmd(),
+		newJournalCmd(),
+		newReportCmd(),
+		newSubscriptionCmd(),
 	)
 
 	return cmd

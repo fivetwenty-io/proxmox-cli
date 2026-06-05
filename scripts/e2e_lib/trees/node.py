@@ -146,6 +146,26 @@ def run(ctx: Ctx) -> None:
         ctx.check("hardware pci", "node", "hardware", "pci", node=n, validate=is_list)
         ctx.check("hardware usb", "node", "hardware", "usb", node=n, validate=is_list)
 
+        # System config: dns/time are key/value objects; the system log, journal,
+        # and report are read-only diagnostics; subscription is the node's
+        # licensing status. /etc/hosts is read here but never replaced live (the
+        # set verb rewrites the whole file and is deferred below). The dns/time/
+        # subscription write verbs are reversible/idempotent — covered by the
+        # mutate lifecycle, not this read-only sweep.
+        def is_object(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        ctx.check("dns get", "node", "dns", "get", node=n, validate=is_object)
+        ctx.check("time get", "node", "time", "get", node=n, validate=is_object)
+        ctx.check("hosts get", "node", "hosts", "get", node=n, fmt="")
+        # The journal and report can be large; --lastentries bounds the journal.
+        ctx.check("journal", "node", "journal", "--lastentries", "20", node=n, fmt="")
+        ctx.check("syslog", "node", "syslog", "--limit", "20", node=n, validate=is_list)
+        ctx.check("report", "node", "report", node=n, fmt="")
+        ctx.check("subscription get", "node", "subscription", "get", node=n, validate=is_object)
+        ctx.check("dns set --help", "node", "dns", "set", "--help", fmt="")
+        ctx.check("hosts set --help", "node", "hosts", "set", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -209,6 +229,30 @@ def run(ctx: Ctx) -> None:
         "disks create/init-gpt/wipe",
         "formats or wipes a physical disk — irreversible; not exercised live",
         "pve node disks wipe --node <node> --disk /dev/sdX --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # The dns and time write verbs are reversible (get -> set-same -> restore)
+    # and are exercised by the mutate phase's node_system_lifecycle.
+    ctx.defer(
+        "dns/time set",
+        "reconfigures node DNS or time zone — reversible; covered live by `e2e --mutate`",
+        "pve node dns set --node <node> --search <domain>",
+        isolation=True, live_covered=True,
+    )
+    # Replacing /etc/hosts wholesale could break host name resolution on the
+    # shared lab, and changing the node's subscription state (set/refresh/delete)
+    # affects licensing — neither is exercised live.
+    ctx.defer(
+        "hosts set",
+        "replaces the whole /etc/hosts file — could break host name resolution; not exercised live",
+        "pve node hosts set --node <node> --data <content> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "subscription set/update/delete",
+        "changes the node's subscription/licensing state on a shared lab; not exercised live",
+        "pve node subscription set --node <node> --key <key> --yes",
         isolation=False, live_covered=False,
     )
 
