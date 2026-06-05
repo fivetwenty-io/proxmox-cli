@@ -49,9 +49,11 @@ def run(ctx: Ctx) -> None:
         ctx.check("config get", "lxc", "config", "get", cid, node=n)
         ctx.check("snapshot list", "lxc", "snapshot", "list", cid, node=n)
 
-    # Verify clone and migrate help text parses (commands are wired).
+    # Verify clone, migrate, and disk help text parses (commands are wired).
     ctx.check("clone --help", "lxc", "clone", "--help", fmt="")
     ctx.check("migrate --help", "lxc", "migrate", "--help", fmt="")
+    ctx.check("disk resize --help", "lxc", "disk", "resize", "--help", fmt="")
+    ctx.check("disk move --help", "lxc", "disk", "move", "--help", fmt="")
 
     # Every mutating verb below — including the full power-state matrix and
     # snapshot create/rollback/delete — is exercised live on a purpose-built
@@ -81,5 +83,17 @@ def run(ctx: Ctx) -> None:
         "migrate",
         "migrates a container to another node — covered live by `e2e --mutate` on multi-node clusters",
         "pve lxc migrate <ctid> --target-node <node>",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "disk resize",
+        "grows a container volume — covered live by `e2e --mutate`",
+        "pve lxc disk resize <ctid> --disk rootfs --size +1G",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "disk move",
+        "relocates a container volume — covered live by `e2e --mutate` when a second rootdir storage exists",
+        "pve lxc disk move <ctid> --volume rootfs --storage <other>",
         isolation=True, live_covered=True,
     )

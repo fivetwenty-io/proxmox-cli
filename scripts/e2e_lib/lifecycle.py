@@ -246,6 +246,29 @@ def _alt_image_storage(r: Runner, exclude: str) -> str:
     return ""
 
 
+def _alt_rootdir_storage(r: Runner, exclude: str) -> str:
+    """Return the id of an enabled storage that supports `rootdir` content other
+    than `exclude`, or "" if none exists. Used so the CT volume `move` verb
+    relocates a container rootfs to a genuinely different storage."""
+    res = r.pve("storage", "list", json_out=True, node=False)
+    if res.rc != 0:
+        return ""
+    try:
+        rows = res.json()
+    except ValueError:
+        return ""
+    if not isinstance(rows, list):
+        return ""
+    for s in rows:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("storage", ""))
+        content = str(s.get("content", ""))
+        if sid and sid != exclude and "rootdir" in content:
+            return sid
+    return ""
+
+
 def _next_id(r: Runner) -> str:
     res = r.pve("cluster", "next-id", json_out=True, node=False)
     if res.rc != 0:
@@ -610,6 +633,25 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
             if clone_created:
                 r.del_step("lxc", "clone delete", f"delete clone {clone_id}",
                            "lxc", "delete", clone_id, "--yes", "--force", "--purge")
+
+        # Volume ops on the (stopped) base CT: grow rootfs, then relocate it to
+        # another rootdir-capable storage when one exists. Both operate on the
+        # isolated pve-cli container and its own volume, so nothing else is touched.
+        r.step("lxc", "disk resize", f"disk resize rootfs on {ctid} (+1G)",
+               "lxc", "disk", "resize", ctid, "--disk", "rootfs", "--size", "+1G")
+        alt = _alt_rootdir_storage(r, ROOTDIR_STORAGE)
+        if alt:
+            r.soft_step(
+                "lxc", "disk move", f"disk move rootfs -> {alt}",
+                "lxc", "disk", "move", ctid, "--volume", "rootfs",
+                "--storage", alt, "--delete",
+                skip_markers=("storage", "no such", "not supported",
+                              "same", "content type"),
+                skip_reason="target storage cannot hold the volume",
+            )
+        else:
+            r.cover_skip("lxc", "disk move", f"disk move rootfs on {ctid}",
+                         "no second rootdir-capable storage available")
     finally:
         r.undo(f"stop CT {ctid}", "lxc", "stop", ctid)
         r.step("lxc", "delete", f"delete CT {ctid}", "lxc", "delete", ctid, "--yes",
