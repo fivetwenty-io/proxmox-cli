@@ -43,18 +43,28 @@ def run(ctx: Ctx) -> None:
         ctx.skip("status", "no VM on node")
         ctx.skip("config get", "no VM on node")
         ctx.skip("snapshot list", "no VM on node")
+        ctx.skip("firewall rules list", "no VM on node")
+        ctx.skip("firewall options get", "no VM on node")
     else:
         vid = str(vmid)
         ctx.check("status", "qemu", "status", vid, node=n, validate=has_status)
         ctx.check("config get", "qemu", "config", "get", vid, node=n)
         ctx.check("snapshot list", "qemu", "snapshot", "list", vid, node=n)
+        # Firewall reads are non-mutating: safe against any existing VM.
+        ctx.check("firewall rules list", "qemu", "firewall", "rules", "list", vid,
+                  node=n, validate=is_list)
+        ctx.check("firewall options get", "qemu", "firewall", "options", "get", vid, node=n)
 
-    # Verify clone, migrate, and disk help text parses (commands are wired).
+    # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
     ctx.check("migrate --help", "qemu", "migrate", "--help", fmt="")
     ctx.check("disk resize --help", "qemu", "disk", "resize", "--help", fmt="")
     ctx.check("disk move --help", "qemu", "disk", "move", "--help", fmt="")
     ctx.check("disk unlink --help", "qemu", "disk", "unlink", "--help", fmt="")
+    ctx.check("firewall rules create --help", "qemu", "firewall", "rules", "create", "--help", fmt="")
+    ctx.check("firewall ipset add --help", "qemu", "firewall", "ipset", "add", "--help", fmt="")
+    ctx.check("firewall alias create --help", "qemu", "firewall", "alias", "create", "--help", fmt="")
+    ctx.check("firewall options set --help", "qemu", "firewall", "options", "set", "--help", fmt="")
 
     # The mutating verbs below are not run by the read-only sweep, but are all
     # exercised live on a purpose-built isolated VM by the mutate phase
@@ -93,5 +103,11 @@ def run(ctx: Ctx) -> None:
         "disk resize/move/unlink",
         "grows, relocates, and detaches VM disks — covered live by `e2e --mutate`",
         "pve qemu disk resize <vmid> --disk scsi0 --size +1G",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "firewall rules/ipset/alias create-delete + options set",
+        "mutates a VM's firewall config — covered live by `e2e --mutate` on the isolated VM",
+        "pve qemu firewall rules create <vmid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
     )

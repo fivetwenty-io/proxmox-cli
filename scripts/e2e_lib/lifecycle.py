@@ -55,6 +55,8 @@ from .runner import (
 VM_NAME = Isolation.NAME_PREFIX + "vm"
 CT_HOST = Isolation.NAME_PREFIX + "ct"
 SNAP_NAME = "pvecli-snap"
+FW_IPSET = "pvecli-ips"
+FW_ALIAS = "pvecli-alias"
 ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
 TMPL_STORAGE = "local"          # holds vztmpl content
 CT_IP = "172.30.0.50/24"
@@ -530,6 +532,42 @@ def vm_lifecycle(r: Runner) -> None:
                          "no second images-capable storage available")
         r.step("qemu", "disk unlink", f"disk unlink scsi0 on {vmid}",
                "qemu", "disk", "unlink", vmid, "--disk", "scsi0", "--force")
+
+        # Firewall ops on the isolated VM's own config: enable the firewall,
+        # add/inspect/remove a rule, an IP set with one member, and an address
+        # alias. Every object is scoped to this throwaway VM and uses pve-cli
+        # names plus the e2e subnet, so no other workload's policy is touched.
+        r.step("qemu", "firewall options set", f"firewall options set on {vmid}",
+               "qemu", "firewall", "options", "set", vmid, "--enable", "--policy-in", "ACCEPT")
+        r.step("qemu", "firewall options get", f"firewall options get on {vmid}",
+               "qemu", "firewall", "options", "get", vmid, json_out=True)
+        r.step("qemu", "firewall rules create", f"firewall rule add on {vmid}",
+               "qemu", "firewall", "rules", "create", vmid,
+               "--type", "in", "--action", "ACCEPT", "--proto", "tcp",
+               "--dport", "22", "--comment", "pve-cli-e2e")
+        r.step("qemu", "firewall rules list", "firewall rules list",
+               "qemu", "firewall", "rules", "list", vmid, json_out=True)
+        r.step("qemu", "firewall rules get", "firewall rule get pos 0",
+               "qemu", "firewall", "rules", "get", vmid, "0", json_out=True)
+        r.del_step("qemu", "firewall rules delete", "firewall rule delete pos 0",
+                   "qemu", "firewall", "rules", "delete", vmid, "0", "--yes")
+        r.step("qemu", "firewall ipset create", f"firewall ipset create {FW_IPSET}",
+               "qemu", "firewall", "ipset", "create", vmid, FW_IPSET, "--comment", "pve-cli-e2e")
+        r.step("qemu", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
+               "qemu", "firewall", "ipset", "add", vmid, FW_IPSET, Isolation.SDN_SUBNET)
+        r.step("qemu", "firewall ipset list", "firewall ipset member list",
+               "qemu", "firewall", "ipset", "list", vmid, FW_IPSET, json_out=True)
+        r.del_step("qemu", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
+                   "qemu", "firewall", "ipset", "remove", vmid, FW_IPSET, Isolation.SDN_SUBNET, "--yes")
+        r.del_step("qemu", "firewall ipset delete", f"firewall ipset delete {FW_IPSET}",
+                   "qemu", "firewall", "ipset", "delete", vmid, FW_IPSET, "--yes", "--force")
+        r.step("qemu", "firewall alias create", f"firewall alias create {FW_ALIAS}",
+               "qemu", "firewall", "alias", "create", vmid, FW_ALIAS, "172.30.0.99",
+               "--comment", "pve-cli-e2e")
+        r.step("qemu", "firewall alias list", "firewall alias list",
+               "qemu", "firewall", "alias", "list", vmid, json_out=True)
+        r.del_step("qemu", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
+                   "qemu", "firewall", "alias", "delete", vmid, FW_ALIAS, "--yes")
     finally:
         r.undo(f"stop VM {vmid}", "qemu", "stop", vmid)
         r.step("qemu", "delete", f"delete VM {vmid}", "qemu", "delete", vmid, "--yes",
