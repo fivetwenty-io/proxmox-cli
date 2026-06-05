@@ -475,7 +475,7 @@ def vm_lifecycle(r: Runner) -> None:
                 else:
                     r.soft_step(
                         "qemu", "migrate", f"migrate clone {clone_id} -> {other}",
-                        "qemu", "migrate", clone_id, "--target", other,
+                        "qemu", "migrate", clone_id, "--target-node", other,
                         skip_markers=("shared storage", "local disk", "not supported",
                                       "cannot migrate", "no route"),
                         skip_reason="migration blocked by storage or network constraints",
@@ -558,6 +558,58 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "lxc", "snapshot", "rollback", ctid, SNAP_NAME)
         r.step("lxc", "snapshot delete", f"snapshot delete {SNAP_NAME}",
                "lxc", "snapshot", "delete", ctid, SNAP_NAME)
+
+        # Clone the (stopped) container, verify it exists, then migrate it on a
+        # multi-node cluster. Mirrors the qemu clone/migrate path; everything
+        # stays inside the pve-cli pool so no other workload is touched.
+        clone_id = _next_id(r)
+        clone_host = Isolation.NAME_PREFIX + "ctclone"
+        print(DIM(f"  clone_id={clone_id}"))
+        clone_created = False
+        try:
+            r.step("lxc", "clone", f"clone CT {ctid} -> {clone_id}",
+                   "lxc", "clone", ctid,
+                   "--newid", clone_id,
+                   "--hostname", clone_host,
+                   "--pool", Isolation.POOL,
+                   "--full")
+            clone_created = True
+            r.step("lxc", "clone verify", f"verify clone {clone_id} exists",
+                   "lxc", "status", clone_id, json_out=True)
+
+            # Migrate: only meaningful when the cluster has more than one node.
+            n_nodes = _node_count(r)
+            if n_nodes < 2:
+                r.cover_skip("lxc", "migrate", f"migrate clone {clone_id}",
+                             "single-node cluster — migrate requires a second node")
+            else:
+                node_res = r.pve("node", "list", json_out=True, node=False)
+                other = ""
+                if node_res.rc == 0:
+                    try:
+                        for nd in node_res.json():
+                            nd_name = (nd.get("node") or "") if isinstance(nd, dict) else ""
+                            if nd_name and nd_name != r.node:
+                                other = nd_name
+                                break
+                    except (ValueError, KeyError):
+                        pass
+                if not other:
+                    r.cover_skip("lxc", "migrate", f"migrate clone {clone_id}",
+                                 "could not determine a second node name")
+                else:
+                    # A stopped CT migrates offline; --restart is unnecessary.
+                    r.soft_step(
+                        "lxc", "migrate", f"migrate clone {clone_id} -> {other}",
+                        "lxc", "migrate", clone_id, "--target-node", other,
+                        skip_markers=("shared storage", "local disk", "not supported",
+                                      "cannot migrate", "no route"),
+                        skip_reason="migration blocked by storage or network constraints",
+                    )
+        finally:
+            if clone_created:
+                r.del_step("lxc", "clone delete", f"delete clone {clone_id}",
+                           "lxc", "delete", clone_id, "--yes", "--force", "--purge")
     finally:
         r.undo(f"stop CT {ctid}", "lxc", "stop", ctid)
         r.step("lxc", "delete", f"delete CT {ctid}", "lxc", "delete", ctid, "--yes",

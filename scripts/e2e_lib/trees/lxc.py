@@ -49,6 +49,10 @@ def run(ctx: Ctx) -> None:
         ctx.check("config get", "lxc", "config", "get", cid, node=n)
         ctx.check("snapshot list", "lxc", "snapshot", "list", cid, node=n)
 
+    # Verify clone and migrate help text parses (commands are wired).
+    ctx.check("clone --help", "lxc", "clone", "--help", fmt="")
+    ctx.check("migrate --help", "lxc", "migrate", "--help", fmt="")
+
     # Every mutating verb below — including the full power-state matrix and
     # snapshot create/rollback/delete — is exercised live on a purpose-built
     # Alpine container by the mutate phase (`scripts/e2e --mutate` /
@@ -67,3 +71,15 @@ def run(ctx: Ctx) -> None:
     ctx.defer("snapshot create/rollback/delete",
               "mutates CT snapshots — covered live by `e2e --mutate`",
               "pve lxc snapshot create <ctid> <name>", isolation=True, live_covered=True)
+    ctx.defer(
+        "clone",
+        "clones a container — covered live by `e2e --mutate`",
+        f"pve lxc clone <ctid> --newid <id> --pool {Isolation.POOL} --hostname {Isolation.NAME_PREFIX}ctclone",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "migrate",
+        "migrates a container to another node — covered live by `e2e --mutate` on multi-node clusters",
+        "pve lxc migrate <ctid> --target-node <node>",
+        isolation=True, live_covered=True,
+    )
