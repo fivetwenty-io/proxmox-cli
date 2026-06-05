@@ -97,6 +97,16 @@ func TestLxcInterfaces_Empty(t *testing.T) {
 	require.Contains(t, buf.String(), "NAME")
 }
 
+// TestLxcInterfaces_RejectsNonNumericVMID verifies the positional vmid is
+// validated before any API call, matching the other lxc subcommands.
+func TestLxcInterfaces_RejectsNonNumericVMID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "interfaces", "not-a-number")
+	require.Error(t, run())
+}
+
 func TestLxcInterfaces_NoNode_Errors(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	deps := newDeps(t, f, output.FormatTable, "", false)

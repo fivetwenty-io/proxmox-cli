@@ -223,6 +223,43 @@ func TestNodeNetwork_ApplyRendersMessage(t *testing.T) {
 	require.Contains(t, buf.String(), "applied")
 }
 
+// TestNodeNetwork_ApplyAsyncReturnsUPID drives the reload through the UPID +
+// --async branch: the PUT returns a task UPID and --async echoes it without
+// waiting on the task status endpoint.
+func TestNodeNetwork_ApplyAsyncReturnsUPID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:srvreload:networking:root@pam:"
+	f.HandleFunc("PUT /api2/json/nodes/pve1/network", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--async", "--node", "pve1", "node", "network", "apply", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), upid)
+}
+
+// TestNodeNetwork_ApplyWaitsForTask drives the reload through the UPID +
+// synchronous branch: the PUT returns a UPID, the command blocks on the task
+// status endpoint, and only renders the done message after the task ends OK.
+func TestNodeNetwork_ApplyWaitsForTask(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:srvreload:networking:root@pam:"
+	f.HandleFunc("PUT /api2/json/nodes/pve1/network", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "OK", "upid": upid,
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "network", "apply", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), "applied")
+}
+
 func TestNodeNetwork_RevertRequiresYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 

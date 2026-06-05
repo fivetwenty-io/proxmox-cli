@@ -66,6 +66,21 @@ func TestQemuCloudinitDump_DefaultType(t *testing.T) {
 	require.Equal(t, "user", gotType)
 }
 
+// TestQemuCloudinitDump_NonStringFallback covers the branch where the dump body
+// is not a bare JSON string: the raw bytes are rendered verbatim rather than
+// failing to decode.
+func TestQemuCloudinitDump_NonStringFallback(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/cloudinit/dump", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"unexpected": "shape"})
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "cloudinit", "dump", "100"))
+	require.Contains(t, buf.String(), "unexpected")
+}
+
 func TestQemuCloudinitUpdate(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotMethod, gotPath string

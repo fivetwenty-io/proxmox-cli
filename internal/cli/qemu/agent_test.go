@@ -62,6 +62,22 @@ func TestQemuAgentGetFsinfo_ArrayResult(t *testing.T) {
 	require.Contains(t, buf.String(), "mountpoint")
 }
 
+// TestQemuAgentGetTime_ScalarResult covers the branch where the agent body is a
+// bare scalar (neither an object nor empty): it is rendered under a synthetic
+// "result" field.
+func TestQemuAgentGetTime_ScalarResult(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/agent/get-time", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, 1700000000)
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "agent", "100", "get-time"))
+	require.Contains(t, buf.String(), "result")
+	require.Contains(t, buf.String(), "1700000000")
+}
+
 func TestQemuAgentMutateFstrim(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotMethod string

@@ -35,6 +35,9 @@ func newInterfacesCmd() *cobra.Command {
 				return err
 			}
 			vmid := args[0]
+			if err := parseVMID(vmid); err != nil {
+				return err
+			}
 
 			resp, err := deps.API.Nodes.ListLxcInterfaces(cmd.Context(), node, vmid)
 			if err != nil {

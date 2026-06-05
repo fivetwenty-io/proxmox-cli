@@ -89,7 +89,7 @@ func newReplicationCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a storage replication job",
 		Long: "Create a replication job. The job ID is '<GUEST>-<JOBNUM>' (for example " +
-			"'101-0'); --target is the node to replicate to.",
+			"'101-0'); --target-node is the node to replicate to.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := resolveDeps(cmd)
