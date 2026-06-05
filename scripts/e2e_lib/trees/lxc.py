@@ -70,6 +70,22 @@ def run(ctx: Ctx) -> None:
         ctx.check("console vnc ticket", "lxc", "console", cid, "--type", "vnc",
                   node=n, validate=has_ticket)
 
+    # `interfaces` reads the container's live network namespace, so it only
+    # works against a running container. Discover one explicitly; when none is
+    # running the read-only sweep skips it (the verb is exercised live on the
+    # purpose-built Alpine container by the mutate phase).
+    running_cid = None
+    if lst.rc == 0:
+        for it in lst.json():
+            if it.get("status") == "running" and it.get("vmid") not in (None, ""):
+                running_cid = str(it["vmid"])
+                break
+    if running_cid is None:
+        ctx.skip("interfaces", "no running container on node")
+    else:
+        ctx.check("interfaces", "lxc", "interfaces", running_cid,
+                  node=n, validate=is_list)
+
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "lxc", "clone", "--help", fmt="")
     ctx.check("migrate --help", "lxc", "migrate", "--help", fmt="")
@@ -80,6 +96,7 @@ def run(ctx: Ctx) -> None:
     ctx.check("firewall alias create --help", "lxc", "firewall", "alias", "create", "--help", fmt="")
     ctx.check("firewall options set --help", "lxc", "firewall", "options", "set", "--help", fmt="")
     ctx.check("console --help", "lxc", "console", "--help", fmt="")
+    ctx.check("interfaces --help", "lxc", "interfaces", "--help", fmt="")
 
     # Every mutating verb below — including the full power-state matrix and
     # snapshot create/rollback/delete — is exercised live on a purpose-built

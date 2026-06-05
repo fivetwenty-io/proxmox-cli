@@ -56,7 +56,7 @@ Administrative depth across guests, nodes, storage, and software-defined network
 | Feature | Commands | Notes | Status |
 |---|---|---|---|
 | VM guest integration | `pve qemu agent`, `pve qemu cloudinit`, `pve qemu reset`, `pve qemu template` | Guest agent, cloud-init exposure, hard reset, template conversion | Shipped |
-| Container interfaces | `pve lxc interfaces` | Network interface inspection | Planned |
+| Container interfaces | `pve lxc interfaces` | Network interface inspection | Shipped |
 | Package management | `pve node apt` | Updates, versions, changelogs, and repositories | Planned |
 | Disks and hardware | `pve node disks`, `pve node scan`, `pve node hardware` | SMART data, storage discovery, and PCI/USB inventory | Planned |
 | Node system config | `pve node dns\|hosts\|time\|syslog\|journal\|report\|subscription` | Host-level configuration and diagnostics | Planned |

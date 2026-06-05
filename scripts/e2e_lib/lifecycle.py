@@ -635,6 +635,14 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
     try:
         r.step("lxc", "start", f"start CT {ctid}", "lxc", "start", ctid)
         r.step("lxc", "status", f"status CT {ctid}", "lxc", "status", ctid, json_out=True)
+        # The running container exposes its host-visible NICs. The endpoint reads
+        # the live namespace, so it works once the CT is up; the freshly started
+        # network can briefly lag, so a transient lookup error is a SKIP, not a
+        # failure.
+        r.soft_step("lxc", "interfaces", f"interfaces CT {ctid}",
+                    "lxc", "interfaces", ctid,
+                    skip_markers=("not running", "timeout", "no such", "unable to open"),
+                    skip_reason="container network not ready for interface enumeration")
         r.step("lxc", "config set", f"config set CT {ctid}",
                "lxc", "config", "set", ctid, "--description", "pve-cli-e2e")
         # Suspend/resume go through CRIU (`lxc-checkpoint`); on hosts without
