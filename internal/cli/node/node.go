@@ -31,6 +31,7 @@ func newNodeCmd(_ *cli.Deps) *cobra.Command {
 		newExecCmd(),
 		newTaskCmd(),
 		newServicesCmd(),
+		newVzdumpCmd(),
 	)
 
 	return cmd

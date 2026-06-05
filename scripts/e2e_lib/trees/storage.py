@@ -39,6 +39,32 @@ def run(ctx: Ctx) -> None:
         else:
             ctx.skip("content", "no node discovered")
 
+    # Prune preview: --dry-run queries the prunebackups endpoint, which reports
+    # the keep/remove decision for each archive WITHOUT deleting anything, so it
+    # is safe in the read-only sweep. Run it against a backup-capable storage when
+    # one exists and a node is known; the result is an array of prune decisions.
+    backup_sid = None
+    if lst.rc == 0 and isinstance(lst.json(), list):
+        for s in lst.json():
+            if isinstance(s, dict) and "backup" in str(s.get("content", "")):
+                backup_sid = str(s.get("storage", ""))
+                break
+    if backup_sid and ctx.node:
+        ctx.check("prune dry-run", "storage", "prune", backup_sid,
+                  "--keep-last", "1", "--dry-run", node=ctx.node, validate=is_list)
+    else:
+        ctx.skip("prune dry-run", "no backup-capable storage or node discovered")
+    ctx.check("prune --help", "storage", "prune", "--help", fmt="")
+
+    # The mutate phase backs up the isolated guest then prunes its own archive
+    # (keep-last=0, scoped to that vmid) — covered live by `e2e --mutate`.
+    ctx.defer(
+        "prune (delete archives)",
+        "deletes backup archives by retention policy — covered live by `e2e --mutate`",
+        f"pve storage prune {Isolation.NAME_PREFIX}... --vmid <id> --keep-last 0 --yes",
+        isolation=True, live_covered=True,
+    )
+
     # The mutate phase creates an isolated `pve-cli-store` dir storage,
     # node-restricted, exercises set, and deletes it — covered live by it.
     ctx.defer(

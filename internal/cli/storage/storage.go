@@ -35,6 +35,7 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 		newCreateCmd(),
 		newSetCmd(),
 		newDeleteCmd(),
+		newPruneCmd(),
 	)
 	return cmd
 }

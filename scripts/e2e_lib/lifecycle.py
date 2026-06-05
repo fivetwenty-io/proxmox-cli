@@ -59,6 +59,8 @@ FW_IPSET = "pvecli-ips"
 FW_ALIAS = "pvecli-alias"
 ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
 TMPL_STORAGE = "local"          # holds vztmpl content
+BACKUP_STORAGE = "local"        # dir storage that holds backup content
+BACKUP_JOB = "pvecli-backup"    # isolated, disabled vzdump schedule id
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
 
@@ -573,6 +575,17 @@ def vm_lifecycle(r: Runner) -> None:
         # never prints the response body.
         r.step("qemu", "console", f"console vnc ticket on {vmid}",
                "qemu", "console", vmid, "--type", "vnc", json_out=True)
+        # On-demand backup of the isolated VM, then prune its own archive. vzdump
+        # writes a real backup of THIS throwaway VM to the backup storage; the
+        # prune (scoped to this vmid, keep-last=0) removes it again, so no backup
+        # artifact is left behind and no other guest's archives are touched.
+        r.step("node", "vzdump", f"vzdump backup VM {vmid}",
+               "node", "vzdump", "--vmid", vmid, "--storage", BACKUP_STORAGE, "--mode", "snapshot")
+        r.step("storage", "prune dry-run", f"prune dry-run for VM {vmid}",
+               "storage", "prune", BACKUP_STORAGE, "--vmid", vmid, "--keep-last", "1",
+               "--dry-run", json_out=True)
+        r.del_step("storage", "prune", f"prune backups of VM {vmid}",
+                   "storage", "prune", BACKUP_STORAGE, "--vmid", vmid, "--keep-last", "0", "--yes")
     finally:
         r.undo(f"stop VM {vmid}", "qemu", "stop", vmid)
         r.step("qemu", "delete", f"delete VM {vmid}", "qemu", "delete", vmid, "--yes",
@@ -741,6 +754,16 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                     "lxc", "console", ctid, "--type", "vnc",
                     skip_markers=("timeout while waiting for port", "port '5900'"),
                     skip_reason="container vncproxy port not ready (host-side timeout)")
+        # On-demand backup of the isolated CT, then prune its own archive — same
+        # contract as the VM path: the backup is of THIS throwaway container and
+        # is pruned immediately, scoped to this ctid, leaving nothing behind.
+        r.step("node", "vzdump", f"vzdump backup CT {ctid}",
+               "node", "vzdump", "--vmid", ctid, "--storage", BACKUP_STORAGE, "--mode", "snapshot")
+        r.step("storage", "prune dry-run", f"prune dry-run for CT {ctid}",
+               "storage", "prune", BACKUP_STORAGE, "--vmid", ctid, "--keep-last", "1",
+               "--dry-run", json_out=True)
+        r.del_step("storage", "prune", f"prune backups of CT {ctid}",
+                   "storage", "prune", BACKUP_STORAGE, "--vmid", ctid, "--keep-last", "0", "--yes")
     finally:
         r.undo(f"stop CT {ctid}", "lxc", "stop", ctid)
         r.step("lxc", "delete", f"delete CT {ctid}", "lxc", "delete", ctid, "--yes",
@@ -963,6 +986,29 @@ def storage_lifecycle(r: Runner) -> None:
                    "storage", "delete", sid, "--yes")
 
 
+def backup_lifecycle(r: Runner) -> None:
+    """Create / inspect / update / delete an isolated, DISABLED vzdump backup
+    schedule. The job is scoped to the pve-cli pool and never enabled, so it can
+    never run and disrupt other workloads; it carries the pvecli- id prefix and is
+    deleted in the finally block."""
+    print(BOLD("cluster: backup schedule create / get / set / delete"))
+    r.step("cluster", "backup create", f"backup job create {BACKUP_JOB}",
+           "cluster", "backup", "create", "--id", BACKUP_JOB,
+           "--schedule", "sun 03:30", "--storage", BACKUP_STORAGE,
+           "--pool", Isolation.POOL, "--mode", "snapshot",
+           "--enabled=false", "--comment", "pve-cli-e2e")
+    try:
+        r.step("cluster", "backup list", "backup job list",
+               "cluster", "backup", "list", json_out=True)
+        r.step("cluster", "backup get", f"backup job get {BACKUP_JOB}",
+               "cluster", "backup", "get", BACKUP_JOB, json_out=True)
+        r.step("cluster", "backup set", f"backup job set {BACKUP_JOB}",
+               "cluster", "backup", "set", BACKUP_JOB, "--comment", "pve-cli-e2e-upd")
+    finally:
+        r.del_step("cluster", "backup delete", f"backup job delete {BACKUP_JOB}",
+                   "cluster", "backup", "delete", BACKUP_JOB, "--yes")
+
+
 def node_ops(r: Runner) -> None:
     """Exercise the SSH-gated node verbs (exec/ssh/rsync). Probe reachability
     with `node exec -- true`; if SSH to the host is unavailable, record all
@@ -1074,6 +1120,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         auth_lifecycle(r)
         print()
         storage_lifecycle(r)
+        print()
+        backup_lifecycle(r)
         print()
 
         if not skip_vm:
