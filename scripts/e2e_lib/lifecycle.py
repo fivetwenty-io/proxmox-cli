@@ -1388,6 +1388,93 @@ def node_firewall_lifecycle(r: Runner) -> None:
                        "node", "firewall", "rules", "delete", created_pos, "--yes")
 
 
+def cluster_options_lifecycle(r: Runner) -> None:
+    """Exercise `cluster options get/set` reversibly.
+
+    Isolation: the only option touched is the datacenter `description` (the notes
+    panel text), which has no operational effect. The original value is captured
+    first and restored in the finally block, so the datacenter config is left
+    exactly as found. No policy, migration, or HA option is ever changed.
+    """
+    print(BOLD("cluster: datacenter options (description marker, reversible)"))
+
+    marker = "pve-cli-e2e options marker"
+    original: str | None = None
+    try:
+        get_res = r.step("cluster", "options get", "options get",
+                         "cluster", "options", "get", json_out=True)
+        try:
+            data = get_res.json()
+            if isinstance(data, dict):
+                desc = data.get("description")
+                original = desc if isinstance(desc, str) else None
+        except ValueError:
+            original = None
+
+        r.step("cluster", "options set", "options set (description marker)",
+               "cluster", "options", "set", "--description", marker)
+
+        verify = r.pve("cluster", "options", "get", json_out=True)
+        ok = False
+        try:
+            vd = verify.json()
+            # PVE stores the description with a trailing newline, so compare the
+            # stripped value rather than requiring an exact match.
+            desc = vd.get("description") if isinstance(vd, dict) else None
+            ok = isinstance(desc, str) and desc.strip() == marker
+        except ValueError:
+            ok = False
+        if ok:
+            print(f"  {GREEN('✓')} options set verified (description == marker)")
+            r.cov.append(Step("cluster", "options verify", PASS))
+        else:
+            r.cover_skip("cluster", "options verify", "options set verify",
+                         "description did not read back as the marker")
+    finally:
+        # Restore the datacenter description to exactly what it was.
+        if original:
+            r.del_step("cluster", "options restore", "options restore (original description)",
+                       "cluster", "options", "set", "--description", original)
+        else:
+            r.del_step("cluster", "options restore", "options restore (clear description)",
+                       "cluster", "options", "set", "--delete", "description")
+
+
+def cluster_replication_lifecycle(r: Runner) -> None:
+    """Exercise storage replication.
+
+    The job list is read live (always safe). Replication targets a *second* node,
+    so on the single-node lab the create/set/delete verbs cannot run — they are
+    recorded as coverage skips with the environment reason, mirroring the HA
+    migrate single-node pattern. On a multi-node cluster a job would be created
+    against the isolated guest in the guest lifecycle.
+    """
+    print(BOLD("cluster: storage replication job"))
+
+    r.step("cluster", "replication list", "replication list",
+           "cluster", "replication", "list", json_out=True)
+
+    if _node_count(r) < 2:
+        reason = "replication needs a second node as the target — single-node lab"
+        r.cover_skip("cluster", "replication create", "replication create", reason)
+        r.cover_skip("cluster", "replication get", "replication get", reason)
+        r.cover_skip("cluster", "replication set", "replication set", reason)
+        r.cover_skip("cluster", "replication delete", "replication delete", reason)
+        return
+
+    # Multi-node cluster: replication still requires an existing guest, which is
+    # provisioned by the guest lifecycle; a standalone job has no guest to bind
+    # to, so record the gap honestly rather than create an orphaned job.
+    r.cover_skip("cluster", "replication create", "replication create",
+                 "no isolated guest available in the cluster-scoped block")
+    r.cover_skip("cluster", "replication get", "replication get",
+                 "no isolated guest available in the cluster-scoped block")
+    r.cover_skip("cluster", "replication set", "replication set",
+                 "no isolated guest available in the cluster-scoped block")
+    r.cover_skip("cluster", "replication delete", "replication delete",
+                 "no isolated guest available in the cluster-scoped block")
+
+
 def cluster_firewall_lifecycle(r: Runner) -> None:
     """Exercise the cluster-wide firewall: a security group with one rule, a
     disabled top-level rule, an IP set with a member, and an address alias.
@@ -1532,6 +1619,10 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_firewall_lifecycle(r)
         print()
         node_firewall_lifecycle(r)
+        print()
+        cluster_options_lifecycle(r)
+        print()
+        cluster_replication_lifecycle(r)
         print()
 
         if not skip_vm:

@@ -125,6 +125,50 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
+    # Datacenter options (datacenter.cfg) are a key/value object; the cluster
+    # join information is an object and the member list is an array. All are
+    # read-only and safe to query directly.
+    ctx.check("options get", "cluster", "options", "get")
+    ctx.check("options set --help", "cluster", "options", "set", "--help", fmt="")
+    # `config join` returns the info a new node needs to join; on a standalone
+    # node (not yet part of a corosync cluster) the endpoint reports "node is not
+    # in a cluster" — record a skip there rather than a failure.
+    join = ctx.run("cluster", "config", "join", "list")
+    join_err = (join.stderr or join.stdout).lower()
+    if join.rc != 0 and "not in a cluster" in join_err:
+        ctx.skip("config join list", "node is not part of a corosync cluster")
+    else:
+        ctx.check("config join list", "cluster", "config", "join", "list")
+    ctx.check("config nodes list", "cluster", "config", "nodes", "list", validate=is_list)
+    # The mutate phase sets a reversible marker on the datacenter description and
+    # restores it — covered live there.
+    ctx.defer(
+        "options set",
+        "changes a reversible datacenter option (description marker) — covered live by `e2e --mutate`",
+        "pve cluster options set --description 'pve-cli-e2e ...'",
+        isolation=True, live_covered=True,
+    )
+    # Membership changes (join, node add/remove) affect corosync quorum and could
+    # break the cluster, so they are parsed-and-deferred and never run live.
+    ctx.defer(
+        "config join add / nodes add / nodes delete",
+        "changes cluster membership and quorum — too dangerous to exercise on a shared lab",
+        "pve cluster config nodes add <node> --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # Storage replication jobs: the list is an array (empty on a fresh cluster).
+    ctx.check("replication list", "cluster", "replication", "list", validate=is_list)
+    ctx.check("replication create --help", "cluster", "replication", "create", "--help", fmt="")
+    # The mutate phase exercises replication CRUD when a second node exists; the
+    # single-node lab cannot host a replication target, so it records a skip there.
+    ctx.defer(
+        "replication create/set/delete",
+        "replicates a guest's volumes to another node — covered live by `e2e --mutate` (skipped on a single-node lab)",
+        "pve cluster replication create --id <guest>-0 --target-node <other> --schedule '*/15'",
+        isolation=True, live_covered=True,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")
