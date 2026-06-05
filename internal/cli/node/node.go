@@ -45,6 +45,7 @@ func newNodeCmd(_ *cli.Deps) *cobra.Command {
 		newJournalCmd(),
 		newReportCmd(),
 		newSubscriptionCmd(),
+		newCertCmd(),
 	)
 
 	return cmd

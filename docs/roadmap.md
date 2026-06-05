@@ -60,7 +60,7 @@ Administrative depth across guests, nodes, storage, and software-defined network
 | Package management | `pve node apt` | Updates, versions, changelogs, and repositories | Shipped |
 | Disks and hardware | `pve node disks`, `pve node scan`, `pve node hardware` | SMART data, storage discovery, and PCI/USB inventory | Shipped |
 | Node system config | `pve node dns\|hosts\|time\|syslog\|journal\|report\|subscription` | Host-level configuration and diagnostics | Shipped |
-| Certificates | `pve node cert` | Custom and ACME certificate management | Planned |
+| Certificates | `pve node cert` | Custom and ACME certificate management | Shipped |
 | Node replication | `pve node replication` | Per-node replication view and on-demand runs | Planned |
 | Metrics and notifications | `pve cluster metrics`, `pve cluster notifications` | External metric targets and alert routing | Planned |
 | Device mapping and jobs | `pve cluster mapping`, `pve cluster jobs` | PCI, USB, and directory mappings, and scheduled realm sync | Planned |

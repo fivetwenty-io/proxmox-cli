@@ -166,6 +166,15 @@ def run(ctx: Ctx) -> None:
         ctx.check("dns set --help", "node", "dns", "set", "--help", fmt="")
         ctx.check("hosts set --help", "node", "hosts", "set", "--help", fmt="")
 
+        # Certificates: the cert chain serving the node's API and the ACME state
+        # are read-only. Every write verb (ACME order/renew/delete, custom
+        # upload/delete) replaces the node's TLS certificate or contacts an ACME
+        # directory, so each is deferred below rather than exercised live.
+        ctx.check("cert list", "node", "cert", "list", node=n, validate=is_list)
+        ctx.check("cert acme list", "node", "cert", "acme", "list", node=n, validate=is_list)
+        ctx.check("cert acme order --help", "node", "cert", "acme", "order", "--help", fmt="")
+        ctx.check("cert custom upload --help", "node", "cert", "custom", "upload", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -253,6 +262,22 @@ def run(ctx: Ctx) -> None:
         "subscription set/update/delete",
         "changes the node's subscription/licensing state on a shared lab; not exercised live",
         "pve node subscription set --node <node> --key <key> --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # Certificate writes all replace the node's API TLS certificate: an ACME
+    # order/renew contacts Let's Encrypt (real account + DNS challenge), and a
+    # custom upload/delete could break TLS to the node. None is exercised live.
+    ctx.defer(
+        "cert acme order/renew/delete",
+        "orders, renews, or removes the node's ACME certificate (contacts Let's Encrypt); not exercised live",
+        "pve node cert acme order --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "cert custom upload/delete",
+        "replaces or removes the node's API TLS certificate — could break TLS to the node; not exercised live",
+        "pve node cert custom upload --node <node> --certificates <pem> --key <pem> --yes",
         isolation=False, live_covered=False,
     )
 
