@@ -99,6 +99,26 @@ def run(ctx: Ctx) -> None:
             ctx.skip("network get", "no interface to inspect")
         ctx.check("network create --help", "node", "network", "create", "--help", fmt="")
 
+        # APT package management: pending updates, installed versions, and the
+        # standard-repository status are all local read-only queries. The
+        # changelog is fetched per package — discover a package name from the
+        # installed versions (PVE uses the capitalized "Package" key). The
+        # apt-database refresh and any repository edit are deferred below.
+        ctx.check("apt list", "node", "apt", "list", node=n, validate=is_list)
+        ver = ctx.check("apt versions", "node", "apt", "versions", node=n, validate=is_list)
+        pkg = None
+        if ver.rc == 0:
+            try:
+                pkg = ctx.first(ver.json(), "Package")
+            except ValueError:
+                pkg = None
+        if pkg:
+            ctx.check("apt changelog", "node", "apt", "changelog", "--name", str(pkg), node=n, fmt="")
+        else:
+            ctx.skip("apt changelog", "no installed package to inspect")
+        ctx.check("apt repositories list", "node", "apt", "repositories", "list", node=n)
+        ctx.check("apt update --help", "node", "apt", "update", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -136,6 +156,22 @@ def run(ctx: Ctx) -> None:
         "network apply/revert",
         "reloads or discards the staged host network configuration — could cut the node off the network; not exercised live",
         "pve node network apply --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # The apt-database refresh runs apt-get update on the host (network I/O and
+    # churns the node's package state on a shared lab), and the repository
+    # verbs rewrite the node's APT sources — neither is exercised live.
+    ctx.defer(
+        "apt update",
+        "refreshes the node's APT database (network I/O, apt state churn); not exercised live",
+        "pve node apt update --node <node>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "apt repositories add/enable",
+        "rewrites the node's APT repository configuration; not exercised live",
+        "pve node apt repositories add --node <node> --handle no-subscription --yes",
         isolation=False, live_covered=False,
     )
 
