@@ -483,6 +483,12 @@ func TestClusterFirewallOptions_SetForwardsFields(t *testing.T) {
 	require.Equal(t, "DROP", gotForm.Get("policy_in"))
 	require.Equal(t, "1", gotForm.Get("ebtables"))
 	require.Equal(t, "ACCEPT", gotForm.Get("policy_forward"))
+	// only-changed-flags contract: flags not passed must be absent from the
+	// body entirely, not sent as empty/zero values that would clobber state.
+	_, hasPolicyOut := gotForm["policy_out"]
+	require.False(t, hasPolicyOut, "unset --policy-out must be omitted from the request body")
+	_, hasLogRatelimit := gotForm["log_ratelimit"]
+	require.False(t, hasLogRatelimit, "unset --log-ratelimit must be omitted from the request body")
 }
 
 // ---- command tree ----------------------------------------------------------

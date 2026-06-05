@@ -227,7 +227,7 @@ func newDomainSetCmd() *cobra.Command {
 				return fmt.Errorf("update domain %q: %w", realm, err)
 			}
 
-			result := output.Result{Message: "Realm updated."}
+			result := output.Result{Message: fmt.Sprintf("Realm %q updated.", realm)}
 			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
 		},
 	}

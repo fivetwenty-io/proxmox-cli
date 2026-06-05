@@ -104,6 +104,23 @@ func TestAccess_TfaDelete_WithYes(t *testing.T) {
 	require.Contains(t, buf.String(), "Deleted tfa entry")
 }
 
+func TestAccess_TfaDelete_OmitsPasswordWhenUnset(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var hasPassword bool
+	f.HandleFunc("DELETE /api2/json/access/tfa/root@pam/totp1", func(w http.ResponseWriter, r *http.Request) {
+		_, hasPassword = r.URL.Query()["password"]
+		testhelper.WriteData(w, nil)
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "delete", "root@pam", "totp1", "--yes"))
+
+	// With --password unset, the only-changed-flags forwarding must omit the
+	// query param entirely rather than send an empty value.
+	require.False(t, hasPassword, "password query param must be absent when --password is not given")
+}
+
 func TestAccess_TfaUnlock_RequiresYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var called bool
