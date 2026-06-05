@@ -586,6 +586,9 @@ def vm_lifecycle(r: Runner) -> None:
                "--dry-run", json_out=True)
         r.del_step("storage", "prune", f"prune backups of VM {vmid}",
                    "storage", "prune", BACKUP_STORAGE, "--vmid", vmid, "--keep-last", "0", "--yes")
+        # HA: manage this isolated VM (sid vm:<id>), then release it. Skipped if
+        # the lab is not a quorate cluster.
+        ha_resource_lifecycle(r, "qemu", f"vm:{vmid}")
     finally:
         r.undo(f"stop VM {vmid}", "qemu", "stop", vmid)
         r.step("qemu", "delete", f"delete VM {vmid}", "qemu", "delete", vmid, "--yes",
@@ -764,6 +767,9 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "--dry-run", json_out=True)
         r.del_step("storage", "prune", f"prune backups of CT {ctid}",
                    "storage", "prune", BACKUP_STORAGE, "--vmid", ctid, "--keep-last", "0", "--yes")
+        # HA: manage this isolated CT (sid ct:<id>), then release it. Skipped if
+        # the lab is not a quorate cluster.
+        ha_resource_lifecycle(r, "lxc", f"ct:{ctid}")
     finally:
         r.undo(f"stop CT {ctid}", "lxc", "stop", ctid)
         r.step("lxc", "delete", f"delete CT {ctid}", "lxc", "delete", ctid, "--yes",
@@ -1007,6 +1013,41 @@ def backup_lifecycle(r: Runner) -> None:
     finally:
         r.del_step("cluster", "backup delete", f"backup job delete {BACKUP_JOB}",
                    "cluster", "backup", "delete", BACKUP_JOB, "--yes")
+
+
+def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
+    """Place an isolated guest under HA management, read it back, update it, then
+    remove it again. HA needs a quorate cluster; a standalone or non-quorate lab
+    rejects `ha resource create`, so that failure is recorded as SKIP (an
+    environment limitation, like the SSH-gated node verbs) rather than a bug — the
+    CLI wiring itself is covered by unit tests. migrate/relocate need a second node
+    to accept the guest, so they are SKIPped on a single-node lab. The resource is
+    always removed before the guest is destroyed, so HA never blocks teardown."""
+    create = r.pve("cluster", "ha", "resource", "create", sid,
+                   "--state", "started", "--comment", "pve-cli-e2e")
+    if create.rc != 0:
+        detail = (create.err.strip() or create.out.strip()).splitlines()
+        reason = detail[-1][:80] if detail else "HA stack unavailable"
+        for verb in ("ha resource create", "ha resource get",
+                     "ha resource set", "ha resource delete"):
+            r.cover_skip(guest, verb, f"{verb} {sid}", reason)
+        r.cover_skip(guest, "ha resource migrate", f"ha resource migrate {sid}", reason)
+        return
+    print(f"  {GREEN('✓')} ha resource create {sid}")
+    r.cov.append(Step(guest, "ha resource create", PASS))
+    try:
+        r.step(guest, "ha resource list", "ha resource list",
+               "cluster", "ha", "resource", "list", json_out=True)
+        r.step(guest, "ha resource get", f"ha resource get {sid}",
+               "cluster", "ha", "resource", "get", sid, json_out=True)
+        r.step(guest, "ha resource set", f"ha resource set {sid}",
+               "cluster", "ha", "resource", "set", sid, "--comment", "pve-cli-e2e-upd")
+        if _node_count(r) < 2:
+            r.cover_skip(guest, "ha resource migrate", f"ha resource migrate {sid}",
+                         "needs a second node as the migration target")
+    finally:
+        r.del_step(guest, "ha resource delete", f"ha resource delete {sid}",
+                   "cluster", "ha", "resource", "delete", sid, "--yes", "--purge")
 
 
 def node_ops(r: Runner) -> None:

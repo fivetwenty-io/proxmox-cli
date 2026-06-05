@@ -46,6 +46,26 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
 
+    # HA resources: the resource list is an array (empty when no guest is under
+    # HA management). The mutate phase places the isolated guest under HA, reads
+    # it back, updates it, and removes it again — covered live there.
+    ctx.check("ha resource list", "cluster", "ha", "resource", "list", validate=is_list)
+    ctx.check("ha resource create --help", "cluster", "ha", "resource", "create", "--help", fmt="")
+    ctx.defer(
+        "ha resource create/set/delete",
+        "places a guest under HA management then removes it — covered live by `e2e --mutate`",
+        "pve cluster ha resource create vm:<id> --state started ... && ... delete vm:<id> --yes",
+        isolation=True, live_covered=True,
+    )
+    # migrate/relocate need a second node to accept the guest; the single-node lab
+    # cannot satisfy them, so they are parsed-and-deferred rather than run live.
+    ctx.defer(
+        "ha resource migrate/relocate",
+        "requires a second node as the migration target — not exercisable on a single-node lab",
+        "pve cluster ha resource migrate vm:<id> --target-node <other>",
+        isolation=True, live_covered=False,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")
