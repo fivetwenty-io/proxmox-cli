@@ -99,6 +99,32 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
+    # Cluster firewall: the rule, group, ipset, and alias lists are arrays
+    # (empty on a fresh datacenter); options is a key/value object. All are
+    # read-only and safe to query directly.
+    ctx.check("firewall rules list", "cluster", "firewall", "rules", "list", validate=is_list)
+    ctx.check("firewall group list", "cluster", "firewall", "group", "list", validate=is_list)
+    ctx.check("firewall ipset list", "cluster", "firewall", "ipset", "list", validate=is_list)
+    ctx.check("firewall alias list", "cluster", "firewall", "alias", "list", validate=is_list)
+    ctx.check("firewall options get", "cluster", "firewall", "options", "get")
+    ctx.check("firewall rules create --help", "cluster", "firewall", "rules", "create", "--help", fmt="")
+    # The mutate phase creates a pve-cli-namespaced security group (with a rule),
+    # a disabled top-level rule, an IP set, and an alias on the e2e subnet, then
+    # removes them all — covered live there. Datacenter firewall options are read
+    # only (enabling the cluster firewall would affect every node).
+    ctx.defer(
+        "firewall rule/group/ipset/alias create/delete",
+        "mutates the cluster firewall — covered live by `e2e --mutate`",
+        "pve cluster firewall group create pvecli-grp && pve cluster firewall ipset add pvecli-clips 172.30.0.0/24",
+        isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "firewall options set",
+        "enables/changes the datacenter firewall policy cluster-wide — not exercised live",
+        "pve cluster firewall options set --enable 1 --policy-in DROP",
+        isolation=False, live_covered=False,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")

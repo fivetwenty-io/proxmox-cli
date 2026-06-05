@@ -57,6 +57,10 @@ CT_HOST = Isolation.NAME_PREFIX + "ct"
 SNAP_NAME = "pvecli-snap"
 FW_IPSET = "pvecli-ips"
 FW_ALIAS = "pvecli-alias"
+CL_FW_GROUP = "pvecli-grp"      # isolated cluster security group
+CL_FW_IPSET = "pvecli-clips"    # cluster-level IP set (distinct from per-guest FW_IPSET)
+CL_FW_ALIAS = "pvecli-clalias"  # cluster-level address alias
+CL_FW_COMMENT = "pve-cli-e2e"   # marks the throwaway top-level cluster rule
 ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
 TMPL_STORAGE = "local"          # holds vztmpl content
 BACKUP_STORAGE = "local"        # dir storage that holds backup content
@@ -1295,6 +1299,120 @@ def _print_coverage(r: Runner) -> None:
 # --- entry point ------------------------------------------------------------
 
 
+def _cluster_rule_pos_by_comment(r: Runner, comment: str) -> str | None:
+    """Return the position of the cluster firewall rule whose comment matches,
+    or None. Used to locate the throwaway top-level rule for deletion without
+    assuming a fixed position (PVE inserts new rules at position 0)."""
+    res = r.pve("cluster", "firewall", "rules", "list", json_out=True, node=False)
+    if res.rc != 0:
+        return None
+    try:
+        rows = res.json()
+    except ValueError:
+        return None
+    if not isinstance(rows, list):
+        return None
+    for rule in rows:
+        if isinstance(rule, dict) and rule.get("comment") == comment:
+            pos = rule.get("pos")
+            if pos is not None:
+                return str(pos)
+    return None
+
+
+def cluster_firewall_lifecycle(r: Runner) -> None:
+    """Exercise the cluster-wide firewall: a security group with one rule, a
+    disabled top-level rule, an IP set with a member, and an address alias.
+
+    Isolation: every object is pve-cli-namespaced (group `pvecli-grp`, ipset
+    `pvecli-clips`, alias `pvecli-clalias`) and the IP set and alias use the e2e
+    subnet (172.30.0.0/24). The top-level rule is created DISABLED (--enable 0)
+    with a `pve-cli-e2e` comment and removed in the same run, so the active
+    datacenter policy is never changed. Datacenter firewall *options* are read
+    only — never set — because enabling the cluster firewall would affect every
+    node. All objects are removed in the finally block.
+    """
+    print(BOLD("cluster: firewall group / rule / ipset / alias"))
+
+    # Best-effort clean of objects left by a crashed prior run (never raises).
+    stale = _cluster_rule_pos_by_comment(r, CL_FW_COMMENT)
+    if stale is not None:
+        r.undo(f"pre-clean cluster rule pos {stale}",
+               "cluster", "firewall", "rules", "delete", stale, "--yes")
+    r.undo(f"pre-clean group rule {CL_FW_GROUP}",
+           "cluster", "firewall", "group", "rule-delete", CL_FW_GROUP, "0", "--yes")
+    r.undo(f"pre-clean {CL_FW_IPSET}",
+           "cluster", "firewall", "ipset", "delete", CL_FW_IPSET, "--yes", "--force")
+    r.undo(f"pre-clean {CL_FW_ALIAS}",
+           "cluster", "firewall", "alias", "delete", CL_FW_ALIAS, "--yes")
+    r.undo(f"pre-clean {CL_FW_GROUP}",
+           "cluster", "firewall", "group", "delete", CL_FW_GROUP, "--yes")
+
+    created_rule_pos: str | None = None
+    try:
+        # Datacenter firewall options: read only (never mutated — cluster-wide).
+        r.step("cluster", "firewall options get", "firewall options get",
+               "cluster", "firewall", "options", "get", json_out=True)
+
+        # Security group + a rule inside it (inert until referenced by --action).
+        r.step("cluster", "firewall group create", f"firewall group create {CL_FW_GROUP}",
+               "cluster", "firewall", "group", "create", CL_FW_GROUP, "--comment", "pve-cli-e2e")
+        r.step("cluster", "firewall group list", "firewall group list",
+               "cluster", "firewall", "group", "list", json_out=True)
+        r.step("cluster", "firewall group rule-add", f"firewall group rule-add {CL_FW_GROUP}",
+               "cluster", "firewall", "group", "rule-add", CL_FW_GROUP,
+               "--type", "in", "--action", "ACCEPT", "--proto", "tcp", "--dport", "22")
+        r.step("cluster", "firewall group rules", "firewall group rules list",
+               "cluster", "firewall", "group", "rules", CL_FW_GROUP, json_out=True)
+        r.del_step("cluster", "firewall group rule-delete", "firewall group rule-delete pos 0",
+                   "cluster", "firewall", "group", "rule-delete", CL_FW_GROUP, "0", "--yes")
+
+        # Top-level cluster rule: created DISABLED, found by comment, then deleted.
+        r.step("cluster", "firewall rules create", "firewall rule add (disabled)",
+               "cluster", "firewall", "rules", "create",
+               "--type", "in", "--action", "ACCEPT", "--proto", "tcp",
+               "--dport", "22", "--enable", "0", "--comment", CL_FW_COMMENT)
+        r.step("cluster", "firewall rules list", "firewall rules list",
+               "cluster", "firewall", "rules", "list", json_out=True)
+        created_rule_pos = _cluster_rule_pos_by_comment(r, CL_FW_COMMENT)
+        if created_rule_pos is None:
+            raise LifecycleError("created cluster firewall rule not found in list")
+        r.step("cluster", "firewall rules get", f"firewall rule get pos {created_rule_pos}",
+               "cluster", "firewall", "rules", "get", created_rule_pos, json_out=True)
+
+        # IP set with one member drawn from the e2e subnet.
+        r.step("cluster", "firewall ipset create", f"firewall ipset create {CL_FW_IPSET}",
+               "cluster", "firewall", "ipset", "create", CL_FW_IPSET, "--comment", "pve-cli-e2e")
+        r.step("cluster", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
+               "cluster", "firewall", "ipset", "add", CL_FW_IPSET, Isolation.SDN_SUBNET)
+        r.step("cluster", "firewall ipset list", "firewall ipset member list",
+               "cluster", "firewall", "ipset", "list", CL_FW_IPSET, json_out=True)
+        r.del_step("cluster", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
+                   "cluster", "firewall", "ipset", "remove", CL_FW_IPSET, Isolation.SDN_SUBNET, "--yes")
+
+        # Address alias.
+        r.step("cluster", "firewall alias create", f"firewall alias create {CL_FW_ALIAS}",
+               "cluster", "firewall", "alias", "create", CL_FW_ALIAS, "172.30.0.99",
+               "--comment", "pve-cli-e2e")
+        r.step("cluster", "firewall alias list", "firewall alias list",
+               "cluster", "firewall", "alias", "list", json_out=True)
+    finally:
+        # Delete the top-level rule by its discovered (or re-discovered) position.
+        pos = created_rule_pos if created_rule_pos is not None else _cluster_rule_pos_by_comment(r, CL_FW_COMMENT)
+        if pos is not None:
+            r.del_step("cluster", "firewall rules delete", f"firewall rule delete pos {pos}",
+                       "cluster", "firewall", "rules", "delete", pos, "--yes")
+        r.del_step("cluster", "firewall ipset delete", f"firewall ipset delete {CL_FW_IPSET}",
+                   "cluster", "firewall", "ipset", "delete", CL_FW_IPSET, "--yes", "--force")
+        r.del_step("cluster", "firewall alias delete", f"firewall alias delete {CL_FW_ALIAS}",
+                   "cluster", "firewall", "alias", "delete", CL_FW_ALIAS, "--yes")
+        # The group must be empty before deletion; clear any lingering rule first.
+        r.undo(f"clear group rule {CL_FW_GROUP}",
+               "cluster", "firewall", "group", "rule-delete", CL_FW_GROUP, "0", "--yes")
+        r.del_step("cluster", "firewall group delete", f"firewall group delete {CL_FW_GROUP}",
+                   "cluster", "firewall", "group", "delete", CL_FW_GROUP, "--yes")
+
+
 def run(target: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
@@ -1342,6 +1460,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         storage_lifecycle(r)
         print()
         backup_lifecycle(r)
+        print()
+        cluster_firewall_lifecycle(r)
         print()
 
         if not skip_vm:

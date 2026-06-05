@@ -34,6 +34,7 @@ func newClusterCmd(_ *cli.Deps) *cobra.Command {
 		newTasksCmd(),
 		newBackupCmd(),
 		newHaCmd(),
+		newFirewallCmd(),
 	)
 
 	return cmd
