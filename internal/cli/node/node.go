@@ -33,6 +33,7 @@ func newNodeCmd(_ *cli.Deps) *cobra.Command {
 		newServicesCmd(),
 		newVzdumpCmd(),
 		newFirewallCmd(),
+		newNetworkCmd(),
 	)
 
 	return cmd

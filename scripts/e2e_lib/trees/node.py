@@ -80,6 +80,25 @@ def run(ctx: Ctx) -> None:
         ctx.check("firewall rules create --help", "node", "firewall", "rules", "create",
                   "--help", fmt="")
 
+        # Host network: the interface list is an array (always non-empty — at
+        # least the management bridge exists); a single interface is a key/value
+        # object. Both are read-only and safe to query. The network commands are
+        # node-scoped via the --node selector. The write verbs (create/set/
+        # delete/apply/revert) edit the host networking stack and could cut the
+        # node off the network, so they are never exercised live.
+        net = ctx.check("network list", "node", "network", "list", node=n, validate=is_list)
+        iface = None
+        if net.rc == 0:
+            try:
+                iface = ctx.first(net.json(), "iface")
+            except ValueError:
+                iface = None
+        if iface:
+            ctx.check("network get", "node", "network", "get", str(iface), node=n)
+        else:
+            ctx.skip("network get", "no interface to inspect")
+        ctx.check("network create --help", "node", "network", "create", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -100,6 +119,23 @@ def run(ctx: Ctx) -> None:
         "firewall options set",
         "changes the host firewall policy — could cut the node off the network; not exercised live",
         "pve node firewall options set --node <node> --enable 1",
+        isolation=False, live_covered=False,
+    )
+
+    # Host network interface edits stage changes to /etc/network/interfaces.new;
+    # applying them reloads the host networking stack and could cut the node off
+    # the network on a shared lab, so create/set/delete/apply/revert are never
+    # exercised live.
+    ctx.defer(
+        "network create/set/delete",
+        "edits a host network interface — could cut the node off the network; not exercised live",
+        "pve node network create --node <node> --iface vmbr9 --type bridge --cidr 172.30.9.1/24",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "network apply/revert",
+        "reloads or discards the staged host network configuration — could cut the node off the network; not exercised live",
+        "pve node network apply --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
