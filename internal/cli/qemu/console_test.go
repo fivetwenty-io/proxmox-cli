@@ -91,6 +91,23 @@ func TestQemuConsole_Spice(t *testing.T) {
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/spiceproxy", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
 	require.Equal(t, "pve1.example", form.Get("proxy"))
+	// The SPICE ticket/password is the point of the command: it must be
+	// surfaced to the caller's output (the raw-fetch workaround exists
+	// precisely because the typed response struct drops it).
+	require.Contains(t, buf.String(), "secret")
+}
+
+func TestQemuConsole_UnexpectedShape(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/vncproxy", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, []any{"not", "an", "object"})
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	err := run(&buf, "console", "100")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected response shape")
 }
 
 func TestQemuConsole_InvalidType(t *testing.T) {

@@ -107,6 +107,36 @@ func TestStoragePrune_KeepAll(t *testing.T) {
 	require.Equal(t, "keep-all=1", rec.form.Get("prune-backups"))
 }
 
+// TestStoragePrune_KeepLastZero verifies that an explicit --keep-last 0 is
+// forwarded as keep-last=0 (prune everything) rather than being dropped as an
+// unset zero value — the command distinguishes unset from explicit 0.
+func TestStoragePrune_KeepLastZero(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("GET /api2/json/nodes/pve1/storage/local/prunebackups", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		rec.form = r.Form
+		testhelper.WriteData(w, []any{})
+	})
+
+	_, err := run(t, f, "--node", "pve1", "prune", "local", "--vmid", "100", "--keep-last", "0", "--dry-run")
+	require.NoError(t, err)
+	require.Equal(t, "keep-last=0", rec.form.Get("prune-backups"))
+}
+
+// TestStoragePrune_NullResult verifies a DELETE that prunes nothing (server
+// replies with a null data field) is normalised to an empty result rather than
+// erroring.
+func TestStoragePrune_NullResult(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/storage/local/prunebackups", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+
+	_, err := run(t, f, "--node", "pve1", "prune", "local", "--vmid", "100", "--keep-last", "1", "--yes")
+	require.NoError(t, err)
+}
+
 // TestStoragePrune_RequiresNode verifies prune fails clearly without a node.
 func TestStoragePrune_RequiresNode(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -135,6 +165,8 @@ func TestStoragePrune_NoLocalTargetFlag(t *testing.T) {
 	walk = func(c *cobra.Command) {
 		require.Nil(t, c.Flags().Lookup("target"),
 			"command %q must not define a local --target (collides with root -t/--target)", c.CommandPath())
+		require.Nil(t, c.Flags().Lookup("node"),
+			"command %q must not define a local --node (collides with root --node)", c.CommandPath())
 		for _, child := range c.Commands() {
 			walk(child)
 		}

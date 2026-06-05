@@ -343,7 +343,7 @@ func newBackupInfoCmd() *cobra.Command {
 
 // --- helpers ---
 
-// scalarCell renders an arbitrary decoded JSON scalar as a table cell.
+// anyCell renders an arbitrary decoded JSON scalar as a table cell.
 func anyCell(v any) string {
 	switch t := v.(type) {
 	case nil:

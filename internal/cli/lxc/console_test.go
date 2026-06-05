@@ -86,6 +86,23 @@ func TestLxcConsole_Spice(t *testing.T) {
 
 	require.Equal(t, "/api2/json/nodes/pve1/lxc/101/spiceproxy", gotPath)
 	require.Equal(t, "pve1.example", body["proxy"])
+	// The SPICE ticket/password is the point of the command: it must reach
+	// the caller's output (the raw-fetch workaround exists because the typed
+	// response struct drops it).
+	require.Contains(t, buf.String(), "secret")
+}
+
+func TestLxcConsole_UnexpectedShape(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/vncproxy", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, []any{"not", "an", "object"})
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "console", "101")
+	err := run()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "decode response")
 }
 
 func TestLxcConsole_InvalidType(t *testing.T) {

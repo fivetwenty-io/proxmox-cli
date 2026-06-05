@@ -446,6 +446,8 @@ func TestQemuFirewall_NoLocalTargetFlag(t *testing.T) {
 	walk = func(c *cobra.Command) {
 		require.Nil(t, c.Flags().Lookup("target"),
 			"command %q must not define a local --target (collides with root -t/--target)", c.CommandPath())
+		require.Nil(t, c.Flags().Lookup("node"),
+			"command %q must not define a local --node (collides with root --node)", c.CommandPath())
 		for _, child := range c.Commands() {
 			walk(child)
 		}

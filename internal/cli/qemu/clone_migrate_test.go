@@ -151,6 +151,8 @@ func TestQemuCloneMigrate_NoLocalTargetFlag(t *testing.T) {
 		require.NotNilf(t, sub, "qemu %s command must be registered", name)
 		require.Nilf(t, sub.Flags().Lookup("target"),
 			"qemu %s must not define a local --target flag (shadows the global -t/--target)", name)
+		require.Nilf(t, sub.Flags().Lookup("node"),
+			"qemu %s must not define a local --node flag (shadows the global --node)", name)
 		require.NotNilf(t, sub.Flags().Lookup("target-node"),
 			"qemu %s must expose the destination node as --target-node", name)
 	}

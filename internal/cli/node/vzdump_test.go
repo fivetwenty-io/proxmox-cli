@@ -87,6 +87,22 @@ func TestNodeVzdump_APIError(t *testing.T) {
 	require.Contains(t, err.Error(), "start vzdump on node")
 }
 
+// TestNodeVzdump_BadUPID verifies that a POST returning no usable UPID surfaces
+// a clear decode error instead of silently proceeding to wait on an empty task.
+func TestNodeVzdump_BadUPID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/vzdump", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, "")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "vzdump", "--vmid", "100", "--storage", "local"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "decode UPID")
+}
+
 // TestNodeVzdump_NoLocalTargetFlag guards against shadowing the root's persistent
 // -t/--target selector with a local --target anywhere in the node command tree.
 func TestNodeVzdump_NoLocalTargetFlag(t *testing.T) {
@@ -104,6 +120,8 @@ func TestNodeVzdump_NoLocalTargetFlag(t *testing.T) {
 	walk = func(c *cobra.Command) {
 		require.Nil(t, c.Flags().Lookup("target"),
 			"command %q must not define a local --target (collides with root -t/--target)", c.CommandPath())
+		require.Nil(t, c.Flags().Lookup("node"),
+			"command %q must not define a local --node (collides with root --node)", c.CommandPath())
 		for _, child := range c.Commands() {
 			walk(child)
 		}

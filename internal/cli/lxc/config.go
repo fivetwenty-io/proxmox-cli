@@ -170,16 +170,18 @@ func newConfigSetCmd() *cobra.Command {
 	return cmd
 }
 
-// structToStringMap marshals a typed config response to a flat string map for
-// key-value rendering, skipping empty/nil fields.
+// structToStringMap marshals a typed response struct or decoded value to a flat
+// string map for key-value rendering, skipping empty/nil fields. It is shared by
+// the config, console, and firewall renderers, so its errors name the response
+// generically rather than any one endpoint.
 func structToStringMap(v any) (map[string]string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return nil, fmt.Errorf("encode config: %w", err)
+		return nil, fmt.Errorf("encode response: %w", err)
 	}
 	var generic map[string]any
 	if err := json.Unmarshal(b, &generic); err != nil {
-		return nil, fmt.Errorf("decode config: %w", err)
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	out := make(map[string]string, len(generic))
 	for k, val := range generic {

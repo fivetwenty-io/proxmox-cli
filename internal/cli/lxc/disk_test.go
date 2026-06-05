@@ -216,5 +216,7 @@ func TestDisk_NoLocalTargetFlag(t *testing.T) {
 	for _, sub := range disk.Commands() {
 		require.Nil(t, sub.Flags().Lookup("target"),
 			"disk %s must not define a local --target (it shadows the global -t/--target)", sub.Name())
+		require.Nil(t, sub.Flags().Lookup("node"),
+			"disk %s must not define a local --node (it shadows the global --node)", sub.Name())
 	}
 }

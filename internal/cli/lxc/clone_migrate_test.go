@@ -217,6 +217,8 @@ func TestCloneMigrate_NoLocalTargetFlag(t *testing.T) {
 		require.NotNil(t, sub, "%s subcommand must be registered", name)
 		require.Nil(t, sub.Flags().Lookup("target"),
 			"%s must not define a local --target (it shadows the global -t/--target); use --target-node", name)
+		require.Nil(t, sub.Flags().Lookup("node"),
+			"%s must not define a local --node (it shadows the global --node)", name)
 		require.NotNil(t, sub.Flags().Lookup("target-node"),
 			"%s must expose --target-node for destination selection", name)
 	}
