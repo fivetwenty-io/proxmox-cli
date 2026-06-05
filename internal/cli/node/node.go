@@ -35,6 +35,9 @@ func newNodeCmd(_ *cli.Deps) *cobra.Command {
 		newFirewallCmd(),
 		newNetworkCmd(),
 		newAptCmd(),
+		newDisksCmd(),
+		newScanCmd(),
+		newHardwareCmd(),
 	)
 
 	return cmd

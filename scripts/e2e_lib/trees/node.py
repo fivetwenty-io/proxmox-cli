@@ -119,6 +119,33 @@ def run(ctx: Ctx) -> None:
         ctx.check("apt repositories list", "node", "apt", "repositories", "list", node=n)
         ctx.check("apt update --help", "node", "apt", "update", "--help", fmt="")
 
+        # Disks: the physical-disk inventory is an array; SMART is read per disk
+        # (discover a block device from the inventory). The disk-initialization
+        # verbs (create/init-gpt/wipe) format physical media and are deferred
+        # below; only their --help is exercised here.
+        disks = ctx.check("disks list", "node", "disks", "list", node=n, validate=is_list)
+        dev = None
+        if disks.rc == 0:
+            try:
+                dev = ctx.first(disks.json(), "devpath")
+            except ValueError:
+                dev = None
+        if dev:
+            ctx.check("disks smart", "node", "disks", "smart", "--disk", str(dev), node=n)
+        else:
+            ctx.skip("disks smart", "no block device to inspect")
+        ctx.check("disks create lvm --help", "node", "disks", "create", "lvm", "--help", fmt="")
+
+        # Scan: the lvm and zfs probes enumerate local storage with no arguments
+        # and are always safe. The remote probes (nfs/cifs/iscsi/pbs) need a
+        # reachable server and credentials, so they are deferred below.
+        ctx.check("scan lvm", "node", "scan", "lvm", node=n, validate=is_list)
+        ctx.check("scan zfs", "node", "scan", "zfs", node=n, validate=is_list)
+
+        # Hardware: PCI(e) and USB inventories are read-only arrays.
+        ctx.check("hardware pci", "node", "hardware", "pci", node=n, validate=is_list)
+        ctx.check("hardware usb", "node", "hardware", "usb", node=n, validate=is_list)
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -172,6 +199,25 @@ def run(ctx: Ctx) -> None:
         "apt repositories add/enable",
         "rewrites the node's APT repository configuration; not exercised live",
         "pve node apt repositories add --node <node> --handle no-subscription --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # Disk initialization formats physical media and is irreversible; it is
+    # never exercised live on the shared lab (it would destroy the node's
+    # storage). The CLI gates each verb behind --yes.
+    ctx.defer(
+        "disks create/init-gpt/wipe",
+        "formats or wipes a physical disk — irreversible; not exercised live",
+        "pve node disks wipe --node <node> --disk /dev/sdX --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # The remote storage scans need a reachable server and (for cifs/pbs)
+    # credentials, so they are not part of the local read-only sweep.
+    ctx.defer(
+        "scan nfs/cifs/iscsi/pbs",
+        "probes a remote storage server (needs a server address and credentials); not exercised live",
+        "pve node scan nfs --node <node> --server <server>",
         isolation=False, live_covered=False,
     )
 
