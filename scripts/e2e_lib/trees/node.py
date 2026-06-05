@@ -175,6 +175,26 @@ def run(ctx: Ctx) -> None:
         ctx.check("cert acme order --help", "node", "cert", "acme", "order", "--help", fmt="")
         ctx.check("cert custom upload --help", "node", "cert", "custom", "upload", "--help", fmt="")
 
+        # Storage replication: the per-node job list, plus a job's status and
+        # log, are read-only. A job's id is discovered from the list; on a
+        # standalone node with no replication configured the list is empty, so
+        # status and log are skipped. `run` triggers an immediate sync and is
+        # deferred below.
+        repl = ctx.check("replication list", "node", "replication", "list", node=n, validate=is_list)
+        repl_id = None
+        if repl.rc == 0:
+            try:
+                repl_id = ctx.first(repl.json(), "id")
+            except ValueError:
+                repl_id = None
+        if repl_id:
+            ctx.check("replication status", "node", "replication", "status", str(repl_id), node=n)
+            ctx.check("replication log", "node", "replication", "log", str(repl_id), node=n, validate=is_list)
+        else:
+            ctx.skip("replication status", "no replication job configured on this node")
+            ctx.skip("replication log", "no replication job configured on this node")
+        ctx.check("replication run --help", "node", "replication", "run", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -278,6 +298,16 @@ def run(ctx: Ctx) -> None:
         "cert custom upload/delete",
         "replaces or removes the node's API TLS certificate — could break TLS to the node; not exercised live",
         "pve node cert custom upload --node <node> --certificates <pem> --key <pem> --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # Triggering a replication run forces an immediate sync that consumes I/O and
+    # bandwidth to the target node, and needs a configured job (none exists on a
+    # standalone node), so it is not exercised live.
+    ctx.defer(
+        "replication run",
+        "triggers an immediate replication sync to the target node (needs a configured job); not exercised live",
+        "pve node replication run <id> --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
