@@ -360,6 +360,133 @@ func TestStorageDelete_ServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestStorageCreate_CIFSForwardsPerTypeFields verifies the CIFS identity fields
+// reach the request body and the password is never echoed to output.
+func TestStorageCreate_CIFSForwardsPerTypeFields(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	const secret = "s3cr3tcifspw"
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/storage", &rec, map[string]any{"storage": "cifs1", "type": "cifs"})
+
+	out, err := run(t, f, "create",
+		"--storage", "cifs1", "--type", "cifs",
+		"--server", "10.0.0.3", "--share", "backup",
+		"--username", "svc", "--password", secret,
+		"--domain", "WORKGROUP", "--smbversion", "3.0",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "10.0.0.3", rec.form.Get("server"))
+	require.Equal(t, "backup", rec.form.Get("share"))
+	require.Equal(t, "svc", rec.form.Get("username"))
+	require.Equal(t, secret, rec.form.Get("password"), "password must reach the API")
+	require.Equal(t, "WORKGROUP", rec.form.Get("domain"))
+	require.Equal(t, "3.0", rec.form.Get("smbversion"))
+	require.NotContains(t, out, secret, "password must never be echoed to output")
+}
+
+// TestStorageCreate_PBSForwardsCredentials verifies PBS fields including secret
+// inputs are forwarded but kept out of output.
+func TestStorageCreate_PBSForwardsCredentials(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	const encKey = "supersecretenckey"
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/storage", &rec, map[string]any{"storage": "pbs1", "type": "pbs"})
+
+	out, err := run(t, f, "create",
+		"--storage", "pbs1", "--type", "pbs",
+		"--server", "10.0.0.5", "--datastore", "store",
+		"--fingerprint", "AA:BB", "--encryption-key", encKey,
+		"--port", "8007", "--namespace", "team",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "10.0.0.5", rec.form.Get("server"))
+	require.Equal(t, "store", rec.form.Get("datastore"))
+	require.Equal(t, "AA:BB", rec.form.Get("fingerprint"))
+	require.Equal(t, encKey, rec.form.Get("encryption-key"), "encryption-key must reach the API")
+	require.Equal(t, "8007", rec.form.Get("port"))
+	require.Equal(t, "team", rec.form.Get("namespace"))
+	require.NotContains(t, out, encKey, "encryption-key must never be echoed")
+}
+
+// TestStorageCreate_IscsiTargetMapsToTarget verifies the --iscsi-target flag
+// (renamed to avoid colliding with the root --target) is sent as "target".
+func TestStorageCreate_IscsiTargetMapsToTarget(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/storage", &rec, map[string]any{"storage": "iscsi1", "type": "iscsi"})
+
+	_, err := run(t, f, "create",
+		"--storage", "iscsi1", "--type", "iscsi",
+		"--portal", "10.0.0.4", "--iscsi-target", "iqn.2024-01.com.example:disk0",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "10.0.0.4", rec.form.Get("portal"))
+	require.Equal(t, "iqn.2024-01.com.example:disk0", rec.form.Get("target"))
+	require.False(t, rec.form.Has("iscsi-target"), "the flag name must not leak into the body")
+}
+
+// TestStorageCreate_OmitsUnsetNewFlags verifies the expanded flag set is omitted
+// from the body unless explicitly passed.
+func TestStorageCreate_OmitsUnsetNewFlags(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "POST /api2/json/storage", &rec, map[string]any{"storage": "lvm1", "type": "lvm"})
+
+	_, err := run(t, f, "create", "--storage", "lvm1", "--type", "lvm", "--vgname", "pve")
+	require.NoError(t, err)
+	require.Equal(t, "pve", rec.form.Get("vgname"))
+	for _, omitted := range []string{"password", "keyring", "encryption-key", "master-pubkey",
+		"datastore", "portal", "target", "pool", "fs-name", "port", "prune-backups", "format"} {
+		require.False(t, rec.form.Has(omitted), "%q must be omitted when unset", omitted)
+	}
+}
+
+// TestStorageSet_ForwardsNewTunablesAndDelete verifies the expanded update flag
+// set, --delete, and --digest are forwarded, and create-only identity fields are
+// never sent on update.
+func TestStorageSet_ForwardsNewTunablesAndDelete(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "PUT /api2/json/storage/pbs1", &rec, map[string]any{"storage": "pbs1", "type": "pbs"})
+
+	_, err := run(t, f, "set", "pbs1",
+		"--prune-backups", "keep-last=3", "--max-protected-backups", "5",
+		"--delete", "fingerprint", "--digest", "abc123",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "keep-last=3", rec.form.Get("prune-backups"))
+	require.Equal(t, "5", rec.form.Get("max-protected-backups"))
+	require.Equal(t, "fingerprint", rec.form.Get("delete"))
+	require.Equal(t, "abc123", rec.form.Get("digest"))
+	// Identity fields have no update parameter and a create-only flag, so they
+	// can never appear on a PUT.
+	require.False(t, rec.form.Has("datastore"))
+	require.False(t, rec.form.Has("type"))
+}
+
+// TestStorageGet_ScrubsSecrets verifies that if the backend ever echoes a stored
+// credential on get, the CLI strips it from every output format.
+func TestStorageGet_ScrubsSecrets(t *testing.T) {
+	for _, format := range []string{"table", "json", "yaml"} {
+		f := testhelper.NewFakePVE(t)
+		f.HandleJSON("GET /api2/json/storage/pbs1", map[string]any{
+			"storage": "pbs1", "type": "pbs", "server": "10.0.0.5", "datastore": "store",
+			"password":       "supersecretpw",
+			"encryption-key": "supersecretkey",
+			"keyring":        "supersecretkeyring",
+			"master-pubkey":  "supersecretpubkey",
+		})
+
+		out, err := run(t, f, "get", "pbs1", "--output", format)
+		require.NoError(t, err)
+		require.Contains(t, out, "pbs1")
+		require.NotContains(t, out, "supersecretpw", "password must not be echoed (%s)", format)
+		require.NotContains(t, out, "supersecretkey", "encryption-key must not be echoed (%s)", format)
+		require.NotContains(t, out, "supersecretkeyring", "keyring must not be echoed (%s)", format)
+		require.NotContains(t, out, "supersecretpubkey", "master-pubkey must not be echoed (%s)", format)
+	}
+}
+
 // TestStorageGroup_HasAllSubcommands verifies the storage group exposes every
 // expected leaf sub-command.
 func TestStorageGroup_HasAllSubcommands(t *testing.T) {

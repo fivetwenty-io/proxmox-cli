@@ -67,7 +67,7 @@ Administrative depth across guests, nodes, storage, and software-defined network
 | ACME and Ceph flags | `pve cluster acme`, `pve cluster ceph flags` | ACME accounts and plugins, global Ceph flags | Shipped |
 | Ceph management | `pve node ceph` | Status, configuration, OSD, pool, monitor, MDS, MGR, and filesystem control | Shipped |
 | SDN extensions | `pve sdn controller\|ipam\|dns`, `pve sdn vnet set\|firewall` | Routing controllers, IPAM backends, DNS providers, VNet updates, and per-VNet firewalls | Shipped |
-| Cluster storage | `pve cluster storage` | Cluster-level storage definitions | Planned |
+| Cluster storage | `pve storage create\|set\|get` | Datacenter-wide storage definitions with full per-backend attributes (dir, NFS, CIFS, LVM, ZFS, Ceph, PBS, iSCSI) and credential scrubbing on read | Shipped |
 | Storage browsing | `pve storage file-restore`, `pve storage import-metadata`, `pve storage volume` | Backup browsing, import metadata, and volume copy and update | Planned |
 
 ## P4 — Specialized Workflows

@@ -1111,18 +1111,36 @@ def storage_lifecycle(r: Runner) -> None:
     """Create / set / delete an isolated `dir` storage config object, restricted
     to the test node. Points at `/var/lib/vz/pve-cli-e2e`: the CLI has no
     `--mkdir`, but a dir storage config is created regardless of whether the
-    path exists yet — enough to exercise the create/set/delete verbs."""
+    path exists yet — enough to exercise the create/set/delete verbs.
+
+    The definition is node-restricted (`--nodes <node>`) so it is only ever
+    considered on the test node, and it is removed in the finally block, leaving
+    the cluster storage config as found. Beyond the bare verbs, this also
+    exercises the expanded attribute surface (backup retention tunables) to prove
+    the new create/set flags reach the API and survive a round-trip."""
     print(BOLD("storage: dir storage create / set / delete"))
     sid = Isolation.NAME_PREFIX + "store"
     spath = "/var/lib/vz/" + Isolation.NAME_PREFIX + "e2e"
+
+    # Best-effort clean of a definition left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {sid}", "storage", "delete", sid, "--yes")
+
     r.step("storage", "create", f"storage create {sid}",
            "storage", "create", "--storage", sid, "--type", "dir",
-           "--path", spath, "--content", "iso", "--nodes", r.node)
+           "--path", spath, "--content", "backup", "--nodes", r.node,
+           "--prune-backups", "keep-last=1", "--max-protected-backups", "1")
     try:
-        r.step("storage", "get", f"storage get {sid}",
-               "storage", "get", sid, json_out=True)
+        got = r.step("storage", "get", f"storage get {sid}",
+                     "storage", "get", sid, json_out=True)
+        if "keep-last=1" not in got.out:
+            raise LifecycleError(f"storage get did not report the prune-backups tunable for {sid}")
+        # set forwards only the changed flag; the backend type and path are fixed.
         r.step("storage", "set", f"storage set {sid}",
-               "storage", "set", sid, "--content", "iso,vztmpl")
+               "storage", "set", sid, "--prune-backups", "keep-last=2", "--content", "backup,iso")
+        verify = r.step("storage", "get", f"storage get {sid} (verify)",
+                        "storage", "get", sid, json_out=True)
+        if "keep-last=2" not in verify.out:
+            raise LifecycleError(f"storage set did not update the prune-backups tunable for {sid}")
     finally:
         r.del_step("storage", "delete", f"storage delete {sid}",
                    "storage", "delete", sid, "--yes")
