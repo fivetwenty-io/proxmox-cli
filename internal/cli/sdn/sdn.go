@@ -119,6 +119,25 @@ func renderObject(cmd *cobra.Command, deps *cli.Deps, v any) error {
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: obj}, deps.Format)
 }
 
+// renderObjectScrubbed renders v as renderObject does, but first removes the
+// named secret keys (a provider API token or key) from both the table and the
+// lossless Raw output. The Get* response shape for these endpoints is opaque
+// (json.RawMessage), so a stored secret is stripped defensively in the CLI
+// rather than trusting the API to omit it.
+func renderObjectScrubbed(cmd *cobra.Command, deps *cli.Deps, v any, secretKeys ...string) error {
+	single, obj, err := objectToSingle(v)
+	if err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	if m, ok := obj.(map[string]any); ok {
+		for _, k := range secretKeys {
+			delete(single, k)
+			delete(m, k)
+		}
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: obj}, deps.Format)
+}
+
 // renderRawList renders a list of heterogeneous JSON objects as a union-of-keys
 // table with sorted, upper-cased headers, preserving the raw elements for
 // lossless JSON/YAML output.

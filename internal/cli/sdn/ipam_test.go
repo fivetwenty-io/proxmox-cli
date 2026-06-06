@@ -84,6 +84,24 @@ func TestIpamGet(t *testing.T) {
 	require.Equal(t, "/api2/json/cluster/sdn/ipams/netbox1", rec[0].path)
 }
 
+// TestIpamGetScrubsToken verifies that if the API returns the stored provider
+// token on get, the CLI strips it from the rendered output (table and raw).
+func TestIpamGetScrubsToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/ipams/netbox1", map[string]any{
+		"ipam": "netbox1", "type": "netbox", "url": "https://nb.example",
+		"token": "supersecrettoken",
+	}, 200)
+
+	for _, format := range []string{"table", "json", "yaml"} {
+		out, err := run(t, f, "", "--output", format, "ipam", "get", "netbox1")
+		require.NoError(t, err)
+		require.Contains(t, out, "netbox1")
+		require.NotContains(t, out, "supersecrettoken", "token must not be echoed (%s)", format)
+	}
+}
+
 func TestIpamSetRequiresChange(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest

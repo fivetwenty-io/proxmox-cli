@@ -76,6 +76,53 @@ func TestAcmeAccount_CreateForwardsFields(t *testing.T) {
 	require.Contains(t, buf.String(), acmeUPID)
 }
 
+// TestAcmeAccount_CreateForwardsEabSecretWithoutEcho verifies the External
+// Account Binding HMAC key (a secret) is forwarded to the request body but never
+// echoed in the rendered output.
+func TestAcmeAccount_CreateForwardsEabSecretWithoutEcho(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotForm url.Values
+	f.HandleFunc("POST /api2/json/cluster/acme/account", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form
+		testhelper.WriteData(w, acmeUPID)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	const secret = "supersecreteabhmac"
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "acme", "account", "create", "staging",
+		"--contact", "admin@example.com", "--eab-kid", "kid-1", "--eab-hmac-key", secret, "--async"))
+	require.Equal(t, "kid-1", gotForm.Get("eab-kid"))
+	require.Equal(t, secret, gotForm.Get("eab-hmac-key"), "the HMAC key must reach the request body")
+	require.NotContains(t, buf.String(), secret, "the HMAC key must never be echoed to output")
+}
+
+// TestAcmeAccount_CreateBlocksUntilDone covers the default synchronous path:
+// without --async the command waits for the registration task to finish and
+// renders the success message.
+func TestAcmeAccount_CreateBlocksUntilDone(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("POST /api2/json/cluster/acme/account", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, acmeUPID)
+	})
+	// WaitTask polls the task status on the node named in the UPID ("pve").
+	f.HandleJSON("GET /api2/json/nodes/pve/tasks/"+acmeUPID+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "OK", "upid": acmeUPID,
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "acme", "account", "create",
+		"--contact", "admin@example.com"))
+	require.Contains(t, buf.String(), "ACME account registered.")
+	require.NotContains(t, buf.String(), acmeUPID, "synchronous create must not print the raw UPID")
+}
+
 // TestAcmeAccount_CreateRequiresContact verifies create rejects a missing contact.
 func TestAcmeAccount_CreateRequiresContact(t *testing.T) {
 	_, ac := newFakeClient(t)

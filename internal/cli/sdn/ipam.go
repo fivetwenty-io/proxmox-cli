@@ -135,7 +135,9 @@ func newIpamGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get SDN IPAM %q: %w", ipam, err)
 			}
-			return renderObject(cmd, deps, resp)
+			// Scrub the provider API token: the response is opaque, so the
+			// secret is stripped in the CLI rather than trusting the API.
+			return renderObjectScrubbed(cmd, deps, resp, "token")
 		},
 	}
 }

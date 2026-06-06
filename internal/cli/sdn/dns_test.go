@@ -85,6 +85,24 @@ func TestDnsGet(t *testing.T) {
 	require.Equal(t, "/api2/json/cluster/sdn/dns/pdns1", rec[0].path)
 }
 
+// TestDnsGetScrubsKey verifies that if the API returns the stored provider key
+// on get, the CLI strips it from the rendered output (table and raw).
+func TestDnsGetScrubsKey(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/dns/pdns1", map[string]any{
+		"dns": "pdns1", "type": "powerdns", "url": "https://pdns.example/api",
+		"key": "supersecretkey",
+	}, 200)
+
+	for _, format := range []string{"table", "json", "yaml"} {
+		out, err := run(t, f, "", "--output", format, "dns", "get", "pdns1")
+		require.NoError(t, err)
+		require.Contains(t, out, "pdns1")
+		require.NotContains(t, out, "supersecretkey", "key must not be echoed (%s)", format)
+	}
+}
+
 func TestDnsSetRequiresChange(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
