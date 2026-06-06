@@ -241,6 +241,51 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
 
+    # ACME: the account and plugin lists are arrays (empty on a lab with no ACME
+    # configured); directories and challenge-schema are built-in static catalogs
+    # that do not contact any CA. All read-only and safe to query directly.
+    ctx.check("acme account list", "cluster", "acme", "account", "list", validate=is_list)
+    ctx.check("acme plugin list", "cluster", "acme", "plugin", "list", validate=is_list)
+    ctx.check("acme directories", "cluster", "acme", "directories", validate=is_list)
+    ctx.check("acme challenge-schema", "cluster", "acme", "challenge-schema", validate=is_list)
+    ctx.check("acme plugin create --help", "cluster", "acme", "plugin", "create", "--help", fmt="")
+    # The mutate phase creates an isolated `pve-cli-` dns-01 plugin with throwaway
+    # data (never used to issue a certificate), exercises get/set, and deletes it —
+    # covered live there. The plugin's --data block is a dummy credential and is
+    # never echoed.
+    ctx.defer(
+        "acme plugin create/set/delete",
+        "manages a local dns-01 challenge plugin — covered live by `e2e --mutate`",
+        "pve cluster acme plugin create pve-cli-acme --type dns --api cf --data <dummy>",
+        isolation=True, live_covered=True,
+    )
+    # Account register/update/deregister contact the ACME CA (e.g. Let's Encrypt)
+    # and run as asynchronous tasks; they are parsed-and-deferred, never run live
+    # on the shared lab.
+    ctx.defer(
+        "acme account create/set/delete",
+        "contacts the ACME certificate authority — never registered live on a shared lab",
+        "pve cluster acme account create --contact admin@example.com --directory <staging>",
+        isolation=False, live_covered=False,
+    )
+
+    # Ceph flags require a configured Ceph cluster; the lab node has no Ceph, so the
+    # API returns an error — record a skip there rather than a failure. The flag set
+    # is cluster-disruptive and is parsed-and-deferred, never run live.
+    flags = ctx.run("cluster", "ceph", "flags", "list")
+    flags_err = (flags.stderr or flags.stdout).lower()
+    if flags.rc != 0 and "ceph" in flags_err:
+        ctx.skip("ceph flags list", "Ceph is not configured on the lab node")
+    else:
+        ctx.check("ceph flags list", "cluster", "ceph", "flags", "list", validate=is_list)
+    ctx.check("ceph flags set --help", "cluster", "ceph", "flags", "set", "--help", fmt="")
+    ctx.defer(
+        "ceph flags set",
+        "toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live",
+        "pve cluster ceph flags set noout true",
+        isolation=False, live_covered=False,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")

@@ -64,7 +64,7 @@ Administrative depth across guests, nodes, storage, and software-defined network
 | Node replication | `pve node replication` | Per-node replication view and on-demand runs | Shipped |
 | Metrics and notifications | `pve cluster metrics`, `pve cluster notifications` | External metric targets and alert routing | Shipped |
 | Device mapping and jobs | `pve cluster mapping`, `pve cluster jobs` | PCI, USB, and directory mappings, and scheduled realm sync | Shipped |
-| ACME and Ceph flags | `pve cluster acme`, `pve cluster ceph flags` | ACME accounts and plugins, global Ceph flags | Planned |
+| ACME and Ceph flags | `pve cluster acme`, `pve cluster ceph flags` | ACME accounts and plugins, global Ceph flags | Shipped |
 | Ceph management | `pve node ceph` | Status, configuration, OSD, pool, monitor, MDS, MGR, and filesystem control | Planned |
 | SDN extensions | `pve sdn controller\|ipam\|dns`, `pve sdn vnet` | Routing controllers, IPAM, DNS providers, VNet updates and firewalls | Planned |
 | Cluster storage | `pve cluster storage` | Cluster-level storage definitions | Planned |

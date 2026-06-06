@@ -31,6 +31,7 @@ container, which has a real init that handles it.
 from __future__ import annotations
 
 import json
+import base64
 import os
 import shutil
 import subprocess
@@ -70,6 +71,7 @@ GOTIFY_ENDPOINT = "pve-cli-gotify"   # isolated, disabled gotify notification en
 DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
 REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
 REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
+ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
@@ -1848,6 +1850,47 @@ def cluster_realmsync_lifecycle(r: Runner) -> None:
                        "access", "domain", "delete", REALMSYNC_REALM, "--yes")
 
 
+def cluster_acme_plugin_lifecycle(r: Runner) -> None:
+    """Exercise `cluster acme plugin create/get/set/delete` reversibly.
+
+    Isolation: a single dns-01 ACME challenge plugin `pve-cli-acme` is created
+    with a throwaway Cloudflare-style credential block. The plugin is a local
+    cluster-config entry only; it is never attached to a node certificate and no
+    certificate is ever ordered, so the ACME CA is never contacted and the dummy
+    credential is never used. The credential is a base64 dummy value and is never
+    echoed (create returns only a status message; the value is not placed in any
+    printed label). The plugin is removed in the finally block, leaving the ACME
+    config as found. Account register/update/deregister contact the CA and are
+    never exercised live.
+    """
+    print(BOLD("cluster: ACME dns-01 plugin (reversible)"))
+
+    # Dummy base64 credential block (never used to issue a certificate).
+    data = base64.b64encode(b"CF_Token=pve-cli-e2e-dummy\n").decode("ascii")
+
+    # Best-effort clean of a plugin left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {ACME_PLUGIN}",
+           "cluster", "acme", "plugin", "delete", ACME_PLUGIN, "--yes")
+
+    try:
+        r.step("cluster", "acme plugin create", f"acme plugin create {ACME_PLUGIN}",
+               "cluster", "acme", "plugin", "create", ACME_PLUGIN,
+               "--type", "dns", "--api", "cf", "--data", data,
+               "--validation-delay", "30", "--disable")
+        r.step("cluster", "acme plugin list", "acme plugin list",
+               "cluster", "acme", "plugin", "list", json_out=True)
+        got = r.step("cluster", "acme plugin get", f"acme plugin get {ACME_PLUGIN}",
+                     "cluster", "acme", "plugin", "get", ACME_PLUGIN, json_out=True)
+        if "cf" not in got.out:
+            raise LifecycleError(f"acme plugin get did not report the api for {ACME_PLUGIN}")
+        r.step("cluster", "acme plugin set", "acme plugin set (validation-delay)",
+               "cluster", "acme", "plugin", "set", ACME_PLUGIN,
+               "--validation-delay", "60")
+    finally:
+        r.del_step("cluster", "acme plugin delete", f"acme plugin delete {ACME_PLUGIN}",
+                   "cluster", "acme", "plugin", "delete", ACME_PLUGIN, "--yes")
+
+
 def run(target: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
@@ -1913,6 +1956,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_mapping_lifecycle(r)
         print()
         cluster_realmsync_lifecycle(r)
+        print()
+        cluster_acme_plugin_lifecycle(r)
         print()
 
         if not skip_vm:
