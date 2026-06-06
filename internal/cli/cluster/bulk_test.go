@@ -178,6 +178,53 @@ func TestClusterBulk_MigrateAsyncReturnsUPID(t *testing.T) {
 	require.Contains(t, buf.String(), upid)
 }
 
+// TestClusterBulk_StartWaitsForTask drives the default synchronous path: the POST
+// returns a real UPID, the command polls the task-status endpoint, and renders
+// the done message only after the task ends OK.
+func TestClusterBulk_StartWaitsForTask(t *testing.T) {
+	f, ac := newFakeClient(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:startall::root@pam:"
+	f.HandleFunc("POST /api2/json/cluster/bulk-action/guest/start", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+	statusHit := false
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		statusHit = true
+		testhelper.WriteData(w, map[string]any{"status": "stopped", "exitstatus": "OK", "upid": upid})
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "bulk", "start", "--yes"))
+	require.True(t, statusHit, "the synchronous path must poll the task-status endpoint")
+	require.Contains(t, buf.String(), "Bulk start started")
+}
+
+// TestClusterBulk_StartWaitTaskError verifies a failed task surfaces the
+// task-wait error wrap rather than the success message.
+func TestClusterBulk_StartWaitTaskError(t *testing.T) {
+	f, ac := newFakeClient(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:startall::root@pam:"
+	f.HandleFunc("POST /api2/json/cluster/bulk-action/guest/start", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"status": "stopped", "exitstatus": "command 'qm start' failed: exit code 1", "upid": upid,
+		})
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	err := run(&buf, "bulk", "start", "--yes")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bulk action")
+}
+
 // TestClusterBulk_StartServerError verifies a server failure surfaces as an error.
 func TestClusterBulk_StartServerError(t *testing.T) {
 	f, ac := newFakeClient(t)

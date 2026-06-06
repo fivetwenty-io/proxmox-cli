@@ -71,6 +71,31 @@ func TestFabricCreateOmitsUnsetFlags(t *testing.T) {
 	require.NotContains(t, rec[0].body, "ip_prefix")
 	require.NotContains(t, rec[0].body, "area")
 	require.NotContains(t, rec[0].body, "route_filter")
+	require.NotContains(t, rec[0].body, "lock-token")
+}
+
+// TestFabricCreateForwardsLockToken verifies the global-SDN unlock token is sent
+// only when --lock-token is set.
+func TestFabricCreateForwardsLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/fabric", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "create", "fab1", "--protocol", "ospf", "--lock-token", "tok-123")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "tok-123", rec[0].body["lock-token"])
+}
+
+// TestFabricCreateError verifies the create error wrap.
+func TestFabricCreateError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/fabric", nil, 500)
+
+	_, err := run(t, f, "", "fabric", "create", "fab1", "--protocol", "ospf")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "create SDN fabric \"fab1\"")
 }
 
 // TestFabricCreateRequiresProtocol verifies --protocol is mandatory and no
@@ -113,6 +138,7 @@ func TestFabricSet(t *testing.T) {
 	require.Equal(t, http.MethodPut, rec[0].method)
 	require.Equal(t, "openfabric", rec[0].body["protocol"])
 	require.Equal(t, "0.0.0.0", rec[0].body["area"])
+	require.NotContains(t, rec[0].body, "ip_prefix", "unset optional must be omitted from the update body")
 }
 
 func TestFabricSetRequiresProtocol(t *testing.T) {
@@ -206,6 +232,24 @@ func TestFabricNodeCreate(t *testing.T) {
 	require.Equal(t, "n1", rec[0].body["node_id"])
 	require.Equal(t, "openfabric", rec[0].body["protocol"])
 	require.Equal(t, "10.0.0.1", rec[0].body["ip"])
+	require.NotContains(t, rec[0].body, "ip6", "unset optional must be omitted")
+	require.NotContains(t, rec[0].body, "endpoint", "unset optional must be omitted")
+	require.NotContains(t, rec[0].body, "public_key", "unset optional must be omitted")
+}
+
+// TestFabricNodeCreateForwardsPublicKey verifies the WireGuard public key and
+// lock token are forwarded only when their flags are set.
+func TestFabricNodeCreateForwardsPublicKey(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/node/fab1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "node", "create", "fab1", "n1",
+		"--protocol", "openfabric", "--public-key", "pubkey==", "--lock-token", "tok-1")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "pubkey==", rec[0].body["public_key"])
+	require.Equal(t, "tok-1", rec[0].body["lock-token"])
 }
 
 func TestFabricNodeCreateRequiresProtocol(t *testing.T) {
@@ -231,6 +275,7 @@ func TestFabricNodeSet(t *testing.T) {
 	require.Equal(t, http.MethodPut, rec[0].method)
 	require.Equal(t, "openfabric", rec[0].body["protocol"])
 	require.Equal(t, "10.0.0.2", rec[0].body["ip"])
+	require.NotContains(t, rec[0].body, "ip6", "unset optional must be omitted from the update body")
 }
 
 func TestFabricNodeDeleteRequiresYes(t *testing.T) {

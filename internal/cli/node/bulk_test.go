@@ -187,6 +187,53 @@ func TestNodeWakeonlan_SendsPacket(t *testing.T) {
 	require.Equal(t, "POST", rec.method)
 	require.Equal(t, "/api2/json/nodes/pve1/wakeonlan", rec.path)
 	require.Contains(t, buf.String(), "Wake-on-LAN packet sent")
+	require.Contains(t, buf.String(), "(AA:BB:CC:DD:EE:FF)",
+		"the MAC the packet was sent to must be rendered in the message")
+}
+
+// TestNodeStartall_WaitsForTask drives the default synchronous path: the POST
+// returns a real UPID, the command polls the task-status endpoint, and only
+// renders the done message after the task ends OK.
+func TestNodeStartall_WaitsForTask(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:startall::root@pam:"
+	f.HandleFunc("POST /api2/json/nodes/pve1/startall", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+	statusHit := false
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		statusHit = true
+		testhelper.WriteData(w, map[string]any{"status": "stopped", "exitstatus": "OK", "upid": upid})
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "startall", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.True(t, statusHit, "the synchronous path must poll the task-status endpoint")
+	require.Contains(t, buf.String(), "Start-all started")
+}
+
+// TestNodeStartall_WaitTaskError verifies a failed task surfaces the task-wait
+// error wrap rather than the success message.
+func TestNodeStartall_WaitTaskError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:startall::root@pam:"
+	f.HandleFunc("POST /api2/json/nodes/pve1/startall", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"status": "stopped", "exitstatus": "command 'qm start' failed: exit code 1", "upid": upid,
+		})
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "startall", "--yes"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bulk action on node \"pve1\"")
 }
 
 // TestNodeBulk_CommandTree verifies the node group exposes every bulk verb.

@@ -51,6 +51,17 @@ func TestPrefixListCreate(t *testing.T) {
 	require.Equal(t, "pl1", rec[0].body["id"])
 }
 
+// TestPrefixListCreateError verifies the create error wrap.
+func TestPrefixListCreateError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/prefix-lists", nil, 500)
+
+	_, err := run(t, f, "", "prefix-list", "create", "pl1")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "create SDN prefix list \"pl1\"")
+}
+
 func TestPrefixListGet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
@@ -308,6 +319,24 @@ func TestRouteMapEntrySet(t *testing.T) {
 	require.Contains(t, out, "updated")
 	require.Len(t, rec, 1)
 	require.Equal(t, "deny", rec[0].body["action"])
+	require.NotContains(t, rec[0].body, "call", "unset optional must be omitted from the update body")
+	require.NotContains(t, rec[0].body, "exit-action", "unset optional must be omitted from the update body")
+}
+
+// TestRouteMapEntrySetForwardsClauses verifies the scalar policy clauses are
+// forwarded when set.
+func TestRouteMapEntrySetForwardsClauses(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/route-maps/entries/rm1/entry/10", map[string]any{}, 200)
+
+	out, err := run(t, f, "", "route-map", "entry", "set", "rm1", "10",
+		"--call", "rm2", "--exit-action", "next")
+	require.NoError(t, err)
+	require.Contains(t, out, "updated")
+	require.Len(t, rec, 1)
+	require.Equal(t, "rm2", rec[0].body["call"])
+	require.Equal(t, "next", rec[0].body["exit-action"])
 }
 
 func TestRouteMapEntryDeleteRequiresYes(t *testing.T) {
