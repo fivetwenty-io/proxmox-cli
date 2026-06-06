@@ -76,7 +76,7 @@ Bulk and advanced features for larger or newer deployments.
 
 | Feature | Commands | Notes | Status |
 |---|---|---|---|
-| Bulk actions | `pve cluster bulk`, `pve node startall\|stopall\|suspendall\|migrateall\|wakeonlan` | Fleet-wide start, stop, suspend, and migrate | Planned |
+| Bulk actions | `pve cluster bulk start\|shutdown\|suspend\|migrate`, `pve node startall\|stopall\|suspendall\|migrateall\|wakeonlan` | Fleet-wide start, stop, suspend, and migrate across the cluster or a single node, plus Wake-on-LAN | Shipped |
 | SDN preview and rollback | `pve sdn dry-run`, `pve sdn rollback` | Preview and revert pending SDN changes | Planned |
 | SDN fabrics and routing policy | `pve sdn fabric`, `pve sdn prefix-list`, `pve sdn route-map` | BGP fabric topology and routing policy | Planned |
 | PVE 9.2 endpoints | `pve node oci`, `pve node capabilities`, `pve cluster cpu-model` | OCI image import, capability queries, and custom CPU models | Planned |

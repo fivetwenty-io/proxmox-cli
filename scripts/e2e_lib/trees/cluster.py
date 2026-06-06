@@ -286,6 +286,21 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
+    # Bulk actions act on every guest in the cluster (or a --vmids subset). They
+    # would start, stop, suspend, or migrate non-isolated production workloads, so
+    # only their argument parsing is exercised here via --help; every verb is
+    # parsed-and-deferred, never run live on the shared lab.
+    ctx.check("bulk start --help", "cluster", "bulk", "start", "--help", fmt="")
+    ctx.check("bulk shutdown --help", "cluster", "bulk", "shutdown", "--help", fmt="")
+    ctx.check("bulk suspend --help", "cluster", "bulk", "suspend", "--help", fmt="")
+    ctx.check("bulk migrate --help", "cluster", "bulk", "migrate", "--help", fmt="")
+    ctx.defer(
+        "bulk start/shutdown/suspend/migrate",
+        "cluster-wide guest power and migration actions — affect every guest, not run live",
+        "pve cluster bulk shutdown --yes",
+        isolation=False, live_covered=False,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")

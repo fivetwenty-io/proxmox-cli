@@ -408,3 +408,25 @@ def run(ctx: Ctx) -> None:
         "mutates real host daemons on a shared lab",
         "pve node services restart <svc> --node <node>",
     )
+
+    # Node-wide bulk actions act on every guest on the node (or a --vmids subset)
+    # and would start, stop, suspend, or migrate non-isolated workloads; wakeonlan
+    # powers a node on. Only argument parsing is exercised here via --help; every
+    # verb is parsed-and-deferred, never run live on the shared lab.
+    ctx.check("startall --help", "node", "startall", "--help", fmt="")
+    ctx.check("stopall --help", "node", "stopall", "--help", fmt="")
+    ctx.check("suspendall --help", "node", "suspendall", "--help", fmt="")
+    ctx.check("migrateall --help", "node", "migrateall", "--help", fmt="")
+    ctx.check("wakeonlan --help", "node", "wakeonlan", "--help", fmt="")
+    ctx.defer(
+        "startall / stopall / suspendall / migrateall",
+        "node-wide guest power and migration actions — affect every guest on the node, not run live",
+        "pve node stopall --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "wakeonlan",
+        "sends a Wake-on-LAN packet to power on a node — affects real host power state, not run live",
+        "pve node wakeonlan --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
