@@ -42,6 +42,9 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 		newControllerCmd(),
 		newIpamCmd(),
 		newDnsCmd(),
+		newFabricCmd(),
+		newPrefixListCmd(),
+		newRouteMapCmd(),
 	)
 	return cmd
 }

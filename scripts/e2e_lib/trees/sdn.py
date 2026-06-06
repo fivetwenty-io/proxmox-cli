@@ -71,6 +71,52 @@ def run(ctx: Ctx) -> None:
               "discards ALL pending SDN changes cluster-wide — never run on shared lab",
               "pve sdn rollback --yes", isolation=False, live_covered=False)
 
+    # SDN fabrics, prefix lists, and route maps are PVE 9.2 net-new (BGP/OSPF/
+    # OpenFabric routing underlays and route policy). The list endpoints are
+    # cluster-global and read-only; on a cluster without the FRR routing stack
+    # configured they may report an error, so guard with a skip rather than fail.
+    fab = ctx.run("sdn", "fabric", "list")
+    if fab.rc != 0:
+        ctx.skip("fabric list", "SDN fabric routing not configured on this cluster")
+        ctx.skip("fabric node list", "SDN fabric routing not configured on this cluster")
+    else:
+        ctx.check("fabric list", "sdn", "fabric", "list", validate=is_list)
+        ctx.check("fabric node list", "sdn", "fabric", "node", "list", validate=is_list)
+
+    pl = ctx.run("sdn", "prefix-list", "list")
+    if pl.rc != 0:
+        ctx.skip("prefix-list list", "SDN prefix lists not available on this cluster")
+    else:
+        ctx.check("prefix-list list", "sdn", "prefix-list", "list", validate=is_list)
+
+    rm = ctx.run("sdn", "route-map", "list")
+    if rm.rc != 0:
+        ctx.skip("route-map list", "SDN route maps not available on this cluster")
+        ctx.skip("route-map entry list", "SDN route maps not available on this cluster")
+    else:
+        ctx.check("route-map list", "sdn", "route-map", "list", validate=is_list)
+        ctx.check("route-map entry list", "sdn", "route-map", "entry", "list", validate=is_list)
+
+    ctx.check("fabric create --help", "sdn", "fabric", "create", "--help", fmt="")
+    ctx.check("prefix-list create --help", "sdn", "prefix-list", "create", "--help", fmt="")
+    ctx.check("route-map entry add --help", "sdn", "route-map", "entry", "add", "--help", fmt="")
+
+    # Creating a fabric, prefix list, or route map stages BGP/OSPF routing
+    # topology that requires real FRR peers and a multi-node underlay. These are
+    # never provisioned on the shared lab — covered by unit tests only.
+    ctx.defer("fabric create/set/delete + node create/set/delete",
+              "needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by unit tests",
+              "pve sdn fabric create pveclifab --protocol openfabric",
+              isolation=False, live_covered=False)
+    ctx.defer("prefix-list create/set/delete + entry add/set/delete",
+              "stages routing policy tied to a fabric — covered by unit tests",
+              "pve sdn prefix-list create pveclipl --entry 'permit 172.30.0.0/24'",
+              isolation=False, live_covered=False)
+    ctx.defer("route-map entry add/set/delete",
+              "stages BGP route policy tied to a fabric — covered by unit tests",
+              "pve sdn route-map entry add pveclirm --order 10 --action permit",
+              isolation=False, live_covered=False)
+
     # The mutate phase provisions and tears down this exact isolated SDN, so
     # zone/vnet/subnet create+delete and apply are all exercised live by it.
     ctx.defer("zone create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
