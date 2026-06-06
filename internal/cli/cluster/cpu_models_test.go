@@ -65,6 +65,43 @@ func TestClusterCpuModel_Get(t *testing.T) {
 	require.Contains(t, out, "EPYC")
 }
 
+func TestClusterCpuModel_GetError(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/qemu/custom-cpu-models/custom-epyc", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusNotFound, "no such model")
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	err := run(&buf, "cpu-model", "get", "custom-epyc")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "get custom CPU model")
+}
+
+func TestClusterCpuModel_CreateForwardsAllFields(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotForm url.Values
+	f.HandleFunc("POST /api2/json/cluster/qemu/custom-cpu-models", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "cpu-model", "create", "custom-epyc",
+		"--reported-model", "EPYC", "--guest-phys-bits", "46", "--level", "30",
+		"--phys-bits", "host", "--hv-vendor-id", "PVE"))
+	require.Equal(t, "46", gotForm.Get("guest-phys-bits"))
+	require.Equal(t, "30", gotForm.Get("level"))
+	require.Equal(t, "host", gotForm.Get("phys-bits"))
+	require.Equal(t, "PVE", gotForm.Get("hv-vendor-id"))
+}
+
 func TestClusterCpuModel_CreateForwardsFields(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotForm url.Values
@@ -143,6 +180,21 @@ func TestClusterCpuModel_SetForwardsChanged(t *testing.T) {
 	_, hasRM := gotForm["reported-model"]
 	require.False(t, hasRM, "unset --reported-model must be omitted from the request body")
 	require.Contains(t, buf.String(), "Custom CPU model custom-epyc updated.")
+}
+
+func TestClusterCpuModel_SetError(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("PUT /api2/json/cluster/qemu/custom-cpu-models/custom-epyc", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusBadRequest, "bad flag")
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	err := run(&buf, "cpu-model", "set", "custom-epyc", "--level", "30")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "update custom CPU model")
 }
 
 func TestClusterCpuModel_SetRequiresChange(t *testing.T) {

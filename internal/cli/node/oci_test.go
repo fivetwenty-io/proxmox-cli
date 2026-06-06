@@ -143,6 +143,24 @@ func TestNodeOci_PullAsyncReturnsUPID(t *testing.T) {
 	require.Contains(t, buf.String(), ociUPID)
 }
 
+// TestNodeOci_PullNonUPIDFallback covers the renderOciTask branch where the
+// POST returns an empty body: UPIDFromRaw errors, so the command falls back to
+// a plain success message without polling any task-status endpoint.
+func TestNodeOci_PullNonUPIDFallback(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/storage/local/oci-registry-pull",
+		func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, nil)
+		})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "oci", "pull", "local",
+		"--reference", "alpine:latest", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), "pulled into local")
+}
+
 func TestNodeOci_PullAPIError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("POST /api2/json/nodes/pve1/storage/local/oci-registry-pull",

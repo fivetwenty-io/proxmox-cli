@@ -64,6 +64,32 @@ func TestNodeCapabilities_QemuMachines(t *testing.T) {
 	require.Contains(t, buf.String(), "i440fx")
 }
 
+func TestNodeCapabilities_QemuMachinesArchQuery(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/capabilities/qemu/machines", &rec, []any{})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "capabilities", "qemu", "machines", "--arch", "aarch64"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "arch=aarch64")
+}
+
+func TestNodeCapabilities_QemuMachinesAPIError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/capabilities/qemu/machines", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "capabilities", "qemu", "machines"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list QEMU machine capabilities")
+}
+
 // ---- capabilities qemu migration -------------------------------------------
 
 func TestNodeCapabilities_QemuMigration(t *testing.T) {
