@@ -1379,6 +1379,27 @@ def _node_rule_pos_by_comment(r: Runner, comment: str) -> str | None:
     return None
 
 
+def _vnet_fw_rule_pos_by_comment(r: Runner, vnet: str, comment: str) -> str | None:
+    """Return the position of the vnet firewall rule whose comment matches, or
+    None. Mirrors the cluster/node helpers: PVE inserts new rules at position 0,
+    so the throwaway rule is located by its comment rather than a fixed index."""
+    res = r.pve("sdn", "vnet", "firewall", "rules", "list", vnet, json_out=True, node=False)
+    if res.rc != 0:
+        return None
+    try:
+        rows = res.json()
+    except ValueError:
+        return None
+    if not isinstance(rows, list):
+        return None
+    for rule in rows:
+        if isinstance(rule, dict) and rule.get("comment") == comment:
+            pos = rule.get("pos")
+            if pos is not None:
+                return str(pos)
+    return None
+
+
 def node_firewall_lifecycle(r: Runner) -> None:
     """Exercise the host firewall of the resolved node: append a disabled rule
     tagged with the pve-cli comment, read it back, then delete it.
@@ -1933,6 +1954,40 @@ def sdn_objects_lifecycle(r: Runner) -> None:
            "sdn", "vnet", "set", Isolation.SDN_VNET, "--alias", "pve-cli-e2e")
     r.step("sdn", "vnet set delete", f"vnet set {Isolation.SDN_VNET} (--delete alias)",
            "sdn", "vnet", "set", Isolation.SDN_VNET, "--delete", "alias")
+
+    # ---- vnet firewall on the isolated pvecli0 vnet (staged-only) -----------
+    # A disabled rule (--enable 0) is appended, read back, then deleted. The
+    # vnet firewall is never enabled (options are read-only), so no traffic on
+    # any guest is affected; the rule is staged and removed in the same run.
+    vnet = Isolation.SDN_VNET
+    stale = _vnet_fw_rule_pos_by_comment(r, vnet, CL_FW_COMMENT)
+    if stale is not None:
+        r.undo(f"pre-clean vnet fw rule {stale}", "sdn", "vnet", "firewall",
+               "rules", "delete", vnet, stale, "--yes")
+    created_pos = None
+    try:
+        r.step("sdn", "vnet fw rule create", f"vnet firewall rules create {vnet}",
+               "sdn", "vnet", "firewall", "rules", "create", vnet,
+               "--type", "forward", "--action", "ACCEPT", "--enable", "0",
+               "--comment", CL_FW_COMMENT)
+        r.step("sdn", "vnet fw rules list", f"vnet firewall rules list {vnet}",
+               "sdn", "vnet", "firewall", "rules", "list", vnet, json_out=True)
+        created_pos = _vnet_fw_rule_pos_by_comment(r, vnet, CL_FW_COMMENT)
+        if created_pos is not None:
+            r.step("sdn", "vnet fw rule get", f"vnet firewall rules get {vnet} {created_pos}",
+                   "sdn", "vnet", "firewall", "rules", "get", vnet, created_pos, json_out=True)
+        else:
+            r.cover_skip("sdn", "vnet fw rule get",
+                         "created rule position not found by comment")
+        # Options are read-only: enabling the vnet firewall could affect guests.
+        r.step("sdn", "vnet fw options get", f"vnet firewall options get {vnet}",
+               "sdn", "vnet", "firewall", "options", "get", vnet, json_out=True)
+    finally:
+        pos = created_pos if created_pos is not None else \
+            _vnet_fw_rule_pos_by_comment(r, vnet, CL_FW_COMMENT)
+        if pos is not None:
+            r.del_step("sdn", "vnet fw rule delete", f"vnet firewall rules delete {vnet} {pos}",
+                       "sdn", "vnet", "firewall", "rules", "delete", vnet, pos, "--yes")
 
 
 def run(target: str, binary: str | None, build: bool, strict: bool,

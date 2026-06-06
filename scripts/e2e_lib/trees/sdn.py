@@ -29,8 +29,17 @@ def run(ctx: Ctx) -> None:
             vnet = None
     if vnet:
         ctx.check("subnet list", "sdn", "subnet", "list", str(vnet), validate=is_list)
+        ctx.check("vnet firewall rules list", "sdn", "vnet", "firewall", "rules", "list",
+                  str(vnet), validate=is_list)
+        ctx.check("vnet firewall options get", "sdn", "vnet", "firewall", "options", "get",
+                  str(vnet))
     else:
         ctx.skip("subnet list", "no vnet defined")
+        ctx.skip("vnet firewall rules list", "no vnet defined")
+        ctx.skip("vnet firewall options get", "no vnet defined")
+
+    ctx.check("vnet firewall rules create --help", "sdn", "vnet", "firewall", "rules",
+              "create", "--help", fmt="")
 
     # Routing controllers, IPAM backends, and DNS providers are cluster-global.
     ctx.check("controller list", "sdn", "controller", "list", validate=is_list)
@@ -85,3 +94,11 @@ def run(ctx: Ctx) -> None:
               "stages a vnet edit — covered live by `e2e --mutate`",
               f"pve sdn vnet set {Isolation.SDN_VNET} --alias pve-cli-e2e",
               isolation=True, live_covered=True)
+    ctx.defer("vnet firewall rules create/get/set/delete",
+              "stages a vnet firewall rule — covered live by `e2e --mutate`",
+              f"pve sdn vnet firewall rules create {Isolation.SDN_VNET} --type forward --action ACCEPT",
+              isolation=True, live_covered=True)
+    ctx.defer("vnet firewall options set",
+              "enabling a vnet firewall affects guest traffic — not exercised live",
+              f"pve sdn vnet firewall options set {Isolation.SDN_VNET} --enable",
+              isolation=True, live_covered=False)

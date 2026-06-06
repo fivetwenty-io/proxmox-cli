@@ -26,7 +26,7 @@ func newVnetCmd() *cobra.Command {
 		Use:   "vnet",
 		Short: "Manage SDN vnets",
 	}
-	cmd.AddCommand(newVnetListCmd(), newVnetCreateCmd(), newVnetSetCmd(), newVnetDeleteCmd())
+	cmd.AddCommand(newVnetListCmd(), newVnetCreateCmd(), newVnetSetCmd(), newVnetDeleteCmd(), newVnetFirewallCmd())
 	return cmd
 }
 
