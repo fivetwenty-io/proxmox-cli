@@ -48,6 +48,8 @@ func newNodeCmd(_ *cli.Deps) *cobra.Command {
 		newCertCmd(),
 		newReplicationCmd(),
 		newCephCmd(),
+		newOciCmd(),
+		newCapabilitiesCmd(),
 		newStartallCmd(),
 		newStopallCmd(),
 		newSuspendallCmd(),

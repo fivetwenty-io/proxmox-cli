@@ -233,6 +233,23 @@ def run(ctx: Ctx) -> None:
         ctx.check("ceph osd create --help", "node", "ceph", "osd", "create", "--help", fmt="")
         ctx.check("ceph pool create --help", "node", "ceph", "pool", "create", "--help", fmt="")
 
+        # QEMU capability queries are read-only: the node reports the CPU
+        # models and machine types it can offer guests, plus its live-migration
+        # features. All three are safe to run live.
+        ctx.check("capabilities qemu cpu", "node", "capabilities", "qemu", "cpu",
+                  node=n, validate=is_list)
+        ctx.check("capabilities qemu machines", "node", "capabilities", "qemu", "machines",
+                  node=n, validate=is_list)
+        ctx.check("capabilities qemu migration", "node", "capabilities", "qemu", "migration",
+                  node=n, validate=is_object)
+
+        # OCI image handling: `oci tags` queries a registry (network egress to
+        # an external registry that may be unreachable from the lab) and `oci
+        # pull` writes an image artifact to a storage with no CLI delete verb to
+        # clean it up — both are exercised by --help only and pull is deferred.
+        ctx.check("oci tags --help", "node", "oci", "tags", "--help", fmt="")
+        ctx.check("oci pull --help", "node", "oci", "pull", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -296,6 +313,17 @@ def run(ctx: Ctx) -> None:
         "disks create/init-gpt/wipe",
         "formats or wipes a physical disk — irreversible; not exercised live",
         "pve node disks wipe --node <node> --disk /dev/sdX --yes",
+        isolation=False, live_covered=False,
+    )
+
+    # Pulling an OCI image downloads it from a registry into a node storage and
+    # leaves an image artifact that has no CLI delete verb to clean it up on the
+    # shared lab (same reasoning as `storage upload`), so it is never exercised
+    # live. The CLI gates the pull behind --yes.
+    ctx.defer(
+        "oci pull",
+        "downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live",
+        "pve node oci pull <storage> --node <node> --reference docker.io/library/alpine:latest --yes",
         isolation=False, live_covered=False,
     )
 

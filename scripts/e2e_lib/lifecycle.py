@@ -72,6 +72,7 @@ DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
 REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
 REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
 ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
+CPU_MODEL = "pve-cli-cpu"            # isolated custom QEMU CPU model
 SDN_IPAM = "pvecliipam"              # isolated SDN IPAM backend (pve-type, no external backend)
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
@@ -1993,6 +1994,47 @@ def cluster_acme_plugin_lifecycle(r: Runner) -> None:
                    "cluster", "acme", "plugin", "delete", ACME_PLUGIN, "--yes")
 
 
+def cluster_cpumodel_lifecycle(r: Runner) -> None:
+    """Exercise `cluster cpu-model create/get/set/delete` reversibly.
+
+    Isolation: a single custom QEMU CPU model `pve-cli-cpu` is created with a
+    reported model of `qemu64` (a model every QEMU/KVM host supports, so the
+    definition is infra-independent — it is pure datacenter configuration stored
+    in cpu-models.conf and is never attached to a guest). The model is removed in
+    the finally block, leaving the datacenter CPU-model config as found. If the
+    create is rejected (older API or a permission limit), the CRUD is recorded as
+    a coverage skip rather than failing the suite.
+    """
+    print(BOLD("cluster: custom CPU model (reversible)"))
+
+    # Best-effort clean of a model left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {CPU_MODEL}",
+           "cluster", "cpu-model", "delete", CPU_MODEL, "--yes")
+
+    create = r.pve("cluster", "cpu-model", "create", CPU_MODEL,
+                   "--reported-model", "qemu64", "--flags", "+pdpe1gb")
+    if create.rc != 0:
+        reason = _err_reason(create, "custom CPU model create rejected")
+        for verb in ("cpu-model create", "cpu-model get", "cpu-model set", "cpu-model delete"):
+            r.cover_skip("cluster", verb, f"{verb} {CPU_MODEL}", reason)
+        return
+
+    print(f"  {GREEN('✓')} cpu-model create {CPU_MODEL}")
+    r.cov.append(Step("cluster", "cpu-model create", PASS))
+    try:
+        r.step("cluster", "cpu-model list", "cpu-model list",
+               "cluster", "cpu-model", "list", json_out=True)
+        got = r.step("cluster", "cpu-model get", f"cpu-model get {CPU_MODEL}",
+                     "cluster", "cpu-model", "get", CPU_MODEL, json_out=True)
+        if "qemu64" not in got.out:
+            raise LifecycleError(f"cpu-model get did not report the reported model for {CPU_MODEL}")
+        r.step("cluster", "cpu-model set", "cpu-model set (level)",
+               "cluster", "cpu-model", "set", CPU_MODEL, "--level", "30")
+    finally:
+        r.del_step("cluster", "cpu-model delete", f"cpu-model delete {CPU_MODEL}",
+                   "cluster", "cpu-model", "delete", CPU_MODEL, "--yes")
+
+
 def sdn_objects_lifecycle(r: Runner) -> None:
     """Exercise `sdn ipam` CRUD and `sdn vnet set` reversibly.
 
@@ -2137,6 +2179,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_realmsync_lifecycle(r)
         print()
         cluster_acme_plugin_lifecycle(r)
+        print()
+        cluster_cpumodel_lifecycle(r)
 
         sdn_objects_lifecycle(r)
         print()

@@ -301,6 +301,19 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
+    # Custom QEMU CPU models are datacenter-wide configuration. The list is
+    # read-only; create/get/set/delete are reversible and infra-independent (a
+    # model just pairs a reported QEMU model with extra flags), so the mutate
+    # phase exercises a full isolated `pve-cli-cpu` CRUD cycle.
+    ctx.check("cpu-model list", "cluster", "cpu-model", "list", validate=is_list)
+    ctx.check("cpu-model create --help", "cluster", "cpu-model", "create", "--help", fmt="")
+    ctx.defer(
+        "cpu-model create/get/set/delete",
+        "creates and removes an isolated custom CPU model — reversible; covered live by `e2e --mutate`",
+        "pve cluster cpu-model create pve-cli-cpu --reported-model qemu64",
+        isolation=True, live_covered=True,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")

@@ -45,6 +45,7 @@ func newClusterCmd(_ *cli.Deps) *cobra.Command {
 		newAcmeCmd(),
 		newCephCmd(),
 		newBulkCmd(),
+		newCpuModelCmd(),
 	)
 
 	return cmd
