@@ -221,6 +221,60 @@ class Runner:
         self.cov.append(Step(guest, verb, SKIP, "cleanup: " + tail[:120]))
 
 
+VOLUME_NOTE = "pve-cli-e2e marker"
+
+
+def _backup_volid(r: Runner, vmid: str) -> str:
+    """Return the volid of a backup archive for vmid on BACKUP_STORAGE, or ""."""
+    res = r.pve("storage", "content", BACKUP_STORAGE, "--content", "backup",
+                "--vmid", vmid, json_out=True)
+    if res.rc != 0:
+        return ""
+    try:
+        data = res.json()
+    except ValueError:
+        return ""
+    rows = data if isinstance(data, list) else (
+        data.get("rows", []) if isinstance(data, dict) else [])
+    for v in rows:
+        if isinstance(v, dict) and v.get("volid"):
+            return str(v["volid"])
+    return ""
+
+
+def _volume_set_roundtrip(r: Runner, vmid: str) -> str | None:
+    """Set a marker note on vmid's backup archive, verify it via `volume get`,
+    then restore the original note. Records coverage for `storage volume get`
+    and `storage volume set`. Returns an error string if verification fails (the
+    caller raises it AFTER pruning the archive), or None on success / no archive.
+    """
+    volid = _backup_volid(r, vmid)
+    if not volid:
+        r.cover_skip("storage", "volume get", f"volume get on VM {vmid} backup",
+                     "no backup archive found")
+        r.cover_skip("storage", "volume set", f"volume set on VM {vmid} backup",
+                     "no backup archive found")
+        return None
+
+    g0 = r.pve("storage", "volume", "get", volid, json_out=True)
+    try:
+        orig = str(g0.json().get("notes", "") or "")
+    except (ValueError, AttributeError):
+        orig = ""
+
+    r.step("storage", "volume set", f"volume set notes on {volid}",
+           "storage", "volume", "set", volid, "--notes", VOLUME_NOTE)
+    g1 = r.step("storage", "volume get", f"volume get {volid}",
+                "storage", "volume", "get", volid, json_out=True)
+    err = None
+    if VOLUME_NOTE not in g1.out:
+        err = f"volume set note not reflected in volume get for {volid}"
+    # Restore the original note (an empty string clears it).
+    r.step("storage", "volume set restore", f"restore notes on {volid}",
+           "storage", "volume", "set", volid, "--notes", orig)
+    return err
+
+
 def _node_count(r: Runner) -> int:
     """Return number of cluster nodes, or 1 on error (single-node assumption)."""
     res = r.pve("node", "list", json_out=True, node=False)
@@ -615,11 +669,19 @@ def vm_lifecycle(r: Runner) -> None:
         # artifact is left behind and no other guest's archives are touched.
         r.step("node", "vzdump", f"vzdump backup VM {vmid}",
                "node", "vzdump", "--vmid", vmid, "--storage", BACKUP_STORAGE, "--mode", "snapshot")
+        # Single-volume management on the archive just created. Set a marker note
+        # on THIS VM's backup, read it back, then restore the original note. Fully
+        # reversible, scoped to our own archive, and the prune below removes the
+        # archive entirely regardless of outcome. Any verification failure is
+        # raised only AFTER the prune so no artifact is left behind.
+        vol_verify_err = _volume_set_roundtrip(r, vmid)
         r.step("storage", "prune dry-run", f"prune dry-run for VM {vmid}",
                "storage", "prune", BACKUP_STORAGE, "--vmid", vmid, "--keep-last", "1",
                "--dry-run", json_out=True)
         r.del_step("storage", "prune", f"prune backups of VM {vmid}",
                    "storage", "prune", BACKUP_STORAGE, "--vmid", vmid, "--keep-last", "0", "--yes")
+        if vol_verify_err:
+            raise LifecycleError(vol_verify_err)
         # HA: manage this isolated VM (sid vm:<id>), then release it. Skipped if
         # the lab is not a quorate cluster.
         ha_resource_lifecycle(r, "qemu", f"vm:{vmid}")

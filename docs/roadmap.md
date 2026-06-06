@@ -68,7 +68,7 @@ Administrative depth across guests, nodes, storage, and software-defined network
 | Ceph management | `pve node ceph` | Status, configuration, OSD, pool, monitor, MDS, MGR, and filesystem control | Shipped |
 | SDN extensions | `pve sdn controller\|ipam\|dns`, `pve sdn vnet set\|firewall` | Routing controllers, IPAM backends, DNS providers, VNet updates, and per-VNet firewalls | Shipped |
 | Cluster storage | `pve storage create\|set\|get` | Datacenter-wide storage definitions with full per-backend attributes (dir, NFS, CIFS, LVM, ZFS, Ceph, PBS, iSCSI) and credential scrubbing on read | Shipped |
-| Storage browsing | `pve storage file-restore`, `pve storage import-metadata`, `pve storage volume` | Backup browsing, import metadata, and volume copy and update | Planned |
+| Storage browsing | `pve storage file-restore`, `pve storage import-metadata`, `pve storage volume` | Backup file browsing and download, guest import metadata, and per-volume inspection, notes/protection update, and copy | Shipped |
 
 ## P4 — Specialized Workflows
 
