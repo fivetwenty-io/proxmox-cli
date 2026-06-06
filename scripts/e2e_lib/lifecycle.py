@@ -67,6 +67,9 @@ BACKUP_STORAGE = "local"        # dir storage that holds backup content
 BACKUP_JOB = "pvecli-backup"    # isolated, disabled vzdump schedule id
 METRICS_SERVER = "pve-cli-graphite"  # isolated, disabled external metric server
 GOTIFY_ENDPOINT = "pve-cli-gotify"   # isolated, disabled gotify notification endpoint
+DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
+REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
+REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
@@ -1759,6 +1762,92 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
                    "cluster", "notifications", "gotify", "delete", GOTIFY_ENDPOINT, "--yes")
 
 
+def cluster_mapping_lifecycle(r: Runner) -> None:
+    """Exercise `cluster mapping dir create/get/set/delete` reversibly.
+
+    Isolation: a single host-directory mapping `pve-cli-dir` is created with one
+    per-node entry pointing at /var/lib/vz (which always exists on a PVE node).
+    A directory mapping needs only a node and a path — no real hardware — so it
+    is safe to create and remove on a shared lab. PCI and USB mappings need real
+    device IDs and are not exercised live. The mapping is removed in the finally
+    block, leaving the cluster mapping config as found.
+    """
+    print(BOLD("cluster: host-directory mapping (reversible)"))
+
+    entry = f"node={r.node},path=/var/lib/vz"
+
+    # Best-effort clean of a mapping left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {DIR_MAPPING}",
+           "cluster", "mapping", "dir", "delete", DIR_MAPPING, "--yes")
+
+    try:
+        r.step("cluster", "mapping dir create", f"mapping dir create {DIR_MAPPING}",
+               "cluster", "mapping", "dir", "create", DIR_MAPPING,
+               "--map", entry, "--description", "pve-cli-e2e")
+        r.step("cluster", "mapping dir list", "mapping dir list",
+               "cluster", "mapping", "dir", "list", json_out=True)
+        got = r.step("cluster", "mapping dir get", f"mapping dir get {DIR_MAPPING}",
+                     "cluster", "mapping", "dir", "get", DIR_MAPPING, json_out=True)
+        if "/var/lib/vz" not in got.out:
+            raise LifecycleError(f"mapping dir get did not report the mapped path for {DIR_MAPPING}")
+        # set re-sends the full --map (the API rewrites the per-node map on update).
+        r.step("cluster", "mapping dir set", "mapping dir set (description)",
+               "cluster", "mapping", "dir", "set", DIR_MAPPING,
+               "--map", entry, "--description", "pve-cli-e2e updated")
+    finally:
+        r.del_step("cluster", "mapping dir delete", f"mapping dir delete {DIR_MAPPING}",
+                   "cluster", "mapping", "dir", "delete", DIR_MAPPING, "--yes")
+
+
+def cluster_realmsync_lifecycle(r: Runner) -> None:
+    """Exercise `cluster jobs realm-sync create/get/set/delete` reversibly.
+
+    Isolation: a realm-sync job needs an authentication realm to point at, so
+    this creates its own isolated ldap realm `pve-cli-syncrealm` (pointing at a
+    dummy server that is never contacted — job creation only registers a schedule
+    and never syncs) and a DISABLED job `pve-cli-syncjob` against it. The job is
+    created with --enabled=false so it never fires on the schedule. Both the job
+    and the realm are removed in the finally block, leaving auth + job config as
+    found.
+    """
+    print(BOLD("cluster: realm-sync job (disabled, reversible)"))
+
+    # Best-effort clean of a job/realm left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {REALMSYNC_JOB}",
+           "cluster", "jobs", "realm-sync", "delete", REALMSYNC_JOB, "--yes")
+    r.undo(f"pre-clean {REALMSYNC_REALM}",
+           "access", "domain", "delete", REALMSYNC_REALM, "--yes")
+
+    realm_created = False
+    try:
+        r.step("access", "domain create", f"domain create {REALMSYNC_REALM} (for realm-sync)",
+               "access", "domain", "create", REALMSYNC_REALM, "--type", "ldap",
+               "--server1", "ldap.invalid.pve-cli.local", "--port", "389",
+               "--base-dn", "dc=pve-cli,dc=local", "--user-attr", "uid",
+               "--comment", "pve-cli e2e realm-sync")
+        realm_created = True
+        r.step("cluster", "jobs realm-sync create", f"jobs realm-sync create {REALMSYNC_JOB}",
+               "cluster", "jobs", "realm-sync", "create", REALMSYNC_JOB,
+               "--schedule", "daily", "--realm", REALMSYNC_REALM, "--scope", "both",
+               "--comment", "pve-cli-e2e", "--enabled=false")
+        r.step("cluster", "jobs realm-sync list", "jobs realm-sync list",
+               "cluster", "jobs", "realm-sync", "list", json_out=True)
+        got = r.step("cluster", "jobs realm-sync get", f"jobs realm-sync get {REALMSYNC_JOB}",
+                     "cluster", "jobs", "realm-sync", "get", REALMSYNC_JOB, json_out=True)
+        if REALMSYNC_REALM not in got.out:
+            raise LifecycleError(f"realm-sync get did not report the realm for {REALMSYNC_JOB}")
+        # set must re-send the required schedule; change the comment.
+        r.step("cluster", "jobs realm-sync set", "jobs realm-sync set (comment)",
+               "cluster", "jobs", "realm-sync", "set", REALMSYNC_JOB,
+               "--schedule", "weekly", "--comment", "pve-cli-e2e updated")
+    finally:
+        r.del_step("cluster", "jobs realm-sync delete", f"jobs realm-sync delete {REALMSYNC_JOB}",
+                   "cluster", "jobs", "realm-sync", "delete", REALMSYNC_JOB, "--yes")
+        if realm_created:
+            r.del_step("access", "domain delete", f"domain delete {REALMSYNC_REALM}",
+                       "access", "domain", "delete", REALMSYNC_REALM, "--yes")
+
+
 def run(target: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
@@ -1820,6 +1909,10 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_metrics_lifecycle(r)
         print()
         cluster_notifications_lifecycle(r)
+        print()
+        cluster_mapping_lifecycle(r)
+        print()
+        cluster_realmsync_lifecycle(r)
         print()
 
         if not skip_vm:

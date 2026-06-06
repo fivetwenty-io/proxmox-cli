@@ -59,13 +59,28 @@ def run(ctx: Ctx) -> None:
                 upid = None
         if upid:
             ctx.check("task log", "node", "task", "log", n, str(upid))
-            # `node task wait` against the same (already-finished) UPID returns
-            # immediately — WaitForUPID sees a `stopped` task, so no hang (◑).
-            # The verb takes only <upid> (node is parsed from the UPID).
-            ctx.check("task wait", "node", "task", "wait", str(upid), "--timeout", "30")
         else:
             ctx.skip("task log", "no task in the node task list")
-            ctx.skip("task wait", "no task in the node task list")
+        # `node task wait` against an already-finished UPID returns immediately —
+        # WaitForUPID sees a `stopped` task, so no hang (◑). It must target a task
+        # that finished SUCCESSFULLY: `wait` reports a non-zero exit when the task
+        # itself failed (for example a realm-sync probe that could not reach its
+        # server), which would be a spurious probe failure. Pick the first task
+        # whose status is "OK".
+        ok_upid = None
+        if tasks.rc == 0:
+            try:
+                for entry in tasks.json():
+                    if isinstance(entry, dict) and entry.get("status") == "OK" and entry.get("upid"):
+                        ok_upid = entry["upid"]
+                        break
+            except ValueError:
+                ok_upid = None
+        if ok_upid:
+            # The verb takes only <upid> (node is parsed from the UPID).
+            ctx.check("task wait", "node", "task", "wait", str(ok_upid), "--timeout", "30")
+        else:
+            ctx.skip("task wait", "no successfully-finished task in the node task list")
 
         # Host firewall: the rule list is an array (empty when the node has no
         # host rules); options is a key/value object. Both are read-only and

@@ -212,6 +212,35 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
 
+    # Hardware/directory mappings: the per-type lists are arrays (empty on a lab
+    # with no mappings defined). All read-only and safe to query directly.
+    for kind in ("pci", "usb", "dir"):
+        ctx.check(f"mapping {kind} list", "cluster", "mapping", kind, "list", validate=is_list)
+    ctx.check("mapping dir create --help", "cluster", "mapping", "dir", "create", "--help", fmt="")
+    # The mutate phase creates an isolated `pve-cli-` directory mapping (which needs
+    # only a node and a path — no real hardware) and exercises full CRUD live. PCI
+    # and USB mappings require real device IDs, so their writes are deferred.
+    ctx.defer(
+        "mapping pci/usb create/set/delete",
+        "PCI/USB mappings need real device IDs — dir mapping CRUD is covered live by `e2e --mutate`",
+        "pve cluster mapping pci create gpu --map node=pve,path=0000:01:00.0,id=10de:1b80",
+        isolation=True, live_covered=False,
+    )
+
+    # Realm-sync jobs: the list is an array (empty on a lab with no LDAP/AD realm
+    # synced). Read-only and safe to query directly.
+    ctx.check("jobs realm-sync list", "cluster", "jobs", "realm-sync", "list", validate=is_list)
+    ctx.check("jobs realm-sync create --help", "cluster", "jobs", "realm-sync", "create", "--help", fmt="")
+    # A realm-sync job needs an existing LDAP/AD realm to point at; the mutate phase
+    # creates one only during the access domain lifecycle, so the realm-sync CRUD is
+    # covered there when a realm is present and skipped otherwise.
+    ctx.defer(
+        "jobs realm-sync create/set/delete",
+        "needs an existing LDAP/AD realm — covered live by `e2e --mutate` when one exists",
+        "pve cluster jobs realm-sync create sync-ldap --schedule daily --realm pve-cli-realm",
+        isolation=True, live_covered=True,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")
