@@ -88,8 +88,9 @@ func renderRawList(cmd *cobra.Command, deps *cli.Deps, raws []json.RawMessage) e
 }
 
 // renderEndpointGet renders a typed endpoint config object as a single record.
-// The PVE Get responses never include secret values (tokens, passwords), so this
-// is safe to print.
+// The PVE Get responses never include real secret values: gotify/SMTP omit the
+// token/password entirely, and webhook returns only masked secret-name entries
+// (never the value), so rendering the config is safe.
 func renderEndpointGet(cmd *cobra.Command, deps *cli.Deps, v any, label, name string) error {
 	single, raw, err := objectToSingle(v)
 	if err != nil {

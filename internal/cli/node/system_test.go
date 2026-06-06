@@ -263,6 +263,33 @@ func TestNodeSubscription_UpdateWithYes(t *testing.T) {
 	require.Contains(t, rec.body, "force=1")
 }
 
+func TestNodeSubscription_UpdateRequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/subscription", &rec, nil)
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "subscription", "update", "--force"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Equal(t, "", rec.method, "no API call must be made without confirmation")
+}
+
+func TestNodeSubscription_UpdateOmitsUnsetForce(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/subscription", &rec, nil)
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "subscription", "update", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.NotContains(t, rec.body, "force", "unset --force must be omitted from the request body")
+}
+
 func TestNodeSubscription_DeleteRequiresYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
