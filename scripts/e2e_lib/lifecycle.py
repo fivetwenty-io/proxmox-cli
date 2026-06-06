@@ -72,6 +72,7 @@ DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
 REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
 REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
 ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
+SDN_IPAM = "pvecliipam"              # isolated SDN IPAM backend (pve-type, no external backend)
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
@@ -1891,6 +1892,49 @@ def cluster_acme_plugin_lifecycle(r: Runner) -> None:
                    "cluster", "acme", "plugin", "delete", ACME_PLUGIN, "--yes")
 
 
+def sdn_objects_lifecycle(r: Runner) -> None:
+    """Exercise `sdn ipam` CRUD and `sdn vnet set` reversibly.
+
+    Isolation: a built-in `pve`-type IPAM backend (`pvecliipam`) is created. The
+    `pve` IPAM stores its allocations in the cluster config itself, so — unlike
+    the netbox/phpipam/powerdns plugins, which validate connectivity to an
+    external backend on create — it needs no reachable endpoint and is a pure,
+    reversible config edit. It is a staged config entry only: it is never
+    committed with `sdn apply` and no subnet references it, so live networking is
+    untouched. The vnet edit targets the isolated `pvecli0` vnet provisioned by
+    this suite (no guest depends on its alias) and exercises the shared update
+    path live. Every created object is removed in a finally block, leaving the
+    SDN config as found. Backend-validated IPAM/DNS providers and routing
+    controllers are deferred live and covered by unit tests.
+    """
+    print(BOLD("sdn: pve IPAM + vnet edit (reversible, staged-only)"))
+
+    # Best-effort clean of an object left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {SDN_IPAM}", "sdn", "ipam", "delete", SDN_IPAM, "--yes")
+
+    # ---- IPAM (pve-type, staged-only, no external backend) ------------------
+    try:
+        r.step("sdn", "ipam create", f"ipam create {SDN_IPAM}",
+               "sdn", "ipam", "create", SDN_IPAM, "--type", "pve")
+        got = r.step("sdn", "ipam get", f"ipam get {SDN_IPAM}",
+                     "sdn", "ipam", "get", SDN_IPAM, json_out=True)
+        if "pve" not in got.out:
+            raise LifecycleError(f"ipam get did not report the type for {SDN_IPAM}")
+        r.step("sdn", "ipam list", "ipam list", "sdn", "ipam", "list", json_out=True)
+        # `ipam status` is only supported for the default `pve` IPAM (covered by
+        # the read-only tree); the API rejects it for any other IPAM id.
+    finally:
+        r.del_step("sdn", "ipam delete", f"ipam delete {SDN_IPAM}",
+                   "sdn", "ipam", "delete", SDN_IPAM, "--yes")
+
+    # ---- vnet edit on the isolated pvecli0 vnet (staged-only) ---------------
+    # Covers the shared set/update path; restored via --delete in the same run.
+    r.step("sdn", "vnet set", f"vnet set {Isolation.SDN_VNET} (alias)",
+           "sdn", "vnet", "set", Isolation.SDN_VNET, "--alias", "pve-cli-e2e")
+    r.step("sdn", "vnet set delete", f"vnet set {Isolation.SDN_VNET} (--delete alias)",
+           "sdn", "vnet", "set", Isolation.SDN_VNET, "--delete", "alias")
+
+
 def run(target: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
@@ -1958,6 +2002,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_realmsync_lifecycle(r)
         print()
         cluster_acme_plugin_lifecycle(r)
+
+        sdn_objects_lifecycle(r)
         print()
 
         if not skip_vm:

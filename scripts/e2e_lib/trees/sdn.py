@@ -32,6 +32,24 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.skip("subnet list", "no vnet defined")
 
+    # Routing controllers, IPAM backends, and DNS providers are cluster-global.
+    ctx.check("controller list", "sdn", "controller", "list", validate=is_list)
+    ipams = ctx.check("ipam list", "sdn", "ipam", "list", validate=is_list)
+    ctx.check("dns list", "sdn", "dns", "list", validate=is_list)
+
+    # IPAM status reports recorded allocations; probe a discovered backend (the
+    # built-in `pve` IPAM is always present on a default install).
+    ipam = None
+    if ipams.rc == 0:
+        try:
+            ipam = ctx.first(ipams.json(), "ipam")
+        except ValueError:
+            ipam = None
+    if ipam:
+        ctx.check("ipam status", "sdn", "ipam", "status", str(ipam), validate=is_list)
+    else:
+        ctx.skip("ipam status", "no IPAM backend defined")
+
     # The mutate phase provisions and tears down this exact isolated SDN, so
     # zone/vnet/subnet create+delete and apply are all exercised live by it.
     ctx.defer("zone create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
@@ -45,3 +63,25 @@ def run(ctx: Ctx) -> None:
               isolation=True, live_covered=True)
     ctx.defer("apply", "reloads network config on all nodes — covered live by `e2e --mutate`",
               "pve sdn apply", isolation=True, live_covered=True)
+
+    # Controller/IPAM/DNS write verbs are staged config edits; the help surface
+    # is checked read-only and the full CRUD cycle runs live in the mutate phase.
+    ctx.check("controller create --help", "sdn", "controller", "create", "--help", fmt="")
+    ctx.check("ipam create --help", "sdn", "ipam", "create", "--help", fmt="")
+    ctx.check("dns create --help", "sdn", "dns", "create", "--help", fmt="")
+    ctx.defer("controller create/get/set/delete",
+              "needs an FRR routing backend — covered by unit tests",
+              "pve sdn controller create pvecli-bgp --type bgp",
+              isolation=True, live_covered=False)
+    ctx.defer("dns create/get/set/delete",
+              "validates connectivity to an external DNS backend — covered by unit tests",
+              "pve sdn dns create pveclidns --type powerdns --url URL --key KEY",
+              isolation=True, live_covered=False)
+    ctx.defer("ipam create/get/delete",
+              "pve-type IPAM CRUD — covered live by `e2e --mutate`",
+              "pve sdn ipam create pvecliipam --type pve",
+              isolation=True, live_covered=True)
+    ctx.defer("vnet set",
+              "stages a vnet edit — covered live by `e2e --mutate`",
+              f"pve sdn vnet set {Isolation.SDN_VNET} --alias pve-cli-e2e",
+              isolation=True, live_covered=True)

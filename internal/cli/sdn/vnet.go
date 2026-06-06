@@ -26,7 +26,74 @@ func newVnetCmd() *cobra.Command {
 		Use:   "vnet",
 		Short: "Manage SDN vnets",
 	}
-	cmd.AddCommand(newVnetListCmd(), newVnetCreateCmd(), newVnetDeleteCmd())
+	cmd.AddCommand(newVnetListCmd(), newVnetCreateCmd(), newVnetSetCmd(), newVnetDeleteCmd())
+	return cmd
+}
+
+// vnetSetFlagNames lists the editable vnet attribute flags, used by `set` to
+// detect a no-op update.
+var vnetSetFlagNames = []string{"zone", "tag", "alias", "vlanaware", "isolate-ports"}
+
+// newVnetSetCmd builds `pve sdn vnet set <vnet>`.
+func newVnetSetCmd() *cobra.Command {
+	var (
+		zone         string
+		tag          int64
+		alias        string
+		vlanaware    bool
+		isolatePorts bool
+		del          string
+		digest       string
+	)
+	cmd := &cobra.Command{
+		Use:   "set <vnet>",
+		Short: "Update an SDN vnet",
+		Long:  "Update an SDN vnet. The change is staged until `pve sdn apply`.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet := args[0]
+			fl := cmd.Flags()
+			if !anyFlagChanged(fl, append(vnetSetFlagNames, "delete")...) {
+				return fmt.Errorf("no changes to set: pass at least one field flag")
+			}
+			params := &cluster.UpdateSdnVnetsParams{}
+			if fl.Changed("zone") {
+				params.Zone = strPtr(zone)
+			}
+			if fl.Changed("tag") {
+				params.Tag = int64Ptr(tag)
+			}
+			if fl.Changed("alias") {
+				params.Alias = strPtr(alias)
+			}
+			if fl.Changed("vlanaware") {
+				params.Vlanaware = boolPtr(vlanaware)
+			}
+			if fl.Changed("isolate-ports") {
+				params.IsolatePorts = boolPtr(isolatePorts)
+			}
+			if fl.Changed("delete") {
+				params.Delete = strPtr(del)
+			}
+			if fl.Changed("digest") {
+				params.Digest = strPtr(digest)
+			}
+			if err := deps.API.Cluster.UpdateSdnVnets(cmd.Context(), vnet, params); err != nil {
+				return fmt.Errorf("update SDN vnet %q: %w", vnet, err)
+			}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q updated (run `pve sdn apply` to commit).", vnet)}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&zone, "zone", "", "zone the vnet belongs to")
+	f.Int64Var(&tag, "tag", 0, "VLAN tag or VXLAN VNI")
+	f.StringVar(&alias, "alias", "", "vnet alias/description")
+	f.BoolVar(&vlanaware, "vlanaware", false, "allow VLANs to pass through this vnet")
+	f.BoolVar(&isolatePorts, "isolate-ports", false, "isolate all interfaces on this vnet's bridge")
+	f.StringVar(&del, "delete", "", "comma-separated list of settings to delete")
+	f.StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
 	return cmd
 }
 
