@@ -34,6 +34,8 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newApplyCmd(),
+		newDryRunCmd(),
+		newRollbackCmd(),
 		newZoneCmd(),
 		newVnetCmd(),
 		newSubnetCmd(),

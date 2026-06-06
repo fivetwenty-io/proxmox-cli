@@ -59,6 +59,18 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.skip("ipam status", "no IPAM backend defined")
 
+    # Preview pending SDN changes (read-only diff) and the rollback help. The
+    # dry-run is safe: it computes the running-vs-pending diff for a node without
+    # changing anything, and on a clean cluster the diff is empty.
+    if ctx.node:
+        ctx.check("dry-run", "sdn", "dry-run", node=ctx.node)
+    else:
+        ctx.skip("dry-run", "no node discovered")
+    ctx.check("rollback --help", "sdn", "rollback", "--help", fmt="")
+    ctx.defer("rollback",
+              "discards ALL pending SDN changes cluster-wide — never run on shared lab",
+              "pve sdn rollback --yes", isolation=False, live_covered=False)
+
     # The mutate phase provisions and tears down this exact isolated SDN, so
     # zone/vnet/subnet create+delete and apply are all exercised live by it.
     ctx.defer("zone create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
