@@ -210,6 +210,29 @@ def run(ctx: Ctx) -> None:
             ctx.skip("replication log", "no replication job configured on this node")
         ctx.check("replication run --help", "node", "replication", "run", "--help", fmt="")
 
+        # Ceph: cluster status, the configuration database, and the OSD and pool
+        # inventories are read-only. The lab node has no Ceph cluster
+        # configured, so the API errors there — probe `ceph status` once and
+        # skip the whole read-only Ceph sweep when Ceph is absent rather than
+        # recording failures. Every create/delete/init and service-control verb
+        # is cluster-destructive and is parsed-and-deferred below, never run
+        # live.
+        ceph_status = ctx.run("node", "ceph", "status", node=n)
+        ceph_err = (ceph_status.stderr or ceph_status.stdout).lower()
+        ceph_absent = ceph_status.rc != 0 and any(
+            m in ceph_err for m in ("ceph", "not installed", "binary not installed", "rados")
+        )
+        if ceph_absent:
+            for probe in ("ceph status", "ceph cfg", "ceph osd list", "ceph pool list"):
+                ctx.skip(probe, "Ceph is not configured on the lab node")
+        else:
+            ctx.check("ceph status", "node", "ceph", "status", node=n, validate=is_object)
+            ctx.check("ceph cfg", "node", "ceph", "cfg", node=n, validate=is_list)
+            ctx.check("ceph osd list", "node", "ceph", "osd", "list", node=n, validate=is_object)
+            ctx.check("ceph pool list", "node", "ceph", "pool", "list", node=n, validate=is_list)
+        ctx.check("ceph osd create --help", "node", "ceph", "osd", "create", "--help", fmt="")
+        ctx.check("ceph pool create --help", "node", "ceph", "pool", "create", "--help", fmt="")
+
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
     # deterministic server-side shutdown task and aborts it).
@@ -332,6 +355,41 @@ def run(ctx: Ctx) -> None:
         "scan nfs/cifs/iscsi/pbs",
         "probes a remote storage server (needs a server address and credentials); not exercised live",
         "pve node scan nfs --node <node> --server <server>",
+        isolation=False, live_covered=False,
+    )
+
+    # Every Ceph write verb is cluster-destructive: init lays down a new Ceph
+    # cluster, OSD/pool/mon/mds/mgr/fs create and delete provision or destroy
+    # daemons and data, and start/stop/restart control running Ceph services.
+    # None is exercised live on the shared lab; the CLI gates each behind --yes.
+    ctx.defer(
+        "ceph init",
+        "initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live",
+        "pve node ceph init --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph osd create/delete/in/out/scrub",
+        "creates or destroys OSDs (wipes block devices) and moves cluster data; not exercised live",
+        "pve node ceph osd create --node <node> --dev /dev/sdb --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph pool create/set/delete",
+        "creates, reconfigures, or destroys a Ceph pool (data loss on delete); not exercised live",
+        "pve node ceph pool create <name> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph mon/mds/mgr/fs create/delete",
+        "provisions or destroys Ceph monitor/MDS/MGR/filesystem daemons; not exercised live",
+        "pve node ceph mon create <monid> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph start/stop/restart",
+        "controls running Ceph services on the node — disruptive; not exercised live",
+        "pve node ceph restart --node <node> --service osd.0 --yes",
         isolation=False, live_covered=False,
     )
 
