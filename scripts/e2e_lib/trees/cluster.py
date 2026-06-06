@@ -169,6 +169,49 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
 
+    # Metrics servers: the list is an array (empty when no external metric server
+    # is configured). The export is read-only; on some setups it requires
+    # root@pam, so record a skip rather than a failure when the API-token identity
+    # is denied.
+    ctx.check("metrics server list", "cluster", "metrics", "server", "list", validate=is_list)
+    ctx.check("metrics server create --help", "cluster", "metrics", "server", "create", "--help", fmt="")
+    exp = ctx.run("cluster", "metrics", "export")
+    exp_err = (exp.stderr or exp.stdout).lower()
+    if exp.rc != 0 and ("root@pam" in exp_err or "permission" in exp_err):
+        ctx.skip("metrics export", "GET /cluster/metrics/export requires root@pam")
+    else:
+        ctx.check("metrics export", "cluster", "metrics", "export")
+    # The mutate phase creates a disabled Graphite server pointing at an unused
+    # address on the e2e subnet, exercises get/set, and deletes it — covered live
+    # there. The target is never contacted (Proxmox stores the config without
+    # probing) and Graphite carries no secret.
+    ctx.defer(
+        "metrics server create/set/delete",
+        "configures an external metric server — covered live by `e2e --mutate`",
+        "pve cluster metrics server create pve-cli-graphite --type graphite --server 172.30.0.250 --port 2003 --disable",
+        isolation=True, live_covered=True,
+    )
+
+    # Notification system: the targets, endpoints, per-type endpoint, and matcher
+    # lists are all arrays (the targets list always includes the built-in
+    # mail-to-root target). All read-only and safe to query directly.
+    ctx.check("notifications targets", "cluster", "notifications", "targets", validate=is_list)
+    ctx.check("notifications endpoints", "cluster", "notifications", "endpoints", validate=is_list)
+    for kind in ("gotify", "sendmail", "smtp", "webhook"):
+        ctx.check(f"notifications {kind} list", "cluster", "notifications", kind, "list", validate=is_list)
+    ctx.check("notifications matcher list", "cluster", "notifications", "matcher", "list", validate=is_list)
+    ctx.check("notifications gotify create --help", "cluster", "notifications", "gotify", "create", "--help", fmt="")
+    # The mutate phase creates a disabled Gotify endpoint pointing at an unused
+    # address on the e2e subnet, exercises get/set, and deletes it — covered live
+    # there. The endpoint is never tested (no `test` verb invoked), so the dummy
+    # host is never contacted, and the token is a throwaway dummy value.
+    ctx.defer(
+        "notifications endpoint create/set/delete",
+        "manages notification endpoints (gotify/sendmail/smtp/webhook) and matchers — covered live by `e2e --mutate`",
+        "pve cluster notifications gotify create pve-cli-gotify --server https://172.30.0.250 --token <dummy> --disable",
+        isolation=True, live_covered=True,
+    )
+
     # Renderer smoke test: the tabular (Headers/Rows) shape must render in every
     # `-o` format, complementing version's key/value smoke test.
     ctx.check_formats("render formats (cluster status)", "cluster", "status")

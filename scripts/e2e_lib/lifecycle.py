@@ -65,6 +65,9 @@ ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
 TMPL_STORAGE = "local"          # holds vztmpl content
 BACKUP_STORAGE = "local"        # dir storage that holds backup content
 BACKUP_JOB = "pvecli-backup"    # isolated, disabled vzdump schedule id
+METRICS_SERVER = "pve-cli-graphite"  # isolated, disabled external metric server
+GOTIFY_ENDPOINT = "pve-cli-gotify"   # isolated, disabled gotify notification endpoint
+DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
 
@@ -1687,6 +1690,75 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
                    "cluster", "firewall", "group", "delete", CL_FW_GROUP, "--yes")
 
 
+def cluster_metrics_lifecycle(r: Runner) -> None:
+    """Exercise `cluster metrics server create/get/set/delete` reversibly.
+
+    Isolation: a single Graphite metric server `pve-cli-graphite` is created
+    DISABLED (--disable) pointing at an unused address on the e2e subnet
+    (172.30.0.250) that is never contacted — Proxmox stores the plugin config
+    without probing the target on create. The Graphite type carries no secret
+    (unlike InfluxDB's token), so nothing sensitive is involved. The server is
+    removed in the finally block, leaving the cluster metric config as found.
+    """
+    print(BOLD("cluster: external metric server (graphite, disabled, reversible)"))
+
+    # Best-effort clean of a server left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {METRICS_SERVER}",
+           "cluster", "metrics", "server", "delete", METRICS_SERVER, "--yes")
+
+    try:
+        r.step("cluster", "metrics server create", f"metrics server create {METRICS_SERVER}",
+               "cluster", "metrics", "server", "create", METRICS_SERVER,
+               "--type", "graphite", "--server", DUMMY_HOST, "--port", "2003", "--disable")
+        r.step("cluster", "metrics server list", "metrics server list",
+               "cluster", "metrics", "server", "list", json_out=True)
+        r.step("cluster", "metrics server get", f"metrics server get {METRICS_SERVER}",
+               "cluster", "metrics", "server", "get", METRICS_SERVER, json_out=True)
+        # set requires re-sending server+port (the API rewrites the full target).
+        r.step("cluster", "metrics server set", "metrics server set (mtu)",
+               "cluster", "metrics", "server", "set", METRICS_SERVER,
+               "--server", DUMMY_HOST, "--port", "2003", "--mtu", "1400")
+    finally:
+        r.del_step("cluster", "metrics server delete", f"metrics server delete {METRICS_SERVER}",
+                   "cluster", "metrics", "server", "delete", METRICS_SERVER, "--yes")
+
+
+def cluster_notifications_lifecycle(r: Runner) -> None:
+    """Exercise `cluster notifications gotify create/get/set/delete` reversibly.
+
+    Isolation: a single Gotify endpoint `pve-cli-gotify` is created DISABLED
+    pointing at an unused address on the e2e subnet (172.30.0.250). Proxmox does
+    not contact the server on create or update — only an explicit `test` verb
+    would, and it is never invoked — so the dummy host is never reached. The
+    Gotify token is a throwaway dummy value; the CLI never echoes it (create
+    returns only a status message) and it is not placed in any printed label.
+    The endpoint is removed in the finally block.
+    """
+    print(BOLD("cluster: notification endpoint (gotify, disabled, reversible)"))
+
+    # Best-effort clean of an endpoint left by a crashed prior run (never raises).
+    r.undo(f"pre-clean {GOTIFY_ENDPOINT}",
+           "cluster", "notifications", "gotify", "delete", GOTIFY_ENDPOINT, "--yes")
+
+    try:
+        r.step("cluster", "notifications targets", "notifications targets",
+               "cluster", "notifications", "targets", json_out=True)
+        r.step("cluster", "notifications gotify create", f"notifications gotify create {GOTIFY_ENDPOINT}",
+               "cluster", "notifications", "gotify", "create", GOTIFY_ENDPOINT,
+               "--server", f"https://{DUMMY_HOST}", "--token", "pve-cli-e2e-dummy-token",
+               "--comment", "pve-cli-e2e", "--disable")
+        r.step("cluster", "notifications gotify list", "notifications gotify list",
+               "cluster", "notifications", "gotify", "list", json_out=True)
+        r.step("cluster", "notifications gotify get", f"notifications gotify get {GOTIFY_ENDPOINT}",
+               "cluster", "notifications", "gotify", "get", GOTIFY_ENDPOINT, json_out=True)
+        r.step("cluster", "notifications gotify set", "notifications gotify set (comment)",
+               "cluster", "notifications", "gotify", "set", GOTIFY_ENDPOINT,
+               "--comment", "pve-cli-e2e updated")
+    finally:
+        r.del_step("cluster", "notifications gotify delete", f"notifications gotify delete {GOTIFY_ENDPOINT}",
+                   "cluster", "notifications", "gotify", "delete", GOTIFY_ENDPOINT, "--yes")
+
+
 def run(target: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
@@ -1744,6 +1816,10 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_options_lifecycle(r)
         print()
         cluster_replication_lifecycle(r)
+        print()
+        cluster_metrics_lifecycle(r)
+        print()
+        cluster_notifications_lifecycle(r)
         print()
 
         if not skip_vm:

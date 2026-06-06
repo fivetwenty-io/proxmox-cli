@@ -38,6 +38,8 @@ func newClusterCmd(_ *cli.Deps) *cobra.Command {
 		newOptionsCmd(),
 		newConfigCmd(),
 		newReplicationCmd(),
+		newMetricsCmd(),
+		newNotificationsCmd(),
 	)
 
 	return cmd
