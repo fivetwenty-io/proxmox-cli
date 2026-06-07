@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
@@ -118,11 +120,21 @@ func newPasswordSetCmd() *cobra.Command {
 	return cmd
 }
 
-// promptPassword reads a single line from the command's input, used when the
-// caller omits --password. The prompt is written to stderr so it never
-// contaminates JSON/YAML output on stdout.
+// promptPassword reads a secret from the command's input, used when the caller
+// omits --password. The prompt is written to stderr so it never contaminates
+// JSON/YAML output on stdout. When input is an interactive terminal, the typed
+// characters are not echoed; piped or redirected input falls back to a line
+// read so scripts and tests can supply the secret on stdin.
 func promptPassword(cmd *cobra.Command) (string, error) {
 	_, _ = fmt.Fprint(cmd.ErrOrStderr(), "New password: ")
+	if f, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		secret, err := term.ReadPassword(int(f.Fd()))
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr())
+		if err != nil {
+			return "", fmt.Errorf("read password: %w", err)
+		}
+		return strings.TrimRight(string(secret), "\r\n"), nil
+	}
 	reader := bufio.NewReader(cmd.InOrStdin())
 	line, err := reader.ReadString('\n')
 	if err != nil && line == "" {

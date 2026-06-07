@@ -169,7 +169,16 @@ func TestAccess_TfaUnlock_ServerError(t *testing.T) {
 
 func TestAccess_TfaCommandTree(t *testing.T) {
 	cmd := newTfaCmd()
-	want := map[string]bool{"list": false, "get": false, "delete": false, "unlock": false}
+	want := map[string]bool{
+		"list":      false,
+		"get":       false,
+		"get-entry": false,
+		"create":    false,
+		"set":       false,
+		"delete":    false,
+		"unlock":    false,
+		"types":     false,
+	}
 	for _, c := range cmd.Commands() {
 		if _, ok := want[c.Name()]; ok {
 			want[c.Name()] = true
@@ -178,4 +187,279 @@ func TestAccess_TfaCommandTree(t *testing.T) {
 	for name, found := range want {
 		require.Truef(t, found, "access tfa must expose a %q sub-command", name)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// tfa get-entry
+// ---------------------------------------------------------------------------
+
+func TestAccess_TfaGetEntry_Table(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("GET /api2/json/access/tfa/root@pam/totp1", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.path = r.Method, r.URL.Path
+		testhelper.WriteData(w, map[string]any{
+			"id": "totp1", "type": "totp", "description": "phone", "enable": 1, "created": 1700000000,
+		})
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "get-entry", "root@pam", "totp1"))
+
+	require.Equal(t, http.MethodGet, rec.method)
+	require.Equal(t, "/api2/json/access/tfa/root@pam/totp1", rec.path)
+
+	out := buf.String()
+	require.Contains(t, out, "totp1")
+	require.Contains(t, out, "totp")
+	require.Contains(t, out, "phone")
+	require.Contains(t, out, "1700000000")
+}
+
+func TestAccess_TfaGetEntry_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/access/tfa/root@pam/nope", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusNotFound, "no such entry")
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	err := run(&buf, "tfa", "get-entry", "root@pam", "nope")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "get tfa entry")
+}
+
+// ---------------------------------------------------------------------------
+// tfa create
+// ---------------------------------------------------------------------------
+
+func TestAccess_TfaCreate_Success(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("POST /api2/json/access/tfa/root@pam", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.path, rec.body = r.Method, r.URL.Path, captureBody(r)
+		testhelper.WriteData(w, map[string]any{
+			"id":       "totp-new",
+			"recovery": []string{},
+		})
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "create", "root@pam",
+		"--type", "totp",
+		"--password", "secret",
+		"--description", "work phone",
+	))
+
+	require.Equal(t, http.MethodPost, rec.method)
+	require.Equal(t, "/api2/json/access/tfa/root@pam", rec.path)
+	// type and description must reach the body; password is forwarded but we
+	// do NOT assert its value in the test to follow the secret-handling rule.
+	require.Equal(t, "totp", rec.body["type"])
+	require.Equal(t, "work phone", rec.body["description"])
+	// password must be present in the body (PVE requires it) but we only
+	// assert presence, not value.
+	_, hasPassword := rec.body["password"]
+	require.True(t, hasPassword, "password must be forwarded to the API body")
+
+	require.Contains(t, buf.String(), "totp-new")
+}
+
+func TestAccess_TfaCreate_RecoveryCodes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/access/tfa/alice@pve", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"id":       "rec1",
+			"recovery": []string{"code-a", "code-b", "code-c"},
+		})
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "create", "alice@pve",
+		"--type", "recovery",
+		"--password", "secret",
+	))
+
+	// Recovery codes must appear in the rendered output.
+	out := buf.String()
+	require.Contains(t, out, "code-a")
+	require.Contains(t, out, "code-b")
+	require.Contains(t, out, "code-c")
+}
+
+func TestAccess_TfaCreate_RequiresType(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	err := run(&buf, "tfa", "create", "root@pam", "--password", "s")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--type")
+}
+
+func TestAccess_TfaCreate_RejectsInvalidType(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	err := run(&buf, "tfa", "create", "root@pam", "--type", "bogus", "--password", "s")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid --type")
+}
+
+func TestAccess_TfaCreate_RequiresPassword(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/access/tfa/root@pam", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, map[string]any{"id": "x"})
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	// Feed empty stdin so the prompt returns empty password.
+	err := runWithStdin(&buf, "\n", "tfa", "create", "root@pam", "--type", "totp")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "password")
+	require.False(t, called, "API must not be called without a password")
+}
+
+func TestAccess_TfaCreate_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/access/tfa/root@pam", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusForbidden, "permission denied")
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	err := run(&buf, "tfa", "create", "root@pam", "--type", "totp", "--password", "secret")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "create tfa entry")
+}
+
+// ---------------------------------------------------------------------------
+// tfa set
+// ---------------------------------------------------------------------------
+
+func TestAccess_TfaSet_Success(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/tfa/root@pam/totp1", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.path, rec.body = r.Method, r.URL.Path, captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "set", "root@pam", "totp1",
+		"--description", "updated",
+		"--password", "secret",
+	))
+
+	require.Equal(t, http.MethodPut, rec.method)
+	require.Equal(t, "/api2/json/access/tfa/root@pam/totp1", rec.path)
+	require.Equal(t, "updated", rec.body["description"])
+	// password forwarded; assert presence only.
+	_, hasPassword := rec.body["password"]
+	require.True(t, hasPassword, "password must be forwarded to the API body")
+	require.Contains(t, buf.String(), "updated")
+}
+
+func TestAccess_TfaSet_EnableFlag(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/tfa/root@pam/totp1", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.body = r.Method, captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "set", "root@pam", "totp1",
+		"--enable=false", "--password", "secret",
+	))
+
+	require.Equal(t, http.MethodPut, rec.method)
+	// The API client marshals the bool param via JSON; false encodes as "0"
+	// through PVE's bool-to-string convention (same as sibling token commands).
+	// Acceptable values seen from the wire are "false" or "0"; we assert what
+	// the library actually sends so we catch regressions.
+	enableVal, _ := rec.body["enable"].(string)
+	require.True(t, enableVal == "false" || enableVal == "0",
+		"enable=false must encode to 'false' or '0', got %q", enableVal)
+}
+
+func TestAccess_TfaSet_RequiresAtLeastOneField(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("PUT /api2/json/access/tfa/root@pam/totp1", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	// Feed non-empty password via stdin so the password check passes, but no
+	// other update fields are given — the command must still reject this.
+	err := runWithStdin(&buf, "secret\n", "tfa", "set", "root@pam", "totp1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "at least one")
+	require.False(t, called, "API must not be called when no fields are being changed")
+}
+
+func TestAccess_TfaSet_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("PUT /api2/json/access/tfa/root@pam/totp1", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	err := run(&buf, "tfa", "set", "root@pam", "totp1",
+		"--description", "x", "--password", "secret")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "update tfa entry")
+}
+
+// ---------------------------------------------------------------------------
+// tfa types (ListUsersTfa)
+// ---------------------------------------------------------------------------
+
+func TestAccess_TfaTypes_Table(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("GET /api2/json/access/users/root@pam/tfa", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.path = r.Method, r.URL.Path
+		testhelper.WriteData(w, map[string]any{
+			"realm": "pam",
+			"user":  "totp",
+			"types": []string{"totp", "recovery"},
+		})
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "tfa", "types", "root@pam"))
+
+	require.Equal(t, http.MethodGet, rec.method)
+	require.Equal(t, "/api2/json/access/users/root@pam/tfa", rec.path)
+
+	out := buf.String()
+	require.Contains(t, out, "pam")
+	require.Contains(t, out, "totp")
+	require.Contains(t, out, "recovery")
+}
+
+func TestAccess_TfaTypes_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/access/users/root@pam/tfa", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusForbidden, "denied")
+	})
+
+	defer withDeps(newDeps(t, f, output.FormatTable))()
+	var buf bytes.Buffer
+	err := run(&buf, "tfa", "types", "root@pam")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list tfa types")
 }

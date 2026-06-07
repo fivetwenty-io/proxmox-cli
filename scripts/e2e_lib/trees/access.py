@@ -43,7 +43,8 @@ def run(ctx: Ctx) -> None:
         ctx.skip("domain get", "no realm returned")
 
     # Two-factor authentication entries. The list is server-wide; labs commonly
-    # have no entries, so `tfa get` of the first user is conditional (◑).
+    # have no entries, so `tfa get` and `tfa get-entry` of the first user/entry
+    # are conditional (◑).
     tfa = ctx.check("tfa list", "access", "tfa", "list", validate=is_list)
     tfa_user = None
     if tfa.rc == 0:
@@ -52,9 +53,33 @@ def run(ctx: Ctx) -> None:
         except ValueError:
             tfa_user = None
     if tfa_user:
-        ctx.check("tfa get", "access", "tfa", "get", str(tfa_user))
+        usr_entries = ctx.check("tfa get", "access", "tfa", "get", str(tfa_user))
+        # tfa get-entry: details for one specific entry; discover the entry id
+        # from the user's entry list, skip when none present.
+        tfa_entry_id = None
+        if usr_entries.rc == 0:
+            try:
+                tfa_entry_id = ctx.first(usr_entries.json(), "id")
+            except (ValueError, KeyError):
+                tfa_entry_id = None
+        if tfa_entry_id:
+            ctx.check("tfa get-entry", "access", "tfa", "get-entry",
+                      str(tfa_user), str(tfa_entry_id))
+        else:
+            ctx.skip("tfa get-entry", "no tfa entry id found for the tfa user")
     else:
         ctx.skip("tfa get", "no user has a tfa entry")
+        ctx.skip("tfa get-entry", "no user has a tfa entry")
+
+    # tfa types: per-user second-factor type summary. root@pam always exists and
+    # the response is an object (empty when the user has no factors enrolled).
+    ctx.check("tfa types", "access", "tfa", "types", "root@pam",
+              validate=lambda r: None if isinstance(r.json(), dict)
+              else "expected a JSON object")
+
+    # OpenID Connect: list configured OpenID realms; empty list is valid on a
+    # lab without an OpenID realm configured.
+    ctx.check("openid list", "access", "openid", "list", validate=is_list)
 
     uid = None
     if users.rc == 0:
