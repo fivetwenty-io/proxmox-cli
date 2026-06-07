@@ -8,7 +8,7 @@ The `pve` CLI is built on the generated `pve-apiclient-go` v3 client, which expo
 
 Today the CLI surfaces only a subset of that client. Every capability listed below is backed by a method that already exists in the client, so the remaining work is command-surface wiring, validation, and end-to-end test coverage — no client regeneration is required.
 
-Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-frequency operations). The **Status** column tracks delivery: `Planned`, `In progress`, or `Shipped`.
+Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-frequency operations). P5 closes the remaining end-to-end test-coverage gaps so that every shipped command leaf is either exercised by a suite or formally deferred with a rationale. The **Status** column tracks delivery: `Planned`, `In progress`, or `Shipped`.
 
 ## Priority Overview
 
@@ -18,6 +18,7 @@ Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-fr
 | P2 | Operations and security | Firewalls, backups, high availability, authentication realms, storage transfer, cluster and node configuration |
 | P3 | Platform management | Guest agent, package management, hardware, system config, Ceph, metrics, notifications, SDN extensions |
 | P4 | Specialized workflows | Bulk actions, SDN fabrics and routing policy, and newer PVE 9.2 endpoints |
+| P5 | Test coverage closure | Isolated end-to-end or deferral coverage for every shipped command leaf that neither suite yet exercises |
 
 ## P1 — Guest Lifecycle Operations
 
@@ -80,6 +81,50 @@ Bulk and advanced features for larger or newer deployments.
 | SDN preview and rollback | `pve sdn dry-run`, `pve sdn rollback` | Preview the running-vs-pending SDN diff for a node, and discard all pending SDN changes cluster-wide | Shipped |
 | SDN fabrics and routing policy | `pve sdn fabric`, `pve sdn prefix-list`, `pve sdn route-map` | BGP fabric topology and routing policy | Shipped |
 | PVE 9.2 endpoints | `pve node oci`, `pve node capabilities`, `pve cluster cpu-model` | OCI image import, capability queries, and custom CPU models | Shipped |
+
+## P5 — Test Coverage Closure
+
+Every command in the priorities above is shipped, but the test-coverage matrix (`docs/test-coverage-matrix.md`) identifies 133 command leaves that neither the read-only sweep nor the destructive verb matrix yet exercises. P5 drives that uncovered count to zero. A leaf counts as closed when it is either exercised by an isolated, namespaced check or formally deferred with a documented rationale, a `--yes` confirmation guard, and unit-test coverage of that guard and its argument contract.
+
+The 133 leaves split into three bands, ordered by value gained per unit of risk and effort: read-only reads first (real coverage, zero mutation), then isolated mutate lifecycles (exercise real create-update-delete flows against `pve-cli`-owned resources), then deferral hardening for the destructive, interactive, and secret-bearing verbs that must never touch the shared lab. All new live checks reuse the existing isolation contract: tag and pool `pve-cli`, name prefix `pve-cli-`, SDN zone `pvecli`, VNet `pvecli0`, and subnet `172.30.0.0/24`. Secret values are never parsed, echoed, or logged; secret-bearing commands are exercised with throwaway dummy inputs.
+
+### P5.1 — Read-only diagnostics sweep (36 leaves)
+
+Idempotent reads added to the read-only sweep. Reads against `pve-cli`-owned objects are covered alongside the matching P5.2 lifecycle (`create` → `get` → `delete`); the rows below list the standalone reads.
+
+| Area | Commands | Approach | Status |
+|---|---|---|---|
+| LXC diagnostics | `pve lxc feature`, `pve lxc metrics`, `pve lxc rrd`, `pve lxc migrate check`, `pve lxc snapshot show` | Inventory-gated reads mirroring the existing QEMU diagnostic checks | Planned |
+| Ceph inspection | `pve node ceph fs\|mds\|mgr\|mon list`, `pve node ceph osd\|pool get`, `pve node ceph pool status` | Reads gated on a Ceph-configured node | Planned |
+| Storage and host discovery | `pve node scan cifs\|iscsi\|lvmthin\|pbs`, `pve node query-url-metadata`, `pve node vzdump extract-config` | Read-only discovery and archive-config extraction | Planned |
+| Cluster inspection | `pve cluster ceph flags get`, `pve cluster ha status manager`, `pve cluster acme account get` | Unconditional cluster reads | Planned |
+| Namespaced object reads | `pve sdn controller\|dns\|fabric\|fabric node\|prefix-list\|prefix-list entry\|route-map\|route-map entry get\|list`, `pve cluster notifications sendmail\|smtp\|webhook\|matcher get`, `pve cluster mapping pci\|usb get` | Covered within their P5.2 lifecycle | Planned |
+
+### P5.2 — Isolated mutate lifecycle (51 leaves)
+
+Namespaced create → inspect → update → delete sequences against `pve-cli`-owned resources, with teardown in every path.
+
+| Area | Commands | Approach | Status |
+|---|---|---|---|
+| SDN objects | `pve sdn zone\|vnet\|subnet\|controller\|dns\|ipam\|fabric\|fabric node\|prefix-list\|prefix-list entry\|route-map\|route-map entry` create/set/delete, `pve sdn vnet firewall options\|rules set` | Stage against zone `pvecli` / VNet `pvecli0` / subnet `172.30.0.0/24`, then `pve sdn apply`; teardown reverts all staged changes | Planned |
+| Notification targets | `pve cluster notifications sendmail\|smtp\|webhook\|matcher create\|set\|delete`, `pve cluster notifications targets-test` | `pve-cli-` named targets with dummy credentials that are never echoed | Planned |
+| Device mappings | `pve cluster mapping pci\|usb create\|set\|delete` | `pve-cli-` named PCI and USB mappings | Planned |
+| Firewall rule edits | `pve cluster firewall rules\|alias\|group rule-update`, `pve node firewall rules update`, `pve qemu\|lxc firewall rules\|alias update` | Edits to `pve-cli-` owned rules, aliases, and groups by index | Planned |
+| Snapshot edits | `pve qemu snapshot update`, `pve lxc snapshot update` | Re-describe a snapshot on a `pve-cli-` guest | Planned |
+| Pool teardown | `pve pool delete` | Create-then-delete a `pve-cli` pool with `--yes` | Planned |
+
+### P5.3 — Deferral hardening (46 leaves)
+
+Destructive, interactive, secret-bearing, or environment-bound verbs that must not run against the shared lab. Each gains a `--yes` confirmation guard (added where missing), unit-test coverage of the guard and argument contract via the `testhelper` fake server, and a `defer()` record in the harness so the matrix scores it deferred rather than uncovered.
+
+| Area | Commands | Approach | Status |
+|---|---|---|---|
+| Ceph cluster operations | `pve node ceph fs\|mds\|mgr\|mon\|osd\|pool create\|delete\|set\|in\|out\|scrub`, `pve node ceph start\|stop` | Cluster-affecting; guard plus unit tests, deferred from live | Planned |
+| Host storage and network | `pve node disks create directory\|lvmthin\|zfs`, `pve node disks init-gpt`, `pve node network set\|delete\|revert` | Host-destructive; guard plus unit tests | Planned |
+| Host services and system | `pve node services start\|stop\|reload`, `pve node apt repositories enable`, `pve node subscription delete\|update`, `pve node cert acme delete\|renew`, `pve node cert custom delete`, `pve node console` | Host-state mutation; guard added to the unguarded service verbs, plus unit tests | Planned |
+| Cluster membership and HA | `pve cluster config join add`, `pve cluster config nodes delete`, `pve cluster ha resource relocate`, `pve cluster ha status arm`, `pve cluster acme account set\|delete` | Cluster-destructive; guard plus unit tests | Planned |
+| Guest agent | `pve qemu agent exec\|exec-status\|file-read\|file-write\|set-user-password` | Environment-bound to a running guest and agent; guard added to the password verb, plus unit tests | Planned |
+| Two-factor authentication | `pve access tfa create\|set\|delete` | Auth and secret-bearing; guard plus unit tests | Planned |
 
 ## Endpoint-Level Completion
 
