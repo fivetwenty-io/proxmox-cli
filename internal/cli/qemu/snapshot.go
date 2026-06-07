@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -22,6 +23,8 @@ func newSnapshotCmd() *cobra.Command {
 		newSnapshotCreateCmd(),
 		newSnapshotDeleteCmd(),
 		newSnapshotRollbackCmd(),
+		newSnapshotShowCmd(),
+		newSnapshotUpdateCmd(),
 	)
 	return cmd
 }
@@ -171,6 +174,91 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
 	cmd.Flags().BoolVar(&force, "force", false, "remove from config even if removing disk snapshots fails")
+	return cmd
+}
+
+// newSnapshotShowCmd builds `pve qemu snapshot show <vmid> <snapname>`.
+func newSnapshotShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <vmid> <snapname>",
+		Short: "Show the configuration of a named snapshot",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+			vmid, snapname := args[0], args[1]
+
+			resp, err := deps.API.Nodes.ListQemuSnapshotConfig(cmd.Context(), node, vmid, snapname)
+			if err != nil {
+				return fmt.Errorf("show snapshot %q for VM %s on node %q: %w", snapname, vmid, node, err)
+			}
+
+			var raw json.RawMessage
+			if resp != nil {
+				raw = *resp
+			}
+			trimmed := strings.TrimSpace(string(raw))
+			if trimmed == "" || trimmed == "null" {
+				return deps.Out.Render(cmd.OutOrStdout(),
+					output.Result{Message: fmt.Sprintf("Snapshot %s has no additional configuration.", snapname)},
+					deps.Format)
+			}
+
+			var v any
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return fmt.Errorf("show snapshot %q for VM %s: decode response: %w", snapname, vmid, err)
+			}
+			if m, ok := v.(map[string]any); ok {
+				single := make(map[string]string, len(m))
+				for k, val := range m {
+					single[k] = stringifyValue(val)
+				}
+				return deps.Out.Render(cmd.OutOrStdout(),
+					output.Result{Single: single, Raw: v}, deps.Format)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: map[string]string{"result": stringifyValue(v)}, Raw: v}, deps.Format)
+		},
+	}
+}
+
+// newSnapshotUpdateCmd builds `pve qemu snapshot update <vmid> <snapname> --description DESC`.
+func newSnapshotUpdateCmd() *cobra.Command {
+	var description string
+	cmd := &cobra.Command{
+		Use:   "update <vmid> <snapname>",
+		Short: "Update the description of a snapshot",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+			vmid, snapname := args[0], args[1]
+			if !cmd.Flags().Changed("description") {
+				return fmt.Errorf("no configuration changes provided: set --description")
+			}
+
+			params := &nodes.UpdateQemuSnapshotConfigParams{}
+			if cmd.Flags().Changed("description") {
+				params.Description = strPtr(description)
+			}
+
+			if err := deps.API.Nodes.UpdateQemuSnapshotConfig(cmd.Context(), node, vmid, snapname, params); err != nil {
+				return fmt.Errorf("update snapshot %q for VM %s on node %q: %w", snapname, vmid, node, err)
+			}
+
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: fmt.Sprintf("Snapshot %s of VM %s updated.", snapname, vmid)},
+				deps.Format)
+		},
+	}
+
+	cmd.Flags().StringVar(&description, "description", "", "new description for the snapshot")
 	return cmd
 }
 

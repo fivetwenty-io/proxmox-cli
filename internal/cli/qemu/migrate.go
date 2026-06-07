@@ -4,11 +4,68 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
+
+// newMigrateCheckCmd builds `pve qemu migrate check <vmid> [--target-node NODE]`.
+// It calls the GET /nodes/{n}/qemu/{v}/migrate pre-flight endpoint and returns
+// feasibility information: allowed nodes, local resources, and local disks.
+func newMigrateCheckCmd() *cobra.Command {
+	var targetNode string
+	cmd := &cobra.Command{
+		Use:   "check <vmid>",
+		Short: "Pre-flight check for migrating a VM",
+		Long: "Query migration feasibility for a VM without performing the migration. " +
+			"Returns allowed target nodes, local resources that block migration, " +
+			"and local disks. Optionally filter results for a specific --target-node.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+			vmid := args[0]
+			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
+				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
+			}
+
+			params := &nodes.ListQemuMigrateParams{}
+			if cmd.Flags().Changed("target-node") {
+				params.Target = strPtr(targetNode)
+			}
+
+			resp, err := deps.API.Nodes.ListQemuMigrate(cmd.Context(), node, vmid, params)
+			if err != nil {
+				return fmt.Errorf("migrate check for VM %s on node %q: %w", vmid, node, err)
+			}
+			if resp == nil {
+				return fmt.Errorf("migrate check for VM %s on node %q: empty response", vmid, node)
+			}
+
+			single := map[string]string{
+				"running":          fmt.Sprintf("%v", bool(resp.Running)),
+				"has-dbus-vmstate": fmt.Sprintf("%v", bool(resp.HasDbusVmstate)),
+				"allowed_nodes":    strings.Join(resp.AllowedNodes, ", "),
+				"local_resources":  strings.Join(resp.LocalResources, ", "),
+				"mapped_resources": strings.Join(resp.MappedResources, ", "),
+			}
+			if len(resp.DependentHaResources) > 0 {
+				single["dependent-ha-resources"] = strings.Join(resp.DependentHaResources, ", ")
+			}
+
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: resp}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&targetNode, "target-node", "", "filter results for this target node")
+	return cmd
+}
 
 // newMigrateCmd builds `pve qemu migrate <vmid> --target NODE [flags]`.
 //
@@ -90,5 +147,10 @@ func newMigrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetstorage, "targetstorage", "",
 		"target storage mapping; a single storage ID maps all source storages, "+
 			"or '1' maps each source storage to itself")
+
+	// Add the pre-flight check as a sub-command so both
+	// `pve qemu migrate 100 --target-node pve2` and
+	// `pve qemu migrate check 100` are valid.
+	cmd.AddCommand(newMigrateCheckCmd())
 	return cmd
 }

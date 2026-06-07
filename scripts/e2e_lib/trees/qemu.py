@@ -51,7 +51,12 @@ def run(ctx: Ctx) -> None:
     if vmid is None:
         ctx.skip("status", "no VM on node")
         ctx.skip("config get", "no VM on node")
+        ctx.skip("metrics", "no VM on node")
+        ctx.skip("rrd", "no VM on node")
+        ctx.skip("feature", "no VM on node")
         ctx.skip("snapshot list", "no VM on node")
+        ctx.skip("snapshot show", "no VM on node")
+        ctx.skip("migrate check", "no VM on node")
         ctx.skip("firewall rules list", "no VM on node")
         ctx.skip("firewall options get", "no VM on node")
         ctx.skip("console vnc ticket", "no VM on node")
@@ -60,7 +65,64 @@ def run(ctx: Ctx) -> None:
         vid = str(vmid)
         ctx.check("status", "qemu", "status", vid, node=n, validate=has_status)
         ctx.check("config get", "qemu", "config", "get", vid, node=n)
+
+        # metrics: rrd timeseries for a guest; zero-row result is a valid list.
+        ctx.check("metrics", "qemu", "metrics", vid, "--timeframe", "hour",
+                  node=n, validate=is_list)
+
+        # rrd: rrd PNG image reference; always returns a filename object.
+        def has_filename(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            if "filename" not in data:
+                return "rrd response missing 'filename' key"
+            return None
+
+        ctx.check("rrd", "qemu", "rrd", vid, "--ds", "cpu", "--timeframe", "hour",
+                  node=n, validate=has_filename)
+
+        # feature: whether the guest supports a named feature (clone is always safe).
+        def has_feature(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            if "hasFeature" not in data:
+                return "feature response missing 'hasFeature' key"
+            return None
+
+        ctx.check("feature", "qemu", "feature", vid, "--feature", "clone",
+                  node=n, validate=has_feature)
+
         ctx.check("snapshot list", "qemu", "snapshot", "list", vid, node=n)
+
+        # snapshot show: discover a real snapshot name, skip when none exists.
+        snap_res = ctx.run("qemu", "snapshot", "list", vid, node=n)
+        snap_name = None
+        if snap_res.rc == 0:
+            try:
+                for entry in snap_res.json():
+                    if isinstance(entry, dict):
+                        nm = entry.get("name") or entry.get("snapname")
+                        if nm and nm != "current":
+                            snap_name = str(nm)
+                            break
+            except (ValueError, KeyError):
+                snap_name = None
+        if snap_name:
+            ctx.check("snapshot show", "qemu", "snapshot", "show", vid, snap_name, node=n)
+        else:
+            ctx.skip("snapshot show", "no snapshot found on the discovered VM")
+
+        # migrate check: pre-flight analysis (read-only). A single-node cluster
+        # returns the feasibility object without an `allowed_nodes` list, so
+        # assert only the object shape here.
+        def is_migrate_check(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        ctx.check("migrate check", "qemu", "migrate", "check", vid,
+                  node=n, validate=is_migrate_check)
+
         # Firewall reads are non-mutating: safe against any existing VM.
         ctx.check("firewall rules list", "qemu", "firewall", "rules", "list", vid,
                   node=n, validate=is_list)
@@ -141,6 +203,31 @@ def run(ctx: Ctx) -> None:
         "opening the proxied console session needs an interactive viewer — the "
         "CLI only returns the ticket, which the read-only sweep validates",
         "pve qemu console <vmid> --type spice",
+    )
+    ctx.defer(
+        "monitor",
+        "sends a raw QEMU monitor command to a running VM — even read-only "
+        "commands require root and an active QEMU process; exercised live by "
+        "`e2e --mutate` (soft-step: info status, which cannot change VM state)",
+        "pve qemu monitor <vmid> --command 'info status' --yes",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "sendkey",
+        "injects a key event into a running VM's console — requires a live guest "
+        "process; a benign key (ret) is used, but the CI lab has no guaranteed "
+        "running guest; not exercised live",
+        "pve qemu sendkey <vmid> --key ret",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "remote-migrate",
+        "migrates a VM to a different Proxmox VE cluster — requires two live "
+        "clusters with shared or compatible storage; no rollback without manual "
+        "intervention; not exercised live",
+        "pve qemu remote-migrate <vmid> --yes --target-endpoint https://remote:8006 "
+        "--target-storage local-lvm --target-bridge vmbr0",
+        isolation=False, live_covered=False,
     )
     ctx.defer(
         "agent <command>",

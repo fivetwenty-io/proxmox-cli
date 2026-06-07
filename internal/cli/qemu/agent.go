@@ -94,11 +94,17 @@ type agentNodes interface {
 // `qm agent`) so that the full set of guest-agent verbs is reachable without a
 // sub-command per verb. All verbs require the guest agent to be installed and
 // running inside the VM.
+//
+// Parameterised endpoints (exec, exec-status, file-read, file-write,
+// set-user-password) are wired as dedicated sub-commands so their structured
+// arguments and, in the password case, the secret value are handled cleanly.
 func newAgentCmd() *cobra.Command {
 	long := "Run a QEMU guest-agent command against a VM. The guest agent must be\n" +
 		"installed and running inside the VM.\n\n" +
 		"Read-only queries:\n  " + strings.Join(agentQueryCommands, ", ") + "\n\n" +
-		"Operations that change guest state:\n  " + strings.Join(agentMutateCommands, ", ")
+		"Operations that change guest state:\n  " + strings.Join(agentMutateCommands, ", ") + "\n\n" +
+		"Parameterised sub-commands (require additional flags):\n" +
+		"  exec, exec-status, file-read, file-write, set-user-password"
 
 	cmd := &cobra.Command{
 		Use:       "agent <vmid> <command>",
@@ -143,6 +149,15 @@ func newAgentCmd() *cobra.Command {
 				fmt.Sprintf("Guest agent on VM %s acknowledged %q.", vmid, command))
 		},
 	}
+
+	// Parameterised agent endpoints wired as dedicated sub-commands.
+	cmd.AddCommand(
+		newAgentExecCmd(),
+		newAgentExecStatusCmd(),
+		newAgentFileReadCmd(),
+		newAgentFileWriteCmd(),
+		newAgentSetUserPasswordCmd(),
+	)
 	return cmd
 }
 
