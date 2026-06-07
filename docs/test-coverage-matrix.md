@@ -68,19 +68,19 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 93 | 5 | 17 | 9 |
+| `cluster` | 157 | 42 | 12 | 96 | 5 | 17 | 6 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
-| `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
+| `lxc` | 48 | 2 | 13 | 37 | 0 | 1 | 1 |
+| `node` | 138 | 1 | 59 | 15 | 0 | 35 | 32 |
 | `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
-| `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
+| `qemu` | 59 | 1 | 12 | 42 | 1 | 4 | 6 |
 | `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **273** | **6** | **71** | **57** |
+| **Total** | **556** | **74** | **125** | **281** | **6** | **71** | **49** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **428** are exercised by at least one suite, **71** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **57** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **436** are exercised by at least one suite, **71** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **49** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -190,13 +190,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster firewall alias create` | — | ✓ |  |
 | `cluster firewall alias delete` | — | ✓ |  |
 | `cluster firewall alias list` | ✓ | ✓ |  |
-| `cluster firewall alias update` | — | — | **uncovered** |
+| `cluster firewall alias update` | — | ✓ |  |
 | `cluster firewall group create` | — | ✓ |  |
 | `cluster firewall group delete` | — | ✓ |  |
 | `cluster firewall group list` | ✓ | ✓ |  |
 | `cluster firewall group rule-add` | — | ✓ |  |
 | `cluster firewall group rule-delete` | — | ✓ |  |
-| `cluster firewall group rule-update` | — | — | **uncovered** |
+| `cluster firewall group rule-update` | — | ✓ |  |
 | `cluster firewall group rules` | — | ✓ |  |
 | `cluster firewall ipset add` | — | ✓ |  |
 | `cluster firewall ipset create` | — | ✓ |  |
@@ -211,7 +211,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster firewall rules delete` | — | ✓ |  |
 | `cluster firewall rules get` | — | ✓ |  |
 | `cluster firewall rules list` | ✓ | ✓ |  |
-| `cluster firewall rules update` | — | — | **uncovered** |
+| `cluster firewall rules update` | — | ✓ |  |
 | `cluster ha group create` | — | ✓ |  |
 | `cluster ha group delete` | — | ✓ |  |
 | `cluster ha group get` | — | ✓ |  |
@@ -327,7 +327,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc firewall alias create` | — | ✓ |  |
 | `lxc firewall alias delete` | — | ✓ |  |
 | `lxc firewall alias list` | — | ✓ |  |
-| `lxc firewall alias update` | — | — | **uncovered** |
+| `lxc firewall alias update` | — | ✓ |  |
 | `lxc firewall ipset add` | — | ✓ |  |
 | `lxc firewall ipset create` | — | ✓ |  |
 | `lxc firewall ipset delete` | — | ✓ |  |
@@ -339,7 +339,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc firewall rules delete` | — | ✓ |  |
 | `lxc firewall rules get` | — | ✓ |  |
 | `lxc firewall rules list` | ◑ | ✓ |  |
-| `lxc firewall rules update` | — | — | **uncovered** |
+| `lxc firewall rules update` | — | ✓ |  |
 | `lxc interfaces` | ◑ | ✓ |  |
 | `lxc list` | ✓ | — |  |
 | `lxc metrics` | ◑ | — |  |
@@ -443,7 +443,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node firewall rules delete` | — | ✓ |  |
 | `node firewall rules get` | — | ✓ |  |
 | `node firewall rules list` | ◑ | ✓ |  |
-| `node firewall rules update` | — | — | **uncovered** |
+| `node firewall rules update` | — | ✓ |  |
 | `node hardware mdev` | ◑ | — |  |
 | `node hardware pci` | ◑ | — |  |
 | `node hardware usb` | ◑ | — |  |
@@ -543,7 +543,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu firewall alias create` | — | ✓ |  |
 | `qemu firewall alias delete` | — | ✓ |  |
 | `qemu firewall alias list` | — | ✓ |  |
-| `qemu firewall alias update` | — | — | **uncovered** |
+| `qemu firewall alias update` | — | ✓ |  |
 | `qemu firewall ipset add` | — | ✓ |  |
 | `qemu firewall ipset create` | — | ✓ |  |
 | `qemu firewall ipset delete` | — | ✓ |  |
@@ -555,7 +555,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu firewall rules delete` | — | ✓ |  |
 | `qemu firewall rules get` | — | ✓ |  |
 | `qemu firewall rules list` | ◑ | ✓ |  |
-| `qemu firewall rules update` | — | — | **uncovered** |
+| `qemu firewall rules update` | — | ✓ |  |
 | `qemu list` | ✓ | — |  |
 | `qemu metrics` | ◑ | — |  |
 | `qemu migrate` | — | ✓ |  |
@@ -704,15 +704,15 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
 
-**`cluster`** (9) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`
+**`cluster`** (6) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster ha resource relocate`, `cluster ha status arm`
 
-**`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
+**`lxc`** (1) — `lxc snapshot update`
 
-**`node`** (33) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph mds create`, `node ceph mds delete`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mon delete`, `node ceph osd delete`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool set`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
+**`node`** (32) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph mds create`, `node ceph mds delete`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mon delete`, `node ceph osd delete`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool set`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node network delete`, `node network revert`, `node network set`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
 
 **`pool`** (1) — `pool delete`
 
-**`qemu`** (8) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`, `qemu firewall alias update`, `qemu firewall rules update`, `qemu snapshot update`
+**`qemu`** (6) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`, `qemu snapshot update`
 
 ## Running the suites
 

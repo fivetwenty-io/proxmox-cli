@@ -651,6 +651,9 @@ def vm_lifecycle(r: Runner) -> None:
                "qemu", "firewall", "rules", "list", vmid, json_out=True)
         r.step("qemu", "firewall rules get", "firewall rule get pos 0",
                "qemu", "firewall", "rules", "get", vmid, "0", json_out=True)
+        r.step("qemu", "firewall rules update", "firewall rule update pos 0",
+               "qemu", "firewall", "rules", "update", vmid, "0",
+               "--comment", "pve-cli-e2e-updated")
         r.del_step("qemu", "firewall rules delete", "firewall rule delete pos 0",
                    "qemu", "firewall", "rules", "delete", vmid, "0", "--yes")
         r.step("qemu", "firewall ipset create", f"firewall ipset create {FW_IPSET}",
@@ -668,6 +671,9 @@ def vm_lifecycle(r: Runner) -> None:
                "--comment", "pve-cli-e2e")
         r.step("qemu", "firewall alias list", "firewall alias list",
                "qemu", "firewall", "alias", "list", vmid, json_out=True)
+        r.step("qemu", "firewall alias update", f"firewall alias update {FW_ALIAS}",
+               "qemu", "firewall", "alias", "update", vmid, FW_ALIAS, "172.30.0.99",
+               "--comment", "pve-cli-e2e-updated")
         r.del_step("qemu", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "qemu", "firewall", "alias", "delete", vmid, FW_ALIAS, "--yes")
         # Console proxy: request a VNC ticket on the isolated VM. The ticket
@@ -844,6 +850,9 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "lxc", "firewall", "rules", "list", ctid, json_out=True)
         r.step("lxc", "firewall rules get", "firewall rule get pos 0",
                "lxc", "firewall", "rules", "get", ctid, "0", json_out=True)
+        r.step("lxc", "firewall rules update", "firewall rule update pos 0",
+               "lxc", "firewall", "rules", "update", ctid, "0",
+               "--comment", "pve-cli-e2e-updated")
         r.del_step("lxc", "firewall rules delete", "firewall rule delete pos 0",
                    "lxc", "firewall", "rules", "delete", ctid, "0", "--yes")
         r.step("lxc", "firewall ipset create", f"firewall ipset create {FW_IPSET}",
@@ -861,6 +870,9 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "--comment", "pve-cli-e2e")
         r.step("lxc", "firewall alias list", "firewall alias list",
                "lxc", "firewall", "alias", "list", ctid, json_out=True)
+        r.step("lxc", "firewall alias update", f"firewall alias update {FW_ALIAS}",
+               "lxc", "firewall", "alias", "update", ctid, FW_ALIAS, "172.30.0.99",
+               "--comment", "pve-cli-e2e-updated")
         r.del_step("lxc", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "lxc", "firewall", "alias", "delete", ctid, FW_ALIAS, "--yes")
         # Console proxy: request a VNC ticket on the isolated CT. The ticket
@@ -1584,8 +1596,16 @@ def node_firewall_lifecycle(r: Runner) -> None:
         if created_pos is not None:
             r.step("node", "firewall rules get", f"firewall rules get {created_pos}",
                    "node", "firewall", "rules", "get", created_pos, json_out=True)
+            # Rule stays disabled (--enable 0) and keeps its pve-cli comment so
+            # pre-clean can still find it; only the dport is edited, so the host's
+            # active firewall policy is never changed.
+            r.step("node", "firewall rules update", f"firewall rules update {created_pos}",
+                   "node", "firewall", "rules", "update", created_pos,
+                   "--enable", "0", "--dport", "2222", "--comment", CL_FW_COMMENT)
         else:
             r.cover_skip("node", "firewall rules get", "firewall rules get",
+                         "created rule not found by comment")
+            r.cover_skip("node", "firewall rules update", "firewall rules update",
                          "created rule not found by comment")
     finally:
         if created_pos is None:
@@ -1816,6 +1836,9 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
                "--type", "in", "--action", "ACCEPT", "--proto", "tcp", "--dport", "22")
         r.step("cluster", "firewall group rules", "firewall group rules list",
                "cluster", "firewall", "group", "rules", CL_FW_GROUP, json_out=True)
+        r.step("cluster", "firewall group rule-update", f"firewall group rule-update {CL_FW_GROUP} pos 0",
+               "cluster", "firewall", "group", "rule-update", CL_FW_GROUP, "0",
+               "--comment", "pve-cli-e2e-updated")
         r.del_step("cluster", "firewall group rule-delete", "firewall group rule-delete pos 0",
                    "cluster", "firewall", "group", "rule-delete", CL_FW_GROUP, "0", "--yes")
 
@@ -1831,6 +1854,12 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
             raise LifecycleError("created cluster firewall rule not found in list")
         r.step("cluster", "firewall rules get", f"firewall rule get pos {created_rule_pos}",
                "cluster", "firewall", "rules", "get", created_rule_pos, json_out=True)
+        # Rule stays disabled (--enable 0) and keeps its pve-cli comment so it is
+        # still found by comment for cleanup; only the dport is edited, so the
+        # datacenter firewall policy is never changed.
+        r.step("cluster", "firewall rules update", f"firewall rule update pos {created_rule_pos}",
+               "cluster", "firewall", "rules", "update", created_rule_pos,
+               "--enable", "0", "--dport", "2222", "--comment", CL_FW_COMMENT)
 
         # IP set with one member drawn from the e2e subnet.
         r.step("cluster", "firewall ipset create", f"firewall ipset create {CL_FW_IPSET}",
@@ -1848,6 +1877,9 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
                "--comment", "pve-cli-e2e")
         r.step("cluster", "firewall alias list", "firewall alias list",
                "cluster", "firewall", "alias", "list", json_out=True)
+        r.step("cluster", "firewall alias update", f"firewall alias update {CL_FW_ALIAS}",
+               "cluster", "firewall", "alias", "update", CL_FW_ALIAS, "172.30.0.99",
+               "--comment", "pve-cli-e2e-updated")
     finally:
         # Delete the top-level rule by its discovered (or re-discovered) position.
         pos = created_rule_pos if created_rule_pos is not None else _cluster_rule_pos_by_comment(r, CL_FW_COMMENT)
