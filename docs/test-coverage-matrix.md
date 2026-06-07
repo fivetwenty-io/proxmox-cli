@@ -70,17 +70,17 @@ swept clean before the next provisions.
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
 | `cluster` | 157 | 42 | 12 | 96 | 5 | 17 | 6 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 48 | 2 | 13 | 37 | 0 | 1 | 1 |
+| `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
 | `node` | 138 | 1 | 59 | 15 | 0 | 35 | 32 |
-| `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
-| `qemu` | 59 | 1 | 12 | 42 | 1 | 4 | 6 |
+| `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
+| `qemu` | 59 | 1 | 12 | 43 | 1 | 4 | 5 |
 | `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **281** | **6** | **71** | **49** |
+| **Total** | **556** | **74** | **125** | **284** | **6** | **71** | **46** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **436** are exercised by at least one suite, **71** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **49** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **71** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **46** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -355,7 +355,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc snapshot list` | ◑ | ✓ |  |
 | `lxc snapshot rollback` | — | ✓ |  |
 | `lxc snapshot show` | ◑ | — |  |
-| `lxc snapshot update` | — | — | **uncovered** |
+| `lxc snapshot update` | — | ✓ |  |
 | `lxc start` | — | ✓ |  |
 | `lxc status` | ◑ | ✓ |  |
 | `lxc stop` | — | ✓ |  |
@@ -511,7 +511,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `pool create` | — | ✓ | error-contract checked |
-| `pool delete` | — | — | **uncovered** |
+| `pool delete` | — | ✓ |  |
 | `pool get` | ◑ | — |  |
 | `pool list` | ✓ | — |  |
 | `pool set` | — | ✓ |  |
@@ -573,7 +573,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu snapshot list` | ◑ | ✓ |  |
 | `qemu snapshot rollback` | — | ✓ |  |
 | `qemu snapshot show` | ◑ | — |  |
-| `qemu snapshot update` | — | — | **uncovered** |
+| `qemu snapshot update` | — | ✓ |  |
 | `qemu start` | — | ✓ |  |
 | `qemu status` | ◑ | ✓ |  |
 | `qemu stop` | — | ✓ |  |
@@ -706,13 +706,9 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`cluster`** (6) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster ha resource relocate`, `cluster ha status arm`
 
-**`lxc`** (1) — `lxc snapshot update`
-
 **`node`** (32) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph mds create`, `node ceph mds delete`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mon delete`, `node ceph osd delete`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool set`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node network delete`, `node network revert`, `node network set`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
 
-**`pool`** (1) — `pool delete`
-
-**`qemu`** (6) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`, `qemu snapshot update`
+**`qemu`** (5) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`
 
 ## Running the suites
 

@@ -540,6 +540,11 @@ def vm_lifecycle(r: Runner) -> None:
                "qemu", "snapshot", "create", vmid, SNAP_NAME)
         r.step("qemu", "snapshot list", "snapshot list",
                "qemu", "snapshot", "list", vmid, json_out=True)
+        # Edit the throwaway snapshot's description before it is rolled back and
+        # deleted; touches only this VM's own snapshot metadata.
+        r.step("qemu", "snapshot update", f"snapshot update {SNAP_NAME}",
+               "qemu", "snapshot", "update", vmid, SNAP_NAME,
+               "--description", "pve-cli-e2e-updated")
         # Graceful shutdown with a short timeout + force-stop is deterministic
         # even without a responsive guest, and leaves the VM stopped.
         r.step("qemu", "shutdown", f"shutdown VM {vmid}",
@@ -755,6 +760,11 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "lxc", "snapshot", "create", ctid, SNAP_NAME)
         r.step("lxc", "snapshot list", "snapshot list",
                "lxc", "snapshot", "list", ctid, json_out=True)
+        # Edit the throwaway snapshot's description before rollback/delete;
+        # touches only this CT's own snapshot metadata.
+        r.step("lxc", "snapshot update", f"snapshot update {SNAP_NAME}",
+               "lxc", "snapshot", "update", ctid, SNAP_NAME,
+               "--description", "pve-cli-e2e-updated")
         # Graceful shutdown, then rollback (rollback needs the CT stopped).
         r.step("lxc", "shutdown", f"shutdown CT {ctid}",
                "lxc", "shutdown", ctid, "--timeout", "30", "--force-stop")
@@ -925,7 +935,11 @@ def teardown_network(r: Runner) -> None:
     r.del_step("infra", "sdn zone delete", f"sdn zone delete {Isolation.SDN_ZONE}",
                "sdn", "zone", "delete", Isolation.SDN_ZONE, "--yes")
     r.undo("sdn apply", "sdn", "apply")
-    r.undo(f"pool delete {Isolation.POOL}", "pool", "delete", Isolation.POOL, "--yes")
+    # Deleting the isolated pve-cli pool is the live coverage for `pool delete`:
+    # it removes the exact pool this suite provisioned, recorded as a del_step
+    # (PASS on a normal teardown, SKIP when a prior run already cleaned it up).
+    r.del_step("infra", "pool delete", f"pool delete {Isolation.POOL}",
+               "pool", "delete", Isolation.POOL, "--yes")
 
 
 def sweep_stale_guests(r: Runner) -> None:
