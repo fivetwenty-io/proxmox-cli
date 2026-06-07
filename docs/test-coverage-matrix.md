@@ -68,7 +68,7 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 41 | 10 | 73 | 5 | 10 | 36 |
+| `cluster` | 157 | 42 | 12 | 73 | 5 | 10 | 33 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
 | `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **73** | **123** | **222** | **6** | **64** | **115** |
+| **Total** | **556** | **74** | **125** | **222** | **6** | **64** | **112** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **377** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **115** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **380** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **112** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -148,7 +148,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 |------|-----|--------|-------|
 | `cluster acme account create` | — | — | n/a — contacts the ACME certificate authority — never registered live on a shared lab |
 | `cluster acme account delete` | — | — | **uncovered** |
-| `cluster acme account get` | — | — | **uncovered** |
+| `cluster acme account get` | ◑ | — |  |
 | `cluster acme account list` | ✓ | — |  |
 | `cluster acme account set` | — | — | **uncovered** |
 | `cluster acme challenge-schema` | ✓ | — |  |
@@ -170,7 +170,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster bulk shutdown` | — | — | deferred — cluster-wide guest power and migration actions — affect every guest, not run live |
 | `cluster bulk start` | — | — | help-only (parse smoke test) |
 | `cluster bulk suspend` | — | — | help-only (parse smoke test) |
-| `cluster ceph flags get` | — | — | **uncovered** |
+| `cluster ceph flags get` | ◑ | — |  |
 | `cluster ceph flags list` | ◑ | — |  |
 | `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
 | `cluster ceph metadata` | ◑ | — |  |
@@ -233,7 +233,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ha status current` | ✓ | — |  |
 | `cluster ha status disarm` | — | — | deferred — toggles the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
 | `cluster ha status list` | ✓ | — |  |
-| `cluster ha status manager` | — | — | **uncovered** |
+| `cluster ha status manager` | ✓ | — |  |
 | `cluster jobs realm-sync create` | — | ✓ |  |
 | `cluster jobs realm-sync delete` | — | ✓ |  |
 | `cluster jobs realm-sync get` | — | ✓ |  |
@@ -704,7 +704,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
 
-**`cluster`** (36) — `cluster acme account delete`, `cluster acme account get`, `cluster acme account set`, `cluster ceph flags get`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster ha status manager`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`, `cluster notifications matcher create`, `cluster notifications matcher delete`, `cluster notifications matcher get`, `cluster notifications matcher set`, `cluster notifications sendmail create`, `cluster notifications sendmail delete`, `cluster notifications sendmail get`, `cluster notifications sendmail set`, `cluster notifications smtp create`, `cluster notifications smtp delete`, `cluster notifications smtp get`, `cluster notifications smtp set`, `cluster notifications targets-test`, `cluster notifications webhook create`, `cluster notifications webhook delete`, `cluster notifications webhook get`, `cluster notifications webhook set`
+**`cluster`** (33) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`, `cluster notifications matcher create`, `cluster notifications matcher delete`, `cluster notifications matcher get`, `cluster notifications matcher set`, `cluster notifications sendmail create`, `cluster notifications sendmail delete`, `cluster notifications sendmail get`, `cluster notifications sendmail set`, `cluster notifications smtp create`, `cluster notifications smtp delete`, `cluster notifications smtp get`, `cluster notifications smtp set`, `cluster notifications targets-test`, `cluster notifications webhook create`, `cluster notifications webhook delete`, `cluster notifications webhook get`, `cluster notifications webhook set`
 
 **`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
 

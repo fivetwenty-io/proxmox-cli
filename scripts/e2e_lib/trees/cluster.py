@@ -115,6 +115,10 @@ def run(ctx: Ctx) -> None:
     # HA status views are read-only and safe to query directly.
     ctx.check("ha status", "cluster", "ha", "status", "list", validate=is_list)
     ctx.check("ha status current", "cluster", "ha", "status", "current", validate=is_list)
+    # ha status manager: the raw CRM/LRM manager status. Read-only; returns the
+    # manager-status object (empty when HA has never been active), so it is safe
+    # to query directly on any cluster.
+    ctx.check("ha status manager", "cluster", "ha", "status", "manager")
     # arm/disarm flip the cluster-wide HA stack and would disrupt every HA-managed
     # resource on the lab, so they are parsed-and-deferred, never run live.
     ctx.defer(
@@ -280,7 +284,32 @@ def run(ctx: Ctx) -> None:
     # ACME: the account and plugin lists are arrays (empty on a lab with no ACME
     # configured); directories and challenge-schema are built-in static catalogs
     # that do not contact any CA. All read-only and safe to query directly.
-    ctx.check("acme account list", "cluster", "acme", "account", "list", validate=is_list)
+    acme_accounts = ctx.check("acme account list", "cluster", "acme", "account", "list",
+                              validate=is_list)
+    # acme account get: show a single registered account by name. Needs an existing
+    # account, so discover one from the list above; the lab has none configured, so
+    # this skips there (the verb is parsed-and-deferred for live coverage below).
+    acme_account_name = None
+    if acme_accounts.rc == 0:
+        try:
+            acme_account_name = ctx.first(acme_accounts.json(), "name")
+        except (ValueError, AttributeError, KeyError):
+            acme_account_name = None
+    if acme_account_name:
+        # Reading a single account returns its private key material, so the API
+        # restricts GET /cluster/acme/account/<name> to root@pam. An API-token
+        # identity is denied — assert the permission error surfaces cleanly there,
+        # and read the account when the identity is privileged enough.
+        probe = ctx.run("cluster", "acme", "account", "get", str(acme_account_name))
+        probe_err = (probe.stderr or probe.stdout).lower()
+        if probe.rc != 0 and ("root@pam" in probe_err or "permission" in probe_err):
+            ctx.expect_fail("acme account get", "cluster", "acme", "account", "get",
+                            str(acme_account_name), must_contain="permission")
+        else:
+            ctx.check("acme account get", "cluster", "acme", "account", "get",
+                      str(acme_account_name))
+    else:
+        ctx.skip("acme account get", "no ACME account registered on the lab")
     ctx.check("acme plugin list", "cluster", "acme", "plugin", "list", validate=is_list)
     ctx.check("acme directories", "cluster", "acme", "directories", validate=is_list)
     ctx.check("acme challenge-schema", "cluster", "acme", "challenge-schema", validate=is_list)
@@ -312,9 +341,14 @@ def run(ctx: Ctx) -> None:
     flags_err = (flags.stderr or flags.stdout).lower()
     if flags.rc != 0 and "ceph" in flags_err:
         ctx.skip("ceph flags list", "Ceph is not configured on the lab node")
+        ctx.skip("ceph flags get", "Ceph is not configured on the lab node")
         ctx.skip("ceph metadata", "Ceph is not configured on the lab node")
     else:
         ctx.check("ceph flags list", "cluster", "ceph", "flags", "list", validate=is_list)
+        # ceph flags get: read a single cluster-wide Ceph flag. `noout` is a
+        # built-in flag that always exists once Ceph is configured, so it is safe
+        # to query here inside the ceph-present branch.
+        ctx.check("ceph flags get", "cluster", "ceph", "flags", "get", "noout")
         # ceph metadata: cluster-wide OSD/mon/mgr/mds daemon metadata; read-only.
         ctx.check("ceph metadata", "cluster", "ceph", "metadata")
     ctx.check("ceph flags set --help", "cluster", "ceph", "flags", "set", "--help", fmt="")
