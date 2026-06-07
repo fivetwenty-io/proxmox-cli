@@ -74,13 +74,13 @@ swept clean before the next provisions.
 | `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
 | `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
 | `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
-| `sdn` | 71 | 5 | 11 | 26 | 0 | 10 | 22 |
+| `sdn` | 71 | 5 | 11 | 48 | 0 | 8 | 2 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **229** | **6** | **66** | **103** |
+| **Total** | **556** | **74** | **125** | **251** | **6** | **64** | **83** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **387** are exercised by at least one suite, **66** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **103** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **409** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **83** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -596,42 +596,42 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn dns list` | ✓ | — |  |
 | `sdn dns set` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
 | `sdn dry-run` | ◑ | — |  |
-| `sdn fabric create` | — | — | deferred — needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by unit tests |
-| `sdn fabric delete` | — | — | **uncovered** |
-| `sdn fabric get` | — | — | **uncovered** |
+| `sdn fabric create` | — | ✓ |  |
+| `sdn fabric delete` | — | ✓ |  |
+| `sdn fabric get` | — | ✓ |  |
 | `sdn fabric list` | ◑ | — |  |
 | `sdn fabric list-all` | ◑ | — |  |
-| `sdn fabric node create` | — | — | **uncovered** |
-| `sdn fabric node delete` | — | — | **uncovered** |
-| `sdn fabric node get` | — | — | **uncovered** |
+| `sdn fabric node create` | — | ✓ |  |
+| `sdn fabric node delete` | — | ✓ |  |
+| `sdn fabric node get` | — | ✓ |  |
 | `sdn fabric node list` | ◑ | — |  |
-| `sdn fabric node set` | — | — | **uncovered** |
-| `sdn fabric set` | — | — | **uncovered** |
+| `sdn fabric node set` | — | ✓ |  |
+| `sdn fabric set` | — | ✓ |  |
 | `sdn ipam create` | — | ✓ |  |
 | `sdn ipam delete` | — | ✓ |  |
 | `sdn ipam get` | — | ✓ |  |
 | `sdn ipam list` | ✓ | ✓ |  |
-| `sdn ipam set` | — | — | **uncovered** |
+| `sdn ipam set` | — | — | deferred — the pve IPAM exposes no settable properties; the netbox/phpipam types validate a reachable external backend on create — covered by unit tests |
 | `sdn ipam status` | ◑ | — |  |
 | `sdn lock acquire` | — | — | deferred — acquires the global SDN config lock — requires a paired release and blocks all concurrent SDN writes; not exercised live |
 | `sdn lock release` | — | — | deferred — releases the global SDN config lock — must follow acquire; not exercised live (paired with acquire, which is also deferred) |
-| `sdn prefix-list create` | — | — | deferred — stages routing policy tied to a fabric — covered by unit tests |
-| `sdn prefix-list delete` | — | — | **uncovered** |
-| `sdn prefix-list entry add` | — | — | **uncovered** |
-| `sdn prefix-list entry delete` | — | — | **uncovered** |
-| `sdn prefix-list entry get` | — | — | **uncovered** |
-| `sdn prefix-list entry list` | — | — | **uncovered** |
-| `sdn prefix-list entry set` | — | — | **uncovered** |
-| `sdn prefix-list get` | — | — | **uncovered** |
+| `sdn prefix-list create` | — | ✓ |  |
+| `sdn prefix-list delete` | — | ✓ |  |
+| `sdn prefix-list entry add` | — | ✓ |  |
+| `sdn prefix-list entry delete` | — | ✓ |  |
+| `sdn prefix-list entry get` | — | ✓ |  |
+| `sdn prefix-list entry list` | — | ✓ |  |
+| `sdn prefix-list entry set` | — | ✓ |  |
+| `sdn prefix-list get` | — | ✓ |  |
 | `sdn prefix-list list` | ◑ | — |  |
-| `sdn prefix-list set` | — | — | **uncovered** |
+| `sdn prefix-list set` | — | ✓ |  |
 | `sdn rollback` | — | — | n/a — discards ALL pending SDN changes cluster-wide — never run on shared lab |
-| `sdn route-map entry add` | — | — | deferred — stages BGP route policy tied to a fabric — covered by unit tests |
-| `sdn route-map entry delete` | — | — | **uncovered** |
-| `sdn route-map entry get` | — | — | **uncovered** |
+| `sdn route-map entry add` | — | ✓ |  |
+| `sdn route-map entry delete` | — | ✓ |  |
+| `sdn route-map entry get` | — | ✓ |  |
 | `sdn route-map entry list` | ◑ | — |  |
-| `sdn route-map entry set` | — | — | **uncovered** |
-| `sdn route-map get` | — | — | **uncovered** |
+| `sdn route-map entry set` | — | ✓ |  |
+| `sdn route-map get` | — | ✓ |  |
 | `sdn route-map list` | ◑ | — |  |
 | `sdn subnet create` | — | ✓ |  |
 | `sdn subnet delete` | — | ✓ |  |
@@ -714,7 +714,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`qemu`** (8) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`, `qemu firewall alias update`, `qemu firewall rules update`, `qemu snapshot update`
 
-**`sdn`** (22) — `sdn fabric delete`, `sdn fabric get`, `sdn fabric node create`, `sdn fabric node delete`, `sdn fabric node get`, `sdn fabric node set`, `sdn fabric set`, `sdn ipam set`, `sdn prefix-list delete`, `sdn prefix-list entry add`, `sdn prefix-list entry delete`, `sdn prefix-list entry get`, `sdn prefix-list entry list`, `sdn prefix-list entry set`, `sdn prefix-list get`, `sdn prefix-list set`, `sdn route-map entry delete`, `sdn route-map entry get`, `sdn route-map entry set`, `sdn route-map get`, `sdn vnet firewall options set`, `sdn vnet firewall rules set`
+**`sdn`** (2) — `sdn vnet firewall options set`, `sdn vnet firewall rules set`
 
 ## Running the suites
 

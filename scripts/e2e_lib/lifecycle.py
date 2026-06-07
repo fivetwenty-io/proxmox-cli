@@ -75,6 +75,9 @@ ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
 CPU_MODEL = "pve-cli-cpu"            # isolated custom QEMU CPU model
 SDN_IPAM = "pvecliipam"              # isolated SDN IPAM backend (pve-type, no external backend)
 SDN_CTRL = "pveclictrl"              # isolated EVPN controller (staged config only, never applied)
+SDN_FABRIC = "pveclifb"              # isolated openfabric SDN fabric (staged config only, never applied)
+SDN_PREFIX = "pveclipl"              # isolated SDN prefix list (staged config only, never applied)
+SDN_RTMAP = "pveclirm"               # isolated SDN route map (staged config only, never applied)
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
@@ -2158,6 +2161,99 @@ def sdn_objects_lifecycle(r: Runner) -> None:
     finally:
         r.del_step("sdn", "controller delete", f"controller delete {SDN_CTRL}",
                    "sdn", "controller", "delete", SDN_CTRL, "--yes", node=False)
+
+    # ---- fabric + fabric node (openfabric, staged-only, no apply) ------------
+    # An SDN fabric and its member nodes are pure cluster-config entries until
+    # `sdn apply`; the FRR routing stack is only engaged at apply time. This
+    # block creates, reads, edits, and deletes an isolated openfabric fabric and
+    # one member node WITHOUT ever applying, so no routing daemon is
+    # reconfigured and live networking is untouched. The fabric's ip-prefix and
+    # the node IP both sit in the isolated e2e subnet (172.30.0.0/24); the node
+    # id is the target node but it is never committed. The member node and the
+    # fabric are removed in nested finally blocks, leaving the config as found.
+    r.undo(f"pre-clean {SDN_FABRIC}", "sdn", "fabric", "delete", SDN_FABRIC, "--yes")
+    try:
+        r.step("sdn", "fabric create", f"fabric create {SDN_FABRIC}",
+               "sdn", "fabric", "create", SDN_FABRIC, "--protocol", "openfabric",
+               "--ip-prefix", "172.30.0.0/24")
+        got = r.step("sdn", "fabric get", f"fabric get {SDN_FABRIC}",
+                     "sdn", "fabric", "get", SDN_FABRIC, json_out=True)
+        if "openfabric" not in got.out:
+            raise LifecycleError(f"fabric get did not report the protocol for {SDN_FABRIC}")
+        r.step("sdn", "fabric set", f"fabric set {SDN_FABRIC} (hello-interval)",
+               "sdn", "fabric", "set", SDN_FABRIC, "--protocol", "openfabric",
+               "--hello-interval", "5")
+        try:
+            r.step("sdn", "fabric node create", f"fabric node create {SDN_FABRIC}/{r.node}",
+                   "sdn", "fabric", "node", "create", SDN_FABRIC, r.node,
+                   "--protocol", "openfabric", "--ip", "172.30.0.1")
+            got = r.step("sdn", "fabric node get", f"fabric node get {SDN_FABRIC}/{r.node}",
+                         "sdn", "fabric", "node", "get", SDN_FABRIC, r.node, json_out=True)
+            if "172.30.0.1" not in got.out:
+                raise LifecycleError(f"fabric node get did not report the IP for {r.node}")
+            r.step("sdn", "fabric node set", f"fabric node set {SDN_FABRIC}/{r.node} (ip)",
+                   "sdn", "fabric", "node", "set", SDN_FABRIC, r.node,
+                   "--protocol", "openfabric", "--ip", "172.30.0.2")
+        finally:
+            r.del_step("sdn", "fabric node delete", f"fabric node delete {SDN_FABRIC}/{r.node}",
+                       "sdn", "fabric", "node", "delete", SDN_FABRIC, r.node, "--yes")
+    finally:
+        r.del_step("sdn", "fabric delete", f"fabric delete {SDN_FABRIC}",
+                   "sdn", "fabric", "delete", SDN_FABRIC, "--yes")
+
+    # ---- prefix-list + entries (staged-only, no apply) ----------------------
+    # A prefix list and its entries are pure config until `sdn apply`. The list
+    # is created empty, one entry is added/listed/read/edited/deleted, the list
+    # itself is edited via `set` (a replacement entry in property-string form),
+    # then the whole list is removed. No fabric references it, so nothing is
+    # committed to FRR. The list is removed in a finally block.
+    r.undo(f"pre-clean {SDN_PREFIX}", "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes")
+    try:
+        r.step("sdn", "prefix-list create", f"prefix-list create {SDN_PREFIX}",
+               "sdn", "prefix-list", "create", SDN_PREFIX)
+        r.step("sdn", "prefix-list get", f"prefix-list get {SDN_PREFIX}",
+               "sdn", "prefix-list", "get", SDN_PREFIX, json_out=True)
+        r.step("sdn", "prefix-list entry add", f"prefix-list entry add {SDN_PREFIX} (seq 10)",
+               "sdn", "prefix-list", "entry", "add", SDN_PREFIX,
+               "--action", "permit", "--prefix", "172.30.0.0/24", "--seq", "10")
+        got = r.step("sdn", "prefix-list entry list", f"prefix-list entry list {SDN_PREFIX}",
+                     "sdn", "prefix-list", "entry", "list", SDN_PREFIX, json_out=True)
+        if "172.30.0.0/24" not in got.out:
+            raise LifecycleError(f"prefix-list entry list missing the added entry for {SDN_PREFIX}")
+        r.step("sdn", "prefix-list entry get", f"prefix-list entry get {SDN_PREFIX} 10",
+               "sdn", "prefix-list", "entry", "get", SDN_PREFIX, "10", json_out=True)
+        r.step("sdn", "prefix-list entry set", f"prefix-list entry set {SDN_PREFIX} 10 (action)",
+               "sdn", "prefix-list", "entry", "set", SDN_PREFIX, "10", "--action", "deny")
+        r.del_step("sdn", "prefix-list entry delete", f"prefix-list entry delete {SDN_PREFIX} 10",
+                   "sdn", "prefix-list", "entry", "delete", SDN_PREFIX, "10", "--yes")
+        # `prefix-list set` replaces entries via the key=value property-string form.
+        r.step("sdn", "prefix-list set", f"prefix-list set {SDN_PREFIX} (entry)",
+               "sdn", "prefix-list", "set", SDN_PREFIX,
+               "--entry", "action=permit,prefix=10.0.0.0/8,seq=20")
+    finally:
+        r.del_step("sdn", "prefix-list delete", f"prefix-list delete {SDN_PREFIX}",
+                   "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes")
+
+    # ---- route-map entries (staged-only, no apply) --------------------------
+    # A route map has no standalone object; it exists once its first entry is
+    # added and disappears when the last entry is removed. Pure config until
+    # `sdn apply`. An entry is added, the map is read via `get`, the entry is
+    # read/edited, then deleted (removing the map). Nothing is committed to FRR.
+    r.undo(f"pre-clean {SDN_RTMAP}", "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes")
+    try:
+        r.step("sdn", "route-map entry add", f"route-map entry add {SDN_RTMAP} (order 10)",
+               "sdn", "route-map", "entry", "add", SDN_RTMAP, "--order", "10", "--action", "permit")
+        got = r.step("sdn", "route-map get", f"route-map get {SDN_RTMAP}",
+                     "sdn", "route-map", "get", SDN_RTMAP, json_out=True)
+        if "permit" not in got.out:
+            raise LifecycleError(f"route-map get did not report the added entry for {SDN_RTMAP}")
+        r.step("sdn", "route-map entry get", f"route-map entry get {SDN_RTMAP} 10",
+               "sdn", "route-map", "entry", "get", SDN_RTMAP, "10", json_out=True)
+        r.step("sdn", "route-map entry set", f"route-map entry set {SDN_RTMAP} 10 (action)",
+               "sdn", "route-map", "entry", "set", SDN_RTMAP, "10", "--action", "deny")
+    finally:
+        r.del_step("sdn", "route-map entry delete", f"route-map entry delete {SDN_RTMAP} 10",
+                   "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes")
 
     # ---- zone set on the isolated pvecli zone (staged-only) ------------------
     # Stage an MTU change on the zone, then clear it in the same run. MTU is a

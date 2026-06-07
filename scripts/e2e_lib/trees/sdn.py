@@ -104,21 +104,24 @@ def run(ctx: Ctx) -> None:
     ctx.check("prefix-list create --help", "sdn", "prefix-list", "create", "--help", fmt="")
     ctx.check("route-map entry add --help", "sdn", "route-map", "entry", "add", "--help", fmt="")
 
-    # Creating a fabric, prefix list, or route map stages BGP/OSPF routing
-    # topology that requires real FRR peers and a multi-node underlay. These are
-    # never provisioned on the shared lab — covered by unit tests only.
-    ctx.defer("fabric create/set/delete + node create/set/delete",
-              "needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by unit tests",
-              "pve sdn fabric create pveclifab --protocol openfabric",
-              isolation=False, live_covered=False)
-    ctx.defer("prefix-list create/set/delete + entry add/set/delete",
-              "stages routing policy tied to a fabric — covered by unit tests",
-              "pve sdn prefix-list create pveclipl --entry 'permit 172.30.0.0/24'",
-              isolation=False, live_covered=False)
-    ctx.defer("route-map entry add/set/delete",
-              "stages BGP route policy tied to a fabric — covered by unit tests",
+    # A fabric, prefix list, and route map are staged cluster-config entries
+    # until `sdn apply`; the FRR routing stack is only engaged at apply time. The
+    # mutate phase creates/gets/sets/deletes an isolated openfabric fabric (+ a
+    # member node), prefix list (+ entries), and route map (+ entries) WITHOUT
+    # ever applying, so the full CRUD cycle is exercised live with no FRR backend.
+    ctx.defer("fabric create/get/set/delete + node create/get/set/delete",
+              "staged openfabric routing config — covered live by `e2e --mutate` "
+              "(never applied, so no FRR backend needed)",
+              "pve sdn fabric create pveclifb --protocol openfabric --ip-prefix 172.30.0.0/24",
+              isolation=True, live_covered=True)
+    ctx.defer("prefix-list create/get/set/delete + entry add/get/set/delete/list",
+              "staged route-filter config — covered live by `e2e --mutate` (never applied)",
+              "pve sdn prefix-list create pveclipl",
+              isolation=True, live_covered=True)
+    ctx.defer("route-map get + entry add/get/set/delete",
+              "staged BGP route policy — covered live by `e2e --mutate` (never applied)",
               "pve sdn route-map entry add pveclirm --order 10 --action permit",
-              isolation=False, live_covered=False)
+              isolation=True, live_covered=True)
 
     # The mutate phase provisions and tears down this exact isolated SDN, so
     # zone/vnet/subnet create+delete and apply are all exercised live by it.
@@ -197,6 +200,11 @@ def run(ctx: Ctx) -> None:
               "pve-type IPAM CRUD — covered live by `e2e --mutate`",
               "pve sdn ipam create pvecliipam --type pve",
               isolation=True, live_covered=True)
+    ctx.defer("ipam set",
+              "the pve IPAM exposes no settable properties; the netbox/phpipam types "
+              "validate a reachable external backend on create — covered by unit tests",
+              "pve sdn ipam set pvecliipam --url URL",
+              isolation=True, live_covered=False)
     ctx.defer("vnet set",
               "stages a vnet edit — covered live by `e2e --mutate`",
               f"pve sdn vnet set {Isolation.SDN_VNET} --alias pve-cli-e2e",
