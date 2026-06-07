@@ -81,6 +81,22 @@ Bulk and advanced features for larger or newer deployments.
 | SDN fabrics and routing policy | `pve sdn fabric`, `pve sdn prefix-list`, `pve sdn route-map` | BGP fabric topology and routing policy | Shipped |
 | PVE 9.2 endpoints | `pve node oci`, `pve node capabilities`, `pve cluster cpu-model` | OCI image import, capability queries, and custom CPU models | Shipped |
 
+## Endpoint-Level Completion
+
+A second coverage pass closed the remaining endpoint-level gaps inside the groups above, wiring every user-facing client method that the earlier group-level work left unsurfaced. The following commands round out each area; destructive or cross-cluster operations carry `--yes` confirmation and are exercised by unit tests rather than the shared live lab.
+
+| Area | Commands | Notes |
+|---|---|---|
+| QEMU guest agent | `pve qemu agent exec\|exec-status\|file-read\|file-write\|set-user-password` | Run commands and move files inside a running guest; the password is read from stdin and never echoed |
+| QEMU and LXC diagnostics | `pve qemu metrics\|rrd\|feature\|migrate check`, `pve lxc metrics\|rrd\|feature\|migrate check\|config pending` | Time-series metrics, feature feasibility, and migration pre-flight checks |
+| QEMU and LXC snapshots | `pve qemu snapshot show\|update`, `pve lxc snapshot show\|update` | Inspect and re-describe existing snapshots |
+| QEMU low level | `pve qemu monitor`, `pve qemu sendkey`, `pve qemu remote-migrate`, `pve lxc remote-migrate` | Raw monitor passthrough, key injection, and cross-cluster migration |
+| SDN | `pve sdn zone set`, `pve sdn vnet subnet set`, `pve sdn vnet ips create\|set\|delete`, `pve sdn fabric list-all`, `pve sdn lock acquire\|release` | Completes zone, subnet, and VNet IP management |
+| Cluster | `pve cluster backup included-volumes`, `pve cluster backup-info not-backed-up`, `pve cluster notifications targets test`, `pve cluster notifications matcher-fields\|matcher-field-values`, `pve cluster jobs schedule-analyze`, `pve cluster ceph metadata`, `pve cluster firewall macros\|refs`, `pve cluster config apiversion\|qdevice\|totem` | Backup coverage audits, notification validation, schedule analysis, and cluster diagnostics |
+| Access | `pve access tfa create\|set\|get-entry\|types`, `pve access openid list` | Two-factor enrollment and OpenID realm listing |
+| Node | `pve node disks ls\|get\|delete`, `pve node rrddata`, `pve node netstat`, `pve node vzdump defaults\|extract-config`, `pve node capabilities qemu cpu-flags`, `pve node hardware pci mdev`, `pve node query-url-metadata`, `pve node services state` | Disk inventory and lifecycle, metrics, and capability inspection |
+| Storage | `pve storage status\|identity\|rrddata\|rrd`, `pve storage volume alloc\|delete` | Per-storage usage and metrics, and volume allocation and deletion |
+
 ## Delivery Standard
 
 Each feature ships only after it:
