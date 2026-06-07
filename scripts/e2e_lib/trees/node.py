@@ -453,18 +453,33 @@ def run(ctx: Ctx) -> None:
 
     # Host network interface edits stage changes to /etc/network/interfaces.new;
     # applying them reloads the host networking stack and could cut the node off
-    # the network on a shared lab, so create/set/delete/apply/revert are never
-    # exercised live.
+    # the network on a shared lab, so set/delete/apply/revert are never exercised
+    # live (network create is reachable via its --help check above). Each verb is
+    # covered by a unit test (argument contract, plus the --yes guard where the
+    # CLI gates the operation). Deferred one verb at a time so the coverage
+    # matrix records every leaf.
     ctx.defer(
-        "network create/set/delete",
+        "network set",
         "edits a host network interface — could cut the node off the network; not exercised live",
-        "pve node network create --node <node> --iface vmbr9 --type bridge --cidr 172.30.9.1/24",
+        "pve node network set <iface> --node <node> --type bridge --cidr 172.30.9.1/24",
         isolation=False, live_covered=False,
     )
     ctx.defer(
-        "network apply/revert",
-        "reloads or discards the staged host network configuration — could cut the node off the network; not exercised live",
+        "network delete",
+        "removes a host network interface — could cut the node off the network; not exercised live",
+        "pve node network delete <iface> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "network apply",
+        "reloads the staged host network configuration — could cut the node off the network; not exercised live",
         "pve node network apply --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "network revert",
+        "discards the staged host network configuration — could cut the node off the network; not exercised live",
+        "pve node network revert --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
@@ -486,10 +501,37 @@ def run(ctx: Ctx) -> None:
 
     # Disk initialization formats physical media and is irreversible; it is
     # never exercised live on the shared lab (it would destroy the node's
-    # storage). The CLI gates each verb behind --yes.
+    # storage). The CLI gates each verb behind --yes, and each is covered by a
+    # unit test (--yes guard plus argument contract). Deferred one verb at a time
+    # so the coverage matrix records every leaf (create lvm is reachable via its
+    # --help check above).
     ctx.defer(
-        "disks create/init-gpt/wipe",
-        "formats or wipes a physical disk — irreversible; not exercised live",
+        "disks create directory",
+        "formats a disk and mounts it as a directory storage — irreversible; not exercised live",
+        "pve node disks create directory --node <node> --device /dev/sdX --name backups --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks create lvmthin",
+        "formats a disk into an LVM-thin pool — irreversible; not exercised live",
+        "pve node disks create lvmthin --node <node> --device /dev/sdX --name thin --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks create zfs",
+        "formats one or more disks into a ZFS pool — irreversible; not exercised live",
+        "pve node disks create zfs --node <node> --devices /dev/sdX --name tank --raidlevel single --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks init-gpt",
+        "writes a fresh GPT partition table to a disk — irreversible; not exercised live",
+        "pve node disks init-gpt --node <node> --disk /dev/sdX --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks wipe",
+        "wipes all data and partition tables from a disk — irreversible; not exercised live",
         "pve node disks wipe --node <node> --disk /dev/sdX --yes",
         isolation=False, live_covered=False,
     )

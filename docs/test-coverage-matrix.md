@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 96 | 5 | 17 | 6 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
-| `node` | 138 | 1 | 59 | 15 | 0 | 50 | 17 |
+| `node` | 138 | 1 | 59 | 15 | 0 | 57 | 10 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 43 | 1 | 4 | 5 |
 | `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **284** | **6** | **86** | **31** |
+| **Total** | **556** | **74** | **125** | **284** | **6** | **93** | **24** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **86** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **31** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **93** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **24** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -417,23 +417,23 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node cert custom upload` | — | — | deferred — replaces or removes the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
 | `node console` | — | — | **uncovered** |
-| `node disks create directory` | — | — | **uncovered** |
+| `node disks create directory` | — | — | deferred — formats a disk and mounts it as a directory storage — irreversible; not exercised live |
 | `node disks create lvm` | — | — | help-only (parse smoke test) |
-| `node disks create lvmthin` | — | — | **uncovered** |
-| `node disks create zfs` | — | — | **uncovered** |
+| `node disks create lvmthin` | — | — | deferred — formats a disk into an LVM-thin pool — irreversible; not exercised live |
+| `node disks create zfs` | — | — | deferred — formats one or more disks into a ZFS pool — irreversible; not exercised live |
 | `node disks delete directory` | — | — | deferred — removes a mounted directory storage from the host — irreversible; not exercised live |
 | `node disks delete lvm` | — | — | deferred — removes an LVM volume group from the host — irreversible; not exercised live |
 | `node disks delete lvmthin` | — | — | deferred — removes an LVM thin pool from a VG — irreversible; not exercised live |
 | `node disks delete zfs` | — | — | deferred — destroys a ZFS pool — irreversible, destroys all data on the pool; not exercised live |
 | `node disks get zfs` | ◑ | — |  |
-| `node disks init-gpt` | — | — | **uncovered** |
+| `node disks init-gpt` | — | — | deferred — writes a fresh GPT partition table to a disk — irreversible; not exercised live |
 | `node disks list` | ◑ | — |  |
 | `node disks ls directory` | ◑ | — |  |
 | `node disks ls lvm` | ◑ | — |  |
 | `node disks ls lvmthin` | ◑ | — |  |
 | `node disks ls zfs` | ◑ | — |  |
 | `node disks smart` | ◑ | — |  |
-| `node disks wipe` | — | — | deferred — formats or wipes a physical disk — irreversible; not exercised live |
+| `node disks wipe` | — | — | deferred — wipes all data and partition tables from a disk — irreversible; not exercised live |
 | `node dns get` | ◑ | ✓ |  |
 | `node dns set` | — | ✓ |  |
 | `node exec` | — | ✓ |  |
@@ -453,13 +453,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node list` | ✓ | — |  |
 | `node migrateall` | — | — | help-only (parse smoke test) |
 | `node netstat` | ◑ | — |  |
-| `node network apply` | — | — | deferred — reloads or discards the staged host network configuration — could cut the node off the network; not exercised live |
-| `node network create` | — | — | deferred — edits a host network interface — could cut the node off the network; not exercised live |
-| `node network delete` | — | — | **uncovered** |
+| `node network apply` | — | — | deferred — reloads the staged host network configuration — could cut the node off the network; not exercised live |
+| `node network create` | — | — | help-only (parse smoke test) |
+| `node network delete` | — | — | deferred — removes a host network interface — could cut the node off the network; not exercised live |
 | `node network get` | ◑ | — |  |
 | `node network list` | ◑ | — |  |
-| `node network revert` | — | — | **uncovered** |
-| `node network set` | — | — | **uncovered** |
+| `node network revert` | — | — | deferred — discards the staged host network configuration — could cut the node off the network; not exercised live |
+| `node network set` | — | — | deferred — edits a host network interface — could cut the node off the network; not exercised live |
 | `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live |
 | `node oci tags` | — | — | help-only (parse smoke test) |
 | `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL (needs outbound HTTP from the node); not exercised live to avoid a network-reachability dependency |
@@ -706,7 +706,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`cluster`** (6) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster ha resource relocate`, `cluster ha status arm`
 
-**`node`** (17) — `node apt repositories enable`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node network delete`, `node network revert`, `node network set`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
+**`node`** (10) — `node apt repositories enable`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
 
 **`qemu`** (5) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`
 

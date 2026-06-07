@@ -159,6 +159,60 @@ func TestNodeDisks_CreateLvm_AsyncReturnsUPID(t *testing.T) {
 	require.Contains(t, buf.String(), upid)
 }
 
+func TestNodeDisks_CreateLvmthin_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/disks/lvmthin", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "create", "lvmthin",
+		"--device", "/dev/sdb", "--name", "thin-data"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called, "no API call must be made without confirmation")
+}
+
+func TestNodeDisks_CreateLvmthin_ForwardsFields(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/disks/lvmthin", &rec, nil)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "create", "lvmthin",
+		"--device", "/dev/sdb", "--name", "thin-data", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, rec.body, "device=%2Fdev%2Fsdb")
+	require.Contains(t, rec.body, "name=thin-data")
+	// --add-storage was not passed, so it must be omitted from the request.
+	require.NotContains(t, rec.body, "add_storage")
+	require.Contains(t, buf.String(), "created")
+}
+
+func TestNodeDisks_CreateZfs_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/disks/zfs", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "create", "zfs",
+		"--devices", "/dev/sdb", "--name", "tank", "--raidlevel", "single"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called, "no API call must be made without confirmation")
+}
+
 func TestNodeDisks_CreateZfs_RequiresRaidlevel(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 
@@ -169,6 +223,23 @@ func TestNodeDisks_CreateZfs_RequiresRaidlevel(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "raidlevel")
+}
+
+func TestNodeDisks_CreateZfs_ForwardsFields(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/disks/zfs", &rec, nil)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "create", "zfs",
+		"--devices", "/dev/sdb,/dev/sdc", "--name", "tank", "--raidlevel", "mirror", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, rec.body, "devices=%2Fdev%2Fsdb%2C%2Fdev%2Fsdc")
+	require.Contains(t, rec.body, "name=tank")
+	require.Contains(t, rec.body, "raidlevel=mirror")
+	require.Contains(t, buf.String(), "created")
 }
 
 func TestNodeDisks_CreateDirectory_WithYes(t *testing.T) {
@@ -203,6 +274,21 @@ func TestNodeDisks_InitGpt_RequiresYes(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called)
+}
+
+func TestNodeDisks_InitGpt_ForwardsFields(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/disks/initgpt", &rec, nil)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "init-gpt",
+		"--disk", "/dev/sdb", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, rec.body, "disk=%2Fdev%2Fsdb")
+	require.Contains(t, buf.String(), "GPT label written")
 }
 
 func TestNodeDisks_Wipe_WithYes(t *testing.T) {
