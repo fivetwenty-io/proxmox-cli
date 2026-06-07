@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 41 | 10 | 73 | 5 | 10 | 36 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
-| `node` | 138 | 1 | 50 | 14 | 0 | 31 | 46 |
+| `node` | 138 | 1 | 57 | 14 | 0 | 31 | 39 |
 | `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
 | `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
 | `sdn` | 71 | 5 | 11 | 19 | 0 | 8 | 31 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **73** | **114** | **222** | **6** | **60** | **128** |
+| **Total** | **556** | **73** | **121** | **222** | **6** | **60** | **121** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **368** are exercised by at least one suite, **60** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **128** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **375** are exercised by at least one suite, **60** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **121** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -381,30 +381,30 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node ceph cfg` | ◑ | — |  |
 | `node ceph fs create` | — | — | **uncovered** |
 | `node ceph fs delete` | — | — | **uncovered** |
-| `node ceph fs list` | — | — | **uncovered** |
+| `node ceph fs list` | ◑ | — |  |
 | `node ceph init` | — | — | deferred — initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live |
 | `node ceph mds create` | — | — | **uncovered** |
 | `node ceph mds delete` | — | — | **uncovered** |
-| `node ceph mds list` | — | — | **uncovered** |
+| `node ceph mds list` | ◑ | — |  |
 | `node ceph mgr create` | — | — | **uncovered** |
 | `node ceph mgr delete` | — | — | **uncovered** |
-| `node ceph mgr list` | — | — | **uncovered** |
+| `node ceph mgr list` | ◑ | — |  |
 | `node ceph mon create` | — | — | deferred — provisions or destroys Ceph monitor/MDS/MGR/filesystem daemons; not exercised live |
 | `node ceph mon delete` | — | — | **uncovered** |
-| `node ceph mon list` | — | — | **uncovered** |
+| `node ceph mon list` | ◑ | — |  |
 | `node ceph osd create` | — | — | deferred — creates or destroys OSDs (wipes block devices) and moves cluster data; not exercised live |
 | `node ceph osd delete` | — | — | **uncovered** |
-| `node ceph osd get` | — | — | **uncovered** |
+| `node ceph osd get` | ◑ | — |  |
 | `node ceph osd in` | — | — | **uncovered** |
 | `node ceph osd list` | ◑ | — |  |
 | `node ceph osd out` | — | — | **uncovered** |
 | `node ceph osd scrub` | — | — | **uncovered** |
 | `node ceph pool create` | — | — | deferred — creates, reconfigures, or destroys a Ceph pool (data loss on delete); not exercised live |
 | `node ceph pool delete` | — | — | **uncovered** |
-| `node ceph pool get` | — | — | **uncovered** |
+| `node ceph pool get` | ◑ | — |  |
 | `node ceph pool list` | ◑ | — |  |
 | `node ceph pool set` | — | — | **uncovered** |
-| `node ceph pool status` | — | — | **uncovered** |
+| `node ceph pool status` | ◑ | — |  |
 | `node ceph restart` | — | — | deferred — controls running Ceph services on the node — disruptive; not exercised live |
 | `node ceph start` | — | — | **uncovered** |
 | `node ceph status` | ◑ | — |  |
@@ -708,7 +708,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
 
-**`node`** (46) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph fs list`, `node ceph mds create`, `node ceph mds delete`, `node ceph mds list`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mgr list`, `node ceph mon delete`, `node ceph mon list`, `node ceph osd delete`, `node ceph osd get`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool get`, `node ceph pool set`, `node ceph pool status`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node query-url-metadata`, `node scan cifs`, `node scan iscsi`, `node scan lvmthin`, `node scan pbs`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`, `node vzdump extract-config`
+**`node`** (39) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph mds create`, `node ceph mds delete`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mon delete`, `node ceph osd delete`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool set`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node query-url-metadata`, `node scan cifs`, `node scan iscsi`, `node scan lvmthin`, `node scan pbs`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`, `node vzdump extract-config`
 
 **`pool`** (1) — `pool delete`
 

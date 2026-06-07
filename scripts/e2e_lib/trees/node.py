@@ -280,13 +280,66 @@ def run(ctx: Ctx) -> None:
             m in ceph_err for m in ("ceph", "not installed", "binary not installed", "rados")
         )
         if ceph_absent:
-            for probe in ("ceph status", "ceph cfg", "ceph osd list", "ceph pool list"):
+            for probe in (
+                "ceph status", "ceph cfg", "ceph osd list", "ceph pool list",
+                "ceph fs list", "ceph mds list", "ceph mgr list", "ceph mon list",
+                "ceph osd get", "ceph pool get", "ceph pool status",
+            ):
                 ctx.skip(probe, "Ceph is not configured on the lab node")
         else:
             ctx.check("ceph status", "node", "ceph", "status", node=n, validate=is_object)
             ctx.check("ceph cfg", "node", "ceph", "cfg", node=n, validate=is_list)
-            ctx.check("ceph osd list", "node", "ceph", "osd", "list", node=n, validate=is_object)
-            ctx.check("ceph pool list", "node", "ceph", "pool", "list", node=n, validate=is_list)
+            osd_tree = ctx.check("ceph osd list", "node", "ceph", "osd", "list",
+                                 node=n, validate=is_object)
+            pool_list = ctx.check("ceph pool list", "node", "ceph", "pool", "list",
+                                  node=n, validate=is_list)
+
+            # The MDS, MGR, monitor, and CephFS inventories are read-only lists
+            # (each empty until the matching daemon is deployed). Safe to query
+            # directly on a Ceph-enabled node.
+            ctx.check("ceph fs list", "node", "ceph", "fs", "list", node=n, validate=is_list)
+            ctx.check("ceph mds list", "node", "ceph", "mds", "list", node=n, validate=is_list)
+            ctx.check("ceph mgr list", "node", "ceph", "mgr", "list", node=n, validate=is_list)
+            ctx.check("ceph mon list", "node", "ceph", "mon", "list", node=n, validate=is_list)
+
+            # osd get: per-OSD detail. The OSD list is a CRUSH tree object; walk
+            # its `nodes` for the first entry of type "osd" to find a real id.
+            osd_id = None
+            if osd_tree.rc == 0:
+                try:
+                    nodes = osd_tree.json().get("nodes")
+                    if isinstance(nodes, list):
+                        for entry in nodes:
+                            if isinstance(entry, dict) and entry.get("type") == "osd":
+                                oid = entry.get("id")
+                                if oid is not None:
+                                    osd_id = str(oid)
+                                    break
+                except (ValueError, AttributeError, KeyError):
+                    osd_id = None
+            if osd_id is not None:
+                ctx.check("ceph osd get", "node", "ceph", "osd", "get", osd_id,
+                          node=n, validate=is_object)
+            else:
+                ctx.skip("ceph osd get", "no OSD deployed on this Ceph cluster")
+
+            # pool get / pool status: per-pool parameters and runtime status.
+            # Discover a pool name from the pool list; skip when no pool exists.
+            pool_name = None
+            if pool_list.rc == 0:
+                try:
+                    pool_name = ctx.first(pool_list.json(), "pool_name") or \
+                        ctx.first(pool_list.json(), "name")
+                except (ValueError, KeyError):
+                    pool_name = None
+            if pool_name:
+                ctx.check("ceph pool get", "node", "ceph", "pool", "get", str(pool_name),
+                          node=n, validate=is_object)
+                ctx.check("ceph pool status", "node", "ceph", "pool", "status", str(pool_name),
+                          node=n, validate=is_object)
+            else:
+                ctx.skip("ceph pool get", "no Ceph pool configured")
+                ctx.skip("ceph pool status", "no Ceph pool configured")
         ctx.check("ceph osd create --help", "node", "ceph", "osd", "create", "--help", fmt="")
         ctx.check("ceph pool create --help", "node", "ceph", "pool", "create", "--help", fmt="")
 
