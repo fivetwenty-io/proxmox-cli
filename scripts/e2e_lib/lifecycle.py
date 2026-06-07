@@ -68,6 +68,10 @@ BACKUP_STORAGE = "local"        # dir storage that holds backup content
 BACKUP_JOB = "pvecli-backup"    # isolated, disabled vzdump schedule id
 METRICS_SERVER = "pve-cli-graphite"  # isolated, disabled external metric server
 GOTIFY_ENDPOINT = "pve-cli-gotify"   # isolated, disabled gotify notification endpoint
+SENDMAIL_ENDPOINT = "pve-cli-sendmail"  # isolated, disabled sendmail endpoint (local mail only)
+SMTP_ENDPOINT = "pve-cli-smtp"       # isolated, disabled smtp endpoint (dummy server, never contacted)
+WEBHOOK_ENDPOINT = "pve-cli-webhook"  # isolated, disabled webhook endpoint (dummy url, never contacted)
+NOTIFY_MATCHER = "pve-cli-matcher"   # isolated, disabled notification matcher
 DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
 REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
 REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
@@ -1895,25 +1899,38 @@ def cluster_metrics_lifecycle(r: Runner) -> None:
 
 
 def cluster_notifications_lifecycle(r: Runner) -> None:
-    """Exercise `cluster notifications gotify create/get/set/delete` reversibly.
+    """Exercise the notification endpoint and matcher CRUD cycle reversibly.
 
-    Isolation: a single Gotify endpoint `pve-cli-gotify` is created DISABLED
-    pointing at an unused address on the e2e subnet (172.30.0.250). Proxmox does
-    not contact the server on create or update — only an explicit `test` verb
-    would, and it is never invoked — so the dummy host is never reached. The
-    Gotify token is a throwaway dummy value; the CLI never echoes it (create
-    returns only a status message) and it is not placed in any printed label.
-    The endpoint is removed in the finally block.
+    Isolation: one endpoint of each type (Gotify, Sendmail, SMTP, Webhook) plus a
+    matcher are created, all named `pve-cli-*` and all created DISABLED, then read
+    back, edited, and deleted. Every endpoint points at an unused address on the
+    e2e subnet (172.30.0.250) or sends only to the local root mailbox. Proxmox
+    does not contact any server on create or update — only an explicit `test` verb
+    does — so the dummy hosts are never reached. The single `targets-test` is run
+    against the local Sendmail endpoint, which writes only to root's local mail
+    spool (no network), and is a soft step so it never fails the suite.
+
+    Secrets (the SMTP password and Webhook secret) are throwaway dummy values
+    passed only to exercise the secret-forwarding code path; the CLI never echoes
+    them (create/update return only a status message) and they are never placed in
+    any printed label. Every object is removed in the finally block, leaving the
+    cluster notification config as found.
     """
-    print(BOLD("cluster: notification endpoint (gotify, disabled, reversible)"))
+    print(BOLD("cluster: notification endpoints + matcher (disabled, reversible)"))
 
-    # Best-effort clean of an endpoint left by a crashed prior run (never raises).
-    r.undo(f"pre-clean {GOTIFY_ENDPOINT}",
-           "cluster", "notifications", "gotify", "delete", GOTIFY_ENDPOINT, "--yes")
+    # Best-effort clean of objects left by a crashed prior run (never raises).
+    # Delete the matcher first in case it references one of the endpoints.
+    r.undo(f"pre-clean {NOTIFY_MATCHER}",
+           "cluster", "notifications", "matcher", "delete", NOTIFY_MATCHER, "--yes")
+    for ep in (GOTIFY_ENDPOINT, SENDMAIL_ENDPOINT, SMTP_ENDPOINT, WEBHOOK_ENDPOINT):
+        kind = ep.rsplit("-", 1)[1]
+        r.undo(f"pre-clean {ep}", "cluster", "notifications", kind, "delete", ep, "--yes")
 
     try:
         r.step("cluster", "notifications targets", "notifications targets",
                "cluster", "notifications", "targets", json_out=True)
+
+        # --- gotify ----------------------------------------------------------
         r.step("cluster", "notifications gotify create", f"notifications gotify create {GOTIFY_ENDPOINT}",
                "cluster", "notifications", "gotify", "create", GOTIFY_ENDPOINT,
                "--server", f"https://{DUMMY_HOST}", "--token", "pve-cli-e2e-dummy-token",
@@ -1925,7 +1942,79 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
         r.step("cluster", "notifications gotify set", "notifications gotify set (comment)",
                "cluster", "notifications", "gotify", "set", GOTIFY_ENDPOINT,
                "--comment", "pve-cli-e2e updated")
+
+        # --- sendmail (local mail to root, no network) -----------------------
+        r.step("cluster", "notifications sendmail create", f"notifications sendmail create {SENDMAIL_ENDPOINT}",
+               "cluster", "notifications", "sendmail", "create", SENDMAIL_ENDPOINT,
+               "--mailto-user", "root@pam", "--comment", "pve-cli-e2e", "--disable")
+        r.step("cluster", "notifications sendmail list", "notifications sendmail list",
+               "cluster", "notifications", "sendmail", "list", json_out=True)
+        r.step("cluster", "notifications sendmail get", f"notifications sendmail get {SENDMAIL_ENDPOINT}",
+               "cluster", "notifications", "sendmail", "get", SENDMAIL_ENDPOINT, json_out=True)
+        r.step("cluster", "notifications sendmail set", "notifications sendmail set (comment)",
+               "cluster", "notifications", "sendmail", "set", SENDMAIL_ENDPOINT,
+               "--comment", "pve-cli-e2e updated")
+
+        # --- smtp (dummy server, dummy credentials, never contacted) ---------
+        # The password is a throwaway dummy; it is passed to exercise the secret
+        # path and is deliberately NOT interpolated into any step label.
+        r.step("cluster", "notifications smtp create", f"notifications smtp create {SMTP_ENDPOINT}",
+               "cluster", "notifications", "smtp", "create", SMTP_ENDPOINT,
+               "--server", DUMMY_HOST, "--from-address", "pve-cli-e2e@example.invalid",
+               "--mailto-user", "root@pam", "--mode", "tls", "--port", "465",
+               "--username", "pve-cli-e2e", "--password", "pve-cli-e2e-dummy",
+               "--comment", "pve-cli-e2e", "--disable")
+        r.step("cluster", "notifications smtp list", "notifications smtp list",
+               "cluster", "notifications", "smtp", "list", json_out=True)
+        r.step("cluster", "notifications smtp get", f"notifications smtp get {SMTP_ENDPOINT}",
+               "cluster", "notifications", "smtp", "get", SMTP_ENDPOINT, json_out=True)
+        r.step("cluster", "notifications smtp set", "notifications smtp set (comment)",
+               "cluster", "notifications", "smtp", "set", SMTP_ENDPOINT,
+               "--comment", "pve-cli-e2e updated")
+
+        # --- webhook (dummy url + dummy secret, never contacted) -------------
+        # --header/--secret take name=<name>,value=<base64>. The secret value is a
+        # throwaway dummy ("secret"); it is never placed in a step label.
+        r.step("cluster", "notifications webhook create", f"notifications webhook create {WEBHOOK_ENDPOINT}",
+               "cluster", "notifications", "webhook", "create", WEBHOOK_ENDPOINT,
+               "--url", f"https://{DUMMY_HOST}/hook", "--method", "post",
+               "--header", "name=X-Pve-Cli,value=ZTJl", "--secret", "name=token,value=c2VjcmV0",
+               "--comment", "pve-cli-e2e", "--disable")
+        r.step("cluster", "notifications webhook list", "notifications webhook list",
+               "cluster", "notifications", "webhook", "list", json_out=True)
+        r.step("cluster", "notifications webhook get", f"notifications webhook get {WEBHOOK_ENDPOINT}",
+               "cluster", "notifications", "webhook", "get", WEBHOOK_ENDPOINT, json_out=True)
+        r.step("cluster", "notifications webhook set", "notifications webhook set (comment)",
+               "cluster", "notifications", "webhook", "set", WEBHOOK_ENDPOINT,
+               "--comment", "pve-cli-e2e updated")
+
+        # --- matcher (disabled, no routing target) ---------------------------
+        r.step("cluster", "notifications matcher create", f"notifications matcher create {NOTIFY_MATCHER}",
+               "cluster", "notifications", "matcher", "create", NOTIFY_MATCHER,
+               "--match-severity", "warning", "--mode", "all",
+               "--comment", "pve-cli-e2e", "--disable")
+        r.step("cluster", "notifications matcher get", f"notifications matcher get {NOTIFY_MATCHER}",
+               "cluster", "notifications", "matcher", "get", NOTIFY_MATCHER, json_out=True)
+        r.step("cluster", "notifications matcher set", "notifications matcher set (comment)",
+               "cluster", "notifications", "matcher", "set", NOTIFY_MATCHER,
+               "--comment", "pve-cli-e2e updated")
+
+        # --- targets-test (local sendmail only; soft so it never fails) ------
+        # Sends a test notification through the local Sendmail target, which writes
+        # only to root's local mail spool — no network egress. Soft because a
+        # disabled target may decline the test on some PVE versions.
+        r.soft_step("cluster", "notifications targets-test", f"notifications targets-test {SENDMAIL_ENDPOINT}",
+                    "cluster", "notifications", "targets-test", SENDMAIL_ENDPOINT,
+                    skip_markers=("disabled",), skip_reason="target is disabled")
     finally:
+        r.del_step("cluster", "notifications matcher delete", f"notifications matcher delete {NOTIFY_MATCHER}",
+                   "cluster", "notifications", "matcher", "delete", NOTIFY_MATCHER, "--yes")
+        r.del_step("cluster", "notifications webhook delete", f"notifications webhook delete {WEBHOOK_ENDPOINT}",
+                   "cluster", "notifications", "webhook", "delete", WEBHOOK_ENDPOINT, "--yes")
+        r.del_step("cluster", "notifications smtp delete", f"notifications smtp delete {SMTP_ENDPOINT}",
+                   "cluster", "notifications", "smtp", "delete", SMTP_ENDPOINT, "--yes")
+        r.del_step("cluster", "notifications sendmail delete", f"notifications sendmail delete {SENDMAIL_ENDPOINT}",
+                   "cluster", "notifications", "sendmail", "delete", SENDMAIL_ENDPOINT, "--yes")
         r.del_step("cluster", "notifications gotify delete", f"notifications gotify delete {GOTIFY_ENDPOINT}",
                    "cluster", "notifications", "gotify", "delete", GOTIFY_ENDPOINT, "--yes")
 

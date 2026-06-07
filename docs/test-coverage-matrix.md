@@ -68,7 +68,7 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 73 | 5 | 10 | 33 |
+| `cluster` | 157 | 42 | 12 | 93 | 5 | 10 | 16 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
 | `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **253** | **6** | **64** | **81** |
+| **Total** | **556** | **74** | **125** | **273** | **6** | **64** | **64** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **411** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **81** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **428** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **64** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -269,30 +269,30 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster notifications gotify get` | — | ✓ |  |
 | `cluster notifications gotify list` | ✓ | ✓ |  |
 | `cluster notifications gotify set` | — | ✓ |  |
-| `cluster notifications matcher create` | — | — | **uncovered** |
-| `cluster notifications matcher delete` | — | — | **uncovered** |
-| `cluster notifications matcher get` | — | — | **uncovered** |
+| `cluster notifications matcher create` | — | ✓ |  |
+| `cluster notifications matcher delete` | — | ✓ |  |
+| `cluster notifications matcher get` | — | ✓ |  |
 | `cluster notifications matcher list` | ✓ | — |  |
-| `cluster notifications matcher set` | — | — | **uncovered** |
+| `cluster notifications matcher set` | — | ✓ |  |
 | `cluster notifications matcher-field-values` | ✓ | — |  |
 | `cluster notifications matcher-fields` | ✓ | — |  |
-| `cluster notifications sendmail create` | — | — | **uncovered** |
-| `cluster notifications sendmail delete` | — | — | **uncovered** |
-| `cluster notifications sendmail get` | — | — | **uncovered** |
-| `cluster notifications sendmail list` | ✓ | — |  |
-| `cluster notifications sendmail set` | — | — | **uncovered** |
-| `cluster notifications smtp create` | — | — | **uncovered** |
-| `cluster notifications smtp delete` | — | — | **uncovered** |
-| `cluster notifications smtp get` | — | — | **uncovered** |
-| `cluster notifications smtp list` | ✓ | — |  |
-| `cluster notifications smtp set` | — | — | **uncovered** |
+| `cluster notifications sendmail create` | — | ✓ |  |
+| `cluster notifications sendmail delete` | — | ✓ |  |
+| `cluster notifications sendmail get` | — | ✓ |  |
+| `cluster notifications sendmail list` | ✓ | ✓ |  |
+| `cluster notifications sendmail set` | — | ✓ |  |
+| `cluster notifications smtp create` | — | ✓ |  |
+| `cluster notifications smtp delete` | — | ✓ |  |
+| `cluster notifications smtp get` | — | ✓ |  |
+| `cluster notifications smtp list` | ✓ | ✓ |  |
+| `cluster notifications smtp set` | — | ✓ |  |
 | `cluster notifications targets` | ✓ | ✓ |  |
-| `cluster notifications targets-test` | — | — | **uncovered** |
-| `cluster notifications webhook create` | — | — | **uncovered** |
-| `cluster notifications webhook delete` | — | — | **uncovered** |
-| `cluster notifications webhook get` | — | — | **uncovered** |
-| `cluster notifications webhook list` | ✓ | — |  |
-| `cluster notifications webhook set` | — | — | **uncovered** |
+| `cluster notifications targets-test` | — | ✓ |  |
+| `cluster notifications webhook create` | — | ✓ |  |
+| `cluster notifications webhook delete` | — | ✓ |  |
+| `cluster notifications webhook get` | — | ✓ |  |
+| `cluster notifications webhook list` | ✓ | ✓ |  |
+| `cluster notifications webhook set` | — | ✓ |  |
 | `cluster options get` | ✓ | ✓ |  |
 | `cluster options set` | — | ✓ |  |
 | `cluster replication create` | — | · |  |
@@ -704,7 +704,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
 
-**`cluster`** (33) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`, `cluster notifications matcher create`, `cluster notifications matcher delete`, `cluster notifications matcher get`, `cluster notifications matcher set`, `cluster notifications sendmail create`, `cluster notifications sendmail delete`, `cluster notifications sendmail get`, `cluster notifications sendmail set`, `cluster notifications smtp create`, `cluster notifications smtp delete`, `cluster notifications smtp get`, `cluster notifications smtp set`, `cluster notifications targets-test`, `cluster notifications webhook create`, `cluster notifications webhook delete`, `cluster notifications webhook get`, `cluster notifications webhook set`
+**`cluster`** (16) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`
 
 **`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
 
