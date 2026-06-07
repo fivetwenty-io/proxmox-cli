@@ -32,12 +32,63 @@ def run(ctx: Ctx) -> None:
     if sid is None:
         ctx.skip("get", "no storage defined")
         ctx.skip("content", "no storage defined")
+        ctx.skip("status", "no storage defined")
+        ctx.skip("identity", "no storage defined")
+        ctx.skip("rrddata", "no storage defined")
+        ctx.skip("rrd", "no storage defined")
     else:
         ctx.check("get", "storage", "get", str(sid), validate=has_storage_keys)
         if ctx.node:
             ctx.check("content", "storage", "content", str(sid), node=ctx.node)
+            # status: per-storage usage summary; requires a node context.
+            def has_usage_keys(res: CmdResult) -> str | None:
+                data = res.json()
+                if not isinstance(data, dict):
+                    return "expected a JSON object"
+                # At least one of used/avail/total must be present.
+                if not any(k in data for k in ("used", "avail", "total")):
+                    return "storage status missing usage keys (used/avail/total)"
+                return None
+
+            ctx.check("status", "storage", "status", str(sid),
+                      node=ctx.node, validate=has_usage_keys)
+            # identity: backend identity (path/export/URL). Not every storage
+            # plugin implements get_identity (e.g. ZFS), so skip gracefully when
+            # the backend reports it as unsupported.
+            id_probe = ctx.run("storage", "identity", str(sid), node=ctx.node)
+            if id_probe.rc == 0:
+                ctx.check("identity", "storage", "identity", str(sid), node=ctx.node)
+            else:
+                ctx.skip("identity", "storage plugin does not implement identity: "
+                         f"{(id_probe.stderr.strip() or id_probe.stdout.strip())[:80]}")
+            # rrddata: timeseries for storage metrics; zero-row result is valid.
+            ctx.check("rrddata", "storage", "rrddata", str(sid),
+                      "--timeframe", "hour", node=ctx.node, validate=is_list)
+            # rrd: rrd PNG image reference. The RRD database may not exist yet for
+            # a recently added storage, so skip gracefully when no data exists.
+            def has_filename(res: CmdResult) -> str | None:
+                data = res.json()
+                if not isinstance(data, dict):
+                    return "expected a JSON object"
+                if "filename" not in data:
+                    return "rrd response missing 'filename' key"
+                return None
+
+            rrd_probe = ctx.run("storage", "rrd", str(sid),
+                                "--ds", "used", "--timeframe", "hour", node=ctx.node)
+            if rrd_probe.rc == 0:
+                ctx.check("rrd", "storage", "rrd", str(sid),
+                          "--ds", "used", "--timeframe", "hour",
+                          node=ctx.node, validate=has_filename)
+            else:
+                ctx.skip("rrd", "no RRD data recorded for this storage: "
+                         f"{(rrd_probe.stderr.strip() or rrd_probe.stdout.strip())[:80]}")
         else:
             ctx.skip("content", "no node discovered")
+            ctx.skip("status", "no node discovered")
+            ctx.skip("identity", "no node discovered")
+            ctx.skip("rrddata", "no node discovered")
+            ctx.skip("rrd", "no node discovered")
 
     # Single-volume inspection: `volume get` reads one volume's attributes
     # (GET .../content/<volid>) and is non-mutating. Discover a real volume by
@@ -121,6 +172,13 @@ def run(ctx: Ctx) -> None:
     # Transfer verbs are not exercised live: there is no CLI verb yet to delete a
     # single storage volume, so a live upload/download would leave a namespaced
     # file on shared lab storage with no way to clean it up through the CLI.
+    ctx.defer(
+        "volume alloc/delete",
+        "allocates a raw volume then deletes it — covered live by `e2e --mutate` "
+        "(storage_volume_lifecycle: alloc on `local`, capture returned volid, delete in finally)",
+        "pve storage volume alloc local --vmid 9999 --filename local:vm-9999-pve-cli-test --size 1G",
+        isolation=True, live_covered=True,
+    )
     ctx.defer(
         "upload",
         "pushes a local file onto a storage — no CLI volume-delete verb yet to remove the artifact; not exercised live",

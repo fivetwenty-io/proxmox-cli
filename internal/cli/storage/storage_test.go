@@ -495,7 +495,10 @@ func TestStorageGroup_HasAllSubcommands(t *testing.T) {
 	for _, c := range cmd.Commands() {
 		names[c.Name()] = true
 	}
-	for _, want := range []string{"list", "get", "create", "set", "delete"} {
+	for _, want := range []string{
+		"list", "get", "create", "set", "delete",
+		"status", "identity", "rrddata", "rrd",
+	} {
 		require.True(t, names[want], "storage must expose sub-command %q", want)
 	}
 }

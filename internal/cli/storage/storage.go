@@ -41,6 +41,10 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 		newFileRestoreCmd(),
 		newImportMetadataCmd(),
 		newVolumeCmd(),
+		newStorageStatusCmd(),
+		newStorageIdentityCmd(),
+		newStorageRrddataCmd(),
+		newStorageRrdCmd(),
 	)
 	return cmd
 }
