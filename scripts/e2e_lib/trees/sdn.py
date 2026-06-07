@@ -214,6 +214,7 @@ def run(ctx: Ctx) -> None:
               f"pve sdn vnet firewall rules create {Isolation.SDN_VNET} --type forward --action ACCEPT",
               isolation=True, live_covered=True)
     ctx.defer("vnet firewall options set",
-              "enabling a vnet firewall affects guest traffic — not exercised live",
-              f"pve sdn vnet firewall options set {Isolation.SDN_VNET} --enable",
-              isolation=True, live_covered=False)
+              "stages a vnet forward policy (never --enable, never applied) on the "
+              "isolated guest-free pvecli0 vnet — covered live by `e2e --mutate`",
+              f"pve sdn vnet firewall options set {Isolation.SDN_VNET} --policy-forward ACCEPT",
+              isolation=True, live_covered=True)

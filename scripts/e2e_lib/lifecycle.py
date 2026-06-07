@@ -2332,9 +2332,10 @@ def sdn_objects_lifecycle(r: Runner) -> None:
            "sdn", "vnet", "set", Isolation.SDN_VNET, "--delete", "alias")
 
     # ---- vnet firewall on the isolated pvecli0 vnet (staged-only) -----------
-    # A disabled rule (--enable 0) is appended, read back, then deleted. The
-    # vnet firewall is never enabled (options are read-only), so no traffic on
-    # any guest is affected; the rule is staged and removed in the same run.
+    # A disabled rule (--enable 0) is appended, read back, edited, then deleted,
+    # and a forward policy is staged then reverted. The vnet firewall is never
+    # enabled (--enable is never set) and nothing is applied, so no guest traffic
+    # is affected; every edit is staged and undone within the same run.
     vnet = Isolation.SDN_VNET
     stale = _vnet_fw_rule_pos_by_comment(r, vnet, CL_FW_COMMENT)
     if stale is not None:
@@ -2352,12 +2353,27 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         if created_pos is not None:
             r.step("sdn", "vnet fw rule get", f"vnet firewall rules get {vnet} {created_pos}",
                    "sdn", "vnet", "firewall", "rules", "get", vnet, created_pos, json_out=True)
+            # Edit the staged rule in place; it stays disabled (--enable 0 is
+            # untouched), so even after `sdn apply` it would enforce nothing.
+            r.step("sdn", "vnet fw rule set", f"vnet firewall rules set {vnet} {created_pos}",
+                   "sdn", "vnet", "firewall", "rules", "set", vnet, created_pos, "--log", "nolog")
         else:
             r.cover_skip("sdn", "vnet fw rule get",
                          "created rule position not found by comment")
-        # Options are read-only: enabling the vnet firewall could affect guests.
+            r.cover_skip("sdn", "vnet fw rule set",
+                         "created rule position not found by comment")
         r.step("sdn", "vnet fw options get", f"vnet firewall options get {vnet}",
                "sdn", "vnet", "firewall", "options", "get", vnet, json_out=True)
+        # Stage a forward policy WITHOUT enabling the firewall (--enable is never
+        # passed) on the isolated, guest-free pvecli0 vnet; the edit is staged
+        # only (never applied) and reverted below, so no guest traffic is touched.
+        try:
+            r.step("sdn", "vnet fw options set", f"vnet firewall options set {vnet}",
+                   "sdn", "vnet", "firewall", "options", "set", vnet,
+                   "--policy-forward", "ACCEPT")
+        finally:
+            r.undo(f"revert vnet fw policy-forward on {vnet}", "sdn", "vnet",
+                   "firewall", "options", "set", vnet, "--delete", "policy_forward")
     finally:
         pos = created_pos if created_pos is not None else \
             _vnet_fw_rule_pos_by_comment(r, vnet, CL_FW_COMMENT)
