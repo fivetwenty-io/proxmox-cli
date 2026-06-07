@@ -21,6 +21,7 @@ func newServicesCmd() *cobra.Command {
 	cmd.AddCommand(
 		newServicesListCmd(),
 		newServicesGetCmd(),
+		newServicesStateCmd(),
 		newServiceActionCmd("start", "started", "Start a service on a node", serviceStart),
 		newServiceActionCmd("stop", "stopped", "Stop a service on a node", serviceStop),
 		newServiceActionCmd("restart", "restarted", "Restart a service on a node", serviceRestart),
@@ -113,6 +114,27 @@ func newServicesGetCmd() *cobra.Command {
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single}, deps.Format)
+		},
+	}
+}
+
+// newServicesStateCmd builds `pve node services state <node> <svc>` — returns
+// the raw systemd state details for a single service.
+func newServicesStateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "state <node> <svc>",
+		Short: "Show the raw systemd state for a single service",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			node := args[0]
+			svc := args[1]
+
+			resp, err := deps.API.Nodes.ListServicesState(cmd.Context(), node, svc)
+			if err != nil {
+				return fmt.Errorf("get state of service %q on node %q: %w", svc, node, err)
+			}
+			return renderObject(cmd, deps, resp)
 		},
 	}
 }

@@ -29,10 +29,11 @@ func newCapabilitiesQemuCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "qemu",
 		Short: "Query QEMU/KVM capabilities",
-		Long:  "Query the QEMU/KVM CPU models, machine types, and live-migration features available on the resolved node.",
+		Long:  "Query the QEMU/KVM CPU models, machine types, CPU flags, and live-migration features available on the resolved node.",
 	}
 	cmd.AddCommand(
 		newCapabilitiesQemuCpuCmd(),
+		newCapabilitiesQemuCpuFlagsCmd(),
 		newCapabilitiesQemuMachinesCmd(),
 		newCapabilitiesQemuMigrationCmd(),
 	)
@@ -61,6 +62,40 @@ func newCapabilitiesQemuCpuCmd() *cobra.Command {
 			return renderScan(cmd, deps, derefRaws(resp), resp)
 		},
 	}
+	cmd.Flags().StringVar(&arch, "arch", "", "virtual processor architecture (defaults to the host architecture)")
+	return cmd
+}
+
+func newCapabilitiesQemuCpuFlagsCmd() *cobra.Command {
+	var (
+		accel string
+		arch  string
+	)
+	cmd := &cobra.Command{
+		Use:   "cpu-flags",
+		Short: "List supported QEMU CPU flags",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			params := &nodes.ListCapabilitiesQemuCpuFlagsParams{}
+			fl := cmd.Flags()
+			if fl.Changed("accel") {
+				params.Accel = &accel
+			}
+			if fl.Changed("arch") {
+				params.Arch = &arch
+			}
+			resp, err := deps.API.Nodes.ListCapabilitiesQemuCpuFlags(cmd.Context(), deps.Node, params)
+			if err != nil {
+				return fmt.Errorf("list QEMU CPU flags on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+	cmd.Flags().StringVar(&accel, "accel", "", "acceleration type to check node compatibility for")
 	cmd.Flags().StringVar(&arch, "arch", "", "virtual processor architecture (defaults to the host architecture)")
 	return cmd
 }

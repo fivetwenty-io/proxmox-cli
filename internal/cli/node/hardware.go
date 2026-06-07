@@ -20,6 +20,7 @@ func newHardwareCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newHardwarePciCmd(),
+		newHardwarePciMdevCmd(),
 		newHardwareUsbCmd(),
 	)
 	return cmd
@@ -70,6 +71,32 @@ func newHardwarePciCmd() *cobra.Command {
 	f.StringVar(&classBlacklist, "class-blacklist", "",
 		"comma-separated PCI classes to exclude (memory, bridge, and processor are excluded by default)")
 	return cmd
+}
+
+// ---- pci mdev --------------------------------------------------------------
+
+// newHardwarePciMdevCmd builds `pve node hardware pci mdev <id>` — lists the
+// available mediated device types for a given PCI device ID or mapping name.
+func newHardwarePciMdevCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "mdev <pci-id-or-mapping>",
+		Short: "List mediated device types for a PCI device",
+		Long: "List the mediated device (mdev) types supported by the specified PCI device " +
+			"on the resolved node. Used when planning vGPU or other mdev passthrough.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			id := args[0]
+			resp, err := deps.API.Nodes.ListHardwarePciMdev(cmd.Context(), deps.Node, id)
+			if err != nil {
+				return fmt.Errorf("list mdev types for PCI device %q on node %q: %w", id, deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
 }
 
 // ---- usb -------------------------------------------------------------------

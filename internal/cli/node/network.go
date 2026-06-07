@@ -39,6 +39,29 @@ func newNetworkCmd() *cobra.Command {
 	return cmd
 }
 
+// newNetstatCmd builds `pve node netstat` — reads per-interface traffic counters
+// from the resolved node.
+func newNetstatCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "netstat",
+		Short: "Show network interface statistics for the node",
+		Long: "Read the per-interface traffic counters (bytes, packets, errors) from the " +
+			"resolved node. This is a read-only point-in-time snapshot.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListNetstat(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("get netstat on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
 // netIfaceEntry is the minimal decoded shape of one network list entry. PVE
 // returns the active/autostart flags as integers (1/0).
 type netIfaceEntry struct {

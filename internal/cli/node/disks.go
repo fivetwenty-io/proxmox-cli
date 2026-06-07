@@ -15,20 +15,23 @@ import (
 )
 
 // newDisksCmd builds the `pve node disks` sub-tree: physical-disk inventory,
-// SMART health, and the destructive disk-initialization verbs (create a storage
-// from a disk, write a fresh GPT label, and wipe a disk).
+// SMART health, the read-only storage-type listing/get verbs, the destructive
+// delete verbs, and the disk-initialization verbs (create, init-gpt, wipe).
 func newDisksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "disks",
 		Short: "Inspect and initialize physical disks on a node",
 		Long: "List the physical disks attached to the resolved node, read their SMART " +
-			"health, and initialize disks into storage. The initialization verbs " +
-			"(create, init-gpt, wipe) are destructive and require --yes.",
+			"health, list existing storage pools by type, and initialize disks into " +
+			"storage. The initialization and delete verbs are destructive and require --yes.",
 	}
 	cmd.AddCommand(
 		newDisksListCmd(),
 		newDisksSmartCmd(),
+		newDisksLsCmd(),
+		newDisksGetCmd(),
 		newDisksCreateCmd(),
+		newDisksDeleteCmd(),
 		newDisksInitGptCmd(),
 		newDisksWipeCmd(),
 	)
@@ -366,6 +369,333 @@ func newDisksCreateDirectoryCmd() *cobra.Command {
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	_ = cmd.MarkFlagRequired("device")
 	_ = cmd.MarkFlagRequired("name")
+	return cmd
+}
+
+// ---- ls (list storage-type pools) -----------------------------------------
+
+// newDisksLsCmd builds the `pve node disks ls <type>` sub-group that lists
+// existing storage pools by type: directory, lvm, lvmthin, or zfs.
+func newDisksLsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ls",
+		Short: "List existing disk-backed storage pools by type",
+		Long: "List the disk-backed storage pools of a given type on the resolved node. " +
+			"Choose one of: directory, lvm, lvmthin, or zfs.",
+	}
+	cmd.AddCommand(
+		newDisksLsDirectoryCmd(),
+		newDisksLsLvmCmd(),
+		newDisksLsLvmthinCmd(),
+		newDisksLsZfsCmd(),
+	)
+	return cmd
+}
+
+func newDisksLsDirectoryCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "directory",
+		Short: "List directory storage mounts on the node",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListDisksDirectory(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list directory disks on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+func newDisksLsLvmCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "lvm",
+		Short: "List LVM volume groups on the node",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListDisksLvm(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list LVM disks on node %q: %w", deps.Node, err)
+			}
+			if resp == nil {
+				return renderScan(cmd, deps, nil, resp)
+			}
+			return renderScan(cmd, deps, resp.Children, resp)
+		},
+	}
+}
+
+func newDisksLsLvmthinCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "lvmthin",
+		Short: "List LVM-thin pools on the node",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListDisksLvmthin(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list LVM-thin disks on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+func newDisksLsZfsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "zfs",
+		Short: "List ZFS pools on the node",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListDisksZfs(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list ZFS disks on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+// ---- get (single ZFS pool detail) ------------------------------------------
+
+// newDisksGetCmd builds `pve node disks get zfs <name>`.
+func newDisksGetCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get detailed information about a specific disk pool",
+		Long:  "Get detailed information about a specific disk pool. Currently supports zfs.",
+	}
+	cmd.AddCommand(newDisksGetZfsCmd())
+	return cmd
+}
+
+func newDisksGetZfsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "zfs <name>",
+		Short: "Show detailed information about a ZFS pool",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			name := args[0]
+			resp, err := deps.API.Nodes.GetDisksZfs(cmd.Context(), deps.Node, name)
+			if err != nil {
+				return fmt.Errorf("get ZFS pool %q on node %q: %w", name, deps.Node, err)
+			}
+			return renderObject(cmd, deps, resp)
+		},
+	}
+}
+
+// ---- delete (destroy storage pools) ----------------------------------------
+
+// newDisksDeleteCmd builds the `pve node disks delete <type> <name>` sub-group.
+// All delete verbs are destructive and require --yes.
+func newDisksDeleteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete",
+		Short: "Delete a disk-backed storage pool (destructive)",
+		Long: "Remove a disk-backed storage pool from the node. These operations destroy " +
+			"the pool and its data and are irreversible, so they require --yes.",
+	}
+	cmd.AddCommand(
+		newDisksDeleteDirectoryCmd(),
+		newDisksDeleteLvmCmd(),
+		newDisksDeleteLvmthinCmd(),
+		newDisksDeleteZfsCmd(),
+	)
+	return cmd
+}
+
+func newDisksDeleteDirectoryCmd() *cobra.Command {
+	var (
+		cleanupConfig bool
+		cleanupDisks  bool
+		yes           bool
+	)
+	cmd := &cobra.Command{
+		Use:   "directory <name>",
+		Short: "Delete a directory storage mount (destructive)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			name := args[0]
+			if err := requireSystemYes(deps.Node, yes,
+				fmt.Sprintf("delete directory storage %q", name)); err != nil {
+				return err
+			}
+			params := &nodes.DeleteDisksDirectoryParams{}
+			fl := cmd.Flags()
+			if fl.Changed("cleanup-config") {
+				params.CleanupConfig = &cleanupConfig
+			}
+			if fl.Changed("cleanup-disks") {
+				params.CleanupDisks = &cleanupDisks
+			}
+			resp, err := deps.API.Nodes.DeleteDisksDirectory(cmd.Context(), deps.Node, name, params)
+			if err != nil {
+				return fmt.Errorf("delete directory storage %q on node %q: %w", name, deps.Node, err)
+			}
+			return renderDiskTask(cmd, deps, rawOrNil(resp),
+				fmt.Sprintf("Directory storage %q deleted on node %q.", name, deps.Node))
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&cleanupConfig, "cleanup-config", false, "remove associated storage configuration for this node")
+	f.BoolVar(&cleanupDisks, "cleanup-disks", false, "wipe the underlying disk so it can be reused")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+	return cmd
+}
+
+func newDisksDeleteLvmCmd() *cobra.Command {
+	var (
+		cleanupConfig bool
+		cleanupDisks  bool
+		yes           bool
+	)
+	cmd := &cobra.Command{
+		Use:   "lvm <name>",
+		Short: "Delete an LVM volume group (destructive)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			name := args[0]
+			if err := requireSystemYes(deps.Node, yes,
+				fmt.Sprintf("delete LVM volume group %q", name)); err != nil {
+				return err
+			}
+			params := &nodes.DeleteDisksLvmParams{}
+			fl := cmd.Flags()
+			if fl.Changed("cleanup-config") {
+				params.CleanupConfig = &cleanupConfig
+			}
+			if fl.Changed("cleanup-disks") {
+				params.CleanupDisks = &cleanupDisks
+			}
+			resp, err := deps.API.Nodes.DeleteDisksLvm(cmd.Context(), deps.Node, name, params)
+			if err != nil {
+				return fmt.Errorf("delete LVM volume group %q on node %q: %w", name, deps.Node, err)
+			}
+			return renderDiskTask(cmd, deps, rawOrNil(resp),
+				fmt.Sprintf("LVM volume group %q deleted on node %q.", name, deps.Node))
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&cleanupConfig, "cleanup-config", false, "remove associated storage configuration for this node")
+	f.BoolVar(&cleanupDisks, "cleanup-disks", false, "wipe the underlying disks so they can be reused")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+	return cmd
+}
+
+func newDisksDeleteLvmthinCmd() *cobra.Command {
+	var (
+		volumeGroup   string
+		cleanupConfig bool
+		cleanupDisks  bool
+		yes           bool
+	)
+	cmd := &cobra.Command{
+		Use:   "lvmthin <name>",
+		Short: "Delete an LVM-thin pool (destructive)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			name := args[0]
+			if err := requireSystemYes(deps.Node, yes,
+				fmt.Sprintf("delete LVM-thin pool %q", name)); err != nil {
+				return err
+			}
+			params := &nodes.DeleteDisksLvmthinParams{VolumeGroup: volumeGroup}
+			fl := cmd.Flags()
+			if fl.Changed("cleanup-config") {
+				params.CleanupConfig = &cleanupConfig
+			}
+			if fl.Changed("cleanup-disks") {
+				params.CleanupDisks = &cleanupDisks
+			}
+			resp, err := deps.API.Nodes.DeleteDisksLvmthin(cmd.Context(), deps.Node, name, params)
+			if err != nil {
+				return fmt.Errorf("delete LVM-thin pool %q on node %q: %w", name, deps.Node, err)
+			}
+			return renderDiskTask(cmd, deps, rawOrNil(resp),
+				fmt.Sprintf("LVM-thin pool %q deleted on node %q.", name, deps.Node))
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&volumeGroup, "volume-group", "", "LVM volume group containing the thin pool (required)")
+	f.BoolVar(&cleanupConfig, "cleanup-config", false, "remove associated storage configuration for this node")
+	f.BoolVar(&cleanupDisks, "cleanup-disks", false, "wipe the underlying disks so they can be reused")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+	_ = cmd.MarkFlagRequired("volume-group")
+	return cmd
+}
+
+func newDisksDeleteZfsCmd() *cobra.Command {
+	var (
+		cleanupConfig bool
+		cleanupDisks  bool
+		yes           bool
+	)
+	cmd := &cobra.Command{
+		Use:   "zfs <name>",
+		Short: "Delete a ZFS pool (destructive)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			name := args[0]
+			if err := requireSystemYes(deps.Node, yes,
+				fmt.Sprintf("delete ZFS pool %q", name)); err != nil {
+				return err
+			}
+			params := &nodes.DeleteDisksZfsParams{}
+			fl := cmd.Flags()
+			if fl.Changed("cleanup-config") {
+				params.CleanupConfig = &cleanupConfig
+			}
+			if fl.Changed("cleanup-disks") {
+				params.CleanupDisks = &cleanupDisks
+			}
+			resp, err := deps.API.Nodes.DeleteDisksZfs(cmd.Context(), deps.Node, name, params)
+			if err != nil {
+				return fmt.Errorf("delete ZFS pool %q on node %q: %w", name, deps.Node, err)
+			}
+			return renderDiskTask(cmd, deps, rawOrNil(resp),
+				fmt.Sprintf("ZFS pool %q deleted on node %q.", name, deps.Node))
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&cleanupConfig, "cleanup-config", false, "remove associated storage configuration for this node")
+	f.BoolVar(&cleanupDisks, "cleanup-disks", false, "wipe the underlying disks so they can be reused")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

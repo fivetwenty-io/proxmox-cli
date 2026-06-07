@@ -149,6 +149,32 @@ def run(ctx: Ctx) -> None:
             ctx.check("disks smart", "node", "disks", "smart", "--disk", str(dev), node=n)
         else:
             ctx.skip("disks smart", "no block device to inspect")
+
+        # Disk sub-type inventories: each returns a list (possibly empty on a lab
+        # that lacks the given storage layout). Empty list is a valid pass.
+        ctx.check("disks ls directory", "node", "disks", "ls", "directory",
+                  node=n, validate=is_list)
+        # lvm reports a volume-group tree as an object ({"children": [...]}),
+        # unlike the other disk sub-types which return arrays.
+        ctx.check("disks ls lvm", "node", "disks", "ls", "lvm", node=n,
+                  validate=lambda r: None if isinstance(r.json(), (dict, list))
+                  else "expected a JSON object or array")
+        ctx.check("disks ls lvmthin", "node", "disks", "ls", "lvmthin",
+                  node=n, validate=is_list)
+        zfs_list = ctx.check("disks ls zfs", "node", "disks", "ls", "zfs",
+                             node=n, validate=is_list)
+        # disks get zfs: detail for a specific pool; discover from the ls output.
+        zfs_pool = None
+        if zfs_list.rc == 0:
+            try:
+                zfs_pool = ctx.first(zfs_list.json(), "name")
+            except (ValueError, KeyError):
+                zfs_pool = None
+        if zfs_pool:
+            ctx.check("disks get zfs", "node", "disks", "get", "zfs", str(zfs_pool), node=n)
+        else:
+            ctx.skip("disks get zfs", "no ZFS pool on this node")
+
         ctx.check("disks create lvm --help", "node", "disks", "create", "lvm", "--help", fmt="")
 
         # Scan: the lvm and zfs probes enumerate local storage with no arguments
@@ -158,8 +184,31 @@ def run(ctx: Ctx) -> None:
         ctx.check("scan zfs", "node", "scan", "zfs", node=n, validate=is_list)
 
         # Hardware: PCI(e) and USB inventories are read-only arrays.
-        ctx.check("hardware pci", "node", "hardware", "pci", node=n, validate=is_list)
+        pci_list = ctx.check("hardware pci", "node", "hardware", "pci",
+                             node=n, validate=is_list)
         ctx.check("hardware usb", "node", "hardware", "usb", node=n, validate=is_list)
+        # hardware pci mdev: list mdev types on a specific PCI device; discover
+        # a PCI id from the inventory. Skip when no PCI device found or the
+        # device does not expose mdev types (not all GPUs/cards do).
+        pci_id = None
+        if pci_list.rc == 0:
+            try:
+                pci_id = ctx.first(pci_list.json(), "id")
+            except (ValueError, KeyError):
+                pci_id = None
+        if pci_id:
+            mdev_res = ctx.run("node", "hardware", "mdev", str(pci_id), node=n)
+            mdev_err = (mdev_res.stderr or mdev_res.stdout).lower()
+            if mdev_res.rc != 0 and any(
+                m in mdev_err for m in ("mdev", "no such", "not supported", "404")
+            ):
+                ctx.skip("hardware pci mdev",
+                         f"PCI device {pci_id} does not expose mdev types")
+            else:
+                ctx.check("hardware pci mdev", "node", "hardware", "mdev",
+                          str(pci_id), node=n, validate=is_list)
+        else:
+            ctx.skip("hardware pci mdev", "no PCI device found on this node")
 
         # System config: dns/time are key/value objects; the system log, journal,
         # and report are read-only diagnostics; subscription is the node's
@@ -178,6 +227,14 @@ def run(ctx: Ctx) -> None:
         ctx.check("syslog", "node", "syslog", "--limit", "20", node=n, validate=is_list)
         ctx.check("report", "node", "report", node=n, fmt="")
         ctx.check("subscription get", "node", "subscription", "get", node=n, validate=is_object)
+        # rrddata: timeseries for node-level metrics; zero-row result is valid.
+        # Node is supplied via the global --node flag, not a positional arg.
+        ctx.check("rrddata", "node", "rrddata", "--timeframe", "hour",
+                  node=n, validate=is_list)
+        # netstat: per-interface network statistics; always returns a list.
+        ctx.check("netstat", "node", "netstat", node=n, validate=is_list)
+        # vzdump defaults: default vzdump settings; always a key/value object.
+        ctx.check("vzdump defaults", "node", "vzdump", "defaults", node=n, validate=is_object)
         ctx.check("dns set --help", "node", "dns", "set", "--help", fmt="")
         ctx.check("hosts set --help", "node", "hosts", "set", "--help", fmt="")
 
@@ -242,6 +299,9 @@ def run(ctx: Ctx) -> None:
                   node=n, validate=is_list)
         ctx.check("capabilities qemu migration", "node", "capabilities", "qemu", "migration",
                   node=n, validate=is_object)
+        # capabilities qemu cpu-flags: per-CPU-model flag detail; always present.
+        ctx.check("capabilities qemu cpu-flags", "node", "capabilities", "qemu", "cpu-flags",
+                  node=n, validate=is_list)
 
         # OCI image handling: `oci tags` queries a registry (network egress to
         # an external registry that may be unreachable from the lab) and `oci
@@ -249,6 +309,17 @@ def run(ctx: Ctx) -> None:
         # clean it up — both are exercised by --help only and pull is deferred.
         ctx.check("oci tags --help", "node", "oci", "tags", "--help", fmt="")
         ctx.check("oci pull --help", "node", "oci", "pull", "--help", fmt="")
+
+        # query-url-metadata: asks the node to probe a remote URL for metadata.
+        # Requires outbound HTTP access from the node; deferred rather than run
+        # live to avoid a hard dependency on external network reachability.
+        ctx.skip("query-url-metadata",
+                 "requires outbound HTTP from the node to an external URL; "
+                 "not exercised live to avoid network-dependency failures")
+
+        # services state: read the runtime state of a known service on the node.
+        # pveproxy is always present on a PVE node — use it as a stable probe.
+        ctx.check("services state", "node", "services", "state", n, "pveproxy", node=n)
 
     # `node task stop` aborts a running task; it stays deferred in this
     # read-only sweep but is exercised live by the mutate phase (which spawns a
@@ -313,6 +384,32 @@ def run(ctx: Ctx) -> None:
         "disks create/init-gpt/wipe",
         "formats or wipes a physical disk — irreversible; not exercised live",
         "pve node disks wipe --node <node> --disk /dev/sdX --yes",
+        isolation=False, live_covered=False,
+    )
+    # Disk sub-type delete verbs destroy the underlying VG, pool, or ZFS dataset
+    # and cannot be reversed without reinitializing storage from scratch.
+    ctx.defer(
+        "disks delete directory",
+        "removes a mounted directory storage from the host — irreversible; not exercised live",
+        "pve node disks delete directory <path> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks delete lvm",
+        "removes an LVM volume group from the host — irreversible; not exercised live",
+        "pve node disks delete lvm <vg> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks delete lvmthin",
+        "removes an LVM thin pool from a VG — irreversible; not exercised live",
+        "pve node disks delete lvmthin <pool> --volume-group <vg> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "disks delete zfs",
+        "destroys a ZFS pool — irreversible, destroys all data on the pool; not exercised live",
+        "pve node disks delete zfs <pool> --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
