@@ -255,6 +255,27 @@ func TestHaResourceRelocate_PostsTargetNode(t *testing.T) {
 	require.Equal(t, "pve2", gotForm.Get("node"))
 }
 
+// TestHaResourceRelocate_RequiresTargetNode verifies relocate refuses without a
+// --target-node and never issues the request.
+func TestHaResourceRelocate_RequiresTargetNode(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var called bool
+	f.HandleFunc("POST /api2/json/cluster/ha/resources/vm:100/relocate", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	err := run(&buf, "ha", "resource", "relocate", "vm:100")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--target-node")
+	require.False(t, called, "relocate must not be issued without --target-node")
+}
+
 // TestHaResourceList_ServerError verifies a server failure on list surfaces an error.
 func TestHaResourceList_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)

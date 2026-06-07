@@ -68,7 +68,7 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 96 | 5 | 17 | 6 |
+| `cluster` | 157 | 42 | 12 | 96 | 5 | 23 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
 | `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **284** | **6** | **103** | **14** |
+| **Total** | **556** | **74** | **125** | **284** | **6** | **109** | **8** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **103** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **14** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **109** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **8** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -146,11 +146,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `cluster acme account create` | — | — | n/a — contacts the ACME certificate authority — never registered live on a shared lab |
-| `cluster acme account delete` | — | — | **uncovered** |
+| `cluster acme account create` | — | — | n/a — registers a new account against the ACME certificate authority — never run live on a shared lab |
+| `cluster acme account delete` | — | — | n/a — deactivates and removes an account at the ACME certificate authority — never run live on a shared lab |
 | `cluster acme account get` | ◑ | — |  |
 | `cluster acme account list` | ✓ | — |  |
-| `cluster acme account set` | — | — | **uncovered** |
+| `cluster acme account set` | — | — | n/a — updates an account's contact at the ACME certificate authority — never run live on a shared lab |
 | `cluster acme challenge-schema` | ✓ | — |  |
 | `cluster acme directories` | ✓ | — |  |
 | `cluster acme plugin create` | — | ✓ |  |
@@ -175,10 +175,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
 | `cluster ceph metadata` | ◑ | — |  |
 | `cluster config apiversion` | ✓ | — |  |
-| `cluster config join add` | — | — | **uncovered** |
+| `cluster config join add` | — | — | n/a — joins the local node to an existing cluster — changes membership and quorum, too dangerous on a shared lab |
 | `cluster config join list` | ◑ | — |  |
-| `cluster config nodes add` | — | — | n/a — changes cluster membership and quorum — too dangerous to exercise on a shared lab |
-| `cluster config nodes delete` | — | — | **uncovered** |
+| `cluster config nodes add` | — | — | n/a — registers a new node in the cluster configuration — changes membership and quorum, too dangerous on a shared lab |
+| `cluster config nodes delete` | — | — | n/a — removes a node from the cluster configuration — changes membership and quorum, too dangerous on a shared lab |
 | `cluster config nodes list` | ✓ | — |  |
 | `cluster config qdevice` | ◑ | — |  |
 | `cluster config totem` | ◑ | — |  |
@@ -222,16 +222,16 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ha resource get` | — | ✓ |  |
 | `cluster ha resource list` | ✓ | ✓ |  |
 | `cluster ha resource migrate` | — | · |  |
-| `cluster ha resource relocate` | — | — | **uncovered** |
+| `cluster ha resource relocate` | — | — | deferred — requires a second node as the relocation target — not exercisable on a single-node lab |
 | `cluster ha resource set` | — | ✓ |  |
 | `cluster ha rule create` | — | ✓ |  |
 | `cluster ha rule delete` | — | ✓ |  |
 | `cluster ha rule get` | — | ✓ |  |
 | `cluster ha rule list` | ✓ | ✓ |  |
 | `cluster ha rule set` | — | ✓ |  |
-| `cluster ha status arm` | — | — | **uncovered** |
+| `cluster ha status arm` | — | — | deferred — re-enables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
 | `cluster ha status current` | ✓ | — |  |
-| `cluster ha status disarm` | — | — | deferred — toggles the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
+| `cluster ha status disarm` | — | — | deferred — disables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
 | `cluster ha status list` | ✓ | — |  |
 | `cluster ha status manager` | ✓ | — |  |
 | `cluster jobs realm-sync create` | — | ✓ |  |
@@ -703,8 +703,6 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
 
 **`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
-
-**`cluster`** (6) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster ha resource relocate`, `cluster ha status arm`
 
 **`qemu`** (5) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`
 

@@ -83,11 +83,19 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
     # migrate/relocate need a second node to accept the guest; the single-node lab
-    # cannot satisfy them, so they are parsed-and-deferred rather than run live.
+    # cannot satisfy them, so each verb is parsed-and-deferred rather than run live.
+    # Both require --target-node and are covered by unit tests (forwards the node;
+    # refuses without it).
     ctx.defer(
-        "ha resource migrate/relocate",
+        "ha resource migrate",
         "requires a second node as the migration target — not exercisable on a single-node lab",
         "pve cluster ha resource migrate vm:<id> --target-node <other>",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "ha resource relocate",
+        "requires a second node as the relocation target — not exercisable on a single-node lab",
+        "pve cluster ha resource relocate vm:<id> --target-node <other>",
         isolation=True, live_covered=False,
     )
 
@@ -120,10 +128,17 @@ def run(ctx: Ctx) -> None:
     # to query directly on any cluster.
     ctx.check("ha status manager", "cluster", "ha", "status", "manager")
     # arm/disarm flip the cluster-wide HA stack and would disrupt every HA-managed
-    # resource on the lab, so they are parsed-and-deferred, never run live.
+    # resource on the lab, so each verb is parsed-and-deferred, never run live. Both
+    # are gated behind --yes and covered by unit tests of that guard.
     ctx.defer(
-        "ha status arm/disarm",
-        "toggles the cluster-wide HA stack — would disrupt every HA-managed resource on the lab",
+        "ha status arm",
+        "re-enables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab",
+        "pve cluster ha status arm --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ha status disarm",
+        "disables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab",
         "pve cluster ha status disarm --yes --resource-mode freeze",
         isolation=False, live_covered=False,
     )
@@ -178,11 +193,24 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
     # Membership changes (join, node add/remove) affect corosync quorum and could
-    # break the cluster, so they are parsed-and-deferred and never run live.
+    # break the cluster, so each verb is parsed-and-deferred and never run live. All
+    # three are gated behind --yes and covered by unit tests of that guard.
     ctx.defer(
-        "config join add / nodes add / nodes delete",
-        "changes cluster membership and quorum — too dangerous to exercise on a shared lab",
+        "config join add",
+        "joins the local node to an existing cluster — changes membership and quorum, too dangerous on a shared lab",
+        "pve cluster config join add --yes --hostname <peer> --fingerprint <fp> --password <pw>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "config nodes add",
+        "registers a new node in the cluster configuration — changes membership and quorum, too dangerous on a shared lab",
         "pve cluster config nodes add <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "config nodes delete",
+        "removes a node from the cluster configuration — changes membership and quorum, too dangerous on a shared lab",
+        "pve cluster config nodes delete <node> --yes",
         isolation=False, live_covered=False,
     )
 
@@ -351,12 +379,25 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
     # Account register/update/deregister contact the ACME CA (e.g. Let's Encrypt)
-    # and run as asynchronous tasks; they are parsed-and-deferred, never run live
-    # on the shared lab.
+    # and run as asynchronous tasks; each verb is parsed-and-deferred, never run
+    # live on the shared lab. All three are covered by unit tests (create/set forward
+    # the contact and require it; delete is gated behind --yes).
     ctx.defer(
-        "acme account create/set/delete",
-        "contacts the ACME certificate authority — never registered live on a shared lab",
+        "acme account create",
+        "registers a new account against the ACME certificate authority — never run live on a shared lab",
         "pve cluster acme account create --contact admin@example.com --directory <staging>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "acme account set",
+        "updates an account's contact at the ACME certificate authority — never run live on a shared lab",
+        "pve cluster acme account set <name> --contact admin@example.com",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "acme account delete",
+        "deactivates and removes an account at the ACME certificate authority — never run live on a shared lab",
+        "pve cluster acme account delete <name> --yes",
         isolation=False, live_covered=False,
     )
 
