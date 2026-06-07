@@ -492,10 +492,19 @@ def run(ctx: Ctx) -> None:
         "pve node apt update --node <node>",
         isolation=False, live_covered=False,
     )
+    # The repository verbs rewrite the node's APT sources. Each is gated behind
+    # --yes and covered by a unit test (guard plus argument contract). Deferred
+    # one verb at a time so the coverage matrix records every leaf.
     ctx.defer(
-        "apt repositories add/enable",
-        "rewrites the node's APT repository configuration; not exercised live",
+        "apt repositories add",
+        "adds a standard APT repository to the node's sources; not exercised live",
         "pve node apt repositories add --node <node> --handle no-subscription --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "apt repositories enable",
+        "enables or disables a configured APT repository on the node; not exercised live",
+        "pve node apt repositories enable --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
@@ -590,26 +599,62 @@ def run(ctx: Ctx) -> None:
         "pve node hosts set --node <node> --data <content> --yes",
         isolation=False, live_covered=False,
     )
+    # The subscription verbs change the node's licensing state. Each is gated
+    # behind --yes and covered by a unit test (guard plus argument contract).
+    # Deferred one verb at a time so the coverage matrix records every leaf.
     ctx.defer(
-        "subscription set/update/delete",
-        "changes the node's subscription/licensing state on a shared lab; not exercised live",
+        "subscription set",
+        "sets the node's subscription key on a shared lab; not exercised live",
         "pve node subscription set --node <node> --key <key> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "subscription update",
+        "refreshes the node's subscription status against the licensing server; not exercised live",
+        "pve node subscription update --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "subscription delete",
+        "removes the node's subscription key on a shared lab; not exercised live",
+        "pve node subscription delete --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
     # Certificate writes all replace the node's API TLS certificate: an ACME
     # order/renew contacts Let's Encrypt (real account + DNS challenge), and a
     # custom upload/delete could break TLS to the node. None is exercised live.
+    # Each cert write verb is gated behind --yes and covered by a unit test
+    # (guard plus argument contract). Deferred one verb at a time so the
+    # coverage matrix records every leaf.
     ctx.defer(
-        "cert acme order/renew/delete",
-        "orders, renews, or removes the node's ACME certificate (contacts Let's Encrypt); not exercised live",
+        "cert acme order",
+        "orders the node's ACME certificate (contacts Let's Encrypt); not exercised live",
         "pve node cert acme order --node <node> --yes",
         isolation=False, live_covered=False,
     )
     ctx.defer(
-        "cert custom upload/delete",
-        "replaces or removes the node's API TLS certificate — could break TLS to the node; not exercised live",
+        "cert acme renew",
+        "renews the node's ACME certificate (contacts Let's Encrypt); not exercised live",
+        "pve node cert acme renew --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "cert acme delete",
+        "removes the node's ACME certificate; not exercised live",
+        "pve node cert acme delete --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "cert custom upload",
+        "replaces the node's API TLS certificate — could break TLS to the node; not exercised live",
         "pve node cert custom upload --node <node> --certificates <pem> --key <pem> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "cert custom delete",
+        "removes the node's custom API TLS certificate — could break TLS to the node; not exercised live",
+        "pve node cert custom delete --node <node> --yes",
         isolation=False, live_covered=False,
     )
 
@@ -786,13 +831,25 @@ def run(ctx: Ctx) -> None:
               "pve node ssh <node> -- true", isolation=True, live_covered=True)
     ctx.defer("rsync", "transfers files to/from host — covered live by `e2e --mutate` (SSH-gated)",
               "pve node rsync <node> <node>:<src> <dst>", isolation=True, live_covered=True)
-    # Genuinely out of scope: interactive PTYs and real host-daemon control.
-    ctx.defer("shell / console", "interactive session; not automatable", "pve node shell <node>")
-    ctx.defer(
-        "services start/stop/restart/reload",
-        "mutates real host daemons on a shared lab",
-        "pve node services restart <svc> --node <node>",
-    )
+    # Genuinely out of scope: interactive PTYs (shell and its console alias open
+    # a live SSH session). Deferred one verb at a time so the matrix records each
+    # leaf; the console alias is covered by a unit test asserting it resolves to
+    # the shell handler.
+    ctx.defer("shell", "interactive SSH session; not automatable", "pve node shell <node>")
+    ctx.defer("console", "interactive SSH session (alias of shell); not automatable",
+              "pve node console <node>")
+
+    # Service control mutates real host daemons on a shared lab. Every verb is
+    # built by the same factory and covered by a unit test (argument contract and
+    # task handling). Deferred one verb at a time so the matrix records each leaf.
+    ctx.defer("services start", "starts a real host daemon on a shared lab; not exercised live",
+              "pve node services start <node> <svc>")
+    ctx.defer("services stop", "stops a real host daemon on a shared lab; not exercised live",
+              "pve node services stop <node> <svc>")
+    ctx.defer("services restart", "restarts a real host daemon on a shared lab; not exercised live",
+              "pve node services restart <node> <svc>")
+    ctx.defer("services reload", "reloads a real host daemon on a shared lab; not exercised live",
+              "pve node services reload <node> <svc>")
 
     # Node-wide bulk actions act on every guest on the node (or a --vmids subset)
     # and would start, stop, suspend, or migrate non-isolated workloads; wakeonlan

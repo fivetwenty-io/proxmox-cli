@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 96 | 5 | 17 | 6 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
-| `node` | 138 | 1 | 59 | 15 | 0 | 57 | 10 |
+| `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 43 | 1 | 4 | 5 |
 | `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **284** | **6** | **93** | **24** |
+| **Total** | **556** | **74** | **125** | **284** | **6** | **103** | **14** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **93** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **24** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **103** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **14** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -369,8 +369,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 |------|-----|--------|-------|
 | `node apt changelog` | ◑ | — |  |
 | `node apt list` | ◑ | — |  |
-| `node apt repositories add` | — | — | deferred — rewrites the node's APT repository configuration; not exercised live |
-| `node apt repositories enable` | — | — | **uncovered** |
+| `node apt repositories add` | — | — | deferred — adds a standard APT repository to the node's sources; not exercised live |
+| `node apt repositories enable` | — | — | deferred — enables or disables a configured APT repository on the node; not exercised live |
 | `node apt repositories list` | ◑ | — |  |
 | `node apt update` | — | — | deferred — refreshes the node's APT database (network I/O, apt state churn); not exercised live |
 | `node apt versions` | ◑ | — |  |
@@ -409,14 +409,14 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node ceph start` | — | — | deferred — starts Ceph services on the node — disruptive; not exercised live |
 | `node ceph status` | ◑ | — |  |
 | `node ceph stop` | — | — | deferred — stops Ceph services on the node — disruptive; not exercised live |
-| `node cert acme delete` | — | — | **uncovered** |
+| `node cert acme delete` | — | — | deferred — removes the node's ACME certificate; not exercised live |
 | `node cert acme list` | ◑ | — |  |
-| `node cert acme order` | — | — | deferred — orders, renews, or removes the node's ACME certificate (contacts Let's Encrypt); not exercised live |
-| `node cert acme renew` | — | — | **uncovered** |
-| `node cert custom delete` | — | — | **uncovered** |
-| `node cert custom upload` | — | — | deferred — replaces or removes the node's API TLS certificate — could break TLS to the node; not exercised live |
+| `node cert acme order` | — | — | deferred — orders the node's ACME certificate (contacts Let's Encrypt); not exercised live |
+| `node cert acme renew` | — | — | deferred — renews the node's ACME certificate (contacts Let's Encrypt); not exercised live |
+| `node cert custom delete` | — | — | deferred — removes the node's custom API TLS certificate — could break TLS to the node; not exercised live |
+| `node cert custom upload` | — | — | deferred — replaces the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
-| `node console` | — | — | **uncovered** |
+| `node console` | — | — | n/a — interactive SSH session (alias of shell); not automatable |
 | `node disks create directory` | — | — | deferred — formats a disk and mounts it as a directory storage — irreversible; not exercised live |
 | `node disks create lvm` | — | — | help-only (parse smoke test) |
 | `node disks create lvmthin` | — | — | deferred — formats a disk into an LVM-thin pool — irreversible; not exercised live |
@@ -479,20 +479,20 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node scan zfs` | ◑ | — |  |
 | `node services get` | ◑ | — |  |
 | `node services list` | ◑ | — |  |
-| `node services reload` | — | — | **uncovered** |
-| `node services restart` | — | — | n/a — mutates real host daemons on a shared lab |
-| `node services start` | — | — | **uncovered** |
+| `node services reload` | — | — | n/a — reloads a real host daemon on a shared lab; not exercised live |
+| `node services restart` | — | — | n/a — restarts a real host daemon on a shared lab; not exercised live |
+| `node services start` | — | — | n/a — starts a real host daemon on a shared lab; not exercised live |
 | `node services state` | ◑ | — |  |
-| `node services stop` | — | — | **uncovered** |
-| `node shell` | — | — | n/a — interactive session; not automatable |
+| `node services stop` | — | — | n/a — stops a real host daemon on a shared lab; not exercised live |
+| `node shell` | — | — | n/a — interactive SSH session; not automatable |
 | `node ssh` | — | ✓ |  |
 | `node startall` | — | — | help-only (parse smoke test) |
 | `node status` | ◑ | — |  |
 | `node stopall` | — | — | deferred — node-wide guest power and migration actions — affect every guest on the node, not run live |
-| `node subscription delete` | — | — | **uncovered** |
+| `node subscription delete` | — | — | n/a — removes the node's subscription key on a shared lab; not exercised live |
 | `node subscription get` | ◑ | — |  |
-| `node subscription set` | — | — | n/a — changes the node's subscription/licensing state on a shared lab; not exercised live |
-| `node subscription update` | — | — | **uncovered** |
+| `node subscription set` | — | — | n/a — sets the node's subscription key on a shared lab; not exercised live |
+| `node subscription update` | — | — | deferred — refreshes the node's subscription status against the licensing server; not exercised live |
 | `node suspendall` | — | — | help-only (parse smoke test) |
 | `node syslog` | ◑ | — |  |
 | `node task list` | ◑ | — |  |
@@ -705,8 +705,6 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 **`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
 
 **`cluster`** (6) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster ha resource relocate`, `cluster ha status arm`
-
-**`node`** (10) — `node apt repositories enable`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
 
 **`qemu`** (5) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`
 
