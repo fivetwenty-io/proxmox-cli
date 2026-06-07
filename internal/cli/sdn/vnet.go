@@ -26,7 +26,147 @@ func newVnetCmd() *cobra.Command {
 		Use:   "vnet",
 		Short: "Manage SDN vnets",
 	}
-	cmd.AddCommand(newVnetListCmd(), newVnetCreateCmd(), newVnetSetCmd(), newVnetDeleteCmd(), newVnetFirewallCmd())
+	cmd.AddCommand(
+		newVnetListCmd(),
+		newVnetCreateCmd(),
+		newVnetSetCmd(),
+		newVnetDeleteCmd(),
+		newVnetFirewallCmd(),
+		newVnetIpsCmd(),
+	)
+	return cmd
+}
+
+// newVnetIpsCmd builds `pve sdn vnet ips` and its sub-commands.
+func newVnetIpsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "ips",
+		Short: "Manage IP mappings in an SDN vnet (IPAM)",
+	}
+	cmd.AddCommand(newVnetIpsCreateCmd(), newVnetIpsSetCmd(), newVnetIpsDeleteCmd())
+	return cmd
+}
+
+// newVnetIpsCreateCmd builds `pve sdn vnet ips create <vnet> --ip <ip> --zone <zone>`.
+func newVnetIpsCreateCmd() *cobra.Command {
+	var (
+		ip   string
+		mac  string
+		zone string
+	)
+	cmd := &cobra.Command{
+		Use:   "create <vnet>",
+		Short: "Add an IP mapping to a vnet",
+		Long:  "Add an IP-to-MAC mapping in a vnet's IPAM zone.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet := args[0]
+			params := &cluster.CreateSdnVnetsIpsParams{Ip: ip, Zone: zone}
+			fl := cmd.Flags()
+			if fl.Changed("mac") {
+				params.Mac = strPtr(mac)
+			}
+			if err := deps.API.Cluster.CreateSdnVnetsIps(cmd.Context(), vnet, params); err != nil {
+				return fmt.Errorf("create IP mapping in vnet %q: %w", vnet, err)
+			}
+			res := output.Result{Message: fmt.Sprintf("IP mapping %q created in vnet %q.", ip, vnet)}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&ip, "ip", "", "IP address to associate (required)")
+	f.StringVar(&mac, "mac", "", "unicast MAC address")
+	f.StringVar(&zone, "zone", "", "SDN zone the IP belongs to (required)")
+	_ = cmd.MarkFlagRequired("ip")
+	_ = cmd.MarkFlagRequired("zone")
+	return cmd
+}
+
+// vnetIpsSetFlagNames lists the optional editable vnet-ips flags.
+var vnetIpsSetFlagNames = []string{"mac", "vmid"}
+
+// newVnetIpsSetCmd builds `pve sdn vnet ips set <vnet> --ip <ip> --zone <zone>`.
+func newVnetIpsSetCmd() *cobra.Command {
+	var (
+		ip   string
+		mac  string
+		vmid int64
+		zone string
+	)
+	cmd := &cobra.Command{
+		Use:   "set <vnet>",
+		Short: "Update an IP mapping in a vnet",
+		Long:  "Update an IP-to-MAC/VMID mapping in a vnet's IPAM zone.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet := args[0]
+			fl := cmd.Flags()
+			if !anyFlagChanged(fl, vnetIpsSetFlagNames...) {
+				return fmt.Errorf("no changes to set: pass at least one field flag")
+			}
+			params := &cluster.UpdateSdnVnetsIpsParams{Ip: ip, Zone: zone}
+			if fl.Changed("mac") {
+				params.Mac = strPtr(mac)
+			}
+			if fl.Changed("vmid") {
+				params.Vmid = int64Ptr(vmid)
+			}
+			if err := deps.API.Cluster.UpdateSdnVnetsIps(cmd.Context(), vnet, params); err != nil {
+				return fmt.Errorf("update IP mapping in vnet %q: %w", vnet, err)
+			}
+			res := output.Result{Message: fmt.Sprintf("IP mapping %q in vnet %q updated.", ip, vnet)}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&ip, "ip", "", "IP address to update (required)")
+	f.StringVar(&mac, "mac", "", "unicast MAC address")
+	f.Int64Var(&vmid, "vmid", 0, "VM ID to associate with the IP")
+	f.StringVar(&zone, "zone", "", "SDN zone the IP belongs to (required)")
+	_ = cmd.MarkFlagRequired("ip")
+	_ = cmd.MarkFlagRequired("zone")
+	return cmd
+}
+
+// newVnetIpsDeleteCmd builds `pve sdn vnet ips delete <vnet> --ip <ip> --zone <zone>`.
+func newVnetIpsDeleteCmd() *cobra.Command {
+	var (
+		ip   string
+		mac  string
+		yes  bool
+		zone string
+	)
+	cmd := &cobra.Command{
+		Use:   "delete <vnet>",
+		Short: "Remove an IP mapping from a vnet",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet := args[0]
+			if !yes {
+				return fmt.Errorf("refusing to delete IP mapping %q without confirmation: pass --yes", ip)
+			}
+			params := &cluster.DeleteSdnVnetsIpsParams{Ip: ip, Zone: zone}
+			fl := cmd.Flags()
+			if fl.Changed("mac") {
+				params.Mac = strPtr(mac)
+			}
+			if err := deps.API.Cluster.DeleteSdnVnetsIps(cmd.Context(), vnet, params); err != nil {
+				return fmt.Errorf("delete IP mapping %q from vnet %q: %w", ip, vnet, err)
+			}
+			res := output.Result{Message: fmt.Sprintf("IP mapping %q deleted from vnet %q.", ip, vnet)}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&ip, "ip", "", "IP address to delete (required)")
+	f.StringVar(&mac, "mac", "", "unicast MAC address")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	f.StringVar(&zone, "zone", "", "SDN zone the IP belongs to (required)")
+	_ = cmd.MarkFlagRequired("ip")
+	_ = cmd.MarkFlagRequired("zone")
 	return cmd
 }
 

@@ -118,12 +118,52 @@ func newFabricCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newFabricListCmd(),
+		newFabricListAllCmd(),
 		newFabricCreateCmd(),
 		newFabricGetCmd(),
 		newFabricSetCmd(),
 		newFabricDeleteCmd(),
 		newFabricNodeCmd(),
 	)
+	return cmd
+}
+
+// newFabricListAllCmd builds `pve sdn fabric list-all`.
+func newFabricListAllCmd() *cobra.Command {
+	var (
+		pending bool
+		running bool
+	)
+	cmd := &cobra.Command{
+		Use:   "list-all",
+		Short: "List all SDN fabrics across nodes",
+		Long: "List all SDN fabrics across all cluster nodes. Returns both fabric " +
+			"definitions and their member nodes in a single request.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			params := &cluster.ListSdnFabricsAllParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.ListSdnFabricsAll(cmd.Context(), params)
+			if err != nil {
+				return fmt.Errorf("list all SDN fabrics: %w", err)
+			}
+			// Combine fabrics + nodes into a single flat list for the table view.
+			all := make([]json.RawMessage, 0, len(resp.Fabrics)+len(resp.Nodes))
+			all = append(all, resp.Fabrics...)
+			all = append(all, resp.Nodes...)
+			return renderRawList(cmd, deps, all)
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
 	return cmd
 }
 

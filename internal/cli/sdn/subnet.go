@@ -20,13 +20,89 @@ type subnetEntry struct {
 	Zone    string `json:"zone"`
 }
 
+// subnetSetFlagNames lists the editable subnet attribute flags used by `set` to
+// detect a no-op update.
+var subnetSetFlagNames = []string{
+	"dhcp-dns-server", "dhcp-range", "dnszoneprefix", "gateway", "lock-token", "snat",
+}
+
 // newSubnetCmd builds `pve sdn subnet` and its sub-commands.
 func newSubnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subnet",
 		Short: "Manage SDN subnets",
 	}
-	cmd.AddCommand(newSubnetListCmd(), newSubnetCreateCmd(), newSubnetDeleteCmd())
+	cmd.AddCommand(newSubnetListCmd(), newSubnetCreateCmd(), newSubnetSetCmd(), newSubnetDeleteCmd())
+	return cmd
+}
+
+// newSubnetSetCmd builds `pve sdn subnet set <vnet> <subnet>`.
+func newSubnetSetCmd() *cobra.Command {
+	var (
+		del           string
+		dhcpDnsServer string
+		dhcpRange     []string
+		digest        string
+		dnszoneprefix string
+		gateway       string
+		lockToken     string
+		snat          bool
+	)
+	cmd := &cobra.Command{
+		Use:   "set <vnet> <subnet>",
+		Short: "Update a subnet on a vnet",
+		Long:  "Update a subnet on a vnet. The change is staged until `pve sdn apply`.",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet, subnet := args[0], args[1]
+			fl := cmd.Flags()
+			if !anyFlagChanged(fl, append(subnetSetFlagNames, "delete")...) {
+				return fmt.Errorf("no changes to set: pass at least one field flag")
+			}
+			params := &cluster.UpdateSdnVnetsSubnetsParams{}
+			if fl.Changed("delete") {
+				params.Delete = strPtr(del)
+			}
+			if fl.Changed("dhcp-dns-server") {
+				params.DhcpDnsServer = strPtr(dhcpDnsServer)
+			}
+			if fl.Changed("dhcp-range") {
+				params.DhcpRange = dhcpRange
+			}
+			if fl.Changed("digest") {
+				params.Digest = strPtr(digest)
+			}
+			if fl.Changed("dnszoneprefix") {
+				params.Dnszoneprefix = strPtr(dnszoneprefix)
+			}
+			if fl.Changed("gateway") {
+				params.Gateway = strPtr(gateway)
+			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if fl.Changed("snat") {
+				params.Snat = boolPtr(snat)
+			}
+			if err := deps.API.Cluster.UpdateSdnVnetsSubnets(cmd.Context(), vnet, subnet, params); err != nil {
+				return fmt.Errorf("update subnet %q on vnet %q: %w", subnet, vnet, err)
+			}
+			res := output.Result{
+				Message: fmt.Sprintf("Subnet %q on vnet %q updated (run `pve sdn apply` to commit).", subnet, vnet),
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&del, "delete", "", "comma-separated list of settings to delete")
+	f.StringVar(&dhcpDnsServer, "dhcp-dns-server", "", "IP address for the DHCP DNS server")
+	f.StringArrayVar(&dhcpRange, "dhcp-range", nil, "DHCP range for this subnet (repeatable)")
+	f.StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
+	f.StringVar(&dnszoneprefix, "dnszoneprefix", "", "DNS domain zone prefix, e.g. adm")
+	f.StringVar(&gateway, "gateway", "", "gateway IP for the subnet")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
+	f.BoolVar(&snat, "snat", false, "enable source NAT (masquerade) for the subnet")
 	return cmd
 }
 

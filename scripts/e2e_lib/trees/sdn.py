@@ -79,9 +79,12 @@ def run(ctx: Ctx) -> None:
     if fab.rc != 0:
         ctx.skip("fabric list", "SDN fabric routing not configured on this cluster")
         ctx.skip("fabric node list", "SDN fabric routing not configured on this cluster")
+        ctx.skip("fabric list-all", "SDN fabric routing not configured on this cluster")
     else:
         ctx.check("fabric list", "sdn", "fabric", "list", validate=is_list)
         ctx.check("fabric node list", "sdn", "fabric", "node", "list", validate=is_list)
+        # fabric list-all: returns all fabrics across nodes; same guard as list.
+        ctx.check("fabric list-all", "sdn", "fabric", "list-all", validate=is_list)
 
     pl = ctx.run("sdn", "prefix-list", "list")
     if pl.rc != 0:
@@ -122,14 +125,40 @@ def run(ctx: Ctx) -> None:
     ctx.defer("zone create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
               f"pve sdn zone create {Isolation.SDN_ZONE} --type simple",
               isolation=True, live_covered=True)
+    ctx.defer("zone set",
+              "updates a zone's properties — covered live by `e2e --mutate` "
+              "(set --nodes on the isolated pvecli zone)",
+              f"pve sdn zone set {Isolation.SDN_ZONE} --nodes <node>",
+              isolation=True, live_covered=True)
     ctx.defer("vnet create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
               f"pve sdn vnet create {Isolation.SDN_VNET} --zone {Isolation.SDN_ZONE}",
               isolation=True, live_covered=True)
     ctx.defer("subnet create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
               f"pve sdn subnet create {Isolation.SDN_VNET} {Isolation.SDN_SUBNET}",
               isolation=True, live_covered=True)
+    ctx.defer("subnet set",
+              "updates a subnet's gateway or other properties — covered live by `e2e --mutate`",
+              f"pve sdn subnet set {Isolation.SDN_VNET} <subnet-id> "
+              f"--gateway {Isolation.SDN_GATEWAY}",
+              isolation=True, live_covered=True)
+    ctx.defer("vnet ips create/set/delete",
+              "manages IPAM IP allocations within a vnet — requires pve IPAM enabled on "
+              "the zone; covered live by `e2e --mutate` on the isolated pvecli vnet",
+              f"pve sdn vnet ips create {Isolation.SDN_VNET} --ip 10.241.0.10 "
+              f"--zone {Isolation.SDN_ZONE}",
+              isolation=True, live_covered=True)
     ctx.defer("apply", "reloads network config on all nodes — covered live by `e2e --mutate`",
               "pve sdn apply", isolation=True, live_covered=True)
+    ctx.defer("lock acquire",
+              "acquires the global SDN config lock — requires a paired release and "
+              "blocks all concurrent SDN writes; not exercised live",
+              "pve sdn lock acquire",
+              isolation=False, live_covered=False)
+    ctx.defer("lock release",
+              "releases the global SDN config lock — must follow acquire; "
+              "not exercised live (paired with acquire, which is also deferred)",
+              "pve sdn lock release --lock-token <token> --yes",
+              isolation=False, live_covered=False)
 
     # Controller/IPAM/DNS write verbs are staged config edits; the help surface
     # is checked read-only and the full CRUD cycle runs live in the mutate phase.
