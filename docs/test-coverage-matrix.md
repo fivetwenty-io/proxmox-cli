@@ -70,7 +70,7 @@ swept clean before the next provisions.
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
 | `cluster` | 157 | 41 | 10 | 73 | 5 | 10 | 36 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 48 | 2 | 8 | 35 | 0 | 1 | 8 |
+| `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
 | `node` | 138 | 1 | 50 | 14 | 0 | 31 | 46 |
 | `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
 | `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **73** | **109** | **222** | **6** | **60** | **133** |
+| **Total** | **556** | **73** | **114** | **222** | **6** | **60** | **128** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **363** are exercised by at least one suite, **60** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **133** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **368** are exercised by at least one suite, **60** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **128** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -323,7 +323,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc delete` | — | ✓ |  |
 | `lxc disk move` | — | ✓ |  |
 | `lxc disk resize` | — | ✓ |  |
-| `lxc feature` | — | — | **uncovered** |
+| `lxc feature` | ◑ | — |  |
 | `lxc firewall alias create` | — | ✓ |  |
 | `lxc firewall alias delete` | — | ✓ |  |
 | `lxc firewall alias list` | — | ✓ |  |
@@ -342,19 +342,19 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc firewall rules update` | — | — | **uncovered** |
 | `lxc interfaces` | ◑ | ✓ |  |
 | `lxc list` | ✓ | — |  |
-| `lxc metrics` | — | — | **uncovered** |
+| `lxc metrics` | ◑ | — |  |
 | `lxc migrate` | — | ✓ |  |
-| `lxc migrate check` | — | — | **uncovered** |
+| `lxc migrate check` | ◑ | — |  |
 | `lxc reboot` | — | ✓ |  |
 | `lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
 | `lxc resume` | — | ✓ |  |
-| `lxc rrd` | — | — | **uncovered** |
+| `lxc rrd` | ◑ | — |  |
 | `lxc shutdown` | — | ✓ |  |
 | `lxc snapshot create` | — | ✓ |  |
 | `lxc snapshot delete` | — | ✓ |  |
 | `lxc snapshot list` | ◑ | ✓ |  |
 | `lxc snapshot rollback` | — | ✓ |  |
-| `lxc snapshot show` | — | — | **uncovered** |
+| `lxc snapshot show` | ◑ | — |  |
 | `lxc snapshot update` | — | — | **uncovered** |
 | `lxc start` | — | ✓ |  |
 | `lxc status` | ◑ | ✓ |  |
@@ -706,7 +706,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`cluster`** (36) — `cluster acme account delete`, `cluster acme account get`, `cluster acme account set`, `cluster ceph flags get`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster ha status manager`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`, `cluster notifications matcher create`, `cluster notifications matcher delete`, `cluster notifications matcher get`, `cluster notifications matcher set`, `cluster notifications sendmail create`, `cluster notifications sendmail delete`, `cluster notifications sendmail get`, `cluster notifications sendmail set`, `cluster notifications smtp create`, `cluster notifications smtp delete`, `cluster notifications smtp get`, `cluster notifications smtp set`, `cluster notifications targets-test`, `cluster notifications webhook create`, `cluster notifications webhook delete`, `cluster notifications webhook get`, `cluster notifications webhook set`
 
-**`lxc`** (8) — `lxc feature`, `lxc firewall alias update`, `lxc firewall rules update`, `lxc metrics`, `lxc migrate check`, `lxc rrd`, `lxc snapshot show`, `lxc snapshot update`
+**`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
 
 **`node`** (46) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph fs list`, `node ceph mds create`, `node ceph mds delete`, `node ceph mds list`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mgr list`, `node ceph mon delete`, `node ceph mon list`, `node ceph osd delete`, `node ceph osd get`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool get`, `node ceph pool set`, `node ceph pool status`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node query-url-metadata`, `node scan cifs`, `node scan iscsi`, `node scan lvmthin`, `node scan pbs`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`, `node vzdump extract-config`
 

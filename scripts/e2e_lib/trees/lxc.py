@@ -52,7 +52,12 @@ def run(ctx: Ctx) -> None:
         ctx.skip("status", "no container on node")
         ctx.skip("config get", "no container on node")
         ctx.skip("config pending", "no container on node")
+        ctx.skip("metrics", "no container on node")
+        ctx.skip("rrd", "no container on node")
+        ctx.skip("feature", "no container on node")
         ctx.skip("snapshot list", "no container on node")
+        ctx.skip("snapshot show", "no container on node")
+        ctx.skip("migrate check", "no container on node")
         ctx.skip("firewall rules list", "no container on node")
         ctx.skip("firewall options get", "no container on node")
         ctx.skip("console vnc ticket", "no container on node")
@@ -65,7 +70,63 @@ def run(ctx: Ctx) -> None:
         # staged), so it is safe against any existing container.
         ctx.check("config pending", "lxc", "config", "pending", cid,
                   node=n, validate=is_list)
+
+        # metrics: rrd timeseries for a container; zero-row result is a valid list.
+        ctx.check("metrics", "lxc", "metrics", cid, "--timeframe", "hour",
+                  node=n, validate=is_list)
+
+        # rrd: rrd PNG image reference; always returns a filename object.
+        def has_filename(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            if "filename" not in data:
+                return "rrd response missing 'filename' key"
+            return None
+
+        ctx.check("rrd", "lxc", "rrd", cid, "--ds", "cpu", "--timeframe", "hour",
+                  node=n, validate=has_filename)
+
+        # feature: whether the container supports a named feature (clone is always safe).
+        def has_feature(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            if "hasFeature" not in data:
+                return "feature response missing 'hasFeature' key"
+            return None
+
+        ctx.check("feature", "lxc", "feature", cid, "--feature", "clone",
+                  node=n, validate=has_feature)
+
         ctx.check("snapshot list", "lxc", "snapshot", "list", cid, node=n)
+
+        # snapshot show: discover a real snapshot name, skip when none exists.
+        snap_res = ctx.run("lxc", "snapshot", "list", cid, node=n)
+        snap_name = None
+        if snap_res.rc == 0:
+            try:
+                for entry in snap_res.json():
+                    if isinstance(entry, dict):
+                        nm = entry.get("name") or entry.get("snapname")
+                        if nm and nm != "current":
+                            snap_name = str(nm)
+                            break
+            except (ValueError, KeyError):
+                snap_name = None
+        if snap_name:
+            ctx.check("snapshot show", "lxc", "snapshot", "show", cid, snap_name, node=n)
+        else:
+            ctx.skip("snapshot show", "no snapshot found on the discovered container")
+
+        # migrate check: pre-flight analysis (read-only). A single-node cluster
+        # returns the feasibility object without an `allowed_nodes` list, so
+        # assert only the object shape here.
+        def is_migrate_check(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        ctx.check("migrate check", "lxc", "migrate", "check", cid,
+                  node=n, validate=is_migrate_check)
         # Read-only firewall inspection: rules list returns an array, and the
         # options object is always present even when the firewall is disabled.
         ctx.check("firewall rules list", "lxc", "firewall", "rules", "list", cid,
