@@ -254,13 +254,39 @@ def run(ctx: Ctx) -> None:
     ctx.check("mapping dir create --help", "cluster", "mapping", "dir", "create", "--help", fmt="")
     # The mutate phase creates an isolated `pve-cli-` directory mapping (which needs
     # only a node and a path — no real hardware) and exercises full CRUD live. PCI
-    # and USB mappings require real device IDs, so their writes are deferred.
-    ctx.defer(
-        "mapping pci/usb create/set/delete",
-        "PCI/USB mappings need real device IDs — dir mapping CRUD is covered live by `e2e --mutate`",
-        "pve cluster mapping pci create gpu --map node=pve,path=0000:01:00.0,id=10de:1b80",
-        isolation=True, live_covered=False,
-    )
+    # and USB mappings bind a logical name to a real device address (PCI path/vendor
+    # ID, USB bus path/vendor ID) that the API validates against hardware present on
+    # the node, so they cannot be provisioned on a shared lab. Each PCI/USB write
+    # leaf is deferred individually (one `pve ...` command apiece so the scorer maps
+    # them one-to-one) and covered by unit tests against a fake API.
+    ctx.defer("mapping pci create",
+              "PCI mappings bind to a real device address validated against node hardware — covered by unit tests; dir mapping CRUD is covered live by `e2e --mutate`",
+              "pve cluster mapping pci create gpu --map node=pve,path=0000:01:00.0,id=10de:1b80",
+              isolation=True, live_covered=False)
+    ctx.defer("mapping pci get",
+              "PCI mappings bind to a real device address validated against node hardware — covered by unit tests",
+              "pve cluster mapping pci get gpu", isolation=True, live_covered=False)
+    ctx.defer("mapping pci set",
+              "PCI mappings bind to a real device address validated against node hardware — covered by unit tests",
+              "pve cluster mapping pci set gpu --map node=pve,path=0000:01:00.0,id=10de:1b80",
+              isolation=True, live_covered=False)
+    ctx.defer("mapping pci delete",
+              "PCI mappings bind to a real device address validated against node hardware — covered by unit tests",
+              "pve cluster mapping pci delete gpu --yes", isolation=True, live_covered=False)
+    ctx.defer("mapping usb create",
+              "USB mappings bind to a real device address validated against node hardware — covered by unit tests; dir mapping CRUD is covered live by `e2e --mutate`",
+              "pve cluster mapping usb create yubikey --map node=pve,path=1-2,id=046d:c52b",
+              isolation=True, live_covered=False)
+    ctx.defer("mapping usb get",
+              "USB mappings bind to a real device address validated against node hardware — covered by unit tests",
+              "pve cluster mapping usb get yubikey", isolation=True, live_covered=False)
+    ctx.defer("mapping usb set",
+              "USB mappings bind to a real device address validated against node hardware — covered by unit tests",
+              "pve cluster mapping usb set yubikey --map node=pve,path=1-2,id=046d:c52b",
+              isolation=True, live_covered=False)
+    ctx.defer("mapping usb delete",
+              "USB mappings bind to a real device address validated against node hardware — covered by unit tests",
+              "pve cluster mapping usb delete yubikey --yes", isolation=True, live_covered=False)
 
     # Realm-sync jobs: the list is an array (empty on a lab with no LDAP/AD realm
     # synced). Read-only and safe to query directly.

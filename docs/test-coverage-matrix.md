@@ -68,7 +68,7 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 93 | 5 | 10 | 16 |
+| `cluster` | 157 | 42 | 12 | 93 | 5 | 17 | 9 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
 | `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **273** | **6** | **64** | **64** |
+| **Total** | **556** | **74** | **125** | **273** | **6** | **71** | **57** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **428** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **64** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **428** are exercised by at least one suite, **71** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **57** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -246,16 +246,16 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster mapping dir get` | — | ✓ |  |
 | `cluster mapping dir list` | ✓ | ✓ |  |
 | `cluster mapping dir set` | — | ✓ |  |
-| `cluster mapping pci create` | — | — | deferred — PCI/USB mappings need real device IDs — dir mapping CRUD is covered live by `e2e --mutate` |
-| `cluster mapping pci delete` | — | — | **uncovered** |
-| `cluster mapping pci get` | — | — | **uncovered** |
+| `cluster mapping pci create` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests; dir mapping CRUD is covered live by `e2e --mutate` |
+| `cluster mapping pci delete` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests |
+| `cluster mapping pci get` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests |
 | `cluster mapping pci list` | ✓ | — |  |
-| `cluster mapping pci set` | — | — | **uncovered** |
-| `cluster mapping usb create` | — | — | **uncovered** |
-| `cluster mapping usb delete` | — | — | **uncovered** |
-| `cluster mapping usb get` | — | — | **uncovered** |
+| `cluster mapping pci set` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests |
+| `cluster mapping usb create` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests; dir mapping CRUD is covered live by `e2e --mutate` |
+| `cluster mapping usb delete` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests |
+| `cluster mapping usb get` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests |
 | `cluster mapping usb list` | ✓ | — |  |
-| `cluster mapping usb set` | — | — | **uncovered** |
+| `cluster mapping usb set` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests |
 | `cluster metrics export` | ◑ | — |  |
 | `cluster metrics server create` | — | ✓ |  |
 | `cluster metrics server delete` | — | ✓ |  |
@@ -704,7 +704,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
 
-**`cluster`** (16) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`
+**`cluster`** (9) — `cluster acme account delete`, `cluster acme account set`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`
 
 **`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
 
