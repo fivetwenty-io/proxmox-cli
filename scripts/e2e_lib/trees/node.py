@@ -156,9 +156,9 @@ def run(ctx: Ctx) -> None:
                   node=n, validate=is_list)
         # lvm reports a volume-group tree as an object ({"children": [...]}),
         # unlike the other disk sub-types which return arrays.
-        ctx.check("disks ls lvm", "node", "disks", "ls", "lvm", node=n,
-                  validate=lambda r: None if isinstance(r.json(), (dict, list))
-                  else "expected a JSON object or array")
+        lvm_tree = ctx.check("disks ls lvm", "node", "disks", "ls", "lvm", node=n,
+                             validate=lambda r: None if isinstance(r.json(), (dict, list))
+                             else "expected a JSON object or array")
         ctx.check("disks ls lvmthin", "node", "disks", "ls", "lvmthin",
                   node=n, validate=is_list)
         zfs_list = ctx.check("disks ls zfs", "node", "disks", "ls", "zfs",
@@ -182,6 +182,27 @@ def run(ctx: Ctx) -> None:
         # reachable server and credentials, so they are deferred below.
         ctx.check("scan lvm", "node", "scan", "lvm", node=n, validate=is_list)
         ctx.check("scan zfs", "node", "scan", "zfs", node=n, validate=is_list)
+
+        # scan lvmthin: list the LVM-thin pools inside a volume group. It needs a
+        # real VG (`--vg`), so discover one from the local LVM tree (`disks ls
+        # lvm`, an object whose top-level children are the node's volume groups).
+        # An empty thin-pool list is a valid pass; skip when the node has no VG.
+        vg_name = None
+        if lvm_tree.rc == 0:
+            try:
+                children = lvm_tree.json().get("children")
+                if isinstance(children, list):
+                    for entry in children:
+                        if isinstance(entry, dict) and entry.get("name"):
+                            vg_name = str(entry["name"])
+                            break
+            except (ValueError, AttributeError, KeyError):
+                vg_name = None
+        if vg_name:
+            ctx.check("scan lvmthin", "node", "scan", "lvmthin", "--vg", vg_name,
+                      node=n, validate=is_list)
+        else:
+            ctx.skip("scan lvmthin", "no LVM volume group on this node")
 
         # Hardware: PCI(e) and USB inventories are read-only arrays.
         pci_list = ctx.check("hardware pci", "node", "hardware", "pci",
@@ -235,6 +256,34 @@ def run(ctx: Ctx) -> None:
         ctx.check("netstat", "node", "netstat", node=n, validate=is_list)
         # vzdump defaults: default vzdump settings; always a key/value object.
         ctx.check("vzdump defaults", "node", "vzdump", "defaults", node=n, validate=is_object)
+        # vzdump extract-config: print the guest configuration embedded in a
+        # backup archive. Read-only — it parses an existing backup file and emits
+        # the config text. Discover a backup volume from cluster storage; skip
+        # when the lab has no backup archive to read.
+        backup_volid = None
+        storages = ctx.run("storage", "list")
+        if storages.rc == 0:
+            try:
+                names = [s.get("storage") for s in storages.json()
+                         if isinstance(s, dict) and s.get("storage")]
+            except (ValueError, AttributeError):
+                names = []
+            for sname in names:
+                listing = ctx.run("storage", "content", str(sname),
+                                  "--content", "backup", node=n)
+                if listing.rc != 0:
+                    continue
+                try:
+                    backup_volid = ctx.first(listing.json(), "volid")
+                except (ValueError, AttributeError, KeyError):
+                    backup_volid = None
+                if backup_volid:
+                    break
+        if backup_volid:
+            ctx.check("vzdump extract-config", "node", "vzdump", "extract-config",
+                      "--volume", str(backup_volid), node=n, fmt="")
+        else:
+            ctx.skip("vzdump extract-config", "no backup archive found in cluster storage")
         ctx.check("dns set --help", "node", "dns", "set", "--help", fmt="")
         ctx.check("hosts set --help", "node", "hosts", "set", "--help", fmt="")
 
@@ -363,12 +412,17 @@ def run(ctx: Ctx) -> None:
         ctx.check("oci tags --help", "node", "oci", "tags", "--help", fmt="")
         ctx.check("oci pull --help", "node", "oci", "pull", "--help", fmt="")
 
-        # query-url-metadata: asks the node to probe a remote URL for metadata.
-        # Requires outbound HTTP access from the node; deferred rather than run
-        # live to avoid a hard dependency on external network reachability.
-        ctx.skip("query-url-metadata",
-                 "requires outbound HTTP from the node to an external URL; "
-                 "not exercised live to avoid network-dependency failures")
+        # query-url-metadata: asks the node to fetch a remote URL and report its
+        # metadata (size, mime type, filename). Needs outbound HTTP from the node
+        # to an external URL, so it is deferred rather than run live to avoid a
+        # hard dependency on external network reachability.
+        ctx.defer(
+            "query-url-metadata",
+            "fetches metadata from an external URL (needs outbound HTTP from the node); "
+            "not exercised live to avoid a network-reachability dependency",
+            "pve node query-url-metadata --node <node> --url https://example.com/image.iso",
+            isolation=False, live_covered=False,
+        )
 
         # services state: read the runtime state of a known service on the node.
         # pveproxy is always present on a PVE node — use it as a stable probe.
@@ -527,12 +581,31 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # The remote storage scans need a reachable server and (for cifs/pbs)
-    # credentials, so they are not part of the local read-only sweep.
+    # The remote storage scans each probe an external storage server (and, for
+    # cifs/pbs, need credentials), so they are not part of the local read-only
+    # sweep. Deferred per protocol so each verb is recorded against its own leaf.
     ctx.defer(
-        "scan nfs/cifs/iscsi/pbs",
-        "probes a remote storage server (needs a server address and credentials); not exercised live",
+        "scan nfs",
+        "probes a remote NFS server for its exports (needs a reachable server address); not exercised live",
         "pve node scan nfs --node <node> --server <server>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "scan cifs",
+        "probes a remote CIFS/SMB server for its shares (needs a server address and credentials); not exercised live",
+        "pve node scan cifs --node <node> --server <server>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "scan iscsi",
+        "probes a remote iSCSI portal for its targets (needs a reachable portal address); not exercised live",
+        "pve node scan iscsi --node <node> --portal <portal>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "scan pbs",
+        "probes a Proxmox Backup Server for its datastores (needs a server address and credentials); not exercised live",
+        "pve node scan pbs --node <node> --server <server> --username <user> --password <secret>",
         isolation=False, live_covered=False,
     )
 

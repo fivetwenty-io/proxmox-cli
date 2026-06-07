@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 41 | 10 | 73 | 5 | 10 | 36 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 35 | 0 | 1 | 3 |
-| `node` | 138 | 1 | 57 | 14 | 0 | 31 | 39 |
+| `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
 | `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
 | `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
 | `sdn` | 71 | 5 | 11 | 19 | 0 | 8 | 31 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **73** | **121** | **222** | **6** | **60** | **121** |
+| **Total** | **556** | **73** | **123** | **222** | **6** | **64** | **115** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **375** are exercised by at least one suite, **60** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **121** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **377** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **115** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -462,7 +462,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node network set` | — | — | **uncovered** |
 | `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live |
 | `node oci tags` | — | — | help-only (parse smoke test) |
-| `node query-url-metadata` | — | — | **uncovered** |
+| `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL (needs outbound HTTP from the node); not exercised live to avoid a network-reachability dependency |
 | `node replication list` | ◑ | — |  |
 | `node replication log` | ◑ | — |  |
 | `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
@@ -470,12 +470,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node report` | ◑ | — |  |
 | `node rrddata` | ◑ | — |  |
 | `node rsync` | — | ✓ |  |
-| `node scan cifs` | — | — | **uncovered** |
-| `node scan iscsi` | — | — | **uncovered** |
+| `node scan cifs` | — | — | deferred — probes a remote CIFS/SMB server for its shares (needs a server address and credentials); not exercised live |
+| `node scan iscsi` | — | — | deferred — probes a remote iSCSI portal for its targets (needs a reachable portal address); not exercised live |
 | `node scan lvm` | ◑ | — |  |
-| `node scan lvmthin` | — | — | **uncovered** |
-| `node scan nfs` | — | — | deferred — probes a remote storage server (needs a server address and credentials); not exercised live |
-| `node scan pbs` | — | — | **uncovered** |
+| `node scan lvmthin` | ◑ | — |  |
+| `node scan nfs` | — | — | deferred — probes a remote NFS server for its exports (needs a reachable server address); not exercised live |
+| `node scan pbs` | — | — | deferred — probes a Proxmox Backup Server for its datastores (needs a server address and credentials); not exercised live |
 | `node scan zfs` | ◑ | — |  |
 | `node services get` | ◑ | — |  |
 | `node services list` | ◑ | — |  |
@@ -503,7 +503,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node time set` | — | ✓ |  |
 | `node vzdump` | — | ✓ |  |
 | `node vzdump defaults` | ◑ | — |  |
-| `node vzdump extract-config` | — | — | **uncovered** |
+| `node vzdump extract-config` | ◑ | — |  |
 | `node wakeonlan` | — | — | n/a — sends a Wake-on-LAN packet to power on a node — affects real host power state, not run live |
 
 ## `pool`
@@ -708,7 +708,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`lxc`** (3) — `lxc firewall alias update`, `lxc firewall rules update`, `lxc snapshot update`
 
-**`node`** (39) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph mds create`, `node ceph mds delete`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mon delete`, `node ceph osd delete`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool set`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node query-url-metadata`, `node scan cifs`, `node scan iscsi`, `node scan lvmthin`, `node scan pbs`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`, `node vzdump extract-config`
+**`node`** (33) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph mds create`, `node ceph mds delete`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mon delete`, `node ceph osd delete`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool set`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`
 
 **`pool`** (1) — `pool delete`
 
