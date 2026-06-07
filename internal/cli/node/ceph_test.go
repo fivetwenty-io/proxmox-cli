@@ -389,6 +389,74 @@ func TestNodeCephMds_Create_ForwardsHotstandby(t *testing.T) {
 	require.Contains(t, buf.String(), "created")
 }
 
+func TestNodeCephMds_Delete_WithYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/mds/pve1", func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		testhelper.WriteData(w, cephUPID)
+	})
+	cephOK(f, cephUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "mds", "delete", "pve1", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "DELETE", rec.method)
+	require.Contains(t, buf.String(), "destroyed")
+}
+
+func TestNodeCephMds_Delete_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/mds/pve1", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "mds", "delete", "pve1"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCephMgr_Delete_WithYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/mgr/pve1", func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		testhelper.WriteData(w, cephUPID)
+	})
+	cephOK(f, cephUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "mgr", "delete", "pve1", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "DELETE", rec.method)
+	require.Contains(t, buf.String(), "destroyed")
+}
+
+func TestNodeCephMgr_Delete_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/mgr/pve1", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "mgr", "delete", "pve1"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
 func TestNodeCephMgr_Create_WithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
@@ -425,6 +493,27 @@ func TestNodeCephFs_Create_ForwardsFields(t *testing.T) {
 	require.Contains(t, rec.body, "add-storage=1")
 	require.Contains(t, rec.body, "pg_num=64")
 	require.Contains(t, buf.String(), "created")
+}
+
+func TestNodeCephFs_Delete_ForwardsFields(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/fs/cephfs", func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		rec.query = r.URL.RawQuery
+		testhelper.WriteData(w, cephUPID)
+	})
+	cephOK(f, cephUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "fs", "delete", "cephfs",
+		"--remove-pools", "--remove-storages", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "DELETE", rec.method)
+	require.Contains(t, rec.query, "remove-pools=1")
+	require.Contains(t, rec.query, "remove-storages=1")
+	require.Contains(t, buf.String(), "destroyed")
 }
 
 func TestNodeCephFs_Delete_RequiresYes(t *testing.T) {

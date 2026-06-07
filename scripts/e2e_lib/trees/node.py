@@ -612,7 +612,9 @@ def run(ctx: Ctx) -> None:
     # Every Ceph write verb is cluster-destructive: init lays down a new Ceph
     # cluster, OSD/pool/mon/mds/mgr/fs create and delete provision or destroy
     # daemons and data, and start/stop/restart control running Ceph services.
-    # None is exercised live on the shared lab; the CLI gates each behind --yes.
+    # None is exercised live on the shared lab; the CLI gates each behind --yes
+    # and each verb is covered by a unit test (guard + argument contract).
+    # Deferred one verb at a time so the coverage matrix records every leaf.
     ctx.defer(
         "ceph init",
         "initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live",
@@ -620,26 +622,116 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
     ctx.defer(
-        "ceph osd create/delete/in/out/scrub",
-        "creates or destroys OSDs (wipes block devices) and moves cluster data; not exercised live",
+        "ceph osd create",
+        "creates an OSD by wiping and consuming a block device; not exercised live",
         "pve node ceph osd create --node <node> --dev /dev/sdb --yes",
         isolation=False, live_covered=False,
     )
     ctx.defer(
-        "ceph pool create/set/delete",
-        "creates, reconfigures, or destroys a Ceph pool (data loss on delete); not exercised live",
+        "ceph osd delete",
+        "destroys an OSD and optionally zaps its underlying volumes; not exercised live",
+        "pve node ceph osd delete <osdid> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph osd in",
+        "marks an OSD in, triggering cluster data movement; not exercised live",
+        "pve node ceph osd in <osdid> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph osd out",
+        "marks an OSD out, draining its data across the cluster; not exercised live",
+        "pve node ceph osd out <osdid> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph osd scrub",
+        "triggers an OSD scrub that adds cluster I/O load; not exercised live",
+        "pve node ceph osd scrub <osdid> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph pool create",
+        "creates a Ceph pool, consuming cluster capacity; not exercised live",
         "pve node ceph pool create <name> --node <node> --yes",
         isolation=False, live_covered=False,
     )
     ctx.defer(
-        "ceph mon/mds/mgr/fs create/delete",
-        "provisions or destroys Ceph monitor/MDS/MGR/filesystem daemons; not exercised live",
+        "ceph pool set",
+        "reconfigures an existing Ceph pool's parameters; not exercised live",
+        "pve node ceph pool set <name> --node <node> --size 3 --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph pool delete",
+        "destroys a Ceph pool and permanently loses its data; not exercised live",
+        "pve node ceph pool delete <name> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph mon create",
+        "provisions a Ceph monitor daemon on the node; not exercised live",
         "pve node ceph mon create <monid> --node <node> --yes",
         isolation=False, live_covered=False,
     )
     ctx.defer(
-        "ceph start/stop/restart",
-        "controls running Ceph services on the node — disruptive; not exercised live",
+        "ceph mon delete",
+        "destroys a Ceph monitor daemon on the node; not exercised live",
+        "pve node ceph mon delete <monid> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph mds create",
+        "provisions a Ceph metadata-server daemon on the node; not exercised live",
+        "pve node ceph mds create <name> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph mds delete",
+        "destroys a Ceph metadata-server daemon on the node; not exercised live",
+        "pve node ceph mds delete <name> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph mgr create",
+        "provisions a Ceph manager daemon on the node; not exercised live",
+        "pve node ceph mgr create <id> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph mgr delete",
+        "destroys a Ceph manager daemon on the node; not exercised live",
+        "pve node ceph mgr delete <id> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph fs create",
+        "creates a CephFS filesystem and its backing pools; not exercised live",
+        "pve node ceph fs create <name> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph fs delete",
+        "destroys a CephFS filesystem and optionally its pools; not exercised live",
+        "pve node ceph fs delete <name> --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph start",
+        "starts Ceph services on the node — disruptive; not exercised live",
+        "pve node ceph start --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph stop",
+        "stops Ceph services on the node — disruptive; not exercised live",
+        "pve node ceph stop --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph restart",
+        "restarts Ceph services on the node — disruptive; not exercised live",
         "pve node ceph restart --node <node> --service osd.0 --yes",
         isolation=False, live_covered=False,
     )
