@@ -51,6 +51,7 @@ def run(ctx: Ctx) -> None:
     if ctid is None:
         ctx.skip("status", "no container on node")
         ctx.skip("config get", "no container on node")
+        ctx.skip("config pending", "no container on node")
         ctx.skip("snapshot list", "no container on node")
         ctx.skip("firewall rules list", "no container on node")
         ctx.skip("firewall options get", "no container on node")
@@ -59,6 +60,11 @@ def run(ctx: Ctx) -> None:
         cid = str(ctid)
         ctx.check("status", "lxc", "status", cid, node=n, validate=has_status)
         ctx.check("config get", "lxc", "config", "get", cid, node=n)
+        # config pending reads the diff between current and pending config; it is
+        # non-mutating and returns an array on any container (even if no change is
+        # staged), so it is safe against any existing container.
+        ctx.check("config pending", "lxc", "config", "pending", cid,
+                  node=n, validate=is_list)
         ctx.check("snapshot list", "lxc", "snapshot", "list", cid, node=n)
         # Read-only firewall inspection: rules list returns an array, and the
         # options object is always present even when the firewall is disabled.
@@ -151,4 +157,12 @@ def run(ctx: Ctx) -> None:
         "opening the proxied console session needs an interactive viewer — the "
         "CLI only returns the ticket, which the read-only sweep validates",
         "pve lxc console <ctid> --type spice",
+    )
+    ctx.defer(
+        "remote-migrate",
+        "migrates a container to a different Proxmox VE cluster — requires two "
+        "live clusters; no rollback without manual intervention; not exercised live",
+        "pve lxc remote-migrate <ctid> --yes --target-endpoint https://remote:8006 "
+        "--target-storage local-lvm",
+        isolation=False, live_covered=False,
     )

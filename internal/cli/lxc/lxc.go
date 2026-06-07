@@ -32,6 +32,7 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 		newCreateCmd(),
 		newCloneCmd(),
 		newMigrateCmd(),
+		newRemoteMigrateCmd(),
 		newDiskCmd(),
 		newFirewallCmd(),
 		newConsoleCmd(),
@@ -45,6 +46,9 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 		newResumeCmd(),
 		newDeleteCmd(),
 		newSnapshotCmd(),
+		newMetricsCmd(),
+		newFeatureCmd(),
+		newRrdCmd(),
 	)
 	return cmd
 }

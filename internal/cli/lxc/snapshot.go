@@ -31,6 +31,8 @@ func newSnapshotCmd() *cobra.Command {
 		newSnapshotCreateCmd(),
 		newSnapshotDeleteCmd(),
 		newSnapshotRollbackCmd(),
+		newSnapshotShowCmd(),
+		newSnapshotUpdateCmd(),
 	)
 	return cmd
 }
@@ -192,6 +194,89 @@ func newSnapshotListCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+}
+
+// newSnapshotShowCmd builds `pve lxc snapshot show <vmid> <snapname>`.
+//
+// Returns the configuration stored with a named snapshot.
+func newSnapshotShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <vmid> <snapname>",
+		Short: "Show the configuration stored with a snapshot",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := getDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+			vmid, snapname := args[0], args[1]
+
+			resp, err := deps.API.Nodes.ListLxcSnapshotConfig(cmd.Context(), node, vmid, snapname)
+			if err != nil {
+				return fmt.Errorf("get config for snapshot %q of container %s: %w", snapname, vmid, err)
+			}
+
+			// resp is a json.RawMessage alias; decode to a generic map for key/value rendering.
+			var decoded map[string]any
+			if resp != nil && len(*resp) > 0 {
+				if err := json.Unmarshal(*resp, &decoded); err != nil {
+					return fmt.Errorf("decode snapshot config: %w", err)
+				}
+			}
+			single := make(map[string]string, len(decoded))
+			for k, v := range decoded {
+				if v != nil {
+					single[k] = fmt.Sprintf("%v", v)
+				}
+			}
+
+			var raw any
+			if resp != nil {
+				raw = *resp
+			}
+			res := output.Result{Single: single, Raw: raw}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+}
+
+// newSnapshotUpdateCmd builds `pve lxc snapshot update <vmid> <snapname> --description DESC`.
+//
+// Updates metadata (description) stored with an existing snapshot.
+func newSnapshotUpdateCmd() *cobra.Command {
+	var description string
+
+	cmd := &cobra.Command{
+		Use:   "update <vmid> <snapname>",
+		Short: "Update the description of a snapshot",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := getDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+			vmid, snapname := args[0], args[1]
+
+			if !cmd.Flags().Changed("description") {
+				return fmt.Errorf("no fields specified: pass --description to update the snapshot")
+			}
+
+			params := &nodes.UpdateLxcSnapshotConfigParams{}
+			params.Description = &description
+
+			if err := deps.API.Nodes.UpdateLxcSnapshotConfig(cmd.Context(), node, vmid, snapname, params); err != nil {
+				return fmt.Errorf("update snapshot %q for container %s: %w", snapname, vmid, err)
+			}
+
+			res := output.Result{Message: fmt.Sprintf("Snapshot %s of container %s updated.", snapname, vmid)}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+
+	cmd.Flags().StringVar(&description, "description", "", "new description for the snapshot")
+	return cmd
 }
 
 // fmtSnaptime renders a unix snapshot timestamp as RFC3339, or "-" when zero.

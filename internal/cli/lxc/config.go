@@ -10,13 +10,13 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newConfigCmd builds `pve lxc config` and its get/set sub-commands.
+// newConfigCmd builds `pve lxc config` and its get/set/pending sub-commands.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Get or set container configuration",
 	}
-	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd())
+	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd())
 	return cmd
 }
 
@@ -168,6 +168,60 @@ func newConfigSetCmd() *cobra.Command {
 	fl.StringVar(&deleteKeys, "delete", "", "comma-separated list of settings to delete")
 	fl.StringVar(&revertKeys, "revert", "", "comma-separated list of pending changes to revert")
 	return cmd
+}
+
+// lxcPendingEntry is one element from the ListLxcPending response array. Each
+// element holds the current committed value and any pending (next-reboot) value
+// for a single config key.
+type lxcPendingEntry struct {
+	Key     string `json:"key"`
+	Value   any    `json:"value"`
+	Pending any    `json:"pending"`
+	Delete  int    `json:"delete"`
+}
+
+// newConfigPendingCmd builds `pve lxc config pending <vmid>`.
+//
+// Returns the diff between the currently committed configuration and any
+// changes that take effect after the next container restart.
+func newConfigPendingCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pending <vmid>",
+		Short: "Show pending configuration changes for a container",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := getDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+			vmid := args[0]
+
+			resp, err := deps.API.Nodes.ListLxcPending(cmd.Context(), node, vmid)
+			if err != nil {
+				return fmt.Errorf("get pending config for container %s on node %q: %w", vmid, node, err)
+			}
+
+			headers := []string{"KEY", "VALUE", "PENDING-VALUE"}
+			rows := make([][]string, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var e lxcPendingEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode pending config entry: %w", err)
+					}
+					rows = append(rows, []string{
+						e.Key,
+						fmt.Sprintf("%v", e.Value),
+						fmt.Sprintf("%v", e.Pending),
+					})
+				}
+			}
+
+			res := output.Result{Headers: headers, Rows: rows, Raw: resp}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
 }
 
 // structToStringMap marshals a typed response struct or decoded value to a flat
