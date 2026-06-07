@@ -74,6 +74,7 @@ REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
 ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
 CPU_MODEL = "pve-cli-cpu"            # isolated custom QEMU CPU model
 SDN_IPAM = "pvecliipam"              # isolated SDN IPAM backend (pve-type, no external backend)
+SDN_CTRL = "pveclictrl"              # isolated EVPN controller (staged config only, never applied)
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
@@ -155,9 +156,11 @@ class Runner:
         raise LifecycleError(label)
 
     # A required, coverage-recorded step: print result, record it, raise on failure.
+    # node=False suppresses the auto-injected `--node` for cluster-global verbs
+    # whose command defines its own `--node` field flag (e.g. sdn controller).
     def step(self, guest: str, verb: str, label: str, *args: str,
-             json_out: bool = False) -> Cmd:
-        return self._record(guest, verb, label, self.pve(*args, json_out=json_out))
+             json_out: bool = False, node: bool = True) -> Cmd:
+        return self._record(guest, verb, label, self.pve(*args, json_out=json_out, node=node))
 
     # Like step(), but runs the binary verbatim (no --target/--node), for verbs
     # driven against a scratch `--config` file or an explicit --target.
@@ -210,8 +213,9 @@ class Runner:
     # On the happy path the just-created resource deletes cleanly → PASS. A
     # cleanup error (e.g. resource already gone from a crashed prior run) records
     # SKIP with the detail rather than failing the whole suite.
-    def del_step(self, guest: str, verb: str, label: str, *args: str) -> None:
-        res = self.pve(*args)
+    def del_step(self, guest: str, verb: str, label: str, *args: str,
+                 node: bool = True) -> None:
+        res = self.pve(*args, node=node)
         if res.rc == 0:
             print(f"  {GREEN('✓')} {label}")
             self.cov.append(Step(guest, verb, PASS))
@@ -883,18 +887,24 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
 
 def teardown_network(r: Runner) -> None:
     print(BOLD("teardown: isolated SDN + pool"))
+    # The subnet/vnet/zone deletes are the live coverage for the `sdn ... delete`
+    # verbs: they remove the exact objects this suite provisioned, so they run as
+    # coverage-recorded del_steps (PASS on a normal teardown, SKIP when a prior
+    # run already cleaned up). teardown is also called as a pre-clean before
+    # provisioning, where these objects do not yet exist — del_step records that
+    # as a benign cleanup SKIP rather than aborting.
     # Subnet must be deleted by its id (zone-prefixed), not the CIDR.
     sub = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
     if sub.rc == 0:
         for s in sub.json():
             sid = s.get("subnet")
             if sid:
-                r.undo(f"sdn subnet delete {sid}", "sdn", "subnet", "delete",
-                       Isolation.SDN_VNET, sid, "--yes")
-    r.undo(f"sdn vnet delete {Isolation.SDN_VNET}", "sdn", "vnet", "delete",
-           Isolation.SDN_VNET, "--yes")
-    r.undo(f"sdn zone delete {Isolation.SDN_ZONE}", "sdn", "zone", "delete",
-           Isolation.SDN_ZONE, "--yes")
+                r.del_step("infra", "sdn subnet delete", f"sdn subnet delete {sid}",
+                           "sdn", "subnet", "delete", Isolation.SDN_VNET, sid, "--yes")
+    r.del_step("infra", "sdn vnet delete", f"sdn vnet delete {Isolation.SDN_VNET}",
+               "sdn", "vnet", "delete", Isolation.SDN_VNET, "--yes")
+    r.del_step("infra", "sdn zone delete", f"sdn zone delete {Isolation.SDN_ZONE}",
+               "sdn", "zone", "delete", Isolation.SDN_ZONE, "--yes")
     r.undo("sdn apply", "sdn", "apply")
     r.undo(f"pool delete {Isolation.POOL}", "pool", "delete", Isolation.POOL, "--yes")
 
@@ -2119,6 +2129,35 @@ def sdn_objects_lifecycle(r: Runner) -> None:
     finally:
         r.del_step("sdn", "ipam delete", f"ipam delete {SDN_IPAM}",
                    "sdn", "ipam", "delete", SDN_IPAM, "--yes")
+
+    # ---- controller create/get/set/delete (evpn, staged-only, no apply) ------
+    # An EVPN controller is a pure cluster-config entry until `sdn apply`; the
+    # FRR routing daemon is only engaged at apply time. This block creates, reads,
+    # edits, and deletes the isolated controller WITHOUT ever applying, so no
+    # routing daemon is reconfigured and live networking is untouched. The
+    # asn/peers values are arbitrary staged config that is never committed. The
+    # controller is removed in a finally block, leaving the SDN config as found.
+    # node=False on every controller step: `sdn controller` defines its own
+    # `--node` field flag, so the suite's auto-injected `--node` would be
+    # forwarded as a controller property and rejected by the EVPN type.
+    r.undo(f"pre-clean {SDN_CTRL}", "sdn", "controller", "delete", SDN_CTRL, "--yes")
+    try:
+        r.step("sdn", "controller create", f"controller create {SDN_CTRL}",
+               "sdn", "controller", "create", SDN_CTRL, "--type", "evpn",
+               "--asn", "65000", "--peers", "172.30.0.2", node=False)
+        got = r.step("sdn", "controller get", f"controller get {SDN_CTRL}",
+                     "sdn", "controller", "get", SDN_CTRL, json_out=True, node=False)
+        if "evpn" not in got.out:
+            raise LifecycleError(f"controller get did not report the type for {SDN_CTRL}")
+        r.step("sdn", "controller set", f"controller set {SDN_CTRL} (asn)",
+               "sdn", "controller", "set", SDN_CTRL, "--asn", "65001", node=False)
+        got = r.step("sdn", "controller get", f"controller get {SDN_CTRL} (after set)",
+                     "sdn", "controller", "get", SDN_CTRL, json_out=True, node=False)
+        if "65001" not in got.out:
+            raise LifecycleError(f"controller set asn not reflected in get for {SDN_CTRL}")
+    finally:
+        r.del_step("sdn", "controller delete", f"controller delete {SDN_CTRL}",
+                   "sdn", "controller", "delete", SDN_CTRL, "--yes", node=False)
 
     # ---- zone set on the isolated pvecli zone (staged-only) ------------------
     # Stage an MTU change on the zone, then clear it in the same run. MTU is a

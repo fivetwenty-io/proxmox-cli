@@ -74,13 +74,13 @@ swept clean before the next provisions.
 | `node` | 138 | 1 | 59 | 14 | 0 | 35 | 33 |
 | `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
 | `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
-| `sdn` | 71 | 5 | 11 | 19 | 0 | 8 | 31 |
+| `sdn` | 71 | 5 | 11 | 26 | 0 | 10 | 22 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **222** | **6** | **64** | **112** |
+| **Total** | **556** | **74** | **125** | **229** | **6** | **66** | **103** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **380** are exercised by at least one suite, **64** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **112** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **387** are exercised by at least one suite, **66** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **103** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -585,16 +585,16 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `sdn apply` | — | ✓ |  |
-| `sdn controller create` | — | — | deferred — needs an FRR routing backend — covered by unit tests |
-| `sdn controller delete` | — | — | **uncovered** |
-| `sdn controller get` | — | — | **uncovered** |
+| `sdn controller create` | — | ✓ |  |
+| `sdn controller delete` | — | ✓ |  |
+| `sdn controller get` | — | ✓ |  |
 | `sdn controller list` | ✓ | — |  |
-| `sdn controller set` | — | — | **uncovered** |
+| `sdn controller set` | — | ✓ |  |
 | `sdn dns create` | — | — | deferred — validates connectivity to an external DNS backend — covered by unit tests |
-| `sdn dns delete` | — | — | **uncovered** |
-| `sdn dns get` | — | — | **uncovered** |
+| `sdn dns delete` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
+| `sdn dns get` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
 | `sdn dns list` | ✓ | — |  |
-| `sdn dns set` | — | — | **uncovered** |
+| `sdn dns set` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
 | `sdn dry-run` | ◑ | — |  |
 | `sdn fabric create` | — | — | deferred — needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by unit tests |
 | `sdn fabric delete` | — | — | **uncovered** |
@@ -634,11 +634,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn route-map get` | — | — | **uncovered** |
 | `sdn route-map list` | ◑ | — |  |
 | `sdn subnet create` | — | ✓ |  |
-| `sdn subnet delete` | — | — | **uncovered** |
+| `sdn subnet delete` | — | ✓ |  |
 | `sdn subnet list` | ◑ | — |  |
 | `sdn subnet set` | — | ✓ |  |
 | `sdn vnet create` | — | ✓ |  |
-| `sdn vnet delete` | — | — | **uncovered** |
+| `sdn vnet delete` | — | ✓ |  |
 | `sdn vnet firewall options get` | ◑ | ✓ |  |
 | `sdn vnet firewall options set` | — | — | **uncovered** |
 | `sdn vnet firewall rules create` | — | ✓ |  |
@@ -652,7 +652,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn vnet list` | ✓ | — |  |
 | `sdn vnet set` | — | ✓ |  |
 | `sdn zone create` | — | ✓ |  |
-| `sdn zone delete` | — | — | **uncovered** |
+| `sdn zone delete` | — | ✓ |  |
 | `sdn zone list` | ✓ | — |  |
 | `sdn zone set` | — | ✓ |  |
 
@@ -714,7 +714,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`qemu`** (8) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`, `qemu firewall alias update`, `qemu firewall rules update`, `qemu snapshot update`
 
-**`sdn`** (31) — `sdn controller delete`, `sdn controller get`, `sdn controller set`, `sdn dns delete`, `sdn dns get`, `sdn dns set`, `sdn fabric delete`, `sdn fabric get`, `sdn fabric node create`, `sdn fabric node delete`, `sdn fabric node get`, `sdn fabric node set`, `sdn fabric set`, `sdn ipam set`, `sdn prefix-list delete`, `sdn prefix-list entry add`, `sdn prefix-list entry delete`, `sdn prefix-list entry get`, `sdn prefix-list entry list`, `sdn prefix-list entry set`, `sdn prefix-list get`, `sdn prefix-list set`, `sdn route-map entry delete`, `sdn route-map entry get`, `sdn route-map entry set`, `sdn route-map get`, `sdn subnet delete`, `sdn vnet delete`, `sdn vnet firewall options set`, `sdn vnet firewall rules set`, `sdn zone delete`
+**`sdn`** (22) — `sdn fabric delete`, `sdn fabric get`, `sdn fabric node create`, `sdn fabric node delete`, `sdn fabric node get`, `sdn fabric node set`, `sdn fabric set`, `sdn ipam set`, `sdn prefix-list delete`, `sdn prefix-list entry add`, `sdn prefix-list entry delete`, `sdn prefix-list entry get`, `sdn prefix-list entry list`, `sdn prefix-list entry set`, `sdn prefix-list get`, `sdn prefix-list set`, `sdn route-map entry delete`, `sdn route-map entry get`, `sdn route-map entry set`, `sdn route-map get`, `sdn vnet firewall options set`, `sdn vnet firewall rules set`
 
 ## Running the suites
 

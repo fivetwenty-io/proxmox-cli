@@ -165,13 +165,33 @@ def run(ctx: Ctx) -> None:
     ctx.check("controller create --help", "sdn", "controller", "create", "--help", fmt="")
     ctx.check("ipam create --help", "sdn", "ipam", "create", "--help", fmt="")
     ctx.check("dns create --help", "sdn", "dns", "create", "--help", fmt="")
+    # An EVPN controller is a staged config entry until `sdn apply`; the mutate
+    # phase creates/gets/sets/deletes the isolated controller without ever
+    # applying, so the full CRUD cycle is exercised live with no FRR backend.
     ctx.defer("controller create/get/set/delete",
-              "needs an FRR routing backend — covered by unit tests",
-              "pve sdn controller create pvecli-bgp --type bgp",
-              isolation=True, live_covered=False)
-    ctx.defer("dns create/get/set/delete",
+              "staged EVPN controller config — covered live by `e2e --mutate` (never applied, so no FRR backend needed)",
+              "pve sdn controller create pveclictrl --type evpn --asn 65000 --peers 172.30.0.2",
+              isolation=True, live_covered=True)
+    # A DNS provider (PowerDNS et al.) validates connectivity to an external DNS
+    # backend on create, so it cannot be provisioned on the lab — the read verbs
+    # need an existing provider that only such a backend can create. Each is
+    # deferred per leaf (one `pve ...` command apiece so the scorer maps them
+    # individually) and covered by unit tests.
+    ctx.defer("dns create",
               "validates connectivity to an external DNS backend — covered by unit tests",
               "pve sdn dns create pveclidns --type powerdns --url URL --key KEY",
+              isolation=True, live_covered=False)
+    ctx.defer("dns get",
+              "needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests",
+              "pve sdn dns get pveclidns",
+              isolation=True, live_covered=False)
+    ctx.defer("dns set",
+              "needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests",
+              "pve sdn dns set pveclidns --ttl 600",
+              isolation=True, live_covered=False)
+    ctx.defer("dns delete",
+              "needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests",
+              "pve sdn dns delete pveclidns --yes",
               isolation=True, live_covered=False)
     ctx.defer("ipam create/get/delete",
               "pve-type IPAM CRUD — covered live by `e2e --mutate`",
