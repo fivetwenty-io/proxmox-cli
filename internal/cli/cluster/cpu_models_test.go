@@ -96,6 +96,8 @@ func TestClusterCpuModel_CreateForwardsAllFields(t *testing.T) {
 	require.NoError(t, run(&buf, "cpu-model", "create", "custom-epyc",
 		"--reported-model", "EPYC", "--guest-phys-bits", "46", "--level", "30",
 		"--phys-bits", "host", "--hv-vendor-id", "PVE"))
+	require.Equal(t, "custom-epyc", gotForm.Get("cputype"))
+	require.Equal(t, "EPYC", gotForm.Get("reported-model"))
 	require.Equal(t, "46", gotForm.Get("guest-phys-bits"))
 	require.Equal(t, "30", gotForm.Get("level"))
 	require.Equal(t, "host", gotForm.Get("phys-bits"))

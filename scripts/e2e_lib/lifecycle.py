@@ -2181,7 +2181,7 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_acme_plugin_lifecycle(r)
         print()
         cluster_cpumodel_lifecycle(r)
-
+        print()
         sdn_objects_lifecycle(r)
         print()
 

@@ -208,8 +208,8 @@ func newCpuModelDeleteCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := resolveDeps(cmd)
 			cputype := args[0]
-			if !yes {
-				return fmt.Errorf("refusing to delete custom CPU model %q without confirmation: pass --yes/-y", cputype)
+			if err := requireDeleteYes(yes, "custom CPU model", cputype); err != nil {
+				return err
 			}
 			if err := deps.API.Cluster.DeleteQemuCustomCpuModels(cmd.Context(), cputype); err != nil {
 				return fmt.Errorf("delete custom CPU model %q: %w", cputype, err)
