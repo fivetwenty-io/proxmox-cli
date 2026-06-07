@@ -1209,6 +1209,56 @@ def storage_lifecycle(r: Runner) -> None:
                    "storage", "delete", sid, "--yes")
 
 
+def storage_volume_lifecycle(r: Runner) -> None:
+    """Alloc a throwaway raw volume on `local` storage, then delete it.
+
+    Isolation: vmid 9999 is reserved for pve-cli integration test volumes;
+    the filename prefix `pve-cli-test` distinguishes test volumes from
+    production data. The alloc captures the server-returned volid (which may
+    differ from the requested name on some backends) and deletes it in the
+    finally block, so no artifact is left behind.
+
+    Guard: `local` (dir-type) may not accept `images` content on every lab —
+    if the server rejects the alloc, the step is recorded as SKIP with the
+    server reason (not a hard failure). The delete is skipped when no volid
+    was allocated.
+    """
+    print(BOLD("storage: volume alloc / delete (isolated, teardown-safe)"))
+    test_sid = "local"
+    test_vmid = "9999"
+    test_name = f"{test_sid}:vm-{test_vmid}-pve-cli-test"
+    allocated_volid: str | None = None
+    try:
+        alloc = r.pve("storage", "volume", "alloc",
+                      "--vmid", test_vmid,
+                      "--filename", test_name,
+                      "--size", "1G",
+                      json_out=True)
+        if alloc.rc != 0:
+            detail = (alloc.err.strip() or alloc.out.strip())[:200]
+            reason = f"volume alloc rejected by server: {detail}"
+            r.cover_skip("storage", "volume alloc", "volume alloc (pve-cli-test)", reason)
+            r.cover_skip("storage", "volume delete", "volume delete (pve-cli-test)", reason)
+            return
+        # Extract the returned volid; the server may normalise the filename.
+        try:
+            data = alloc.json()
+            if isinstance(data, str):
+                allocated_volid = data.strip().strip('"')
+            elif isinstance(data, dict):
+                allocated_volid = str(data.get("volid") or data.get("data") or test_name)
+            else:
+                allocated_volid = test_name
+        except (ValueError, KeyError):
+            allocated_volid = test_name
+        print(f"  {GREEN('✓')} volume alloc -> {allocated_volid}")
+        r.cov.append(Step("storage", "volume alloc", PASS))
+    finally:
+        if allocated_volid:
+            r.del_step("storage", "volume delete", f"volume delete {allocated_volid}",
+                       "storage", "volume", "delete", allocated_volid, "--yes")
+
+
 def backup_lifecycle(r: Runner) -> None:
     """Create / inspect / update / delete an isolated, DISABLED vzdump backup
     schedule. The job is scoped to the pve-cli pool and never enabled, so it can
@@ -2070,6 +2120,75 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         r.del_step("sdn", "ipam delete", f"ipam delete {SDN_IPAM}",
                    "sdn", "ipam", "delete", SDN_IPAM, "--yes")
 
+    # ---- zone set on the isolated pvecli zone (staged-only) ------------------
+    # Stage an MTU change on the zone, then clear it in the same run. MTU is a
+    # generic, reversible attribute. Soft: if a simple zone rejects the field on
+    # this PVE version, record SKIP rather than aborting the suite.
+    zset = r.pve("sdn", "zone", "set", Isolation.SDN_ZONE, "--mtu", "1400")
+    if zset.rc != 0:
+        reason_z = (zset.err.strip() or zset.out.strip())[:120]
+        r.cover_skip("sdn", "zone set", "zone set", f"zone set rejected: {reason_z}")
+    else:
+        print(f"  {GREEN('✓')} zone set {Isolation.SDN_ZONE} (mtu)")
+        r.cov.append(Step("sdn", "zone set", PASS))
+        r.del_step("sdn", "zone set delete", f"zone set {Isolation.SDN_ZONE} (--delete mtu)",
+                   "sdn", "zone", "set", Isolation.SDN_ZONE, "--delete", "mtu")
+
+    # ---- subnet set on the isolated pvecli0/10.241.0.0-24 subnet (staged-only)
+    # The subnet id uses the API's dash notation; discover it from the list so
+    # the test is robust to subnet id format changes. Stage a DNS zone prefix,
+    # then clear it. Soft: SKIP on rejection rather than aborting.
+    sub_res = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
+    subnet_id: str | None = None
+    if sub_res.rc == 0:
+        try:
+            for s in sub_res.json():
+                if isinstance(s, dict) and s.get("subnet"):
+                    subnet_id = str(s["subnet"])
+                    break
+        except (ValueError, KeyError):
+            subnet_id = None
+    if subnet_id:
+        sset = r.pve("sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
+                     "--dnszoneprefix", "pvecli")
+        if sset.rc != 0:
+            reason_s = (sset.err.strip() or sset.out.strip())[:120]
+            r.cover_skip("sdn", "subnet set", "subnet set", f"subnet set rejected: {reason_s}")
+        else:
+            print(f"  {GREEN('✓')} subnet set {subnet_id} (dnszoneprefix)")
+            r.cov.append(Step("sdn", "subnet set", PASS))
+            r.del_step("sdn", "subnet set delete", f"subnet set {subnet_id} (--delete dnszoneprefix)",
+                       "sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
+                       "--delete", "dnszoneprefix")
+    else:
+        r.cover_skip("sdn", "subnet set", "subnet set",
+                     "could not discover the isolated subnet id")
+
+    # ---- vnet ips create/set/delete (pve IPAM, isolated pvecli zone/vnet) ----
+    # Create an IP allocation in the isolated zone's IPAM, update its vmid, then
+    # delete it. Requires the pve IPAM to be enabled on the zone; if the create
+    # is rejected (no IPAM configured), record as SKIP rather than failing.
+    TEST_IP = "10.241.0.10"
+    ips_create = r.pve("sdn", "vnet", "ips", "create", Isolation.SDN_VNET,
+                       "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE)
+    if ips_create.rc != 0:
+        reason_ips = (ips_create.err.strip() or ips_create.out.strip())[:120]
+        r.cover_skip("sdn", "vnet ips create", "vnet ips create",
+                     f"vnet ips create rejected: {reason_ips}")
+        r.cover_skip("sdn", "vnet ips set", "vnet ips set", "vnet ips create skipped")
+        r.cover_skip("sdn", "vnet ips delete", "vnet ips delete", "vnet ips create skipped")
+    else:
+        print(f"  {GREEN('✓')} vnet ips create {TEST_IP}")
+        r.cov.append(Step("sdn", "vnet ips create", PASS))
+        try:
+            r.step("sdn", "vnet ips set", f"vnet ips set {TEST_IP} (vmid 9999)",
+                   "sdn", "vnet", "ips", "set", Isolation.SDN_VNET,
+                   "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE, "--vmid", "9999")
+        finally:
+            r.del_step("sdn", "vnet ips delete", f"vnet ips delete {TEST_IP}",
+                       "sdn", "vnet", "ips", "delete", Isolation.SDN_VNET,
+                       "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE, "--yes")
+
     # ---- vnet edit on the isolated pvecli0 vnet (staged-only) ---------------
     # Covers the shared set/update path; restored via --delete in the same run.
     r.step("sdn", "vnet set", f"vnet set {Isolation.SDN_VNET} (alias)",
@@ -2157,6 +2276,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         auth_lifecycle(r)
         print()
         storage_lifecycle(r)
+        print()
+        storage_volume_lifecycle(r)
         print()
         backup_lifecycle(r)
         print()
