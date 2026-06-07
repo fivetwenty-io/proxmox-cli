@@ -1,402 +1,720 @@
 # Test Coverage Matrix
 
-This document maps every command-tree leaf command to its automated test
-coverage across the two live suites:
+> **Generated file — do not edit by hand.** Regenerate with
+> `go build -o ./dist/pve ./cmd/pve && python3 scripts/coverage_matrix.py`.
+> The classification is derived statically from the built command tree, the
+> read-only sweep definitions in `scripts/e2e_lib/trees/*.py`, and the mutate
+> phase in `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and
+> tests change.
+
+This document maps every invocable leaf command to its automated test coverage
+across the two live suites:
 
 - **e2e** (`scripts/e2e`, `make test-e2e`) — a read-only, parallel happy-path
-  sweep of all command trees against a configured target. Mutating or
-  destructive operations are never executed; they are recorded as deferred.
+  sweep against a configured target. Mutating operations are never executed;
+  they are recorded as deferred.
 
 - **lifecycle / mutate** (`scripts/lifecycle`, `make test-lifecycle`, or
   `scripts/e2e --mutate`) — the destructive counterpart. It provisions an
-  isolated `pvecli` SDN and a `pve-cli` resource pool, then drives **every**
-  mutating sub-command across the trees on resources created for the purpose,
-  recording each verb individually, and tears everything down:
+  isolated SDN zone and resource pool, drives the mutating sub-commands on
+  purpose-built throwaway resources, records each verb, and tears everything
+  down.
 
-  - a throwaway QEMU VM and an LXC container through the full power-state matrix
-    (`start`/`stop`/`shutdown`/`reboot`/`reset`/`suspend`/`resume`), `snapshot
-    create`/`rollback`/`delete`, and `config set`/`pending`;
-  - `pool set` on the provisioned pool, `task wait` on a real `--async` UPID,
-    and `task stop`/`node task stop` aborting a deterministic server-side
-    `qmshutdown` task spawned by `qemu shutdown --async`;
-  - an isolated `pve-cli-probe` access block: user/group `create`/`delete`,
-    `user token create`/`delete`, `acl set` (grant + revoke) on the `pve-cli`
-    pool path, and `password set` (on the throwaway user, never root);
-  - a node-restricted `pve-cli-store` `dir` storage `create`/`set`/`delete`;
-  - the SSH-gated node `exec`/`ssh`/`rsync` verbs (SKIP if the host is
-    unreachable).
-
-  `scripts/e2e --mutate` runs the read-only sweep and then this mutate phase in
-  one invocation. The `api` config verbs (`target add`/`remove`, `switch`) are
-  exercised by the read-only sweep itself against a throwaway scratch `--config`
-  file, so they never touch the real config or the configured target.
-
-The two suites are complementary: e2e proves read paths work and never mutates;
-the mutate phase proves the mutating paths work within an isolation contract
-that shields other lab efforts. A few verbs are environment-bound rather than
-CLI-bound and are recorded as SKIP with their reason: qemu `reboot` (a diskless
-VM has no guest OS to ACPI-reboot — the `reboot` verb itself is proven live on
-the Alpine container, and qemu `reset` covers the in-place restart path), lxc
-`suspend`/`resume` (need working CRIU checkpoint support on the host), and
-`access password set` (PVE blocks `/access/password` when the target
-authenticates with an API token; PASSes on a password-auth target).
+A third tree, **negative** (`scripts/e2e_lib/trees/negative.py`), asserts the
+CLI's error contract: bad input must fail cleanly (non-zero exit plus a useful
+message). It never mutates, so it does not set a happy-path ✓; leaves whose
+failure path it guards are tagged `error-contract checked` in the Notes column.
 
 ## Legend
 
-- **e2e ✓** — exercised by the read-only sweep on every run.
+- **e2e ✓** — exercised unconditionally by the read-only sweep on every run.
 
 - **e2e ◑** — exercised by the sweep only when prerequisite inventory exists
-  (e.g. a VM, user, or vnet is present); otherwise the check is skipped (a skip
-  still passes, exit 0).
+  (a VM, user, vnet, …); otherwise skipped (a skip still passes, exit 0).
 
-- **mutate ✓** — exercised live by the mutate phase (`scripts/e2e --mutate` /
-  `scripts/lifecycle`) on a purpose-built isolated guest.
+- **mutate ✓** — driven live by the mutate phase on a purpose-built resource.
 
 - **mutate ·** — driven by the mutate phase but recorded as SKIP because the
-  host/guest can't complete it (the reason is recorded); not a CLI gap.
+  host/guest cannot complete it (the reason is recorded); not a CLI gap.
 
-- **—** — not applicable to that suite. A mutating verb shows `—` in the `e2e`
-  column because the read-only sweep never runs mutations (it lists them in its
-  deferred section); a read-only leaf shows `—` in the `mutate` column.
+- **—** — not exercised by that suite (a mutating verb is `—` for e2e because
+  the read sweep never mutates; a read verb is `—` for mutate).
 
-- **deferred** — a genuine coverage gap: nothing exercises this leaf yet. It
-  appears in the column of the suite that would own it (e.g. `mutate` for a
-  mutating verb), with the reason in the notes.
-
-- **n/a** — no automated coverage by design (interactive, host-mutating, or out
-  of scope — e.g. `node shell`/`console`, `node services` control, `api auth
-  login`).
+- **Notes** — `live via mutate phase` (deferred in the sweep, driven by
+  `--mutate`), `deferred — …` (intentionally not run live, with reason),
+  `n/a — …` (interactive or host-daemon, no automated coverage by design),
+  `help-only` (only the `--help` parse is checked), `error-contract checked`
+  (the failure path is guarded by the negative tree), or **uncovered** (a
+  genuine gap, listed in the appendix).
 
 ## Isolation contract
 
-Every resource the lifecycle suite creates is shielded from other lab efforts:
+Every resource the lifecycle suite creates is shielded from other lab efforts
+(see `scripts/e2e_lib/model.py`, the single source of truth):
 
 - named or hostnamed with the `pve-cli-` prefix,
 
 - placed in the `pve-cli` resource pool and tagged `pve-cli`,
 
 - attached to a dedicated `pvecli` simple SDN zone and `pvecli0` vnet on the
-  `10.241.0.0/24` subnet, off the host management network.
+  `172.30.0.0/24` subnet, deliberately off the host management network.
 
 Teardown runs in a `finally` block and is idempotent: a crashed prior run is
 swept clean before the next provisions.
 
 ## Coverage summary
 
-| Tree | Leaf commands | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred / n/a |
-|------|--------------:|------:|------:|---------:|---------:|---------------:|
-| `version` | 2 | 2 | 0 | 0 | 0 | 0 |
-| `cluster` | 5 | 5 | 0 | 0 | 0 | 0 |
-| `node` | 17 | 1 | 6 | 4 | 0 | 6 |
-| `qemu` | 18 | 1 | 3 | 13 | 1 | 0 |
-| `lxc` | 18 | 2 | 3 | 11 | 2 | 0 |
-| `storage` | 6 | 1 | 2 | 3 | 0 | 0 |
-| `sdn` | 10 | 2 | 1 | 7 | 0 | 0 |
-| `pool` | 5 | 1 | 1 | 3 | 0 | 0 |
-| `task` | 4 | 1 | 1 | 2 | 0 | 0 |
-| `access` | 21 | 5 | 5 | 10 | 1 | 0 |
-| `api` | 11 | 8 | 0 | 3 | 0 | 0 |
-| `init` | 1 | 1 | 0 | 0 | 0 | 0 |
-| **Total** | **118** | **30** | **22** | **56** | **4** | **6** |
+| Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred / n/a | uncovered |
+|------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
+| `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
+| `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
+| `cluster` | 157 | 41 | 10 | 73 | 5 | 10 | 36 |
+| `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
+| `lxc` | 48 | 2 | 8 | 35 | 0 | 1 | 8 |
+| `node` | 138 | 1 | 50 | 14 | 0 | 31 | 46 |
+| `pool` | 5 | 1 | 1 | 2 | 0 | 0 | 1 |
+| `qemu` | 59 | 1 | 12 | 40 | 1 | 4 | 8 |
+| `sdn` | 71 | 5 | 11 | 19 | 0 | 8 | 31 |
+| `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
+| `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
+| `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **556** | **73** | **109** | **222** | **6** | **60** | **133** |
 
-Counts are by distinct invocable leaf command, verified against a walk of the
-built command tree (`pve <tree> ... --help`). Each `create`/`delete` and
-`get`/`set` verb counts as its own leaf — they are not collapsed into a single
-row. `mutate ·` is a verb the mutate phase drives but the host can't complete
-(recorded as SKIP with its reason). For `qemu` and `lxc`, every power-state,
-snapshot, and `config set`/`pending` verb is mutate-covered.
-
-The 6 remaining `deferred`/`n/a` entries are now all `n/a` (by design) — there
-are zero genuine deferred gaps:
-
-- **n/a (by design):** `node shell`/`console` (interactive PTY) and `node services
-  start`/`stop`/`restart`/`reload` (mutate shared-host daemons).
-
-The former task-control gaps are closed: `task stop` and `node task stop` are
-driven live by the mutate phase against a deterministic `qmshutdown` task
-(spawned by `qemu shutdown --timeout 30 --async`, which returns its UPID
-immediately while the task waits out the timeout), and `node task wait` is swept
-read-only against an already-finished UPID from `node task list`, so it returns
-immediately without hanging.
-
-Note there are two distinct task trees: the top-level `task` (covered) and the
-per-node `node task` sub-group; `list`/`log` are swept read-only, `wait` against
-a finished UPID, and `stop` is exercised live by the mutate phase.
-
-Beyond per-leaf reachability, the sweep also runs assertions that go past
-`exit 0`: schema checks on the high-value reads (`qemu`/`lxc`/`node status`,
-`storage get`, `access permissions`), set→read-back round-trips on every
-mutating `set`, a four-format renderer smoke test (`table`/`plain`/`json`/`yaml`),
-and a dedicated `negative` tree of error-contract checks (bad input must fail
-with a non-zero exit and a message). These are test depth, not new leaves, so
-they do not change the counts above.
-
-## `version`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `version` | ✓ | — | asserts `version`/`release` present in response |
-| `version client` | ✓ | — | CLI build info |
-
-## `cluster`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `cluster status` | ✓ | — | asserts JSON array |
-| `cluster resources` | ✓ | — | asserts JSON array |
-| `cluster next-id` | ✓ | (✓) | read-only check; lifecycle also calls it to pick a free VMID/CTID |
-| `cluster log` | ✓ | — | `--max 5` |
-| `cluster tasks` | ✓ | — | recent tasks |
-
-## `node`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `node list` | ✓ | — | asserts non-empty array |
-| `node status` | ◑ | — | node as positional; skipped if no node discovered |
-| `node services list` | ◑ | — | skipped if no node discovered |
-| `node services get` | ◑ | — | first service from the list; skipped if none |
-| `node task list` | ◑ | — | node as positional |
-| `node task log` | ◑ | — | first UPID from `node task list`; skipped if none |
-| `node task wait` | ◑ | — | swept against an already-finished UPID from `node task list` (returns immediately, no hang); skipped if no task exists |
-| `node task stop` | — | ✓ | aborts a deterministic `qmshutdown` task spawned by `qemu shutdown --async` (positional `<node> <upid>` form) |
-| `node exec` | — | ✓ | `exec <node> -- true`; SSH-gated (SKIP if host unreachable) |
-| `node ssh` | — | ✓ | `ssh <node> -- true`; SSH-gated |
-| `node rsync` | — | ✓ | pulls a `/tmp` scratch file back from the host; SSH-gated |
-| `node shell` | — | n/a | interactive PTY; not automatable |
-| `node console` | — | n/a | interactive PTY; not automatable |
-| `node services start` | — | n/a | mutates real host daemons on a shared lab; out of scope |
-| `node services stop` | — | n/a | mutates real host daemons on a shared lab; out of scope |
-| `node services restart` | — | n/a | mutates real host daemons on a shared lab; out of scope |
-| `node services reload` | — | n/a | mutates real host daemons on a shared lab; out of scope |
-
-`node status`, `services list`, `services get`, and `task list` are all
-conditional on a discovered node, hence ◑. The e2e summary counts `node status`
-and `task list` as the always-attempted pair once a node exists. The `node task`
-sub-group duplicates the top-level `task` verbs; `node task list`/`log` are now
-swept, and `node status` additionally asserts its response carries the expected
-keys (`memory`, `pveversion`). `node task wait` is swept against a finished UPID
-(returns immediately), and `node task stop` is exercised live by the mutate
-phase, so neither is deferred any longer.
-
-## `qemu`
-
-Every power-state and snapshot verb is driven live by the mutate phase on a
-purpose-built diskless VM (`scsi0 local-lvm:1`, 512 MB, `ostype l26`, NIC on the
-isolated `pvecli0` vnet, pooled/tagged `pve-cli`). Sequenced through a valid
-state machine: create → start → suspend → resume → reset → stop → start →
-snapshot create → shutdown → snapshot rollback → snapshot delete → delete.
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|--------|-------|
-| `qemu list` | ✓ | — | asserts JSON array |
-| `qemu status` | ◑ | ✓ | e2e: first VM in list (asserts `status`+`vmid` keys); mutate: throwaway VM |
-| `qemu config get` | ◑ | ✓ | e2e: first VM in list (skipped if none); mutate: reads back the cloud-init flags set at create |
-| `qemu snapshot list` | ◑ | ✓ | e2e read-only; mutate lists its own snapshot |
-| `qemu create` | — | ✓ | isolation: pool/tag `pve-cli`, NIC on `pvecli0`; drives `--sockets`/`--boot` plus a cloud-init flag group (`--ciuser`/`--citype`/`--ipconfig0`/`--searchdomain`/`--nameserver`) round-tripped via `config get` |
-| `qemu start` | — | ✓ | power state (run twice: initial + pre-shutdown) |
-| `qemu stop` | — | ✓ | hard power off from running |
-| `qemu shutdown` | — | ✓ | `--timeout 10 --force-stop` → deterministic without a guest OS |
-| `qemu reboot` | — | · | diskless VM has no guest OS to ACPI-reboot; covered live on lxc, restart path covered by `reset` |
-| `qemu reset` | — | ✓ | hard reset, stays running |
-| `qemu suspend` | — | ✓ | pause (suspend to RAM); no guest needed |
-| `qemu resume` | — | ✓ | unpause |
-| `qemu snapshot create` | — | ✓ | disk snapshot (no `--vmstate`) |
-| `qemu snapshot rollback` | — | ✓ | run while stopped (snapshot carries no RAM state) |
-| `qemu snapshot delete` | — | ✓ | requires `--yes` |
-| `qemu delete` | — | ✓ | `--yes --purge --destroy-unreferenced-disks` |
-| `qemu config set` | — | ✓ | sets `--description` on the running VM |
-| `qemu config pending` | — | ✓ | reads the pending config diff after the set |
-
-## `lxc`
-
-Every power-state and snapshot verb is driven live by the mutate phase on a
-purpose-built Alpine container (`vztmpl` from `local`, `rootfs local-lvm:1`, 256
-MB, unprivileged, static IP `10.241.0.50/24` on the isolated net). Sequence:
-create → start → suspend → resume → reboot → stop → start → snapshot create →
-shutdown → snapshot rollback → snapshot delete → delete.
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|--------|-------|
-| `lxc list` | ✓ | — | asserts JSON array |
-| `lxc template list` | ✓ | ✓ | e2e read-only; mutate uses it to find Alpine |
-| `lxc status` | ◑ | ✓ | e2e: first CT (asserts `status`+`vmid` keys); mutate: throwaway CT (exercises PVEFloat PSI decode) |
-| `lxc config get` | ◑ | — | first CT in list; skipped if none |
-| `lxc snapshot list` | ◑ | ✓ | |
-| `lxc template download` | — | ✓ | downloads Alpine to `local` if absent |
-| `lxc create` | — | ✓ | isolation: unprivileged, static IP on `pvecli0`; drives `--swap` for flag breadth |
-| `lxc start` | — | ✓ | power state (run twice: initial + pre-shutdown) |
-| `lxc stop` | — | ✓ | immediate stop from running |
-| `lxc shutdown` | — | ✓ | `--timeout 30 --force-stop`; Alpine init handles it |
-| `lxc reboot` | — | ✓ | graceful; Alpine init handles it (also covers qemu's skipped reboot) |
-| `lxc suspend` | — | · | needs working CRIU checkpoint support on the host; SKIP otherwise |
-| `lxc resume` | — | · | only runs if suspend succeeded |
-| `lxc snapshot create` | — | ✓ | |
-| `lxc snapshot rollback` | — | ✓ | newly implemented (`lxc snapshot rollback`); run while stopped |
-| `lxc snapshot delete` | — | ✓ | no `--yes` required (unlike qemu) |
-| `lxc delete` | — | ✓ | `--yes --force --purge` |
-| `lxc config set` | — | ✓ | sets `--description` on the running container |
-
-## `storage`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `storage list` | ✓ | — | asserts JSON array |
-| `storage get` | ◑ | — | first storage in list (asserts `storage`+`type` keys); skipped if none |
-| `storage content` | ◑ | (✓) | e2e: first storage + discovered node; lifecycle queries `vztmpl` content |
-| `storage create` | — | ✓ | isolated `pve-cli-store` `dir` storage, `--nodes` the test node only |
-| `storage set` | — | ✓ | updates `--content` on the isolated storage |
-| `storage delete` | — | ✓ | tears down the isolated storage (`--yes`) |
-
-## `sdn`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `sdn zone list` | ✓ | — | asserts JSON array |
-| `sdn vnet list` | ✓ | (✓) | e2e read-only; lifecycle reads it during teardown |
-| `sdn subnet list` | ◑ | (✓) | e2e: first vnet; lifecycle reads subnet ids for teardown |
-| `sdn zone create` | — | ✓ | provisions `pvecli` simple zone |
-| `sdn zone delete` | — | ✓ | teardown |
-| `sdn vnet create` | — | ✓ | provisions `pvecli0` |
-| `sdn vnet delete` | — | ✓ | teardown |
-| `sdn subnet create` | — | ✓ | `10.241.0.0/24` with gateway |
-| `sdn subnet delete` | — | ✓ | teardown by subnet **id** (`pvecli-10.241.0.0-24`), not CIDR |
-| `sdn apply` | — | ✓ | reloads network config; run on both provision and teardown |
-
-## `pool`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `pool list` | ✓ | — | asserts JSON array |
-| `pool get` | ◑ | — | first pool in list; skipped if none |
-| `pool create` | — | ✓ | provisions the `pve-cli` pool |
-| `pool set` | — | ✓ | sets `--comment` on the provisioned `pve-cli` pool |
-| `pool delete` | — | ✓ | teardown |
-
-## `task`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `task list` | ✓ | — | node as positional; asserts JSON array |
-| `task log` | ◑ | — | first UPID from the list; skipped if none |
-| `task wait` | — | ✓ | waits on a real UPID from an `--async` VM start |
-| `task stop` | — | ✓ | aborts a deterministic `qmshutdown` task spawned by `qemu shutdown --async` (top-level form, node via `--node`) |
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **363** are exercised by at least one suite, **60** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **133** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
 | Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `access user list` | ✓ | — | asserts JSON array |
-| `access role list` | ✓ | — | asserts JSON array |
-| `access group list` | ✓ | — | asserts JSON array |
-| `access acl list` | ✓ | — | asserts JSON array |
-| `access permissions` | ✓ | — | self permissions |
-| `access user get` | ◑ | ✓ | sweep: first user in list; mutate: read-back of the probe user after `user set` |
-| `access user token list` | ◑ | — | first user in list |
-| `access role get` | ◑ | — | first role in list |
-| `access group get` | ◑ | ✓ | sweep: first group in list; mutate: read-back after `group set` |
-| `access user token get` | ◑ | ✓ | sweep: first token (skipped if none); mutate: read-back after `token set` |
-| `access user create` | — | ✓ | isolated `pve-cli-probe@pve` |
-| `access user delete` | — | ✓ | deleted in teardown |
-| `access user set` | — | ✓ | sets `--comment` on the probe user; read back via `user get` |
-| `access group create` | — | ✓ | isolated `pve-cli-probe` group |
-| `access group delete` | — | ✓ | deleted in teardown |
-| `access group set` | — | ✓ | sets `--comment` on the probe group; read back via `group get` |
-| `access user token create` | — | ✓ | token `e2e`; the plaintext secret VALUE is never logged or parsed |
-| `access user token delete` | — | ✓ | revoked in teardown |
-| `access user token set` | — | ✓ | sets `--comment` on the probe token; read back via `token get` |
-| `access acl set` | — | ✓ | grants then revokes `PVEAuditor` on `/pool/pve-cli` |
-| `access password set` | — | · | driven on the probe user, but recorded SKIP when the target uses API-token auth (PVE blocks `/access/password` for token auth); PASSes on a password-auth target |
-
-There is no `access role create`/`delete` verb — role management is read-only in
-the CLI, so it is not a leaf and not a gap. Every `access` leaf is now covered:
-the read-only `get` verbs in the sweep, and the create/delete/`set`/token/acl
-verbs live in the isolated `pve-cli-probe` lifecycle block. Each `set` reads its
-value back to prove the mutation took. `permissions` additionally asserts the
-response is a `/`-rooted permission tree, not merely valid JSON.
+|------|-----|--------|-------|
+| `access acl list` | ✓ | — |  |
+| `access acl set` | — | ✓ |  |
+| `access domain create` | — | ✓ |  |
+| `access domain delete` | — | ✓ |  |
+| `access domain get` | ◑ | ✓ |  |
+| `access domain list` | ✓ | — |  |
+| `access domain set` | — | ✓ |  |
+| `access domain sync` | — | ✓ |  |
+| `access group create` | — | ✓ |  |
+| `access group delete` | — | ✓ | error-contract checked |
+| `access group get` | ◑ | ✓ |  |
+| `access group list` | ✓ | — |  |
+| `access group set` | — | ✓ |  |
+| `access openid list` | ✓ | — |  |
+| `access password set` | — | ✓ |  |
+| `access permissions` | ✓ | — |  |
+| `access role create` | — | ✓ |  |
+| `access role delete` | — | ✓ |  |
+| `access role get` | ◑ | ✓ |  |
+| `access role list` | ✓ | — |  |
+| `access role set` | — | ✓ |  |
+| `access tfa create` | — | — | **uncovered** |
+| `access tfa delete` | — | — | **uncovered** |
+| `access tfa get` | ◑ | — |  |
+| `access tfa get-entry` | ◑ | — |  |
+| `access tfa list` | ✓ | — |  |
+| `access tfa set` | — | — | **uncovered** |
+| `access tfa types` | ✓ | — |  |
+| `access tfa unlock` | — | ✓ |  |
+| `access user create` | — | ✓ |  |
+| `access user delete` | — | ✓ |  |
+| `access user get` | ◑ | ✓ |  |
+| `access user list` | ✓ | — |  |
+| `access user set` | — | ✓ |  |
+| `access user token create` | — | ✓ |  |
+| `access user token delete` | — | ✓ |  |
+| `access user token get` | ◑ | ✓ |  |
+| `access user token list` | ◑ | ✓ |  |
+| `access user token set` | — | ✓ |  |
 
 ## `api`
 
 | Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `api targets` | ✓ | — | asserts the configured target is listed |
-| `api target <name> show` | ✓ | — | |
-| `api auth status` | ✓ | — | active identity + expiry |
-| `api target add` | ✓ | — | run against a scratch `--config` file; real config untouched |
-| `api switch` | ✓ | — | switches between two scratch-config targets |
-| `api target remove` | ✓ | — | removes the scratch target; asserts it is gone |
-| `api auth login` | — | ✓ | live: throwaway pve-realm user + scratch `--config`; session asserted present via `auth status` |
-| `api auth logout` | — | ✓ | live: invalidates the ticket server-side; session asserted cleared |
-| `api auth refresh` | — | ✓ | live: re-obtains the ticket for the password target |
-| `api auth set-token` | ✓ | — | scratch `--config`; reads back via `auth status` and asserts auth-type=token + token-id |
-| `api auth set-password` | ✓ | — | scratch `--config`; reads back via `auth status` and asserts auth-type=password + username |
+|------|-----|--------|-------|
+| `api auth login` | — | ✓ |  |
+| `api auth logout` | — | ✓ |  |
+| `api auth refresh` | — | ✓ |  |
+| `api auth set-password` | ✓ | — |  |
+| `api auth set-token` | ✓ | — |  |
+| `api auth status` | ✓ | — |  |
+| `api switch` | ✓ | — |  |
+| `api target add` | ✓ | — |  |
+| `api target remove` | ✓ | — |  |
+| `api target show` | ✓ | — |  |
+| `api targets` | ✓ | — |  |
 
-`api auth set-token` and `api auth set-password` mutate *local config only*. Like
-`target add`/`remove`/`switch`, they are exercised against a throwaway scratch
-`--config` file without touching the real config, and each is read back through
-`auth status` to confirm the write round-trips. `login`/`logout`/`refresh` mutate
-a stored *session*, so they stay deferred in the read-only sweep but are driven
-live by the mutate phase: it creates a throwaway `pve-cli-authprobe@pve` user
-(NEVER root) with an initial password, points a scratch `--config` target at the
-same host, then `login` → `refresh` → `logout`, asserting via `auth status` that
-the session appears and is then cleared. The real config, the configured target,
-and its session are never touched, so the suite returns to the original identity
-automatically.
+## `cluster`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `cluster acme account create` | — | — | n/a — contacts the ACME certificate authority — never registered live on a s… |
+| `cluster acme account delete` | — | — | **uncovered** |
+| `cluster acme account get` | — | — | **uncovered** |
+| `cluster acme account list` | ✓ | — |  |
+| `cluster acme account set` | — | — | **uncovered** |
+| `cluster acme challenge-schema` | ✓ | — |  |
+| `cluster acme directories` | ✓ | — |  |
+| `cluster acme plugin create` | — | ✓ |  |
+| `cluster acme plugin delete` | — | ✓ |  |
+| `cluster acme plugin get` | — | ✓ |  |
+| `cluster acme plugin list` | ✓ | ✓ |  |
+| `cluster acme plugin set` | — | ✓ |  |
+| `cluster backup create` | — | ✓ |  |
+| `cluster backup delete` | — | ✓ |  |
+| `cluster backup get` | — | ✓ |  |
+| `cluster backup included-volumes` | ◑ | — |  |
+| `cluster backup info` | ◑ | — |  |
+| `cluster backup list` | ✓ | ✓ |  |
+| `cluster backup set` | — | ✓ |  |
+| `cluster backup-info not-backed-up` | ◑ | — |  |
+| `cluster bulk migrate` | — | — | help-only (parse smoke test) |
+| `cluster bulk shutdown` | — | — | deferred — cluster-wide guest power and migration actions — affect every guest, n… |
+| `cluster bulk start` | — | — | help-only (parse smoke test) |
+| `cluster bulk suspend` | — | — | help-only (parse smoke test) |
+| `cluster ceph flags get` | — | — | **uncovered** |
+| `cluster ceph flags list` | ◑ | — |  |
+| `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disr… |
+| `cluster ceph metadata` | ◑ | — |  |
+| `cluster config apiversion` | ✓ | — |  |
+| `cluster config join add` | — | — | **uncovered** |
+| `cluster config join list` | ◑ | — |  |
+| `cluster config nodes add` | — | — | n/a — changes cluster membership and quorum — too dangerous to exercise on a… |
+| `cluster config nodes delete` | — | — | **uncovered** |
+| `cluster config nodes list` | ✓ | — |  |
+| `cluster config qdevice` | ◑ | — |  |
+| `cluster config totem` | ◑ | — |  |
+| `cluster cpu-model create` | — | ✓ |  |
+| `cluster cpu-model delete` | — | ✓ |  |
+| `cluster cpu-model get` | — | ✓ |  |
+| `cluster cpu-model list` | ✓ | ✓ |  |
+| `cluster cpu-model set` | — | ✓ |  |
+| `cluster firewall alias create` | — | ✓ |  |
+| `cluster firewall alias delete` | — | ✓ |  |
+| `cluster firewall alias list` | ✓ | ✓ |  |
+| `cluster firewall alias update` | — | — | **uncovered** |
+| `cluster firewall group create` | — | ✓ |  |
+| `cluster firewall group delete` | — | ✓ |  |
+| `cluster firewall group list` | ✓ | ✓ |  |
+| `cluster firewall group rule-add` | — | ✓ |  |
+| `cluster firewall group rule-delete` | — | ✓ |  |
+| `cluster firewall group rule-update` | — | — | **uncovered** |
+| `cluster firewall group rules` | — | ✓ |  |
+| `cluster firewall ipset add` | — | ✓ |  |
+| `cluster firewall ipset create` | — | ✓ |  |
+| `cluster firewall ipset delete` | — | ✓ |  |
+| `cluster firewall ipset list` | ✓ | ✓ |  |
+| `cluster firewall ipset remove` | — | ✓ |  |
+| `cluster firewall macros list` | ✓ | — |  |
+| `cluster firewall options get` | ✓ | ✓ |  |
+| `cluster firewall options set` | — | — | deferred — enables/changes the datacenter firewall policy cluster-wide — not exer… |
+| `cluster firewall refs list` | ✓ | — |  |
+| `cluster firewall rules create` | — | ✓ |  |
+| `cluster firewall rules delete` | — | ✓ |  |
+| `cluster firewall rules get` | — | ✓ |  |
+| `cluster firewall rules list` | ✓ | ✓ |  |
+| `cluster firewall rules update` | — | — | **uncovered** |
+| `cluster ha group create` | — | ✓ |  |
+| `cluster ha group delete` | — | ✓ |  |
+| `cluster ha group get` | — | ✓ |  |
+| `cluster ha group list` | ◑ | ✓ |  |
+| `cluster ha group set` | — | ✓ |  |
+| `cluster ha resource create` | — | ✓ |  |
+| `cluster ha resource delete` | — | ✓ |  |
+| `cluster ha resource get` | — | ✓ |  |
+| `cluster ha resource list` | ✓ | ✓ |  |
+| `cluster ha resource migrate` | — | · |  |
+| `cluster ha resource relocate` | — | — | **uncovered** |
+| `cluster ha resource set` | — | ✓ |  |
+| `cluster ha rule create` | — | ✓ |  |
+| `cluster ha rule delete` | — | ✓ |  |
+| `cluster ha rule get` | — | ✓ |  |
+| `cluster ha rule list` | ✓ | ✓ |  |
+| `cluster ha rule set` | — | ✓ |  |
+| `cluster ha status arm` | — | — | **uncovered** |
+| `cluster ha status current` | ✓ | — |  |
+| `cluster ha status disarm` | — | — | deferred — toggles the cluster-wide HA stack — would disrupt every HA-managed res… |
+| `cluster ha status list` | ✓ | — |  |
+| `cluster ha status manager` | — | — | **uncovered** |
+| `cluster jobs realm-sync create` | — | ✓ |  |
+| `cluster jobs realm-sync delete` | — | ✓ |  |
+| `cluster jobs realm-sync get` | — | ✓ |  |
+| `cluster jobs realm-sync list` | ✓ | ✓ |  |
+| `cluster jobs realm-sync set` | — | ✓ |  |
+| `cluster jobs schedule-analyze` | ✓ | — |  |
+| `cluster log` | ✓ | — |  |
+| `cluster mapping dir create` | — | ✓ |  |
+| `cluster mapping dir delete` | — | ✓ |  |
+| `cluster mapping dir get` | — | ✓ |  |
+| `cluster mapping dir list` | ✓ | ✓ |  |
+| `cluster mapping dir set` | — | ✓ |  |
+| `cluster mapping pci create` | — | — | deferred — PCI/USB mappings need real device IDs — dir mapping CRUD is covered li… |
+| `cluster mapping pci delete` | — | — | **uncovered** |
+| `cluster mapping pci get` | — | — | **uncovered** |
+| `cluster mapping pci list` | ✓ | — |  |
+| `cluster mapping pci set` | — | — | **uncovered** |
+| `cluster mapping usb create` | — | — | **uncovered** |
+| `cluster mapping usb delete` | — | — | **uncovered** |
+| `cluster mapping usb get` | — | — | **uncovered** |
+| `cluster mapping usb list` | ✓ | — |  |
+| `cluster mapping usb set` | — | — | **uncovered** |
+| `cluster metrics export` | ◑ | — |  |
+| `cluster metrics server create` | — | ✓ |  |
+| `cluster metrics server delete` | — | ✓ |  |
+| `cluster metrics server get` | — | ✓ |  |
+| `cluster metrics server list` | ✓ | ✓ |  |
+| `cluster metrics server set` | — | ✓ |  |
+| `cluster next-id` | ✓ | — |  |
+| `cluster notifications endpoints` | ✓ | — |  |
+| `cluster notifications gotify create` | — | ✓ |  |
+| `cluster notifications gotify delete` | — | ✓ |  |
+| `cluster notifications gotify get` | — | ✓ |  |
+| `cluster notifications gotify list` | ✓ | ✓ |  |
+| `cluster notifications gotify set` | — | ✓ |  |
+| `cluster notifications matcher create` | — | — | **uncovered** |
+| `cluster notifications matcher delete` | — | — | **uncovered** |
+| `cluster notifications matcher get` | — | — | **uncovered** |
+| `cluster notifications matcher list` | ✓ | — |  |
+| `cluster notifications matcher set` | — | — | **uncovered** |
+| `cluster notifications matcher-field-values` | ✓ | — |  |
+| `cluster notifications matcher-fields` | ✓ | — |  |
+| `cluster notifications sendmail create` | — | — | **uncovered** |
+| `cluster notifications sendmail delete` | — | — | **uncovered** |
+| `cluster notifications sendmail get` | — | — | **uncovered** |
+| `cluster notifications sendmail list` | ✓ | — |  |
+| `cluster notifications sendmail set` | — | — | **uncovered** |
+| `cluster notifications smtp create` | — | — | **uncovered** |
+| `cluster notifications smtp delete` | — | — | **uncovered** |
+| `cluster notifications smtp get` | — | — | **uncovered** |
+| `cluster notifications smtp list` | ✓ | — |  |
+| `cluster notifications smtp set` | — | — | **uncovered** |
+| `cluster notifications targets` | ✓ | ✓ |  |
+| `cluster notifications targets-test` | — | — | **uncovered** |
+| `cluster notifications webhook create` | — | — | **uncovered** |
+| `cluster notifications webhook delete` | — | — | **uncovered** |
+| `cluster notifications webhook get` | — | — | **uncovered** |
+| `cluster notifications webhook list` | ✓ | — |  |
+| `cluster notifications webhook set` | — | — | **uncovered** |
+| `cluster options get` | ✓ | ✓ |  |
+| `cluster options set` | — | ✓ |  |
+| `cluster replication create` | — | · |  |
+| `cluster replication delete` | — | · |  |
+| `cluster replication get` | — | · |  |
+| `cluster replication list` | ✓ | ✓ |  |
+| `cluster replication set` | — | · |  |
+| `cluster resources` | ✓ | — |  |
+| `cluster status` | ✓ | — |  |
+| `cluster tasks` | ✓ | — |  |
 
 ## `init`
 
 | Leaf | e2e | mutate | Notes |
-|------|-----|-----------|-------|
-| `init config` | ✓ | — | run against a throwaway `--config` path; asserts the file is written, so the real `~/.config/pve/config.yml` is never touched |
+|------|-----|--------|-------|
+| `init config` | ✓ | — |  |
 
-## Gaps and deferred work
+## `lxc`
 
-- **QEMU/LXC power-state + snapshot breadth — closed.** The mutate phase now
-  drives the full power-state matrix (`start`/`stop`/`shutdown`/`reboot`/
-  `reset`/`suspend`/`resume`) and `snapshot create`/`rollback`/`delete` on both
-  a VM and a container. The only verbs not given a live PASS are qemu `reboot`
-  (no guest OS on the diskless VM — proven on the lxc container instead) and lxc
-  `suspend`/`resume` (depend on host CRIU support); both are recorded as SKIP
-  with their reason rather than silently dropped.
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `lxc clone` | — | ✓ |  |
+| `lxc config get` | ◑ | — |  |
+| `lxc config pending` | ◑ | — |  |
+| `lxc config set` | — | ✓ |  |
+| `lxc console` | ◑ | ✓ |  |
+| `lxc create` | — | ✓ |  |
+| `lxc delete` | — | ✓ |  |
+| `lxc disk move` | — | ✓ |  |
+| `lxc disk resize` | — | ✓ |  |
+| `lxc feature` | — | — | **uncovered** |
+| `lxc firewall alias create` | — | ✓ |  |
+| `lxc firewall alias delete` | — | ✓ |  |
+| `lxc firewall alias list` | — | ✓ |  |
+| `lxc firewall alias update` | — | — | **uncovered** |
+| `lxc firewall ipset add` | — | ✓ |  |
+| `lxc firewall ipset create` | — | ✓ |  |
+| `lxc firewall ipset delete` | — | ✓ |  |
+| `lxc firewall ipset list` | — | ✓ |  |
+| `lxc firewall ipset remove` | — | ✓ |  |
+| `lxc firewall options get` | ◑ | ✓ |  |
+| `lxc firewall options set` | — | ✓ |  |
+| `lxc firewall rules create` | — | ✓ |  |
+| `lxc firewall rules delete` | — | ✓ |  |
+| `lxc firewall rules get` | — | ✓ |  |
+| `lxc firewall rules list` | ◑ | ✓ |  |
+| `lxc firewall rules update` | — | — | **uncovered** |
+| `lxc interfaces` | ◑ | ✓ |  |
+| `lxc list` | ✓ | — |  |
+| `lxc metrics` | — | — | **uncovered** |
+| `lxc migrate` | — | ✓ |  |
+| `lxc migrate check` | — | — | **uncovered** |
+| `lxc reboot` | — | ✓ |  |
+| `lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two … |
+| `lxc resume` | — | ✓ |  |
+| `lxc rrd` | — | — | **uncovered** |
+| `lxc shutdown` | — | ✓ |  |
+| `lxc snapshot create` | — | ✓ |  |
+| `lxc snapshot delete` | — | ✓ |  |
+| `lxc snapshot list` | ◑ | ✓ |  |
+| `lxc snapshot rollback` | — | ✓ |  |
+| `lxc snapshot show` | — | — | **uncovered** |
+| `lxc snapshot update` | — | — | **uncovered** |
+| `lxc start` | — | ✓ |  |
+| `lxc status` | ◑ | ✓ |  |
+| `lxc stop` | — | ✓ |  |
+| `lxc suspend` | — | ✓ |  |
+| `lxc template download` | — | ✓ |  |
+| `lxc template list` | ✓ | — |  |
 
-- **VM/CT config mutation — closed.** `qemu config set`/`pending` and `lxc
-  config set` are exercised live on the throwaway guests.
+## `node`
 
-- **Storage / access / api mutations — closed.** `storage create/set/delete` run
-  against an isolated node-restricted `pve-cli-store`; the full `access`
-  create/delete/`set`/token/acl/password matrix runs against an isolated
-  `pve-cli-probe` user/group/token with an ACL scoped to the `pve-cli` pool path,
-  each `set` read back to prove it took; the `api target add/remove/switch` and
-  `auth set-token/set-password` config verbs run against a throwaway scratch
-  `--config` file in the read-only sweep, read back through `auth status`. The
-  session verbs `api auth login`/`refresh`/`logout` are driven live by the mutate
-  phase against a throwaway `pve-cli-authprobe@pve` user and a scratch
-  `--config`, so the real config and session are never touched.
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `node apt changelog` | ◑ | — |  |
+| `node apt list` | ◑ | — |  |
+| `node apt repositories add` | — | — | deferred — rewrites the node's APT repository configuration; not exercised live |
+| `node apt repositories enable` | — | — | **uncovered** |
+| `node apt repositories list` | ◑ | — |  |
+| `node apt update` | — | — | deferred — refreshes the node's APT database (network I/O, apt state churn); not … |
+| `node apt versions` | ◑ | — |  |
+| `node capabilities qemu cpu` | ◑ | — |  |
+| `node capabilities qemu cpu-flags` | ◑ | — |  |
+| `node capabilities qemu machines` | ◑ | — |  |
+| `node capabilities qemu migration` | ◑ | — |  |
+| `node ceph cfg` | ◑ | — |  |
+| `node ceph fs create` | — | — | **uncovered** |
+| `node ceph fs delete` | — | — | **uncovered** |
+| `node ceph fs list` | — | — | **uncovered** |
+| `node ceph init` | — | — | deferred — initializes a Ceph cluster configuration on the node — cluster-wide an… |
+| `node ceph mds create` | — | — | **uncovered** |
+| `node ceph mds delete` | — | — | **uncovered** |
+| `node ceph mds list` | — | — | **uncovered** |
+| `node ceph mgr create` | — | — | **uncovered** |
+| `node ceph mgr delete` | — | — | **uncovered** |
+| `node ceph mgr list` | — | — | **uncovered** |
+| `node ceph mon create` | — | — | deferred — provisions or destroys Ceph monitor/MDS/MGR/filesystem daemons; not ex… |
+| `node ceph mon delete` | — | — | **uncovered** |
+| `node ceph mon list` | — | — | **uncovered** |
+| `node ceph osd create` | — | — | deferred — creates or destroys OSDs (wipes block devices) and moves cluster data;… |
+| `node ceph osd delete` | — | — | **uncovered** |
+| `node ceph osd get` | — | — | **uncovered** |
+| `node ceph osd in` | — | — | **uncovered** |
+| `node ceph osd list` | ◑ | — |  |
+| `node ceph osd out` | — | — | **uncovered** |
+| `node ceph osd scrub` | — | — | **uncovered** |
+| `node ceph pool create` | — | — | deferred — creates, reconfigures, or destroys a Ceph pool (data loss on delete); … |
+| `node ceph pool delete` | — | — | **uncovered** |
+| `node ceph pool get` | — | — | **uncovered** |
+| `node ceph pool list` | ◑ | — |  |
+| `node ceph pool set` | — | — | **uncovered** |
+| `node ceph pool status` | — | — | **uncovered** |
+| `node ceph restart` | — | — | deferred — controls running Ceph services on the node — disruptive; not exercised… |
+| `node ceph start` | — | — | **uncovered** |
+| `node ceph status` | ◑ | — |  |
+| `node ceph stop` | — | — | **uncovered** |
+| `node cert acme delete` | — | — | **uncovered** |
+| `node cert acme list` | ◑ | — |  |
+| `node cert acme order` | — | — | deferred — orders, renews, or removes the node's ACME certificate (contacts Let's… |
+| `node cert acme renew` | — | — | **uncovered** |
+| `node cert custom delete` | — | — | **uncovered** |
+| `node cert custom upload` | — | — | deferred — replaces or removes the node's API TLS certificate — could break TLS t… |
+| `node cert list` | ◑ | — |  |
+| `node console` | — | — | **uncovered** |
+| `node disks create directory` | — | — | **uncovered** |
+| `node disks create lvm` | — | — | help-only (parse smoke test) |
+| `node disks create lvmthin` | — | — | **uncovered** |
+| `node disks create zfs` | — | — | **uncovered** |
+| `node disks delete directory` | — | — | deferred — removes a mounted directory storage from the host — irreversible; not … |
+| `node disks delete lvm` | — | — | deferred — removes an LVM volume group from the host — irreversible; not exercise… |
+| `node disks delete lvmthin` | — | — | deferred — removes an LVM thin pool from a VG — irreversible; not exercised live |
+| `node disks delete zfs` | — | — | deferred — destroys a ZFS pool — irreversible, destroys all data on the pool; not… |
+| `node disks get zfs` | ◑ | — |  |
+| `node disks init-gpt` | — | — | **uncovered** |
+| `node disks list` | ◑ | — |  |
+| `node disks ls directory` | ◑ | — |  |
+| `node disks ls lvm` | ◑ | — |  |
+| `node disks ls lvmthin` | ◑ | — |  |
+| `node disks ls zfs` | ◑ | — |  |
+| `node disks smart` | ◑ | — |  |
+| `node disks wipe` | — | — | deferred — formats or wipes a physical disk — irreversible; not exercised live |
+| `node dns get` | ◑ | ✓ |  |
+| `node dns set` | — | ✓ |  |
+| `node exec` | — | ✓ |  |
+| `node firewall options get` | ◑ | ✓ |  |
+| `node firewall options set` | — | — | deferred — changes the host firewall policy — could cut the node off the network;… |
+| `node firewall rules create` | — | ✓ |  |
+| `node firewall rules delete` | — | ✓ |  |
+| `node firewall rules get` | — | ✓ |  |
+| `node firewall rules list` | ◑ | ✓ |  |
+| `node firewall rules update` | — | — | **uncovered** |
+| `node hardware mdev` | ◑ | — |  |
+| `node hardware pci` | ◑ | — |  |
+| `node hardware usb` | ◑ | — |  |
+| `node hosts get` | ◑ | — |  |
+| `node hosts set` | — | — | deferred — replaces the whole /etc/hosts file — could break host name resolution;… |
+| `node journal` | ◑ | — |  |
+| `node list` | ✓ | — |  |
+| `node migrateall` | — | — | help-only (parse smoke test) |
+| `node netstat` | ◑ | — |  |
+| `node network apply` | — | — | deferred — reloads or discards the staged host network configuration — could cut … |
+| `node network create` | — | — | deferred — edits a host network interface — could cut the node off the network; n… |
+| `node network delete` | — | — | **uncovered** |
+| `node network get` | ◑ | — |  |
+| `node network list` | ◑ | — |  |
+| `node network revert` | — | — | **uncovered** |
+| `node network set` | — | — | **uncovered** |
+| `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact… |
+| `node oci tags` | — | — | help-only (parse smoke test) |
+| `node query-url-metadata` | — | — | **uncovered** |
+| `node replication list` | ◑ | — |  |
+| `node replication log` | ◑ | — |  |
+| `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a con… |
+| `node replication status` | ◑ | — |  |
+| `node report` | ◑ | — |  |
+| `node rrddata` | ◑ | — |  |
+| `node rsync` | — | ✓ |  |
+| `node scan cifs` | — | — | **uncovered** |
+| `node scan iscsi` | — | — | **uncovered** |
+| `node scan lvm` | ◑ | — |  |
+| `node scan lvmthin` | — | — | **uncovered** |
+| `node scan nfs` | — | — | deferred — probes a remote storage server (needs a server address and credentials… |
+| `node scan pbs` | — | — | **uncovered** |
+| `node scan zfs` | ◑ | — |  |
+| `node services get` | ◑ | — |  |
+| `node services list` | ◑ | — |  |
+| `node services reload` | — | — | **uncovered** |
+| `node services restart` | — | — | n/a — mutates real host daemons on a shared lab |
+| `node services start` | — | — | **uncovered** |
+| `node services state` | ◑ | — |  |
+| `node services stop` | — | — | **uncovered** |
+| `node shell` | — | — | n/a — interactive session; not automatable |
+| `node ssh` | — | ✓ |  |
+| `node startall` | — | — | help-only (parse smoke test) |
+| `node status` | ◑ | — |  |
+| `node stopall` | — | — | deferred — node-wide guest power and migration actions — affect every guest on th… |
+| `node subscription delete` | — | — | **uncovered** |
+| `node subscription get` | ◑ | — |  |
+| `node subscription set` | — | — | n/a — changes the node's subscription/licensing state on a shared lab; not e… |
+| `node subscription update` | — | — | **uncovered** |
+| `node suspendall` | — | — | help-only (parse smoke test) |
+| `node syslog` | ◑ | — |  |
+| `node task list` | ◑ | — |  |
+| `node task log` | ◑ | — |  |
+| `node task stop` | — | ✓ |  |
+| `node task wait` | ◑ | — |  |
+| `node time get` | ◑ | ✓ |  |
+| `node time set` | — | ✓ |  |
+| `node vzdump` | — | ✓ |  |
+| `node vzdump defaults` | ◑ | — |  |
+| `node vzdump extract-config` | — | — | **uncovered** |
+| `node wakeonlan` | — | — | n/a — sends a Wake-on-LAN packet to power on a node — affects real host powe… |
 
-- **Node host operations.** `exec`, `ssh`, and `rsync` are exercised live but
-  SSH-gated: the mutate phase probes reachability and records SKIP if the host
-  is unreachable, so they never hard-fail. `shell`, `console`, and service
-  control remain out of scope (interactive PTY or real host-daemon mutation).
+## `pool`
 
-- **Task control — closed.** `qemu shutdown --timeout 30 --async` spawns a
-  server-side `qmshutdown` task that waits the full timeout for an ACPI
-  power-off the diskless VM can never deliver, and returns its UPID
-  immediately — a safe (aborting it leaves the VM running), deterministic,
-  isolated task. The mutate phase aborts it through both `task stop` (top-level,
-  node via `--node`) and `node task stop` (positional `<node> <upid>`).
-  `node task wait` needs no running task at all: it parses the node from the
-  UPID, so the read-only sweep waits on an already-finished UPID from `node task
-  list` and returns immediately. No genuine deferred gaps remain; the only
-  uncovered leaves are `n/a` by design (interactive PTYs and host-daemon
-  control).
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `pool create` | — | ✓ | error-contract checked |
+| `pool delete` | — | — | **uncovered** |
+| `pool get` | ◑ | — |  |
+| `pool list` | ✓ | — |  |
+| `pool set` | — | ✓ |  |
 
-- **Stored-session auth — closed.** `api auth login`/`refresh`/`logout` are
-  driven live by the mutate phase: it creates a throwaway `pve-cli-authprobe@pve`
-  user (NEVER root) with an initial password, points a scratch `--config` target
-  at the same host, and runs `login` → `refresh` → `logout`, asserting through
-  `auth status` that the session is established and then cleared. Because the
-  ticket lives only in the scratch config, the real config, the configured
-  target, and its session are never touched.
+## `qemu`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `qemu agent` | — | ✓ |  |
+| `qemu agent exec` | — | — | **uncovered** |
+| `qemu agent exec-status` | — | — | **uncovered** |
+| `qemu agent file-read` | — | — | **uncovered** |
+| `qemu agent file-write` | — | — | **uncovered** |
+| `qemu agent set-user-password` | — | — | **uncovered** |
+| `qemu clone` | — | ✓ |  |
+| `qemu cloudinit dump` | — | ✓ |  |
+| `qemu cloudinit pending` | ◑ | ✓ |  |
+| `qemu cloudinit update` | — | ✓ |  |
+| `qemu config get` | ◑ | ✓ |  |
+| `qemu config pending` | — | ✓ |  |
+| `qemu config set` | — | ✓ |  |
+| `qemu console` | ◑ | ✓ |  |
+| `qemu create` | — | ✓ |  |
+| `qemu delete` | — | ✓ |  |
+| `qemu disk move` | — | ✓ |  |
+| `qemu disk resize` | — | ✓ |  |
+| `qemu disk unlink` | — | ✓ |  |
+| `qemu feature` | ◑ | — |  |
+| `qemu firewall alias create` | — | ✓ |  |
+| `qemu firewall alias delete` | — | ✓ |  |
+| `qemu firewall alias list` | — | ✓ |  |
+| `qemu firewall alias update` | — | — | **uncovered** |
+| `qemu firewall ipset add` | — | ✓ |  |
+| `qemu firewall ipset create` | — | ✓ |  |
+| `qemu firewall ipset delete` | — | ✓ |  |
+| `qemu firewall ipset list` | — | ✓ |  |
+| `qemu firewall ipset remove` | — | ✓ |  |
+| `qemu firewall options get` | ◑ | ✓ |  |
+| `qemu firewall options set` | — | ✓ |  |
+| `qemu firewall rules create` | — | ✓ |  |
+| `qemu firewall rules delete` | — | ✓ |  |
+| `qemu firewall rules get` | — | ✓ |  |
+| `qemu firewall rules list` | ◑ | ✓ |  |
+| `qemu firewall rules update` | — | — | **uncovered** |
+| `qemu list` | ✓ | — |  |
+| `qemu metrics` | ◑ | — |  |
+| `qemu migrate` | — | ✓ |  |
+| `qemu migrate check` | ◑ | — |  |
+| `qemu monitor` | — | — | deferred — sends a raw QEMU monitor command to a running VM — even read-only comm… |
+| `qemu reboot` | — | · |  |
+| `qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live cl… |
+| `qemu reset` | — | ✓ |  |
+| `qemu resume` | — | ✓ |  |
+| `qemu rrd` | ◑ | — |  |
+| `qemu sendkey` | — | — | deferred — injects a key event into a running VM's console — requires a live gues… |
+| `qemu shutdown` | — | ✓ |  |
+| `qemu snapshot create` | — | ✓ | error-contract checked |
+| `qemu snapshot delete` | — | ✓ |  |
+| `qemu snapshot list` | ◑ | ✓ |  |
+| `qemu snapshot rollback` | — | ✓ |  |
+| `qemu snapshot show` | ◑ | — |  |
+| `qemu snapshot update` | — | — | **uncovered** |
+| `qemu start` | — | ✓ |  |
+| `qemu status` | ◑ | ✓ |  |
+| `qemu stop` | — | ✓ |  |
+| `qemu suspend` | — | ✓ |  |
+| `qemu template` | — | — | n/a — converts a VM into a template — irreversible, so it is never run on th… |
+
+## `sdn`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `sdn apply` | — | ✓ |  |
+| `sdn controller create` | — | — | deferred — needs an FRR routing backend — covered by unit tests |
+| `sdn controller delete` | — | — | **uncovered** |
+| `sdn controller get` | — | — | **uncovered** |
+| `sdn controller list` | ✓ | — |  |
+| `sdn controller set` | — | — | **uncovered** |
+| `sdn dns create` | — | — | deferred — validates connectivity to an external DNS backend — covered by unit te… |
+| `sdn dns delete` | — | — | **uncovered** |
+| `sdn dns get` | — | — | **uncovered** |
+| `sdn dns list` | ✓ | — |  |
+| `sdn dns set` | — | — | **uncovered** |
+| `sdn dry-run` | ◑ | — |  |
+| `sdn fabric create` | — | — | deferred — needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by … |
+| `sdn fabric delete` | — | — | **uncovered** |
+| `sdn fabric get` | — | — | **uncovered** |
+| `sdn fabric list` | ◑ | — |  |
+| `sdn fabric list-all` | ◑ | — |  |
+| `sdn fabric node create` | — | — | **uncovered** |
+| `sdn fabric node delete` | — | — | **uncovered** |
+| `sdn fabric node get` | — | — | **uncovered** |
+| `sdn fabric node list` | ◑ | — |  |
+| `sdn fabric node set` | — | — | **uncovered** |
+| `sdn fabric set` | — | — | **uncovered** |
+| `sdn ipam create` | — | ✓ |  |
+| `sdn ipam delete` | — | ✓ |  |
+| `sdn ipam get` | — | ✓ |  |
+| `sdn ipam list` | ✓ | ✓ |  |
+| `sdn ipam set` | — | — | **uncovered** |
+| `sdn ipam status` | ◑ | — |  |
+| `sdn lock acquire` | — | — | deferred — acquires the global SDN config lock — requires a paired release and bl… |
+| `sdn lock release` | — | — | deferred — releases the global SDN config lock — must follow acquire; not exercis… |
+| `sdn prefix-list create` | — | — | deferred — stages routing policy tied to a fabric — covered by unit tests |
+| `sdn prefix-list delete` | — | — | **uncovered** |
+| `sdn prefix-list entry add` | — | — | **uncovered** |
+| `sdn prefix-list entry delete` | — | — | **uncovered** |
+| `sdn prefix-list entry get` | — | — | **uncovered** |
+| `sdn prefix-list entry list` | — | — | **uncovered** |
+| `sdn prefix-list entry set` | — | — | **uncovered** |
+| `sdn prefix-list get` | — | — | **uncovered** |
+| `sdn prefix-list list` | ◑ | — |  |
+| `sdn prefix-list set` | — | — | **uncovered** |
+| `sdn rollback` | — | — | n/a — discards ALL pending SDN changes cluster-wide — never run on shared lab |
+| `sdn route-map entry add` | — | — | deferred — stages BGP route policy tied to a fabric — covered by unit tests |
+| `sdn route-map entry delete` | — | — | **uncovered** |
+| `sdn route-map entry get` | — | — | **uncovered** |
+| `sdn route-map entry list` | ◑ | — |  |
+| `sdn route-map entry set` | — | — | **uncovered** |
+| `sdn route-map get` | — | — | **uncovered** |
+| `sdn route-map list` | ◑ | — |  |
+| `sdn subnet create` | — | ✓ |  |
+| `sdn subnet delete` | — | — | **uncovered** |
+| `sdn subnet list` | ◑ | — |  |
+| `sdn subnet set` | — | ✓ |  |
+| `sdn vnet create` | — | ✓ |  |
+| `sdn vnet delete` | — | — | **uncovered** |
+| `sdn vnet firewall options get` | ◑ | ✓ |  |
+| `sdn vnet firewall options set` | — | — | **uncovered** |
+| `sdn vnet firewall rules create` | — | ✓ |  |
+| `sdn vnet firewall rules delete` | — | ✓ |  |
+| `sdn vnet firewall rules get` | — | ✓ |  |
+| `sdn vnet firewall rules list` | ◑ | ✓ |  |
+| `sdn vnet firewall rules set` | — | — | **uncovered** |
+| `sdn vnet ips create` | — | ✓ |  |
+| `sdn vnet ips delete` | — | ✓ |  |
+| `sdn vnet ips set` | — | ✓ |  |
+| `sdn vnet list` | ✓ | — |  |
+| `sdn vnet set` | — | ✓ |  |
+| `sdn zone create` | — | ✓ |  |
+| `sdn zone delete` | — | — | **uncovered** |
+| `sdn zone list` | ✓ | — |  |
+| `sdn zone set` | — | ✓ |  |
+
+## `storage`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `storage content` | ◑ | — |  |
+| `storage create` | — | ✓ |  |
+| `storage delete` | — | ✓ |  |
+| `storage download-url` | — | — | help-only (parse smoke test) |
+| `storage file-restore download` | — | — | help-only (parse smoke test) |
+| `storage file-restore list` | — | — | deferred — browses/extracts files from a PBS snapshot — lab has no Proxmox Backup… |
+| `storage get` | ◑ | ✓ |  |
+| `storage identity` | ◑ | — |  |
+| `storage import-metadata` | — | — | deferred — inspects an importable guest archive — lab has no import source; not e… |
+| `storage list` | ✓ | — |  |
+| `storage prune` | ◑ | ✓ |  |
+| `storage rrd` | ◑ | — |  |
+| `storage rrddata` | ◑ | — |  |
+| `storage set` | — | ✓ |  |
+| `storage status` | ◑ | — |  |
+| `storage upload` | — | — | help-only (parse smoke test) |
+| `storage volume alloc` | — | ✓ |  |
+| `storage volume copy` | — | — | deferred — copies a volume to a new target — no CLI volume-delete verb yet to rem… |
+| `storage volume delete` | — | ✓ |  |
+| `storage volume get` | ◑ | ✓ |  |
+| `storage volume set` | — | ✓ |  |
+
+## `task`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `task list` | ✓ | — |  |
+| `task log` | ◑ | — |  |
+| `task stop` | — | ✓ |  |
+| `task wait` | — | ✓ |  |
+
+## `version`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `version` | ✓ | — |  |
+| `version client` | ✓ | — |  |
+
+## Uncovered leaves
+
+Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
+
+**`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
+
+**`cluster`** (36) — `cluster acme account delete`, `cluster acme account get`, `cluster acme account set`, `cluster ceph flags get`, `cluster config join add`, `cluster config nodes delete`, `cluster firewall alias update`, `cluster firewall group rule-update`, `cluster firewall rules update`, `cluster ha resource relocate`, `cluster ha status arm`, `cluster ha status manager`, `cluster mapping pci delete`, `cluster mapping pci get`, `cluster mapping pci set`, `cluster mapping usb create`, `cluster mapping usb delete`, `cluster mapping usb get`, `cluster mapping usb set`, `cluster notifications matcher create`, `cluster notifications matcher delete`, `cluster notifications matcher get`, `cluster notifications matcher set`, `cluster notifications sendmail create`, `cluster notifications sendmail delete`, `cluster notifications sendmail get`, `cluster notifications sendmail set`, `cluster notifications smtp create`, `cluster notifications smtp delete`, `cluster notifications smtp get`, `cluster notifications smtp set`, `cluster notifications targets-test`, `cluster notifications webhook create`, `cluster notifications webhook delete`, `cluster notifications webhook get`, `cluster notifications webhook set`
+
+**`lxc`** (8) — `lxc feature`, `lxc firewall alias update`, `lxc firewall rules update`, `lxc metrics`, `lxc migrate check`, `lxc rrd`, `lxc snapshot show`, `lxc snapshot update`
+
+**`node`** (46) — `node apt repositories enable`, `node ceph fs create`, `node ceph fs delete`, `node ceph fs list`, `node ceph mds create`, `node ceph mds delete`, `node ceph mds list`, `node ceph mgr create`, `node ceph mgr delete`, `node ceph mgr list`, `node ceph mon delete`, `node ceph mon list`, `node ceph osd delete`, `node ceph osd get`, `node ceph osd in`, `node ceph osd out`, `node ceph osd scrub`, `node ceph pool delete`, `node ceph pool get`, `node ceph pool set`, `node ceph pool status`, `node ceph start`, `node ceph stop`, `node cert acme delete`, `node cert acme renew`, `node cert custom delete`, `node console`, `node disks create directory`, `node disks create lvmthin`, `node disks create zfs`, `node disks init-gpt`, `node firewall rules update`, `node network delete`, `node network revert`, `node network set`, `node query-url-metadata`, `node scan cifs`, `node scan iscsi`, `node scan lvmthin`, `node scan pbs`, `node services reload`, `node services start`, `node services stop`, `node subscription delete`, `node subscription update`, `node vzdump extract-config`
+
+**`pool`** (1) — `pool delete`
+
+**`qemu`** (8) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`, `qemu firewall alias update`, `qemu firewall rules update`, `qemu snapshot update`
+
+**`sdn`** (31) — `sdn controller delete`, `sdn controller get`, `sdn controller set`, `sdn dns delete`, `sdn dns get`, `sdn dns set`, `sdn fabric delete`, `sdn fabric get`, `sdn fabric node create`, `sdn fabric node delete`, `sdn fabric node get`, `sdn fabric node set`, `sdn fabric set`, `sdn ipam set`, `sdn prefix-list delete`, `sdn prefix-list entry add`, `sdn prefix-list entry delete`, `sdn prefix-list entry get`, `sdn prefix-list entry list`, `sdn prefix-list entry set`, `sdn prefix-list get`, `sdn prefix-list set`, `sdn route-map entry delete`, `sdn route-map entry get`, `sdn route-map entry set`, `sdn route-map get`, `sdn subnet delete`, `sdn vnet delete`, `sdn vnet firewall options set`, `sdn vnet firewall rules set`, `sdn zone delete`
 
 ## Running the suites
 
@@ -416,3 +734,4 @@ scripts/lifecycle --ct-only    # container verb matrix only
 Both suites skip gracefully (exit 0) when the target is not configured; pass
 `--strict` to fail instead. The mutate phase prints a per-guest coverage table
 listing every verb it drove and its result.
+
