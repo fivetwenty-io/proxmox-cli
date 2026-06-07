@@ -336,8 +336,10 @@ def classify(leaf, e2e, mut, defers, errpath):
 
 
 def _short(reason: str) -> str:
-    r = reason.split(" — covered live")[0].strip()
-    return (r[:70] + "…") if len(r) > 71 else r
+    # Strip the "— covered live ..." suffix (redundant with the live-via-mutate
+    # note) but keep the full deferral/n-a rationale — truncating it mid-word
+    # dropped the very reason the leaf is deferred.
+    return reason.split(" — covered live")[0].strip()
 
 
 def bucket(leaf, e_cell, m_cell, note):

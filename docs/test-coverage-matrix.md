@@ -146,7 +146,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `cluster acme account create` | — | — | n/a — contacts the ACME certificate authority — never registered live on a s… |
+| `cluster acme account create` | — | — | n/a — contacts the ACME certificate authority — never registered live on a shared lab |
 | `cluster acme account delete` | — | — | **uncovered** |
 | `cluster acme account get` | — | — | **uncovered** |
 | `cluster acme account list` | ✓ | — |  |
@@ -167,17 +167,17 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster backup set` | — | ✓ |  |
 | `cluster backup-info not-backed-up` | ◑ | — |  |
 | `cluster bulk migrate` | — | — | help-only (parse smoke test) |
-| `cluster bulk shutdown` | — | — | deferred — cluster-wide guest power and migration actions — affect every guest, n… |
+| `cluster bulk shutdown` | — | — | deferred — cluster-wide guest power and migration actions — affect every guest, not run live |
 | `cluster bulk start` | — | — | help-only (parse smoke test) |
 | `cluster bulk suspend` | — | — | help-only (parse smoke test) |
 | `cluster ceph flags get` | — | — | **uncovered** |
 | `cluster ceph flags list` | ◑ | — |  |
-| `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disr… |
+| `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
 | `cluster ceph metadata` | ◑ | — |  |
 | `cluster config apiversion` | ✓ | — |  |
 | `cluster config join add` | — | — | **uncovered** |
 | `cluster config join list` | ◑ | — |  |
-| `cluster config nodes add` | — | — | n/a — changes cluster membership and quorum — too dangerous to exercise on a… |
+| `cluster config nodes add` | — | — | n/a — changes cluster membership and quorum — too dangerous to exercise on a shared lab |
 | `cluster config nodes delete` | — | — | **uncovered** |
 | `cluster config nodes list` | ✓ | — |  |
 | `cluster config qdevice` | ◑ | — |  |
@@ -205,7 +205,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster firewall ipset remove` | — | ✓ |  |
 | `cluster firewall macros list` | ✓ | — |  |
 | `cluster firewall options get` | ✓ | ✓ |  |
-| `cluster firewall options set` | — | — | deferred — enables/changes the datacenter firewall policy cluster-wide — not exer… |
+| `cluster firewall options set` | — | — | deferred — enables/changes the datacenter firewall policy cluster-wide — not exercised live |
 | `cluster firewall refs list` | ✓ | — |  |
 | `cluster firewall rules create` | — | ✓ |  |
 | `cluster firewall rules delete` | — | ✓ |  |
@@ -231,7 +231,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ha rule set` | — | ✓ |  |
 | `cluster ha status arm` | — | — | **uncovered** |
 | `cluster ha status current` | ✓ | — |  |
-| `cluster ha status disarm` | — | — | deferred — toggles the cluster-wide HA stack — would disrupt every HA-managed res… |
+| `cluster ha status disarm` | — | — | deferred — toggles the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
 | `cluster ha status list` | ✓ | — |  |
 | `cluster ha status manager` | — | — | **uncovered** |
 | `cluster jobs realm-sync create` | — | ✓ |  |
@@ -246,7 +246,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster mapping dir get` | — | ✓ |  |
 | `cluster mapping dir list` | ✓ | ✓ |  |
 | `cluster mapping dir set` | — | ✓ |  |
-| `cluster mapping pci create` | — | — | deferred — PCI/USB mappings need real device IDs — dir mapping CRUD is covered li… |
+| `cluster mapping pci create` | — | — | deferred — PCI/USB mappings need real device IDs — dir mapping CRUD is covered live by `e2e --mutate` |
 | `cluster mapping pci delete` | — | — | **uncovered** |
 | `cluster mapping pci get` | — | — | **uncovered** |
 | `cluster mapping pci list` | ✓ | — |  |
@@ -346,7 +346,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc migrate` | — | ✓ |  |
 | `lxc migrate check` | — | — | **uncovered** |
 | `lxc reboot` | — | ✓ |  |
-| `lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two … |
+| `lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
 | `lxc resume` | — | ✓ |  |
 | `lxc rrd` | — | — | **uncovered** |
 | `lxc shutdown` | — | ✓ |  |
@@ -372,7 +372,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node apt repositories add` | — | — | deferred — rewrites the node's APT repository configuration; not exercised live |
 | `node apt repositories enable` | — | — | **uncovered** |
 | `node apt repositories list` | ◑ | — |  |
-| `node apt update` | — | — | deferred — refreshes the node's APT database (network I/O, apt state churn); not … |
+| `node apt update` | — | — | deferred — refreshes the node's APT database (network I/O, apt state churn); not exercised live |
 | `node apt versions` | ◑ | — |  |
 | `node capabilities qemu cpu` | ◑ | — |  |
 | `node capabilities qemu cpu-flags` | ◑ | — |  |
@@ -382,49 +382,49 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node ceph fs create` | — | — | **uncovered** |
 | `node ceph fs delete` | — | — | **uncovered** |
 | `node ceph fs list` | — | — | **uncovered** |
-| `node ceph init` | — | — | deferred — initializes a Ceph cluster configuration on the node — cluster-wide an… |
+| `node ceph init` | — | — | deferred — initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live |
 | `node ceph mds create` | — | — | **uncovered** |
 | `node ceph mds delete` | — | — | **uncovered** |
 | `node ceph mds list` | — | — | **uncovered** |
 | `node ceph mgr create` | — | — | **uncovered** |
 | `node ceph mgr delete` | — | — | **uncovered** |
 | `node ceph mgr list` | — | — | **uncovered** |
-| `node ceph mon create` | — | — | deferred — provisions or destroys Ceph monitor/MDS/MGR/filesystem daemons; not ex… |
+| `node ceph mon create` | — | — | deferred — provisions or destroys Ceph monitor/MDS/MGR/filesystem daemons; not exercised live |
 | `node ceph mon delete` | — | — | **uncovered** |
 | `node ceph mon list` | — | — | **uncovered** |
-| `node ceph osd create` | — | — | deferred — creates or destroys OSDs (wipes block devices) and moves cluster data;… |
+| `node ceph osd create` | — | — | deferred — creates or destroys OSDs (wipes block devices) and moves cluster data; not exercised live |
 | `node ceph osd delete` | — | — | **uncovered** |
 | `node ceph osd get` | — | — | **uncovered** |
 | `node ceph osd in` | — | — | **uncovered** |
 | `node ceph osd list` | ◑ | — |  |
 | `node ceph osd out` | — | — | **uncovered** |
 | `node ceph osd scrub` | — | — | **uncovered** |
-| `node ceph pool create` | — | — | deferred — creates, reconfigures, or destroys a Ceph pool (data loss on delete); … |
+| `node ceph pool create` | — | — | deferred — creates, reconfigures, or destroys a Ceph pool (data loss on delete); not exercised live |
 | `node ceph pool delete` | — | — | **uncovered** |
 | `node ceph pool get` | — | — | **uncovered** |
 | `node ceph pool list` | ◑ | — |  |
 | `node ceph pool set` | — | — | **uncovered** |
 | `node ceph pool status` | — | — | **uncovered** |
-| `node ceph restart` | — | — | deferred — controls running Ceph services on the node — disruptive; not exercised… |
+| `node ceph restart` | — | — | deferred — controls running Ceph services on the node — disruptive; not exercised live |
 | `node ceph start` | — | — | **uncovered** |
 | `node ceph status` | ◑ | — |  |
 | `node ceph stop` | — | — | **uncovered** |
 | `node cert acme delete` | — | — | **uncovered** |
 | `node cert acme list` | ◑ | — |  |
-| `node cert acme order` | — | — | deferred — orders, renews, or removes the node's ACME certificate (contacts Let's… |
+| `node cert acme order` | — | — | deferred — orders, renews, or removes the node's ACME certificate (contacts Let's Encrypt); not exercised live |
 | `node cert acme renew` | — | — | **uncovered** |
 | `node cert custom delete` | — | — | **uncovered** |
-| `node cert custom upload` | — | — | deferred — replaces or removes the node's API TLS certificate — could break TLS t… |
+| `node cert custom upload` | — | — | deferred — replaces or removes the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
 | `node console` | — | — | **uncovered** |
 | `node disks create directory` | — | — | **uncovered** |
 | `node disks create lvm` | — | — | help-only (parse smoke test) |
 | `node disks create lvmthin` | — | — | **uncovered** |
 | `node disks create zfs` | — | — | **uncovered** |
-| `node disks delete directory` | — | — | deferred — removes a mounted directory storage from the host — irreversible; not … |
-| `node disks delete lvm` | — | — | deferred — removes an LVM volume group from the host — irreversible; not exercise… |
+| `node disks delete directory` | — | — | deferred — removes a mounted directory storage from the host — irreversible; not exercised live |
+| `node disks delete lvm` | — | — | deferred — removes an LVM volume group from the host — irreversible; not exercised live |
 | `node disks delete lvmthin` | — | — | deferred — removes an LVM thin pool from a VG — irreversible; not exercised live |
-| `node disks delete zfs` | — | — | deferred — destroys a ZFS pool — irreversible, destroys all data on the pool; not… |
+| `node disks delete zfs` | — | — | deferred — destroys a ZFS pool — irreversible, destroys all data on the pool; not exercised live |
 | `node disks get zfs` | ◑ | — |  |
 | `node disks init-gpt` | — | — | **uncovered** |
 | `node disks list` | ◑ | — |  |
@@ -438,7 +438,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node dns set` | — | ✓ |  |
 | `node exec` | — | ✓ |  |
 | `node firewall options get` | ◑ | ✓ |  |
-| `node firewall options set` | — | — | deferred — changes the host firewall policy — could cut the node off the network;… |
+| `node firewall options set` | — | — | deferred — changes the host firewall policy — could cut the node off the network; not exercised live |
 | `node firewall rules create` | — | ✓ |  |
 | `node firewall rules delete` | — | ✓ |  |
 | `node firewall rules get` | — | ✓ |  |
@@ -448,24 +448,24 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node hardware pci` | ◑ | — |  |
 | `node hardware usb` | ◑ | — |  |
 | `node hosts get` | ◑ | — |  |
-| `node hosts set` | — | — | deferred — replaces the whole /etc/hosts file — could break host name resolution;… |
+| `node hosts set` | — | — | deferred — replaces the whole /etc/hosts file — could break host name resolution; not exercised live |
 | `node journal` | ◑ | — |  |
 | `node list` | ✓ | — |  |
 | `node migrateall` | — | — | help-only (parse smoke test) |
 | `node netstat` | ◑ | — |  |
-| `node network apply` | — | — | deferred — reloads or discards the staged host network configuration — could cut … |
-| `node network create` | — | — | deferred — edits a host network interface — could cut the node off the network; n… |
+| `node network apply` | — | — | deferred — reloads or discards the staged host network configuration — could cut the node off the network; not exercised live |
+| `node network create` | — | — | deferred — edits a host network interface — could cut the node off the network; not exercised live |
 | `node network delete` | — | — | **uncovered** |
 | `node network get` | ◑ | — |  |
 | `node network list` | ◑ | — |  |
 | `node network revert` | — | — | **uncovered** |
 | `node network set` | — | — | **uncovered** |
-| `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact… |
+| `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live |
 | `node oci tags` | — | — | help-only (parse smoke test) |
 | `node query-url-metadata` | — | — | **uncovered** |
 | `node replication list` | ◑ | — |  |
 | `node replication log` | ◑ | — |  |
-| `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a con… |
+| `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
 | `node replication status` | ◑ | — |  |
 | `node report` | ◑ | — |  |
 | `node rrddata` | ◑ | — |  |
@@ -474,7 +474,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node scan iscsi` | — | — | **uncovered** |
 | `node scan lvm` | ◑ | — |  |
 | `node scan lvmthin` | — | — | **uncovered** |
-| `node scan nfs` | — | — | deferred — probes a remote storage server (needs a server address and credentials… |
+| `node scan nfs` | — | — | deferred — probes a remote storage server (needs a server address and credentials); not exercised live |
 | `node scan pbs` | — | — | **uncovered** |
 | `node scan zfs` | ◑ | — |  |
 | `node services get` | ◑ | — |  |
@@ -488,10 +488,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node ssh` | — | ✓ |  |
 | `node startall` | — | — | help-only (parse smoke test) |
 | `node status` | ◑ | — |  |
-| `node stopall` | — | — | deferred — node-wide guest power and migration actions — affect every guest on th… |
+| `node stopall` | — | — | deferred — node-wide guest power and migration actions — affect every guest on the node, not run live |
 | `node subscription delete` | — | — | **uncovered** |
 | `node subscription get` | ◑ | — |  |
-| `node subscription set` | — | — | n/a — changes the node's subscription/licensing state on a shared lab; not e… |
+| `node subscription set` | — | — | n/a — changes the node's subscription/licensing state on a shared lab; not exercised live |
 | `node subscription update` | — | — | **uncovered** |
 | `node suspendall` | — | — | help-only (parse smoke test) |
 | `node syslog` | ◑ | — |  |
@@ -504,7 +504,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node vzdump` | — | ✓ |  |
 | `node vzdump defaults` | ◑ | — |  |
 | `node vzdump extract-config` | — | — | **uncovered** |
-| `node wakeonlan` | — | — | n/a — sends a Wake-on-LAN packet to power on a node — affects real host powe… |
+| `node wakeonlan` | — | — | n/a — sends a Wake-on-LAN packet to power on a node — affects real host power state, not run live |
 
 ## `pool`
 
@@ -560,13 +560,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu metrics` | ◑ | — |  |
 | `qemu migrate` | — | ✓ |  |
 | `qemu migrate check` | ◑ | — |  |
-| `qemu monitor` | — | — | deferred — sends a raw QEMU monitor command to a running VM — even read-only comm… |
+| `qemu monitor` | — | — | deferred — sends a raw QEMU monitor command to a running VM — even read-only commands require root and an active QEMU process; exercised live by `e2e --mutate` (soft-step: info status, which cannot change VM state) |
 | `qemu reboot` | — | · |  |
-| `qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live cl… |
+| `qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live clusters with shared or compatible storage; no rollback without manual intervention; not exercised live |
 | `qemu reset` | — | ✓ |  |
 | `qemu resume` | — | ✓ |  |
 | `qemu rrd` | ◑ | — |  |
-| `qemu sendkey` | — | — | deferred — injects a key event into a running VM's console — requires a live gues… |
+| `qemu sendkey` | — | — | deferred — injects a key event into a running VM's console — requires a live guest process; a benign key (ret) is used, but the CI lab has no guaranteed running guest; not exercised live |
 | `qemu shutdown` | — | ✓ |  |
 | `qemu snapshot create` | — | ✓ | error-contract checked |
 | `qemu snapshot delete` | — | ✓ |  |
@@ -578,7 +578,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu status` | ◑ | ✓ |  |
 | `qemu stop` | — | ✓ |  |
 | `qemu suspend` | — | ✓ |  |
-| `qemu template` | — | — | n/a — converts a VM into a template — irreversible, so it is never run on th… |
+| `qemu template` | — | — | n/a — converts a VM into a template — irreversible, so it is never run on the shared lab (it would destroy the reusable isolated VM); covered by unit tests |
 
 ## `sdn`
 
@@ -590,13 +590,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn controller get` | — | — | **uncovered** |
 | `sdn controller list` | ✓ | — |  |
 | `sdn controller set` | — | — | **uncovered** |
-| `sdn dns create` | — | — | deferred — validates connectivity to an external DNS backend — covered by unit te… |
+| `sdn dns create` | — | — | deferred — validates connectivity to an external DNS backend — covered by unit tests |
 | `sdn dns delete` | — | — | **uncovered** |
 | `sdn dns get` | — | — | **uncovered** |
 | `sdn dns list` | ✓ | — |  |
 | `sdn dns set` | — | — | **uncovered** |
 | `sdn dry-run` | ◑ | — |  |
-| `sdn fabric create` | — | — | deferred — needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by … |
+| `sdn fabric create` | — | — | deferred — needs a real BGP/OSPF/OpenFabric topology with FRR peers — covered by unit tests |
 | `sdn fabric delete` | — | — | **uncovered** |
 | `sdn fabric get` | — | — | **uncovered** |
 | `sdn fabric list` | ◑ | — |  |
@@ -613,8 +613,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn ipam list` | ✓ | ✓ |  |
 | `sdn ipam set` | — | — | **uncovered** |
 | `sdn ipam status` | ◑ | — |  |
-| `sdn lock acquire` | — | — | deferred — acquires the global SDN config lock — requires a paired release and bl… |
-| `sdn lock release` | — | — | deferred — releases the global SDN config lock — must follow acquire; not exercis… |
+| `sdn lock acquire` | — | — | deferred — acquires the global SDN config lock — requires a paired release and blocks all concurrent SDN writes; not exercised live |
+| `sdn lock release` | — | — | deferred — releases the global SDN config lock — must follow acquire; not exercised live (paired with acquire, which is also deferred) |
 | `sdn prefix-list create` | — | — | deferred — stages routing policy tied to a fabric — covered by unit tests |
 | `sdn prefix-list delete` | — | — | **uncovered** |
 | `sdn prefix-list entry add` | — | — | **uncovered** |
@@ -665,10 +665,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage delete` | — | ✓ |  |
 | `storage download-url` | — | — | help-only (parse smoke test) |
 | `storage file-restore download` | — | — | help-only (parse smoke test) |
-| `storage file-restore list` | — | — | deferred — browses/extracts files from a PBS snapshot — lab has no Proxmox Backup… |
+| `storage file-restore list` | — | — | deferred — browses/extracts files from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live |
 | `storage get` | ◑ | ✓ |  |
 | `storage identity` | ◑ | — |  |
-| `storage import-metadata` | — | — | deferred — inspects an importable guest archive — lab has no import source; not e… |
+| `storage import-metadata` | — | — | deferred — inspects an importable guest archive — lab has no import source; not exercised live |
 | `storage list` | ✓ | — |  |
 | `storage prune` | ◑ | ✓ |  |
 | `storage rrd` | ◑ | — |  |
@@ -677,7 +677,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage status` | ◑ | — |  |
 | `storage upload` | — | — | help-only (parse smoke test) |
 | `storage volume alloc` | — | ✓ |  |
-| `storage volume copy` | — | — | deferred — copies a volume to a new target — no CLI volume-delete verb yet to rem… |
+| `storage volume copy` | — | — | deferred — copies a volume to a new target — no CLI volume-delete verb yet to remove the copy; not exercised live |
 | `storage volume delete` | — | ✓ |  |
 | `storage volume get` | ◑ | ✓ |  |
 | `storage volume set` | — | ✓ |  |
