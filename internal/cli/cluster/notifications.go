@@ -25,7 +25,10 @@ func newNotificationsCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newNotificationsTargetsCmd(),
+		newNotificationsTargetsTestCmd(),
 		newNotificationsEndpointsCmd(),
+		newNotificationsMatcherFieldsCmd(),
+		newNotificationsMatcherFieldValuesCmd(),
 		newGotifyCmd(),
 		newSendmailCmd(),
 		newSMTPCmd(),
@@ -63,6 +66,68 @@ func newNotificationsEndpointsCmd() *cobra.Command {
 			resp, err := deps.API.Cluster.ListNotificationsEndpoints(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list notification endpoints: %w", err)
+			}
+			return renderRawList(cmd, deps, derefRawList(resp))
+		},
+	}
+}
+
+// newNotificationsTargetsTestCmd builds `pve cluster notifications targets test <name>`.
+// It sends a test notification through the named target so operators can verify the
+// endpoint configuration is functional without waiting for a real alert.
+func newNotificationsTargetsTestCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "targets-test <name>",
+		Short: "Send a test notification through a target",
+		Long: "Send a test notification through the named notification target. " +
+			"Use this to verify endpoint configuration is functional.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			name := args[0]
+			if err := deps.API.Cluster.CreateNotificationsTargetsTest(cmd.Context(), name); err != nil {
+				return fmt.Errorf("test notification target %q: %w", name, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: fmt.Sprintf("Test notification sent to target %q.", name)}, deps.Format)
+		},
+	}
+}
+
+// newNotificationsMatcherFieldsCmd builds `pve cluster notifications matcher-fields`.
+// It lists the known metadata field names that can be used in matcher rules.
+func newNotificationsMatcherFieldsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "matcher-fields",
+		Short: "List known matcher metadata field names",
+		Long: "List the known metadata field names that can be used when authoring " +
+			"notification matcher rules.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			resp, err := deps.API.Cluster.ListNotificationsMatcherFields(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("list notification matcher fields: %w", err)
+			}
+			return renderRawList(cmd, deps, derefRawList(resp))
+		},
+	}
+}
+
+// newNotificationsMatcherFieldValuesCmd builds `pve cluster notifications matcher-field-values`.
+// It lists each known metadata field together with its valid values.
+func newNotificationsMatcherFieldValuesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "matcher-field-values",
+		Short: "List matcher field names and their known values",
+		Long: "List each known notification matcher metadata field together with the " +
+			"values it can take. Useful when authoring matcher rules.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			resp, err := deps.API.Cluster.ListNotificationsMatcherFieldValues(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("list notification matcher field values: %w", err)
 			}
 			return renderRawList(cmd, deps, derefRawList(resp))
 		},

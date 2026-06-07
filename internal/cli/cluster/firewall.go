@@ -29,6 +29,8 @@ func newFirewallCmd() *cobra.Command {
 		newClusterFirewallIpsetCmd(),
 		newClusterFirewallAliasCmd(),
 		newClusterFirewallOptionsCmd(),
+		newClusterFirewallMacrosCmd(),
+		newClusterFirewallRefsCmd(),
 	)
 	return cmd
 }
@@ -1053,6 +1055,91 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&policyForward, "policy-forward", "", "forward policy: ACCEPT or DROP")
 	cmd.Flags().StringVar(&logRatelimit, "log-ratelimit", "", "log rate-limiting settings, for example enable=1,rate=1/second")
 	cmd.Flags().StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
+	return cmd
+}
+
+// newClusterFirewallMacrosCmd builds `pve cluster firewall macros list`.
+// It reads the static list of built-in firewall macros from the server. The list
+// is read-only and useful when authoring rules that reference a macro name.
+func newClusterFirewallMacrosCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "macros",
+		Short: "List built-in firewall macros",
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List all built-in firewall macros",
+		Long: "List all built-in firewall macros available for use in firewall rules. " +
+			"The list is static and provided by the PVE server.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			resp, err := deps.API.Cluster.ListFirewallMacros(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("list firewall macros: %w", err)
+			}
+			entries := make([]map[string]any, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var m map[string]any
+					if err := json.Unmarshal(raw, &m); err != nil {
+						return fmt.Errorf("decode firewall macro entry: %w", err)
+					}
+					entries = append(entries, m)
+				}
+			}
+			headers, rows := dynamicTable(entries)
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
+		},
+	})
+	return cmd
+}
+
+// newClusterFirewallRefsCmd builds `pve cluster firewall refs list`.
+// It returns the valid IPSet and alias references that can be used as source or
+// destination in firewall rules. The optional --type flag limits results to
+// either "ipset" or "alias".
+func newClusterFirewallRefsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "refs",
+		Short: "List valid IP set and alias references for firewall rules",
+	}
+	var refType string
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List IP set and alias references",
+		Long: "List the IP set and alias references that can be used as source or " +
+			"destination in firewall rules. Pass --type ipset or --type alias to filter.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			fl := cmd.Flags()
+			params := &pvecluster.ListFirewallRefsParams{}
+			if fl.Changed("type") {
+				params.Type = &refType
+			}
+			resp, err := deps.API.Cluster.ListFirewallRefs(cmd.Context(), params)
+			if err != nil {
+				return fmt.Errorf("list firewall refs: %w", err)
+			}
+			entries := make([]map[string]any, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var m map[string]any
+					if err := json.Unmarshal(raw, &m); err != nil {
+						return fmt.Errorf("decode firewall ref entry: %w", err)
+					}
+					entries = append(entries, m)
+				}
+			}
+			headers, rows := dynamicTable(entries)
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
+	listCmd.Flags().StringVar(&refType, "type", "", "filter by reference type: ipset or alias")
+	cmd.AddCommand(listCmd)
 	return cmd
 }
 

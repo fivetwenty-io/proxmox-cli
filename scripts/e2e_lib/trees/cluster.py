@@ -35,6 +35,31 @@ def run(ctx: Ctx) -> None:
         ctx.skip("backup info", "GET /cluster/backup-info requires root@pam")
     else:
         ctx.check("backup info", "cluster", "backup", "info", validate=is_list)
+    # backup included-volumes: list volumes the schedule would back up per guest.
+    # Requires an existing backup job id; discover one from the list and skip if
+    # none exist.
+    backup_job_id = None
+    bl = ctx.run("cluster", "backup", "list")
+    if bl.rc == 0:
+        try:
+            backup_job_id = ctx.first(bl.json(), "id")
+        except (ValueError, KeyError):
+            backup_job_id = None
+    if backup_job_id:
+        ctx.check("backup included-volumes", "cluster", "backup", "included-volumes",
+                  str(backup_job_id), validate=is_list)
+    else:
+        ctx.skip("backup included-volumes", "no backup job defined")
+    # backup-info not-backed-up: list guests not covered by any backup schedule.
+    # Safe to run; returns empty list when all guests are covered.
+    nb = ctx.run("cluster", "backup-info", "not-backed-up")
+    nb_err = (nb.stderr or nb.stdout).lower()
+    if nb.rc != 0 and ("root@pam" in nb_err or "permission" in nb_err):
+        ctx.skip("backup-info not-backed-up",
+                 "GET /cluster/backup-info/not-backed-up requires root@pam")
+    else:
+        ctx.check("backup-info not-backed-up", "cluster", "backup-info", "not-backed-up",
+                  validate=is_list)
     ctx.check("backup create --help", "cluster", "backup", "create", "--help", fmt="")
 
     # The mutate phase creates a disabled, pool-scoped backup schedule with the
@@ -200,6 +225,12 @@ def run(ctx: Ctx) -> None:
     for kind in ("gotify", "sendmail", "smtp", "webhook"):
         ctx.check(f"notifications {kind} list", "cluster", "notifications", kind, "list", validate=is_list)
     ctx.check("notifications matcher list", "cluster", "notifications", "matcher", "list", validate=is_list)
+    # matcher-fields and matcher-field-values are static metadata catalogs that do
+    # not change with cluster state — always present and safe to query directly.
+    ctx.check("notifications matcher-fields", "cluster", "notifications", "matcher-fields",
+              validate=is_list)
+    ctx.check("notifications matcher-field-values", "cluster", "notifications",
+              "matcher-field-values", validate=is_list)
     ctx.check("notifications gotify create --help", "cluster", "notifications", "gotify", "create", "--help", fmt="")
     # The mutate phase creates a disabled Gotify endpoint pointing at an unused
     # address on the e2e subnet, exercises get/set, and deletes it — covered live
@@ -230,6 +261,11 @@ def run(ctx: Ctx) -> None:
     # Realm-sync jobs: the list is an array (empty on a lab with no LDAP/AD realm
     # synced). Read-only and safe to query directly.
     ctx.check("jobs realm-sync list", "cluster", "jobs", "realm-sync", "list", validate=is_list)
+    # schedule-analyze: validates a cron/timespec and lists next trigger times.
+    # --schedule is required; a simple daily schedule always parses without any
+    # configured jobs, so this is safe to run unconditionally.
+    ctx.check("jobs schedule-analyze", "cluster", "jobs", "schedule-analyze",
+              "--schedule", "daily", validate=is_list)
     ctx.check("jobs realm-sync create --help", "cluster", "jobs", "realm-sync", "create", "--help", fmt="")
     # A realm-sync job needs an existing LDAP/AD realm to point at; the mutate phase
     # creates one only during the access domain lifecycle, so the realm-sync CRUD is
@@ -276,8 +312,11 @@ def run(ctx: Ctx) -> None:
     flags_err = (flags.stderr or flags.stdout).lower()
     if flags.rc != 0 and "ceph" in flags_err:
         ctx.skip("ceph flags list", "Ceph is not configured on the lab node")
+        ctx.skip("ceph metadata", "Ceph is not configured on the lab node")
     else:
         ctx.check("ceph flags list", "cluster", "ceph", "flags", "list", validate=is_list)
+        # ceph metadata: cluster-wide OSD/mon/mgr/mds daemon metadata; read-only.
+        ctx.check("ceph metadata", "cluster", "ceph", "metadata")
     ctx.check("ceph flags set --help", "cluster", "ceph", "flags", "set", "--help", fmt="")
     ctx.defer(
         "ceph flags set",
@@ -285,6 +324,30 @@ def run(ctx: Ctx) -> None:
         "pve cluster ceph flags set noout true",
         isolation=False, live_covered=False,
     )
+
+    # Cluster firewall: static metadata catalogs — macro list and reference list.
+    # Both are always present (macros are built-in; refs reflects the current
+    # firewall config), safe to query directly.
+    ctx.check("firewall macros list", "cluster", "firewall", "macros", "list", validate=is_list)
+    ctx.check("firewall refs list", "cluster", "firewall", "refs", "list", validate=is_list)
+
+    # Corosync/cluster config metadata. `apiversion` is always present; `totem`
+    # is always present on a cluster with corosync; `qdevice` errors when no
+    # QDevice is configured — record a skip there rather than a failure.
+    ctx.check("config apiversion", "cluster", "config", "apiversion")
+    totem_res = ctx.run("cluster", "config", "totem")
+    if totem_res.rc == 0:
+        ctx.check("config totem", "cluster", "config", "totem")
+    else:
+        ctx.skip("config totem", "corosync totem not available on this cluster")
+    qdev_res = ctx.run("cluster", "config", "qdevice")
+    qdev_err = (qdev_res.stderr or qdev_res.stdout).lower()
+    if qdev_res.rc != 0 and any(
+        m in qdev_err for m in ("qdevice", "not configured", "no such", "404")
+    ):
+        ctx.skip("config qdevice", "QDevice not configured on this cluster")
+    else:
+        ctx.check("config qdevice", "cluster", "config", "qdevice")
 
     # Bulk actions act on every guest in the cluster (or a --vmids subset). They
     # would start, stop, suspend, or migrate non-isolated production workloads, so

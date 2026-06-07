@@ -21,7 +21,10 @@ func newCephCmd() *cobra.Command {
 		Short: "Manage cluster-wide Ceph settings",
 		Long:  "Manage cluster-wide Ceph settings. Requires a configured Ceph cluster.",
 	}
-	cmd.AddCommand(newCephFlagsCmd())
+	cmd.AddCommand(
+		newCephFlagsCmd(),
+		newCephMetadataCmd(),
+	)
 	return cmd
 }
 
@@ -108,4 +111,41 @@ func newCephFlagsSetCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("ceph flag %s %s.", flag, state)}, deps.Format)
 		},
 	}
+}
+
+// newCephMetadataCmd builds `pve cluster ceph metadata`.
+// It calls GET /cluster/ceph/metadata and returns per-node Ceph daemon metadata
+// (monitors, OSD, MDS, managers). The optional --scope flag filters to a specific
+// daemon type. On a node without a configured Ceph cluster the API returns an
+// error, which is surfaced verbatim — the command itself is correct.
+func newCephMetadataCmd() *cobra.Command {
+	var scope string
+	cmd := &cobra.Command{
+		Use:   "metadata",
+		Short: "Show per-node Ceph daemon metadata",
+		Long: "Show per-node Ceph daemon metadata including monitors, OSDs, MDS, and managers. " +
+			"Requires a configured Ceph cluster; returns an error on nodes without Ceph.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			fl := cmd.Flags()
+			params := &pvecluster.ListCephMetadataParams{}
+			if fl.Changed("scope") {
+				params.Scope = &scope
+			}
+			resp, err := deps.API.Cluster.ListCephMetadata(cmd.Context(), params)
+			if err != nil {
+				return fmt.Errorf("get ceph metadata: %w", err)
+			}
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("decode ceph metadata: %w", err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&scope, "scope", "",
+		"filter metadata by daemon type: mon, osd, mds, mgr, or all")
+	return cmd
 }

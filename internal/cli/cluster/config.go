@@ -28,6 +28,9 @@ func newConfigCmd() *cobra.Command {
 	cmd.AddCommand(
 		newConfigJoinCmd(),
 		newConfigNodesCmd(),
+		newConfigApiversionCmd(),
+		newConfigQdeviceCmd(),
+		newConfigTotemCmd(),
 	)
 	return cmd
 }
@@ -253,4 +256,86 @@ func newConfigNodesDeleteCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the membership change without prompting")
 	return cmd
+}
+
+// ---- cluster configuration introspection -----------------------------------
+
+// newConfigApiversionCmd builds `pve cluster config apiversion`.
+// It returns the cluster JOIN_API_VERSION, primarily useful for tooling that
+// needs to negotiate join protocol compatibility. The API returns a scalar
+// integer, so the response is rendered as a message rather than a table.
+func newConfigApiversionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "apiversion",
+		Short: "Show the cluster join API version",
+		Long: "Return the cluster JOIN_API_VERSION. Primarily useful for tooling " +
+			"that needs to verify join protocol compatibility between nodes.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			resp, err := deps.API.Cluster.ListConfigApiversion(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("get cluster config apiversion: %w", err)
+			}
+			msg := ""
+			if resp != nil {
+				msg = string(*resp)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: msg, Raw: resp}, deps.Format)
+		},
+	}
+}
+
+// newConfigQdeviceCmd builds `pve cluster config qdevice`.
+// It returns the QDevice quorum status for the corosync cluster.
+// On a cluster without a QDevice configured the API returns an error,
+// which is surfaced verbatim — the command itself is correct.
+func newConfigQdeviceCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "qdevice",
+		Short: "Show QDevice quorum status",
+		Long: "Show the QDevice quorum device status for the corosync cluster. " +
+			"Returns an error on clusters without a configured QDevice.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			resp, err := deps.API.Cluster.ListConfigQdevice(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("get cluster config qdevice: %w", err)
+			}
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("decode cluster config qdevice: %w", err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
+}
+
+// newConfigTotemCmd builds `pve cluster config totem`.
+// It returns the corosync totem settings, which govern ring transport, token
+// timeouts, and consensus parameters — useful for cluster health diagnosis.
+func newConfigTotemCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "totem",
+		Short: "Show corosync totem settings",
+		Long: "Show the corosync totem configuration: ring transport, token timeouts, " +
+			"and consensus parameters. Useful for cluster health diagnosis.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			resp, err := deps.API.Cluster.ListConfigTotem(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("get cluster config totem: %w", err)
+			}
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("decode cluster config totem: %w", err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
 }

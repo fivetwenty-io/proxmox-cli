@@ -28,8 +28,45 @@ func newBackupCmd() *cobra.Command {
 		newBackupSetCmd(),
 		newBackupDeleteCmd(),
 		newBackupInfoCmd(),
+		newBackupIncludedVolumesCmd(),
 	)
 	return cmd
+}
+
+// newBackupIncludedVolumesCmd builds `pve cluster backup included-volumes <id>`.
+// It shows which disks and volumes a backup job covers, which is essential for
+// auditing backup scope before a maintenance window.
+func newBackupIncludedVolumesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "included-volumes <id>",
+		Short: "Show the volumes included in a backup job",
+		Long: "List every disk and volume that a scheduled backup job covers. " +
+			"Useful for auditing backup scope before a maintenance window.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := resolveDeps(cmd)
+			id := args[0]
+			resp, err := deps.API.Cluster.ListBackupIncludedVolumes(cmd.Context(), id)
+			if err != nil {
+				return fmt.Errorf("list backup included volumes %q: %w", id, err)
+			}
+			// The response has a top-level Children field containing the tree of
+			// included volumes. Render it as a dynamic table so every field surfaces.
+			entries := make([]map[string]any, 0)
+			if resp != nil {
+				for _, raw := range resp.Children {
+					var m map[string]any
+					if err := json.Unmarshal(raw, &m); err != nil {
+						return fmt.Errorf("decode included volume entry: %w", err)
+					}
+					entries = append(entries, m)
+				}
+			}
+			headers, rows := dynamicTable(entries)
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
 }
 
 // newBackupListCmd builds `pve cluster backup list`.

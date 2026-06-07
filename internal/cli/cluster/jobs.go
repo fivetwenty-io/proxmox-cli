@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -19,7 +20,10 @@ func newJobsCmd() *cobra.Command {
 		Short: "Manage scheduled cluster jobs",
 		Long:  "Manage scheduled cluster jobs, such as periodic realm (LDAP/AD) user synchronization.",
 	}
-	cmd.AddCommand(newJobsRealmSyncCmd())
+	cmd.AddCommand(
+		newJobsRealmSyncCmd(),
+		newJobsScheduleAnalyzeCmd(),
+	)
 	return cmd
 }
 
@@ -223,5 +227,59 @@ func newJobsRealmSyncDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	return cmd
+}
+
+// newJobsScheduleAnalyzeCmd builds `pve cluster jobs schedule-analyze --schedule <cron>`.
+// It calls GET /cluster/jobs/schedule-analyze and returns the next N runtimes for a
+// given systemd calendar expression. Useful for validating job schedules before
+// committing them to a realm-sync or backup job.
+func newJobsScheduleAnalyzeCmd() *cobra.Command {
+	var (
+		schedule   string
+		iterations int64
+		starttime  int64
+	)
+	cmd := &cobra.Command{
+		Use:   "schedule-analyze",
+		Short: "Preview the next runtimes for a schedule expression",
+		Long: "Calculate and list the next runtimes for a systemd calendar expression. " +
+			"Use this to validate a schedule before applying it to a job. " +
+			"--schedule is required; --iterations defaults to the server default (10).",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := resolveDeps(cmd)
+			fl := cmd.Flags()
+			params := &pvecluster.ListJobsScheduleAnalyzeParams{Schedule: schedule}
+			if fl.Changed("iterations") {
+				params.Iterations = &iterations
+			}
+			if fl.Changed("starttime") {
+				params.Starttime = &starttime
+			}
+			resp, err := deps.API.Cluster.ListJobsScheduleAnalyze(cmd.Context(), params)
+			if err != nil {
+				return fmt.Errorf("analyze schedule %q: %w", schedule, err)
+			}
+			entries := make([]map[string]any, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var m map[string]any
+					if err := json.Unmarshal(raw, &m); err != nil {
+						return fmt.Errorf("decode schedule entry: %w", err)
+					}
+					entries = append(entries, m)
+				}
+			}
+			headers, rows := dynamicTable(entries)
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&schedule, "schedule", "", "systemd calendar expression to analyze (required)")
+	f.Int64Var(&iterations, "iterations", 0, "number of upcoming run times to return")
+	f.Int64Var(&starttime, "starttime", 0, "UNIX timestamp to start the calculation from (default: now)")
+	_ = cmd.MarkFlagRequired("schedule")
 	return cmd
 }
