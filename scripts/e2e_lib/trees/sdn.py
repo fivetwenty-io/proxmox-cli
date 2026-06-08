@@ -152,16 +152,19 @@ def run(ctx: Ctx) -> None:
               isolation=True, live_covered=True)
     ctx.defer("apply", "reloads network config on all nodes — covered live by `e2e --mutate`",
               "pve sdn apply", isolation=True, live_covered=True)
+    # The mutate phase runs a tight acquire→release pair on the global SDN lock
+    # (the token `acquire` returns releases it immediately), when the SDN config
+    # is freshly applied and no other write is in flight — covered live by it.
     ctx.defer("lock acquire",
-              "acquires the global SDN config lock — requires a paired release and "
-              "blocks all concurrent SDN writes; not exercised live",
+              "acquires the global SDN config lock — covered live by `e2e --mutate` "
+              "(tight acquire→release pair)",
               "pve sdn lock acquire",
-              isolation=False, live_covered=False)
+              isolation=True, live_covered=True)
     ctx.defer("lock release",
-              "releases the global SDN config lock — must follow acquire; "
-              "not exercised live (paired with acquire, which is also deferred)",
+              "releases the global SDN config lock with its token — covered live by "
+              "`e2e --mutate`",
               "pve sdn lock release --lock-token <token> --yes",
-              isolation=False, live_covered=False)
+              isolation=True, live_covered=True)
 
     # Controller/IPAM/DNS write verbs are staged config edits; the help surface
     # is checked read-only and the full CRUD cycle runs live in the mutate phase.

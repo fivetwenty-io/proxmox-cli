@@ -138,11 +138,10 @@ def run(ctx: Ctx) -> None:
     ctx.check("prune --help", "storage", "prune", "--help", fmt="")
 
     # Transfer verbs move bytes onto a storage (upload pushes a local file;
-    # download-url has the node pull a URL). Both create a real volume and there
-    # is no CLI verb yet to delete a single volume, so exercising them live would
-    # leave a namespaced artifact behind on shared lab storage. They are checked
-    # read-only via --help here and deferred live until a `storage volume` delete
-    # verb exists to clean up after them.
+    # download-url has the node pull a URL). Both create a real volume; the mutate
+    # phase exercises each on `local` and removes the artifact with
+    # `storage volume delete` in a finally block, so the help surface is checked
+    # read-only here and the full transfer is covered live below.
     ctx.check("upload --help", "storage", "upload", "--help", fmt="")
     ctx.check("download-url --help", "storage", "download-url", "--help", fmt="")
 
@@ -169,9 +168,9 @@ def run(ctx: Ctx) -> None:
     ctx.defer("delete", "removes a storage definition — covered live by `e2e --mutate`",
               f"pve storage delete {Isolation.NAME_PREFIX}store", isolation=True, live_covered=True)
 
-    # Transfer verbs are not exercised live: there is no CLI verb yet to delete a
-    # single storage volume, so a live upload/download would leave a namespaced
-    # file on shared lab storage with no way to clean it up through the CLI.
+    # The mutate phase allocates a raw volume, uploads a small file, and pulls a
+    # file by URL onto `local`, then removes each artifact with
+    # `storage volume delete` in a finally block — all covered live by it.
     ctx.defer(
         "volume alloc/delete",
         "allocates a raw volume then deletes it — covered live by `e2e --mutate` "
@@ -181,15 +180,15 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "upload",
-        "pushes a local file onto a storage — no CLI volume-delete verb yet to remove the artifact; not exercised live",
-        f"pve storage upload local --file ./{Isolation.NAME_PREFIX}test.iso --content iso",
-        isolation=True, live_covered=False,
+        "pushes a local file onto a storage then deletes the volume — covered live by `e2e --mutate`",
+        f"pve storage upload local --file ./{Isolation.NAME_PREFIX}upload.iso --content iso",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "download-url",
-        "downloads a URL onto a storage — no CLI volume-delete verb yet to remove the artifact; not exercised live",
-        f"pve storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}test.iso --content iso",
-        isolation=True, live_covered=False,
+        "has the node pull a small Proxmox-hosted file then deletes the volume — covered live by `e2e --mutate`",
+        f"pve storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}download.iso --content iso",
+        isolation=True, live_covered=True,
     )
 
     # The mutate phase backs up the isolated guest, then sets and restores the
@@ -200,11 +199,14 @@ def run(ctx: Ctx) -> None:
         "pve storage volume set local:backup/vzdump-...-<id>.vma.zst --notes <m>",
         isolation=True, live_covered=True,
     )
-    # Volume copy creates a new volume and there is no CLI verb to delete a single
-    # volume, so a live copy would leave a namespaced artifact on shared storage.
+    # Volume copy hits POST .../content/{volume}, which the PVE API restricts to
+    # root@pam (it rejects API-token auth with "Permission check failed
+    # (user != root@pam)"), so the token-authenticated e2e suite cannot exercise
+    # it live; covered by unit tests.
     ctx.defer(
         "volume copy",
-        "copies a volume to a new target — no CLI volume-delete verb yet to remove the copy; not exercised live",
+        "copies a volume to a new target — the copy endpoint is restricted to root@pam "
+        "and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests",
         "pve storage volume copy local:backup/... --target-volume <storage>:<vol>",
         isolation=True, live_covered=False,
     )

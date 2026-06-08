@@ -2555,6 +2555,83 @@ def sdn_objects_lifecycle(r: Runner) -> None:
                        "sdn", "vnet", "firewall", "rules", "delete", vnet, pos, "--yes")
 
 
+def sdn_lock_lifecycle(r: Runner) -> None:
+    """Acquire the global SDN config lock and release it immediately.
+
+    The SDN lock is a single cluster-global token (not namespaceable), so this
+    runs as a tight acquire→release pair with nothing in between: the lock is
+    held only for the round-trip and released with the token `acquire` returns.
+    A finally block force-releases it if the token can't be captured, so a
+    crashed run can never leave the SDN subsystem locked. Run when the SDN config
+    is freshly applied (no pending changes) and no other SDN write is in flight.
+    """
+    print(BOLD("sdn: global config lock acquire/release"))
+    acq = r.step("sdn", "lock acquire", "lock acquire",
+                 "sdn", "lock", "acquire", json_out=True, node=False)
+    token = ""
+    raw = acq.out.strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            token = str(parsed.get("data", "")) if isinstance(parsed, dict) else str(parsed)
+        except ValueError:
+            token = raw.strip('"')
+    token = token.strip()
+    if token:
+        r.del_step("sdn", "lock release", "lock release (by token)",
+                   "sdn", "lock", "release", "--lock-token", token, "--yes", node=False)
+    else:
+        # Token unreadable — force-release so the global lock cannot leak.
+        r.undo("force-release SDN lock (token not captured)",
+               "sdn", "lock", "release", "--force", "--yes")
+
+
+def storage_transfer_lifecycle(r: Runner) -> None:
+    """Upload a tiny throwaway file to `local`, download a small file by URL,
+    then delete both volumes.
+
+    Both transfer verbs create a real volume on shared lab storage; now that a
+    `storage volume delete` verb exists, each artifact is removed in a finally
+    block, so nothing is left behind. The payloads are inert and namespaced with
+    the pve-cli prefix: a short marker string for the upload, and Proxmox's own
+    small aplinfo.dat for the URL download (the same download.proxmox.com host
+    the container-template fetch already depends on). download-url reaches an
+    external host, so a network failure records SKIP rather than failing.
+    """
+    print(BOLD("storage: upload / download-url (isolated, teardown-safe)"))
+    up_name = Isolation.NAME_PREFIX + "upload.iso"
+    dl_name = Isolation.NAME_PREFIX + "download.iso"
+    up_volid = f"{TMPL_STORAGE}:iso/{up_name}"
+    dl_volid = f"{TMPL_STORAGE}:iso/{dl_name}"
+    tmp = tempfile.mkdtemp(prefix="pve-cli-e2e-")
+    iso_path = os.path.join(tmp, up_name)
+    try:
+        with open(iso_path, "w", encoding="ascii") as fh:
+            fh.write("PVE-CLI-E2E-UPLOAD-MARKER")
+        try:
+            r.step("storage", "upload", f"upload {up_name} to {TMPL_STORAGE}",
+                   "storage", "upload", TMPL_STORAGE,
+                   "--file", iso_path, "--content", "iso")
+        finally:
+            r.del_step("storage", "volume delete", f"volume delete {up_volid}",
+                       "storage", "volume", "delete", up_volid, "--yes")
+        # The node pulls a small, stable Proxmox-hosted file by URL.
+        dl_ok = r.soft_step(
+            "storage", "download-url", f"download-url -> {dl_name} on {TMPL_STORAGE}",
+            "storage", "download-url", TMPL_STORAGE,
+            "--url", "http://download.proxmox.com/images/aplinfo.dat",
+            "--filename", dl_name, "--content", "iso",
+            skip_markers=("could not", "timeout", "resolve", "connection",
+                          "no route", "refused", "unable", "failed to download",
+                          "network is unreachable"),
+            skip_reason="node could not reach download.proxmox.com")
+        if dl_ok:
+            r.del_step("storage", "volume delete", f"volume delete {dl_volid}",
+                       "storage", "volume", "delete", dl_volid, "--yes")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def run(target: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
@@ -2603,6 +2680,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         print()
         storage_volume_lifecycle(r)
         print()
+        storage_transfer_lifecycle(r)
+        print()
         backup_lifecycle(r)
         print()
         cluster_firewall_lifecycle(r)
@@ -2626,6 +2705,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         cluster_acme_plugin_lifecycle(r)
         print()
         cluster_cpumodel_lifecycle(r)
+        print()
+        sdn_lock_lifecycle(r)
         print()
         sdn_objects_lifecycle(r)
         print()

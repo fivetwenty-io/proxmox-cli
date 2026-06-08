@@ -74,13 +74,13 @@ swept clean before the next provisions.
 | `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 45 | 1 | 7 | 0 |
-| `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
-| `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
+| `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 |
+| `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **289** | **6** | **112** | **0** |
+| **Total** | **556** | **74** | **125** | **293** | **6** | **108** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **444** are exercised by at least one suite, **112** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **448** are exercised by at least one suite, **108** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -107,12 +107,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `access role get` | ◑ | ✓ |  |
 | `access role list` | ✓ | — |  |
 | `access role set` | — | ✓ |  |
-| `access tfa create` | — | — | deferred — enrolls a second factor — credential-bearing (operator password + factor material), would alter a real user's login; not exercised live |
-| `access tfa delete` | — | — | deferred — removes a user's second factor — guarded by --yes, alters a real user's login; not exercised live |
+| `access tfa create` | — | — | deferred — enrolls a second factor — the /access/tfa endpoint rejects API-token auth (requires a login ticket) and needs the operator password; not exercisable by the token-authenticated e2e suite — covered by unit tests |
+| `access tfa delete` | — | — | deferred — removes a user's second factor — the /access/tfa endpoint rejects API-token auth (requires a login ticket); not exercisable by the token-authenticated e2e suite — covered by unit tests |
 | `access tfa get` | ◑ | — |  |
 | `access tfa get-entry` | ◑ | — |  |
 | `access tfa list` | ✓ | — |  |
-| `access tfa set` | — | — | deferred — updates a tfa entry — requires the operator password (credential-bearing); not exercised live |
+| `access tfa set` | — | — | deferred — updates a tfa entry — the /access/tfa endpoint rejects API-token auth (requires a login ticket) and needs the operator password; not exercisable by the token-authenticated e2e suite — covered by unit tests |
 | `access tfa types` | ✓ | — |  |
 | `access tfa unlock` | — | ✓ |  |
 | `access user create` | — | ✓ |  |
@@ -613,8 +613,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn ipam list` | ✓ | ✓ |  |
 | `sdn ipam set` | — | — | deferred — the pve IPAM exposes no settable properties; the netbox/phpipam types validate a reachable external backend on create — covered by unit tests |
 | `sdn ipam status` | ◑ | — |  |
-| `sdn lock acquire` | — | — | deferred — acquires the global SDN config lock — requires a paired release and blocks all concurrent SDN writes; not exercised live |
-| `sdn lock release` | — | — | deferred — releases the global SDN config lock — must follow acquire; not exercised live (paired with acquire, which is also deferred) |
+| `sdn lock acquire` | — | ✓ |  |
+| `sdn lock release` | — | ✓ |  |
 | `sdn prefix-list create` | — | ✓ |  |
 | `sdn prefix-list delete` | — | ✓ |  |
 | `sdn prefix-list entry add` | — | ✓ |  |
@@ -663,7 +663,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage content` | ◑ | — |  |
 | `storage create` | — | ✓ |  |
 | `storage delete` | — | ✓ |  |
-| `storage download-url` | — | — | help-only (parse smoke test) |
+| `storage download-url` | — | ✓ |  |
 | `storage file-restore download` | — | — | help-only (parse smoke test) |
 | `storage file-restore list` | — | — | deferred — browses/extracts files from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live |
 | `storage get` | ◑ | ✓ |  |
@@ -675,9 +675,9 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage rrddata` | ◑ | — |  |
 | `storage set` | — | ✓ |  |
 | `storage status` | ◑ | — |  |
-| `storage upload` | — | — | help-only (parse smoke test) |
+| `storage upload` | — | ✓ |  |
 | `storage volume alloc` | — | ✓ |  |
-| `storage volume copy` | — | — | deferred — copies a volume to a new target — no CLI volume-delete verb yet to remove the copy; not exercised live |
+| `storage volume copy` | — | — | deferred — copies a volume to a new target — the copy endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
 | `storage volume delete` | — | ✓ |  |
 | `storage volume get` | ◑ | ✓ |  |
 | `storage volume set` | — | ✓ |  |

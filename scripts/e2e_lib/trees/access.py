@@ -161,21 +161,27 @@ def run(ctx: Ctx) -> None:
     ctx.defer("tfa unlock", "clears a user's tfa lockout — covered live by `e2e --mutate`",
               f"pve access tfa unlock {Isolation.NAME_PREFIX}probe@pve --yes",
               isolation=True, live_covered=True)
-    # Second-factor enrollment/edits are credential-bearing and would lock a real
-    # user out of the shared lab if mismanaged, so they are never run live; the
-    # operator password and factor material are read without echo and never logged.
+    # Second-factor enrollment/edits hit /access/tfa/{userid}, which the PVE API
+    # makes unavailable to API-token auth ("URI not available with API token, need
+    # proper ticket"); enrollment additionally requires the operator's password.
+    # The e2e suite authenticates with a token, so it physically cannot exercise
+    # these — covered by unit tests. (The operator password and factor material
+    # are read without echo and never logged by the CLI.)
     ctx.defer("tfa create",
-              "enrolls a second factor — credential-bearing (operator password + "
-              "factor material), would alter a real user's login; not exercised live",
+              "enrolls a second factor — the /access/tfa endpoint rejects API-token "
+              "auth (requires a login ticket) and needs the operator password; "
+              "not exercisable by the token-authenticated e2e suite — covered by unit tests",
               "pve access tfa create <user> --type totp",
               isolation=False, live_covered=False)
     ctx.defer("tfa set",
-              "updates a tfa entry — requires the operator password (credential-"
-              "bearing); not exercised live",
+              "updates a tfa entry — the /access/tfa endpoint rejects API-token auth "
+              "(requires a login ticket) and needs the operator password; "
+              "not exercisable by the token-authenticated e2e suite — covered by unit tests",
               "pve access tfa set <user> <id> --enable",
               isolation=False, live_covered=False)
     ctx.defer("tfa delete",
-              "removes a user's second factor — guarded by --yes, alters a real "
-              "user's login; not exercised live",
+              "removes a user's second factor — the /access/tfa endpoint rejects "
+              "API-token auth (requires a login ticket); not exercisable by the "
+              "token-authenticated e2e suite — covered by unit tests",
               "pve access tfa delete <user> <id> --yes",
               isolation=False, live_covered=False)
