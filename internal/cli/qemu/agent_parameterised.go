@@ -248,7 +248,10 @@ func newAgentFileWriteCmd() *cobra.Command {
 // newAgentSetUserPasswordCmd builds `pve qemu agent set-user-password <vmid> --username USER`.
 // The password is read from stdin and never echoed or logged.
 func newAgentSetUserPasswordCmd() *cobra.Command {
-	var username string
+	var (
+		username string
+		yes      bool
+	)
 	cmd := &cobra.Command{
 		Use:   "set-user-password <vmid>",
 		Short: "Set a user's password inside a VM via the guest agent",
@@ -265,6 +268,13 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 			vmid := args[0]
 			if err := parseVMID(vmid); err != nil {
 				return err
+			}
+
+			// Changing a guest user's password can lock that account out, so the
+			// operation is gated behind --yes to guard against accidental runs.
+			if !yes {
+				return fmt.Errorf("refusing to set the password for user %q in VM %s without --yes/-y",
+					username, vmid)
 			}
 
 			// Read password from stdin without echoing it. bufio.Scanner reads
@@ -303,6 +313,7 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&username, "username", "", "username whose password to set (required)")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm setting the password")
 	if err := cmd.MarkFlagRequired("username"); err != nil {
 		panic(fmt.Sprintf("agent set-user-password: mark --username required: %v", err))
 	}

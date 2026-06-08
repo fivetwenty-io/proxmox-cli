@@ -302,7 +302,7 @@ func TestQemuAgentSetUserPassword_Success(t *testing.T) {
 	defer withFakeStdin(t, "s3cret\n")()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "agent", "set-user-password", "100", "--username", "alice"))
+	require.NoError(t, run(&buf, "agent", "set-user-password", "100", "--username", "alice", "--yes"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/agent/set-user-password", gotPath)
@@ -329,9 +329,28 @@ func TestQemuAgentSetUserPassword_EmptyStdin(t *testing.T) {
 	defer withFakeStdin(t, "")()
 
 	var buf bytes.Buffer
-	err := run(&buf, "agent", "set-user-password", "100", "--username", "bob")
+	err := run(&buf, "agent", "set-user-password", "100", "--username", "bob", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no password provided")
+}
+
+// TestQemuAgentSetUserPassword_RequiresYes verifies the command refuses to set a
+// password without --yes and never reads stdin or issues the request.
+func TestQemuAgentSetUserPassword_RequiresYes(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var called bool
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/agent/set-user-password", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+	defer withFakeStdin(t, "s3cret\n")()
+
+	var buf bytes.Buffer
+	err := run(&buf, "agent", "set-user-password", "100", "--username", "alice")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called, "set-user-password must not be issued without --yes")
 }
 
 func TestQemuAgentSetUserPassword_ServerError(t *testing.T) {
@@ -343,7 +362,7 @@ func TestQemuAgentSetUserPassword_ServerError(t *testing.T) {
 	defer withFakeStdin(t, "pass\n")()
 
 	var buf bytes.Buffer
-	err := run(&buf, "agent", "set-user-password", "100", "--username", "alice")
+	err := run(&buf, "agent", "set-user-password", "100", "--username", "alice", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "agent set-user-password for VM 100")
 }

@@ -236,6 +236,44 @@ def run(ctx: Ctx) -> None:
         "pve qemu agent <vmid> ping",
         isolation=True, live_covered=True,
     )
+    # Parameterised guest-agent sub-commands. Each needs a guest OS with a running
+    # agent inside it; the lab's isolated VM is diskless, so none can run live.
+    ctx.defer(
+        "agent exec",
+        "runs an arbitrary command inside the guest — requires a running guest "
+        "agent and a guest OS; not exercised live",
+        "pve qemu agent exec <vmid> --command 'id'",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "agent exec-status",
+        "polls a guest exec PID — requires a prior `agent exec` inside a live "
+        "guest; not exercised live",
+        "pve qemu agent exec-status <vmid> --pid <pid>",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "agent file-read",
+        "reads a file from inside the guest — requires a running guest agent; "
+        "not exercised live",
+        "pve qemu agent file-read <vmid> --file /etc/hostname",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "agent file-write",
+        "writes a file inside the guest filesystem — requires a running guest "
+        "agent; not exercised live",
+        "pve qemu agent file-write <vmid> --file /tmp/probe --content x",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "agent set-user-password",
+        "sets a guest user's password — secret-bearing (read from stdin, never "
+        "echoed or logged), guarded by --yes, requires a running guest agent; "
+        "never exercised live",
+        "pve qemu agent set-user-password <vmid> --username <user> --yes",
+        isolation=True, live_covered=False,
+    )
     ctx.defer(
         "cloudinit dump/update",
         "dumps/regenerates the cloud-init drive — exercised live (soft) on the "

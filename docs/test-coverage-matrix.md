@@ -66,21 +66,21 @@ swept clean before the next provisions.
 
 | Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred / n/a | uncovered |
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
-| `access` | 39 | 9 | 8 | 25 | 0 | 0 | 3 |
+| `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
 | `cluster` | 157 | 42 | 12 | 96 | 5 | 23 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
 | `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
-| `qemu` | 59 | 1 | 12 | 43 | 1 | 4 | 5 |
+| `qemu` | 59 | 1 | 12 | 43 | 1 | 9 | 0 |
 | `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **284** | **6** | **109** | **8** |
+| **Total** | **556** | **74** | **125** | **284** | **6** | **117** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **109** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **8** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **117** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -107,12 +107,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `access role get` | ◑ | ✓ |  |
 | `access role list` | ✓ | — |  |
 | `access role set` | — | ✓ |  |
-| `access tfa create` | — | — | **uncovered** |
-| `access tfa delete` | — | — | **uncovered** |
+| `access tfa create` | — | — | deferred — enrolls a second factor — credential-bearing (operator password + factor material), would alter a real user's login; not exercised live |
+| `access tfa delete` | — | — | deferred — removes a user's second factor — guarded by --yes, alters a real user's login; not exercised live |
 | `access tfa get` | ◑ | — |  |
 | `access tfa get-entry` | ◑ | — |  |
 | `access tfa list` | ✓ | — |  |
-| `access tfa set` | — | — | **uncovered** |
+| `access tfa set` | — | — | deferred — updates a tfa entry — requires the operator password (credential-bearing); not exercised live |
 | `access tfa types` | ✓ | — |  |
 | `access tfa unlock` | — | ✓ |  |
 | `access user create` | — | ✓ |  |
@@ -521,11 +521,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `qemu agent` | — | ✓ |  |
-| `qemu agent exec` | — | — | **uncovered** |
-| `qemu agent exec-status` | — | — | **uncovered** |
-| `qemu agent file-read` | — | — | **uncovered** |
-| `qemu agent file-write` | — | — | **uncovered** |
-| `qemu agent set-user-password` | — | — | **uncovered** |
+| `qemu agent exec` | — | — | deferred — runs an arbitrary command inside the guest — requires a running guest agent and a guest OS; not exercised live |
+| `qemu agent exec-status` | — | — | deferred — polls a guest exec PID — requires a prior `agent exec` inside a live guest; not exercised live |
+| `qemu agent file-read` | — | — | deferred — reads a file from inside the guest — requires a running guest agent; not exercised live |
+| `qemu agent file-write` | — | — | deferred — writes a file inside the guest filesystem — requires a running guest agent; not exercised live |
+| `qemu agent set-user-password` | — | — | deferred — sets a guest user's password — secret-bearing (read from stdin, never echoed or logged), guarded by --yes, requires a running guest agent; never exercised live |
 | `qemu clone` | — | ✓ |  |
 | `qemu cloudinit dump` | — | ✓ |  |
 | `qemu cloudinit pending` | ◑ | ✓ |  |
@@ -702,9 +702,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
 
-**`access`** (3) — `access tfa create`, `access tfa delete`, `access tfa set`
-
-**`qemu`** (5) — `qemu agent exec`, `qemu agent exec-status`, `qemu agent file-read`, `qemu agent file-write`, `qemu agent set-user-password`
+_None — every leaf is exercised or explicitly deferred._
 
 ## Running the suites
 

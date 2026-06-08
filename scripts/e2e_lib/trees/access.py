@@ -161,3 +161,21 @@ def run(ctx: Ctx) -> None:
     ctx.defer("tfa unlock", "clears a user's tfa lockout — covered live by `e2e --mutate`",
               f"pve access tfa unlock {Isolation.NAME_PREFIX}probe@pve --yes",
               isolation=True, live_covered=True)
+    # Second-factor enrollment/edits are credential-bearing and would lock a real
+    # user out of the shared lab if mismanaged, so they are never run live; the
+    # operator password and factor material are read without echo and never logged.
+    ctx.defer("tfa create",
+              "enrolls a second factor — credential-bearing (operator password + "
+              "factor material), would alter a real user's login; not exercised live",
+              "pve access tfa create <user> --type totp",
+              isolation=False, live_covered=False)
+    ctx.defer("tfa set",
+              "updates a tfa entry — requires the operator password (credential-"
+              "bearing); not exercised live",
+              "pve access tfa set <user> <id> --enable",
+              isolation=False, live_covered=False)
+    ctx.defer("tfa delete",
+              "removes a user's second factor — guarded by --yes, alters a real "
+              "user's login; not exercised live",
+              "pve access tfa delete <user> <id> --yes",
+              isolation=False, live_covered=False)
