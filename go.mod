@@ -1,6 +1,6 @@
 module github.com/fivetwenty-io/pve-cli
 
-go 1.26
+go 1.26.4
 
 require (
 	github.com/fivetwenty-io/pve-apiclient-go/v3 v3.2.6
