@@ -388,27 +388,27 @@ def render(leaves, e2e, mut, defers, errpath) -> str:
     out = [HEADER]
     # ---- summary table ----
     out.append("## Coverage summary\n")
-    out.append("| Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred / n/a | uncovered |")
-    out.append("|------|-------:|------:|------:|---------:|---------:|---------------:|----------:|")
+    out.append("| Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred | n/a | uncovered |")
+    out.append("|------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|")
     tot = Counter()
     for tree in sorted(by_tree):
         c = tcount(tree)
-        defna = c["deferred"] + c["na"]
         out.append(f"| `{tree}` | {c['total']} | {c['e2e_full']} | {c['e2e_cond']} | "
-                   f"{c['mut_full']} | {c['mut_skip']} | {defna} | {c['uncovered']} |")
+                   f"{c['mut_full']} | {c['mut_skip']} | {c['deferred']} | {c['na']} | "
+                   f"{c['uncovered']} |")
         for k, v in c.items():
             tot[k] += v
-        tot["defna"] += defna
     out.append(f"| **Total** | **{tot['total']}** | **{tot['e2e_full']}** | **{tot['e2e_cond']}** | "
-               f"**{tot['mut_full']}** | **{tot['mut_skip']}** | **{tot['defna']}** | "
-               f"**{tot['uncovered']}** |")
+               f"**{tot['mut_full']}** | **{tot['mut_skip']}** | **{tot['deferred']}** | "
+               f"**{tot['na']}** | **{tot['uncovered']}** |")
     covered = tot['both'] + tot['e2e'] + tot['mutate']
     out.append("")
     out.append(f"Leaf commands are counted from a walk of the built command tree "
                f"(`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its "
                f"own leaf. Of **{tot['total']}** leaves, **{covered}** are exercised by at least "
-               f"one suite, **{tot['defna']}** are deferred or n/a by design (irreversible, "
-               f"interactive, or environment-bound), and **{tot['uncovered']}** are not yet "
+               f"one live suite, **{tot['deferred']}** are deferred from the live suites "
+               f"(irreversible, interactive, or environment-bound — covered by unit tests), "
+               f"**{tot['na']}** are n/a by design, and **{tot['uncovered']}** are not yet "
                f"exercised by either suite — see [Uncovered leaves](#uncovered-leaves).")
     out.append("")
 

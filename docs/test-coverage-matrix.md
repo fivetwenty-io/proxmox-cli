@@ -64,23 +64,23 @@ swept clean before the next provisions.
 
 ## Coverage summary
 
-| Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred / n/a | uncovered |
-|------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
-| `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 |
-| `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 99 | 5 | 20 | 0 |
-| `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
-| `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 |
-| `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
-| `qemu` | 59 | 1 | 12 | 45 | 1 | 7 | 0 |
-| `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 |
-| `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 |
-| `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
-| `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **293** | **6** | **108** | **0** |
+| Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred | n/a | uncovered |
+|------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
+| `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 | 0 |
+| `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 | 0 |
+| `cluster` | 157 | 42 | 12 | 99 | 5 | 20 | 0 | 0 |
+| `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 | 0 |
+| `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
+| `qemu` | 59 | 1 | 12 | 45 | 1 | 7 | 0 | 0 |
+| `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 | 0 |
+| `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
+| `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
+| `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
+| **Total** | **556** | **74** | **125** | **293** | **6** | **108** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **448** are exercised by at least one suite, **108** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **448** are exercised by at least one live suite, **108** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
