@@ -337,6 +337,24 @@ func TestQemuConfigSet_DeleteKeys(t *testing.T) {
 	require.Equal(t, "net1,scsi1", parseForm(t, body).Get("delete"))
 }
 
+// TestQemuConfigSet_Agent verifies --agent toggles the guest-agent channel by
+// landing as the PVE "agent" option string in the update request body.
+func TestQemuConfigSet_Agent(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "config", "set", "100", "--agent", "1"))
+	require.Equal(t, "1", parseForm(t, body).Get("agent"))
+}
+
 func TestQemuConfigSet_NoChanges(t *testing.T) {
 	_, ac := newFakeClient(t)
 	depsFor(t, ac, output.FormatTable, "pve1", false)
@@ -793,6 +811,28 @@ func TestQemuCreate_NoCloudInitOmitted(t *testing.T) {
 		"cicustom", "nameserver", "searchdomain", "sshkeys", "ipconfig0"} {
 		require.Empty(t, form.Get(k), "cloud-init key %q must be omitted when unset", k)
 	}
+}
+
+// TestQemuCreate_Agent verifies --agent lands as the PVE "agent" option string
+// in the CreateQemu request body, and is omitted from the body when unset.
+func TestQemuCreate_Agent(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var body string
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, validUPID)
+	})
+
+	depsFor(t, ac, output.FormatTable, "pve1", true)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "create", "100", "--agent", "enabled=1,fstrim_cloned_disks=1"))
+	require.Equal(t, "enabled=1,fstrim_cloned_disks=1", parseForm(t, body).Get("agent"))
+
+	body = ""
+	require.NoError(t, run(&buf, "create", "101", "--name", "plain"))
+	require.Empty(t, parseForm(t, body).Get("agent"))
 }
 
 // --- JSON output ----------------------------------------------------------

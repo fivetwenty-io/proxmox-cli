@@ -29,6 +29,7 @@ func newCreateCmd() *cobra.Command {
 		boot    string
 		pool    string
 		tags    string
+		agent   string
 		start   bool
 
 		ciuser       string
@@ -91,6 +92,9 @@ func newCreateCmd() *cobra.Command {
 			if fl.Changed("tags") {
 				params.Tags = strPtr(tags)
 			}
+			if fl.Changed("agent") {
+				params.Agent = strPtr(agent)
+			}
 			if fl.Changed("start") {
 				params.Start = boolPtr(start)
 			}
@@ -152,6 +156,7 @@ func newCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&boot, "boot", "", "boot order spec, e.g. order=scsi0;net0")
 	cmd.Flags().StringVar(&pool, "pool", "", "resource pool to place the VM in")
 	cmd.Flags().StringVar(&tags, "tags", "", "comma- or semicolon-separated tags")
+	cmd.Flags().StringVar(&agent, "agent", "", "QEMU guest-agent option string, e.g. 1 or enabled=1,fstrim_cloned_disks=1")
 	cmd.Flags().BoolVar(&start, "start", false, "start the VM immediately after creation")
 	cmd.Flags().StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
 	cmd.Flags().StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")

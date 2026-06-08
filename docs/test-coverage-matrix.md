@@ -521,11 +521,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `qemu agent` | — | ✓ |  |
-| `qemu agent exec` | — | — | deferred — runs an arbitrary command inside the guest — requires a running guest agent and a guest OS; not exercised live |
-| `qemu agent exec-status` | — | — | deferred — polls a guest exec PID — requires a prior `agent exec` inside a live guest; not exercised live |
-| `qemu agent file-read` | — | — | deferred — reads a file from inside the guest — requires a running guest agent; not exercised live |
-| `qemu agent file-write` | — | — | deferred — writes a file inside the guest filesystem — requires a running guest agent; not exercised live |
-| `qemu agent set-user-password` | — | — | deferred — sets a guest user's password — secret-bearing (read from stdin, never echoed or logged), guarded by --yes, requires a running guest agent; never exercised live |
+| `qemu agent exec` | — | — | deferred — runs an arbitrary command inside the guest — needs a running qemu-guest-agent daemon, which no available image ships and the offline isolated network cannot install; not exercisable live — covered by unit tests |
+| `qemu agent exec-status` | — | — | deferred — polls a guest exec PID — needs a prior `agent exec` inside a guest running qemu-guest-agent, which the offline isolated suite cannot bring online; not exercisable live — covered by unit tests |
+| `qemu agent file-read` | — | — | deferred — reads a file from inside the guest — needs a running qemu-guest-agent daemon, which no available image ships and the offline isolated network cannot install; not exercisable live — covered by unit tests |
+| `qemu agent file-write` | — | — | deferred — writes a file inside the guest filesystem — needs a running qemu-guest-agent daemon, which no available image ships and the offline isolated network cannot install; not exercisable live — covered by unit tests |
+| `qemu agent set-user-password` | — | — | deferred — sets a guest user's password — secret-bearing (read from stdin, never echoed or logged), guarded by --yes; needs a running qemu-guest-agent daemon the offline isolated suite cannot bring online; not exercisable live — covered by unit tests |
 | `qemu clone` | — | ✓ |  |
 | `qemu cloudinit dump` | — | ✓ |  |
 | `qemu cloudinit pending` | ◑ | ✓ |  |

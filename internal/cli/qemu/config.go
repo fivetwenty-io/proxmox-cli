@@ -129,6 +129,7 @@ func newConfigSetCmd() *cobra.Command {
 		net0        string
 		scsi0       string
 		ide0        string
+		agent       string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <vmid>",
@@ -159,6 +160,7 @@ func newConfigSetCmd() *cobra.Command {
 			set("scsihw", func() { params.Scsihw = strPtr(scsihw) })
 			set("cpu", func() { params.Cpu = strPtr(cpu) })
 			set("ostype", func() { params.Ostype = strPtr(ostype) })
+			set("agent", func() { params.Agent = strPtr(agent) })
 			set("delete", func() { params.Delete = strPtr(deleteKeys) })
 			set("revert", func() { params.Revert = strPtr(revertKeys) })
 			set("net0", func() { params.Net = map[int]string{0: net0} })
@@ -186,6 +188,7 @@ func newConfigSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&scsihw, "scsihw", "", "SCSI controller model")
 	cmd.Flags().StringVar(&cpu, "cpu", "", "CPU type")
 	cmd.Flags().StringVar(&ostype, "ostype", "", "guest OS type")
+	cmd.Flags().StringVar(&agent, "agent", "", "QEMU guest-agent option string, e.g. 1 or enabled=1,fstrim_cloned_disks=1")
 	cmd.Flags().StringVar(&deleteKeys, "delete", "", "comma-separated config keys to remove")
 	cmd.Flags().StringVar(&revertKeys, "revert", "", "comma-separated pending config keys to revert")
 	cmd.Flags().StringVar(&net0, "net0", "", "network device net0 specification")

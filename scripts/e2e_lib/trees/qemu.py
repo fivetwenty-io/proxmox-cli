@@ -234,41 +234,52 @@ def run(ctx: Ctx) -> None:
         "pve qemu agent <vmid> ping",
         isolation=True, live_covered=True,
     )
-    # Parameterised guest-agent sub-commands. Each needs a guest OS with a running
-    # agent inside it; the lab's isolated VM is diskless, so none can run live.
+    # Parameterised guest-agent sub-commands. Each needs a guest running the
+    # qemu-guest-agent daemon. The CLI can now enable the agent channel at create
+    # time (`qemu create --agent 1`), but bringing the daemon online is the wall:
+    # the available cloud images (Ubuntu noble) do not ship qemu-guest-agent, and
+    # the isolated e2e network has no internet uplink to apt-install it on first
+    # boot, so the agent never answers (verified: an agent=1 noble VM booted but
+    # `agent ping` never responded). Not exercisable by the isolated, offline
+    # suite — covered by unit tests.
     ctx.defer(
         "agent exec",
-        "runs an arbitrary command inside the guest — requires a running guest "
-        "agent and a guest OS; not exercised live",
+        "runs an arbitrary command inside the guest — needs a running "
+        "qemu-guest-agent daemon, which no available image ships and the offline "
+        "isolated network cannot install; not exercisable live — covered by unit tests",
         "pve qemu agent exec <vmid> --command 'id'",
         isolation=True, live_covered=False,
     )
     ctx.defer(
         "agent exec-status",
-        "polls a guest exec PID — requires a prior `agent exec` inside a live "
-        "guest; not exercised live",
+        "polls a guest exec PID — needs a prior `agent exec` inside a guest "
+        "running qemu-guest-agent, which the offline isolated suite cannot bring "
+        "online; not exercisable live — covered by unit tests",
         "pve qemu agent exec-status <vmid> --pid <pid>",
         isolation=True, live_covered=False,
     )
     ctx.defer(
         "agent file-read",
-        "reads a file from inside the guest — requires a running guest agent; "
-        "not exercised live",
+        "reads a file from inside the guest — needs a running qemu-guest-agent "
+        "daemon, which no available image ships and the offline isolated network "
+        "cannot install; not exercisable live — covered by unit tests",
         "pve qemu agent file-read <vmid> --file /etc/hostname",
         isolation=True, live_covered=False,
     )
     ctx.defer(
         "agent file-write",
-        "writes a file inside the guest filesystem — requires a running guest "
-        "agent; not exercised live",
+        "writes a file inside the guest filesystem — needs a running "
+        "qemu-guest-agent daemon, which no available image ships and the offline "
+        "isolated network cannot install; not exercisable live — covered by unit tests",
         "pve qemu agent file-write <vmid> --file /tmp/probe --content x",
         isolation=True, live_covered=False,
     )
     ctx.defer(
         "agent set-user-password",
         "sets a guest user's password — secret-bearing (read from stdin, never "
-        "echoed or logged), guarded by --yes, requires a running guest agent; "
-        "never exercised live",
+        "echoed or logged), guarded by --yes; needs a running qemu-guest-agent "
+        "daemon the offline isolated suite cannot bring online; not exercisable "
+        "live — covered by unit tests",
         "pve qemu agent set-user-password <vmid> --username <user> --yes",
         isolation=True, live_covered=False,
     )
