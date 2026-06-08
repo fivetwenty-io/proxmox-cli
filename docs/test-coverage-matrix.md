@@ -146,11 +146,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `cluster acme account create` | — | — | n/a — registers a new account against the ACME certificate authority — never run live on a shared lab |
-| `cluster acme account delete` | — | — | n/a — deactivates and removes an account at the ACME certificate authority — never run live on a shared lab |
+| `cluster acme account create` | — | — | deferred — registers a new account against the ACME certificate authority; not exercised live; covered by unit tests |
+| `cluster acme account delete` | — | — | deferred — deactivates and removes an account at the ACME certificate authority; not exercised live; covered by unit tests |
 | `cluster acme account get` | ◑ | — |  |
 | `cluster acme account list` | ✓ | — |  |
-| `cluster acme account set` | — | — | n/a — updates an account's contact at the ACME certificate authority — never run live on a shared lab |
+| `cluster acme account set` | — | — | deferred — updates an account's contact at the ACME certificate authority; not exercised live; covered by unit tests |
 | `cluster acme challenge-schema` | ✓ | — |  |
 | `cluster acme directories` | ✓ | — |  |
 | `cluster acme plugin create` | — | ✓ |  |
@@ -175,10 +175,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
 | `cluster ceph metadata` | ◑ | — |  |
 | `cluster config apiversion` | ✓ | — |  |
-| `cluster config join add` | — | — | n/a — joins the local node to an existing cluster — changes membership and quorum, too dangerous on a shared lab |
+| `cluster config join add` | — | — | deferred — joins the local node to an existing cluster — changes membership and quorum; not exercised live; covered by unit tests |
 | `cluster config join list` | ◑ | — |  |
-| `cluster config nodes add` | — | — | n/a — registers a new node in the cluster configuration — changes membership and quorum, too dangerous on a shared lab |
-| `cluster config nodes delete` | — | — | n/a — removes a node from the cluster configuration — changes membership and quorum, too dangerous on a shared lab |
+| `cluster config nodes add` | — | — | deferred — registers a new node in the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests |
+| `cluster config nodes delete` | — | — | deferred — removes a node from the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests |
 | `cluster config nodes list` | ✓ | — |  |
 | `cluster config qdevice` | ◑ | — |  |
 | `cluster config totem` | ◑ | — |  |
@@ -416,9 +416,9 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node cert custom delete` | — | — | deferred — removes the node's custom API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert custom upload` | — | — | deferred — replaces the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
-| `node console` | — | — | n/a — interactive SSH session (alias of shell); not automatable |
+| `node console` | — | — | deferred — opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests |
 | `node disks create directory` | — | — | deferred — formats a disk and mounts it as a directory storage — irreversible; not exercised live |
-| `node disks create lvm` | — | — | help-only (parse smoke test) |
+| `node disks create lvm` | — | — | deferred — formats a disk into an LVM volume group — irreversible; not exercised live; covered by unit tests |
 | `node disks create lvmthin` | — | — | deferred — formats a disk into an LVM-thin pool — irreversible; not exercised live |
 | `node disks create zfs` | — | — | deferred — formats one or more disks into a ZFS pool — irreversible; not exercised live |
 | `node disks delete directory` | — | — | deferred — removes a mounted directory storage from the host — irreversible; not exercised live |
@@ -451,17 +451,17 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node hosts set` | — | — | deferred — replaces the whole /etc/hosts file — could break host name resolution; not exercised live |
 | `node journal` | ◑ | — |  |
 | `node list` | ✓ | — |  |
-| `node migrateall` | — | — | help-only (parse smoke test) |
+| `node migrateall` | — | — | deferred — migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests |
 | `node netstat` | ◑ | — |  |
 | `node network apply` | — | — | deferred — reloads the staged host network configuration — could cut the node off the network; not exercised live |
-| `node network create` | — | — | help-only (parse smoke test) |
+| `node network create` | — | — | deferred — creates a host network interface — edits the host networking stack and could cut the node off the network; not exercised live; covered by unit tests |
 | `node network delete` | — | — | deferred — removes a host network interface — could cut the node off the network; not exercised live |
 | `node network get` | ◑ | — |  |
 | `node network list` | ◑ | — |  |
 | `node network revert` | — | — | deferred — discards the staged host network configuration — could cut the node off the network; not exercised live |
 | `node network set` | — | — | deferred — edits a host network interface — could cut the node off the network; not exercised live |
-| `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live |
-| `node oci tags` | — | — | help-only (parse smoke test) |
+| `node oci pull` | — | — | deferred — downloads an OCI image into a storage — leaves an uncleanable artifact on lab storage; not exercised live; covered by unit tests |
+| `node oci tags` | — | — | deferred — lists the tags of a remote OCI reference (needs registry access and a valid reference); not exercised live; covered by unit tests |
 | `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL via HTTP HEAD (needs outbound HTTP from the node; the local pveproxy API does not support HEAD); not exercised live to avoid a network-reachability dependency |
 | `node replication list` | ◑ | — |  |
 | `node replication log` | ◑ | — |  |
@@ -479,21 +479,21 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node scan zfs` | ◑ | — |  |
 | `node services get` | ◑ | — |  |
 | `node services list` | ◑ | — |  |
-| `node services reload` | — | — | n/a — reloads a real host daemon on a shared lab; not exercised live |
-| `node services restart` | — | — | n/a — restarts a real host daemon on a shared lab; not exercised live |
-| `node services start` | — | — | n/a — starts a real host daemon on a shared lab; not exercised live |
+| `node services reload` | — | — | deferred — reloads a running host service on the node; not exercised live; covered by unit tests |
+| `node services restart` | — | — | deferred — restarts a running host service on the node; not exercised live; covered by unit tests |
+| `node services start` | — | — | deferred — starts a running host service on the node; not exercised live; covered by unit tests |
 | `node services state` | ◑ | — |  |
-| `node services stop` | — | — | n/a — stops a real host daemon on a shared lab; not exercised live |
-| `node shell` | — | — | n/a — interactive SSH session; not automatable |
+| `node services stop` | — | — | deferred — stops a running host service on the node; not exercised live; covered by unit tests |
+| `node shell` | — | — | deferred — opens a live SSH terminal on the node, so it cannot be driven head-less; not run live; covered by unit tests |
 | `node ssh` | — | ✓ |  |
-| `node startall` | — | — | help-only (parse smoke test) |
+| `node startall` | — | — | deferred — starts every guest on the node (bulk power action); not exercised live; covered by unit tests |
 | `node status` | ◑ | — |  |
-| `node stopall` | — | — | deferred — node-wide guest power and migration actions — affect every guest on the node, not run live |
-| `node subscription delete` | — | — | n/a — removes the node's subscription key on a shared lab; not exercised live |
+| `node stopall` | — | — | deferred — stops every guest on the node (bulk power action); not exercised live; covered by unit tests |
+| `node subscription delete` | — | — | deferred — removes the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
 | `node subscription get` | ◑ | — |  |
-| `node subscription set` | — | — | n/a — sets the node's subscription key on a shared lab; not exercised live |
+| `node subscription set` | — | — | deferred — sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
 | `node subscription update` | — | — | deferred — refreshes the node's subscription status against the licensing server; not exercised live |
-| `node suspendall` | — | — | help-only (parse smoke test) |
+| `node suspendall` | — | — | deferred — suspends every guest on the node (bulk power action); not exercised live; covered by unit tests |
 | `node syslog` | ◑ | — |  |
 | `node task list` | ◑ | — |  |
 | `node task log` | ◑ | — |  |
@@ -504,7 +504,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node vzdump` | — | ✓ |  |
 | `node vzdump defaults` | ◑ | — |  |
 | `node vzdump extract-config` | ◑ | — |  |
-| `node wakeonlan` | — | — | n/a — sends a Wake-on-LAN packet to power on a node — affects real host power state, not run live |
+| `node wakeonlan` | — | — | deferred — sends a Wake-on-LAN packet to power on a node — affects node power state; not exercised live; covered by unit tests |
 
 ## `pool`
 
@@ -578,7 +578,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu status` | ◑ | ✓ |  |
 | `qemu stop` | — | ✓ |  |
 | `qemu suspend` | — | ✓ |  |
-| `qemu template` | — | — | n/a — converts a VM into a template — irreversible, so it is never run on the shared lab (it would destroy the reusable isolated VM); covered by unit tests |
+| `qemu template` | — | — | deferred — converts a VM into a template — irreversible (it would destroy the reusable isolated VM); not exercised live; covered by unit tests |
 
 ## `sdn`
 
@@ -625,7 +625,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn prefix-list get` | — | ✓ |  |
 | `sdn prefix-list list` | ◑ | — |  |
 | `sdn prefix-list set` | — | ✓ |  |
-| `sdn rollback` | — | — | n/a — discards ALL pending SDN changes cluster-wide — never run on shared lab |
+| `sdn rollback` | — | — | deferred — discards ALL pending SDN changes cluster-wide; not exercised live; covered by unit tests |
 | `sdn route-map entry add` | — | ✓ |  |
 | `sdn route-map entry delete` | — | ✓ |  |
 | `sdn route-map entry get` | — | ✓ |  |
@@ -664,8 +664,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage create` | — | ✓ |  |
 | `storage delete` | — | ✓ |  |
 | `storage download-url` | — | ✓ |  |
-| `storage file-restore download` | — | — | help-only (parse smoke test) |
-| `storage file-restore list` | — | — | deferred — browses/extracts files from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live |
+| `storage file-restore download` | — | — | deferred — extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
+| `storage file-restore list` | — | — | deferred — browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
 | `storage get` | ◑ | ✓ |  |
 | `storage identity` | ◑ | — |  |
 | `storage import-metadata` | — | — | deferred — inspects an importable guest archive — lab has no import source; not exercised live |

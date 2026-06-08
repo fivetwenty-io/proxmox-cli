@@ -199,19 +199,19 @@ def run(ctx: Ctx) -> None:
     # three are gated behind --yes and covered by unit tests of that guard.
     ctx.defer(
         "config join add",
-        "joins the local node to an existing cluster — changes membership and quorum, too dangerous on a shared lab",
+        "joins the local node to an existing cluster — changes membership and quorum; not exercised live; covered by unit tests",
         "pve cluster config join add --yes --hostname <peer> --fingerprint <fp> --password <pw>",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "config nodes add",
-        "registers a new node in the cluster configuration — changes membership and quorum, too dangerous on a shared lab",
+        "registers a new node in the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests",
         "pve cluster config nodes add <node> --yes",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "config nodes delete",
-        "removes a node from the cluster configuration — changes membership and quorum, too dangerous on a shared lab",
+        "removes a node from the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests",
         "pve cluster config nodes delete <node> --yes",
         isolation=False, live_covered=False,
     )
@@ -382,23 +382,23 @@ def run(ctx: Ctx) -> None:
     )
     # Account register/update/deregister contact the ACME CA (e.g. Let's Encrypt)
     # and run as asynchronous tasks; each verb is parsed-and-deferred, never run
-    # live on the shared lab. All three are covered by unit tests (create/set forward
-    # the contact and require it; delete is gated behind --yes).
+    # live. All three are covered by unit tests (create/set forward the contact and
+    # require it; delete is gated behind --yes).
     ctx.defer(
         "acme account create",
-        "registers a new account against the ACME certificate authority — never run live on a shared lab",
+        "registers a new account against the ACME certificate authority; not exercised live; covered by unit tests",
         "pve cluster acme account create --contact admin@example.com --directory <staging>",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "acme account set",
-        "updates an account's contact at the ACME certificate authority — never run live on a shared lab",
+        "updates an account's contact at the ACME certificate authority; not exercised live; covered by unit tests",
         "pve cluster acme account set <name> --contact admin@example.com",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "acme account delete",
-        "deactivates and removes an account at the ACME certificate authority — never run live on a shared lab",
+        "deactivates and removes an account at the ACME certificate authority; not exercised live; covered by unit tests",
         "pve cluster acme account delete <name> --yes",
         isolation=False, live_covered=False,
     )

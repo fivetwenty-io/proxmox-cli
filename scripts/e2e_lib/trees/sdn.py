@@ -68,7 +68,7 @@ def run(ctx: Ctx) -> None:
         ctx.skip("dry-run", "no node discovered")
     ctx.check("rollback --help", "sdn", "rollback", "--help", fmt="")
     ctx.defer("rollback",
-              "discards ALL pending SDN changes cluster-wide — never run on shared lab",
+              "discards ALL pending SDN changes cluster-wide; not exercised live; covered by unit tests",
               "pve sdn rollback --yes", isolation=False, live_covered=False)
 
     # SDN fabrics, prefix lists, and route maps are PVE 9.2 net-new (BGP/OSPF/

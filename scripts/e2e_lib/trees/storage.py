@@ -214,9 +214,15 @@ def run(ctx: Ctx) -> None:
     # endpoints support Proxmox Backup Server snapshots only; the lab has no PBS
     # storage, so these are not exercised live.
     ctx.defer(
-        "file-restore list/download",
-        "browses/extracts files from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live",
+        "file-restore list",
+        "browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
         "pve storage file-restore list <pbs> --volume <snapshot>",
+        isolation=True, live_covered=False,
+    )
+    ctx.defer(
+        "file-restore download",
+        "extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
+        "pve storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
         isolation=True, live_covered=False,
     )
     # import-metadata inspects a foreign guest archive (OVA/ESXi); the lab has no

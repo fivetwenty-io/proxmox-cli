@@ -462,6 +462,12 @@ def run(ctx: Ctx) -> None:
     # CLI gates the operation). Deferred one verb at a time so the coverage
     # matrix records every leaf.
     ctx.defer(
+        "network create",
+        "creates a host network interface — edits the host networking stack and could cut the node off the network; not exercised live; covered by unit tests",
+        "pve node network create <iface> --node <node> --type bridge",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
         "network set",
         "edits a host network interface — could cut the node off the network; not exercised live",
         "pve node network set <iface> --node <node> --type bridge --cidr 172.30.9.1/24",
@@ -517,6 +523,12 @@ def run(ctx: Ctx) -> None:
     # unit test (--yes guard plus argument contract). Deferred one verb at a time
     # so the coverage matrix records every leaf (create lvm is reachable via its
     # --help check above).
+    ctx.defer(
+        "disks create lvm",
+        "formats a disk into an LVM volume group — irreversible; not exercised live; covered by unit tests",
+        "pve node disks create lvm --node <node> --device /dev/sdX --name vg --yes",
+        isolation=False, live_covered=False,
+    )
     ctx.defer(
         "disks create directory",
         "formats a disk and mounts it as a directory storage — irreversible; not exercised live",
@@ -580,8 +592,14 @@ def run(ctx: Ctx) -> None:
     # live. The CLI gates the pull behind --yes.
     ctx.defer(
         "oci pull",
-        "downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live",
+        "downloads an OCI image into a storage — leaves an uncleanable artifact on lab storage; not exercised live; covered by unit tests",
         "pve node oci pull <storage> --node <node> --reference docker.io/library/alpine:latest --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "oci tags",
+        "lists the tags of a remote OCI reference (needs registry access and a valid reference); not exercised live; covered by unit tests",
+        "pve node oci tags <reference> --node <node>",
         isolation=False, live_covered=False,
     )
 
@@ -607,7 +625,7 @@ def run(ctx: Ctx) -> None:
     # Deferred one verb at a time so the coverage matrix records every leaf.
     ctx.defer(
         "subscription set",
-        "sets the node's subscription key on a shared lab; not exercised live",
+        "sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests",
         "pve node subscription set --node <node> --key <key> --yes",
         isolation=False, live_covered=False,
     )
@@ -619,7 +637,7 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "subscription delete",
-        "removes the node's subscription key on a shared lab; not exercised live",
+        "removes the node's subscription key (changes licensing state); not exercised live; covered by unit tests",
         "pve node subscription delete --node <node> --yes",
         isolation=False, live_covered=False,
     )
@@ -834,44 +852,50 @@ def run(ctx: Ctx) -> None:
               "pve node ssh <node> -- true", isolation=True, live_covered=True)
     ctx.defer("rsync", "transfers files to/from host — covered live by `e2e --mutate` (SSH-gated)",
               "pve node rsync <node> <node>:<src> <dst>", isolation=True, live_covered=True)
-    # Genuinely out of scope: interactive PTYs (shell and its console alias open
-    # a live SSH session). Deferred one verb at a time so the matrix records each
-    # leaf; the console alias is covered by a unit test asserting it resolves to
-    # the shell handler.
-    ctx.defer("shell", "interactive SSH session; not automatable", "pve node shell <node>")
-    ctx.defer("console", "interactive SSH session (alias of shell); not automatable",
+    # shell and its console alias open a live SSH terminal that cannot be driven
+    # head-less, so they are never run live; each builds the SSH invocation the
+    # same way and is covered by a unit test (the console alias resolves to the
+    # shell handler, which builds the expected `root@<ip>` target). Deferred one
+    # verb at a time so the matrix records each leaf.
+    ctx.defer("shell", "opens a live SSH terminal on the node, so it cannot be driven head-less; not run live; covered by unit tests",
+              "pve node shell <node>")
+    ctx.defer("console", "opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests",
               "pve node console <node>")
 
-    # Service control mutates real host daemons on a shared lab. Every verb is
-    # built by the same factory and covered by a unit test (argument contract and
-    # task handling). Deferred one verb at a time so the matrix records each leaf.
-    ctx.defer("services start", "starts a real host daemon on a shared lab; not exercised live",
+    # Service control mutates running host services on the live node. Every verb
+    # is built by the same factory and covered by a unit test (argument contract
+    # and task handling). Deferred one verb at a time so the matrix records each
+    # leaf.
+    ctx.defer("services start", "starts a running host service on the node; not exercised live; covered by unit tests",
               "pve node services start <node> <svc>")
-    ctx.defer("services stop", "stops a real host daemon on a shared lab; not exercised live",
+    ctx.defer("services stop", "stops a running host service on the node; not exercised live; covered by unit tests",
               "pve node services stop <node> <svc>")
-    ctx.defer("services restart", "restarts a real host daemon on a shared lab; not exercised live",
+    ctx.defer("services restart", "restarts a running host service on the node; not exercised live; covered by unit tests",
               "pve node services restart <node> <svc>")
-    ctx.defer("services reload", "reloads a real host daemon on a shared lab; not exercised live",
+    ctx.defer("services reload", "reloads a running host service on the node; not exercised live; covered by unit tests",
               "pve node services reload <node> <svc>")
 
     # Node-wide bulk actions act on every guest on the node (or a --vmids subset)
     # and would start, stop, suspend, or migrate non-isolated workloads; wakeonlan
-    # powers a node on. Only argument parsing is exercised here via --help; every
-    # verb is parsed-and-deferred, never run live on the shared lab.
+    # powers a node on. None is run live; --help exercises argument parsing and
+    # every verb is covered by a unit test (argument contract and task handling).
+    # Deferred one verb at a time so the matrix records each leaf.
     ctx.check("startall --help", "node", "startall", "--help", fmt="")
     ctx.check("stopall --help", "node", "stopall", "--help", fmt="")
     ctx.check("suspendall --help", "node", "suspendall", "--help", fmt="")
     ctx.check("migrateall --help", "node", "migrateall", "--help", fmt="")
     ctx.check("wakeonlan --help", "node", "wakeonlan", "--help", fmt="")
-    ctx.defer(
-        "startall / stopall / suspendall / migrateall",
-        "node-wide guest power and migration actions — affect every guest on the node, not run live",
-        "pve node stopall --node <node> --yes",
-        isolation=False, live_covered=False,
-    )
+    ctx.defer("startall", "starts every guest on the node (bulk power action); not exercised live; covered by unit tests",
+              "pve node startall --node <node> --yes", isolation=False, live_covered=False)
+    ctx.defer("stopall", "stops every guest on the node (bulk power action); not exercised live; covered by unit tests",
+              "pve node stopall --node <node> --yes", isolation=False, live_covered=False)
+    ctx.defer("suspendall", "suspends every guest on the node (bulk power action); not exercised live; covered by unit tests",
+              "pve node suspendall --node <node> --yes", isolation=False, live_covered=False)
+    ctx.defer("migrateall", "migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests",
+              "pve node migrateall --node <node> --target <node2> --yes", isolation=False, live_covered=False)
     ctx.defer(
         "wakeonlan",
-        "sends a Wake-on-LAN packet to power on a node — affects real host power state, not run live",
+        "sends a Wake-on-LAN packet to power on a node — affects node power state; not exercised live; covered by unit tests",
         "pve node wakeonlan --node <node> --yes",
         isolation=False, live_covered=False,
     )
