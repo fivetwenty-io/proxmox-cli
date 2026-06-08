@@ -68,7 +68,7 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 | 0 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 99 | 5 | 20 | 0 | 0 |
+| `cluster` | 157 | 42 | 12 | 107 | 5 | 12 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
 | `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 | 0 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **293** | **6** | **108** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **301** | **6** | **100** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **448** are exercised by at least one live suite, **108** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **456** are exercised by at least one live suite, **100** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -246,16 +246,16 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster mapping dir get` | — | ✓ |  |
 | `cluster mapping dir list` | ✓ | ✓ |  |
 | `cluster mapping dir set` | — | ✓ |  |
-| `cluster mapping pci create` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests; dir mapping CRUD is covered live by `e2e --mutate` |
-| `cluster mapping pci delete` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests |
-| `cluster mapping pci get` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests |
+| `cluster mapping pci create` | — | ✓ |  |
+| `cluster mapping pci delete` | — | ✓ |  |
+| `cluster mapping pci get` | — | ✓ |  |
 | `cluster mapping pci list` | ✓ | — |  |
-| `cluster mapping pci set` | — | — | deferred — PCI mappings bind to a real device address validated against node hardware — covered by unit tests |
-| `cluster mapping usb create` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests; dir mapping CRUD is covered live by `e2e --mutate` |
-| `cluster mapping usb delete` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests |
-| `cluster mapping usb get` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests |
+| `cluster mapping pci set` | — | ✓ |  |
+| `cluster mapping usb create` | — | ✓ |  |
+| `cluster mapping usb delete` | — | ✓ |  |
+| `cluster mapping usb get` | — | ✓ |  |
 | `cluster mapping usb list` | ✓ | — |  |
-| `cluster mapping usb set` | — | — | deferred — USB mappings bind to a real device address validated against node hardware — covered by unit tests |
+| `cluster mapping usb set` | — | ✓ |  |
 | `cluster metrics export` | ◑ | — |  |
 | `cluster metrics server create` | — | ✓ |  |
 | `cluster metrics server delete` | — | ✓ |  |

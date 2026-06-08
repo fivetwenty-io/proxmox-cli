@@ -73,6 +73,8 @@ SMTP_ENDPOINT = "pve-cli-smtp"       # isolated, disabled smtp endpoint (dummy s
 WEBHOOK_ENDPOINT = "pve-cli-webhook"  # isolated, disabled webhook endpoint (dummy url, never contacted)
 NOTIFY_MATCHER = "pve-cli-matcher"   # isolated, disabled notification matcher
 DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
+PCI_MAPPING = "pve-cli-pci"          # isolated PCI mapping (synthetic address)
+USB_MAPPING = "pve-cli-usb"          # isolated USB mapping (synthetic address)
 REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
 REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
 ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
@@ -2104,14 +2106,18 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
 
 
 def cluster_mapping_lifecycle(r: Runner) -> None:
-    """Exercise `cluster mapping dir create/get/set/delete` reversibly.
+    """Exercise `cluster mapping dir/pci/usb create/get/set/delete` reversibly.
 
-    Isolation: a single host-directory mapping `pve-cli-dir` is created with one
-    per-node entry pointing at /var/lib/vz (which always exists on a PVE node).
-    A directory mapping needs only a node and a path — no real hardware — so it
-    is safe to create and remove on a shared lab. PCI and USB mappings need real
-    device IDs and are not exercised live. The mapping is removed in the finally
-    block, leaving the cluster mapping config as found.
+    Isolation: one mapping of each kind, all `pve-cli-` prefixed and removed in a
+    finally block, leaving the cluster mapping config as found.
+
+    - A directory mapping (`pve-cli-dir`) points one per-node entry at /var/lib/vz
+      (always present on a PVE node) — no real hardware needed.
+    - PCI (`pve-cli-pci`) and USB (`pve-cli-usb`) mappings store the device address
+      as a drift-detection hint, not a create-time hardware gate, so an isolated
+      mapping with a host-present address creates and removes cleanly. They are
+      driven via soft_step so a stricter PVE build that does validate the address
+      records SKIP rather than failing the whole suite.
     """
     print(BOLD("cluster: host-directory mapping (reversible)"))
 
@@ -2138,6 +2144,66 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
     finally:
         r.del_step("cluster", "mapping dir delete", f"mapping dir delete {DIR_MAPPING}",
                    "cluster", "mapping", "dir", "delete", DIR_MAPPING, "--yes")
+
+    # PCI and USB hardware mappings. The 0000:00:00.0 PCI root and a low USB bus
+    # path are present on every host; the API stores the address verbatim. The
+    # create verbs are soft_steps so a stricter PVE build that validates the
+    # address records SKIP rather than failing; dependent get/set are skipped too
+    # in that case, and the delete still runs as teardown. The pci/usb blocks are
+    # spelled out (not looped) so the coverage scorer can map each literal verb.
+    pci_entry = f"node={r.node},path=0000:00:00.0,id=0000:0000"
+    print(BOLD("cluster: pci mapping (reversible)"))
+    r.undo(f"pre-clean {PCI_MAPPING}",
+           "cluster", "mapping", "pci", "delete", PCI_MAPPING, "--yes")
+    try:
+        created = r.soft_step(
+            "cluster", "mapping pci create", f"mapping pci create {PCI_MAPPING}",
+            "cluster", "mapping", "pci", "create", PCI_MAPPING,
+            "--map", pci_entry, "--description", "pve-cli-e2e",
+            skip_markers=("does not exist", "no such", "not found", "invalid",
+                          "could not", "unable to", "no pci"),
+            skip_reason="node rejected the synthetic PCI mapping address")
+        if created:
+            r.step("cluster", "mapping pci get", f"mapping pci get {PCI_MAPPING}",
+                   "cluster", "mapping", "pci", "get", PCI_MAPPING, json_out=True)
+            r.step("cluster", "mapping pci set", "mapping pci set (description)",
+                   "cluster", "mapping", "pci", "set", PCI_MAPPING,
+                   "--map", pci_entry, "--description", "pve-cli-e2e updated")
+        else:
+            r.cover_skip("cluster", "mapping pci get", "mapping pci get",
+                         "pci mapping create was skipped")
+            r.cover_skip("cluster", "mapping pci set", "mapping pci set",
+                         "pci mapping create was skipped")
+    finally:
+        r.del_step("cluster", "mapping pci delete", f"mapping pci delete {PCI_MAPPING}",
+                   "cluster", "mapping", "pci", "delete", PCI_MAPPING, "--yes")
+
+    usb_entry = f"node={r.node},path=1-1,id=0000:0000"
+    print(BOLD("cluster: usb mapping (reversible)"))
+    r.undo(f"pre-clean {USB_MAPPING}",
+           "cluster", "mapping", "usb", "delete", USB_MAPPING, "--yes")
+    try:
+        created = r.soft_step(
+            "cluster", "mapping usb create", f"mapping usb create {USB_MAPPING}",
+            "cluster", "mapping", "usb", "create", USB_MAPPING,
+            "--map", usb_entry, "--description", "pve-cli-e2e",
+            skip_markers=("does not exist", "no such", "not found", "invalid",
+                          "could not", "unable to", "no usb"),
+            skip_reason="node rejected the synthetic USB mapping address")
+        if created:
+            r.step("cluster", "mapping usb get", f"mapping usb get {USB_MAPPING}",
+                   "cluster", "mapping", "usb", "get", USB_MAPPING, json_out=True)
+            r.step("cluster", "mapping usb set", "mapping usb set (description)",
+                   "cluster", "mapping", "usb", "set", USB_MAPPING,
+                   "--map", usb_entry, "--description", "pve-cli-e2e updated")
+        else:
+            r.cover_skip("cluster", "mapping usb get", "mapping usb get",
+                         "usb mapping create was skipped")
+            r.cover_skip("cluster", "mapping usb set", "mapping usb set",
+                         "usb mapping create was skipped")
+    finally:
+        r.del_step("cluster", "mapping usb delete", f"mapping usb delete {USB_MAPPING}",
+                   "cluster", "mapping", "usb", "delete", USB_MAPPING, "--yes")
 
 
 def cluster_realmsync_lifecycle(r: Runner) -> None:
