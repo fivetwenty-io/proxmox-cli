@@ -474,6 +474,29 @@ def vm_lifecycle(r: Runner) -> None:
                 f"{missing} (got {got})")
         r.step("qemu", "start", f"start VM {vmid}", "qemu", "start", vmid)
         r.step("qemu", "status", f"status VM {vmid}", "qemu", "status", vmid, json_out=True)
+        # Raw QEMU monitor: a read-only `info status` against the running VM's
+        # QEMU process. Needs root and a live process, not a guest OS; soft-step
+        # so a privilege-restricted API user records SKIP instead of failing.
+        r.soft_step("qemu", "monitor", f"monitor info status VM {vmid}",
+                    "qemu", "monitor", vmid, "--command", "info status", "--yes",
+                    skip_markers=("permission", "forbidden", "only root", "privilege"),
+                    skip_reason="monitor requires root on the node")
+        # Sendkey injects a key event into the running QEMU process — no guest OS
+        # needed. `ret` (Return) is benign on a firmware-phase VM and leaves it
+        # running.
+        r.step("qemu", "sendkey", f"sendkey ret VM {vmid}",
+               "qemu", "sendkey", vmid, "--key", "ret")
+        # Bulk power actions scoped to ONLY this throwaway VM via --vmids, so no
+        # other guest on the lab is touched. Shutdown with a short timeout plus
+        # --force-stop is deterministic on the diskless guest; start brings it
+        # back so the suspend/resume matrix below still has a running VM. Both are
+        # cluster-global verbs, so node=False suppresses the auto-injected --node.
+        r.step("cluster", "bulk shutdown", f"bulk shutdown --vmids {vmid}",
+               "cluster", "bulk", "shutdown", "--vmids", vmid,
+               "--timeout", "10", "--force-stop", "--yes", node=False)
+        r.step("cluster", "bulk start", f"bulk start --vmids {vmid}",
+               "cluster", "bulk", "start", "--vmids", vmid,
+               "--timeout", "30", "--yes", node=False)
         # Edit config on the running VM, then read back the pending diff.
         r.step("qemu", "config set", f"config set VM {vmid}",
                "qemu", "config", "set", vmid, "--description", "pve-cli-e2e")
@@ -1836,9 +1859,24 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
 
     created_rule_pos: str | None = None
     try:
-        # Datacenter firewall options: read only (never mutated — cluster-wide).
-        r.step("cluster", "firewall options get", "firewall options get",
-               "cluster", "firewall", "options", "get", json_out=True)
+        # Datacenter firewall options: read the current `enable` value, then write
+        # the SAME value straight back. The set verb runs against the live cluster
+        # but the effective policy is unchanged (an idempotent no-op write), so no
+        # other workload is affected. soft-step so an API user without Sys.Modify
+        # on / records SKIP rather than failing the suite.
+        opts = r.step("cluster", "firewall options get", "firewall options get",
+                      "cluster", "firewall", "options", "get", json_out=True)
+        cur_enable = "0"
+        if opts.rc == 0:
+            try:
+                cur_enable = str(opts.json().get("enable", 0))
+            except (ValueError, AttributeError):
+                cur_enable = "0"
+        r.soft_step("cluster", "firewall options set",
+                    f"firewall options set --enable {cur_enable} (idempotent round-trip)",
+                    "cluster", "firewall", "options", "set", "--enable", cur_enable,
+                    skip_markers=("permission", "forbidden", "privilege", "not allowed"),
+                    skip_reason="needs Sys.Modify on / to set datacenter firewall options")
 
         # Security group + a rule inside it (inert until referenced by --action).
         r.step("cluster", "firewall group create", f"firewall group create {CL_FW_GROUP}",

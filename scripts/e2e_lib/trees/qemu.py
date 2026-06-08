@@ -206,19 +206,17 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "monitor",
-        "sends a raw QEMU monitor command to a running VM — even read-only "
-        "commands require root and an active QEMU process; exercised live by "
+        "sends a raw QEMU monitor command to a running VM — covered live by "
         "`e2e --mutate` (soft-step: info status, which cannot change VM state)",
         "pve qemu monitor <vmid> --command 'info status' --yes",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "sendkey",
-        "injects a key event into a running VM's console — requires a live guest "
-        "process; a benign key (ret) is used, but the CI lab has no guaranteed "
-        "running guest; not exercised live",
+        "injects a key event into a running VM's QEMU process (no guest OS "
+        "needed) — covered live by `e2e --mutate` with a benign key (ret)",
         "pve qemu sendkey <vmid> --key ret",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "remote-migrate",

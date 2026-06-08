@@ -413,12 +413,15 @@ def run(ctx: Ctx) -> None:
         ctx.check("oci pull --help", "node", "oci", "pull", "--help", fmt="")
 
         # query-url-metadata: asks the node to fetch a remote URL and report its
-        # metadata (size, mime type, filename). Needs outbound HTTP from the node
-        # to an external URL, so it is deferred rather than run live to avoid a
-        # hard dependency on external network reachability.
+        # metadata (size, mime type, filename) via an HTTP HEAD. The node's own
+        # pveproxy API rejects HEAD (501), and the lab runs no other local HTTP
+        # server, so the only working target is an external URL — a network
+        # reachability dependency the read-only sweep deliberately avoids. Left
+        # deferred; the flag/error contract is covered by unit tests.
         ctx.defer(
             "query-url-metadata",
-            "fetches metadata from an external URL (needs outbound HTTP from the node); "
+            "fetches metadata from an external URL via HTTP HEAD (needs outbound "
+            "HTTP from the node; the local pveproxy API does not support HEAD); "
             "not exercised live to avoid a network-reachability dependency",
             "pve node query-url-metadata --node <node> --url https://example.com/image.iso",
             isolation=False, live_covered=False,

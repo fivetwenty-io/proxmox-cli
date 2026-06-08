@@ -68,19 +68,19 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------------:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 96 | 5 | 23 | 0 |
+| `cluster` | 157 | 42 | 12 | 99 | 5 | 20 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 |
 | `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 |
-| `qemu` | 59 | 1 | 12 | 43 | 1 | 9 | 0 |
+| `qemu` | 59 | 1 | 12 | 45 | 1 | 7 | 0 |
 | `sdn` | 71 | 5 | 11 | 50 | 0 | 8 | 0 |
 | `storage` | 21 | 1 | 8 | 9 | 0 | 6 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **284** | **6** | **117** | **0** |
+| **Total** | **556** | **74** | **125** | **289** | **6** | **112** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **439** are exercised by at least one suite, **117** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **444** are exercised by at least one suite, **112** are deferred or n/a by design (irreversible, interactive, or environment-bound), and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -166,10 +166,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster backup list` | ✓ | ✓ |  |
 | `cluster backup set` | — | ✓ |  |
 | `cluster backup-info not-backed-up` | ◑ | — |  |
-| `cluster bulk migrate` | — | — | help-only (parse smoke test) |
-| `cluster bulk shutdown` | — | — | deferred — cluster-wide guest power and migration actions — affect every guest, not run live |
-| `cluster bulk start` | — | — | help-only (parse smoke test) |
-| `cluster bulk suspend` | — | — | help-only (parse smoke test) |
+| `cluster bulk migrate` | — | — | deferred — migrates guests cluster-wide — requires a second node; not exercisable on a single-node lab |
+| `cluster bulk shutdown` | — | ✓ |  |
+| `cluster bulk start` | — | ✓ |  |
+| `cluster bulk suspend` | — | — | deferred — suspends guests cluster-wide — the diskless e2e VM has no guest to suspend (as with `qemu suspend`); not exercised live |
 | `cluster ceph flags get` | ◑ | — |  |
 | `cluster ceph flags list` | ◑ | — |  |
 | `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
@@ -205,7 +205,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster firewall ipset remove` | — | ✓ |  |
 | `cluster firewall macros list` | ✓ | — |  |
 | `cluster firewall options get` | ✓ | ✓ |  |
-| `cluster firewall options set` | — | — | deferred — enables/changes the datacenter firewall policy cluster-wide — not exercised live |
+| `cluster firewall options set` | — | ✓ |  |
 | `cluster firewall refs list` | ✓ | — |  |
 | `cluster firewall rules create` | — | ✓ |  |
 | `cluster firewall rules delete` | — | ✓ |  |
@@ -462,7 +462,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node network set` | — | — | deferred — edits a host network interface — could cut the node off the network; not exercised live |
 | `node oci pull` | — | — | n/a — downloads an OCI image into a storage — leaves an uncleanable artifact on shared lab storage; not exercised live |
 | `node oci tags` | — | — | help-only (parse smoke test) |
-| `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL (needs outbound HTTP from the node); not exercised live to avoid a network-reachability dependency |
+| `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL via HTTP HEAD (needs outbound HTTP from the node; the local pveproxy API does not support HEAD); not exercised live to avoid a network-reachability dependency |
 | `node replication list` | ◑ | — |  |
 | `node replication log` | ◑ | — |  |
 | `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
@@ -560,13 +560,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu metrics` | ◑ | — |  |
 | `qemu migrate` | — | ✓ |  |
 | `qemu migrate check` | ◑ | — |  |
-| `qemu monitor` | — | — | deferred — sends a raw QEMU monitor command to a running VM — even read-only commands require root and an active QEMU process; exercised live by `e2e --mutate` (soft-step: info status, which cannot change VM state) |
+| `qemu monitor` | — | ✓ |  |
 | `qemu reboot` | — | · |  |
 | `qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live clusters with shared or compatible storage; no rollback without manual intervention; not exercised live |
 | `qemu reset` | — | ✓ |  |
 | `qemu resume` | — | ✓ |  |
 | `qemu rrd` | ◑ | — |  |
-| `qemu sendkey` | — | — | deferred — injects a key event into a running VM's console — requires a live guest process; a benign key (ret) is used, but the CI lab has no guaranteed running guest; not exercised live |
+| `qemu sendkey` | — | ✓ |  |
 | `qemu shutdown` | — | ✓ |  |
 | `qemu snapshot create` | — | ✓ | error-contract checked |
 | `qemu snapshot delete` | — | ✓ |  |
