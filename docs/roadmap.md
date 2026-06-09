@@ -6,9 +6,9 @@ This roadmap tracks the path to full Proxmox VE 9.2 API coverage in the `pve` CL
 
 The `pve` CLI is built on the generated `pve-apiclient-go` v3 client, which exposes 716 service methods covering the complete Proxmox VE 9.2 REST surface (all 444 documented endpoints), including the 9.2 net-new features: SDN fabrics, storage identity, in-place token-secret rotation, custom CPU models, node location, and OCI container images.
 
-Today the CLI surfaces only a subset of that client. Every capability listed below is backed by a method that already exists in the client, so the remaining work is command-surface wiring, validation, and end-to-end test coverage — no client regeneration is required.
+The CLI now surfaces the complete user-facing command set. Every capability listed below is shipped and backed by a method that already exists in the client, so no client regeneration is required. The remaining work is test-coverage maintenance: keeping each shipped leaf either exercised by a live suite or formally deferred with a documented rationale.
 
-Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-frequency operations). P5 closes the remaining end-to-end test-coverage gaps so that every shipped command leaf is either exercised by a suite or formally deferred with a rationale. The **Status** column tracks delivery: `Planned`, `In progress`, or `Shipped`.
+Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-frequency operations). P5 closed the remaining end-to-end test-coverage gaps so that every shipped command leaf is either exercised by a suite or formally deferred with a rationale. P6 then shrank the deferred bucket itself by finding live strategies for verbs that earlier passes had set aside, leaving only those that are genuinely impossible to exercise on the shared lab. The **Status** column tracks delivery: `Planned`, `In progress`, or `Shipped`.
 
 ## Priority Overview
 
@@ -19,6 +19,7 @@ Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-fr
 | P3 | Platform management | Guest agent, package management, hardware, system config, Ceph, metrics, notifications, SDN extensions |
 | P4 | Specialized workflows | Bulk actions, SDN fabrics and routing policy, and newer PVE 9.2 endpoints |
 | P5 | Test coverage closure | Isolated end-to-end or deferral coverage for every shipped command leaf that neither suite yet exercises |
+| P6 | Deferred-coverage recovery | Live strategies that move formerly deferred verbs into the suites, leaving only genuinely blocked leaves deferred |
 
 ## P1 — Guest Lifecycle Operations
 
@@ -117,6 +118,8 @@ Namespaced create → inspect → update → delete sequences against `pve-cli`-
 
 Destructive, interactive, secret-bearing, or environment-bound verbs that must not run against the shared lab. Each gains a `--yes` confirmation guard (added where missing), unit-test coverage of the guard and argument contract via the `testhelper` fake server, and a `defer()` record in the harness so the matrix scores it deferred rather than uncovered.
 
+This table records the deferral set as it stood at the close of P5. P6 (below) later found safe live strategies for many of these verbs — the guest-agent, TFA, node-network, node-services, subscription-delete, and most node-disks rows are now exercised live — so the matrix is the source of truth for what remains deferred today.
+
 | Area | Commands | Approach | Status |
 |---|---|---|---|
 | Ceph cluster operations | `pve node ceph fs\|mds\|mgr\|mon\|osd\|pool create\|delete\|set\|in\|out\|scrub`, `pve node ceph start\|stop` | Cluster-affecting; guard plus unit tests, deferred from live | Shipped |
@@ -141,6 +144,43 @@ A second coverage pass closed the remaining endpoint-level gaps inside the group
 | Access | `pve access tfa create\|set\|get-entry\|types`, `pve access openid list` | Two-factor enrollment and OpenID realm listing |
 | Node | `pve node disks ls\|get\|delete`, `pve node rrddata`, `pve node netstat`, `pve node vzdump defaults\|extract-config`, `pve node capabilities qemu cpu-flags`, `pve node hardware pci mdev`, `pve node query-url-metadata`, `pve node services state` | Disk inventory and lifecycle, metrics, and capability inspection |
 | Storage | `pve storage status\|identity\|rrddata\|rrd`, `pve storage volume alloc\|delete` | Per-storage usage and metrics, and volume allocation and deletion |
+
+## P6 — Deferred-Coverage Recovery
+
+After P5 brought the uncovered count to zero, a follow-on pass revisited the deferred bucket itself. Every leaf that an earlier pass had formally deferred was re-examined for a live strategy that exercises it without disrupting the shared lab. This drove the deferred count from 108 leaves down to 54: of **556** leaves, **502** are now exercised by at least one live suite, **0** are uncovered, and **54** remain deferred with a specific, accurate rationale in the test-coverage matrix (`docs/test-coverage-matrix.md`).
+
+### Recovered leaves
+
+The recovered verbs use host-side fixture staging over root SSH to satisfy the environment dependencies that previously forced deferral. Every staged fixture is torn down in all paths, and the existing isolation contract (tag and pool `pve-cli`, name prefix `pve-cli-`, SDN zone `pvecli`, VNet `pvecli0`, subnet `172.30.0.0/24`) is honored throughout.
+
+| Area | Verbs recovered | Live strategy | Status |
+|---|---|---|---|
+| QEMU guest agent | `pve qemu agent exec\|exec-status\|file-read\|file-write\|set-user-password` | Bake `qemu-guest-agent` into a cloud image with `virt-customize`, provision the throwaway VM host-side (the API token cannot `import-from` arbitrary paths), then drive the agent over the CLI; the password is piped via stdin | Shipped |
+| Node disks | `pve node disks init-gpt`, `create\|delete directory\|lvm\|lvmthin\|zfs` | Run against a single spare NVMe pinned by serial and hard-asserted unused (via `disks list` plus a host-side `wipefs`/holders/`zpool` probe); each create is paired with a `delete --cleanup-disks`, and a finally block zaps residue over root SSH | Shipped |
+| Remote-storage scans | `pve node scan cifs\|iscsi\|nfs\|pbs` | Point cifs and iscsi at the node's own services; answer nfs with a temporary `nfs-kernel-server` export (purged afterward) and pbs with a host-local HTTPS stub whose self-signed cert is pinned by fingerprint | Shipped |
+| Two-factor authentication | `pve access tfa create\|set\|delete` | Drive a password-login ticket session for a throwaway realm user with offline RFC 6238 TOTP (the `/access/tfa` endpoints reject API-token auth) | Shipped |
+| Storage import metadata | `pve storage import-metadata` | Stage a crafted OVF and backing VMDK in the node's import directory over root SSH, read the metadata, then remove the fixture | Shipped |
+| SDN DNS | `pve sdn dns create\|get\|set\|delete` | Satisfy the PowerDNS connectivity check with a host-local HTTP stub; the full CRUD is staged and never applied to the running SDN | Shipped |
+| Host services and network | `pve node services reload\|restart\|stop\|start`, `pve node network create\|set\|delete\|revert`, `pve node subscription delete\|update`, `pve node oci pull` | Cycle a benign non-control-plane service (chrony) and restore it; stage and revert network interface changes; run idempotent subscription and OCI operations | Shipped |
+| Cluster and template setup | `pve cluster mapping pci\|usb create\|get\|set\|delete`, `pve cluster bulk suspend`, `pve node startall\|stopall\|suspendall`, `pve node hosts set`, `pve qemu template` | Exercise against synthetic mapping hints and `pve-cli`-owned guests, with teardown in every path | Shipped |
+
+### Remaining deferrals
+
+The 54 leaves that remain deferred are genuinely impossible to exercise on the shared single-node lab. Each is grouped below by why it cannot run; every leaf carries an accurate rationale in the matrix and is covered by unit tests of its argument contract and `--yes` guard.
+
+| Category | Leaves | Why it stays deferred |
+|---|---|---|
+| Ceph cluster operations | 21 | The lab has no Ceph cluster, and these create, destroy, restart, or reconfigure Ceph daemons, OSDs, pools, and filesystems |
+| Multi-node or second-cluster topology | 9 | A single-node lab has no peer node or second cluster for cross-node and cross-cluster migration, cluster join, node add and delete, `migrateall`, and `wakeonlan` |
+| Environment-bound or no-op | 6 | Needs a configured job, key, or IPAM backend, or would discard all pending state (`apt repositories add\|enable`, `subscription set`, `replication run`, `sdn ipam set`, `sdn rollback`) |
+| root@pam-only endpoints | 5 | The suite authenticates with an API token, which PVE forbids on these endpoints (`acme account create\|set\|delete`, `disks wipe`, `storage volume copy`) |
+| External CA or live TLS | 5 | Contacts a real ACME CA or replaces the node's live API certificate (`cert acme delete\|order\|renew`, `cert custom delete\|upload`) |
+| HA stack arm and disarm | 2 | Would disrupt every HA-managed resource on the shared lab |
+| Host network or firewall cutover | 2 | Applying the change could sever the suite's own connection to the node (`network apply`, `firewall options set`) |
+| No Proxmox Backup Server | 2 | The lab has no PBS storage to browse (`file-restore list\|download`) |
+| Interactive terminals | 2 | `console` and `shell` open a live SSH or VNC session that cannot be driven head-less |
+
+A recurring lesson from this pass: live de-risking before writing harness code caught five verbs that read-only inspection had mislabelled recoverable — local-node `wakeonlan`, the three `acme account` verbs, and `disks wipe` all turned out to be rejected by API-token auth or single-node topology, and were reclassified as blocked with corrected rationales.
 
 ## Delivery Standard
 
