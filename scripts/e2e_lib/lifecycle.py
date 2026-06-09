@@ -2151,6 +2151,183 @@ def qemu_agent_lifecycle(r: Runner) -> None:
             print(f"  {YELLOW('·')} rm baked agent image {DIM('(cleanup: ' + tail + ')')}")
 
 
+def _resolve_host(r: Runner) -> str:
+    """Resolve the node host address for passwordless root SSH, or "" if unknown."""
+    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    if show.rc != 0:
+        return ""
+    data = show.json()
+    data = data.get("data", data) if isinstance(data, dict) else {}
+    return str(data.get("Host", "")) if isinstance(data, dict) else ""
+
+
+# A throwaway HTTPS server staged on the node host that impersonates just enough
+# of a Proxmox Backup Server API for `node scan pbs`: it answers the auth ticket
+# POST and the datastore-list GET with static JSON over TLS. The node pins the
+# stub's self-signed cert by the SHA-256 fingerprint passed via --fingerprint, so
+# no real PBS is needed. `__PORT__`/`__CERT__`/`__KEY__` are substituted before it
+# is written; it binds 127.0.0.1 only and is killed after use.
+_PBS_STUB_PORT = 18007
+_PBS_STUB = '''import http.server, ssl, json
+class H(http.server.BaseHTTPRequestHandler):
+    def _send(self, obj):
+        b = json.dumps(obj).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        self.rfile.read(n)
+        self._send({"data": {"ticket": "PBS:stub", "CSRFPreventionToken": "x",
+                             "username": "stub@pbs"}})
+    def do_GET(self):
+        self._send({"data": [{"store": "pve-cli-stub", "comment": "e2e"}]})
+    def log_message(self, *a):
+        pass
+srv = http.server.HTTPServer(("127.0.0.1", __PORT__), H)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain("__CERT__", "__KEY__")
+srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+srv.serve_forever()
+'''
+
+
+def node_scan_lifecycle(r: Runner) -> None:
+    """Exercise the four remote-storage scan verbs against host-local servers.
+
+    `node scan cifs/iscsi/nfs/pbs` each probe a storage server for its
+    shares/targets/exports/datastores, so they normally need an external server.
+    They are pointed at the node itself instead: cifs and iscsi hit services the
+    node already exposes (smbd on :445, the iSCSI initiator); pbs is answered by a
+    throwaway host-local HTTPS stub whose self-signed cert is pinned by fingerprint
+    (the SDN-DNS-stub pattern over TLS); nfs needs an NFS server, so
+    nfs-kernel-server is installed for the probe and purged afterward if this suite
+    installed it. cifs/iscsi soft-skip if the host exposes no such service; pbs/nfs
+    skip if the host is unreachable or the fixture cannot be staged.
+    """
+    print(BOLD("node: scan cifs/iscsi/nfs/pbs (host-local servers + stub)"))
+    net_markers = ("failed to execute", "refused", "timeout", "timed out",
+                   "unreachable", "no route", "not registered", "exit code",
+                   "connection", "could not")
+
+    # cifs + iscsi reach the node's own services through the API, so they need no
+    # host-side staging. A list (possibly empty) is a pass; an environment error
+    # (no SMB server / no portal) records a skip rather than failing.
+    r.soft_step("node", "scan cifs", "scan cifs (node-local smbd)",
+                "node", "scan", "cifs", "--server", "127.0.0.1",
+                skip_markers=net_markers, skip_reason="no SMB server reachable on host")
+    r.soft_step("node", "scan iscsi", "scan iscsi (node-local portal)",
+                "node", "scan", "iscsi", "--portal", "127.0.0.1",
+                skip_markers=net_markers, skip_reason="no iSCSI portal reachable on host")
+
+    host = _resolve_host(r)
+    if not host or _ssh_node(host, "true")[0] != 0:
+        r.cover_skip("node", "scan pbs", "scan pbs", "SSH to host unavailable")
+        r.cover_skip("node", "scan nfs", "scan nfs", "SSH to host unavailable")
+        return
+
+    # ---- scan pbs: host-local HTTPS stub pinned by cert fingerprint ----
+    if _ssh_node(host, "command", "-v", "openssl")[0] != 0:
+        r.cover_skip("node", "scan pbs", "scan pbs", "host lacks openssl to mint a stub cert")
+    else:
+        sd = f"/tmp/{Isolation.NAME_PREFIX}pbsstub"
+        cert, key = f"{sd}/cert.pem", f"{sd}/key.pem"
+        stub_py, stub_log = f"{sd}/stub.py", f"{sd}/log"
+        pid = ""
+        try:
+            _ssh_node(host, "mkdir", "-p", sd)
+            mk = _ssh_node(host, "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                           "-keyout", key, "-out", cert, "-days", "1", "-nodes",
+                           "-subj", "/CN=127.0.0.1", timeout=60)
+            fpr = _ssh_node(host, "openssl", "x509", "-in", cert, "-noout",
+                            "-fingerprint", "-sha256")
+            fp = ""
+            if fpr[0] == 0 and "=" in fpr[1]:
+                fp = fpr[1].strip().split("=", 1)[1].strip()
+            if mk[0] != 0 or not fp:
+                r.cover_skip("node", "scan pbs", "scan pbs", "could not mint a stub TLS cert")
+            else:
+                body = (_PBS_STUB.replace("__PORT__", str(_PBS_STUB_PORT))
+                        .replace("__CERT__", cert).replace("__KEY__", key))
+                _ssh_node(host, "tee", stub_py, stdin=body)
+                launch = _ssh_node(host, f"nohup python3 {stub_py} >{stub_log} 2>&1 & echo $!")
+                pid = (launch[1].strip().splitlines() or [""])[0].strip()
+                ready = False
+                for _ in range(10):
+                    # Single-string form so the remote shell keeps the quoted -c
+                    # script intact (its parens/quotes would be mangled if passed
+                    # as separate argv tokens). A plain TCP connect confirms the
+                    # stub is listening before the scan runs.
+                    chk = _ssh_node(host, f"python3 -c \"import socket; "
+                                    f"socket.create_connection(('127.0.0.1',{_PBS_STUB_PORT}),2)"
+                                    f".close()\" && echo ok")
+                    if chk[0] == 0 and "ok" in chk[1]:
+                        ready = True
+                        break
+                    time.sleep(0.5)
+                if not ready:
+                    r.cover_skip("node", "scan pbs", "scan pbs",
+                                 "PBS API stub did not become reachable on the host")
+                else:
+                    # The stub password is a throwaway value for a local stub, not a
+                    # real secret; the step prints only its label, never the argv.
+                    r.soft_step("node", "scan pbs", "scan pbs (host-local stub)",
+                                "node", "scan", "pbs", "--server", "127.0.0.1",
+                                "--port", str(_PBS_STUB_PORT), "--username", "stub@pbs",
+                                "--password", "pve-cli-e2e-stub", "--fingerprint", fp,
+                                skip_markers=net_markers,
+                                skip_reason="PBS stub probe failed")
+        finally:
+            if pid:
+                _ssh_node(host, "kill", "-9", pid)
+            _ssh_node(host, "rm", "-rf", sd)
+
+    # ---- scan nfs: install nfs-kernel-server for the probe, purge if we did ----
+    q = _ssh_node(host, "dpkg-query", "-W", "-f=${Status}", "nfs-kernel-server")
+    pre_installed = q[0] == 0 and "installed" in q[1]
+    we_installed = False
+    expfile = "/etc/exports.d/pve-cli-e2e.exports"
+    expdir = f"/tmp/{Isolation.NAME_PREFIX}nfsexport"
+    try:
+        if not pre_installed:
+            ins = _ssh_node(host, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get",
+                            "install", "-y", "-q", "nfs-kernel-server", timeout=240)
+            if ins[0] != 0:
+                r.cover_skip("node", "scan nfs", "scan nfs",
+                             "could not install nfs-kernel-server on the host")
+                raise _NfsSkip()
+            we_installed = True
+        # Export a throwaway dir to localhost so the scan returns a real entry; an
+        # empty list is still a valid result if the export cannot be staged.
+        _ssh_node(host, "mkdir", "-p", expdir, "/etc/exports.d")
+        _ssh_node(host, "tee", expfile,
+                  stdin=f"{expdir} 127.0.0.1(ro,no_subtree_check,insecure)\n")
+        _ssh_node(host, "exportfs", "-ra")
+        _ssh_node(host, "systemctl", "restart", "nfs-server", timeout=60)
+        time.sleep(1)
+        r.soft_step("node", "scan nfs", "scan nfs (node-local export)",
+                    "node", "scan", "nfs", "--server", "127.0.0.1",
+                    skip_markers=net_markers, skip_reason="no NFS server reachable on host")
+    except _NfsSkip:
+        pass
+    finally:
+        _ssh_node(host, "rm", "-f", expfile)
+        _ssh_node(host, "exportfs", "-ra")
+        _ssh_node(host, "rmdir", expdir)
+        if we_installed:
+            _ssh_node(host, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get",
+                      "purge", "-y", "-q", "nfs-kernel-server", timeout=180)
+            _ssh_node(host, "env", "DEBIAN_FRONTEND=noninteractive", "apt-get",
+                      "autoremove", "-y", "-q", timeout=120)
+            print(f"  {GREEN('✓')} uninstall nfs-kernel-server (restored host state)")
+
+
+class _NfsSkip(Exception):
+    """Internal control-flow signal to skip the nfs probe but still run teardown."""
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3535,6 +3712,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
             print()
 
         node_ops(r)
+        print()
+        node_scan_lifecycle(r)
         print()
         storage_import_metadata_lifecycle(r)
         print()

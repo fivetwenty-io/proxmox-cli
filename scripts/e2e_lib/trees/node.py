@@ -692,32 +692,39 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # The remote storage scans each probe an external storage server (and, for
-    # cifs/pbs, need credentials), so they are not part of the local read-only
-    # sweep. Deferred per protocol so each verb is recorded against its own leaf.
+    # The remote storage scans each probe a storage server for its
+    # shares/targets/exports/datastores. Rather than an external server, the mutate
+    # phase points them at the node itself: cifs/iscsi hit services the node already
+    # exposes, pbs is answered by a host-local HTTPS stub pinned by cert fingerprint,
+    # and nfs-kernel-server is installed for the nfs probe and purged afterward.
     ctx.defer(
         "scan nfs",
-        "probes a remote NFS server for its exports (needs a reachable server address); not exercised live",
+        "probes an NFS server for its exports — covered live by `e2e --mutate`, which "
+        "installs nfs-kernel-server, exports a throwaway dir to localhost, scans it, "
+        "then purges the package",
         "pve node scan nfs --node <node> --server <server>",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "scan cifs",
-        "probes a remote CIFS/SMB server for its shares (needs a server address and credentials); not exercised live",
+        "probes a CIFS/SMB server for its shares — covered live by `e2e --mutate`, which "
+        "scans the node's own smbd on 127.0.0.1",
         "pve node scan cifs --node <node> --server <server>",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "scan iscsi",
-        "probes a remote iSCSI portal for its targets (needs a reachable portal address); not exercised live",
+        "probes an iSCSI portal for its targets — covered live by `e2e --mutate`, which "
+        "scans 127.0.0.1 on the node",
         "pve node scan iscsi --node <node> --portal <portal>",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "scan pbs",
-        "probes a Proxmox Backup Server for its datastores (needs a server address and credentials); not exercised live",
+        "probes a Proxmox Backup Server for its datastores — covered live by `e2e --mutate`, "
+        "which answers the scan from a host-local HTTPS stub pinned by cert fingerprint",
         "pve node scan pbs --node <node> --server <server> --username <user> --password <secret>",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
 
     # Every Ceph write verb is cluster-destructive: init lays down a new Ceph

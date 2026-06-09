@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 28 | 0 | 55 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 32 | 0 | 51 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 51 | 1 | 1 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **329** | **6** | **73** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **333** | **6** | **69** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **483** are exercised by at least one live suite, **73** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **487** are exercised by at least one live suite, **69** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -470,12 +470,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node report` | ◑ | — |  |
 | `node rrddata` | ◑ | — |  |
 | `node rsync` | — | ✓ |  |
-| `node scan cifs` | — | — | deferred — probes a remote CIFS/SMB server for its shares (needs a server address and credentials); not exercised live |
-| `node scan iscsi` | — | — | deferred — probes a remote iSCSI portal for its targets (needs a reachable portal address); not exercised live |
+| `node scan cifs` | — | ✓ |  |
+| `node scan iscsi` | — | ✓ |  |
 | `node scan lvm` | ◑ | — |  |
 | `node scan lvmthin` | ◑ | — |  |
-| `node scan nfs` | — | — | deferred — probes a remote NFS server for its exports (needs a reachable server address); not exercised live |
-| `node scan pbs` | — | — | deferred — probes a Proxmox Backup Server for its datastores (needs a server address and credentials); not exercised live |
+| `node scan nfs` | — | ✓ |  |
+| `node scan pbs` | — | ✓ |  |
 | `node scan zfs` | ◑ | — |  |
 | `node services get` | ◑ | — |  |
 | `node services list` | ◑ | — |  |
