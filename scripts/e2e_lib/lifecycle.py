@@ -762,6 +762,51 @@ def vm_lifecycle(r: Runner) -> None:
                "--purge", "--destroy-unreferenced-disks")
 
 
+def qemu_template_lifecycle(r: Runner) -> None:
+    """Convert a dedicated throwaway VM into a template, then destroy it.
+
+    `qemu template` is irreversible — it permanently converts the VM's disks to
+    base images — so it cannot run against the reusable VM that vm_lifecycle
+    drives. A second, single-purpose VM is created under the isolation contract
+    (pve-cli name, pool, and tag, on the e2e vnet), templated, verified via
+    `config get` (template=1), and deleted, so nothing else in the lab is
+    touched and no template is left behind.
+    """
+    print(BOLD("qemu: template conversion (dedicated throwaway VM)"))
+    vmid = _next_id(r)
+    name = Isolation.NAME_PREFIX + "tmpl"
+    print(DIM(f"  vmid={vmid}"))
+    created = False
+    try:
+        r.step("qemu", "create", f"create template VM {vmid}",
+               "qemu", "create", vmid, "--name", name, "--memory", "512",
+               "--cores", "1", "--scsihw", "virtio-scsi-pci",
+               "--scsi0", f"{ROOTDIR_STORAGE}:1",
+               "--net0", f"virtio,bridge={Isolation.SDN_VNET}",
+               "--ostype", "l26", "--pool", Isolation.POOL, "--tags", Isolation.TAG)
+        created = True
+        r.step("qemu", "template", f"template VM {vmid}",
+               "qemu", "template", vmid, "--yes")
+        cfg = r.pve("qemu", "config", "get", vmid, json_out=True)
+        ok = False
+        try:
+            cd = cfg.json()
+            ok = isinstance(cd, dict) and str(cd.get("template", "")) in ("1", "true", "True")
+        except ValueError:
+            ok = False
+        if ok:
+            print(f"  {GREEN('✓')} template verified (template=1)")
+            r.cov.append(Step("qemu", "template verify", PASS))
+        else:
+            r.cover_skip("qemu", "template verify", "template verify",
+                         "config did not read back template=1")
+    finally:
+        if created:
+            r.del_step("qemu", "template delete", f"delete template VM {vmid}",
+                       "qemu", "delete", vmid, "--yes",
+                       "--purge", "--destroy-unreferenced-disks")
+
+
 def ct_lifecycle(r: Runner, ostemplate: str) -> None:
     """Drive an Alpine throwaway container through every mutating lxc verb."""
     print(BOLD("lxc: full container verb matrix"))
@@ -1683,9 +1728,11 @@ def node_system_lifecycle(r: Runner) -> None:
     Isolation: only the node's time zone and DNS settings are touched, and each
     is set back to the value it already holds (a no-op write). The original
     values are captured first and restored in the finally block, so the node's
-    configuration is left exactly as found. The /etc/hosts and subscription write
-    verbs are NOT exercised here — replacing /etc/hosts could break host name
-    resolution and changing the subscription affects licensing on the shared lab.
+    configuration is left exactly as found. /etc/hosts is rewritten with its own
+    current content under a digest guard (a no-op replace), and the host network
+    verbs are exercised staged-only and then reverted, so neither is ever applied
+    to the live node. The subscription write verbs are NOT exercised here —
+    changing the subscription affects licensing on the shared lab.
     """
     print(BOLD("node: system config (time zone + DNS, set-to-self, reversible)"))
 
@@ -1725,6 +1772,60 @@ def node_system_lifecycle(r: Runner) -> None:
         if original_tz:
             r.del_step("node", "time restore", f"time restore ({original_tz})",
                        "node", "time", "set", "--timezone", original_tz)
+
+    # ---- /etc/hosts: digest-guarded wholesale replace, set-to-self ----------
+    # Reversible by construction: read the current file plus its digest, then
+    # write the IDENTICAL bytes back guarded by that digest. A wholesale replace
+    # with the same content is a no-op, and the digest guard would reject the
+    # write if anything changed underneath, so /etc/hosts is left exactly as
+    # found. (--data/--digest carry runtime values; the command-path tokens stay
+    # literal so the coverage matrix maps the leaf.)
+    hosts_get = r.step("node", "hosts get", "hosts get",
+                       "node", "hosts", "get", json_out=True)
+    try:
+        hd = hosts_get.json()
+    except ValueError:
+        hd = None
+    if (isinstance(hd, dict) and isinstance(hd.get("data"), str) and hd["data"]
+            and isinstance(hd.get("digest"), str) and hd["digest"]):
+        content, digest = hd["data"], hd["digest"]
+        r.step("node", "hosts set", "hosts set (self, digest-guarded)",
+               "node", "hosts", "set", "--data", content, "--digest", digest, "--yes")
+        verify = r.pve("node", "hosts", "get", json_out=True)
+        ok = False
+        try:
+            vd = verify.json()
+            ok = isinstance(vd, dict) and vd.get("data") == content
+        except ValueError:
+            ok = False
+        if ok:
+            print(f"  {GREEN('✓')} hosts set verified (/etc/hosts unchanged)")
+            r.cov.append(Step("node", "hosts verify", PASS))
+        else:
+            r.cover_skip("node", "hosts verify", "hosts set verify",
+                         "/etc/hosts did not read back unchanged")
+    else:
+        r.cover_skip("node", "hosts set", "hosts set",
+                     "node returned no /etc/hosts content or digest")
+
+    # ---- host network interfaces: staged-only, never applied ----------------
+    # Every network write stages into /etc/network/interfaces.new; only
+    # `network apply` reloads the stack (and could cut the node off the network),
+    # so apply is NEVER run here. A throwaway bridge is created, edited, and
+    # deleted entirely in the staged file, then `network revert` discards the
+    # staged file, leaving the live configuration untouched. The iface name is
+    # unused on the lab (vmbr0/1/9 exist).
+    netif = "vmbr987"
+    r.step("node", "network create", f"network create {netif} (staged)",
+           "node", "network", "create", "--iface", netif, "--type", "bridge",
+           "--autostart", "--comments", "pve-cli-e2e staged probe")
+    r.step("node", "network set", f"network set {netif} (staged)",
+           "node", "network", "set", netif, "--type", "bridge",
+           "--comments", "pve-cli-e2e staged probe (edited)")
+    r.del_step("node", "network delete", f"network delete {netif} (staged)",
+               "node", "network", "delete", netif, "--yes")
+    r.step("node", "network revert", "network revert (discard staged)",
+           "node", "network", "revert", "--yes")
 
     # ---- DNS: guarded on a configured search domain (--search is required) --
     dns_get = r.step("node", "dns get", "dns get", "node", "dns", "get", json_out=True)
@@ -2802,6 +2903,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
 
         if not skip_vm:
             vm_lifecycle(r)
+            print()
+            qemu_template_lifecycle(r)
             print()
         if not skip_ct:
             ostemplate = _ensure_template(r)

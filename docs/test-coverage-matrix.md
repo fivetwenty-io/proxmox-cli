@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 18 | 0 | 64 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 24 | 0 | 59 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `qemu` | 59 | 1 | 12 | 45 | 1 | 7 | 0 | 0 |
+| `qemu` | 59 | 1 | 12 | 46 | 1 | 6 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **305** | **6** | **96** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **312** | **6** | **90** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **460** are exercised by at least one live suite, **96** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **466** are exercised by at least one live suite, **90** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -447,19 +447,19 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node hardware mdev` | ◑ | — |  |
 | `node hardware pci` | ◑ | — |  |
 | `node hardware usb` | ◑ | — |  |
-| `node hosts get` | ◑ | — |  |
-| `node hosts set` | — | — | deferred — replaces the whole /etc/hosts file — could break host name resolution; not exercised live |
+| `node hosts get` | ◑ | ✓ |  |
+| `node hosts set` | — | ✓ |  |
 | `node journal` | ◑ | — |  |
 | `node list` | ✓ | — |  |
 | `node migrateall` | — | — | deferred — migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests |
 | `node netstat` | ◑ | — |  |
 | `node network apply` | — | — | deferred — reloads the staged host network configuration — could cut the node off the network; not exercised live |
-| `node network create` | — | — | deferred — creates a host network interface — edits the host networking stack and could cut the node off the network; not exercised live; covered by unit tests |
-| `node network delete` | — | — | deferred — removes a host network interface — could cut the node off the network; not exercised live |
+| `node network create` | — | ✓ |  |
+| `node network delete` | — | ✓ |  |
 | `node network get` | ◑ | — |  |
 | `node network list` | ◑ | — |  |
-| `node network revert` | — | — | deferred — discards the staged host network configuration — could cut the node off the network; not exercised live |
-| `node network set` | — | — | deferred — edits a host network interface — could cut the node off the network; not exercised live |
+| `node network revert` | — | ✓ |  |
+| `node network set` | — | ✓ |  |
 | `node oci pull` | — | — | deferred — downloads an OCI image into a storage — leaves an uncleanable artifact on lab storage; not exercised live; covered by unit tests |
 | `node oci tags` | — | — | deferred — lists the tags of a remote OCI reference (needs registry access and a valid reference); not exercised live; covered by unit tests |
 | `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL via HTTP HEAD (needs outbound HTTP from the node; the local pveproxy API does not support HEAD); not exercised live to avoid a network-reachability dependency |
@@ -578,7 +578,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu status` | ◑ | ✓ |  |
 | `qemu stop` | — | ✓ |  |
 | `qemu suspend` | — | ✓ |  |
-| `qemu template` | — | — | deferred — converts a VM into a template — irreversible (it would destroy the reusable isolated VM); not exercised live; covered by unit tests |
+| `qemu template` | — | ✓ |  |
 
 ## `sdn`
 

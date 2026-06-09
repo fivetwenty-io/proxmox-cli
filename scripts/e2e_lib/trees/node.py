@@ -454,30 +454,29 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # Host network interface edits stage changes to /etc/network/interfaces.new;
-    # applying them reloads the host networking stack and could cut the node off
-    # the network on a shared lab, so set/delete/apply/revert are never exercised
-    # live (network create is reachable via its --help check above). Each verb is
-    # covered by a unit test (argument contract, plus the --yes guard where the
-    # CLI gates the operation). Deferred one verb at a time so the coverage
-    # matrix records every leaf.
+    # Host network interface edits stage changes to /etc/network/interfaces.new.
+    # create/set/delete/revert are covered live by `e2e --mutate`: it stages a
+    # throwaway bridge (vmbr987), edits it, deletes it, and reverts the staged
+    # file — all entirely in interfaces.new, so the live config is never
+    # touched. Only `network apply` reloads the host networking stack (and could
+    # cut the node off the network), so apply alone stays deferred.
     ctx.defer(
         "network create",
-        "creates a host network interface — edits the host networking stack and could cut the node off the network; not exercised live; covered by unit tests",
+        "creates a host network interface — covered live by `e2e --mutate`, which stages a throwaway bridge and reverts it (never applied)",
         "pve node network create <iface> --node <node> --type bridge",
-        isolation=False, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "network set",
-        "edits a host network interface — could cut the node off the network; not exercised live",
-        "pve node network set <iface> --node <node> --type bridge --cidr 172.30.9.1/24",
-        isolation=False, live_covered=False,
+        "edits a host network interface — covered live by `e2e --mutate` on the staged throwaway bridge (never applied)",
+        "pve node network set <iface> --node <node> --type bridge",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "network delete",
-        "removes a host network interface — could cut the node off the network; not exercised live",
+        "removes a host network interface — covered live by `e2e --mutate` on the staged throwaway bridge (never applied)",
         "pve node network delete <iface> --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "network apply",
@@ -487,9 +486,9 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "network revert",
-        "discards the staged host network configuration — could cut the node off the network; not exercised live",
+        "discards the staged host network configuration — covered live by `e2e --mutate`, which reverts its own staged bridge changes",
         "pve node network revert --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=True, live_covered=True,
     )
 
     # The apt-database refresh runs apt-get update on the host (network I/O and
@@ -611,14 +610,16 @@ def run(ctx: Ctx) -> None:
         "pve node dns set --node <node> --search <domain>",
         isolation=True, live_covered=True,
     )
-    # Replacing /etc/hosts wholesale could break host name resolution on the
-    # shared lab, and changing the node's subscription state (set/refresh/delete)
-    # affects licensing — neither is exercised live.
+    # /etc/hosts is covered live by `e2e --mutate`: it reads the current file
+    # plus its digest and writes the identical bytes back under that digest
+    # guard — a no-op replace that leaves the file exactly as found. Changing
+    # the node's subscription state (set/refresh/delete) affects licensing, so
+    # those stay deferred.
     ctx.defer(
         "hosts set",
-        "replaces the whole /etc/hosts file — could break host name resolution; not exercised live",
-        "pve node hosts set --node <node> --data <content> --yes",
-        isolation=False, live_covered=False,
+        "replaces the whole /etc/hosts file — covered live by `e2e --mutate`, which writes the current content back under a digest guard (no-op)",
+        "pve node hosts set --node <node> --data <content> --digest <digest> --yes",
+        isolation=True, live_covered=True,
     )
     # The subscription verbs change the node's licensing state. Each is gated
     # behind --yes and covered by a unit test (guard plus argument contract).

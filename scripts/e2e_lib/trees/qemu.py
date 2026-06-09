@@ -292,8 +292,9 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "template",
-        "converts a VM into a template — irreversible (it would destroy the "
-        "reusable isolated VM); not exercised live; covered by unit tests",
+        "converts a VM into a template — irreversible; covered live by `e2e "
+        "--mutate` against a dedicated single-purpose isolated VM that is "
+        "templated and then destroyed",
         "pve qemu template <vmid> --yes",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
