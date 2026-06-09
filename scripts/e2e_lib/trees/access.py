@@ -163,25 +163,23 @@ def run(ctx: Ctx) -> None:
               isolation=True, live_covered=True)
     # Second-factor enrollment/edits hit /access/tfa/{userid}, which the PVE API
     # makes unavailable to API-token auth ("URI not available with API token, need
-    # proper ticket"); enrollment additionally requires the operator's password.
-    # The e2e suite authenticates with a token, so it physically cannot exercise
-    # these — covered by unit tests. (The operator password and factor material
-    # are read without echo and never logged by the CLI.)
+    # proper ticket"). The mutate phase covers these by opening a real password
+    # -login session for a throwaway pve-realm user and self-administering that
+    # user's own TOTP factor: enroll (current code computed offline), edit, then
+    # remove, after which the throwaway user is deleted. (The throwaway password
+    # and factor material are short-lived test values, never echoed or logged.)
     ctx.defer("tfa create",
-              "enrolls a second factor — the /access/tfa endpoint rejects API-token "
-              "auth (requires a login ticket) and needs the operator password; "
-              "not exercisable by the token-authenticated e2e suite — covered by unit tests",
+              "enrolls a second factor — covered live by `e2e --mutate`, which opens a "
+              "ticket session for a throwaway user and self-enrolls a TOTP factor",
               "pve access tfa create <user> --type totp",
-              isolation=False, live_covered=False)
+              isolation=True, live_covered=True)
     ctx.defer("tfa set",
-              "updates a tfa entry — the /access/tfa endpoint rejects API-token auth "
-              "(requires a login ticket) and needs the operator password; "
-              "not exercisable by the token-authenticated e2e suite — covered by unit tests",
+              "updates a tfa entry — covered live by `e2e --mutate`, which edits the "
+              "throwaway user's own TOTP entry over a ticket session",
               "pve access tfa set <user> <id> --enable",
-              isolation=False, live_covered=False)
+              isolation=True, live_covered=True)
     ctx.defer("tfa delete",
-              "removes a user's second factor — the /access/tfa endpoint rejects "
-              "API-token auth (requires a login ticket); not exercisable by the "
-              "token-authenticated e2e suite — covered by unit tests",
+              "removes a user's second factor — covered live by `e2e --mutate`, which "
+              "removes the throwaway user's own TOTP entry over a ticket session",
               "pve access tfa delete <user> <id> --yes",
-              isolation=False, live_covered=False)
+              isolation=True, live_covered=True)

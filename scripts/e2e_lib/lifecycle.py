@@ -32,8 +32,11 @@ from __future__ import annotations
 
 import json
 import base64
+import hashlib
+import hmac
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -1300,6 +1303,110 @@ def auth_lifecycle(r: Runner) -> None:
             sd = sd.get("data", sd) if isinstance(sd, dict) else {}
             if str(sd.get("Session", "")) != "none":
                 raise LifecycleError("auth logout did not clear the session")
+    finally:
+        if created:
+            r.undo(f"user delete {user}", "access", "user", "delete", user, "--yes")
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _totp_now(secret_b32: str) -> str:
+    """Compute the current 6-digit TOTP code for a base32 secret (RFC 6238,
+    SHA-1, 30-second step) using only the standard library — no network and no
+    third-party dependency. Used to prove possession of a freshly-minted TOTP
+    secret when self-enrolling a throwaway user's second factor."""
+    pad = "=" * ((8 - len(secret_b32) % 8) % 8)
+    key = base64.b32decode(secret_b32 + pad)
+    counter = struct.pack(">Q", int(time.time()) // 30)
+    digest = hmac.new(key, counter, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return f"{code % 1_000_000:06d}"
+
+
+def tfa_lifecycle(r: Runner) -> None:
+    """Enroll, edit, and remove a TOTP second factor for a throwaway user.
+
+    The /access/tfa write endpoints reject API-token auth ("not available with
+    API token, need proper ticket"), so this opens a real password-login session
+    for a fresh `pve-cli-tfaprobe@pve` user (NEVER root) in a scratch config and
+    drives the tfa verbs as that user self-administering their own second factor.
+    A throwaway TOTP secret is minted locally and the current code is computed
+    offline (RFC 6238) to satisfy the API's possession check on enroll. The user
+    — and with it every TFA entry — is deleted in the finally block, so the lab's
+    real users and their factors are never touched. The user's password and the
+    TOTP secret are short-lived test values, never real credentials.
+    """
+    print(BOLD("access: tfa enroll / set / delete (ticket session, throwaway user)"))
+    user = Isolation.NAME_PREFIX + "tfaprobe@pve"      # created on the pve realm
+    login_user = Isolation.NAME_PREFIX + "tfaprobe"    # bare id; realm sent separately
+    probe_pw = "pve-cli-e2e-pw"                          # throwaway, never a real secret
+    secret = "JBSWY3DPEHPK3PXP"                          # throwaway TOTP secret (test value)
+
+    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    host = ""
+    if show.rc == 0:
+        data = show.json()
+        data = data.get("data", data) if isinstance(data, dict) else {}
+        host = str(data.get("Host", ""))
+    if not host:
+        for verb in ("tfa create", "tfa set", "tfa delete"):
+            r.cover_skip("access", verb, verb, "could not resolve target host")
+        return
+
+    scratch = tempfile.mkdtemp(prefix="pve-cli-e2e-tfa-")
+    cfg = os.path.join(scratch, "config.yml")
+    created = False
+    try:
+        create_user = r.pve("access", "user", "create", user, "--password", probe_pw,
+                            "--comment", "pve-cli tfa probe")
+        if create_user.rc != 0:
+            detail = (create_user.err.strip() or create_user.out.strip())[:200]
+            raise LifecycleError(f"tfa probe user create: {detail}")
+        created = True
+        print(f"  {GREEN('✓')} user create {user}")
+
+        # Scratch password-auth target + login → real session ticket for the
+        # throwaway user (setup only; target/auth verbs are covered elsewhere).
+        r.pve_raw("--config", cfg, "api", "target", "tfaprobe", "add",
+                  "--host", host, "--username", login_user, "--realm", "pve",
+                  "--token", "x=y", "--tls-insecure")
+        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--target", "tfaprobe",
+                  "--username", login_user, "--secret", probe_pw)
+        login = r.pve_raw("--config", cfg, "api", "auth", "login", "--target", "tfaprobe")
+        if login.rc != 0:
+            detail = (login.err.strip() or login.out.strip())[:200]
+            raise LifecycleError(f"tfa probe login: {detail}")
+
+        # Enroll a TOTP factor: the API verifies --value against the secret in the
+        # otpauth URI, so compute the current code locally. The entry id comes back
+        # in the create response and drives the set/delete verbs.
+        totp_uri = f"otpauth://totp/pvecli:{login_user}?secret={secret}&issuer=pvecli"
+        create = r.step_raw("access", "tfa create", "tfa create (totp, self-enroll)",
+                            "--config", cfg, "--target", "tfaprobe",
+                            "access", "tfa", "create", user, "--type", "totp",
+                            "--description", "pve-cli-e2e", "--totp", totp_uri,
+                            "--value", _totp_now(secret), "--password", probe_pw,
+                            json_out=True)
+        entry_id = ""
+        try:
+            cd = create.json()
+            if isinstance(cd, dict):
+                entry_id = str(cd.get("id", ""))
+        except ValueError:
+            entry_id = ""
+        if not entry_id:
+            r.cover_skip("access", "tfa set", "tfa set", "enroll returned no entry id")
+            r.cover_skip("access", "tfa delete", "tfa delete", "enroll returned no entry id")
+            return
+
+        r.step_raw("access", "tfa set", "tfa set (edit description)",
+                   "--config", cfg, "--target", "tfaprobe",
+                   "access", "tfa", "set", user, entry_id,
+                   "--description", "pve-cli-e2e (edited)", "--password", probe_pw)
+        r.step_raw("access", "tfa delete", "tfa delete (remove factor)",
+                   "--config", cfg, "--target", "tfaprobe",
+                   "access", "tfa", "delete", user, entry_id,
+                   "--password", probe_pw, "--yes")
     finally:
         if created:
             r.undo(f"user delete {user}", "access", "user", "delete", user, "--yes")
@@ -2898,6 +3005,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         role_lifecycle(r)
         print()
         auth_lifecycle(r)
+        print()
+        tfa_lifecycle(r)
         print()
         storage_lifecycle(r)
         print()

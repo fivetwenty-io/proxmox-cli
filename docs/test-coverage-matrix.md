@@ -66,7 +66,7 @@ swept clean before the next provisions.
 
 | Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred | n/a | uncovered |
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
-| `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 | 0 |
+| `access` | 39 | 9 | 8 | 28 | 0 | 0 | 0 | 0 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 | 0 |
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -78,9 +78,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **316** | **6** | **86** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **319** | **6** | **83** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **470** are exercised by at least one live suite, **86** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **473** are exercised by at least one live suite, **83** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -107,12 +107,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `access role get` | ◑ | ✓ |  |
 | `access role list` | ✓ | — |  |
 | `access role set` | — | ✓ |  |
-| `access tfa create` | — | — | deferred — enrolls a second factor — the /access/tfa endpoint rejects API-token auth (requires a login ticket) and needs the operator password; not exercisable by the token-authenticated e2e suite — covered by unit tests |
-| `access tfa delete` | — | — | deferred — removes a user's second factor — the /access/tfa endpoint rejects API-token auth (requires a login ticket); not exercisable by the token-authenticated e2e suite — covered by unit tests |
+| `access tfa create` | — | ✓ |  |
+| `access tfa delete` | — | ✓ |  |
 | `access tfa get` | ◑ | — |  |
 | `access tfa get-entry` | ◑ | — |  |
 | `access tfa list` | ✓ | — |  |
-| `access tfa set` | — | — | deferred — updates a tfa entry — the /access/tfa endpoint rejects API-token auth (requires a login ticket) and needs the operator password; not exercisable by the token-authenticated e2e suite — covered by unit tests |
+| `access tfa set` | — | ✓ |  |
 | `access tfa types` | ✓ | — |  |
 | `access tfa unlock` | — | ✓ |  |
 | `access user create` | — | ✓ |  |
