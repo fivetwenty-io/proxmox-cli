@@ -235,53 +235,51 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
     # Parameterised guest-agent sub-commands. Each needs a guest running the
-    # qemu-guest-agent daemon. The CLI can now enable the agent channel at create
-    # time (`qemu create --agent 1`), but bringing the daemon online is the wall:
-    # the available cloud images (Ubuntu noble) do not ship qemu-guest-agent, and
-    # the isolated e2e network has no internet uplink to apt-install it on first
-    # boot, so the agent never answers (verified: an agent=1 noble VM booted but
-    # `agent ping` never responded). Not exercisable by the isolated, offline
-    # suite — covered by unit tests.
+    # qemu-guest-agent daemon. The agent talks over a virtio-serial channel rather
+    # than the guest network, so the only requirement is an image that *contains*
+    # the daemon — the offline isolated network is irrelevant. The mutate phase
+    # bakes qemu-guest-agent into a copy of a cached cloud image with virt-customize
+    # over passwordless root SSH, imports it as the boot disk of an isolated
+    # throwaway VM (`--agent 1`, no NIC), waits for the agent to answer `ping`,
+    # exercises each verb, then destroys the VM and removes the baked image. They
+    # skip gracefully if the host is unreachable or lacks the imaging tooling.
     ctx.defer(
         "agent exec",
-        "runs an arbitrary command inside the guest — needs a running "
-        "qemu-guest-agent daemon, which no available image ships and the offline "
-        "isolated network cannot install; not exercisable live — covered by unit tests",
+        "runs an arbitrary command inside the guest — covered live by `e2e --mutate`, "
+        "which boots an isolated VM from an image with qemu-guest-agent baked in and "
+        "runs `agent exec id`",
         "pve qemu agent exec <vmid> --command 'id'",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent exec-status",
-        "polls a guest exec PID — needs a prior `agent exec` inside a guest "
-        "running qemu-guest-agent, which the offline isolated suite cannot bring "
-        "online; not exercisable live — covered by unit tests",
+        "polls a guest exec PID — covered live by `e2e --mutate`, which polls the PID "
+        "returned by the preceding `agent exec` on the baked-agent VM",
         "pve qemu agent exec-status <vmid> --pid <pid>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent file-read",
-        "reads a file from inside the guest — needs a running qemu-guest-agent "
-        "daemon, which no available image ships and the offline isolated network "
-        "cannot install; not exercisable live — covered by unit tests",
+        "reads a file from inside the guest — covered live by `e2e --mutate`, which "
+        "reads back the file written by `agent file-write` on the baked-agent VM",
         "pve qemu agent file-read <vmid> --file /etc/hostname",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent file-write",
-        "writes a file inside the guest filesystem — needs a running "
-        "qemu-guest-agent daemon, which no available image ships and the offline "
-        "isolated network cannot install; not exercisable live — covered by unit tests",
+        "writes a file inside the guest filesystem — covered live by `e2e --mutate`, "
+        "which writes a marker file on the baked-agent VM and reads it back",
         "pve qemu agent file-write <vmid> --file /tmp/probe --content x",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent set-user-password",
         "sets a guest user's password — secret-bearing (read from stdin, never "
-        "echoed or logged), guarded by --yes; needs a running qemu-guest-agent "
-        "daemon the offline isolated suite cannot bring online; not exercisable "
-        "live — covered by unit tests",
+        "echoed or logged), guarded by --yes; covered live by `e2e --mutate`, which "
+        "sets root's password on the disposable baked-agent VM via a stdin-piped "
+        "throwaway value",
         "pve qemu agent set-user-password <vmid> --username <user> --yes",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "cloudinit dump/update",

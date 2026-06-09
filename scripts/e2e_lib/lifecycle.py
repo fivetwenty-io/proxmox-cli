@@ -128,7 +128,8 @@ class Runner:
         self.timeout = timeout
         self.cov: list[Step] = []
 
-    def pve(self, *args: str, json_out: bool = False, node: bool = True) -> Cmd:
+    def pve(self, *args: str, json_out: bool = False, node: bool = True,
+            stdin: str | None = None) -> Cmd:
         argv = [self.binary, "--target", self.target, "--no-log"]
         if json_out:
             argv += ["-o", "json"]
@@ -136,7 +137,8 @@ class Runner:
             argv += ["--node", self.node]
         argv += list(args)
         try:
-            p = subprocess.run(argv, capture_output=True, text=True, timeout=self.timeout)
+            p = subprocess.run(argv, input=stdin, capture_output=True, text=True,
+                               timeout=self.timeout)
             return Cmd(p.returncode, p.stdout, p.stderr)
         except subprocess.TimeoutExpired:
             return Cmd(124, "", f"timed out after {self.timeout}s")
@@ -171,8 +173,10 @@ class Runner:
     # node=False suppresses the auto-injected `--node` for cluster-global verbs
     # whose command defines its own `--node` field flag (e.g. sdn controller).
     def step(self, guest: str, verb: str, label: str, *args: str,
-             json_out: bool = False, node: bool = True) -> Cmd:
-        return self._record(guest, verb, label, self.pve(*args, json_out=json_out, node=node))
+             json_out: bool = False, node: bool = True,
+             stdin: str | None = None) -> Cmd:
+        return self._record(guest, verb, label,
+                            self.pve(*args, json_out=json_out, node=node, stdin=stdin))
 
     # Like step(), but runs the binary verbatim (no --target/--node), for verbs
     # driven against a scratch `--config` file or an explicit --target.
@@ -1967,6 +1971,186 @@ def sdn_dns_lifecycle(r: Runner) -> None:
             print(f"  {YELLOW('·')} stop DNS stub {DIM('(cleanup: ' + tail + ')')}")
 
 
+# Candidate base cloud images to bake the guest agent into, newest-Ubuntu first.
+# The chosen image is copied to a pve-cli-named qcow2, has qemu-guest-agent
+# installed and enabled offline via virt-customize, and is imported as the boot
+# disk. Any image that boots a systemd Linux works; the list is just where lab
+# nodes commonly cache cloud images.
+_AGENT_BASE_IMAGES = (
+    "/var/lib/vz/template/iso/noble-server-cloudimg-amd64.img",
+    "/var/lib/vz/template/iso/ubuntu-noble-cloudimg.img",
+    "/var/lib/vz/template/iso/noble-amd64.img",
+)
+# A throwaway password set on the guest's root user via `agent set-user-password`.
+# It is piped over stdin (never an argv) and is only ever applied to a disposable
+# VM that is destroyed at the end of the run, so it is a test value, not a secret.
+_AGENT_TEST_PASSWORD = "pve-cli-e2e-throwaway"
+
+
+def qemu_agent_lifecycle(r: Runner) -> None:
+    """Exercise the parameterised guest-agent verbs against a real running agent.
+
+    `qemu agent exec/exec-status/file-read/file-write/set-user-password` each need
+    a guest running qemu-guest-agent, which the stock cloud images do not ship and
+    the offline isolated network cannot install at boot. The agent talks over a
+    virtio-serial channel (not the guest network), so the only requirement is an
+    image that *contains* the daemon. This stages one over passwordless root SSH:
+    a cached cloud image is copied, qemu-guest-agent is installed and enabled into
+    it offline with virt-customize, and it is imported as the boot disk of an
+    isolated throwaway VM (`--agent 1`, no NIC). Once the agent answers `ping`, the
+    five verbs run, then the VM and the baked image are removed. If the host is
+    unreachable, lacks the tooling/base image, or the agent never comes up, all
+    five verbs are recorded as skips rather than failing the suite.
+    """
+    print(BOLD("qemu: guest-agent exec/file/password (baked agent image, isolated VM)"))
+    verbs = ("agent exec", "agent exec-status", "agent file-read",
+             "agent file-write", "agent set-user-password")
+
+    def skip_all(why: str) -> None:
+        for v in verbs:
+            r.cover_skip("qemu", v, v, why)
+
+    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    host = ""
+    if show.rc == 0:
+        data = show.json()
+        data = data.get("data", data) if isinstance(data, dict) else {}
+        host = str(data.get("Host", ""))
+    if not host:
+        skip_all("could not resolve node host for SSH"); return
+    if _ssh_node(host, "true")[0] != 0:
+        skip_all("SSH to host unavailable"); return
+    # The build needs qemu-img + virt-customize on the host. Probe each with a
+    # single-token `command -v` (argv joined by SSH stays a simple command).
+    if (_ssh_node(host, "command", "-v", "qemu-img")[0] != 0
+            or _ssh_node(host, "command", "-v", "virt-customize")[0] != 0):
+        skip_all("host lacks qemu-img/virt-customize to bake an agent image"); return
+    # Pick the first cached base image that exists on the host.
+    base = ""
+    for cand in _AGENT_BASE_IMAGES:
+        if _ssh_node(host, "test", "-f", cand)[0] == 0:
+            base = cand
+            break
+    if not base:
+        skip_all("no cached cloud image on host to bake the agent into"); return
+
+    vmid = _next_id(r)
+    print(DIM(f"  vmid={vmid}"))
+    work = f"/var/lib/vz/template/iso/{Isolation.NAME_PREFIX}agent-{vmid}.qcow2"
+    enable_sh = f"/tmp/{Isolation.NAME_PREFIX}agent-enable-{vmid}.sh"
+    created = False
+    try:
+        # Bake qemu-guest-agent into a private copy of the base image. virt-customize
+        # runs the guest's package manager inside a libguestfs appliance that uses
+        # the host network, so the host (not the guest) needs egress. Each remote
+        # command is a spaceless argv to survive SSH's argv-joining; the enable
+        # command (which contains a space) is staged as a script and run via --run.
+        conv = _ssh_node(host, "qemu-img", "convert", "-O", "qcow2", base, work, timeout=300)
+        if conv[0] != 0:
+            skip_all((conv[2].strip().splitlines() or ["could not copy base image"])[-1][:80])
+            return
+        created = True  # the work file now exists; clean it up regardless
+        wr = _ssh_node(host, "tee", enable_sh,
+                       stdin="systemctl enable qemu-guest-agent.service\n")
+        if wr[0] != 0:
+            skip_all((wr[2].strip().splitlines() or ["could not stage enable script"])[-1][:80])
+            return
+        cust = _ssh_node(host, "env", "LIBGUESTFS_BACKEND=direct", "virt-customize",
+                         "-a", work, "--install", "qemu-guest-agent",
+                         "--run", enable_sh, timeout=300)
+        _ssh_node(host, "rm", "-f", enable_sh)
+        if cust[0] != 0:
+            skip_all((cust[2].strip().splitlines() or ["virt-customize failed"])[-1][:80])
+            return
+
+        # Provision the isolated VM with the baked disk imported as scsi0 and the
+        # agent channel enabled. The API rejects `import-from=<arbitrary path>` for
+        # non-root@pam callers ("Only root can pass arbitrary filesystem paths"),
+        # and the suite authenticates with an API token, so the VM is created on the
+        # node host as root over SSH — the same fixture-staging pattern used for the
+        # import-metadata OVF and the SDN DNS stub. This is setup, not a coverage
+        # target (create is covered by vm_lifecycle); the five agent verbs below are
+        # the coverage targets and run through the real CLI against the running
+        # agent. A provisioning failure skips the verbs rather than aborting the suite.
+        crt = _ssh_node(host, "qm", "create", str(vmid),
+                        "--name", Isolation.NAME_PREFIX + "agent",
+                        "--memory", "1024", "--cores", "1", "--scsihw", "virtio-scsi-pci",
+                        "--scsi0", f"{ROOTDIR_STORAGE}:0,import-from={work}",
+                        "--boot", "order=scsi0", "--ostype", "l26", "--agent", "1",
+                        "--pool", Isolation.POOL, "--tags", Isolation.TAG, timeout=300)
+        if crt[0] != 0:
+            skip_all((crt[1].strip().splitlines() + crt[2].strip().splitlines()
+                      or ["VM create/import failed"])[-1][:120])
+            return
+        created = True
+        start = _ssh_node(host, "qm", "start", str(vmid), timeout=120)
+        if start[0] != 0:
+            skip_all((start[2].strip().splitlines() or ["VM start failed"])[-1][:120])
+            return
+
+        # Poll for the guest agent to answer ping (cloud image boots in ~60-90s).
+        print(DIM("  waiting for guest agent to come up (up to 180s)..."))
+        up = False
+        for _ in range(60):
+            if r.pve("qemu", "agent", vmid, "ping").rc == 0:
+                up = True
+                break
+            time.sleep(3)
+        if not up:
+            skip_all("guest agent did not answer ping within 180s"); return
+        print(f"  {GREEN('✓')} guest agent is up")
+
+        # exec a command, then poll its exit status via the returned pid.
+        ex = r.step("qemu", "agent exec", f"agent exec id on {vmid}",
+                    "qemu", "agent", "exec", vmid, "--command", "id", json_out=True)
+        pid = ""
+        try:
+            ed = ex.json()
+            ed = ed.get("data", ed) if isinstance(ed, dict) else {}
+            pid = str(ed.get("pid", "") or "")
+        except ValueError:
+            pid = ""
+        if pid:
+            r.step("qemu", "agent exec-status", f"agent exec-status pid {pid} on {vmid}",
+                   "qemu", "agent", "exec-status", vmid, "--pid", pid, json_out=True)
+        else:
+            r.cover_skip("qemu", "agent exec-status", "agent exec-status",
+                         "agent exec returned no pid to poll")
+        # file-write then file-read the same path: a round-trip through the guest fs.
+        marker = "pve-cli-e2e"
+        guest_file = "/tmp/pve-cli-e2e-probe"
+        r.step("qemu", "agent file-write", f"agent file-write {guest_file} on {vmid}",
+               "qemu", "agent", "file-write", vmid, "--file", guest_file,
+               "--content", marker)
+        rd = r.step("qemu", "agent file-read", f"agent file-read {guest_file} on {vmid}",
+                    "qemu", "agent", "file-read", vmid, "--file", guest_file, json_out=True)
+        if marker not in rd.out:
+            raise LifecycleError(f"agent file-read did not return the written marker for VM {vmid}")
+        # set-user-password for root: the password is piped over stdin so it never
+        # appears in an argv, the process table, or this suite's output.
+        r.step("qemu", "agent set-user-password", f"agent set-user-password root on {vmid}",
+               "qemu", "agent", "set-user-password", vmid, "--username", "root", "--yes",
+               stdin=_AGENT_TEST_PASSWORD + "\n")
+    finally:
+        # Tear the VM down on the host as root (symmetric with the qm create above;
+        # the disk it imported is owned by root). stop is best-effort, then destroy
+        # purges the config and disk.
+        if created:
+            _ssh_node(host, "qm", "stop", str(vmid), timeout=60)
+            dz = _ssh_node(host, "qm", "destroy", str(vmid), "--purge", timeout=120)
+            if dz[0] == 0:
+                print(f"  {GREEN('✓')} destroy agent VM {vmid}")
+            else:
+                tail = (dz[2].strip().splitlines() or ["failed"])[-1][:80]
+                print(f"  {YELLOW('·')} destroy agent VM {vmid} {DIM('(cleanup: ' + tail + ')')}")
+        rc, _, err = _ssh_node(host, "rm", "-f", work, enable_sh)
+        if rc == 0:
+            print(f"  {GREEN('✓')} rm baked agent image")
+        else:
+            tail = (err.strip().splitlines() or ["failed"])[-1][:80]
+            print(f"  {YELLOW('·')} rm baked agent image {DIM('(cleanup: ' + tail + ')')}")
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3342,6 +3526,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
             vm_lifecycle(r)
             print()
             qemu_template_lifecycle(r)
+            print()
+            qemu_agent_lifecycle(r)
             print()
         if not skip_ct:
             ostemplate = _ensure_template(r)

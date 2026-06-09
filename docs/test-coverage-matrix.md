@@ -73,14 +73,14 @@ swept clean before the next provisions.
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
 | `node` | 138 | 1 | 59 | 28 | 0 | 55 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `qemu` | 59 | 1 | 12 | 46 | 1 | 6 | 0 | 0 |
+| `qemu` | 59 | 1 | 12 | 51 | 1 | 1 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **324** | **6** | **78** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **329** | **6** | **73** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **478** are exercised by at least one live suite, **78** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **483** are exercised by at least one live suite, **73** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -521,11 +521,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `qemu agent` | — | ✓ |  |
-| `qemu agent exec` | — | — | deferred — runs an arbitrary command inside the guest — needs a running qemu-guest-agent daemon, which no available image ships and the offline isolated network cannot install; not exercisable live — covered by unit tests |
-| `qemu agent exec-status` | — | — | deferred — polls a guest exec PID — needs a prior `agent exec` inside a guest running qemu-guest-agent, which the offline isolated suite cannot bring online; not exercisable live — covered by unit tests |
-| `qemu agent file-read` | — | — | deferred — reads a file from inside the guest — needs a running qemu-guest-agent daemon, which no available image ships and the offline isolated network cannot install; not exercisable live — covered by unit tests |
-| `qemu agent file-write` | — | — | deferred — writes a file inside the guest filesystem — needs a running qemu-guest-agent daemon, which no available image ships and the offline isolated network cannot install; not exercisable live — covered by unit tests |
-| `qemu agent set-user-password` | — | — | deferred — sets a guest user's password — secret-bearing (read from stdin, never echoed or logged), guarded by --yes; needs a running qemu-guest-agent daemon the offline isolated suite cannot bring online; not exercisable live — covered by unit tests |
+| `qemu agent exec` | — | ✓ |  |
+| `qemu agent exec-status` | — | ✓ |  |
+| `qemu agent file-read` | — | ✓ |  |
+| `qemu agent file-write` | — | ✓ |  |
+| `qemu agent set-user-password` | — | ✓ |  |
 | `qemu clone` | — | ✓ |  |
 | `qemu cloudinit dump` | — | ✓ |  |
 | `qemu cloudinit pending` | ◑ | ✓ |  |
