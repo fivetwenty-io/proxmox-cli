@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 24 | 0 | 59 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 28 | 0 | 55 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 46 | 1 | 6 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **312** | **6** | **90** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **316** | **6** | **86** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **466** are exercised by at least one live suite, **90** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **470** are exercised by at least one live suite, **86** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -372,7 +372,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node apt repositories add` | — | — | deferred — adds a standard APT repository to the node's sources; not exercised live |
 | `node apt repositories enable` | — | — | deferred — enables or disables a configured APT repository on the node; not exercised live |
 | `node apt repositories list` | ◑ | — |  |
-| `node apt update` | — | — | deferred — refreshes the node's APT database (network I/O, apt state churn); not exercised live |
+| `node apt update` | — | ✓ |  |
 | `node apt versions` | ◑ | — |  |
 | `node capabilities qemu cpu` | ◑ | — |  |
 | `node capabilities qemu cpu-flags` | ◑ | — |  |
@@ -461,8 +461,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node network revert` | — | ✓ |  |
 | `node network set` | — | ✓ |  |
 | `node oci pull` | — | — | deferred — downloads an OCI image into a storage — leaves an uncleanable artifact on lab storage; not exercised live; covered by unit tests |
-| `node oci tags` | — | — | deferred — lists the tags of a remote OCI reference (needs registry access and a valid reference); not exercised live; covered by unit tests |
-| `node query-url-metadata` | — | — | deferred — fetches metadata from an external URL via HTTP HEAD (needs outbound HTTP from the node; the local pveproxy API does not support HEAD); not exercised live to avoid a network-reachability dependency |
+| `node oci tags` | — | ✓ |  |
+| `node query-url-metadata` | — | ✓ |  |
 | `node replication list` | ◑ | — |  |
 | `node replication log` | ◑ | — |  |
 | `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
@@ -492,7 +492,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node subscription delete` | — | — | deferred — removes the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
 | `node subscription get` | ◑ | — |  |
 | `node subscription set` | — | — | deferred — sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
-| `node subscription update` | — | — | deferred — refreshes the node's subscription status against the licensing server; not exercised live |
+| `node subscription update` | — | ✓ |  |
 | `node suspendall` | — | ✓ |  |
 | `node syslog` | ◑ | — |  |
 | `node task list` | ◑ | — |  |

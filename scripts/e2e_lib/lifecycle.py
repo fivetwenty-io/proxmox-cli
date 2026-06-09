@@ -1731,8 +1731,12 @@ def node_system_lifecycle(r: Runner) -> None:
     configuration is left exactly as found. /etc/hosts is rewritten with its own
     current content under a digest guard (a no-op replace), and the host network
     verbs are exercised staged-only and then reverted, so neither is ever applied
-    to the live node. The subscription write verbs are NOT exercised here —
-    changing the subscription affects licensing on the shared lab.
+    to the live node. A handful of read-like egress refresh verbs are also run
+    here — apt update, oci tags, query-url-metadata, and subscription update —
+    none of which changes a guest or rewrites node config; each skips cleanly if
+    its remote endpoint is unreachable. The subscription set/delete write verbs
+    are NOT exercised here — changing the subscription key affects licensing on
+    the shared lab.
     """
     print(BOLD("node: system config (time zone + DNS, set-to-self, reversible)"))
 
@@ -1826,6 +1830,35 @@ def node_system_lifecycle(r: Runner) -> None:
                "node", "network", "delete", netif, "--yes")
     r.step("node", "network revert", "network revert (discard staged)",
            "node", "network", "revert", "--yes")
+
+    # ---- egress reads: refresh/inspect verbs that reach off-node -------------
+    # These contact the outside world (an OCI registry, an arbitrary URL, the
+    # Debian/Proxmox mirrors, the subscription server). None of them changes a
+    # guest or rewrites node config: apt update only refreshes the package
+    # database, subscription update only re-reads the current key's status (it
+    # does NOT set or clear the key), and the OCI/URL probes are pure reads.
+    # They are exercised with soft_step so that a transient loss of outbound
+    # connectivity records a SKIP rather than failing the whole suite.
+    net_skip = (
+        "can't connect", "could not connect", "connection refused",
+        "could not resolve", "name or service not known", "no such host",
+        "temporary failure", "network is unreachable", "no route to host",
+        "timed out", "timeout", "i/o timeout", "failed to fetch",
+        "tls handshake", "503", "502", "504",
+    )
+    r.soft_step("node", "apt update", "apt update (refresh package database)",
+                "node", "apt", "update",
+                skip_markers=net_skip, skip_reason="no outbound mirror access")
+    r.soft_step("node", "oci tags", "oci tags (docker.io/library/alpine)",
+                "node", "oci", "tags", "--reference", "docker.io/library/alpine",
+                skip_markers=net_skip, skip_reason="OCI registry unreachable")
+    r.soft_step("node", "query-url-metadata", "query-url-metadata (download.proxmox.com)",
+                "node", "query-url-metadata", "--url", "https://download.proxmox.com/",
+                "--verify-certificates=false",
+                skip_markers=net_skip, skip_reason="external URL unreachable")
+    r.soft_step("node", "subscription update", "subscription update (refresh status)",
+                "node", "subscription", "update", "--force", "--yes",
+                skip_markers=net_skip, skip_reason="subscription server unreachable")
 
     # ---- DNS: guarded on a configured search domain (--search is required) --
     dns_get = r.step("node", "dns get", "dns get", "node", "dns", "get", json_out=True)

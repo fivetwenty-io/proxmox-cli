@@ -405,26 +405,24 @@ def run(ctx: Ctx) -> None:
         ctx.check("capabilities qemu cpu-flags", "node", "capabilities", "qemu", "cpu-flags",
                   node=n, validate=is_list)
 
-        # OCI image handling: `oci tags` queries a registry (network egress to
-        # an external registry that may be unreachable from the lab) and `oci
+        # OCI image handling: `oci tags` queries a registry (network egress) and
+        # is exercised live by the mutate phase against a public reference; `oci
         # pull` writes an image artifact to a storage with no CLI delete verb to
-        # clean it up — both are exercised by --help only and pull is deferred.
+        # clean it up, so it stays deferred and is exercised by --help only.
         ctx.check("oci tags --help", "node", "oci", "tags", "--help", fmt="")
         ctx.check("oci pull --help", "node", "oci", "pull", "--help", fmt="")
 
         # query-url-metadata: asks the node to fetch a remote URL and report its
-        # metadata (size, mime type, filename) via an HTTP HEAD. The node's own
-        # pveproxy API rejects HEAD (501), and the lab runs no other local HTTP
-        # server, so the only working target is an external URL — a network
-        # reachability dependency the read-only sweep deliberately avoids. Left
-        # deferred; the flag/error contract is covered by unit tests.
+        # metadata (size, mime type, filename) via an HTTP HEAD. The only working
+        # target is an external URL, so it is exercised live by the mutate phase
+        # against a stable public URL and skips if that URL is unreachable.
         ctx.defer(
             "query-url-metadata",
-            "fetches metadata from an external URL via HTTP HEAD (needs outbound "
-            "HTTP from the node; the local pveproxy API does not support HEAD); "
-            "not exercised live to avoid a network-reachability dependency",
+            "fetches metadata from an external URL via HTTP HEAD — covered live by "
+            "`e2e --mutate`, which points it at a stable public URL (skips if that "
+            "URL is unreachable)",
             "pve node query-url-metadata --node <node> --url https://example.com/image.iso",
-            isolation=False, live_covered=False,
+            isolation=False, live_covered=True,
         )
 
         # services state: read the runtime state of a known service on the node.
@@ -491,14 +489,15 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
 
-    # The apt-database refresh runs apt-get update on the host (network I/O and
-    # churns the node's package state on a shared lab), and the repository
-    # verbs rewrite the node's APT sources — neither is exercised live.
+    # The apt-database refresh runs apt-get update on the host — a read-like
+    # refresh that touches no guest and rewrites no node config. It is exercised
+    # live by `e2e --mutate`. The repository verbs (which rewrite the node's APT
+    # sources) stay deferred.
     ctx.defer(
         "apt update",
-        "refreshes the node's APT database (network I/O, apt state churn); not exercised live",
+        "refreshes the node's APT database — covered live by `e2e --mutate`, which runs it as a read-like refresh (skips if no mirror access)",
         "pve node apt update --node <node>",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     # The repository verbs rewrite the node's APT sources. Each is gated behind
     # --yes and covered by a unit test (guard plus argument contract). Deferred
@@ -597,9 +596,9 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "oci tags",
-        "lists the tags of a remote OCI reference (needs registry access and a valid reference); not exercised live; covered by unit tests",
+        "lists the tags of a remote OCI reference — covered live by `e2e --mutate`, which queries a public registry reference (skips if the registry is unreachable)",
         "pve node oci tags <reference> --node <node>",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
 
     # The dns and time write verbs are reversible (get -> set-same -> restore)
@@ -621,9 +620,10 @@ def run(ctx: Ctx) -> None:
         "pve node hosts set --node <node> --data <content> --digest <digest> --yes",
         isolation=True, live_covered=True,
     )
-    # The subscription verbs change the node's licensing state. Each is gated
-    # behind --yes and covered by a unit test (guard plus argument contract).
-    # Deferred one verb at a time so the coverage matrix records every leaf.
+    # `subscription update` only re-reads the current key's status (no licensing
+    # change), so it is exercised live by the mutate phase. The set/delete verbs
+    # do change the node's licensing state — each is gated behind --yes, covered
+    # by a unit test, and stays deferred so the matrix records every leaf.
     ctx.defer(
         "subscription set",
         "sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests",
@@ -632,9 +632,11 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "subscription update",
-        "refreshes the node's subscription status against the licensing server; not exercised live",
+        "refreshes the node's subscription status against the licensing server — "
+        "covered live by `e2e --mutate`; it re-reads the current key's status and "
+        "does not set or clear the key (skips if the server is unreachable)",
         "pve node subscription update --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "subscription delete",
