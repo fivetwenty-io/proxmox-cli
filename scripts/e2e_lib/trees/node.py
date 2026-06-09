@@ -515,73 +515,78 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # Disk initialization formats physical media and is irreversible; it is
-    # never exercised live on the shared lab (it would destroy the node's
-    # storage). The CLI gates each verb behind --yes, and each is covered by a
-    # unit test (--yes guard plus argument contract). Deferred one verb at a time
-    # so the coverage matrix records every leaf (create lvm is reachable via its
-    # --help check above).
+    # Disk initialization formats physical media. The lifecycle runner exercises
+    # the create/init-gpt and delete verbs live against a single dedicated spare
+    # NVMe pinned by serial number: it resolves the device from `disks list`, hard
+    # asserts the disk is unused (used in ('', None)) before touching it, then runs
+    # each create -> assert -> paired delete --cleanup-disks round-trip so the disk
+    # is returned to its pristine state. If the spare is absent, in use, or the
+    # host is unreachable the runner skips every verb instead of touching real
+    # storage. See node_disks_lifecycle in scripts/e2e_lib/lifecycle.py.
     ctx.defer(
         "disks create lvm",
-        "formats a disk into an LVM volume group — irreversible; not exercised live; covered by unit tests",
+        "create -> delete round-trip on a dedicated spare NVMe (pinned by serial, asserted unused)",
         "pve node disks create lvm --node <node> --device /dev/sdX --name vg --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks create directory",
-        "formats a disk and mounts it as a directory storage — irreversible; not exercised live",
+        "create -> delete round-trip on a dedicated spare NVMe (formats ext4, mounts, then unmounts and removes)",
         "pve node disks create directory --node <node> --device /dev/sdX --name backups --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks create lvmthin",
-        "formats a disk into an LVM-thin pool — irreversible; not exercised live",
+        "create -> delete round-trip on a dedicated spare NVMe (pinned by serial, asserted unused)",
         "pve node disks create lvmthin --node <node> --device /dev/sdX --name thin --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks create zfs",
-        "formats one or more disks into a ZFS pool — irreversible; not exercised live",
+        "create -> delete round-trip on a dedicated spare NVMe (single-vdev pool, asserted unused)",
         "pve node disks create zfs --node <node> --devices /dev/sdX --name tank --raidlevel single --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks init-gpt",
-        "writes a fresh GPT partition table to a disk — irreversible; not exercised live",
+        "writes a fresh GPT label to the dedicated spare NVMe (asserted unused) before the create round-trips",
         "pve node disks init-gpt --node <node> --disk /dev/sdX --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks wipe",
-        "wipes all data and partition tables from a disk — irreversible; not exercised live",
+        "BLOCKED: /nodes/{node}/disks/wipedisk is root@pam-only and rejects the API token "
+        "('user != root@pam'), like storage volume copy and cluster acme account; not invokable by the suite",
         "pve node disks wipe --node <node> --disk /dev/sdX --yes",
         isolation=False, live_covered=False,
     )
-    # Disk sub-type delete verbs destroy the underlying VG, pool, or ZFS dataset
-    # and cannot be reversed without reinitializing storage from scratch.
+    # Disk sub-type delete verbs destroy the underlying VG, pool, or ZFS dataset.
+    # Each is exercised live as the teardown half of its create round-trip on the
+    # dedicated spare NVMe (see node_disks_lifecycle), with --cleanup-disks so the
+    # spare is freed for the next type.
     ctx.defer(
         "disks delete directory",
-        "removes a mounted directory storage from the host — irreversible; not exercised live",
+        "delete half of the directory create round-trip on the dedicated spare NVMe (unmounts, removes mount unit and config)",
         "pve node disks delete directory <path> --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks delete lvm",
-        "removes an LVM volume group from the host — irreversible; not exercised live",
+        "delete half of the lvm create round-trip on the dedicated spare NVMe (--cleanup-disks frees the device)",
         "pve node disks delete lvm <vg> --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks delete lvmthin",
-        "removes an LVM thin pool from a VG — irreversible; not exercised live",
+        "delete half of the lvmthin create round-trip on the dedicated spare NVMe (--volume-group, --cleanup-disks)",
         "pve node disks delete lvmthin <pool> --volume-group <vg> --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "disks delete zfs",
-        "destroys a ZFS pool — irreversible, destroys all data on the pool; not exercised live",
+        "delete half of the zfs create round-trip on the dedicated spare NVMe (--cleanup-disks, host-side GPT zap on teardown)",
         "pve node disks delete zfs <pool> --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
 
     # Pulling an OCI image downloads it from a registry into a node storage as an

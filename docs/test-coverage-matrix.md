@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 38 | 0 | 45 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 47 | 0 | 36 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 51 | 1 | 1 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **339** | **6** | **63** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **348** | **6** | **54** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **493** are exercised by at least one live suite, **63** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **502** are exercised by at least one live suite, **54** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -417,23 +417,23 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node cert custom upload` | — | — | deferred — replaces the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
 | `node console` | — | — | deferred — opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests |
-| `node disks create directory` | — | — | deferred — formats a disk and mounts it as a directory storage — irreversible; not exercised live |
-| `node disks create lvm` | — | — | deferred — formats a disk into an LVM volume group — irreversible; not exercised live; covered by unit tests |
-| `node disks create lvmthin` | — | — | deferred — formats a disk into an LVM-thin pool — irreversible; not exercised live |
-| `node disks create zfs` | — | — | deferred — formats one or more disks into a ZFS pool — irreversible; not exercised live |
-| `node disks delete directory` | — | — | deferred — removes a mounted directory storage from the host — irreversible; not exercised live |
-| `node disks delete lvm` | — | — | deferred — removes an LVM volume group from the host — irreversible; not exercised live |
-| `node disks delete lvmthin` | — | — | deferred — removes an LVM thin pool from a VG — irreversible; not exercised live |
-| `node disks delete zfs` | — | — | deferred — destroys a ZFS pool — irreversible, destroys all data on the pool; not exercised live |
+| `node disks create directory` | — | ✓ |  |
+| `node disks create lvm` | — | ✓ |  |
+| `node disks create lvmthin` | — | ✓ |  |
+| `node disks create zfs` | — | ✓ |  |
+| `node disks delete directory` | — | ✓ |  |
+| `node disks delete lvm` | — | ✓ |  |
+| `node disks delete lvmthin` | — | ✓ |  |
+| `node disks delete zfs` | — | ✓ |  |
 | `node disks get zfs` | ◑ | — |  |
-| `node disks init-gpt` | — | — | deferred — writes a fresh GPT partition table to a disk — irreversible; not exercised live |
+| `node disks init-gpt` | — | ✓ |  |
 | `node disks list` | ◑ | — |  |
 | `node disks ls directory` | ◑ | — |  |
 | `node disks ls lvm` | ◑ | — |  |
 | `node disks ls lvmthin` | ◑ | — |  |
 | `node disks ls zfs` | ◑ | — |  |
 | `node disks smart` | ◑ | — |  |
-| `node disks wipe` | — | — | deferred — wipes all data and partition tables from a disk — irreversible; not exercised live |
+| `node disks wipe` | — | — | deferred — BLOCKED: /nodes/{node}/disks/wipedisk is root@pam-only and rejects the API token ('user != root@pam'), like storage volume copy and cluster acme account; not invokable by the suite |
 | `node dns get` | ◑ | ✓ |  |
 | `node dns set` | — | ✓ |  |
 | `node exec` | — | ✓ |  |

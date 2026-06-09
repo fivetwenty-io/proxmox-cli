@@ -2428,6 +2428,166 @@ def node_services_lifecycle(r: Runner) -> None:
         r.undo(f"ensure {svc} running", "node", "services", "start", r.node, svc)
 
 
+# Serial number of the single 1.7T NVMe on the lab node reserved for destructive
+# disk tests. It is pinned by serial (stable across /dev/nvmeXn1 renumbering); the
+# current device path is resolved from `disks list` at run time. NOTHING else may
+# use this disk — the runner hard-asserts it is unused before writing to it.
+_DISKS_SPARE_SERIAL = "PHAX405409TE1P9BGN"
+# Isolation-prefixed storage IDs / pool names created and torn down on the spare.
+_DISKS_LVM = "pvecli-lvm"
+_DISKS_LVMTHIN = "pvecli-lvmthin"
+_DISKS_ZFS = "pvecli-zfs"
+_DISKS_DIR = "pvecli-dir"
+
+
+def _disks_resolve_spare(r: Runner) -> str:
+    """Return the device path of the dedicated spare NVMe, but only if it is unused.
+
+    Matches the reserved disk by serial number (the invariant that survives device
+    renumbering) and returns its current /dev/nvmeXn1 path. Returns "" if the serial
+    is absent or the disk reports any use (ZFS/LVM/partition/etc.), so the runner
+    never touches storage that is in service.
+    """
+    lst = r.pve("node", "disks", "list", json_out=True)
+    if lst.rc != 0:
+        return ""
+    try:
+        data = lst.json()
+    except ValueError:
+        return ""
+    rows = data.get("data", data) if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        return ""
+    for d in rows:
+        if not isinstance(d, dict) or d.get("serial") != _DISKS_SPARE_SERIAL:
+            continue
+        if d.get("used") not in (None, "", "0"):
+            return ""
+        dev = str(d.get("devpath") or "")
+        return dev if dev.startswith("/dev/nvme") else ""
+    return ""
+
+
+def _disks_host_cleanup(host: str, dev: str, short: str,
+                        leftover: list[tuple[str, str]]) -> None:
+    """Best-effort host-side teardown of the spare disk after the round-trips.
+
+    Force-removes any pool/storage a failed round-trip left behind, then zaps the
+    GPT/partition residue so the disk returns to a pristine, unused state. (The
+    `wipe` verb is root@pam-only and cannot run under the suite's token, so the
+    final zap is done over root SSH.) Every command is idempotent and ignores
+    errors — on the happy path only the zfs-delete GPT remnant needs clearing.
+    """
+    for kind, name in leftover:
+        if kind == "zfs":
+            _ssh_node(host, "zpool", "destroy", "-f", name)
+        elif kind in ("lvm", "lvmthin"):
+            _ssh_node(host, "vgremove", "-f", name)
+        elif kind == "dir":
+            _ssh_node(host, f"umount /mnt/pve/{name} 2>/dev/null; "
+                            f"rm -f /etc/systemd/system/mnt-pve-{name.replace('-', '*')}.mount; "
+                            f"sed -i '\\#{name}#d' /etc/pve/storage.cfg 2>/dev/null; "
+                            f"systemctl daemon-reload 2>/dev/null; true")
+    _ssh_node(host, f"zpool labelclear -f {dev} 2>/dev/null; "
+                    f"sgdisk --zap-all {dev} >/dev/null 2>&1; "
+                    f"wipefs -a {dev} >/dev/null 2>&1; "
+                    f"partprobe {dev} 2>/dev/null; true")
+
+
+def node_disks_lifecycle(r: Runner) -> None:
+    """Exercise init-gpt/create/delete for every storage type on one spare NVMe.
+
+    create lvm/lvmthin/zfs/directory and their paired deletes, plus init-gpt, run
+    live against a single disk reserved by serial. The disk is hard-asserted unused
+    — first via `disks list`, then via a host-side wipefs/holders/zpool probe —
+    before anything is written. Each create → delete --cleanup-disks round-trip
+    returns the disk to an unused state (the by-name delete also proves the create
+    materialised the pool); a finally block zaps any residue over root SSH. If the
+    spare is missing, in use, or the host is unreachable, every verb is cover-
+    skipped rather than touching real storage. `disks wipe` is root@pam-only and is
+    not invokable by the suite's API token, so it remains deferred.
+    """
+    print(BOLD("node: disks init-gpt/create/delete on dedicated spare NVMe"))
+    create_verbs = ("disks create lvm", "disks create lvmthin",
+                    "disks create zfs", "disks create directory")
+    del_verbs = ("disks delete lvm", "disks delete lvmthin",
+                 "disks delete zfs", "disks delete directory")
+    all_verbs = ("disks init-gpt",) + create_verbs + del_verbs
+
+    def skip_all(why: str) -> None:
+        for v in all_verbs:
+            r.cover_skip("node", v, v, why)
+
+    host = _resolve_host(r)
+    if not host or _ssh_node(host, "true")[0] != 0:
+        skip_all("node host not reachable for spare-disk safety checks")
+        return
+
+    dev = _disks_resolve_spare(r)
+    if not dev:
+        skip_all(f"dedicated spare NVMe (serial {_DISKS_SPARE_SERIAL}) absent or in use")
+        return
+
+    # Belt-and-suspenders: confirm the resolved device is physically pristine (no
+    # filesystem/partition signatures, no holders, not a member of any zpool/VG)
+    # before we touch it. Passed as one quoted string so the remote shell parses
+    # the &&/||/$() chain intact (ssh re-splits a multi-token argv on spaces).
+    short = dev.rsplit("/", 1)[-1]
+    probe = (f"( test -z \"$(lsblk -no FSTYPE {dev} 2>/dev/null | tr -d '[:space:]')\" "
+             f"&& test -z \"$(ls /sys/block/{short}/holders/ 2>/dev/null)\" "
+             f"&& test -z \"$(ls -d /sys/block/{short}/{short}p* 2>/dev/null)\" "
+             f"&& ! zpool status 2>/dev/null | grep -q {short} "
+             f"&& ! pvs 2>/dev/null | grep -q {short} "
+             f"&& echo SPARE_OK ) || echo SPARE_DIRTY")
+    pr = _ssh_node(host, probe)
+    if "SPARE_OK" not in (pr[1] + pr[2]):
+        skip_all(f"spare NVMe {dev} failed host-side cleanliness probe")
+        return
+
+    print(DIM(f"  device={dev} (serial {_DISKS_SPARE_SERIAL})"))
+    leftover: list[tuple[str, str]] = []
+    try:
+        r.step("node", "disks init-gpt", f"init-gpt {dev}",
+               "node", "disks", "init-gpt", "--disk", dev, "-y")
+
+        r.step("node", "disks create lvm", f"create lvm {_DISKS_LVM}",
+               "node", "disks", "create", "lvm", "--device", dev, "--name", _DISKS_LVM, "-y")
+        leftover.append(("lvm", _DISKS_LVM))
+        r.step("node", "disks delete lvm", f"delete lvm {_DISKS_LVM}",
+               "node", "disks", "delete", "lvm", _DISKS_LVM, "--cleanup-disks", "-y")
+        leftover.pop()
+
+        r.step("node", "disks create lvmthin", f"create lvmthin {_DISKS_LVMTHIN}",
+               "node", "disks", "create", "lvmthin", "--device", dev, "--name", _DISKS_LVMTHIN, "-y")
+        leftover.append(("lvmthin", _DISKS_LVMTHIN))
+        r.step("node", "disks delete lvmthin", f"delete lvmthin {_DISKS_LVMTHIN}",
+               "node", "disks", "delete", "lvmthin", _DISKS_LVMTHIN,
+               "--volume-group", _DISKS_LVMTHIN, "--cleanup-disks", "-y")
+        leftover.pop()
+
+        r.step("node", "disks create directory", f"create directory {_DISKS_DIR}",
+               "node", "disks", "create", "directory", "--device", dev,
+               "--name", _DISKS_DIR, "--filesystem", "ext4", "-y")
+        leftover.append(("dir", _DISKS_DIR))
+        r.step("node", "disks delete directory", f"delete directory {_DISKS_DIR}",
+               "node", "disks", "delete", "directory", _DISKS_DIR,
+               "--cleanup-config", "--cleanup-disks", "-y")
+        leftover.pop()
+
+        # ZFS last: its delete --cleanup-disks leaves a GPT/p1/p9 remnant that the
+        # finally block zaps (the wipe verb is root@pam-only, so it cannot here).
+        r.step("node", "disks create zfs", f"create zfs {_DISKS_ZFS}",
+               "node", "disks", "create", "zfs", "--devices", dev,
+               "--name", _DISKS_ZFS, "--raidlevel", "single", "-y")
+        leftover.append(("zfs", _DISKS_ZFS))
+        r.step("node", "disks delete zfs", f"delete zfs {_DISKS_ZFS}",
+               "node", "disks", "delete", "zfs", _DISKS_ZFS, "--cleanup-disks", "-y")
+        leftover.pop()
+    finally:
+        _disks_host_cleanup(host, dev, short, leftover)
+        print(DIM(f"  spare {dev} restored to unused state"))
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3818,6 +3978,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         node_recover_lifecycle(r)
         print()
         node_services_lifecycle(r)
+        print()
+        node_disks_lifecycle(r)
         print()
         storage_import_metadata_lifecycle(r)
         print()
