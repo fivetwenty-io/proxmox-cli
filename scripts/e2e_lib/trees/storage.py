@@ -225,11 +225,14 @@ def run(ctx: Ctx) -> None:
         "pve storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
         isolation=True, live_covered=False,
     )
-    # import-metadata inspects a foreign guest archive (OVA/ESXi); the lab has no
-    # import-content storage or importable source, so it is not exercised live.
+    # import-metadata inspects a foreign guest archive (OVA/ESXi). The API cannot
+    # upload such an archive (the upload endpoint accepts only iso/vztmpl), so the
+    # mutate phase stages a crafted minimal OVF in an import-capable storage's
+    # import/ directory over passwordless root SSH to the node host, reads its
+    # metadata, and removes the fixture; it skips if the host is unreachable.
     ctx.defer(
         "import-metadata",
-        "inspects an importable guest archive — lab has no import source; not exercised live",
+        "inspects an importable guest archive — covered live by `e2e --mutate`, which stages a crafted OVF on the node's import dir and reads its metadata",
         "pve storage import-metadata <import-storage> --volume <archive>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )

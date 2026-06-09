@@ -1672,6 +1672,190 @@ def node_ops(r: Runner) -> None:
         pass
 
 
+# A minimal, self-contained OVF descriptor: one VM with a SCSI controller and a
+# single small disk. PVE's import-metadata parser reads name/cpu/memory/disks
+# from this without the disk needing to be a real bootable image. `{disk}` is
+# the basename of the referenced disk file, written alongside the descriptor.
+_IMPORT_OVF = """<?xml version="1.0" encoding="UTF-8"?>
+<Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData">
+  <References>
+    <File ovf:href="{disk}" ovf:id="file1" ovf:size="65536"/>
+  </References>
+  <DiskSection>
+    <Info>Virtual disks</Info>
+    <Disk ovf:capacity="1" ovf:capacityAllocationUnits="byte * 2^30" ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
+  </DiskSection>
+  <VirtualSystem ovf:id="pve-cli-e2e">
+    <Info>pve-cli e2e import probe</Info>
+    <Name>pve-cli-e2e</Name>
+    <VirtualHardwareSection>
+      <Info>Virtual hardware requirements</Info>
+      <System>
+        <vssd:ElementName>Virtual Hardware Family</vssd:ElementName>
+        <vssd:InstanceID>0</vssd:InstanceID>
+        <vssd:VirtualSystemType>vmx-10</vssd:VirtualSystemType>
+      </System>
+      <Item>
+        <rasd:Description>Number of Virtual CPUs</rasd:Description>
+        <rasd:ElementName>1 virtual CPU(s)</rasd:ElementName>
+        <rasd:InstanceID>1</rasd:InstanceID>
+        <rasd:ResourceType>3</rasd:ResourceType>
+        <rasd:VirtualQuantity>1</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:AllocationUnits>byte * 2^20</rasd:AllocationUnits>
+        <rasd:Description>Memory Size</rasd:Description>
+        <rasd:ElementName>512MB of memory</rasd:ElementName>
+        <rasd:InstanceID>2</rasd:InstanceID>
+        <rasd:ResourceType>4</rasd:ResourceType>
+        <rasd:VirtualQuantity>512</rasd:VirtualQuantity>
+      </Item>
+      <Item>
+        <rasd:Address>0</rasd:Address>
+        <rasd:Description>SCSI Controller</rasd:Description>
+        <rasd:ElementName>scsiController0</rasd:ElementName>
+        <rasd:InstanceID>3</rasd:InstanceID>
+        <rasd:ResourceSubType>VirtualSCSI</rasd:ResourceSubType>
+        <rasd:ResourceType>6</rasd:ResourceType>
+      </Item>
+      <Item>
+        <rasd:AddressOnParent>0</rasd:AddressOnParent>
+        <rasd:ElementName>disk1</rasd:ElementName>
+        <rasd:HostResource>ovf:/disk/vmdisk1</rasd:HostResource>
+        <rasd:InstanceID>4</rasd:InstanceID>
+        <rasd:Parent>3</rasd:Parent>
+        <rasd:ResourceType>17</rasd:ResourceType>
+      </Item>
+    </VirtualHardwareSection>
+  </VirtualSystem>
+</Envelope>
+"""
+
+
+def _ssh_node(host: str, *cmd: str, stdin: str | None = None,
+              timeout: int = 25) -> tuple[int, str, str]:
+    """Run a command on the node host over passwordless root SSH. Returns
+    (rc, stdout, stderr); rc 255 on an SSH/connection failure. Used only to
+    stage test fixtures that the API cannot place (e.g. an import archive in a
+    storage's import/ directory)."""
+    argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+            "-o", "StrictHostKeyChecking=accept-new", f"root@{host}", *cmd]
+    try:
+        p = subprocess.run(argv, input=stdin, capture_output=True, text=True,
+                           timeout=timeout)
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.SubprocessError as exc:
+        return 255, "", str(exc)
+
+
+def storage_import_metadata_lifecycle(r: Runner) -> None:
+    """Inspect a crafted OVF guest archive with `storage import-metadata`.
+
+    The verb reads the import parameters of a foreign guest archive, so it needs
+    an OVF/OVA in an import-capable storage's `import/` directory — a file the
+    API cannot upload (the upload endpoint accepts only iso/vztmpl). The fixture
+    is therefore staged on the node host over passwordless root SSH: a tiny
+    throwaway disk plus a minimal OVF descriptor, both removed in the finally
+    block. If the host is unreachable over SSH or has no import-capable dir
+    storage, the verb is recorded as a skip rather than failing.
+    """
+    print(BOLD("storage: import-metadata (crafted OVF on node import dir)"))
+
+    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    host = ""
+    if show.rc == 0:
+        data = show.json()
+        data = data.get("data", data) if isinstance(data, dict) else {}
+        host = str(data.get("Host", ""))
+    if not host:
+        r.cover_skip("storage", "import-metadata", "import-metadata",
+                     "could not resolve node host for SSH")
+        return
+
+    probe = _ssh_node(host, "true")
+    if probe[0] != 0:
+        reason = (probe[2].strip().splitlines() or ["SSH to host unavailable"])[-1][:80]
+        r.cover_skip("storage", "import-metadata", "import-metadata", reason)
+        return
+
+    # Find an import-capable dir storage and resolve its on-disk path.
+    sid = ""
+    sl = r.pve("storage", "list", json_out=True)
+    try:
+        rows = sl.json()
+        rows = rows.get("data", rows) if isinstance(rows, dict) else rows
+        for s in rows or []:
+            if s.get("type") == "dir" and "import" in str(s.get("content", "")):
+                sid = str(s.get("storage", ""))
+                break
+    except ValueError:
+        sid = ""
+    if not sid:
+        r.cover_skip("storage", "import-metadata", "import-metadata",
+                     "no import-capable dir storage on the cluster")
+        return
+
+    rc, out, _ = _ssh_node(host, "pvesh", "get", f"/storage/{sid}",
+                           "--output-format", "json")
+    path = ""
+    try:
+        pd = json.loads(out)
+        path = str(pd.get("path", "")) if isinstance(pd, dict) else ""
+    except ValueError:
+        path = ""
+    if not path:
+        r.cover_skip("storage", "import-metadata", "import-metadata",
+                     f"could not resolve path of storage {sid!r}")
+        return
+
+    importdir = path.rstrip("/") + "/import"
+    diskname = Isolation.NAME_PREFIX + "import-disk.vmdk"
+    ovfname = Isolation.NAME_PREFIX + "import.ovf"
+    ovf_path = f"{importdir}/{ovfname}"
+    disk_path = f"{importdir}/{diskname}"
+    staged = False
+    try:
+        _ssh_node(host, "mkdir", "-p", importdir)
+        mk = _ssh_node(host, "qemu-img", "create", "-f", "vmdk", disk_path, "1M")
+        # Write the OVF descriptor by piping its bytes over SSH stdin — robust to
+        # any content, unlike re-quoting it through a remote shell.
+        wr = _ssh_node(host, "tee", ovf_path, stdin=_IMPORT_OVF.format(disk=diskname))
+        if mk[0] != 0 or wr[0] != 0:
+            detail = (mk[2].strip() or wr[2].strip() or "could not stage OVF fixture")
+            r.cover_skip("storage", "import-metadata", "import-metadata",
+                         detail.splitlines()[-1][:80])
+            staged = True  # something may have landed; clean it up
+            return
+        staged = True
+
+        # The CLI builds the volid as "<storage>:<volume>", so --volume is the
+        # storage-relative path (no "<storage>:" prefix).
+        res = r.step("storage", "import-metadata", "import-metadata (crafted OVF)",
+                     "storage", "import-metadata", sid,
+                     "--volume", f"import/{ovfname}", json_out=True)
+        ok = False
+        try:
+            jd = res.json()
+            ca = jd.get("create-args", {}) if isinstance(jd, dict) else {}
+            ok = isinstance(ca, dict) and bool(ca.get("name"))
+        except ValueError:
+            ok = False
+        if ok:
+            print(f"  {GREEN('✓')} import-metadata parsed the crafted OVF")
+            r.cov.append(Step("storage", "import-metadata verify", PASS))
+        else:
+            r.cover_skip("storage", "import-metadata verify", "import-metadata verify",
+                         "metadata did not include a guest name")
+    finally:
+        if staged:
+            rc, _, err = _ssh_node(host, "rm", "-f", ovf_path, disk_path)
+            if rc == 0:
+                print(f"  {GREEN('✓')} rm import fixture")
+            else:
+                tail = (err.strip().splitlines() or ["failed"])[-1][:80]
+                print(f"  {YELLOW('·')} rm import fixture {DIM('(cleanup: ' + tail + ')')}")
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3054,6 +3238,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
             print()
 
         node_ops(r)
+        print()
+        storage_import_metadata_lifecycle(r)
         print()
     except LifecycleError as exc:
         failed = True

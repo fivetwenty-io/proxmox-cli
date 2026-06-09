@@ -75,12 +75,12 @@ swept clean before the next provisions.
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 46 | 1 | 6 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 | 0 |
-| `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
+| `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **319** | **6** | **83** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **320** | **6** | **82** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **473** are exercised by at least one live suite, **83** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **474** are exercised by at least one live suite, **82** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -668,7 +668,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage file-restore list` | — | — | deferred — browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
 | `storage get` | ◑ | ✓ |  |
 | `storage identity` | ◑ | — |  |
-| `storage import-metadata` | — | — | deferred — inspects an importable guest archive — lab has no import source; not exercised live |
+| `storage import-metadata` | — | ✓ |  |
 | `storage list` | ✓ | — |  |
 | `storage prune` | ◑ | ✓ |  |
 | `storage rrd` | ◑ | — |  |
