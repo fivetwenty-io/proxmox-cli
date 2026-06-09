@@ -351,25 +351,29 @@ def run(ctx: Ctx) -> None:
         "pve cluster acme plugin create pve-cli-acme --type dns --api cf --data <dummy>",
         isolation=True, live_covered=True,
     )
-    # Account register/update/deregister contact the ACME CA (e.g. Let's Encrypt)
-    # and run as asynchronous tasks; each verb is parsed-and-deferred, never run
-    # live. All three are covered by unit tests (create/set forward the contact and
-    # require it; delete is gated behind --yes).
+    # Account register/update/deregister are restricted to root@pam by the API
+    # ("Permission check failed (user != root@pam)"), so the API-token-authenticated
+    # e2e suite cannot invoke them even against a reachable ACME directory (a
+    # host-local ACME stub satisfies the protocol, but the auth gate is on the verb,
+    # not the CA). Covered by unit tests, same as `storage volume copy`.
     ctx.defer(
         "acme account create",
-        "registers a new account against the ACME certificate authority; not exercised live; covered by unit tests",
+        "registers a new account against the ACME CA — the endpoint is restricted to root@pam and "
+        "rejects API-token auth; not exercisable by the e2e suite — covered by unit tests",
         "pve cluster acme account create --contact admin@example.com --directory <staging>",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "acme account set",
-        "updates an account's contact at the ACME certificate authority; not exercised live; covered by unit tests",
+        "updates an account's contact at the ACME CA — the endpoint is restricted to root@pam and "
+        "rejects API-token auth; not exercisable by the e2e suite — covered by unit tests",
         "pve cluster acme account set <name> --contact admin@example.com",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "acme account delete",
-        "deactivates and removes an account at the ACME certificate authority; not exercised live; covered by unit tests",
+        "deactivates and removes an account at the ACME CA — the endpoint is restricted to root@pam and "
+        "rejects API-token auth; not exercisable by the e2e suite — covered by unit tests",
         "pve cluster acme account delete <name> --yes",
         isolation=False, live_covered=False,
     )

@@ -878,14 +878,18 @@ def run(ctx: Ctx) -> None:
     # is built by the same factory and covered by a unit test (argument contract
     # and task handling). Deferred one verb at a time so the matrix records each
     # leaf.
-    ctx.defer("services start", "starts a running host service on the node; not exercised live; covered by unit tests",
-              "pve node services start <node> <svc>")
-    ctx.defer("services stop", "stops a running host service on the node; not exercised live; covered by unit tests",
-              "pve node services stop <node> <svc>")
-    ctx.defer("services restart", "restarts a running host service on the node; not exercised live; covered by unit tests",
-              "pve node services restart <node> <svc>")
-    ctx.defer("services reload", "reloads a running host service on the node; not exercised live; covered by unit tests",
-              "pve node services reload <node> <svc>")
+    # Exercised live by the mutate phase against a benign, non-control-plane
+    # service (chrony or postfix): reload, restart, stop, then start — always
+    # ending in the service's original running state, never touching
+    # pveproxy/pve-cluster/corosync/sshd.
+    ctx.defer("services start", "starts a host service — covered live by `e2e --mutate` on a benign service (chrony/postfix), restored to running",
+              "pve node services start <node> <svc>", isolation=False, live_covered=True)
+    ctx.defer("services stop", "stops a host service — covered live by `e2e --mutate` on a benign service (chrony/postfix), restarted immediately after",
+              "pve node services stop <node> <svc>", isolation=False, live_covered=True)
+    ctx.defer("services restart", "restarts a host service — covered live by `e2e --mutate` on a benign service (chrony/postfix)",
+              "pve node services restart <node> <svc>", isolation=False, live_covered=True)
+    ctx.defer("services reload", "reloads a host service — covered live by `e2e --mutate` on a benign service (chrony/postfix)",
+              "pve node services reload <node> <svc>", isolation=False, live_covered=True)
 
     # Node-wide bulk actions act on every guest on the node by default, but
     # --vmids narrows them to a subset. startall/stopall/suspendall are driven

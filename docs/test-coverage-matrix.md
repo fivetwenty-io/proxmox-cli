@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 34 | 0 | 49 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 38 | 0 | 45 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 51 | 1 | 1 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **335** | **6** | **67** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **339** | **6** | **63** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **489** are exercised by at least one live suite, **67** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **493** are exercised by at least one live suite, **63** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -146,11 +146,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `cluster acme account create` | — | — | deferred — registers a new account against the ACME certificate authority; not exercised live; covered by unit tests |
-| `cluster acme account delete` | — | — | deferred — deactivates and removes an account at the ACME certificate authority; not exercised live; covered by unit tests |
+| `cluster acme account create` | — | — | deferred — registers a new account against the ACME CA — the endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
+| `cluster acme account delete` | — | — | deferred — deactivates and removes an account at the ACME CA — the endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
 | `cluster acme account get` | ◑ | — |  |
 | `cluster acme account list` | ✓ | — |  |
-| `cluster acme account set` | — | — | deferred — updates an account's contact at the ACME certificate authority; not exercised live; covered by unit tests |
+| `cluster acme account set` | — | — | deferred — updates an account's contact at the ACME CA — the endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
 | `cluster acme challenge-schema` | ✓ | — |  |
 | `cluster acme directories` | ✓ | — |  |
 | `cluster acme plugin create` | — | ✓ |  |
@@ -479,11 +479,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node scan zfs` | ◑ | — |  |
 | `node services get` | ◑ | — |  |
 | `node services list` | ◑ | — |  |
-| `node services reload` | — | — | deferred — reloads a running host service on the node; not exercised live; covered by unit tests |
-| `node services restart` | — | — | deferred — restarts a running host service on the node; not exercised live; covered by unit tests |
-| `node services start` | — | — | deferred — starts a running host service on the node; not exercised live; covered by unit tests |
+| `node services reload` | — | ✓ |  |
+| `node services restart` | — | ✓ |  |
+| `node services start` | — | ✓ |  |
 | `node services state` | ◑ | — |  |
-| `node services stop` | — | — | deferred — stops a running host service on the node; not exercised live; covered by unit tests |
+| `node services stop` | — | ✓ |  |
 | `node shell` | — | — | deferred — opens a live SSH terminal on the node, so it cannot be driven head-less; not run live; covered by unit tests |
 | `node ssh` | — | ✓ |  |
 | `node startall` | — | ✓ |  |

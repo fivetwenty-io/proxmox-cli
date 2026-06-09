@@ -2377,6 +2377,57 @@ def node_recover_lifecycle(r: Runner) -> None:
                    "storage", "volume", "delete", oci_volid, "--yes")
 
 
+# Services safe to cycle: NTP and mail daemons that are not part of the API/SSH
+# control plane. Never include pveproxy/pvedaemon/pve-cluster/corosync/sshd —
+# cycling those could sever the suite's own connection to the node. Both listed
+# here support reload, restart, stop, and start.
+_SAFE_SERVICES = ("chrony", "postfix")
+
+
+def node_services_lifecycle(r: Runner) -> None:
+    """Drive `node services reload/restart/stop/start` on a benign service.
+
+    A non-control-plane service (chrony or postfix) is cycled reload → restart →
+    stop → start, always ending in its original running state. The node is passed
+    positionally (these verbs take `<node> <svc>`, not the --node flag), so node
+    injection is suppressed. If no safe service is running, all four record skips.
+    """
+    print(BOLD("node: service reload/restart/stop/start (benign service)"))
+    verbs = ("services reload", "services restart", "services stop", "services start")
+
+    def skip_all(why: str) -> None:
+        for v in verbs:
+            r.cover_skip("node", v, v, why)
+
+    lst = r.pve("node", "services", "list", r.node, json_out=True, node=False)
+    svc = ""
+    try:
+        data = lst.json()
+        data = data.get("data", data) if isinstance(data, dict) else data
+        running = {str(s.get("service")) for s in data
+                   if isinstance(s, dict) and str(s.get("state", "")) == "running"}
+        svc = next((s for s in _SAFE_SERVICES if s in running), "")
+    except (ValueError, AttributeError):
+        svc = ""
+    if not svc:
+        skip_all("no benign running service (chrony/postfix) to cycle")
+        return
+    print(DIM(f"  service={svc}"))
+    try:
+        r.step("node", "services reload", f"services reload {svc}",
+               "node", "services", "reload", r.node, svc, node=False)
+        r.step("node", "services restart", f"services restart {svc}",
+               "node", "services", "restart", r.node, svc, node=False)
+        r.step("node", "services stop", f"services stop {svc}",
+               "node", "services", "stop", r.node, svc, node=False)
+        r.step("node", "services start", f"services start {svc}",
+               "node", "services", "start", r.node, svc, node=False)
+    finally:
+        # Restore the service to running regardless of where a failure landed.
+        # (undo always injects the global --node flag, which these verbs accept.)
+        r.undo(f"ensure {svc} running", "node", "services", "start", r.node, svc)
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3765,6 +3816,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         node_scan_lifecycle(r)
         print()
         node_recover_lifecycle(r)
+        print()
+        node_services_lifecycle(r)
         print()
         storage_import_metadata_lifecycle(r)
         print()
