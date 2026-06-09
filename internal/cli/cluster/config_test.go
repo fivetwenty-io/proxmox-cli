@@ -70,6 +70,26 @@ func TestClusterConfigJoin_AddRequiresYes(t *testing.T) {
 	require.False(t, called, "join must not POST without --yes")
 }
 
+// TestClusterConfigJoin_AddWithYes verifies join add POSTs to /cluster/config/join
+// once confirmed and renders the initiated message.
+func TestClusterConfigJoin_AddWithYes(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotMethod string
+	f.HandleFunc("POST /api2/json/cluster/config/join", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "config", "join", "add",
+		"--hostname", "pve1.example.com", "--fingerprint", "AA:BB", "--password", "secret", "--yes"))
+	require.Equal(t, http.MethodPost, gotMethod)
+	require.Contains(t, buf.String(), "initiated")
+}
+
 // TestClusterConfigNodes_AddRequiresYes verifies nodes add refuses without --yes.
 func TestClusterConfigNodes_AddRequiresYes(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -87,6 +107,25 @@ func TestClusterConfigNodes_AddRequiresYes(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "nodes add must not POST without --yes")
+}
+
+// TestClusterConfigNodes_AddWithYes verifies nodes add POSTs to
+// /cluster/config/nodes/<node> once confirmed and renders the response.
+func TestClusterConfigNodes_AddWithYes(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotMethod string
+	f.HandleFunc("POST /api2/json/cluster/config/nodes/pve2", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		testhelper.WriteData(w, map[string]any{"corosync_authkey": "abc-key", "corosync_conf": "conf"})
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	defer withDeps(deps)()
+
+	var buf bytes.Buffer
+	require.NoError(t, run(&buf, "config", "nodes", "add", "pve2", "--yes"))
+	require.Equal(t, http.MethodPost, gotMethod)
+	require.Contains(t, buf.String(), "abc-key")
 }
 
 // TestClusterConfigNodes_DeleteRequiresYes verifies nodes delete refuses

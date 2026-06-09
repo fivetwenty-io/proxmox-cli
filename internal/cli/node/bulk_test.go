@@ -155,6 +155,25 @@ func TestNodeMigrateall_ForwardsFields(t *testing.T) {
 	require.Contains(t, buf.String(), "Migrate-all started")
 }
 
+// TestNodeMigrateall_RequiresYes verifies migrateall refuses to act without
+// --yes even when the required --target-node is supplied.
+func TestNodeMigrateall_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/migrateall", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "migrateall", "--target-node", "pve2"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called, "migrateall must not POST without --yes")
+}
+
 // TestNodeWakeonlan_RequiresYes verifies wakeonlan refuses to act without --yes.
 func TestNodeWakeonlan_RequiresYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

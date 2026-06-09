@@ -609,6 +609,197 @@ func TestNodeCeph_Stop_RequiresYes(t *testing.T) {
 	require.False(t, called)
 }
 
+// ---- guard / success completeness ------------------------------------------
+
+func TestNodeCephOsd_Delete_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/osd/0", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "delete", "0"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCephOsd_In_WithYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/ceph/osd/0/in", &rec, nil)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "in", "0", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, buf.String(), "marked in")
+}
+
+func TestNodeCephOsd_Out_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/osd/0/out", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "out", "0"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCephOsd_Scrub_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/osd/0/scrub", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "scrub", "0"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCephMon_Create_WithYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/mon/pve1", func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		testhelper.WriteData(w, cephUPID)
+	})
+	cephOK(f, cephUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "mon", "create", "pve1", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, buf.String(), "created")
+}
+
+func TestNodeCephMon_Delete_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/mon/pve1", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "mon", "delete", "pve1"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCephPool_Delete_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/ceph/pool/rbd", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "pool", "delete", "rbd"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCeph_Start_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/start", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "start"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
+func TestNodeCeph_Stop_WithYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/stop", func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		_ = r.ParseForm()
+		rec.body = r.Form.Encode()
+		testhelper.WriteData(w, cephUPID)
+	})
+	cephOK(f, cephUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "stop", "--service", "osd.0", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, rec.body, "service=osd.0")
+	require.Contains(t, buf.String(), "issued")
+}
+
+func TestNodeCeph_Restart_WithYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/restart", func(w http.ResponseWriter, r *http.Request) {
+		rec.method = r.Method
+		_ = r.ParseForm()
+		rec.body = r.Form.Encode()
+		testhelper.WriteData(w, cephUPID)
+	})
+	cephOK(f, cephUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart", "--service", "mon.pve1", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, rec.body, "service=mon.pve1")
+	require.Contains(t, buf.String(), "issued")
+}
+
+func TestNodeCeph_Restart_RequiresYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/restart", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes")
+	require.False(t, called)
+}
+
 // ---- node scoping + command tree -------------------------------------------
 
 func TestNodeCeph_RequiresNode(t *testing.T) {
