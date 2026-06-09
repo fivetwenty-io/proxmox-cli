@@ -71,16 +71,16 @@ swept clean before the next provisions.
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 32 | 0 | 51 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 34 | 0 | 49 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 51 | 1 | 1 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **333** | **6** | **69** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **335** | **6** | **67** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **487** are exercised by at least one live suite, **69** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **489** are exercised by at least one live suite, **67** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -460,7 +460,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node network list` | ◑ | — |  |
 | `node network revert` | — | ✓ |  |
 | `node network set` | — | ✓ |  |
-| `node oci pull` | — | — | deferred — downloads an OCI image into a storage — leaves an uncleanable artifact on lab storage; not exercised live; covered by unit tests |
+| `node oci pull` | — | ✓ |  |
 | `node oci tags` | — | ✓ |  |
 | `node query-url-metadata` | — | ✓ |  |
 | `node replication list` | ◑ | — |  |
@@ -489,7 +489,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node startall` | — | ✓ |  |
 | `node status` | ◑ | — |  |
 | `node stopall` | — | ✓ |  |
-| `node subscription delete` | — | — | deferred — removes the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
+| `node subscription delete` | — | ✓ |  |
 | `node subscription get` | ◑ | — |  |
 | `node subscription set` | — | — | deferred — sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
 | `node subscription update` | — | ✓ |  |
@@ -504,7 +504,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node vzdump` | — | ✓ |  |
 | `node vzdump defaults` | ◑ | — |  |
 | `node vzdump extract-config` | ◑ | — |  |
-| `node wakeonlan` | — | — | deferred — sends a Wake-on-LAN packet to power on a node — affects node power state; not exercised live; covered by unit tests |
+| `node wakeonlan` | — | — | deferred — sends a Wake-on-LAN packet to power on another node — the API rejects waking the local node, and this is a single-node cluster, so there is no remote target; not exercised live; covered by unit tests |
 
 ## `pool`
 

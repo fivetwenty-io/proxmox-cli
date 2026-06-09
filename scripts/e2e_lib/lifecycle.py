@@ -2328,6 +2328,55 @@ class _NfsSkip(Exception):
     """Internal control-flow signal to skip the nfs probe but still run teardown."""
 
 
+def node_recover_lifecycle(r: Runner) -> None:
+    """Cover `node subscription delete` and `node oci pull` live.
+
+    `subscription delete` is idempotent on a node with no key, so it is exercised
+    only when the node has no active subscription (it never removes a real key).
+    `oci pull` downloads a small public image into a storage and is reversed with
+    `storage volume delete` (the pulled artifact is an ordinary vztmpl volume),
+    skipping if the node has no registry egress.
+    """
+    print(BOLD("node: subscription delete + oci pull (idempotent / reversible)"))
+
+    # subscription delete: only safe when no real key is configured — never remove
+    # a live licence key.
+    sub = r.pve("node", "subscription", "get", json_out=True)
+    status = ""
+    try:
+        sd = sub.json()
+        sd = sd.get("data", sd) if isinstance(sd, dict) else {}
+        status = str(sd.get("status", "")) if isinstance(sd, dict) else ""
+    except ValueError:
+        status = ""
+    if status.lower() == "active":
+        r.cover_skip("node", "subscription delete", "subscription delete",
+                     "node has an active subscription key — not removing it")
+    else:
+        r.step("node", "subscription delete", "subscription delete (no key configured)",
+               "node", "subscription", "delete", "--yes")
+
+    # oci pull: fetch a small public image, then delete the artifact it creates.
+    oci_store = "local"
+    oci_name = Isolation.NAME_PREFIX + "oci"
+    oci_volid = f"{oci_store}:vztmpl/{oci_name}.tar"
+    pulled = False
+    try:
+        pulled = r.soft_step(
+            "node", "oci pull", "oci pull alpine -> local",
+            "node", "oci", "pull", oci_store,
+            "--reference", "docker.io/library/alpine:latest",
+            "--filename", oci_name, "--yes",
+            skip_markers=("dial", "lookup", "resolve", "timeout", "timed out",
+                          "no route", "connection refused", "i/o timeout",
+                          "temporary failure", "tls handshake", "registry"),
+            skip_reason="node has no registry egress")
+    finally:
+        if pulled:
+            r.undo(f"delete pulled oci artifact {oci_volid}",
+                   "storage", "volume", "delete", oci_volid, "--yes")
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3714,6 +3763,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         node_ops(r)
         print()
         node_scan_lifecycle(r)
+        print()
+        node_recover_lifecycle(r)
         print()
         storage_import_metadata_lifecycle(r)
         print()

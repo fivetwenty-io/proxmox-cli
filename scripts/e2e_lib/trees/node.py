@@ -584,15 +584,16 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # Pulling an OCI image downloads it from a registry into a node storage and
-    # leaves an image artifact that has no CLI delete verb to clean it up on the
-    # shared lab (same reasoning as `storage upload`), so it is never exercised
-    # live. The CLI gates the pull behind --yes.
+    # Pulling an OCI image downloads it from a registry into a node storage as an
+    # ordinary vztmpl volume, which `storage volume delete` removes, so the mutate
+    # phase pulls a small public image and deletes the artifact. The CLI gates the
+    # pull behind --yes.
     ctx.defer(
         "oci pull",
-        "downloads an OCI image into a storage — leaves an uncleanable artifact on lab storage; not exercised live; covered by unit tests",
+        "downloads an OCI image into a storage — covered live by `e2e --mutate`, which pulls a "
+        "small public image and deletes the resulting vztmpl volume (skips without registry egress)",
         "pve node oci pull <storage> --node <node> --reference docker.io/library/alpine:latest --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
     ctx.defer(
         "oci tags",
@@ -640,9 +641,10 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "subscription delete",
-        "removes the node's subscription key (changes licensing state); not exercised live; covered by unit tests",
+        "removes the node's subscription key — covered live by `e2e --mutate`, which runs it "
+        "only on a node with no active key (idempotent; never removes a real licence)",
         "pve node subscription delete --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
 
     # Certificate writes all replace the node's API TLS certificate: an ACME
@@ -903,9 +905,13 @@ def run(ctx: Ctx) -> None:
               "pve node suspendall --vmids <vmid> --yes", isolation=True, live_covered=True)
     ctx.defer("migrateall", "migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests",
               "pve node migrateall --node <node> --target <node2> --yes", isolation=False, live_covered=False)
+    # wakeonlan targets another cluster node by its configured MAC; the API
+    # refuses to wake the local node ("'pve' is local node, cannot wake my self!"),
+    # so on a single-node cluster there is no valid target — not exercisable live.
     ctx.defer(
         "wakeonlan",
-        "sends a Wake-on-LAN packet to power on a node — affects node power state; not exercised live; covered by unit tests",
+        "sends a Wake-on-LAN packet to power on another node — the API rejects waking the local "
+        "node, and this is a single-node cluster, so there is no remote target; not exercised live; covered by unit tests",
         "pve node wakeonlan --node <node> --yes",
         isolation=False, live_covered=False,
     )
