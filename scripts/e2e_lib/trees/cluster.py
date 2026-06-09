@@ -424,11 +424,11 @@ def run(ctx: Ctx) -> None:
         ctx.check("config qdevice", "cluster", "config", "qdevice")
 
     # Bulk actions act on every guest in the cluster by default, but --vmids
-    # narrows them to a subset. `start` and `shutdown` are driven live by the
-    # mutate phase scoped to ONLY the isolated pve-cli VM, so they touch no other
-    # workload. `suspend` needs a guest the diskless VM cannot provide (same
-    # reason `qemu reboot`/`suspend` skip), and `migrate` needs a second node, so
-    # both stay deferred; their argument parsing is still exercised via --help.
+    # narrows them to a subset. `start`, `shutdown`, and `suspend` are driven
+    # live by the mutate phase scoped to ONLY the isolated pve-cli VM, so they
+    # touch no other workload (`suspend` pauses the running QEMU process, the
+    # same operation as `qemu suspend`). `migrate` needs a second node, so it
+    # stays deferred; its argument parsing is still exercised via --help.
     ctx.check("bulk start --help", "cluster", "bulk", "start", "--help", fmt="")
     ctx.check("bulk shutdown --help", "cluster", "bulk", "shutdown", "--help", fmt="")
     ctx.check("bulk suspend --help", "cluster", "bulk", "suspend", "--help", fmt="")
@@ -449,10 +449,10 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "bulk suspend",
-        "suspends guests cluster-wide — the diskless e2e VM has no guest to "
-        "suspend (as with `qemu suspend`); not exercised live",
+        "suspends guests cluster-wide — covered live by `e2e --mutate` scoped "
+        "to the isolated pve-cli VM via --vmids (pauses the QEMU process)",
         "pve cluster bulk suspend --vmids <vmid> --yes",
-        isolation=False, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "bulk migrate",

@@ -528,6 +528,29 @@ def vm_lifecycle(r: Runner) -> None:
         # Pause/resume operate on the running qemu process — no guest OS needed.
         r.step("qemu", "suspend", f"suspend VM {vmid}", "qemu", "suspend", vmid)
         r.step("qemu", "resume", f"resume VM {vmid}", "qemu", "resume", vmid)
+        # Bulk power verbs scoped to ONLY this throwaway VM via --vmids — no
+        # other guest on the node is touched. `cluster bulk suspend` and `node
+        # suspendall` pause the running QEMU process (no guest OS or CRIU
+        # needed, the same operation as `qemu suspend` above); each is resumed
+        # before the next step. `node stopall` then stops the VM and `node
+        # startall` brings it back, leaving it running for the rest of the
+        # matrix. `cluster bulk suspend` is a cluster-global verb, so node=False
+        # suppresses the auto-injected --node.
+        r.step("cluster", "bulk suspend", f"bulk suspend --vmids {vmid}",
+               "cluster", "bulk", "suspend", "--vmids", vmid, "--yes", node=False)
+        r.step("qemu", "resume", f"resume VM {vmid} (post bulk suspend)",
+               "qemu", "resume", vmid)
+        r.step("node", "suspendall", f"suspendall --vmids {vmid}",
+               "node", "suspendall", "--vmids", vmid, "--yes")
+        r.step("qemu", "resume", f"resume VM {vmid} (post suspendall)",
+               "qemu", "resume", vmid)
+        r.step("node", "stopall", f"stopall --vmids {vmid}",
+               "node", "stopall", "--vmids", vmid,
+               "--timeout", "10", "--force-stop", "--yes")
+        # --force: startall only starts guests with onboot set unless forced,
+        # and the throwaway VM has no onboot, so force it back to running.
+        r.step("node", "startall", f"startall --vmids {vmid}",
+               "node", "startall", "--vmids", vmid, "--force", "--yes")
         # Hard reset stays running; covers the in-place restart path.
         r.step("qemu", "reset", f"reset VM {vmid}", "qemu", "reset", vmid)
         # Graceful reboot needs guest ACPI the diskless VM lacks; covered on LXC.

@@ -875,22 +875,22 @@ def run(ctx: Ctx) -> None:
     ctx.defer("services reload", "reloads a running host service on the node; not exercised live; covered by unit tests",
               "pve node services reload <node> <svc>")
 
-    # Node-wide bulk actions act on every guest on the node (or a --vmids subset)
-    # and would start, stop, suspend, or migrate non-isolated workloads; wakeonlan
-    # powers a node on. None is run live; --help exercises argument parsing and
-    # every verb is covered by a unit test (argument contract and task handling).
-    # Deferred one verb at a time so the matrix records each leaf.
+    # Node-wide bulk actions act on every guest on the node by default, but
+    # --vmids narrows them to a subset. startall/stopall/suspendall are driven
+    # live by the mutate phase scoped to ONLY the isolated pve-cli VM, so they
+    # touch no other workload. migrateall needs a second node and wakeonlan
+    # powers a node on, so both stay deferred; --help exercises their parsing.
     ctx.check("startall --help", "node", "startall", "--help", fmt="")
     ctx.check("stopall --help", "node", "stopall", "--help", fmt="")
     ctx.check("suspendall --help", "node", "suspendall", "--help", fmt="")
     ctx.check("migrateall --help", "node", "migrateall", "--help", fmt="")
     ctx.check("wakeonlan --help", "node", "wakeonlan", "--help", fmt="")
-    ctx.defer("startall", "starts every guest on the node (bulk power action); not exercised live; covered by unit tests",
-              "pve node startall --node <node> --yes", isolation=False, live_covered=False)
-    ctx.defer("stopall", "stops every guest on the node (bulk power action); not exercised live; covered by unit tests",
-              "pve node stopall --node <node> --yes", isolation=False, live_covered=False)
-    ctx.defer("suspendall", "suspends every guest on the node (bulk power action); not exercised live; covered by unit tests",
-              "pve node suspendall --node <node> --yes", isolation=False, live_covered=False)
+    ctx.defer("startall", "starts guests on the node — covered live by `e2e --mutate` scoped to the isolated pve-cli VM via --vmids",
+              "pve node startall --vmids <vmid> --yes", isolation=True, live_covered=True)
+    ctx.defer("stopall", "stops guests on the node — covered live by `e2e --mutate` scoped to the isolated pve-cli VM via --vmids",
+              "pve node stopall --vmids <vmid> --yes", isolation=True, live_covered=True)
+    ctx.defer("suspendall", "suspends guests on the node — covered live by `e2e --mutate` scoped to the isolated pve-cli VM via --vmids (pauses the QEMU process)",
+              "pve node suspendall --vmids <vmid> --yes", isolation=True, live_covered=True)
     ctx.defer("migrateall", "migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests",
               "pve node migrateall --node <node> --target <node2> --yes", isolation=False, live_covered=False)
     ctx.defer(

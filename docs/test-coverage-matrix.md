@@ -68,19 +68,19 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `access` | 39 | 9 | 8 | 25 | 0 | 3 | 0 | 0 |
 | `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 107 | 5 | 12 | 0 | 0 |
+| `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 15 | 0 | 67 | 0 | 0 |
+| `node` | 138 | 1 | 59 | 18 | 0 | 64 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 45 | 1 | 7 | 0 | 0 |
 | `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 11 | 0 | 4 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **301** | **6** | **100** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **305** | **6** | **96** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **456** are exercised by at least one live suite, **100** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **460** are exercised by at least one live suite, **96** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -169,7 +169,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster bulk migrate` | — | — | deferred — migrates guests cluster-wide — requires a second node; not exercisable on a single-node lab |
 | `cluster bulk shutdown` | — | ✓ |  |
 | `cluster bulk start` | — | ✓ |  |
-| `cluster bulk suspend` | — | — | deferred — suspends guests cluster-wide — the diskless e2e VM has no guest to suspend (as with `qemu suspend`); not exercised live |
+| `cluster bulk suspend` | — | ✓ |  |
 | `cluster ceph flags get` | ◑ | — |  |
 | `cluster ceph flags list` | ◑ | — |  |
 | `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
@@ -486,14 +486,14 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node services stop` | — | — | deferred — stops a running host service on the node; not exercised live; covered by unit tests |
 | `node shell` | — | — | deferred — opens a live SSH terminal on the node, so it cannot be driven head-less; not run live; covered by unit tests |
 | `node ssh` | — | ✓ |  |
-| `node startall` | — | — | deferred — starts every guest on the node (bulk power action); not exercised live; covered by unit tests |
+| `node startall` | — | ✓ |  |
 | `node status` | ◑ | — |  |
-| `node stopall` | — | — | deferred — stops every guest on the node (bulk power action); not exercised live; covered by unit tests |
+| `node stopall` | — | ✓ |  |
 | `node subscription delete` | — | — | deferred — removes the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
 | `node subscription get` | ◑ | — |  |
 | `node subscription set` | — | — | deferred — sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
 | `node subscription update` | — | — | deferred — refreshes the node's subscription status against the licensing server; not exercised live |
-| `node suspendall` | — | — | deferred — suspends every guest on the node (bulk power action); not exercised live; covered by unit tests |
+| `node suspendall` | — | ✓ |  |
 | `node syslog` | ◑ | — |  |
 | `node task list` | ◑ | — |  |
 | `node task log` | ◑ | — |  |
