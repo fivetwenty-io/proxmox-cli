@@ -1731,6 +1731,26 @@ _IMPORT_OVF = """<?xml version="1.0" encoding="UTF-8"?>
 </Envelope>
 """
 
+# A throwaway HTTP server staged on the node host to stand in for a PowerDNS
+# API: it answers any GET with `200 {}` so the SDN PowerDNS plugin's connectivity
+# probe (on_update_hook issues a bare GET to the provider URL and fails on a
+# non-2xx response or non-JSON body) succeeds. `__PORT__` is substituted before
+# it is written to the host; it binds 127.0.0.1 only and is killed after use.
+_DNS_STUB_PORT = 8731
+_DNS_STUB = '''import http.server, socketserver
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        b = b"{}"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+    def log_message(self, *a):
+        pass
+socketserver.TCPServer(("127.0.0.1", __PORT__), H).serve_forever()
+'''
+
 
 def _ssh_node(host: str, *cmd: str, stdin: str | None = None,
               timeout: int = 25) -> tuple[int, str, str]:
@@ -1854,6 +1874,97 @@ def storage_import_metadata_lifecycle(r: Runner) -> None:
             else:
                 tail = (err.strip().splitlines() or ["failed"])[-1][:80]
                 print(f"  {YELLOW('·')} rm import fixture {DIM('(cleanup: ' + tail + ')')}")
+
+
+def sdn_dns_lifecycle(r: Runner) -> None:
+    """Exercise `sdn dns create/get/set/delete` against a host-local API stub.
+
+    A PowerDNS provider validates connectivity to its backend whenever it is
+    created or updated: the plugin's on_update_hook issues a GET to the
+    configured URL and fails if it is unreachable or answers with a non-2xx /
+    non-JSON response. The lab has no PowerDNS, so the mutate phase stages a tiny
+    throwaway HTTP server on the node host over passwordless root SSH — it
+    answers any GET with `200 {}` — points the provider URL at it, runs the full
+    create/get/set/delete cycle (all staged; `sdn apply` is never called, so no
+    real DNS backend is touched), then stops the stub. If the host is
+    unreachable over SSH or the stub never comes up, the four verbs are recorded
+    as skips rather than failing.
+    """
+    print(BOLD("sdn: dns create/get/set/delete (host-local API stub, staged only)"))
+    dns_id = "pveclidns"  # within the pvecli SDN isolation namespace
+
+    def skip_all(why: str) -> None:
+        for v in ("dns create", "dns get", "dns set", "dns delete"):
+            r.cover_skip("sdn", v, v, why)
+
+    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    host = ""
+    if show.rc == 0:
+        data = show.json()
+        data = data.get("data", data) if isinstance(data, dict) else {}
+        host = str(data.get("Host", ""))
+    if not host:
+        skip_all("could not resolve node host for SSH")
+        return
+    if _ssh_node(host, "true")[0] != 0:
+        skip_all("SSH to host unavailable")
+        return
+
+    remote_py = "/tmp/pve-cli-e2e-dnsstub.py"
+    remote_log = "/tmp/pve-cli-e2e-dnsstub.log"
+    url = f"http://127.0.0.1:{_DNS_STUB_PORT}/"
+    pid = ""
+    try:
+        wr = _ssh_node(host, "tee", remote_py,
+                       stdin=_DNS_STUB.replace("__PORT__", str(_DNS_STUB_PORT)))
+        if wr[0] != 0:
+            skip_all((wr[2].strip().splitlines() or ["could not stage DNS stub"])[-1][:80])
+            return
+        # Launch detached; pass the whole pipeline as one argument so the remote
+        # shell parses the redirect/background/`echo $!` (an argv split would not).
+        launch = _ssh_node(host, f"nohup python3 {remote_py} >{remote_log} 2>&1 & echo $!")
+        pid = (launch[1].strip().splitlines() or [""])[0].strip()
+        # Wait for the stub to accept connections (no curl/wget dependency).
+        ready = False
+        for _ in range(10):
+            chk = _ssh_node(
+                host,
+                f"python3 -c \"import urllib.request; "
+                f"urllib.request.urlopen('{url}', timeout=2)\" && echo ok")
+            if chk[0] == 0 and "ok" in chk[1]:
+                ready = True
+                break
+            time.sleep(0.5)
+        if not ready:
+            skip_all("DNS API stub did not become reachable on the host")
+            return
+
+        # create + set both run the connectivity probe against the stub; get and
+        # delete touch only the staged config. Nothing is ever applied.
+        r.step("sdn", "dns create", "dns create (powerdns -> host stub)",
+               "sdn", "dns", "create", dns_id,
+               "--type", "powerdns", "--url", url, "--key", "pve-cli-e2e",
+               json_out=True)
+        r.step("sdn", "dns get", "dns get (read staged provider)",
+               "sdn", "dns", "get", dns_id, json_out=True)
+        r.step("sdn", "dns set", "dns set (edit ttl)",
+               "sdn", "dns", "set", dns_id, "--ttl", "600")
+        r.del_step("sdn", "dns delete", "dns delete (remove staged provider)",
+                   "sdn", "dns", "delete", dns_id, "--yes")
+    finally:
+        # Safety net: drop the provider if a mid-cycle failure left it staged
+        # (a clean run already deleted it, so this just no-ops). Then stop the
+        # stub by its pid (never `pkill -f`, which would match this very shell)
+        # and remove its files.
+        r.undo(f"sdn dns delete {dns_id}", "sdn", "dns", "delete", dns_id, "--yes")
+        if pid:
+            _ssh_node(host, "kill", "-9", pid)
+        rc, _, err = _ssh_node(host, "rm", "-f", remote_py, remote_log)
+        if rc == 0:
+            print(f"  {GREEN('✓')} stop DNS stub")
+        else:
+            tail = (err.strip().splitlines() or ["failed"])[-1][:80]
+            print(f"  {YELLOW('·')} stop DNS stub {DIM('(cleanup: ' + tail + ')')}")
 
 
 # --- coverage report --------------------------------------------------------
@@ -3240,6 +3351,8 @@ def run(target: str, binary: str | None, build: bool, strict: bool,
         node_ops(r)
         print()
         storage_import_metadata_lifecycle(r)
+        print()
+        sdn_dns_lifecycle(r)
         print()
     except LifecycleError as exc:
         failed = True

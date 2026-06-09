@@ -74,13 +74,13 @@ swept clean before the next provisions.
 | `node` | 138 | 1 | 59 | 28 | 0 | 55 | 0 | 0 |
 | `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 59 | 1 | 12 | 46 | 1 | 6 | 0 | 0 |
-| `sdn` | 71 | 5 | 11 | 52 | 0 | 6 | 0 | 0 |
+| `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **320** | **6** | **82** | **0** | **0** |
+| **Total** | **556** | **74** | **125** | **324** | **6** | **78** | **0** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **474** are exercised by at least one live suite, **82** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **478** are exercised by at least one live suite, **78** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -590,11 +590,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn controller get` | — | ✓ |  |
 | `sdn controller list` | ✓ | — |  |
 | `sdn controller set` | — | ✓ |  |
-| `sdn dns create` | — | — | deferred — validates connectivity to an external DNS backend — covered by unit tests |
-| `sdn dns delete` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
-| `sdn dns get` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
+| `sdn dns create` | — | ✓ |  |
+| `sdn dns delete` | — | ✓ |  |
+| `sdn dns get` | — | ✓ |  |
 | `sdn dns list` | ✓ | — |  |
-| `sdn dns set` | — | — | deferred — needs an existing DNS provider (creatable only with a reachable external backend) — covered by unit tests |
+| `sdn dns set` | — | ✓ |  |
 | `sdn dry-run` | ◑ | — |  |
 | `sdn fabric create` | — | ✓ |  |
 | `sdn fabric delete` | — | ✓ |  |
