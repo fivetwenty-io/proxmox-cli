@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -32,7 +31,7 @@ func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, err
 	// Keep env-derived flag defaults out of the way.
 	t.Setenv("PVE_OUTPUT", "table")
 	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_TARGET", "")
+	t.Setenv("PVE_CONTEXT", "")
 
 	root := cli.NewRootCmd()
 	root.SetContext(context.Background())
@@ -60,17 +59,17 @@ func newTestDeps(t *testing.T) *cli.Deps {
 	}
 }
 
-// writeConfig writes cfg to path with SaveForce so tests can seed targets.
+// writeConfig writes cfg to path with SaveForce so tests can seed contexts.
 func writeConfig(t *testing.T, path string, cfg *config.Config) {
 	t.Helper()
 	require.NoError(t, config.SaveForce(path, cfg))
 }
 
-// seedCfg returns a config with one password target and one token target.
+// seedCfg returns a config with one password context and one token context.
 func seedCfg() *config.Config {
 	return &config.Config{
-		CurrentTarget: "prod",
-		Targets: map[string]*config.Target{
+		CurrentContext: "prod",
+		Contexts: map[string]*config.Context{
 			"prod": {
 				Host:     "pve.example.com",
 				Port:     8006,
@@ -106,7 +105,7 @@ func loadCfg(t *testing.T, path string) *config.Config {
 }
 
 // fakeHostPort splits the fake server's host:port into separate host and int
-// port so config targets can be built without doubling the port.
+// port so config contexts can be built without doubling the port.
 func fakeHostPort(t *testing.T, f *testhelper.FakePVE) (string, int) {
 	t.Helper()
 	host, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
@@ -114,271 +113,6 @@ func fakeHostPort(t *testing.T, f *testhelper.FakePVE) (string, int) {
 	port, err := strconv.Atoi(portStr)
 	require.NoError(t, err)
 	return host, port
-}
-
-// ---------------------------------------------------------------------------
-// targets
-// ---------------------------------------------------------------------------
-
-func TestTargets_List(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	out, err := run(t, deps, path, "targets")
-	require.NoError(t, err)
-	require.Contains(t, out, "prod")
-	require.Contains(t, out, "lab")
-	require.Contains(t, out, "pve.example.com")
-	require.Contains(t, out, "token")
-	require.Contains(t, out, "password")
-}
-
-func TestTargets_ListEmpty(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, &config.Config{})
-
-	deps := newTestDeps(t)
-	deps.Cfg = &config.Config{}
-
-	out, err := run(t, deps, path, "targets")
-	require.NoError(t, err)
-	require.Contains(t, out, "No targets")
-}
-
-func TestTargets_ListEmpty_JSON_IsEmptyArray(t *testing.T) {
-	t.Setenv("PVE_OUTPUT", "json")
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, &config.Config{})
-
-	root := cli.NewRootCmd()
-	root.SetContext(context.Background())
-	root.AddCommand(api.NewCommand())
-
-	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs([]string{"--config", path, "-o", "json", "api", "targets"})
-	require.NoError(t, root.Execute())
-
-	out := strings.TrimSpace(buf.String())
-	require.Equal(t, "[]", out,
-		"empty target list must serialise as an empty JSON array, not a message object")
-	require.NotContains(t, out, "message")
-}
-
-func TestTargets_HiddenTopLevelAlias(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_TARGET", "")
-
-	root := cli.NewRootCmd()
-	root.SetContext(context.Background())
-	// Register the api group and its hidden top-level aliases the way the real
-	// binary does (via the group registry).
-	cli.AddGroups(root, &cli.Deps{})
-
-	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	// `pve targets` must work exactly like `pve api targets`.
-	root.SetArgs([]string{"--config", path, "targets"})
-	require.NoError(t, root.Execute())
-
-	out := buf.String()
-	require.Contains(t, out, "prod")
-	require.Contains(t, out, "lab")
-}
-
-// ---------------------------------------------------------------------------
-// target show
-// ---------------------------------------------------------------------------
-
-func TestTargetShow_Success(t *testing.T) {
-	// Set the referenced env var to a distinctive value so we can prove the
-	// resolved secret VALUE is never printed — only its source form.
-	t.Setenv("PVE_TOKEN", "leakcanary-show-9f3c")
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	out, err := run(t, deps, path, "target", "prod", "show")
-	require.NoError(t, err)
-	require.Contains(t, out, "pve.example.com")
-	require.Contains(t, out, "token")
-	require.Contains(t, out, "cli")
-	// Secret value itself must NOT be printed; only its source form.
-	require.Contains(t, out, "${PVE_TOKEN}")
-	require.NotContains(t, out, "leakcanary-show-9f3c",
-		"target show must report the secret source, never the resolved value")
-}
-
-func TestTargetShow_NotFound(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	_, err := run(t, deps, path, "target", "ghost", "show")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ghost")
-}
-
-// ---------------------------------------------------------------------------
-// target add
-// ---------------------------------------------------------------------------
-
-func TestTargetAdd_Token(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, &config.Config{})
-
-	deps := newTestDeps(t)
-	deps.Cfg = &config.Config{}
-
-	out, err := run(t, deps, path,
-		"target", "new", "add",
-		"--host", "h1.example.com",
-		"--token", "mytoken=abc123",
-		"--username", "root@pam",
-	)
-	require.NoError(t, err)
-	require.Contains(t, out, "new")
-
-	cfg := loadCfg(t, path)
-	require.NotNil(t, cfg.Targets["new"])
-	require.Equal(t, "h1.example.com", cfg.Targets["new"].Host)
-	require.Equal(t, "token", cfg.Targets["new"].Auth.Type)
-	require.Equal(t, "mytoken", cfg.Targets["new"].Auth.TokenID)
-	require.Equal(t, "abc123", cfg.Targets["new"].Auth.Secret)
-}
-
-func TestTargetAdd_Switch(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, &config.Config{})
-
-	deps := newTestDeps(t)
-	deps.Cfg = &config.Config{}
-
-	_, err := run(t, deps, path,
-		"target", "primary", "add",
-		"--host", "h.example.com",
-		"--token", "t=secret",
-		"--username", "root@pam",
-		"--switch",
-	)
-	require.NoError(t, err)
-
-	cfg := loadCfg(t, path)
-	require.Equal(t, "primary", cfg.CurrentTarget)
-}
-
-func TestTargetAdd_MissingHost(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, &config.Config{})
-
-	deps := newTestDeps(t)
-	deps.Cfg = &config.Config{}
-
-	_, err := run(t, deps, path, "target", "bad", "add")
-	require.Error(t, err)
-}
-
-// ---------------------------------------------------------------------------
-// target remove
-// ---------------------------------------------------------------------------
-
-func TestTargetRemove_Success(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	out, err := run(t, deps, path, "target", "lab", "remove", "--yes")
-	require.NoError(t, err)
-	require.Contains(t, out, "lab")
-
-	cfg := loadCfg(t, path)
-	require.Nil(t, cfg.Targets["lab"])
-	require.NotNil(t, cfg.Targets["prod"])
-}
-
-func TestTargetRemove_CurrentTargetCleared(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	_, err := run(t, deps, path, "target", "prod", "remove", "--yes")
-	require.NoError(t, err)
-
-	cfg := loadCfg(t, path)
-	require.Empty(t, cfg.CurrentTarget, "current-target must be cleared when removed")
-}
-
-func TestTargetRemove_NotFound(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	_, err := run(t, deps, path, "target", "ghost", "remove", "--yes")
-	require.Error(t, err)
-}
-
-// ---------------------------------------------------------------------------
-// switch
-// ---------------------------------------------------------------------------
-
-func TestSwitch_Success(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	out, err := run(t, deps, path, "switch", "lab")
-	require.NoError(t, err)
-	require.Contains(t, out, "lab")
-	require.Contains(t, out, "lab.example.com")
-
-	cfg := loadCfg(t, path)
-	require.Equal(t, "lab", cfg.CurrentTarget)
-}
-
-func TestSwitch_NotFound(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	writeConfig(t, path, seedCfg())
-
-	deps := newTestDeps(t)
-	deps.Cfg = loadCfg(t, path)
-
-	_, err := run(t, deps, path, "switch", "ghost")
-	require.Error(t, err)
 }
 
 // ---------------------------------------------------------------------------
@@ -405,8 +139,8 @@ func TestAuthLogin_Success(t *testing.T) {
 
 	host, port := fakeHostPort(t, f)
 	cfg := &config.Config{
-		CurrentTarget: "lab",
-		Targets: map[string]*config.Target{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
 			"lab": {
 				Host:     host,
 				Port:     port,
@@ -426,7 +160,7 @@ func TestAuthLogin_Success(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	out, err := run(t, deps, path, "auth", "login", "--target", "lab", "--password", "secretpw")
+	out, err := run(t, deps, path, "auth", "login", "--context", "lab", "--password", "secretpw")
 	require.NoError(t, err)
 	require.Contains(t, out, "admin@pam")
 
@@ -436,9 +170,9 @@ func TestAuthLogin_Success(t *testing.T) {
 
 	// Session must be persisted in config.
 	saved := loadCfg(t, path)
-	require.NotNil(t, saved.Targets["lab"].Auth.Session)
-	require.Equal(t, "PVE:admin@pam:DEADBEEF", saved.Targets["lab"].Auth.Session.Ticket)
-	require.Equal(t, "csrf-token-xyz", saved.Targets["lab"].Auth.Session.CSRF)
+	require.NotNil(t, saved.Contexts["lab"].Auth.Session)
+	require.Equal(t, "PVE:admin@pam:DEADBEEF", saved.Contexts["lab"].Auth.Session.Ticket)
+	require.Equal(t, "csrf-token-xyz", saved.Contexts["lab"].Auth.Session.CSRF)
 }
 
 func TestAuthLogin_ServerError(t *testing.T) {
@@ -451,7 +185,7 @@ func TestAuthLogin_ServerError(t *testing.T) {
 	path := filepath.Join(dir, "config.yml")
 	host, port := fakeHostPort(t, f)
 	cfg := &config.Config{
-		Targets: map[string]*config.Target{
+		Contexts: map[string]*config.Context{
 			"lab": {
 				Host:     host,
 				Port:     port,
@@ -471,7 +205,7 @@ func TestAuthLogin_ServerError(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	_, err := run(t, deps, path, "auth", "login", "--target", "lab", "--password", "wrong")
+	_, err := run(t, deps, path, "auth", "login", "--context", "lab", "--password", "wrong")
 	require.Error(t, err)
 }
 
@@ -491,8 +225,8 @@ func TestAuthLogout_WipesSession(t *testing.T) {
 	path := filepath.Join(dir, "config.yml")
 	host, port := fakeHostPort(t, f)
 	cfg := &config.Config{
-		CurrentTarget: "lab",
-		Targets: map[string]*config.Target{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
 			"lab": {
 				Host:     host,
 				Port:     port,
@@ -517,12 +251,12 @@ func TestAuthLogout_WipesSession(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	out, err := run(t, deps, path, "auth", "logout", "--target", "lab")
+	out, err := run(t, deps, path, "auth", "logout", "--context", "lab")
 	require.NoError(t, err)
 	require.Contains(t, out, "lab")
 
 	saved := loadCfg(t, path)
-	require.Nil(t, saved.Targets["lab"].Auth.Session, "session must be wiped on logout")
+	require.Nil(t, saved.Contexts["lab"].Auth.Session, "session must be wiped on logout")
 }
 
 func TestAuthLogout_NoSession(t *testing.T) {
@@ -534,7 +268,7 @@ func TestAuthLogout_NoSession(t *testing.T) {
 	deps.Cfg = loadCfg(t, path)
 
 	// prod has token auth, no session — logout should still succeed (idempotent).
-	_, err := run(t, deps, path, "auth", "logout", "--target", "prod")
+	_, err := run(t, deps, path, "auth", "logout", "--context", "prod")
 	require.NoError(t, err)
 }
 
@@ -551,7 +285,7 @@ func TestAuthStatus_Token(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	out, err := run(t, deps, path, "auth", "status", "--target", "prod")
+	out, err := run(t, deps, path, "auth", "status", "--context", "prod")
 	require.NoError(t, err)
 	require.Contains(t, out, "token")
 	require.Contains(t, out, "cli")
@@ -572,7 +306,7 @@ func TestAuthStatus_UnresolvedSecret(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	out, err := run(t, deps, path, "auth", "status", "--target", "prod")
+	out, err := run(t, deps, path, "auth", "status", "--context", "prod")
 	require.NoError(t, err)
 	require.Contains(t, out, "no")
 }
@@ -585,7 +319,7 @@ func TestAuthStatus_NotFound(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	_, err := run(t, deps, path, "auth", "status", "--target", "ghost")
+	_, err := run(t, deps, path, "auth", "status", "--context", "ghost")
 	require.Error(t, err)
 }
 
@@ -607,8 +341,8 @@ func TestAuthRefresh_Success(t *testing.T) {
 	path := filepath.Join(dir, "config.yml")
 	host, port := fakeHostPort(t, f)
 	cfg := &config.Config{
-		CurrentTarget: "lab",
-		Targets: map[string]*config.Target{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
 			"lab": {
 				Host:     host,
 				Port:     port,
@@ -628,16 +362,16 @@ func TestAuthRefresh_Success(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	out, err := run(t, deps, path, "auth", "refresh", "--target", "lab")
+	out, err := run(t, deps, path, "auth", "refresh", "--context", "lab")
 	require.NoError(t, err)
 	require.Contains(t, out, "admin@pam")
 
 	saved := loadCfg(t, path)
-	require.NotNil(t, saved.Targets["lab"].Auth.Session)
-	require.Equal(t, "PVE:admin@pam:NEW", saved.Targets["lab"].Auth.Session.Ticket)
+	require.NotNil(t, saved.Contexts["lab"].Auth.Session)
+	require.Equal(t, "PVE:admin@pam:NEW", saved.Contexts["lab"].Auth.Session.Ticket)
 }
 
-func TestAuthRefresh_TokenTargetRejected(t *testing.T) {
+func TestAuthRefresh_TokenContextRejected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 	writeConfig(t, path, seedCfg())
@@ -645,8 +379,8 @@ func TestAuthRefresh_TokenTargetRejected(t *testing.T) {
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
-	// prod is a token target — refresh only applies to password auth.
-	_, err := run(t, deps, path, "auth", "refresh", "--target", "prod")
+	// prod is a token context — refresh only applies to password auth.
+	_, err := run(t, deps, path, "auth", "refresh", "--context", "prod")
 	require.Error(t, err)
 }
 
@@ -663,7 +397,7 @@ func TestAuthSetToken_Success(t *testing.T) {
 	deps.Cfg = loadCfg(t, path)
 
 	out, err := run(t, deps, path,
-		"auth", "set-token", "--target", "lab",
+		"auth", "set-token", "--context", "lab",
 		"--token-id", "newid", "--secret", "newsecret",
 		"--username", "svc@pam",
 	)
@@ -671,11 +405,11 @@ func TestAuthSetToken_Success(t *testing.T) {
 	require.Contains(t, out, "lab")
 
 	cfg := loadCfg(t, path)
-	require.Equal(t, "token", cfg.Targets["lab"].Auth.Type)
-	require.Equal(t, "newid", cfg.Targets["lab"].Auth.TokenID)
-	require.Equal(t, "newsecret", cfg.Targets["lab"].Auth.Secret)
-	require.Equal(t, "svc@pam", cfg.Targets["lab"].Auth.Username)
-	require.Nil(t, cfg.Targets["lab"].Auth.Session, "switching to token auth must drop any session")
+	require.Equal(t, "token", cfg.Contexts["lab"].Auth.Type)
+	require.Equal(t, "newid", cfg.Contexts["lab"].Auth.TokenID)
+	require.Equal(t, "newsecret", cfg.Contexts["lab"].Auth.Secret)
+	require.Equal(t, "svc@pam", cfg.Contexts["lab"].Auth.Username)
+	require.Nil(t, cfg.Contexts["lab"].Auth.Session, "switching to token auth must drop any session")
 }
 
 func TestAuthSetToken_NotFound(t *testing.T) {
@@ -687,7 +421,7 @@ func TestAuthSetToken_NotFound(t *testing.T) {
 	deps.Cfg = loadCfg(t, path)
 
 	_, err := run(t, deps, path,
-		"auth", "set-token", "--target", "ghost",
+		"auth", "set-token", "--context", "ghost",
 		"--token-id", "x", "--secret", "y",
 	)
 	require.Error(t, err)
@@ -706,17 +440,17 @@ func TestAuthSetPassword_Success(t *testing.T) {
 	deps.Cfg = loadCfg(t, path)
 
 	out, err := run(t, deps, path,
-		"auth", "set-password", "--target", "prod",
+		"auth", "set-password", "--context", "prod",
 		"--username", "root@pam", "--secret", "${MY_PW}",
 	)
 	require.NoError(t, err)
 	require.Contains(t, out, "prod")
 
 	cfg := loadCfg(t, path)
-	require.Equal(t, "password", cfg.Targets["prod"].Auth.Type)
-	require.Equal(t, "root@pam", cfg.Targets["prod"].Auth.Username)
-	require.Equal(t, "${MY_PW}", cfg.Targets["prod"].Auth.Secret)
-	require.Empty(t, cfg.Targets["prod"].Auth.TokenID, "switching to password auth must drop token-id")
+	require.Equal(t, "password", cfg.Contexts["prod"].Auth.Type)
+	require.Equal(t, "root@pam", cfg.Contexts["prod"].Auth.Username)
+	require.Equal(t, "${MY_PW}", cfg.Contexts["prod"].Auth.Secret)
+	require.Empty(t, cfg.Contexts["prod"].Auth.TokenID, "switching to password auth must drop token-id")
 }
 
 func TestAuthSetPassword_MissingUsername(t *testing.T) {
@@ -728,7 +462,7 @@ func TestAuthSetPassword_MissingUsername(t *testing.T) {
 	deps.Cfg = loadCfg(t, path)
 
 	_, err := run(t, deps, path,
-		"auth", "set-password", "--target", "prod",
+		"auth", "set-password", "--context", "prod",
 		"--secret", "x",
 	)
 	require.Error(t, err)

@@ -36,22 +36,22 @@ func NewCommand() *cobra.Command {
 
 // configTemplate is the commented config.yml emitted by `pve init config`. It
 // documents every supported field so the user can fill it in by hand. The
-// rendered file still parses as valid YAML once a target's placeholders are set.
+// rendered file still parses as valid YAML once a context's placeholders are set.
 const configTemplate = `# pve CLI configuration.
 # Location: ~/.config/pve/config.yml (override with --config or $XDG_CONFIG_HOME).
 # This file is written 0600; keep it that way — it may hold credentials.
 
-# Name of the target used when --target/-t is not given. Set this to one of the
-# keys under "targets:" below once you have filled a target in.
-current-target: lab
+# Name of the context used when --context/-c is not given. Set this to one of
+# the keys under "contexts:" below once you have filled a context in.
+current-context: lab
 
 # Default output format for every command: table | plain | json | yaml.
 default-output: table
 
-targets:
-  # A target is one Proxmox VE endpoint. Rename "lab" to anything you like; the
-  # name is what you pass to --target and "current-target" above. Add as many
-  # targets as you need.
+contexts:
+  # A context is one Proxmox VE endpoint. Rename "lab" to anything you like; the
+  # name is what you pass to --context and "current-context" above. Add as many
+  # contexts as you need.
   lab:
     host: pve.example.com    # hostname or IP of any node in the cluster
     port: 8006               # HTTPS API port (default 8006)

@@ -90,16 +90,16 @@ test-integration: ## Run integration tests (requires config/.env.test or PVE_TES
 	$(SCRIPTS)/test integration
 
 .PHONY: test-e2e
-test-e2e: ## Run end-to-end happy-path sweep of all command trees (TARGET=lab)
-	$(SCRIPTS)/e2e $(if $(TARGET),--target $(TARGET),) $(TREES)
+test-e2e: ## Run end-to-end happy-path sweep of all command trees (CONTEXT=lab)
+	$(SCRIPTS)/e2e $(if $(CONTEXT),--context $(CONTEXT),) $(TREES)
 
 .PHONY: test-e2e-mutate
-test-e2e-mutate: ## Run the e2e sweep plus the destructive qemu/lxc verb matrix (TARGET=lab)
-	$(SCRIPTS)/e2e --mutate $(if $(TARGET),--target $(TARGET),) $(TREES)
+test-e2e-mutate: ## Run the e2e sweep plus the destructive qemu/lxc verb matrix (CONTEXT=lab)
+	$(SCRIPTS)/e2e --mutate $(if $(CONTEXT),--context $(CONTEXT),) $(TREES)
 
 .PHONY: test-lifecycle
-test-lifecycle: ## Run destructive VM+CT lifecycle on an isolated SDN/pool (TARGET=lab)
-	$(SCRIPTS)/lifecycle $(if $(TARGET),--target $(TARGET),) $(LIFECYCLE_ARGS)
+test-lifecycle: ## Run destructive VM+CT lifecycle on an isolated SDN/pool (CONTEXT=lab)
+	$(SCRIPTS)/lifecycle $(if $(CONTEXT),--context $(CONTEXT),) $(LIFECYCLE_ARGS)
 
 .PHONY: test-race
 test-race: ## Run unit tests with race detector

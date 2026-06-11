@@ -4,18 +4,21 @@ package config
 
 // Config is the top-level configuration file struct.
 type Config struct {
-	// CurrentTarget is the name of the active target used when --target is not specified.
-	CurrentTarget string `yaml:"current-target"`
+	// CurrentContext is the name of the active context used when --context is not specified.
+	CurrentContext string `yaml:"current-context"`
+
+	// PreviousContext is the name of the last active context, used by `pve context previous`.
+	PreviousContext string `yaml:"previous-context,omitempty"`
 
 	// DefaultOutput is the default output format (table|plain|json|yaml) for all commands.
 	DefaultOutput string `yaml:"default-output"`
 
-	// Targets is the named map of PVE endpoint configurations.
-	Targets map[string]*Target `yaml:"targets"`
+	// Contexts is the named map of PVE endpoint configurations.
+	Contexts map[string]*Context `yaml:"contexts"`
 }
 
-// Target represents one named Proxmox VE API endpoint.
-type Target struct {
+// Context represents one named Proxmox VE API endpoint.
+type Context struct {
 	// Host is the hostname or IP address of the PVE node (required).
 	Host string `yaml:"host"`
 
@@ -31,17 +34,17 @@ type Target struct {
 	// DefaultNode is the PVE node name to use when --node is not specified.
 	DefaultNode string `yaml:"default-node,omitempty"`
 
-	// Auth holds the credential block for this target.
+	// DefaultOutput overrides the global default output format for this context.
+	DefaultOutput string `yaml:"default-output,omitempty"`
+
+	// Auth holds the credential block for this context.
 	Auth AuthBlock `yaml:"auth"`
 
 	// TLS holds TLS verification settings.
 	TLS TLSBlock `yaml:"tls,omitempty"`
-
-	// DefaultOutput overrides the global default output format for this target.
-	DefaultOutput string `yaml:"default-output,omitempty"`
 }
 
-// AuthBlock holds credential configuration for a target.
+// AuthBlock holds credential configuration for a context.
 // Secrets may be env refs (${VAR} or $VAR), keychain refs (keychain:path), or literals.
 type AuthBlock struct {
 	// Type is the authentication method: "token" or "password".
@@ -60,7 +63,7 @@ type AuthBlock struct {
 	Session *Session `yaml:"session,omitempty"`
 }
 
-// TLSBlock holds TLS verification settings for a target.
+// TLSBlock holds TLS verification settings for a context.
 type TLSBlock struct {
 	// Insecure disables TLS certificate verification when true.
 	Insecure bool `yaml:"insecure"`

@@ -21,7 +21,7 @@ func run(t *testing.T, cfgPath string, args ...string) (string, error) {
 
 	t.Setenv("PVE_OUTPUT", "table")
 	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_TARGET", "")
+	t.Setenv("PVE_CONTEXT", "")
 
 	root := cli.NewRootCmd()
 	root.SetContext(context.Background())
@@ -51,16 +51,16 @@ func TestInitConfig_WritesParsableTemplate(t *testing.T) {
 
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
-	require.Equal(t, "lab", cfg.CurrentTarget)
+	require.Equal(t, "lab", cfg.CurrentContext)
 	require.Equal(t, "table", cfg.DefaultOutput)
 
-	target := cfg.Targets["lab"]
-	require.NotNil(t, target)
-	require.Equal(t, "pve.example.com", target.Host)
-	require.Equal(t, 8006, target.Port)
-	require.Equal(t, "token", target.Auth.Type)
-	require.Equal(t, "automation", target.Auth.TokenID)
-	require.Equal(t, "${PVE_TOKEN}", target.Auth.Secret)
+	ctx := cfg.Contexts["lab"]
+	require.NotNil(t, ctx)
+	require.Equal(t, "pve.example.com", ctx.Host)
+	require.Equal(t, 8006, ctx.Port)
+	require.Equal(t, "token", ctx.Auth.Type)
+	require.Equal(t, "automation", ctx.Auth.TokenID)
+	require.Equal(t, "${PVE_TOKEN}", ctx.Auth.Secret)
 
 	// The template keeps its guiding comments.
 	raw, err := os.ReadFile(path)
@@ -70,7 +70,7 @@ func TestInitConfig_WritesParsableTemplate(t *testing.T) {
 
 func TestInitConfig_RefusesOverwriteWithoutForce(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
-	require.NoError(t, os.WriteFile(path, []byte("current-target: keep\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("current-context: keep\n"), 0o600))
 
 	out, err := run(t, path, "config")
 	require.Error(t, err)
@@ -79,20 +79,20 @@ func TestInitConfig_RefusesOverwriteWithoutForce(t *testing.T) {
 	// Untouched.
 	raw, readErr := os.ReadFile(path)
 	require.NoError(t, readErr)
-	require.Equal(t, "current-target: keep\n", string(raw))
+	require.Equal(t, "current-context: keep\n", string(raw))
 	require.NotContains(t, out, "Wrote config template")
 }
 
 func TestInitConfig_ForceOverwrites(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
-	require.NoError(t, os.WriteFile(path, []byte("current-target: old\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("current-context: old\n"), 0o600))
 
 	_, err := run(t, path, "config", "--force")
 	require.NoError(t, err)
 
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
-	require.Equal(t, "lab", cfg.CurrentTarget)
+	require.Equal(t, "lab", cfg.CurrentContext)
 }
 
 func TestInit_NoArgsShowsHelp(t *testing.T) {

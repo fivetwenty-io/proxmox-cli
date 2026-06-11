@@ -8,13 +8,7 @@ import (
 
 func init() {
 	cli.RegisterGroup(newGroupCmd)
-	// Hidden top-level aliases for the api/* sub-tree (A-03): `pve targets`,
-	// `pve target`, `pve switch`, and `pve auth ...` behave identically to their
-	// `pve api ...` forms. Each is registered as its own hidden top-level command
-	// so it does not clutter help yet remains a working invocation.
-	cli.RegisterGroup(func(_ *cli.Deps) *cobra.Command { return hidden(newTargetsCmd()) })
-	cli.RegisterGroup(func(_ *cli.Deps) *cobra.Command { return hidden(newTargetCmd()) })
-	cli.RegisterGroup(func(_ *cli.Deps) *cobra.Command { return hidden(newSwitchCmd()) })
+	// Hidden top-level alias: `pve auth ...` behaves identically to `pve api auth ...`.
 	cli.RegisterGroup(func(_ *cli.Deps) *cobra.Command { return hidden(newAuthCmd()) })
 }
 
@@ -31,23 +25,20 @@ func hidden(cmd *cobra.Command) *cobra.Command {
 	return cmd
 }
 
-// NewCommand builds the `pve api` command and all of its sub-commands: target
-// management (targets/target/switch) and authentication (auth login/logout/
-// status/refresh/set-token/set-password). Every sub-command operates only on the
-// local config file (and, for login/refresh, the PVE ticket endpoint), so each
-// carries the noClient annotation to skip API-client construction.
+// NewCommand builds the `pve api` command and its sub-commands: authentication
+// (auth login/logout/status/refresh/set-token/set-password). Every sub-command
+// operates only on the local config file (and, for login/refresh, the PVE
+// ticket endpoint), so each carries the noClient annotation to skip API-client
+// construction.
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api",
-		Short: "Manage CLI targets and authentication",
-		Long: "Manage named Proxmox VE targets in the local config file and " +
-			"authenticate against them.",
+		Short: "Manage CLI authentication",
+		Long: "Manage authentication against named Proxmox VE contexts in the " +
+			"local config file.",
 	}
 
 	cmd.AddCommand(
-		newTargetsCmd(),
-		newTargetCmd(),
-		newSwitchCmd(),
 		newAuthCmd(),
 	)
 

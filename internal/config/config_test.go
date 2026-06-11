@@ -17,9 +17,9 @@ import (
 // sampleConfig returns a fully populated Config for round-trip tests.
 func sampleConfig() *config.Config {
 	return &config.Config{
-		CurrentTarget: "prod",
-		DefaultOutput: "table",
-		Targets: map[string]*config.Target{
+		CurrentContext: "prod",
+		DefaultOutput:  "table",
+		Contexts: map[string]*config.Context{
 			"prod": {
 				Host:     "pve.example.com",
 				Port:     8006,
@@ -85,8 +85,8 @@ func TestLoad_MissingFile_ReturnsEmptyConfig(t *testing.T) {
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
-	require.Empty(t, cfg.CurrentTarget)
-	require.Nil(t, cfg.Targets)
+	require.Empty(t, cfg.CurrentContext)
+	require.Nil(t, cfg.Contexts)
 }
 
 func TestLoad_ValidFile(t *testing.T) {
@@ -99,11 +99,11 @@ func TestLoad_ValidFile(t *testing.T) {
 	loaded, err := config.Load(path)
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
-	require.Equal(t, "prod", loaded.CurrentTarget)
+	require.Equal(t, "prod", loaded.CurrentContext)
 	require.Equal(t, "table", loaded.DefaultOutput)
-	require.Len(t, loaded.Targets, 2)
+	require.Len(t, loaded.Contexts, 2)
 
-	prod := loaded.Targets["prod"]
+	prod := loaded.Contexts["prod"]
 	require.NotNil(t, prod)
 	require.Equal(t, "pve.example.com", prod.Host)
 	require.Equal(t, "token", prod.Auth.Type)
@@ -111,7 +111,7 @@ func TestLoad_ValidFile(t *testing.T) {
 	require.Equal(t, "AA:BB:CC", prod.TLS.Fingerprint)
 	require.Equal(t, "/etc/ssl/certs/ca.pem", prod.TLS.CACert)
 
-	staging := loaded.Targets["staging"]
+	staging := loaded.Contexts["staging"]
 	require.NotNil(t, staging)
 	require.NotNil(t, staging.Auth.Session)
 	require.Equal(t, "PVE:admin@pam:abc123", staging.Auth.Session.Ticket)
@@ -122,54 +122,148 @@ func TestLoad_MalformedYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 	// An unclosed sequence is genuinely invalid YAML for goccy/go-yaml.
-	require.NoError(t, os.WriteFile(path, []byte("current-target: [unclosed"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("current-context: [unclosed"), 0o600))
 
 	_, err := config.Load(path)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "parse config")
 }
 
-// ── ResolveTarget ─────────────────────────────────────────────────────────────
+// ── contexts/current-context round-trip ──────────────────────────────────────
 
-func TestResolveTarget_UsesCurrentTarget(t *testing.T) {
+func TestLoad_ContextsCurrentContext_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := &config.Config{
+		CurrentContext: "dev",
+		Contexts: map[string]*config.Context{
+			"dev": {
+				Host: "dev.example.com",
+				Port: 8006,
+				Auth: config.AuthBlock{Type: "token", Secret: "tok"},
+			},
+		},
+	}
+	require.NoError(t, config.Save(path, cfg))
+
+	// Verify the YAML file uses "contexts:" and "current-context:" keys.
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "current-context:")
+	require.Contains(t, string(raw), "contexts:")
+	require.NotContains(t, string(raw), "current-target:")
+	require.NotContains(t, string(raw), "targets:")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, "dev", loaded.CurrentContext)
+	require.NotNil(t, loaded.Contexts["dev"])
+}
+
+// ── previous-context persist ──────────────────────────────────────────────────
+
+func TestLoad_PreviousContext_Persist(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := &config.Config{
+		CurrentContext:  "prod",
+		PreviousContext: "staging",
+		Contexts: map[string]*config.Context{
+			"prod": {
+				Host: "prod.example.com",
+				Port: 8006,
+				Auth: config.AuthBlock{Type: "token", Secret: "tok"},
+			},
+			"staging": {
+				Host: "staging.example.com",
+				Port: 8006,
+				Auth: config.AuthBlock{Type: "token", Secret: "tok2"},
+			},
+		},
+	}
+	require.NoError(t, config.Save(path, cfg))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, "prod", loaded.CurrentContext)
+	require.Equal(t, "staging", loaded.PreviousContext)
+
+	// Verify YAML key emitted correctly.
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "previous-context:")
+}
+
+// ── unknown-key tolerance ─────────────────────────────────────────────────────
+
+func TestLoad_UnknownKeys_Tolerated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	// YAML with unknown top-level and nested keys should not error on load.
+	yml := `current-context: dev
+unknown-top-key: ignored
+contexts:
+  dev:
+    host: dev.example.com
+    port: 8006
+    unknown-context-key: also-ignored
+    auth:
+      type: token
+      secret: tok
+`
+	require.NoError(t, os.WriteFile(path, []byte(yml), 0o600))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, "dev", loaded.CurrentContext)
+	require.NotNil(t, loaded.Contexts["dev"])
+	require.Equal(t, "dev.example.com", loaded.Contexts["dev"].Host)
+}
+
+// ── ResolveContext ─────────────────────────────────────────────────────────────
+
+func TestResolveContext_UsesCurrentContext(t *testing.T) {
 	cfg := sampleConfig()
-	tgt, name, err := config.ResolveTarget(cfg, "")
+	ctx, name, err := config.ResolveContext(cfg, "")
 	require.NoError(t, err)
 	require.Equal(t, "prod", name)
-	require.Equal(t, "pve.example.com", tgt.Host)
+	require.Equal(t, "pve.example.com", ctx.Host)
 }
 
-func TestResolveTarget_OverrideOverridesCurrentTarget(t *testing.T) {
+func TestResolveContext_OverrideOverridesCurrentContext(t *testing.T) {
 	cfg := sampleConfig()
-	tgt, name, err := config.ResolveTarget(cfg, "staging")
+	ctx, name, err := config.ResolveContext(cfg, "staging")
 	require.NoError(t, err)
 	require.Equal(t, "staging", name)
-	require.Equal(t, "pve-staging.example.com", tgt.Host)
+	require.Equal(t, "pve-staging.example.com", ctx.Host)
 }
 
-func TestResolveTarget_NotFound(t *testing.T) {
+func TestResolveContext_NotFound(t *testing.T) {
 	cfg := sampleConfig()
-	_, _, err := config.ResolveTarget(cfg, "doesnotexist")
+	_, _, err := config.ResolveContext(cfg, "doesnotexist")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "doesnotexist")
 }
 
-func TestResolveTarget_NoCurrentTarget_NoOverride(t *testing.T) {
-	cfg := &config.Config{Targets: map[string]*config.Target{}}
-	_, _, err := config.ResolveTarget(cfg, "")
+func TestResolveContext_NoCurrentContext_NoOverride(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{}}
+	_, _, err := config.ResolveContext(cfg, "")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no target specified")
+	require.Contains(t, err.Error(), "no context specified")
 }
 
-func TestResolveTarget_NilConfig(t *testing.T) {
-	_, _, err := config.ResolveTarget(nil, "prod")
+func TestResolveContext_NilConfig(t *testing.T) {
+	_, _, err := config.ResolveContext(nil, "prod")
 	require.Error(t, err)
 }
 
-func TestResolveTarget_AppliesDefaults(t *testing.T) {
+func TestResolveContext_AppliesDefaults(t *testing.T) {
 	cfg := &config.Config{
-		CurrentTarget: "minimal",
-		Targets: map[string]*config.Target{
+		CurrentContext: "minimal",
+		Contexts: map[string]*config.Context{
 			"minimal": {
 				Host: "192.0.2.1",
 				Auth: config.AuthBlock{
@@ -179,38 +273,38 @@ func TestResolveTarget_AppliesDefaults(t *testing.T) {
 			},
 		},
 	}
-	tgt, _, err := config.ResolveTarget(cfg, "")
+	ctx, _, err := config.ResolveContext(cfg, "")
 	require.NoError(t, err)
-	require.Equal(t, 8006, tgt.Port)
-	require.Equal(t, "https", tgt.Protocol)
-	require.Equal(t, "pam", tgt.Realm)
+	require.Equal(t, 8006, ctx.Port)
+	require.Equal(t, "https", ctx.Protocol)
+	require.Equal(t, "pam", ctx.Realm)
 }
 
-func TestResolveTarget_ValidatesHostRequired(t *testing.T) {
+func TestResolveContext_ValidatesHostRequired(t *testing.T) {
 	cfg := &config.Config{
-		CurrentTarget: "bad",
-		Targets: map[string]*config.Target{
+		CurrentContext: "bad",
+		Contexts: map[string]*config.Context{
 			"bad": {
 				Auth: config.AuthBlock{Type: "token", Secret: "s"},
 			},
 		},
 	}
-	_, _, err := config.ResolveTarget(cfg, "")
+	_, _, err := config.ResolveContext(cfg, "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "host is required")
 }
 
-func TestResolveTarget_ValidatesAuthType(t *testing.T) {
+func TestResolveContext_ValidatesAuthType(t *testing.T) {
 	cfg := &config.Config{
-		CurrentTarget: "bad",
-		Targets: map[string]*config.Target{
+		CurrentContext: "bad",
+		Contexts: map[string]*config.Context{
 			"bad": {
 				Host: "host",
 				Auth: config.AuthBlock{Type: "oauth", Secret: "s"},
 			},
 		},
 	}
-	_, _, err := config.ResolveTarget(cfg, "")
+	_, _, err := config.ResolveContext(cfg, "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "auth.type must be")
 }
@@ -312,13 +406,13 @@ func TestSave_Atomic_ThenLoad_Equality(t *testing.T) {
 	loaded, err := config.Load(path)
 	require.NoError(t, err)
 
-	require.Equal(t, original.CurrentTarget, loaded.CurrentTarget)
+	require.Equal(t, original.CurrentContext, loaded.CurrentContext)
 	require.Equal(t, original.DefaultOutput, loaded.DefaultOutput)
-	require.Len(t, loaded.Targets, len(original.Targets))
+	require.Len(t, loaded.Contexts, len(original.Contexts))
 
-	for name, orig := range original.Targets {
-		got, ok := loaded.Targets[name]
-		require.True(t, ok, "target %q missing after round-trip", name)
+	for name, orig := range original.Contexts {
+		got, ok := loaded.Contexts[name]
+		require.True(t, ok, "context %q missing after round-trip", name)
 		require.Equal(t, orig.Host, got.Host)
 		require.Equal(t, orig.Port, got.Port)
 		require.Equal(t, orig.Auth.Type, got.Auth.Type)
@@ -429,8 +523,8 @@ func TestResolve_AllEmpty_ReturnsEmptyString(t *testing.T) {
 
 func TestTLSBlock_ZeroValue_RoundTrip(t *testing.T) {
 	cfg := &config.Config{
-		CurrentTarget: "t",
-		Targets: map[string]*config.Target{
+		CurrentContext: "t",
+		Contexts: map[string]*config.Context{
 			"t": {
 				Host:     "host",
 				Port:     8006,
@@ -450,8 +544,8 @@ func TestTLSBlock_ZeroValue_RoundTrip(t *testing.T) {
 
 	loaded, err := config.Load(path)
 	require.NoError(t, err)
-	tgt := loaded.Targets["t"]
-	require.False(t, tgt.TLS.Insecure)
-	require.Empty(t, tgt.TLS.Fingerprint)
-	require.Empty(t, tgt.TLS.CACert)
+	ctx := loaded.Contexts["t"]
+	require.False(t, ctx.TLS.Insecure)
+	require.Empty(t, ctx.TLS.Fingerprint)
+	require.Empty(t, ctx.TLS.CACert)
 }

@@ -44,14 +44,14 @@ type Deps struct {
 	// Log is the slog.Logger for this invocation.
 	Log *slog.Logger
 
-	// Node is the resolved --node flag value (flag > PVE_NODE > config DefaultNode).
+	// Node is the resolved --node flag value (flag > PVE_NODE > context DefaultNode).
 	Node string
 
 	// Cfg is the loaded config. Never nil after PersistentPreRunE.
 	Cfg *config.Config
 
 	// ConfigPath is the resolved --config file path. Config-mutating commands
-	// (the api group) persist to this path via config.Save / config.SaveForce.
+	// persist to this path via config.Save / config.SaveForce.
 	ConfigPath string
 
 	// Runner is the exec.Runner for shell-outs (ssh, rsync).
@@ -98,7 +98,7 @@ func RegisterGroup(f func(*Deps) *cobra.Command) {
 // persistentFlags holds the raw flag values read by cobra before PersistentPreRunE runs.
 type persistentFlags struct {
 	config   string
-	target   string
+	context  string
 	node     string
 	output   string
 	debug    bool
@@ -123,7 +123,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "pve — Proxmox VE CLI",
 		Long: `pve is a command-line interface for the Proxmox VE API.
 
-It supports multiple named targets, token and password authentication, and
+It supports multiple named contexts, token and password authentication, and
 structured output in table, plain, JSON, and YAML formats.`,
 		// Silence cobra's built-in error printing; Execute() handles it.
 		SilenceErrors: true,
@@ -135,8 +135,8 @@ structured output in table, plain, JSON, and YAML formats.`,
 		config.DefaultPath(),
 		"path to pve config file")
 
-	root.PersistentFlags().StringVarP(&pf.target, "target", "t", "",
-		"target name from config (overrides current-target)")
+	root.PersistentFlags().StringVarP(&pf.context, "context", "c", "",
+		"context name override (overrides $PVE_CONTEXT and current-context in config)")
 
 	root.PersistentFlags().StringVar(&pf.node, "node",
 		os.Getenv("PVE_NODE"),
@@ -175,7 +175,7 @@ func resolveOutputDefault() string {
 // persistentPreRunE is the implementation of root.PersistentPreRunE.
 // It:
 //  1. Loads config from --config path.
-//  2. Resolves the target (flag > env > config current-target).
+//  2. Resolves the context (flag > env > config current-context).
 //  3. Skips client construction for commands annotated with Annotations["noClient"].
 //  4. Resolves the secret via config.ResolveSecret.
 //  5. Constructs the *apiclient.APIClient via BuildOptions + NewAPIClient.
@@ -220,86 +220,108 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 		Format:     format,
 		Async:      pf.async,
 		Log:        logger,
-		Node:       resolveNode(pf.node, cfg),
+		Node:       pf.node,
 		Cfg:        cfg,
 		ConfigPath: pf.config,
 		Runner:     exec.Real(),
 	}
 
 	// Commands that set Annotations["noClient"]="true" skip API client build.
-	// This applies to: version (build-info only), api target add/remove/show,
-	// api targets, api switch.
+	// This applies to: version (build-info only), context group verbs.
 	if cmd.Annotations["noClient"] == "true" {
 		setDeps(cmd, deps)
 		return nil
 	}
 
-	// Resolve target — flag > env > config.
-	targetName := config.Resolve(pf.target, "PVE_TARGET", cfg.CurrentTarget, "")
-	if targetName == "" {
+	// Resolve context — flag > env > config.
+	contextName := config.Resolve(pf.context, "PVE_CONTEXT", cfg.CurrentContext, "")
+	if contextName == "" {
 		return fmt.Errorf(
-			"no target specified: use --target/-t, set PVE_TARGET, or configure current-target in %s",
+			"no context specified: use --context/-c, set $PVE_CONTEXT, or run 'pve context select' (config: %s)",
 			pf.config,
 		)
 	}
 
-	target, _, err := config.ResolveTarget(cfg, targetName)
+	ctx, _, err := config.ResolveContext(cfg, contextName)
 	if err != nil {
-		return fmt.Errorf("resolve target %q: %w", targetName, err)
+		return fmt.Errorf("resolve context %q: %w", contextName, err)
+	}
+
+	// Apply per-context defaults for --node and --output.
+	// Precedence: explicit flag > context default > existing global default.
+	// pf.node is empty only when PVE_NODE is unset and --node was not passed.
+	// Apply per-context DefaultNode when --node was not explicitly set.
+	// pf.node is empty only when neither PVE_NODE nor --node was provided;
+	// the node flag has no non-empty global default, so the empty-string check is safe.
+	if deps.Node == "" && ctx.DefaultNode != "" {
+		deps.Node = ctx.DefaultNode
+	}
+
+	// Apply per-context DefaultOutput only when --output/-o was NOT explicitly
+	// set by the user AND $PVE_OUTPUT is unset.
+	//
+	// Precedence (high → low): explicit flag > $PVE_OUTPUT > context default-output > global default.
+	//
+	// $PVE_OUTPUT is baked into the flag's default value by resolveOutputDefault,
+	// so cmd.Flags().Changed("output") stays false even when $PVE_OUTPUT is set.
+	// The additional os.Getenv guard preserves $PVE_OUTPUT over context default-output,
+	// matching the parallel treatment of $PVE_NODE (which is never overridden by context DefaultNode).
+	if !cmd.Flags().Changed("output") && os.Getenv("PVE_OUTPUT") == "" && ctx.DefaultOutput != "" {
+		deps.Format = output.Format(ctx.DefaultOutput)
 	}
 
 	// Resolve the secret (env ref, keychain ref, or literal).
-	secret, err := config.ResolveSecret(target.Auth.Secret)
+	secret, err := config.ResolveSecret(ctx.Auth.Secret)
 	if err != nil {
-		return fmt.Errorf("resolve secret for target %q: %w", targetName, err)
+		return fmt.Errorf("resolve secret for context %q: %w", contextName, err)
 	}
 
 	// Determine TLS flag: --insecure flag overrides config.
-	insecure := pf.insecure || target.TLS.Insecure
+	insecure := pf.insecure || ctx.TLS.Insecure
 	if insecure {
 		WarnInsecureTLS(cmd.ErrOrStderr())
 	}
 
 	// Build pve.Options and construct the API client.
 	var ticket, csrf, password string
-	switch target.Auth.Type {
+	switch ctx.Auth.Type {
 	case "password":
-		if target.Auth.Session != nil && target.Auth.Session.Ticket != "" {
-			ticket = target.Auth.Session.Ticket
-			csrf = target.Auth.Session.CSRF
+		if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
+			ticket = ctx.Auth.Session.Ticket
+			csrf = ctx.Auth.Session.CSRF
 		} else {
 			password = secret
 		}
 	}
 
 	var token string
-	if target.Auth.Type == "token" {
+	if ctx.Auth.Type == "token" {
 		// secret may be just the value; token-id comes from TokenID field.
 		// Format expected by BuildOptions: "tokenid=secret" or just secret.
-		if target.Auth.TokenID != "" {
-			token = target.Auth.TokenID + "=" + secret
+		if ctx.Auth.TokenID != "" {
+			token = ctx.Auth.TokenID + "=" + secret
 		} else {
 			token = secret
 		}
 	}
 
 	opts := apiclient.BuildOptions(
-		target.Host,
-		target.Port,
-		target.Protocol,
-		target.Auth.Username,
-		target.Realm,
+		ctx.Host,
+		ctx.Port,
+		ctx.Protocol,
+		ctx.Auth.Username,
+		ctx.Realm,
 		token,
 		password,
 		ticket,
 		csrf,
 		insecure,
-		target.TLS.Fingerprint,
+		ctx.TLS.Fingerprint,
 	)
 
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
-		return fmt.Errorf("connect to %s: %w", target.Host, err)
+		return fmt.Errorf("connect to %s: %w", ctx.Host, err)
 	}
 
 	// Inject the logger so HTTP request/response activity is captured in the
@@ -312,35 +334,11 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 }
 
 // WarnInsecureTLS emits a stderr warning whenever TLS verification is disabled,
-// so an operator who set --insecure (or target.TLS.Insecure) is reminded that
+// so an operator who set --insecure (or context.TLS.Insecure) is reminded that
 // the connection is vulnerable to interception. It is shared with the api auth
 // commands, which build their own clients outside the root hook.
 func WarnInsecureTLS(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "WARN: TLS certificate verification disabled (--insecure); connection is vulnerable to interception")
-}
-
-// resolveNode returns the effective --node value.
-// Priority: flag value > PVE_NODE env (already pre-applied to pf.node via flag default) > config DefaultNode.
-func resolveNode(flagNode string, cfg *config.Config) string {
-	if flagNode != "" {
-		return flagNode
-	}
-	// Attempt to read the DefaultNode from the current target in config.
-	if cfg == nil {
-		return ""
-	}
-	targetName := cfg.CurrentTarget
-	if targetName == "" {
-		return ""
-	}
-	if cfg.Targets == nil {
-		return ""
-	}
-	t, ok := cfg.Targets[targetName]
-	if !ok || t == nil {
-		return ""
-	}
-	return t.DefaultNode
 }
 
 // commandLabels extracts the command and subcommand names from the full cobra

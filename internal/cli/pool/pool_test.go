@@ -36,8 +36,8 @@ func writeConfig(t *testing.T, f *testhelper.FakePVE) string {
 	host, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
 	require.NoError(t, err, "split fake server host:port")
 
-	cfg := fmt.Sprintf(`current-target: fake
-targets:
+	cfg := fmt.Sprintf(`current-context: fake
+contexts:
   fake:
     host: %s
     port: %s
@@ -65,7 +65,7 @@ func run(t *testing.T, f *testhelper.FakePVE, in string, args ...string) (string
 
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_OUTPUT", "")
-	t.Setenv("PVE_TARGET", "")
+	t.Setenv("PVE_CONTEXT", "")
 
 	cfgPath := writeConfig(t, f)
 
@@ -97,7 +97,7 @@ func runSplit(t *testing.T, f *testhelper.FakePVE, in, format string, args ...st
 
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_OUTPUT", "")
-	t.Setenv("PVE_TARGET", "")
+	t.Setenv("PVE_CONTEXT", "")
 
 	cfgPath := writeConfig(t, f)
 

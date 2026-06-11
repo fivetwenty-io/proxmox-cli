@@ -40,8 +40,8 @@ func writeFakeConfig(t *testing.T, f *testhelper.FakePVE) string {
 	port, err := strconv.Atoi(portStr)
 	require.NoError(t, err)
 	cfg := &config.Config{
-		CurrentTarget: "fake",
-		Targets: map[string]*config.Target{
+		CurrentContext: "fake",
+		Contexts: map[string]*config.Context{
 			"fake": {
 				Host:     host,
 				Port:     port,
@@ -70,7 +70,7 @@ func newNodeRoot(t *testing.T, f *testhelper.FakePVE, format output.Format, runn
 	*cobra.Command, *bytes.Buffer, []string,
 ) {
 	t.Helper()
-	t.Setenv("PVE_TARGET", "")
+	t.Setenv("PVE_CONTEXT", "")
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_OUTPUT", "")
 

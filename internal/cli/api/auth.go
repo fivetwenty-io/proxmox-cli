@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -23,7 +24,7 @@ const ticketLifetime = 2 * time.Hour
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
-		Short: "Authenticate against a target",
+		Short: "Authenticate against a context",
 	}
 	cmd.AddCommand(
 		newAuthLoginCmd(),
@@ -36,34 +37,34 @@ func newAuthCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// resolveTargetName returns the target name to operate on: the --target flag if
-// set, otherwise the config's current-target.
-func resolveTargetName(flagTarget string, cfg *config.Config) (string, error) {
-	if flagTarget != "" {
-		return flagTarget, nil
+// resolveContextName returns the context name to operate on: the --context flag
+// if set, otherwise the config's current-context.
+func resolveContextName(flagContext string, cfg *config.Config) (string, error) {
+	if flagContext != "" {
+		return flagContext, nil
 	}
-	if cfg.CurrentTarget != "" {
-		return cfg.CurrentTarget, nil
+	if cfg.CurrentContext != "" {
+		return cfg.CurrentContext, nil
 	}
-	return "", fmt.Errorf("no target specified: use --target or set a current target")
+	return "", fmt.Errorf("no context specified: use --context or set a current context")
 }
 
-// lookupTarget returns the named target or an error if it is absent.
-func lookupTarget(cfg *config.Config, name string) (*config.Target, error) {
-	t, ok := cfg.Targets[name]
-	if !ok || t == nil {
-		return nil, fmt.Errorf("target %q not found", name)
+// lookupContext returns the named context or an error if it is absent.
+func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
+	c, ok := cfg.Contexts[name]
+	if !ok || c == nil {
+		return nil, fmt.Errorf("context %q not found", name)
 	}
-	return t, nil
+	return c, nil
 }
 
 // newAuthLoginCmd builds `pve api auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
-		targetName string
-		username   string
-		realm      string
-		password   string
+		contextName string
+		username    string
+		realm       string
+		password    string
 	)
 
 	cmd := &cobra.Command{
@@ -74,28 +75,28 @@ func newAuthLoginCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveTargetName(targetName, cfg)
+			name, err := resolveContextName(contextName, cfg)
 			if err != nil {
 				return err
 			}
-			target, err := lookupTarget(cfg, name)
-			if err != nil {
-				return err
-			}
-
-			user := firstNonEmpty(username, target.Auth.Username)
-			rlm := firstNonEmpty(realm, target.Realm, "pam")
-			pw, err := resolvePassword(password, target)
+			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
 			}
 
-			resp, err := createTicket(cmd, target, user, rlm, pw)
+			user := firstNonEmpty(username, ctx.Auth.Username)
+			rlm := firstNonEmpty(realm, ctx.Realm, "pam")
+			pw, err := resolvePassword(password, ctx)
 			if err != nil {
 				return err
 			}
 
-			storeSession(target, resp)
+			resp, err := createTicket(cmd, ctx, user, rlm, pw)
+			if err != nil {
+				return err
+			}
+
+			storeSession(ctx, resp)
 			if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
@@ -108,51 +109,51 @@ func newAuthLoginCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&targetName, "target", "", "target name (defaults to current target)")
-	cmd.Flags().StringVar(&username, "username", "", "PVE username (defaults to target's username)")
-	cmd.Flags().StringVar(&realm, "realm", "", "authentication realm (defaults to target's realm)")
-	cmd.Flags().StringVar(&password, "password", "", "password (defaults to the target's resolved secret)")
+	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
+	cmd.Flags().StringVar(&username, "username", "", "PVE username (defaults to context's username)")
+	cmd.Flags().StringVar(&realm, "realm", "", "authentication realm (defaults to context's realm)")
+	cmd.Flags().StringVar(&password, "password", "", "password (defaults to the context's resolved secret)")
 	return noClient(cmd)
 }
 
 // newAuthRefreshCmd builds `pve api auth refresh`, re-obtaining a session ticket
-// for a password target.
+// for a password context.
 func newAuthRefreshCmd() *cobra.Command {
-	var targetName string
+	var contextName string
 
 	cmd := &cobra.Command{
 		Use:   "refresh",
-		Short: "Refresh the session ticket for a password target",
+		Short: "Refresh the session ticket for a password context",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveTargetName(targetName, cfg)
+			name, err := resolveContextName(contextName, cfg)
 			if err != nil {
 				return err
 			}
-			target, err := lookupTarget(cfg, name)
+			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
 			}
-			if target.Auth.Type != "password" {
-				return fmt.Errorf("target %q uses %q auth; refresh applies only to password targets",
-					name, target.Auth.Type)
+			if ctx.Auth.Type != "password" {
+				return fmt.Errorf("context %q uses %q auth; refresh applies only to password contexts",
+					name, ctx.Auth.Type)
 			}
 
-			pw, err := resolvePassword("", target)
+			pw, err := resolvePassword("", ctx)
 			if err != nil {
 				return err
 			}
-			rlm := firstNonEmpty(target.Realm, "pam")
+			rlm := firstNonEmpty(ctx.Realm, "pam")
 
-			resp, err := createTicket(cmd, target, target.Auth.Username, rlm, pw)
+			resp, err := createTicket(cmd, ctx, ctx.Auth.Username, rlm, pw)
 			if err != nil {
 				return err
 			}
 
-			storeSession(target, resp)
+			storeSession(ctx, resp)
 			if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
@@ -165,13 +166,13 @@ func newAuthRefreshCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&targetName, "target", "", "target name (defaults to current target)")
+	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	return noClient(cmd)
 }
 
 // newAuthLogoutCmd builds `pve api auth logout`.
 func newAuthLogoutCmd() *cobra.Command {
-	var targetName string
+	var contextName string
 
 	cmd := &cobra.Command{
 		Use:   "logout",
@@ -181,71 +182,71 @@ func newAuthLogoutCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveTargetName(targetName, cfg)
+			name, err := resolveContextName(contextName, cfg)
 			if err != nil {
 				return err
 			}
-			target, err := lookupTarget(cfg, name)
+			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
 			}
 
 			// If a live session exists, best-effort invalidate it server-side.
-			if target.Auth.Session != nil && target.Auth.Session.Ticket != "" {
-				if err := serverLogout(target); err != nil {
+			if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
+				if err := serverLogout(ctx); err != nil {
 					return err
 				}
 			}
 
-			target.Auth.Session = nil
+			ctx.Auth.Session = nil
 			if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Message: fmt.Sprintf("Logged out from target %q.", name)},
+				output.Result{Message: fmt.Sprintf("Logged out from context %q.", name)},
 				deps.Format)
 		},
 	}
 
-	cmd.Flags().StringVar(&targetName, "target", "", "target name (defaults to current target)")
+	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	return noClient(cmd)
 }
 
 // newAuthStatusCmd builds `pve api auth status`.
 func newAuthStatusCmd() *cobra.Command {
-	var targetName string
+	var contextName string
 
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show authentication status for a target",
+		Short: "Show authentication status for a context",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveTargetName(targetName, cfg)
+			name, err := resolveContextName(contextName, cfg)
 			if err != nil {
 				return err
 			}
-			target, err := lookupTarget(cfg, name)
+			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
 			}
 
 			resolved := "yes"
-			if _, err := config.ResolveSecret(target.Auth.Secret); err != nil {
+			if _, err := config.ResolveSecret(ctx.Auth.Secret); err != nil {
 				resolved = "no (" + err.Error() + ")"
 			}
 
 			single := map[string]string{
-				"Target":        name,
-				"Auth-type":     target.Auth.Type,
-				"Username":      target.Auth.Username,
-				"Token-ID":      target.Auth.TokenID,
-				"Secret-source": secretSource(target.Auth.Secret),
+				"Context":       name,
+				"Auth-type":     ctx.Auth.Type,
+				"Username":      ctx.Auth.Username,
+				"Token-ID":      ctx.Auth.TokenID,
+				"Secret-source": secretSource(ctx.Auth.Secret),
 				"Resolved":      resolved,
-				"Session":       sessionStatus(target.Auth.Session),
+				"Session":       sessionStatus(ctx.Auth.Session),
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(),
@@ -253,32 +254,32 @@ func newAuthStatusCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&targetName, "target", "", "target name (defaults to current target)")
+	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	return noClient(cmd)
 }
 
 // newAuthSetTokenCmd builds `pve api auth set-token`.
 func newAuthSetTokenCmd() *cobra.Command {
 	var (
-		targetName string
-		tokenID    string
-		secret     string
-		username   string
+		contextName string
+		tokenID     string
+		secret      string
+		username    string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "set-token",
-		Short: "Configure token authentication for a target",
+		Short: "Configure token authentication for a context",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveTargetName(targetName, cfg)
+			name, err := resolveContextName(contextName, cfg)
 			if err != nil {
 				return err
 			}
-			target, err := lookupTarget(cfg, name)
+			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
 			}
@@ -290,25 +291,25 @@ func newAuthSetTokenCmd() *cobra.Command {
 				return fmt.Errorf("--secret is required")
 			}
 
-			target.Auth.Type = "token"
-			target.Auth.TokenID = tokenID
-			target.Auth.Secret = secret
+			ctx.Auth.Type = "token"
+			ctx.Auth.TokenID = tokenID
+			ctx.Auth.Secret = secret
 			if username != "" {
-				target.Auth.Username = username
+				ctx.Auth.Username = username
 			}
-			target.Auth.Session = nil
+			ctx.Auth.Session = nil
 
 			if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Message: fmt.Sprintf("Set token authentication for target %q.", name)},
+				output.Result{Message: fmt.Sprintf("Set token authentication for context %q.", name)},
 				deps.Format)
 		},
 	}
 
-	cmd.Flags().StringVar(&targetName, "target", "", "target name (defaults to current target)")
+	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	cmd.Flags().StringVar(&tokenID, "token-id", "", "API token id (required)")
 	cmd.Flags().StringVar(&secret, "secret", "", "token secret reference (required)")
 	cmd.Flags().StringVar(&username, "username", "", "PVE username for the token")
@@ -318,24 +319,24 @@ func newAuthSetTokenCmd() *cobra.Command {
 // newAuthSetPasswordCmd builds `pve api auth set-password`.
 func newAuthSetPasswordCmd() *cobra.Command {
 	var (
-		targetName string
-		username   string
-		secret     string
+		contextName string
+		username    string
+		secret      string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "set-password",
-		Short: "Configure password authentication for a target",
+		Short: "Configure password authentication for a context",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveTargetName(targetName, cfg)
+			name, err := resolveContextName(contextName, cfg)
 			if err != nil {
 				return err
 			}
-			target, err := lookupTarget(cfg, name)
+			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
 			}
@@ -347,36 +348,36 @@ func newAuthSetPasswordCmd() *cobra.Command {
 				return fmt.Errorf("--secret is required")
 			}
 
-			target.Auth.Type = "password"
-			target.Auth.Username = username
-			target.Auth.Secret = secret
-			target.Auth.TokenID = ""
-			target.Auth.Session = nil
+			ctx.Auth.Type = "password"
+			ctx.Auth.Username = username
+			ctx.Auth.Secret = secret
+			ctx.Auth.TokenID = ""
+			ctx.Auth.Session = nil
 
 			if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Message: fmt.Sprintf("Set password authentication for target %q.", name)},
+				output.Result{Message: fmt.Sprintf("Set password authentication for context %q.", name)},
 				deps.Format)
 		},
 	}
 
-	cmd.Flags().StringVar(&targetName, "target", "", "target name (defaults to current target)")
+	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	cmd.Flags().StringVar(&username, "username", "", "PVE username (required)")
 	cmd.Flags().StringVar(&secret, "secret", "", "password reference (required)")
 	return noClient(cmd)
 }
 
-// createTicket builds a password-authenticated client for target and requests a
+// createTicket builds a password-authenticated client for ctx and requests a
 // session ticket using the given user, realm, and password.
 func createTicket(
 	cmd *cobra.Command,
-	target *config.Target,
+	ctx *config.Context,
 	user, realm, password string,
 ) (*access.CreateTicketResponse, error) {
-	ac, err := clientForTarget(target, user, realm, password, "", "")
+	ac, err := clientForContext(ctx, user, realm, password, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +393,7 @@ func createTicket(
 
 	resp, err := ac.Access.CreateTicket(cmd.Context(), params)
 	if err != nil {
-		return nil, fmt.Errorf("login to %s: %w", target.Host, err)
+		return nil, fmt.Errorf("login to %s: %w", ctx.Host, err)
 	}
 	return resp, nil
 }
@@ -400,51 +401,51 @@ func createTicket(
 // serverLogout builds a ticket-authenticated client and invalidates the session
 // server-side. The session's CSRF token is supplied so the logout (a non-GET
 // request) carries the PVECSRFPreventionToken header Proxmox requires.
-func serverLogout(target *config.Target) error {
-	ac, err := clientForTarget(target, "", "", "", target.Auth.Session.Ticket, target.Auth.Session.CSRF)
+func serverLogout(ctx *config.Context) error {
+	ac, err := clientForContext(ctx, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	if err != nil {
 		return err
 	}
 	if err := ac.Raw.Logout(); err != nil {
-		return fmt.Errorf("logout from %s: %w", target.Host, err)
+		return fmt.Errorf("logout from %s: %w", ctx.Host, err)
 	}
 	return nil
 }
 
-// clientForTarget constructs an APIClient for the given target. Exactly one of
+// clientForContext constructs an APIClient for the given context. Exactly one of
 // (user+password) or (ticket+csrf) should be supplied so the underlying client
 // has valid credentials. The csrf token is required alongside a ticket for
 // non-GET requests under session authentication.
-func clientForTarget(target *config.Target, user, realm, password, ticket, csrf string) (*apiclient.APIClient, error) {
-	if target.TLS.Insecure {
+func clientForContext(ctx *config.Context, user, realm, password, ticket, csrf string) (*apiclient.APIClient, error) {
+	if ctx.TLS.Insecure {
 		cli.WarnInsecureTLS(os.Stderr)
 	}
 	rlm := realm
 	if rlm == "" {
-		rlm = target.Realm
+		rlm = ctx.Realm
 	}
 	opts := apiclient.BuildOptions(
-		target.Host,
-		target.Port,
-		target.Protocol,
+		ctx.Host,
+		ctx.Port,
+		ctx.Protocol,
 		user,
 		rlm,
 		"", // no token: login/logout use ticket or password
 		password,
 		ticket,
 		csrf,
-		target.TLS.Insecure,
-		target.TLS.Fingerprint,
+		ctx.TLS.Insecure,
+		ctx.TLS.Fingerprint,
 	)
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", target.Host, err)
+		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
 	}
 	return ac, nil
 }
 
-// storeSession records the ticket, CSRF token, and expiry from resp on target.
-func storeSession(target *config.Target, resp *access.CreateTicketResponse) {
+// storeSession records the ticket, CSRF token, and expiry from resp on ctx.
+func storeSession(ctx *config.Context, resp *access.CreateTicketResponse) {
 	session := &config.Session{
 		ExpiresAt: time.Now().Add(ticketLifetime).Unix(),
 	}
@@ -454,16 +455,16 @@ func storeSession(target *config.Target, resp *access.CreateTicketResponse) {
 	if resp.CSRFPreventionToken != nil {
 		session.CSRF = *resp.CSRFPreventionToken
 	}
-	target.Auth.Session = session
+	ctx.Auth.Session = session
 }
 
 // resolvePassword returns the explicit password if provided, otherwise resolves
-// the target's secret reference.
-func resolvePassword(explicit string, target *config.Target) (string, error) {
+// the context's secret reference.
+func resolvePassword(explicit string, ctx *config.Context) (string, error) {
 	if explicit != "" {
 		return explicit, nil
 	}
-	pw, err := config.ResolveSecret(target.Auth.Secret)
+	pw, err := config.ResolveSecret(ctx.Auth.Secret)
 	if err != nil {
 		return "", fmt.Errorf("resolve password: %w", err)
 	}
@@ -493,4 +494,18 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// secretSource classifies a secret reference without revealing its value.
+func secretSource(secret string) string {
+	switch {
+	case secret == "":
+		return "(none)"
+	case strings.HasPrefix(secret, "${") || (strings.HasPrefix(secret, "$") && !strings.HasPrefix(secret, "${")):
+		return secret + " (env)"
+	case strings.HasPrefix(secret, "keychain:"):
+		return secret + " (keychain)"
+	default:
+		return "(inline literal)"
+	}
 }

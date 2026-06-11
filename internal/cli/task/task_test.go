@@ -71,8 +71,8 @@ func writeConfig(t *testing.T, host string, port int, apiToken, node string) str
 		defaultNode = "    default-node: " + node + "\n"
 	}
 
-	cfg := fmt.Sprintf(`current-target: fake
-targets:
+	cfg := fmt.Sprintf(`current-context: fake
+contexts:
   fake:
     host: %s
     port: %d

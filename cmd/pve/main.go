@@ -13,6 +13,7 @@ import (
 	_ "github.com/fivetwenty-io/pve-cli/internal/cli/access"
 	_ "github.com/fivetwenty-io/pve-cli/internal/cli/api"
 	_ "github.com/fivetwenty-io/pve-cli/internal/cli/cluster"
+	_ "github.com/fivetwenty-io/pve-cli/internal/cli/context"
 	_ "github.com/fivetwenty-io/pve-cli/internal/cli/initcmd"
 	_ "github.com/fivetwenty-io/pve-cli/internal/cli/lxc"
 	_ "github.com/fivetwenty-io/pve-cli/internal/cli/node"

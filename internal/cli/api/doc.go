@@ -1,2 +1,2 @@
-// Package api implements the pve api command group (targets, target, switch, auth).
+// Package api implements the pve api command group (auth).
 package api

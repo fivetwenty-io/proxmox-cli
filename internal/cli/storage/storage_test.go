@@ -41,8 +41,8 @@ func run(t *testing.T, f *testhelper.FakePVE, args ...string) (string, error) {
 	tokenID, secret := splitToken(t, f.Options.APIToken)
 
 	cfg := strings.Join([]string{
-		"current-target: fake",
-		"targets:",
+		"current-context: fake",
+		"contexts:",
 		"  fake:",
 		"    host: " + host,
 		"    port: " + strconv.Itoa(port),
@@ -62,7 +62,7 @@ func run(t *testing.T, f *testhelper.FakePVE, args ...string) (string, error) {
 	cfgPath := filepath.Join(dir, "config.yml")
 	require.NoError(t, os.WriteFile(cfgPath, []byte(cfg), 0o600))
 
-	t.Setenv("PVE_TARGET", "")
+	t.Setenv("PVE_CONTEXT", "")
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_OUTPUT", "")
 
