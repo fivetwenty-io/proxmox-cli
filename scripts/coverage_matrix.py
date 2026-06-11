@@ -92,10 +92,6 @@ def discover_leaves() -> set[str]:
     for top in _subcommands([]):
         walk([top])
     leaves |= RUNNABLE_PARENTS
-    # `api target` is a dynamic `<name> <show|add|remove>` parent.
-    if "api target" in leaves:
-        leaves.discard("api target")
-        leaves |= {"api target show", "api target add", "api target remove"}
     return leaves
 
 
@@ -104,7 +100,7 @@ def discover_leaves() -> set[str]:
 # --------------------------------------------------------------------------- #
 def make_mapper(leaves: set[str]):
     trees = {l.split()[0] for l in leaves}
-    val_flags = {"--target", "-t", "-o", "--output", "--node", "--config", "--timeout"}
+    val_flags = {"--context", "-c", "-o", "--output", "--node", "--config", "--timeout"}
 
     def map_leaf(tokens: list[str]) -> str | None:
         # skip leading global flags + their values to find the tree token
@@ -125,11 +121,6 @@ def make_mapper(leaves: set[str]):
             if t.startswith("-"):
                 break
             toks.append(t)
-        if toks[:2] == ["api", "target"] and len(toks) >= 4:
-            cand = f"api target {toks[3]}"
-            return cand if cand in leaves else None
-        if toks[:2] == ["api", "target"] and len(toks) == 3 and toks[2] in ("show", "add", "remove"):
-            return f"api target {toks[2]}"
         for n in range(len(toks), 0, -1):
             cand = " ".join(toks[:n])
             if cand in leaves:
@@ -457,7 +448,7 @@ This document maps every invocable leaf command to its automated test coverage
 across the two live suites:
 
 - **e2e** (`scripts/e2e`, `make test-e2e`) — a read-only, parallel happy-path
-  sweep against a configured target. Mutating operations are never executed;
+  sweep against a configured context. Mutating operations are never executed;
   they are recorded as deferred.
 
 - **lifecycle / mutate** (`scripts/lifecycle`, `make test-lifecycle`, or
@@ -512,9 +503,9 @@ swept clean before the next provisions.
 FOOTER = """## Running the suites
 
 ```bash
-make test-e2e                  # all trees, read-only, against the `lab` target
+make test-e2e                  # all trees, read-only, against the `lab` context
 make test-e2e TREES=qemu       # a subset
-make test-e2e TARGET=prod      # a different configured target
+make test-e2e CONTEXT=prod     # a different configured context
 scripts/e2e --list             # list trees and the isolation contract
 
 make test-e2e-mutate           # read-only sweep + the destructive verb matrix
@@ -524,7 +515,7 @@ scripts/lifecycle --vm-only    # VM verb matrix only
 scripts/lifecycle --ct-only    # container verb matrix only
 ```
 
-Both suites skip gracefully (exit 0) when the target is not configured; pass
+Both suites skip gracefully (exit 0) when no context is configured; pass
 `--strict` to fail instead. The mutate phase prints a per-guest coverage table
 listing every verb it drove and its result.
 """

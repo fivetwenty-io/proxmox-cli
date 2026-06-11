@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Destructive VM + container lifecycle suite against a configured target.
+"""Destructive VM + container lifecycle suite against a configured context.
 
 Provisions an isolated `pvecli` SDN (zone/vnet/subnet) and a `pve-cli` resource
 pool, then runs a throwaway QEMU VM and an LXC container through their full
@@ -15,10 +15,10 @@ clean before the next provisions.
 
 Usage:
   scripts/lifecycle                 # full VM + CT lifecycle against `lab`
-  scripts/lifecycle --target prod
+  scripts/lifecycle --context prod
   scripts/lifecycle --vm-only       # skip the container lifecycle
   scripts/lifecycle --ct-only       # skip the VM lifecycle
-  scripts/lifecycle --strict        # fail (not skip) if target is unconfigured
+  scripts/lifecycle --strict        # fail (not skip) if context is unconfigured
 """
 
 from __future__ import annotations
@@ -37,13 +37,13 @@ def main() -> None:
         prog="lifecycle",
         description="Destructive VM + container lifecycle suite (isolated SDN + pool).",
     )
-    parser.add_argument("--target", "-t", default=os.environ.get("PVE_E2E_TARGET", "lab"),
-                        help="configured target name (default: lab, or $PVE_E2E_TARGET)")
+    parser.add_argument("--context", "-c", default=os.environ.get("PVE_E2E_CONTEXT", "lab"),
+                        help="configured context name (default: lab, or $PVE_E2E_CONTEXT)")
     parser.add_argument("--binary", help="path to the pve binary (default: ./dist/pve)")
     parser.add_argument("--no-build", action="store_true",
                         help="do not auto-build the binary if ./dist/pve is missing")
     parser.add_argument("--strict", action="store_true",
-                        help="exit non-zero if the target is not configured (default: skip)")
+                        help="exit non-zero if the context is not configured (default: skip)")
     parser.add_argument("--vm-only", action="store_true", help="run only the VM lifecycle")
     parser.add_argument("--ct-only", action="store_true", help="run only the container lifecycle")
     args = parser.parse_args()
@@ -52,7 +52,7 @@ def main() -> None:
         parser.error("--vm-only and --ct-only are mutually exclusive")
 
     rc = lifecycle.run(
-        target=args.target,
+        context=args.context,
         binary=args.binary,
         build=not args.no_build,
         strict=args.strict,

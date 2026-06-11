@@ -12,6 +12,7 @@ from . import (
     access,
     api,
     cluster,
+    context,
     init,
     lxc,
     negative,
@@ -36,6 +37,7 @@ _MODULES: list[ModuleType] = [
     task,
     access,
     api,
+    context,
     init,
     negative,
 ]

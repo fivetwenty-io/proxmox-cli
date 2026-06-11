@@ -11,7 +11,7 @@ This document maps every invocable leaf command to its automated test coverage
 across the two live suites:
 
 - **e2e** (`scripts/e2e`, `make test-e2e`) — a read-only, parallel happy-path
-  sweep against a configured target. Mutating operations are never executed;
+  sweep against a configured context. Mutating operations are never executed;
   they are recorded as deferred.
 
 - **lifecycle / mutate** (`scripts/lifecycle`, `make test-lifecycle`, or
@@ -67,8 +67,9 @@ swept clean before the next provisions.
 | Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred | n/a | uncovered |
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `access` | 39 | 9 | 8 | 28 | 0 | 0 | 0 | 0 |
-| `api` | 11 | 8 | 0 | 3 | 0 | 0 | 0 | 0 |
+| `api` | 6 | 3 | 0 | 3 | 0 | 0 | 0 | 0 |
 | `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
+| `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
 | `node` | 138 | 1 | 59 | 47 | 0 | 36 | 0 | 0 |
@@ -78,9 +79,9 @@ swept clean before the next provisions.
 | `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
 | `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **556** | **74** | **125** | **348** | **6** | **54** | **0** | **0** |
+| **Total** | **560** | **77** | **125** | **348** | **6** | **54** | **1** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **556** leaves, **502** are exercised by at least one live suite, **54** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **0** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **560** leaves, **505** are exercised by at least one live suite, **54** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **1** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -136,11 +137,6 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `api auth set-password` | ✓ | — |  |
 | `api auth set-token` | ✓ | — |  |
 | `api auth status` | ✓ | — |  |
-| `api switch` | ✓ | — |  |
-| `api target add` | ✓ | — |  |
-| `api target remove` | ✓ | — |  |
-| `api target show` | ✓ | — |  |
-| `api targets` | ✓ | — |  |
 
 ## `cluster`
 
@@ -303,6 +299,20 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster resources` | ✓ | — |  |
 | `cluster status` | ✓ | — |  |
 | `cluster tasks` | ✓ | — |  |
+
+## `context`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `context add` | ✓ | — |  |
+| `context copy` | ✓ | — |  |
+| `context edit` | — | — | n/a — requires $EDITOR / interactive TTY — not safe to drive in headless e2e; covered in unit tests via EDITOR=true trick (test-strategy §4.2) |
+| `context ls` | ✓ | — |  |
+| `context previous` | ✓ | — |  |
+| `context rm` | ✓ | — |  |
+| `context select` | ✓ | — |  |
+| `context show` | ✓ | — |  |
+| `context validate` | ✓ | — |  |
 
 ## `init`
 
@@ -707,9 +717,9 @@ _None — every leaf is exercised or explicitly deferred._
 ## Running the suites
 
 ```bash
-make test-e2e                  # all trees, read-only, against the `lab` target
+make test-e2e                  # all trees, read-only, against the `lab` context
 make test-e2e TREES=qemu       # a subset
-make test-e2e TARGET=prod      # a different configured target
+make test-e2e CONTEXT=prod     # a different configured context
 scripts/e2e --list             # list trees and the isolation contract
 
 make test-e2e-mutate           # read-only sweep + the destructive verb matrix
@@ -719,7 +729,7 @@ scripts/lifecycle --vm-only    # VM verb matrix only
 scripts/lifecycle --ct-only    # container verb matrix only
 ```
 
-Both suites skip gracefully (exit 0) when the target is not configured; pass
+Both suites skip gracefully (exit 0) when no context is configured; pass
 `--strict` to fail instead. The mutate phase prints a per-guest coverage table
 listing every verb it drove and its result.
 

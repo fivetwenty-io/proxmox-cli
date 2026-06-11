@@ -121,16 +121,16 @@ class Step:
 
 
 class Runner:
-    def __init__(self, binary: str, target: str, node: str, timeout: int = 600):
+    def __init__(self, binary: str, context: str, node: str, timeout: int = 600):
         self.binary = binary
-        self.target = target
+        self.context = context
         self.node = node
         self.timeout = timeout
         self.cov: list[Step] = []
 
     def pve(self, *args: str, json_out: bool = False, node: bool = True,
             stdin: str | None = None) -> Cmd:
-        argv = [self.binary, "--target", self.target, "--no-log"]
+        argv = [self.binary, "--context", self.context, "--no-log"]
         if json_out:
             argv += ["-o", "json"]
         if node and self.node:
@@ -143,8 +143,8 @@ class Runner:
         except subprocess.TimeoutExpired:
             return Cmd(124, "", f"timed out after {self.timeout}s")
 
-    # Run the binary with an explicit argv (no --target/--node injection), used
-    # by steps that drive a scratch `--config` file or a non-default --target.
+    # Run the binary with an explicit argv (no --context/--node injection), used
+    # by steps that drive a scratch `--config` file or a non-default --context.
     def pve_raw(self, *args: str, json_out: bool = False) -> Cmd:
         argv = [self.binary, "--no-log"]
         if json_out:
@@ -178,8 +178,8 @@ class Runner:
         return self._record(guest, verb, label,
                             self.pve(*args, json_out=json_out, node=node, stdin=stdin))
 
-    # Like step(), but runs the binary verbatim (no --target/--node), for verbs
-    # driven against a scratch `--config` file or an explicit --target.
+    # Like step(), but runs the binary verbatim (no --context/--node), for verbs
+    # driven against a scratch `--config` file or an explicit --context.
     def step_raw(self, guest: str, verb: str, label: str, *args: str,
                  json_out: bool = False) -> Cmd:
         return self._record(guest, verb, label, self.pve_raw(*args, json_out=json_out))
@@ -1247,12 +1247,12 @@ def auth_lifecycle(r: Runner) -> None:
     login_user = Isolation.NAME_PREFIX + "authprobe"   # bare id; realm sent separately
     probe_pw = "pve-cli-e2e-pw"                          # throwaway, never a real secret
 
-    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    show = r.pve("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
         data = data.get("data", data) if isinstance(data, dict) else {}
-        host = str(data.get("Host", ""))
+        host = str(data.get("host", ""))
     if not host:
         for verb in ("auth login", "auth refresh", "auth logout"):
             r.cover_skip("api", verb, verb, "could not resolve target host")
@@ -1270,20 +1270,20 @@ def auth_lifecycle(r: Runner) -> None:
         created = True
         print(f"  {GREEN('✓')} user create {user}")
 
-        # Scratch password-auth target pointed at the same host (TLS verification
-        # disabled for the throwaway target). target add + set-password mutate
+        # Scratch password-auth context pointed at the same host (TLS verification
+        # disabled for the throwaway context). context add + set-password mutate
         # local config only and are already covered read-only, so they are setup
         # here, not recorded again.
-        r.pve_raw("--config", cfg, "api", "target", "authprobe", "add",
+        r.pve_raw("--config", cfg, "context", "add", "authprobe",
                   "--host", host, "--username", login_user, "--realm", "pve",
-                  "--token", "x=y", "--tls-insecure")
-        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--target", "authprobe",
+                  "--auth-type", "password", "--secret", "placeholder", "--insecure")
+        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--context", "authprobe",
                   "--username", login_user, "--secret", probe_pw)
 
         # login → real session ticket, stored only in the scratch config.
         r.step_raw("api", "auth login", f"auth login as {user}",
-                   "--config", cfg, "api", "auth", "login", "--target", "authprobe")
-        st = r.pve_raw("--config", cfg, "api", "auth", "status", "--target", "authprobe",
+                   "--config", cfg, "api", "auth", "login", "--context", "authprobe")
+        st = r.pve_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
                        json_out=True)
         sess = ""
         if st.rc == 0:
@@ -1295,12 +1295,12 @@ def auth_lifecycle(r: Runner) -> None:
 
         # refresh → re-obtain the ticket for the password target.
         r.step_raw("api", "auth refresh", "auth refresh",
-                   "--config", cfg, "api", "auth", "refresh", "--target", "authprobe")
+                   "--config", cfg, "api", "auth", "refresh", "--context", "authprobe")
 
         # logout → invalidate the ticket server-side and clear it locally.
         r.step_raw("api", "auth logout", "auth logout",
-                   "--config", cfg, "api", "auth", "logout", "--target", "authprobe")
-        st = r.pve_raw("--config", cfg, "api", "auth", "status", "--target", "authprobe",
+                   "--config", cfg, "api", "auth", "logout", "--context", "authprobe")
+        st = r.pve_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
                        json_out=True)
         if st.rc == 0:
             sd = st.json()
@@ -1346,12 +1346,12 @@ def tfa_lifecycle(r: Runner) -> None:
     probe_pw = "pve-cli-e2e-pw"                          # throwaway, never a real secret
     secret = "JBSWY3DPEHPK3PXP"                          # throwaway TOTP secret (test value)
 
-    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    show = r.pve("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
         data = data.get("data", data) if isinstance(data, dict) else {}
-        host = str(data.get("Host", ""))
+        host = str(data.get("host", ""))
     if not host:
         for verb in ("tfa create", "tfa set", "tfa delete"):
             r.cover_skip("access", verb, verb, "could not resolve target host")
@@ -1369,14 +1369,14 @@ def tfa_lifecycle(r: Runner) -> None:
         created = True
         print(f"  {GREEN('✓')} user create {user}")
 
-        # Scratch password-auth target + login → real session ticket for the
-        # throwaway user (setup only; target/auth verbs are covered elsewhere).
-        r.pve_raw("--config", cfg, "api", "target", "tfaprobe", "add",
+        # Scratch password-auth context + login → real session ticket for the
+        # throwaway user (setup only; context/auth verbs are covered elsewhere).
+        r.pve_raw("--config", cfg, "context", "add", "tfaprobe",
                   "--host", host, "--username", login_user, "--realm", "pve",
-                  "--token", "x=y", "--tls-insecure")
-        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--target", "tfaprobe",
+                  "--auth-type", "password", "--secret", "placeholder", "--insecure")
+        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--context", "tfaprobe",
                   "--username", login_user, "--secret", probe_pw)
-        login = r.pve_raw("--config", cfg, "api", "auth", "login", "--target", "tfaprobe")
+        login = r.pve_raw("--config", cfg, "api", "auth", "login", "--context", "tfaprobe")
         if login.rc != 0:
             detail = (login.err.strip() or login.out.strip())[:200]
             raise LifecycleError(f"tfa probe login: {detail}")
@@ -1386,7 +1386,7 @@ def tfa_lifecycle(r: Runner) -> None:
         # in the create response and drives the set/delete verbs.
         totp_uri = f"otpauth://totp/pvecli:{login_user}?secret={secret}&issuer=pvecli"
         create = r.step_raw("access", "tfa create", "tfa create (totp, self-enroll)",
-                            "--config", cfg, "--target", "tfaprobe",
+                            "--config", cfg, "--context", "tfaprobe",
                             "access", "tfa", "create", user, "--type", "totp",
                             "--description", "pve-cli-e2e", "--totp", totp_uri,
                             "--value", _totp_now(secret), "--password", probe_pw,
@@ -1404,11 +1404,11 @@ def tfa_lifecycle(r: Runner) -> None:
             return
 
         r.step_raw("access", "tfa set", "tfa set (edit description)",
-                   "--config", cfg, "--target", "tfaprobe",
+                   "--config", cfg, "--context", "tfaprobe",
                    "access", "tfa", "set", user, entry_id,
                    "--description", "pve-cli-e2e (edited)", "--password", probe_pw)
         r.step_raw("access", "tfa delete", "tfa delete (remove factor)",
-                   "--config", cfg, "--target", "tfaprobe",
+                   "--config", cfg, "--context", "tfaprobe",
                    "access", "tfa", "delete", user, entry_id,
                    "--password", probe_pw, "--yes")
     finally:
@@ -1785,12 +1785,12 @@ def storage_import_metadata_lifecycle(r: Runner) -> None:
     """
     print(BOLD("storage: import-metadata (crafted OVF on node import dir)"))
 
-    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    show = r.pve("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
         data = data.get("data", data) if isinstance(data, dict) else {}
-        host = str(data.get("Host", ""))
+        host = str(data.get("host", ""))
     if not host:
         r.cover_skip("storage", "import-metadata", "import-metadata",
                      "could not resolve node host for SSH")
@@ -1901,12 +1901,12 @@ def sdn_dns_lifecycle(r: Runner) -> None:
         for v in ("dns create", "dns get", "dns set", "dns delete"):
             r.cover_skip("sdn", v, v, why)
 
-    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    show = r.pve("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
         data = data.get("data", data) if isinstance(data, dict) else {}
-        host = str(data.get("Host", ""))
+        host = str(data.get("host", ""))
     if not host:
         skip_all("could not resolve node host for SSH")
         return
@@ -2010,12 +2010,12 @@ def qemu_agent_lifecycle(r: Runner) -> None:
         for v in verbs:
             r.cover_skip("qemu", v, v, why)
 
-    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    show = r.pve("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
         data = data.get("data", data) if isinstance(data, dict) else {}
-        host = str(data.get("Host", ""))
+        host = str(data.get("host", ""))
     if not host:
         skip_all("could not resolve node host for SSH"); return
     if _ssh_node(host, "true")[0] != 0:
@@ -2153,12 +2153,12 @@ def qemu_agent_lifecycle(r: Runner) -> None:
 
 def _resolve_host(r: Runner) -> str:
     """Resolve the node host address for passwordless root SSH, or "" if unknown."""
-    show = r.pve("api", "target", r.target, "show", json_out=True, node=False)
+    show = r.pve("context", "show", r.context, json_out=True, node=False)
     if show.rc != 0:
         return ""
     data = show.json()
     data = data.get("data", data) if isinstance(data, dict) else {}
-    return str(data.get("Host", "")) if isinstance(data, dict) else ""
+    return str(data.get("host", "")) if isinstance(data, dict) else ""
 
 
 # A throwaway HTTPS server staged on the node host that impersonates just enough
@@ -3878,25 +3878,25 @@ def storage_transfer_lifecycle(r: Runner) -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def run(target: str, binary: str | None, build: bool, strict: bool,
+def run(context: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
     bin_path = find_binary(binary, build=build)
-    ok, why = target_configured(bin_path, target)
+    ok, why = target_configured(bin_path, context)
     if not ok:
-        msg = f"target {target!r} not usable: {why}"
+        msg = f"context {context!r} not usable: {why}"
         if strict:
             print(f"lifecycle: error: {msg}", file=sys.stderr)
             return 3
         print(f"lifecycle: skipping — {msg}")
         return 0
 
-    node = discover_node(bin_path, target)
+    node = discover_node(bin_path, context)
     if not node:
         print("lifecycle: error: could not discover a node", file=sys.stderr)
         return 3
 
-    r = Runner(bin_path, target, node)
-    print(BOLD(f"lifecycle: target={target} node={node}"))
+    r = Runner(bin_path, context, node)
+    print(BOLD(f"lifecycle: context={context} node={node}"))
     print(DIM(f"  isolation: zone={Isolation.SDN_ZONE} vnet={Isolation.SDN_VNET} "
               f"subnet={Isolation.SDN_SUBNET} pool={Isolation.POOL} tag={Isolation.TAG}"))
     print()

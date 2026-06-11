@@ -1,6 +1,6 @@
 """Execution context handed to every command-tree check function.
 
-A `Ctx` wraps an immutable `Env` (binary path + target + discovered node) and
+A `Ctx` wraps an immutable `Env` (binary path + context + discovered node) and
 collects `Result` rows. One `Ctx` is created per tree so trees run on separate
 threads without sharing mutable state.
 """
@@ -19,7 +19,7 @@ from .model import Deferred, Result, Status
 @dataclass(frozen=True)
 class Env:
     binary: str
-    target: str
+    context: str
     node: str            # a real node name discovered up front (may be "")
     timeout_s: int = 60
 
@@ -46,15 +46,15 @@ class Ctx:
     # -- raw invocation ------------------------------------------------------
 
     def run(self, *args: str, node: str | None = None, fmt: str = "json",
-            with_target: bool = True) -> CmdResult:
-        """Invoke `pve` with target/output/no-log injected. Never raises.
+            with_context: bool = True) -> CmdResult:
+        """Invoke `pve` with context/output/no-log injected. Never raises.
 
-        `with_target=False` omits `--target`; used by checks that operate on a
-        scratch `--config` file and must not resolve the configured target.
+        `with_context=False` omits `--context`; used by checks that operate on a
+        scratch `--config` file and must not resolve the configured context.
         """
         argv = [self.env.binary, "--no-log"]
-        if with_target:
-            argv += ["--target", self.env.target]
+        if with_context:
+            argv += ["--context", self.env.context]
         if fmt:
             argv += ["-o", fmt]
         if node:
@@ -85,7 +85,7 @@ class Ctx:
         *args: str,
         node: str | None = None,
         fmt: str = "json",
-        with_target: bool = True,
+        with_context: bool = True,
         validate: Callable[[CmdResult], str | None] | None = None,
     ) -> CmdResult:
         """Run a command, record PASS/FAIL.
@@ -95,7 +95,7 @@ class Ctx:
         when `fmt=json`, malformed JSON fails the check.
         """
         start = time.monotonic()
-        res = self.run(*args, node=node, fmt=fmt, with_target=with_target)
+        res = self.run(*args, node=node, fmt=fmt, with_context=with_context)
         dur = time.monotonic() - start
         cmd = self.pretty(res.argv)
         detail = ""
@@ -151,7 +151,7 @@ class Ctx:
         *args: str,
         must_contain: str = "",
         node: str | None = None,
-        with_target: bool = True,
+        with_context: bool = True,
     ) -> None:
         """Inverse of `check`: record PASS only when the command FAILS cleanly.
 
@@ -161,7 +161,7 @@ class Ctx:
         flags, and not-found lookups — which no happy-path check exercises.
         """
         start = time.monotonic()
-        res = self.run(*args, node=node, fmt="", with_target=with_target)
+        res = self.run(*args, node=node, fmt="", with_context=with_context)
         dur = time.monotonic() - start
         cmd = self.pretty(res.argv)
         msg = res.stderr.strip() or res.stdout.strip()

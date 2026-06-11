@@ -1,4 +1,4 @@
-"""Orchestration: binary discovery, target/node probing, parallel tree runs,
+"""Orchestration: binary discovery, context/node probing, parallel tree runs,
 and reporting."""
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ def find_binary(explicit: str | None, build: bool) -> str:
 
 
 def _probe_json(binary: str, target: str, *args: str) -> tuple[int, object | None, str]:
-    argv = [binary, "--target", target, "--no-log", "-o", "json", *args]
+    argv = [binary, "--context", target, "--no-log", "-o", "json", *args]
     proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
     if proc.returncode != 0:
         return proc.returncode, None, proc.stderr.strip() or proc.stdout.strip()
@@ -78,14 +78,14 @@ def _probe_json(binary: str, target: str, *args: str) -> tuple[int, object | Non
 
 
 def target_configured(binary: str, target: str) -> tuple[bool, str]:
-    rc, data, err = _probe_json(binary, target, "api", "targets")
+    rc, data, err = _probe_json(binary, target, "context", "ls")
     if rc != 0 or data is None:
         return False, err
     if isinstance(data, list) and any(
         isinstance(t, dict) and t.get("name") == target for t in data
     ):
         return True, ""
-    return False, f"target {target!r} not in config"
+    return False, f"context {target!r} not in config"
 
 
 def discover_node(binary: str, target: str) -> str:

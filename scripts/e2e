@@ -3,17 +3,17 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""End-to-end happy-path sweep of the pve CLI command trees against a target.
+"""End-to-end happy-path sweep of the pve CLI command trees against a context.
 
 Runs the read-only commands of each command tree (default: all) in parallel
-against a configured target (default: `lab`) and reports pass/fail/skip per
+against a configured context (default: `lab`) and reports pass/fail/skip per
 check. Destructive or mutating operations are never executed — they are listed
 as deferred, with the lab isolation contract they must honour.
 
 Usage:
-  scripts/e2e                      # all trees against the `lab` target
+  scripts/e2e                      # all trees against the `lab` context
   scripts/e2e qemu cluster         # only the named trees
-  scripts/e2e --target prod        # a different configured target
+  scripts/e2e --context prod       # a different configured context
   scripts/e2e --list               # list trees + isolation contract
   scripts/e2e --no-deferred        # hide the deferred section
   scripts/e2e --mutate             # also run the destructive qemu/lxc verb matrix
@@ -46,8 +46,8 @@ def main() -> None:
         nargs="*",
         help="command trees to run (default: all)",
     )
-    parser.add_argument("--target", "-t", default=os.environ.get("PVE_E2E_TARGET", "lab"),
-                        help="configured target name (default: lab, or $PVE_E2E_TARGET)")
+    parser.add_argument("--context", "-c", default=os.environ.get("PVE_E2E_CONTEXT", "lab"),
+                        help="configured context name (default: lab, or $PVE_E2E_CONTEXT)")
     parser.add_argument("--binary", help="path to the pve binary (default: ./dist/pve)")
     parser.add_argument("--no-build", action="store_true",
                         help="do not auto-build the binary if ./dist/pve is missing")
@@ -60,7 +60,7 @@ def main() -> None:
     parser.add_argument("--no-deferred", action="store_true",
                         help="suppress the deferred-operations section")
     parser.add_argument("--strict", action="store_true",
-                        help="exit non-zero if the target is not configured (default: skip)")
+                        help="exit non-zero if the context is not configured (default: skip)")
     parser.add_argument("--mutate", "-M", action="store_true",
                         help="after the read-only sweep, run the destructive verb matrix "
                              "(qemu/lxc guests, pool/task, access, storage, SSH-gated node) "
@@ -87,19 +87,19 @@ def main() -> None:
 
     binary = runner.find_binary(args.binary, build=not args.no_build)
 
-    ok, why = runner.target_configured(binary, args.target)
+    ok, why = runner.target_configured(binary, args.context)
     if not ok:
-        msg = f"target {args.target!r} not usable: {why}"
+        msg = f"context {args.context!r} not usable: {why}"
         if args.strict:
             runner.die(msg, code=3)
         print(f"e2e: skipping — {msg}")
-        print("e2e: configure the target (see `pve init config`) or pass --target.")
+        print("e2e: configure the context (see `pve init config`) or pass --context.")
         return
 
-    node = runner.discover_node(binary, args.target)
-    env = Env(binary=binary, target=args.target, node=node, timeout_s=args.timeout)
+    node = runner.discover_node(binary, args.context)
+    env = Env(binary=binary, context=args.context, node=node, timeout_s=args.timeout)
 
-    print(runner.BOLD(f"e2e: target={args.target} node={node or '(none)'} "
+    print(runner.BOLD(f"e2e: context={args.context} node={node or '(none)'} "
                       f"trees={len(selected)} jobs={args.jobs}"))
     print()
 
@@ -130,7 +130,7 @@ def main() -> None:
         print(runner.BOLD("─── mutate phase: destructive qemu/lxc verb matrix ───"))
         print()
         mrc = lifecycle.run(
-            target=args.target,
+            context=args.context,
             binary=binary,
             build=False,
             strict=args.strict,
