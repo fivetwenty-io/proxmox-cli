@@ -3,13 +3,14 @@
 A comprehensive command-line interface for the Proxmox VE API, built on
 [`pve-apiclient-go`](https://github.com/fivetwenty-io/pve-apiclient-go).
 
-`pve` manages multiple named Proxmox targets, authenticates with API tokens or
+`pve` manages multiple named Proxmox contexts, authenticates with API tokens or
 password tickets, blocks on long-running tasks by default, and renders every
 command as a table, plain text, JSON, or YAML.
 
 ## Features
 
-- Multiple named targets in `~/.config/pve/config.yml`, switchable per command.
+- Multiple named contexts in `~/.config/pve/config.yml`, switchable per command
+  with `pve context select` or the `--context` flag.
 
 - Token and password (ticket + CSRF) authentication, with secrets resolved from
   environment variables, the system keychain, or literals.
@@ -70,12 +71,12 @@ Requires Go 1.26 or newer.
 ## Quick start
 
 ```bash
-# 1. Add a target authenticated with an API token, and make it active.
-pve api target lab add \
+# 1. Add a context authenticated with an API token, and make it active.
+pve context add lab \
   --host pve.example.com \
   --username root@pam \
   --token automation=${PVE_TOKEN} \
-  --switch
+  --select
 
 # 2. Use it.
 pve cluster status
@@ -89,15 +90,16 @@ Configuration lives in `~/.config/pve/config.yml` (override with `--config`).
 Files are written `0600` and directories `0700`, atomically.
 
 ```yaml
-current-target: lab
+current-context: lab
 default-output: table
-targets:
+contexts:
   lab:
     host: pve.example.com
     port: 8006
     protocol: https
     realm: pam
     default-node: pve1
+    default-output: table      # per-context output format override
     auth:
       type: token
       username: root@pam
@@ -108,6 +110,11 @@ targets:
       fingerprint: ""          # pin a hex SHA-256 cert fingerprint
       ca-cert: ""              # path to a PEM CA bundle for custom trust
 ```
+
+Configs written by an earlier version of `pve` use `targets:` and
+`current-target:`. Run `scripts/migrate-config.py` (or
+`python3 scripts/migrate-config.py`) to rename those keys in place. The script
+is idempotent and supports `--dry-run`.
 
 ### Secret resolution
 
@@ -124,10 +131,59 @@ The `auth.secret` value is resolved in three tiers:
 Password login stores a live `session` (ticket + CSRF + expiry) back into the
 target; `pve api auth logout` wipes it.
 
+## Contexts
+
+`pve context` (alias: `pve ctx`) manages the named Proxmox VE contexts stored
+in the config file. All verbs operate on the local config and never contact the
+Proxmox VE API.
+
+```bash
+# Add a context.
+pve context add lab \
+  --host pve.example.com --username root@pam \
+  --token automation=${PVE_TOKEN} --select
+
+# List all contexts (* marks the active one).
+pve context ls
+
+# Show one context (secrets are redacted).
+pve context show lab
+
+# Switch the active context.
+pve ctx select prod
+pve ctx select -         # toggle back to the previous context
+
+# Return to the previous context explicitly.
+pve context previous
+
+# Copy a context to a new name.
+pve context copy lab staging --select
+
+# Edit a context in $EDITOR.
+pve context edit lab
+
+# Remove a context.
+pve context rm old-lab
+
+# Validate one or all contexts (structural checks; no network connect).
+pve context validate lab
+pve context validate --all
+```
+
+The active context is resolved in this order:
+
+1. `--context/-c` flag on any command.
+2. `$PVE_CONTEXT` environment variable.
+3. `current-context:` in the config file.
+
+Per-context `default-node` and `default-output` fields supply defaults for
+`--node` and `--output`. The full resolution order for both fields is:
+explicit flag > environment variable (`$PVE_NODE` / `$PVE_OUTPUT`) > context default > built-in default (`""` / `table`).
+
 ## Authentication
 
 ```bash
-# Token auth: store the token id + secret on the target (see Quick start).
+# Token auth: store the token id + secret on the context (see Quick start).
 
 # Password auth: obtain and persist a ticket + CSRF token.
 pve api auth login --username root@pam
@@ -156,13 +212,14 @@ or `--trace`.
 ## Command overview
 
 `pve` organizes the API into logical groups. VM and container operations take a
-node via `--node`/`$PVE_NODE` (or a target's `default-node`); node administration
+node via `--node`/`$PVE_NODE` (or the context's `default-node`); node administration
 uses the `pve node` subtree.
 
 | Group | Purpose | Sub-commands |
 |-------|---------|--------------|
 | `init` | Scaffold local CLI configuration | `config` |
-| `api` | Targets and authentication (local config) | `targets`, `target <name> show\|add\|remove`, `switch`, `auth login\|logout\|status\|refresh\|set-token\|set-password` |
+| `context` | Named contexts (local config) | `add`, `ls`, `show`, `select`, `previous`, `rm`, `copy`, `edit`, `validate` |
+| `api` | Authentication (local config) | `auth login\|logout\|status\|refresh\|set-token\|set-password` |
 | `version` | Cluster API version and CLI build info | `version`, `version client` |
 | `access` | Users, tokens, groups, roles, ACLs | `user` (with `user token`), `group`, `role`, `acl`, `permissions`, `password` |
 | `cluster` | Cluster state | `status`, `resources`, `next-id`, `log`, `tasks` |
@@ -174,8 +231,8 @@ uses the `pve node` subtree.
 | `pool` | Resource pools | `list`, `get`, `create`, `set`, `delete` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
 
-The top-level aliases `pve targets`, `pve target`, `pve switch`, and `pve auth`
-resolve to the corresponding `api` sub-commands.
+The top-level alias `pve ctx` resolves to `pve context`; `pve auth` resolves to
+`pve api auth`.
 
 ### Examples
 
@@ -232,19 +289,19 @@ Each Makefile category delegates to a script under `scripts/` (`build`, `test`,
 `fmt`, `lint`, `release`, `package`, `e2e`).
 
 `scripts/e2e` is a live, read-only happy-path sweep of every command tree
-against a configured target (default: `lab`). It runs the trees in parallel and
+against a configured context (default: `lab`). It runs the trees in parallel and
 reports pass/fail/skip per check; mutating or destructive operations are never
 executed — they are listed as deferred. Run it directly or via Make:
 
 ```bash
-make test-e2e                  # all trees against the `lab` target
-make test-e2e TREES=qemu       # a subset
-make test-e2e TARGET=prod      # a different configured target
-scripts/e2e --list             # list trees and the lab isolation contract
-scripts/e2e qemu cluster -j 4  # named trees, four parallel workers
+make test-e2e                   # all trees against the `lab` context
+make test-e2e TREES=qemu        # a subset
+make test-e2e CONTEXT=prod      # a different configured context
+scripts/e2e --list              # list trees and the lab isolation contract
+scripts/e2e qemu cluster -j 4   # named trees, four parallel workers
 ```
 
-The sweep skips gracefully (exit 0) when the target is not configured; pass
+The sweep skips gracefully (exit 0) when the context is not configured; pass
 `--strict` to fail instead. `make test-integration` runs the Go integration
 tests (gated on the config file or `PVE_TEST_*`).
 
@@ -265,12 +322,12 @@ VM has no guest OS to ACPI-reboot — the verb is proven on the Alpine container
 and lxc `suspend`/`resume` (need working CRIU support on the host).
 
 ```bash
-make test-e2e-mutate                      # read-only sweep + the destructive verb matrix
-make test-lifecycle                       # the destructive verb matrix only, against `lab`
-make test-lifecycle TARGET=prod
-scripts/e2e --mutate --vm-only            # sweep + VM verb matrix (skip the container)
-scripts/lifecycle --vm-only               # VM verb matrix only
-scripts/lifecycle --ct-only               # container verb matrix only
+make test-e2e-mutate                       # read-only sweep + the destructive verb matrix
+make test-lifecycle                        # the destructive verb matrix only, against `lab`
+make test-lifecycle CONTEXT=prod
+scripts/e2e --mutate --vm-only             # sweep + VM verb matrix (skip the container)
+scripts/lifecycle --vm-only                # VM verb matrix only
+scripts/lifecycle --ct-only                # container verb matrix only
 ```
 
 See [`docs/test-coverage-matrix.md`](docs/test-coverage-matrix.md) for a

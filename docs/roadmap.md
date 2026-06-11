@@ -10,6 +10,21 @@ The CLI now surfaces the complete user-facing command set. Every capability list
 
 Priorities run from P1 (highest impact, ship first) to P4 (specialized or low-frequency operations). P5 closed the remaining end-to-end test-coverage gaps so that every shipped command leaf is either exercised by a suite or formally deferred with a rationale. P6 then shrank the deferred bucket itself by finding live strategies for verbs that earlier passes had set aside, leaving only those that are genuinely impossible to exercise on the shared lab. The **Status** column tracks delivery: `Planned`, `In progress`, or `Shipped`.
 
+## Context management
+
+The `pve context` group (alias: `pve ctx`) ships as a first-class command group
+for managing named PVE endpoint configurations. It is separate from the API
+coverage priorities below because it operates on the local config file rather
+than the Proxmox VE API.
+
+| Feature | Commands | Notes | Status |
+|---|---|---|---|
+| Context CRUD | `pve context add`, `pve context ls`, `pve context show`, `pve context rm` | Add, list, inspect, and remove named contexts | Shipped |
+| Context switching | `pve context select`, `pve context previous` | Set the active context; `-` arg toggles to the previous context | Shipped |
+| Context copy and edit | `pve context copy`, `pve context edit` | Duplicate a context to a new name; open a context in `$EDITOR` | Shipped |
+| Context validation | `pve context validate` | Structural checks (host, auth type, port, protocol, fingerprint); `--all` validates every context; no network connect in v1 | Shipped |
+| Config migration | `scripts/migrate-config.py` | One-shot renamer: `targets:`/`current-target:` → `contexts:`/`current-context:` for pre-rename configs | Shipped |
+
 ## Priority Overview
 
 | Priority | Theme | Focus |
