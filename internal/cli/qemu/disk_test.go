@@ -22,10 +22,10 @@ func TestQemuDiskResize_Sync(t *testing.T) {
 		testhelper.WriteData(w, nil) // synchronous storages return null, not a UPID
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "resize", "100", "--disk", "scsi0", "--size", "+10G"))
+	require.NoError(t, run(deps, &buf, "disk", "resize", "100", "--disk", "scsi0", "--size", "+10G"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/resize", gotPath)
@@ -40,29 +40,29 @@ func TestQemuDiskResize_WorkerUPID(t *testing.T) {
 	})
 	handleTaskStatus(f, validUPID)
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "resize", "100", "--disk", "scsi0", "--size", "32G"))
+	require.NoError(t, run(deps, &buf, "disk", "resize", "100", "--disk", "scsi0", "--size", "32G"))
 	require.Contains(t, buf.String(), "resized")
 }
 
 func TestQemuDiskResize_RequiresDisk(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "disk", "resize", "100", "--size", "+10G")
+	err := run(deps, &buf, "disk", "resize", "100", "--size", "+10G")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--disk is required")
 }
 
 func TestQemuDiskResize_RequiresSize(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "disk", "resize", "100", "--disk", "scsi0")
+	err := run(deps, &buf, "disk", "resize", "100", "--disk", "scsi0")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--size is required")
 }
@@ -77,10 +77,10 @@ func TestQemuDiskResize_FlagParams(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "resize", "100",
+	require.NoError(t, run(deps, &buf, "disk", "resize", "100",
 		"--disk", "scsi0", "--size", "+10G", "--skiplock"))
 
 	form := parseForm(t, gotQuery+"&"+body)
@@ -101,10 +101,10 @@ func TestQemuDiskMove_Blocking(t *testing.T) {
 	})
 	handleTaskStatus(f, validUPID)
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "move", "100", "--disk", "scsi0", "--storage", "local-lvm"))
+	require.NoError(t, run(deps, &buf, "disk", "move", "100", "--disk", "scsi0", "--storage", "local-lvm"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/move_disk", gotPath)
@@ -113,20 +113,20 @@ func TestQemuDiskMove_Blocking(t *testing.T) {
 
 func TestQemuDiskMove_RequiresDisk(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "disk", "move", "100", "--storage", "local-lvm")
+	err := run(deps, &buf, "disk", "move", "100", "--storage", "local-lvm")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--disk is required")
 }
 
 func TestQemuDiskMove_RequiresTarget(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "disk", "move", "100", "--disk", "scsi0")
+	err := run(deps, &buf, "disk", "move", "100", "--disk", "scsi0")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--storage or --target-vmid is required")
 }
@@ -141,10 +141,10 @@ func TestQemuDiskMove_FlagParams(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "move", "100",
+	require.NoError(t, run(deps, &buf, "disk", "move", "100",
 		"--disk", "scsi0", "--storage", "local-lvm", "--target-disk", "scsi1", "--delete"))
 
 	form := parseForm(t, gotQuery+"&"+body)
@@ -165,10 +165,10 @@ func TestQemuDiskUnlink_Blocking(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "unlink", "100", "--disk", "scsi1"))
+	require.NoError(t, run(deps, &buf, "disk", "unlink", "100", "--disk", "scsi1"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/unlink", gotPath)
@@ -177,10 +177,10 @@ func TestQemuDiskUnlink_Blocking(t *testing.T) {
 
 func TestQemuDiskUnlink_RequiresDisk(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "disk", "unlink", "100")
+	err := run(deps, &buf, "disk", "unlink", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--disk is required")
 }
@@ -195,10 +195,10 @@ func TestQemuDiskUnlink_FlagParams(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "disk", "unlink", "100", "--disk", "scsi0,scsi1", "--force"))
+	require.NoError(t, run(deps, &buf, "disk", "unlink", "100", "--disk", "scsi0,scsi1", "--force"))
 
 	form := parseForm(t, gotQuery+"&"+body)
 	require.Equal(t, "scsi0,scsi1", form.Get("idlist"))

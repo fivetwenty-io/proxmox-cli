@@ -24,10 +24,10 @@ func TestQemuSnapshotShow_Success(t *testing.T) {
 			"snaptime":    1700000000,
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "show", "100", "pre-upgrade"))
+	require.NoError(t, run(deps, &buf, "snapshot", "show", "100", "pre-upgrade"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/snapshot/pre-upgrade/config", gotPath)
@@ -40,10 +40,10 @@ func TestQemuSnapshotShow_EmptyResponse(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/snapshot/snap1/config", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "show", "100", "snap1"))
+	require.NoError(t, run(deps, &buf, "snapshot", "show", "100", "snap1"))
 	require.Contains(t, buf.String(), "no additional configuration")
 }
 
@@ -52,20 +52,20 @@ func TestQemuSnapshotShow_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/snapshot/snap1/config", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusNotFound, "snap not found")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "snapshot", "show", "100", "snap1")
+	err := run(deps, &buf, "snapshot", "show", "100", "snap1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "show snapshot")
 }
 
 func TestQemuSnapshotShow_RequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "snapshot", "show", "100", "snap1")
+	err := run(deps, &buf, "snapshot", "show", "100", "snap1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node")
 }
@@ -80,10 +80,10 @@ func TestQemuSnapshotUpdate_Success(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "update", "100", "pre-upgrade",
+	require.NoError(t, run(deps, &buf, "snapshot", "update", "100", "pre-upgrade",
 		"--description", "updated desc"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -95,10 +95,10 @@ func TestQemuSnapshotUpdate_Success(t *testing.T) {
 
 func TestQemuSnapshotUpdate_NoChanges(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "snapshot", "update", "100", "snap1")
+	err := run(deps, &buf, "snapshot", "update", "100", "snap1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no configuration changes")
 }
@@ -108,10 +108,10 @@ func TestQemuSnapshotUpdate_ServerError(t *testing.T) {
 	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/snapshot/snap1/config", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "snapshot", "update", "100", "snap1", "--description", "x")
+	err := run(deps, &buf, "snapshot", "update", "100", "snap1", "--description", "x")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "update snapshot")
 }

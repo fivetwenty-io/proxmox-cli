@@ -14,10 +14,10 @@ import (
 
 func TestQemuTemplate_RequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "template", "100")
+	err := run(deps, &buf, "template", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "without confirmation")
 }
@@ -29,10 +29,10 @@ func TestQemuTemplate_ConvertsNullBody(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "template", "100", "--yes"))
+	require.NoError(t, run(deps, &buf, "template", "100", "--yes"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/template", gotPath)
@@ -47,10 +47,10 @@ func TestQemuTemplate_WithDisk(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "template", "100", "--yes", "--disk", "scsi0"))
+	require.NoError(t, run(deps, &buf, "template", "100", "--yes", "--disk", "scsi0"))
 
 	form := parseForm(t, gotQuery+"&"+body)
 	require.Equal(t, "scsi0", form.Get("disk"))
@@ -62,10 +62,10 @@ func TestQemuTemplate_BlocksOnUPID(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 	handleTaskStatus(f, validUPID)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "template", "100", "--yes"))
+	require.NoError(t, run(deps, &buf, "template", "100", "--yes"))
 	require.Contains(t, buf.String(), "converted into a template")
 }
 
@@ -74,19 +74,19 @@ func TestQemuTemplate_Async(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/template", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "template", "100", "--yes", "--async"))
+	require.NoError(t, run(deps, &buf, "template", "100", "--yes", "--async"))
 	require.Contains(t, buf.String(), validUPID)
 }
 
 func TestQemuTemplate_RequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "template", "100", "--yes")
+	err := run(deps, &buf, "template", "100", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node specified")
 }

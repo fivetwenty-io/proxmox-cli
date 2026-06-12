@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
 // newCloneCmd builds `pve qemu clone <vmid> --newid N [flags]`.
@@ -38,7 +39,7 @@ func newCloneCmd() *cobra.Command {
 			"The command blocks until the clone task completes unless --async is set.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

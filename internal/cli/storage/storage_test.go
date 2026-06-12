@@ -66,7 +66,8 @@ func run(t *testing.T, f *testhelper.FakePVE, args ...string) (string, error) {
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_OUTPUT", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 	root.AddCommand(newGroupCmd(&cli.Deps{}))
 

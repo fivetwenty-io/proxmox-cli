@@ -24,10 +24,9 @@ func TestClusterReplication_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "replication", "list"))
+	require.NoError(t, run(deps, &buf, "replication", "list"))
 	out := buf.String()
 	require.Contains(t, out, "101-0")
 	require.Contains(t, out, "pve2")
@@ -45,10 +44,9 @@ func TestClusterReplication_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "replication", "create",
+	require.NoError(t, run(deps, &buf, "replication", "create",
 		"--id", "101-0", "--target-node", "pve2", "--schedule", "*/30"))
 	require.Equal(t, "101-0", gotForm.Get("id"))
 	require.Equal(t, "pve2", gotForm.Get("target"))
@@ -69,10 +67,9 @@ func TestClusterReplication_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "replication", "get", "101-0"))
+	require.NoError(t, run(deps, &buf, "replication", "get", "101-0"))
 	require.Contains(t, buf.String(), "pve2")
 }
 
@@ -86,10 +83,9 @@ func TestClusterReplication_SetRequiresFlag(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "replication", "set", "101-0")
+	err := run(deps, &buf, "replication", "set", "101-0")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no changes to set")
 	require.False(t, called, "set must not issue a PUT when no flags are passed")
@@ -107,10 +103,9 @@ func TestClusterReplication_SetForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "replication", "set", "101-0", "--schedule", "*/45", "--disable"))
+	require.NoError(t, run(deps, &buf, "replication", "set", "101-0", "--schedule", "*/45", "--disable"))
 	require.Equal(t, "*/45", gotForm.Get("schedule"))
 	require.Equal(t, "1", gotForm.Get("disable"))
 	_, hasRate := gotForm["rate"]
@@ -127,10 +122,9 @@ func TestClusterReplication_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "replication", "delete", "101-0")
+	err := run(deps, &buf, "replication", "delete", "101-0")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -148,10 +142,9 @@ func TestClusterReplication_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "replication", "delete", "101-0", "--yes", "--force"))
+	require.NoError(t, run(deps, &buf, "replication", "delete", "101-0", "--yes", "--force"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "1", gotForce)
 	require.Contains(t, buf.String(), "deleted")

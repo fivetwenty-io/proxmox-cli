@@ -10,11 +10,6 @@ import (
 	selfversion "github.com/fivetwenty-io/pve-cli/internal/version"
 )
 
-// resolveDeps looks up the live Deps for a command. It is a package-level
-// indirection over cli.GetDeps so tests can inject a Deps built from a fake
-// server without driving the root PersistentPreRunE.
-var resolveDeps = cli.GetDeps
-
 func init() {
 	cli.RegisterGroup(newGroupCmd)
 }
@@ -39,7 +34,7 @@ func newGroupCmd(_ *cli.Deps) *cobra.Command {
 
 // runClusterVersion queries GET /version and renders the cluster API version.
 func runClusterVersion(cmd *cobra.Command, _ []string) error {
-	deps := resolveDeps(cmd)
+	deps := cli.GetDeps(cmd)
 
 	resp, err := deps.API.Version.Get(cmd.Context())
 	if err != nil {
@@ -91,7 +86,7 @@ type clientInfo struct {
 
 // runClientVersion renders this CLI's build information.
 func runClientVersion(cmd *cobra.Command, _ []string) error {
-	deps := resolveDeps(cmd)
+	deps := cli.GetDeps(cmd)
 	info := selfversion.GetInfo()
 
 	result := output.Result{

@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -41,7 +42,7 @@ func newReplicationListCmd() *cobra.Command {
 		Short: "List storage replication jobs",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListReplication(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list replication jobs: %w", err)
@@ -92,7 +93,7 @@ func newReplicationCreateCmd() *cobra.Command {
 			"'101-0'); --target-node is the node to replicate to.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			params := &pvecluster.CreateReplicationParams{
 				Id:     id,
 				Target: target,
@@ -137,7 +138,7 @@ func newReplicationGetCmd() *cobra.Command {
 		Short: "Show a single replication job",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			resp, err := deps.API.Cluster.GetReplication(cmd.Context(), id)
 			if err != nil {
@@ -167,7 +168,7 @@ func newReplicationSetCmd() *cobra.Command {
 		Long:  "Update a replication job. Only the flags you pass are changed.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "schedule", "rate", "comment", "disable", "delete") {
@@ -216,7 +217,7 @@ func newReplicationDeleteCmd() *cobra.Command {
 		Short: "Delete a replication job",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete replication job %q without confirmation: pass --yes/-y", id)

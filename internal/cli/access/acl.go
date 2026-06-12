@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -39,7 +40,7 @@ func newACLListCmd() *cobra.Command {
 		Short: "List ACL entries",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Access.ListAcl(cmd.Context())
 			if err != nil {
@@ -94,7 +95,7 @@ func newACLSetCmd() *cobra.Command {
 		Short: "Grant or revoke roles on a path",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			if path == "" {
 				return fmt.Errorf("--path is required")

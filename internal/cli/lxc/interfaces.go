@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -29,7 +30,7 @@ func newInterfacesCmd() *cobra.Command {
 		Short: "List a container's network interfaces",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := getDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

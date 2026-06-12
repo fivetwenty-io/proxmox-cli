@@ -7,6 +7,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -39,7 +40,7 @@ func newCpuModelListCmd() *cobra.Command {
 		Short: "List custom CPU models",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListQemuCustomCpuModels(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list custom CPU models: %w", err)
@@ -60,7 +61,7 @@ func newCpuModelGetCmd() *cobra.Command {
 		Short: "Show a single custom CPU model",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cputype := args[0]
 			resp, err := deps.API.Cluster.GetQemuCustomCpuModels(cmd.Context(), cputype)
 			if err != nil {
@@ -94,7 +95,7 @@ func newCpuModelCreateCmd() *cobra.Command {
 			"reported to guests; additional CPU flags and CPUID tuning are optional.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cputype := args[0]
 			params := &pvecluster.CreateQemuCustomCpuModelsParams{
 				Cputype:       cputype,
@@ -150,7 +151,7 @@ func newCpuModelSetCmd() *cobra.Command {
 			"--delete to reset specific properties to their defaults.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cputype := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "reported-model", "flags", "guest-phys-bits",
@@ -206,7 +207,7 @@ func newCpuModelDeleteCmd() *cobra.Command {
 		Short: "Delete a custom CPU model",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cputype := args[0]
 			if err := requireDeleteYes(yes, "custom CPU model", cputype); err != nil {
 				return err

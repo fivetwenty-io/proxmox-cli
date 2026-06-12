@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
@@ -18,19 +18,11 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
 
-// withDeps overrides the package-local deps lookup so tests can inject a Deps
-// built from the fake server without driving the root PersistentPreRunE. The
-// returned function restores the previous lookup and must be deferred.
-func withDeps(deps *cli.Deps) func() {
-	prev := resolveDeps
-	resolveDeps = func(_ *cobra.Command) *cli.Deps { return deps }
-	return func() { resolveDeps = prev }
-}
-
-// run builds the cluster group command, captures output in buf, and executes it
-// with the supplied args.
-func run(buf *bytes.Buffer, args ...string) error {
+// run builds the cluster group command, injects deps via context, captures
+// output in buf, and executes it with the supplied args.
+func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 	cmd := newClusterCmd(&cli.Deps{})
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetArgs(args)
@@ -88,10 +80,9 @@ func TestClusterStatus_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "status"))
+	require.NoError(t, run(deps, &buf, "status"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/status", gotPath)
@@ -118,10 +109,9 @@ func TestClusterStatus_JSON(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "status"))
+	require.NoError(t, run(deps, &buf, "status"))
 	out := buf.String()
 	require.Contains(t, out, "pve1")
 	// Result.Raw fidelity: json output is the verbatim API array with native
@@ -142,10 +132,9 @@ func TestClusterStatus_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "status"))
+	require.Error(t, run(deps, &buf, "status"))
 }
 
 // TestClusterResources_TypeFilter verifies that `pve cluster resources --type vm`
@@ -172,10 +161,9 @@ func TestClusterResources_TypeFilter(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "resources", "--type", "vm"))
+	require.NoError(t, run(deps, &buf, "resources", "--type", "vm"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/resources", gotPath)
@@ -205,10 +193,9 @@ func TestClusterResources_NoFilter(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "resources"))
+	require.NoError(t, run(deps, &buf, "resources"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "TYPE")
 }
@@ -221,10 +208,9 @@ func TestClusterResources_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "resources"))
+	require.Error(t, run(deps, &buf, "resources"))
 }
 
 // TestClusterNextID_Plain verifies `pve cluster next-id` returns the next VMID.
@@ -238,10 +224,9 @@ func TestClusterNextID_Plain(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "next-id"))
+	require.NoError(t, run(deps, &buf, "next-id"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/nextid", gotPath)
@@ -260,10 +245,9 @@ func TestClusterNextID_VMIDHint(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "next-id", "--vmid", "205"))
+	require.NoError(t, run(deps, &buf, "next-id", "--vmid", "205"))
 
 	require.Contains(t, gotQuery, "vmid=205")
 	require.Contains(t, buf.String(), "205")
@@ -275,10 +259,9 @@ func TestClusterNextID_JSON(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/nextid", json.RawMessage(`"100"`))
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "next-id"))
+	require.NoError(t, run(deps, &buf, "next-id"))
 	require.Contains(t, buf.String(), "100")
 }
 
@@ -290,10 +273,9 @@ func TestClusterNextID_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "next-id"))
+	require.Error(t, run(deps, &buf, "next-id"))
 }
 
 // TestClusterCommandTree verifies the group exposes the expected sub-commands.
@@ -313,7 +295,8 @@ func TestClusterCommandTree(t *testing.T) {
 // TestClusterGroupRegistered verifies importing this package self-registers a
 // group factory named "cluster" with the cli root registry.
 func TestClusterGroupRegistered(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	found := false

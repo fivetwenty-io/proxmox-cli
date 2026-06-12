@@ -25,10 +25,10 @@ func TestQemuConsole_VNCDefault(t *testing.T) {
 			"upid":   validUPID,
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "console", "100"))
+	require.NoError(t, run(deps, &buf, "console", "100"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/vncproxy", gotPath)
@@ -45,10 +45,10 @@ func TestQemuConsole_VNCWebsocket(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, map[string]any{"ticket": "T", "port": 5901})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "console", "100", "--type", "vnc", "--websocket"))
+	require.NoError(t, run(deps, &buf, "console", "100", "--type", "vnc", "--websocket"))
 
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/vncproxy", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
@@ -63,10 +63,10 @@ func TestQemuConsole_Term(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, map[string]any{"ticket": "TT", "port": 5902, "user": "root@pam"})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "console", "100", "--type", "term", "--serial", "serial0"))
+	require.NoError(t, run(deps, &buf, "console", "100", "--type", "term", "--serial", "serial0"))
 
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/termproxy", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
@@ -83,10 +83,10 @@ func TestQemuConsole_Spice(t *testing.T) {
 			"password": "secret", "host": "pve1", "tls-port": 3128, "proxy": "https://pve1",
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "console", "100", "--type", "spice", "--proxy", "pve1.example"))
+	require.NoError(t, run(deps, &buf, "console", "100", "--type", "spice", "--proxy", "pve1.example"))
 
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/spiceproxy", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
@@ -102,20 +102,20 @@ func TestQemuConsole_UnexpectedShape(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/vncproxy", func(w http.ResponseWriter, r *http.Request) {
 		testhelper.WriteData(w, []any{"not", "an", "object"})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "console", "100")
+	err := run(deps, &buf, "console", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unexpected response shape")
 }
 
 func TestQemuConsole_InvalidType(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "console", "100", "--type", "bogus")
+	err := run(deps, &buf, "console", "100", "--type", "bogus")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid console type")
 }
@@ -125,10 +125,10 @@ func TestQemuConsole_ServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/vncproxy", func(w http.ResponseWriter, r *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "console", "100")
+	err := run(deps, &buf, "console", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "open vnc console")
 }

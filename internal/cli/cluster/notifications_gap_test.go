@@ -25,10 +25,9 @@ func TestNotificationsTargetsTest_Success(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "targets-test", "mail-to-root"))
+	require.NoError(t, run(deps, &buf, "notifications", "targets-test", "mail-to-root"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/cluster/notifications/targets/mail-to-root/test", gotPath)
@@ -43,10 +42,9 @@ func TestNotificationsTargetsTest_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "notifications", "targets-test", "missing"))
+	require.Error(t, run(deps, &buf, "notifications", "targets-test", "missing"))
 }
 
 // TestNotificationsMatcherFields_Table verifies `pve cluster notifications matcher-fields`
@@ -64,10 +62,9 @@ func TestNotificationsMatcherFields_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "matcher-fields"))
+	require.NoError(t, run(deps, &buf, "notifications", "matcher-fields"))
 
 	require.Equal(t, "/api2/json/cluster/notifications/matcher-fields", gotPath)
 	out := buf.String()
@@ -83,10 +80,9 @@ func TestNotificationsMatcherFields_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "notifications", "matcher-fields"))
+	require.Error(t, run(deps, &buf, "notifications", "matcher-fields"))
 }
 
 // TestNotificationsMatcherFieldValues_Table verifies `pve cluster notifications matcher-field-values`
@@ -104,10 +100,9 @@ func TestNotificationsMatcherFieldValues_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "matcher-field-values"))
+	require.NoError(t, run(deps, &buf, "notifications", "matcher-field-values"))
 
 	require.Equal(t, "/api2/json/cluster/notifications/matcher-field-values", gotPath)
 	out := buf.String()
@@ -123,10 +118,9 @@ func TestNotificationsMatcherFieldValues_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "notifications", "matcher-field-values"))
+	require.Error(t, run(deps, &buf, "notifications", "matcher-field-values"))
 }
 
 // TestNotificationsCommandTree_GapCommands verifies the new gap commands are registered.

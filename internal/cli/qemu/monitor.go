@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
 // newMonitorCmd builds `pve qemu monitor <vmid> --command CMD`.
@@ -27,7 +28,7 @@ func newMonitorCmd() *cobra.Command {
 			"This command is typically restricted to root.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

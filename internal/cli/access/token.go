@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -42,7 +43,7 @@ func newTokenListCmd() *cobra.Command {
 		Short: "List a user's API tokens",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			resp, err := deps.API.Access.ListUsersToken(cmd.Context(), userid)
@@ -76,7 +77,7 @@ func newTokenGetCmd() *cobra.Command {
 		Short: "Show an API token's details",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
 
 			resp, err := deps.API.Access.GetUsersToken(cmd.Context(), userid, tokenid)
@@ -109,7 +110,7 @@ func newTokenCreateCmd() *cobra.Command {
 		Short: "Create an API token",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
 
 			params := &access.CreateUsersTokenParams{}
@@ -154,7 +155,7 @@ func newTokenSetCmd() *cobra.Command {
 		Short: "Update an API token",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
 
 			params := &access.UpdateUsersTokenParams{}
@@ -188,7 +189,7 @@ func newTokenDeleteCmd() *cobra.Command {
 		Short: "Delete an API token",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
 
 			if !yes {

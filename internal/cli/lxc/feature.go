@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -24,7 +25,7 @@ func newFeatureCmd() *cobra.Command {
 			"Pass --snapname to check feature support in the context of a snapshot.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := getDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

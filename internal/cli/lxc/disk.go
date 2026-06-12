@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -46,7 +47,7 @@ func newDiskResizeCmd() *cobra.Command {
 			"size such as `16G` or a relative increment such as `+5G`. Shrinking is not supported by PVE.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := getDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -108,7 +109,7 @@ func newDiskMoveCmd() *cobra.Command {
 			"container. The command blocks until the move task completes unless --async is set.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := getDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

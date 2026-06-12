@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -53,7 +54,7 @@ func newJobsRealmSyncListCmd() *cobra.Command {
 		Short: "List realm-sync jobs",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListJobsRealmSync(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list realm-sync jobs: %w", err)
@@ -73,7 +74,7 @@ func newJobsRealmSyncGetCmd() *cobra.Command {
 		Short: "Show a single realm-sync job",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			resp, err := deps.API.Cluster.GetJobsRealmSync(cmd.Context(), id)
 			if err != nil {
@@ -106,7 +107,7 @@ func newJobsRealmSyncCreateCmd() *cobra.Command {
 			"(for example 'daily' or '*/15'); --realm selects the authentication realm to sync.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := &pvecluster.CreateJobsRealmSyncParams{Schedule: schedule}
 			fl := cmd.Flags()
@@ -165,7 +166,7 @@ func newJobsRealmSyncSetCmd() *cobra.Command {
 			"the full schedule; other flags are changed only when passed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := &pvecluster.UpdateJobsRealmSyncParams{Schedule: schedule}
 			fl := cmd.Flags()
@@ -214,7 +215,7 @@ func newJobsRealmSyncDeleteCmd() *cobra.Command {
 		Short: "Delete a realm-sync job",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete realm-sync job %q without confirmation: pass --yes/-y", id)
@@ -248,7 +249,7 @@ func newJobsScheduleAnalyzeCmd() *cobra.Command {
 			"--schedule is required; --iterations defaults to the server default (10).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.ListJobsScheduleAnalyzeParams{Schedule: schedule}
 			if fl.Changed("iterations") {

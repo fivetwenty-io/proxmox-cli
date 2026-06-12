@@ -23,10 +23,9 @@ func TestClusterCpuModel_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cpu-model", "list"))
+	require.NoError(t, run(deps, &buf, "cpu-model", "list"))
 	out := buf.String()
 	require.Contains(t, out, "custom-epyc")
 	require.Contains(t, out, "EPYC")
@@ -39,10 +38,9 @@ func TestClusterCpuModel_ListError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "list")
+	err := run(deps, &buf, "cpu-model", "list")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "list custom CPU models")
 }
@@ -56,10 +54,9 @@ func TestClusterCpuModel_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cpu-model", "get", "custom-epyc"))
+	require.NoError(t, run(deps, &buf, "cpu-model", "get", "custom-epyc"))
 	out := buf.String()
 	require.Contains(t, out, "reported-model")
 	require.Contains(t, out, "EPYC")
@@ -72,10 +69,9 @@ func TestClusterCpuModel_GetError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "get", "custom-epyc")
+	err := run(deps, &buf, "cpu-model", "get", "custom-epyc")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "get custom CPU model")
 }
@@ -90,10 +86,9 @@ func TestClusterCpuModel_CreateForwardsAllFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cpu-model", "create", "custom-epyc",
+	require.NoError(t, run(deps, &buf, "cpu-model", "create", "custom-epyc",
 		"--reported-model", "EPYC", "--guest-phys-bits", "46", "--level", "30",
 		"--phys-bits", "host", "--hv-vendor-id", "PVE"))
 	require.Equal(t, "custom-epyc", gotForm.Get("cputype"))
@@ -114,10 +109,9 @@ func TestClusterCpuModel_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cpu-model", "create", "custom-epyc",
+	require.NoError(t, run(deps, &buf, "cpu-model", "create", "custom-epyc",
 		"--reported-model", "EPYC", "--flags", "+aes", "--hidden"))
 	require.Equal(t, "custom-epyc", gotForm.Get("cputype"))
 	require.Equal(t, "EPYC", gotForm.Get("reported-model"))
@@ -138,10 +132,9 @@ func TestClusterCpuModel_CreateRequiresReportedModel(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "create", "custom-epyc")
+	err := run(deps, &buf, "cpu-model", "create", "custom-epyc")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "reported-model")
 	require.False(t, called, "create must not POST without --reported-model")
@@ -154,10 +147,9 @@ func TestClusterCpuModel_CreateError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "create", "custom-epyc", "--reported-model", "EPYC")
+	err := run(deps, &buf, "cpu-model", "create", "custom-epyc", "--reported-model", "EPYC")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "create custom CPU model")
 }
@@ -172,10 +164,9 @@ func TestClusterCpuModel_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cpu-model", "set", "custom-epyc", "--level", "30", "--delete", "flags"))
+	require.NoError(t, run(deps, &buf, "cpu-model", "set", "custom-epyc", "--level", "30", "--delete", "flags"))
 	require.Equal(t, "30", gotForm.Get("level"))
 	require.Equal(t, "flags", gotForm.Get("delete"))
 	// --reported-model was not passed, so it must be omitted from the body.
@@ -191,10 +182,9 @@ func TestClusterCpuModel_SetError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "set", "custom-epyc", "--level", "30")
+	err := run(deps, &buf, "cpu-model", "set", "custom-epyc", "--level", "30")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "update custom CPU model")
 }
@@ -208,10 +198,9 @@ func TestClusterCpuModel_SetRequiresChange(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "set", "custom-epyc")
+	err := run(deps, &buf, "cpu-model", "set", "custom-epyc")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no changes to set")
 	require.False(t, called, "set must not PUT when no field flags change")
@@ -226,10 +215,9 @@ func TestClusterCpuModel_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "cpu-model", "delete", "custom-epyc")
+	err := run(deps, &buf, "cpu-model", "delete", "custom-epyc")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not DELETE without --yes")
@@ -244,10 +232,9 @@ func TestClusterCpuModel_Delete(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cpu-model", "delete", "custom-epyc", "--yes"))
+	require.NoError(t, run(deps, &buf, "cpu-model", "delete", "custom-epyc", "--yes"))
 	require.Equal(t, "DELETE", gotMethod)
 	require.Contains(t, buf.String(), "Custom CPU model custom-epyc deleted.")
 }

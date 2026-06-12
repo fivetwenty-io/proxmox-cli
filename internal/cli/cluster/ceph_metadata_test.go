@@ -33,10 +33,9 @@ func TestCephMetadata_Success(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ceph", "metadata"))
+	require.NoError(t, run(deps, &buf, "ceph", "metadata"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/ceph/metadata", gotPath)
@@ -60,10 +59,9 @@ func TestCephMetadata_ScopeForwarded(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ceph", "metadata", "--scope", "versions"))
+	require.NoError(t, run(deps, &buf, "ceph", "metadata", "--scope", "versions"))
 	require.Contains(t, gotQuery, "scope=versions")
 }
 
@@ -75,10 +73,9 @@ func TestCephMetadata_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "ceph", "metadata"))
+	require.Error(t, run(deps, &buf, "ceph", "metadata"))
 }
 
 // TestCephCommandTree_Metadata verifies metadata is registered under ceph.

@@ -189,7 +189,8 @@ func TestNodeOci_RequiresNode(t *testing.T) {
 }
 
 func TestNodeOci_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	var node, oci *cobra.Command

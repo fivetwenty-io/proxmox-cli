@@ -32,10 +32,9 @@ func TestHaGroupList_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "group", "list"))
+	require.NoError(t, run(deps, &buf, "ha", "group", "list"))
 
 	require.Equal(t, "/api2/json/cluster/ha/groups", gotPath)
 	out := buf.String()
@@ -60,10 +59,9 @@ func TestHaGroupGet_Single(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "group", "get", "ha1"))
+	require.NoError(t, run(deps, &buf, "ha", "group", "get", "ha1"))
 
 	require.Equal(t, "/api2/json/cluster/ha/groups/ha1", gotPath)
 	require.Contains(t, buf.String(), "ha1")
@@ -84,10 +82,9 @@ func TestHaGroupCreate_PostsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "group", "create", "ha1",
+	require.NoError(t, run(deps, &buf, "ha", "group", "create", "ha1",
 		"--nodes", "pve:2,pve2", "--comment", "primary", "--restricted"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
@@ -110,10 +107,9 @@ func TestHaGroupCreate_RequiresNodes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "group", "create", "ha1")
+	err := run(deps, &buf, "ha", "group", "create", "ha1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--nodes")
 	require.False(t, called, "create must not be issued without --nodes")
@@ -134,10 +130,9 @@ func TestHaGroupSet_PutsChangedFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "group", "set", "ha1",
+	require.NoError(t, run(deps, &buf, "ha", "group", "set", "ha1",
 		"--nodes", "pve", "--delete", "comment"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -160,16 +155,15 @@ func TestHaGroupDelete_RequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "group", "delete", "ha1")
+	err := run(deps, &buf, "ha", "group", "delete", "ha1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not be issued without --yes")
 
 	buf.Reset()
-	require.NoError(t, run(&buf, "ha", "group", "delete", "ha1", "--yes"))
+	require.NoError(t, run(deps, &buf, "ha", "group", "delete", "ha1", "--yes"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -192,10 +186,9 @@ func TestHaRuleList_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "rule", "list"))
+	require.NoError(t, run(deps, &buf, "ha", "rule", "list"))
 
 	require.Equal(t, "/api2/json/cluster/ha/rules", gotPath)
 	out := buf.String()
@@ -221,10 +214,9 @@ func TestHaRuleList_Filters(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "rule", "list", "--resource", "vm:100", "--type", "node-affinity"))
+	require.NoError(t, run(deps, &buf, "ha", "rule", "list", "--resource", "vm:100", "--type", "node-affinity"))
 	require.Equal(t, "vm:100", gotResource)
 	require.Equal(t, "node-affinity", gotType)
 }
@@ -243,10 +235,9 @@ func TestHaRuleGet_RawObject(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "rule", "get", "pin"))
+	require.NoError(t, run(deps, &buf, "ha", "rule", "get", "pin"))
 
 	require.Equal(t, "/api2/json/cluster/ha/rules/pin", gotPath)
 	out := buf.String()
@@ -270,10 +261,9 @@ func TestHaRuleCreate_PostsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "rule", "create", "keep-apart",
+	require.NoError(t, run(deps, &buf, "ha", "rule", "create", "keep-apart",
 		"--type", "resource-affinity", "--resources", "vm:100,vm:101",
 		"--affinity", "negative", "--strict"))
 
@@ -298,15 +288,14 @@ func TestHaRuleCreate_RequiresTypeAndResources(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "rule", "create", "r1")
+	err := run(deps, &buf, "ha", "rule", "create", "r1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type")
 
 	buf.Reset()
-	err = run(&buf, "ha", "rule", "create", "r1", "--type", "node-affinity")
+	err = run(deps, &buf, "ha", "rule", "create", "r1", "--type", "node-affinity")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--resources")
 	require.False(t, called, "create must not be issued when a required flag is missing")
@@ -327,10 +316,9 @@ func TestHaRuleSet_PutsChangedFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "rule", "set", "pin",
+	require.NoError(t, run(deps, &buf, "ha", "rule", "set", "pin",
 		"--type", "node-affinity", "--nodes", "pve:3", "--disable"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -352,10 +340,9 @@ func TestHaRuleSet_RequiresType(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "rule", "set", "pin", "--nodes", "pve")
+	err := run(deps, &buf, "ha", "rule", "set", "pin", "--nodes", "pve")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type")
 	require.False(t, called, "set must not be issued without --type")
@@ -373,16 +360,15 @@ func TestHaRuleDelete_RequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "rule", "delete", "pin")
+	err := run(deps, &buf, "ha", "rule", "delete", "pin")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not be issued without --yes")
 
 	buf.Reset()
-	require.NoError(t, run(&buf, "ha", "rule", "delete", "pin", "--yes"))
+	require.NoError(t, run(deps, &buf, "ha", "rule", "delete", "pin", "--yes"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "deleted")
 }

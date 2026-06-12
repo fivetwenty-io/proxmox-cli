@@ -9,6 +9,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -130,7 +131,7 @@ func newClusterFirewallRulesListCmd() *cobra.Command {
 		Short: "List the cluster firewall rules",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallRules(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list cluster firewall rules: %w", err)
@@ -155,7 +156,7 @@ func newClusterFirewallRulesGetCmd() *cobra.Command {
 		Short: "Show a single cluster firewall rule by position",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			pos := args[0]
 			// The typed client method cannot decode this endpoint: PVE returns
 			// `pos` as a string here while the generated struct expects int64.
@@ -184,7 +185,7 @@ func newClusterFirewallRulesCreateCmd() *cobra.Command {
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !cmd.Flags().Changed("type") {
 				return fmt.Errorf("--type is required: one of in, out, or group")
 			}
@@ -250,7 +251,7 @@ func newClusterFirewallRulesUpdateCmd() *cobra.Command {
 		Short: "Modify a cluster firewall rule by position",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			pos := args[0]
 
 			params := &pvecluster.UpdateFirewallRulesParams{}
@@ -320,7 +321,7 @@ func newClusterFirewallRulesDeleteCmd() *cobra.Command {
 		Short: "Delete a cluster firewall rule by position",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			pos := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete cluster firewall rule %s without confirmation: pass --yes/-y", pos)
@@ -370,7 +371,7 @@ func newClusterFirewallGroupListCmd() *cobra.Command {
 		Short: "List security groups",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallGroups(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list cluster firewall security groups: %w", err)
@@ -404,7 +405,7 @@ func newClusterFirewallGroupCreateCmd() *cobra.Command {
 		Short: "Create or rename a security group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 			params := &pvecluster.CreateFirewallGroupsParams{Group: group}
 			if cmd.Flags().Changed("comment") {
@@ -432,7 +433,7 @@ func newClusterFirewallGroupDeleteCmd() *cobra.Command {
 		Short: "Delete a security group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete security group %q without confirmation: pass --yes/-y", group)
@@ -454,7 +455,7 @@ func newClusterFirewallGroupRulesCmd() *cobra.Command {
 		Short: "List the rules in a security group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 			resp, err := deps.API.Cluster.GetFirewallGroups(cmd.Context(), group)
 			if err != nil {
@@ -483,7 +484,7 @@ func newClusterFirewallGroupRuleAddCmd() *cobra.Command {
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 			if !cmd.Flags().Changed("type") {
 				return fmt.Errorf("--type is required: one of in, out, or group")
@@ -550,7 +551,7 @@ func newClusterFirewallGroupRuleUpdateCmd() *cobra.Command {
 		Short: "Modify a rule in a security group by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group, pos := args[0], args[1]
 
 			params := &pvecluster.UpdateFirewallGroupsParams{}
@@ -620,7 +621,7 @@ func newClusterFirewallGroupRuleDeleteCmd() *cobra.Command {
 		Short: "Delete a rule from a security group by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group, pos := args[0], args[1]
 			if !yes {
 				return fmt.Errorf("refusing to delete rule %s from security group %q without confirmation: pass --yes/-y", pos, group)
@@ -668,7 +669,7 @@ func newClusterFirewallIpsetListCmd() *cobra.Command {
 		Short: "List IP sets, or the members of one IP set",
 		Args:  cobra.RangeArgs(0, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			var raws []json.RawMessage
 			var headers []string
@@ -723,7 +724,7 @@ func newClusterFirewallIpsetCreateCmd() *cobra.Command {
 		Short: "Create or rename a firewall IP set",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			params := &pvecluster.CreateFirewallIpsetParams{Name: name}
 			if cmd.Flags().Changed("comment") {
@@ -754,7 +755,7 @@ func newClusterFirewallIpsetDeleteCmd() *cobra.Command {
 		Short: "Delete a firewall IP set",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete IP set %q without confirmation: pass --yes/-y", name)
@@ -785,7 +786,7 @@ func newClusterFirewallIpsetAddCmd() *cobra.Command {
 		Short: "Add a CIDR entry to an IP set",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
 			params := &pvecluster.CreateFirewallIpset2Params{Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
@@ -813,7 +814,7 @@ func newClusterFirewallIpsetRemoveCmd() *cobra.Command {
 		Short: "Remove a CIDR entry from an IP set",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
 			if !yes {
 				return fmt.Errorf("refusing to remove %s from IP set %q without confirmation: pass --yes/-y", cidr, name)
@@ -858,7 +859,7 @@ func newClusterFirewallAliasListCmd() *cobra.Command {
 		Short: "List the cluster firewall aliases",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallAliases(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list cluster firewall aliases: %w", err)
@@ -889,7 +890,7 @@ func newClusterFirewallAliasCreateCmd() *cobra.Command {
 		Short: "Create a firewall address alias",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
 			params := &pvecluster.CreateFirewallAliasesParams{Name: name, Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
@@ -916,7 +917,7 @@ func newClusterFirewallAliasUpdateCmd() *cobra.Command {
 		Short: "Update a firewall address alias",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
 			params := &pvecluster.UpdateFirewallAliasesParams{Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
@@ -944,7 +945,7 @@ func newClusterFirewallAliasDeleteCmd() *cobra.Command {
 		Short: "Delete a firewall address alias",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete alias %q without confirmation: pass --yes/-y", name)
@@ -980,7 +981,7 @@ func newClusterFirewallOptionsGetCmd() *cobra.Command {
 		Short: "Show the datacenter firewall options",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallOptions(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get cluster firewall options: %w", err)
@@ -1011,7 +1012,7 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 		Long:  "Update the cluster-wide firewall options. Only the flags you pass are changed.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "enable", "ebtables", "policy-in", "policy-out",
 				"policy-forward", "log-ratelimit", "delete") {
@@ -1073,7 +1074,7 @@ func newClusterFirewallMacrosCmd() *cobra.Command {
 			"The list is static and provided by the PVE server.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallMacros(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list firewall macros: %w", err)
@@ -1113,7 +1114,7 @@ func newClusterFirewallRefsCmd() *cobra.Command {
 			"destination in firewall rules. Pass --type ipset or --type alias to filter.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.ListFirewallRefsParams{}
 			if fl.Changed("type") {

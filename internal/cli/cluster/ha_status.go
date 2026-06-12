@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -33,7 +34,7 @@ func newHaStatusCmd() *cobra.Command {
 // renderHaStatusList unmarshals a raw HA-status list and renders it as a
 // dynamic-column table preserving every field across heterogeneous entries.
 func renderHaStatusList(cmd *cobra.Command, raws []json.RawMessage, what string) error {
-	deps := resolveDeps(cmd)
+	deps := cli.GetDeps(cmd)
 	entries := make([]map[string]any, 0, len(raws))
 	for _, r := range raws {
 		var m map[string]any
@@ -55,7 +56,7 @@ func newHaStatusListCmd() *cobra.Command {
 		Short:   "Show the HA status overview",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListHaStatus(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list HA status: %w", err)
@@ -76,7 +77,7 @@ func newHaStatusCurrentCmd() *cobra.Command {
 		Short: "Show the current HA status of resources and nodes",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListHaStatusCurrent(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get current HA status: %w", err)
@@ -98,7 +99,7 @@ func newHaStatusManagerCmd() *cobra.Command {
 		Short:   "Show the raw HA manager status",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListHaStatusManagerStatus(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get HA manager status: %w", err)
@@ -130,7 +131,7 @@ func newHaStatusArmCmd() *cobra.Command {
 			"every HA-managed resource, so it is guarded by --yes.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to arm cluster HA without --yes: this affects every HA-managed resource")
 			}
@@ -159,7 +160,7 @@ func newHaStatusDisarmCmd() *cobra.Command {
 			"resources from HA tracking. This affects every HA-managed resource, so it is guarded by --yes.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to disarm cluster HA without --yes: this affects every HA-managed resource")
 			}

@@ -308,7 +308,8 @@ func TestNodeApt_RequiresNode(t *testing.T) {
 }
 
 func TestNodeApt_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {

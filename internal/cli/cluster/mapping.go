@@ -49,7 +49,7 @@ func newMappingListCmd(call func(*cli.Deps, context.Context, *string) ([]json.Ra
 		Short: "List mappings",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			var cn *string
 			if cmd.Flags().Changed("check-node") {
 				cn = &checkNode
@@ -77,7 +77,7 @@ func newMappingGetCmd(kind string, call func(*cli.Deps, context.Context, string)
 		Short: "Show a single mapping",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			resp, err := call(deps, cmd.Context(), id)
 			if err != nil {
@@ -101,7 +101,7 @@ func newMappingDeleteCmd(kind string, call func(*cli.Deps, context.Context, stri
 		Short: "Delete a mapping",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete %s mapping %q without confirmation: pass --yes/-y", kind, id)
@@ -155,7 +155,7 @@ func newMappingPciCreateCmd() *cobra.Command {
 			"property string, for example 'node=pve,path=0000:01:00.0,id=10de:1b80'.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := &pvecluster.CreateMappingPciParams{Id: id, Map: entries}
 			fl := cmd.Flags()
@@ -200,7 +200,7 @@ func newMappingPciSetCmd() *cobra.Command {
 			"(the API rewrites it on every update); other flags are changed only when passed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
 			params := &pvecluster.UpdateMappingPciParams{Map: entries}
@@ -273,7 +273,7 @@ func newMappingUsbCreateCmd() *cobra.Command {
 			"property string, for example 'node=pve,path=1-2,id=046d:c52b'.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := &pvecluster.CreateMappingUsbParams{Id: id, Map: entries}
 			if cmd.Flags().Changed("description") {
@@ -307,7 +307,7 @@ func newMappingUsbSetCmd() *cobra.Command {
 			"(the API rewrites it on every update); other flags are changed only when passed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
 			params := &pvecluster.UpdateMappingUsbParams{Map: entries}
@@ -372,7 +372,7 @@ func newMappingDirCreateCmd() *cobra.Command {
 			"property string, for example 'node=pve,path=/mnt/data'.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := &pvecluster.CreateMappingDirParams{Id: id, Map: entries}
 			if cmd.Flags().Changed("description") {
@@ -406,7 +406,7 @@ func newMappingDirSetCmd() *cobra.Command {
 			"(the API rewrites it on every update); other flags are changed only when passed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
 			params := &pvecluster.UpdateMappingDirParams{Map: entries}

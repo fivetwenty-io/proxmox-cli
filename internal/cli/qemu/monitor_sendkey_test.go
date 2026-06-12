@@ -21,10 +21,10 @@ func TestQemuMonitor_Success(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, "OK")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "monitor", "100", "--command", "info status", "--yes"))
+	require.NoError(t, run(deps, &buf, "monitor", "100", "--command", "info status", "--yes"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/monitor", gotPath)
@@ -35,20 +35,20 @@ func TestQemuMonitor_Success(t *testing.T) {
 
 func TestQemuMonitor_RequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "monitor", "100", "--command", "info status")
+	err := run(deps, &buf, "monitor", "100", "--command", "info status")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "confirmation")
 }
 
 func TestQemuMonitor_RequiresCommand(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "monitor", "100", "--yes")
+	err := run(deps, &buf, "monitor", "100", "--yes")
 	require.Error(t, err)
 	// MarkFlagRequired error mentions the flag name.
 	require.Contains(t, err.Error(), "command")
@@ -59,20 +59,20 @@ func TestQemuMonitor_ServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/monitor", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "root only")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "monitor", "100", "--command", "info", "--yes")
+	err := run(deps, &buf, "monitor", "100", "--command", "info", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "monitor command for VM 100")
 }
 
 func TestQemuMonitor_RequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "monitor", "100", "--command", "info", "--yes")
+	err := run(deps, &buf, "monitor", "100", "--command", "info", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node")
 }
@@ -96,10 +96,10 @@ func TestQemuSendkey_Success(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "sendkey", "100", "--key", "ctrl-alt-delete"))
+	require.NoError(t, run(deps, &buf, "sendkey", "100", "--key", "ctrl-alt-delete"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/sendkey", gotPath)
@@ -109,10 +109,10 @@ func TestQemuSendkey_Success(t *testing.T) {
 
 func TestQemuSendkey_RequiresKey(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "sendkey", "100")
+	err := run(deps, &buf, "sendkey", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "key")
 }
@@ -122,20 +122,20 @@ func TestQemuSendkey_ServerError(t *testing.T) {
 	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/sendkey", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "sendkey", "100", "--key", "ret")
+	err := run(deps, &buf, "sendkey", "100", "--key", "ret")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "sendkey")
 }
 
 func TestQemuSendkey_RequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "sendkey", "100", "--key", "ret")
+	err := run(deps, &buf, "sendkey", "100", "--key", "ret")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node")
 }

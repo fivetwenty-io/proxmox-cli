@@ -26,10 +26,9 @@ func TestClusterBulk_StartForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "bulk", "start", "--vmids", "100,101", "--timeout", "60", "--yes"))
+	require.NoError(t, run(deps, &buf, "bulk", "start", "--vmids", "100,101", "--timeout", "60", "--yes"))
 	require.Equal(t, []string{"100", "101"}, gotForm["vms"])
 	require.Equal(t, "60", gotForm.Get("timeout"))
 	_, hasMW := gotForm["max-workers"]
@@ -47,10 +46,9 @@ func TestClusterBulk_StartRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "bulk", "start")
+	err := run(deps, &buf, "bulk", "start")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "start must not POST without --yes")
@@ -67,10 +65,9 @@ func TestClusterBulk_StartInvalidVMIDs(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "bulk", "start", "--vmids", "100,abc", "--yes")
+	err := run(deps, &buf, "bulk", "start", "--vmids", "100,abc", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid VMID")
 	require.False(t, called, "an invalid VMID list must not reach the API")
@@ -88,10 +85,9 @@ func TestClusterBulk_ShutdownForwardsForceStop(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "bulk", "shutdown", "--force-stop", "--yes"))
+	require.NoError(t, run(deps, &buf, "bulk", "shutdown", "--force-stop", "--yes"))
 	require.Equal(t, "1", gotForm.Get("force-stop"))
 	_, hasTimeout := gotForm["timeout"]
 	require.False(t, hasTimeout, "unset --timeout must be omitted from the request body")
@@ -110,10 +106,9 @@ func TestClusterBulk_SuspendForwardsToDisk(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "bulk", "suspend", "--to-disk", "--statestorage", "local", "--yes"))
+	require.NoError(t, run(deps, &buf, "bulk", "suspend", "--to-disk", "--statestorage", "local", "--yes"))
 	require.Equal(t, "1", gotForm.Get("to-disk"))
 	require.Equal(t, "local", gotForm.Get("statestorage"))
 	require.Contains(t, buf.String(), "Bulk suspend started")
@@ -130,10 +125,9 @@ func TestClusterBulk_MigrateRequiresTargetNode(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "bulk", "migrate", "--yes")
+	err := run(deps, &buf, "bulk", "migrate", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "target-node")
 	require.False(t, called, "migrate must not POST without --target-node")
@@ -151,10 +145,9 @@ func TestClusterBulk_MigrateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "bulk", "migrate", "--target-node", "pve2", "--vmids", "100", "--online", "--yes"))
+	require.NoError(t, run(deps, &buf, "bulk", "migrate", "--target-node", "pve2", "--vmids", "100", "--online", "--yes"))
 	require.Equal(t, "pve2", gotForm.Get("target"))
 	require.Equal(t, []string{"100"}, gotForm["vms"])
 	require.Equal(t, "1", gotForm.Get("online"))
@@ -171,10 +164,9 @@ func TestClusterBulk_MigrateAsyncReturnsUPID(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain, Async: true}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "bulk", "migrate", "--target-node", "pve2", "--yes"))
+	require.NoError(t, run(deps, &buf, "bulk", "migrate", "--target-node", "pve2", "--yes"))
 	require.Contains(t, buf.String(), upid)
 }
 
@@ -194,10 +186,9 @@ func TestClusterBulk_StartWaitsForTask(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "bulk", "start", "--yes"))
+	require.NoError(t, run(deps, &buf, "bulk", "start", "--yes"))
 	require.True(t, statusHit, "the synchronous path must poll the task-status endpoint")
 	require.Contains(t, buf.String(), "Bulk start started")
 }
@@ -217,10 +208,9 @@ func TestClusterBulk_StartWaitTaskError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "bulk", "start", "--yes")
+	err := run(deps, &buf, "bulk", "start", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "bulk action")
 }
@@ -233,10 +223,9 @@ func TestClusterBulk_StartServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "bulk", "start", "--yes")
+	err := run(deps, &buf, "bulk", "start", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "bulk start guests")
 }

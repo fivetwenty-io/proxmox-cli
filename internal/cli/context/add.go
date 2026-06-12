@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -86,7 +87,7 @@ func newAddCmd() *cobra.Command {
 				return fmt.Errorf("--protocol must be \"https\" or \"http\", got %q", f.protocol)
 			}
 
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			cfg := deps.Cfg
 			if cfg == nil {

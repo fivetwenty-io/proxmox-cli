@@ -24,10 +24,9 @@ func TestClusterOptions_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "options", "get"))
+	require.NoError(t, run(deps, &buf, "options", "get"))
 	out := buf.String()
 	require.Contains(t, out, "html5")
 	require.Contains(t, out, "en-us")
@@ -44,10 +43,9 @@ func TestClusterOptions_SetRequiresFlag(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "options", "set")
+	err := run(deps, &buf, "options", "set")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no options to set")
 	require.False(t, called, "set must not issue a PUT when no flags are passed")
@@ -65,10 +63,9 @@ func TestClusterOptions_SetForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "options", "set",
+	require.NoError(t, run(deps, &buf, "options", "set",
 		"--console", "xtermjs", "--max-workers", "8", "--email-from", "noc@example.com"))
 	require.Equal(t, "xtermjs", gotForm.Get("console"))
 	require.Equal(t, "8", gotForm.Get("max_workers"))

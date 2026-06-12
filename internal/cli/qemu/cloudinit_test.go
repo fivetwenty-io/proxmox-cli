@@ -21,10 +21,10 @@ func TestQemuCloudinitPending_Table(t *testing.T) {
 			map[string]any{"key": "ciuser", "value": "root", "pending": "admin"},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cloudinit", "pending", "100"))
+	require.NoError(t, run(deps, &buf, "cloudinit", "pending", "100"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/cloudinit", gotPath)
@@ -41,10 +41,10 @@ func TestQemuCloudinitDump(t *testing.T) {
 		gotType = r.URL.Query().Get("type")
 		testhelper.WriteData(w, "#cloud-config\nhostname: web\n")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cloudinit", "dump", "100", "--type", "user"))
+	require.NoError(t, run(deps, &buf, "cloudinit", "dump", "100", "--type", "user"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/cloudinit/dump", gotPath)
@@ -59,10 +59,10 @@ func TestQemuCloudinitDump_DefaultType(t *testing.T) {
 		gotType = r.URL.Query().Get("type")
 		testhelper.WriteData(w, "data")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cloudinit", "dump", "100"))
+	require.NoError(t, run(deps, &buf, "cloudinit", "dump", "100"))
 	require.Equal(t, "user", gotType)
 }
 
@@ -74,10 +74,10 @@ func TestQemuCloudinitDump_NonStringFallback(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/cloudinit/dump", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, map[string]any{"unexpected": "shape"})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cloudinit", "dump", "100"))
+	require.NoError(t, run(deps, &buf, "cloudinit", "dump", "100"))
 	require.Contains(t, buf.String(), "unexpected")
 }
 
@@ -88,10 +88,10 @@ func TestQemuCloudinitUpdate(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "cloudinit", "update", "100"))
+	require.NoError(t, run(deps, &buf, "cloudinit", "update", "100"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/cloudinit", gotPath)
@@ -100,10 +100,10 @@ func TestQemuCloudinitUpdate(t *testing.T) {
 
 func TestQemuCloudinitRequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "cloudinit", "pending", "100")
+	err := run(deps, &buf, "cloudinit", "pending", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node specified")
 }

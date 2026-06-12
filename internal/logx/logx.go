@@ -43,10 +43,20 @@ type Config struct {
 	VMID string
 }
 
+// nopCloser is a no-op io.Closer returned when no log file is opened.
+// Close always succeeds and is safe to defer unconditionally.
+type nopCloser struct{}
+
+func (nopCloser) Close() error { return nil }
+
 // Init initialises a *slog.Logger that writes JSONL to a file under LogDir.
 //
-// When cfg.NoLog is true Init returns a logger backed by io.Discard and
-// creates no files or directories.
+// When cfg.NoLog is true Init returns a logger backed by io.Discard, a no-op
+// io.Closer, and a nil error — no files or directories are created.
+//
+// When a log file is opened the returned io.Closer wraps the *os.File; the
+// caller must call Close() (typically via defer) to flush buffered data and
+// release the file descriptor.  The closer is always non-nil on a nil error.
 //
 // The log file is named:
 //
@@ -58,33 +68,33 @@ type Config struct {
 //
 // Level precedence: cfg.Debug || cfg.Verbose || cfg.Level in
 // {"trace","verbose","debug"} → slog.LevelDebug; anything else → slog.LevelInfo.
-func Init(cfg Config) (*slog.Logger, error) {
+func Init(cfg Config) (*slog.Logger, io.Closer, error) {
 	level := levelFromCfg(cfg)
 
 	if cfg.NoLog {
 		h := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: level})
-		return withBaseAttrs(slog.New(h), cfg), nil
+		return withBaseAttrs(slog.New(h), cfg), nopCloser{}, nil
 	}
 
 	logDir, err := resolveLogDir(cfg.LogDir)
 	if err != nil {
-		return nil, fmt.Errorf("logx: resolve log dir: %w", err)
+		return nil, nil, fmt.Errorf("logx: resolve log dir: %w", err)
 	}
 
 	if err := os.MkdirAll(logDir, 0o700); err != nil {
-		return nil, fmt.Errorf("logx: mkdir %s: %w", logDir, err)
+		return nil, nil, fmt.Errorf("logx: mkdir %s: %w", logDir, err)
 	}
 
 	filename := buildFilename(cfg.Command, cfg.Subcommand, time.Now())
 	path := filepath.Join(logDir, filename)
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // G304: path is logDir+timestamped-filename under ~/.pve/logs, not untrusted input
 	if err != nil {
-		return nil, fmt.Errorf("logx: open log file %s: %w", path, err)
+		return nil, nil, fmt.Errorf("logx: open log file %s: %w", path, err)
 	}
 
 	h := slog.NewJSONHandler(f, &slog.HandlerOptions{Level: level})
-	return withBaseAttrs(slog.New(h), cfg), nil
+	return withBaseAttrs(slog.New(h), cfg), f, nil
 }
 
 // LevelVar returns a *slog.LevelVar initialised from cfg.

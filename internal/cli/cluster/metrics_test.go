@@ -20,10 +20,9 @@ func TestMetricsServer_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "server", "list"))
+	require.NoError(t, run(deps, &buf, "metrics", "server", "list"))
 	out := buf.String()
 	require.Contains(t, out, "TYPE")
 	require.Contains(t, out, "SERVER")
@@ -40,10 +39,9 @@ func TestMetricsServer_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "server", "get", "graf"))
+	require.NoError(t, run(deps, &buf, "metrics", "server", "get", "graf"))
 	require.Equal(t, "/api2/json/cluster/metrics/server/graf", gotPath)
 	require.Contains(t, buf.String(), "10.0.0.9")
 }
@@ -60,10 +58,9 @@ func TestMetricsServer_CreateForwardsRequiredOmitsUnset(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "server", "create", "graf",
+	require.NoError(t, run(deps, &buf, "metrics", "server", "create", "graf",
 		"--type", "graphite", "--server", "10.0.0.9", "--port", "2003", "--proto", "udp"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "graphite", gotForm.Get("type"))
@@ -88,10 +85,9 @@ func TestMetricsServer_CreateTokenNotEchoed(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "server", "create", "influx",
+	require.NoError(t, run(deps, &buf, "metrics", "server", "create", "influx",
 		"--type", "influxdb", "--server", "10.0.0.9", "--port", "8086", "--token", secret))
 	require.Equal(t, secret, gotForm.Get("token"), "token must reach the API")
 	require.NotContains(t, buf.String(), secret, "token must never be echoed to output")
@@ -109,10 +105,9 @@ func TestMetricsServer_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "server", "set", "graf",
+	require.NoError(t, run(deps, &buf, "metrics", "server", "set", "graf",
 		"--server", "10.0.0.9", "--port", "2003", "--disable"))
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "10.0.0.9", gotForm.Get("server"))
@@ -129,10 +124,9 @@ func TestMetricsServer_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "metrics", "server", "delete", "graf")
+	err := run(deps, &buf, "metrics", "server", "delete", "graf")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called)
@@ -147,10 +141,9 @@ func TestMetricsServer_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "server", "delete", "graf", "--yes"))
+	require.NoError(t, run(deps, &buf, "metrics", "server", "delete", "graf", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -166,10 +159,9 @@ func TestMetricsExport_QueryParams(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "export", "--history", "--local-only"))
+	require.NoError(t, run(deps, &buf, "metrics", "export", "--history", "--local-only"))
 	require.Contains(t, gotQuery, "history=1")
 	require.Contains(t, gotQuery, "local-only=1")
 	out := buf.String()
@@ -186,10 +178,9 @@ func TestMetricsExport_OmitsUnsetParams(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "export"))
+	require.NoError(t, run(deps, &buf, "metrics", "export"))
 	require.NotContains(t, gotQuery, "history")
 	require.NotContains(t, gotQuery, "start-time")
 }

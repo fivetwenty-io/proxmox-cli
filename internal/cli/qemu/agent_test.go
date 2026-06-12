@@ -19,10 +19,10 @@ func TestQemuAgentPing(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "agent", "100", "ping"))
+	require.NoError(t, run(deps, &buf, "agent", "100", "ping"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/agent/ping", gotPath)
@@ -37,10 +37,10 @@ func TestQemuAgentGetHostName(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, map[string]any{"result": map[string]any{"host-name": "vmguest"}})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "agent", "100", "get-host-name"))
+	require.NoError(t, run(deps, &buf, "agent", "100", "get-host-name"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/agent/get-host-name", gotPath)
@@ -55,10 +55,10 @@ func TestQemuAgentGetFsinfo_ArrayResult(t *testing.T) {
 			"result": []any{map[string]any{"name": "sda1", "mountpoint": "/"}},
 		})
 	})
-	depsFor(t, ac, output.FormatJSON, "pve1", false)
+	deps := depsFor(t, ac, output.FormatJSON, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "agent", "100", "get-fsinfo"))
+	require.NoError(t, run(deps, &buf, "agent", "100", "get-fsinfo"))
 	require.Contains(t, buf.String(), "mountpoint")
 }
 
@@ -70,10 +70,10 @@ func TestQemuAgentGetTime_ScalarResult(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/agent/get-time", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, 1700000000)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "agent", "100", "get-time"))
+	require.NoError(t, run(deps, &buf, "agent", "100", "get-time"))
 	require.Contains(t, buf.String(), "result")
 	require.Contains(t, buf.String(), "1700000000")
 }
@@ -85,38 +85,38 @@ func TestQemuAgentMutateFstrim(t *testing.T) {
 		gotMethod = r.Method
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "agent", "100", "fstrim"))
+	require.NoError(t, run(deps, &buf, "agent", "100", "fstrim"))
 	require.Equal(t, http.MethodPost, gotMethod)
 }
 
 func TestQemuAgentUnknownCommand(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "agent", "100", "no-such-cmd")
+	err := run(deps, &buf, "agent", "100", "no-such-cmd")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown agent command")
 }
 
 func TestQemuAgentInvalidVMID(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "agent", "abc", "ping")
+	err := run(deps, &buf, "agent", "abc", "ping")
 	require.Error(t, err)
 }
 
 func TestQemuAgentRequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "agent", "100", "ping")
+	err := run(deps, &buf, "agent", "100", "ping")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node specified")
 }
@@ -126,10 +126,10 @@ func TestQemuAgentServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/agent/ping", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "no agent")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "agent", "100", "ping")
+	err := run(deps, &buf, "agent", "100", "ping")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "agent ping for VM 100")
 }

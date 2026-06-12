@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -49,7 +50,7 @@ func newUserListCmd() *cobra.Command {
 		Short: "List users",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			params := &access.ListUsersParams{}
 			if cmd.Flags().Changed("enabled") {
@@ -96,7 +97,7 @@ func newUserGetCmd() *cobra.Command {
 		Short: "Show a user's details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			resp, err := deps.API.Access.GetUsers(cmd.Context(), userid)
@@ -137,7 +138,7 @@ func newUserCreateCmd() *cobra.Command {
 		Short: "Create a user",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			params := &access.CreateUsersParams{Userid: userid}
@@ -187,7 +188,7 @@ func newUserSetCmd() *cobra.Command {
 		Short: "Update a user",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			params := &access.UpdateUsersParams{}
@@ -231,7 +232,7 @@ func newUserDeleteCmd() *cobra.Command {
 		Short: "Delete a user",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			if !yes {

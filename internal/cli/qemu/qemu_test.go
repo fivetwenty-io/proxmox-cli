@@ -2,6 +2,7 @@ package qemu
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -24,21 +25,23 @@ import (
 // tasks service parses the node from this string when blocking on completion.
 const validUPID = "UPID:pve1:00001234:00005678:65000000:qmstart:100:root@pam:"
 
-// withDeps overrides the package-local deps lookup so tests can inject a Deps
-// built from the fake server without driving the root PersistentPreRunE. The
-// returned function restores the previous lookup and must be deferred.
-func withDeps(deps *cli.Deps) func() {
-	prev := resolveDeps
-	resolveDeps = func(_ *cobra.Command) *cli.Deps { return deps }
-	return func() { resolveDeps = prev }
+// run builds the qemu group command, injects deps via context, captures
+// output in buf, and executes it with the supplied args.
+func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
+	return runWithStdin(deps, buf, nil, args...)
 }
 
-// run builds the qemu group command, captures output in buf, and executes it
-// with the supplied args.
-func run(buf *bytes.Buffer, args ...string) error {
+// runWithStdin is identical to run but sets cmd.SetIn(stdin) before Execute so
+// tests can inject stdin per-command without touching the process-wide os.Stdin.
+// Pass nil stdin to get the default cobra behaviour (reads os.Stdin).
+func runWithStdin(deps *cli.Deps, buf *bytes.Buffer, stdin io.Reader, args ...string) error {
 	cmd := newGroupCmd(&cli.Deps{})
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
+	if stdin != nil {
+		cmd.SetIn(stdin)
+	}
 	cmd.SetArgs(args)
 	return cmd.Execute()
 }
@@ -67,13 +70,10 @@ func newFakeClient(t *testing.T) (*testhelper.FakePVE, *apiclient.APIClient) {
 	return f, ac
 }
 
-// depsFor builds a Deps with the given client, format, and node, registering it
-// as the active lookup for the duration of the test.
+// depsFor builds a Deps with the given client, format, and node.
 func depsFor(t *testing.T, ac *apiclient.APIClient, format output.Format, node string, async bool) *cli.Deps {
 	t.Helper()
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, Async: async}
-	t.Cleanup(withDeps(deps))
-	return deps
+	return &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, Async: async}
 }
 
 // handleTaskStatus registers a terminal "stopped/OK" task-status response so a
@@ -123,10 +123,10 @@ func TestQemuList_Table(t *testing.T) {
 		})
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "list"))
+	require.NoError(t, run(deps, &buf, "list"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu", gotPath)
@@ -149,19 +149,19 @@ func TestQemuList_FullFlagQuery(t *testing.T) {
 		testhelper.WriteData(w, []any{})
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "list", "--full"))
+	require.NoError(t, run(deps, &buf, "list", "--full"))
 	require.Contains(t, gotQuery, "full=1")
 }
 
 func TestQemuList_NoNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "list")
+	err := run(deps, &buf, "list")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node")
 }
@@ -171,10 +171,10 @@ func TestQemuList_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "list")
+	err := run(deps, &buf, "list")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "list VMs on node")
 }
@@ -201,10 +201,10 @@ func TestQemuStatus_Single(t *testing.T) {
 		})
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "status", "100"))
+	require.NoError(t, run(deps, &buf, "status", "100"))
 
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/current", gotPath)
 	out := buf.String()
@@ -225,10 +225,10 @@ func TestQemuStatus_JSONLossless(t *testing.T) {
 		})
 	})
 
-	depsFor(t, ac, output.FormatJSON, "pve1", false)
+	deps := depsFor(t, ac, output.FormatJSON, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "status", "100"))
+	require.NoError(t, run(deps, &buf, "status", "100"))
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &parsed),
@@ -245,10 +245,10 @@ func TestQemuStatus_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusNotFound, "no such vm")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "status", "100"))
+	require.Error(t, run(deps, &buf, "status", "100"))
 }
 
 // --- config get -----------------------------------------------------------
@@ -269,10 +269,10 @@ func TestQemuConfigGet_Single(t *testing.T) {
 		})
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "get", "100", "--current"))
+	require.NoError(t, run(deps, &buf, "config", "get", "100", "--current"))
 
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/config", gotPath)
 	require.Contains(t, gotQuery, "current=1")
@@ -287,10 +287,10 @@ func TestQemuConfigGet_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "config", "get", "100"))
+	require.Error(t, run(deps, &buf, "config", "get", "100"))
 }
 
 // --- config set -----------------------------------------------------------
@@ -305,10 +305,10 @@ func TestQemuConfigSet_TypedFields(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "set", "100",
+	require.NoError(t, run(deps, &buf, "config", "set", "100",
 		"--cores", "8", "--memory", "8192", "--name", "db", "--net0", "virtio,bridge=vmbr0"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -330,10 +330,10 @@ func TestQemuConfigSet_DeleteKeys(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "set", "100", "--delete", "net1,scsi1"))
+	require.NoError(t, run(deps, &buf, "config", "set", "100", "--delete", "net1,scsi1"))
 	require.Equal(t, "net1,scsi1", parseForm(t, body).Get("delete"))
 }
 
@@ -348,19 +348,19 @@ func TestQemuConfigSet_Agent(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "set", "100", "--agent", "1"))
+	require.NoError(t, run(deps, &buf, "config", "set", "100", "--agent", "1"))
 	require.Equal(t, "1", parseForm(t, body).Get("agent"))
 }
 
 func TestQemuConfigSet_NoChanges(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "config", "set", "100")
+	err := run(deps, &buf, "config", "set", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no configuration")
 }
@@ -370,10 +370,10 @@ func TestQemuConfigSet_ServerError(t *testing.T) {
 	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusBadRequest, "bad param")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "config", "set", "100", "--cores", "2"))
+	require.Error(t, run(deps, &buf, "config", "set", "100", "--cores", "2"))
 }
 
 // --- config pending -------------------------------------------------------
@@ -388,10 +388,10 @@ func TestQemuConfigPending_Table(t *testing.T) {
 		})
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "pending", "100"))
+	require.NoError(t, run(deps, &buf, "config", "pending", "100"))
 	out := buf.String()
 	require.Contains(t, out, "KEY")
 	require.Contains(t, out, "cores")
@@ -403,10 +403,10 @@ func TestQemuConfigPending_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/pending", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "config", "pending", "100"))
+	require.Error(t, run(deps, &buf, "config", "pending", "100"))
 }
 
 // --- lifecycle: start (blocking + async) ----------------------------------
@@ -421,10 +421,10 @@ func TestQemuStart_Blocking(t *testing.T) {
 	})
 	handleTaskStatus(f, validUPID)
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "start", "100"))
+	require.NoError(t, run(deps, &buf, "start", "100"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/start", gotPath)
@@ -435,10 +435,10 @@ func TestQemuStart_Async(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleJSON("POST /api2/json/nodes/pve1/qemu/100/status/start", validUPID)
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "start", "100"))
+	require.NoError(t, run(deps, &buf, "start", "100"))
 	require.Contains(t, buf.String(), validUPID)
 }
 
@@ -449,10 +449,10 @@ func TestQemuStart_AsyncJSONShape(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleJSON("POST /api2/json/nodes/pve1/qemu/100/status/start", validUPID)
 
-	depsFor(t, ac, output.FormatJSON, "pve1", true)
+	deps := depsFor(t, ac, output.FormatJSON, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "start", "100"))
+	require.NoError(t, run(deps, &buf, "start", "100"))
 
 	var parsed map[string]string
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &parsed),
@@ -470,10 +470,10 @@ func TestQemuStart_FlagParams(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "start", "100", "--timeout", "120", "--migratedfrom", "pve2"))
+	require.NoError(t, run(deps, &buf, "start", "100", "--timeout", "120", "--migratedfrom", "pve2"))
 	combined := gotQuery + body
 	require.Contains(t, combined, "migratedfrom")
 	require.Contains(t, combined, "pve2")
@@ -484,10 +484,10 @@ func TestQemuStart_ServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/status/start", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "start", "100"))
+	require.Error(t, run(deps, &buf, "start", "100"))
 }
 
 // --- lifecycle: stop / reboot / shutdown / reset / suspend / resume --------
@@ -499,10 +499,10 @@ func TestQemuStop_Async(t *testing.T) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "stop", "100"))
+	require.NoError(t, run(deps, &buf, "stop", "100"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/stop", gotPath)
 	require.Contains(t, buf.String(), validUPID)
 }
@@ -514,10 +514,10 @@ func TestQemuReboot_Async(t *testing.T) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "reboot", "100"))
+	require.NoError(t, run(deps, &buf, "reboot", "100"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/reboot", gotPath)
 }
 
@@ -530,10 +530,10 @@ func TestQemuShutdown_Blocking(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 	handleTaskStatus(f, validUPID)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "shutdown", "100", "--force-stop"))
+	require.NoError(t, run(deps, &buf, "shutdown", "100", "--force-stop"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/shutdown", gotPath)
 	require.Contains(t, body, "forceStop")
 	require.Contains(t, buf.String(), "shut down")
@@ -546,10 +546,10 @@ func TestQemuReset_Async(t *testing.T) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "reset", "100"))
+	require.NoError(t, run(deps, &buf, "reset", "100"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/reset", gotPath)
 }
 
@@ -561,10 +561,10 @@ func TestQemuSuspend_Async(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "suspend", "100", "--todisk"))
+	require.NoError(t, run(deps, &buf, "suspend", "100", "--todisk"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/suspend", gotPath)
 	require.Contains(t, body, "todisk")
 }
@@ -576,10 +576,10 @@ func TestQemuResume_Async(t *testing.T) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "resume", "100"))
+	require.NoError(t, run(deps, &buf, "resume", "100"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/status/resume", gotPath)
 }
 
@@ -592,10 +592,10 @@ func TestQemuDelete_Async(t *testing.T) {
 		gotMethod, gotPath, gotQuery = r.Method, r.URL.Path, r.URL.RawQuery
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "delete", "100", "--yes", "--purge"))
+	require.NoError(t, run(deps, &buf, "delete", "100", "--yes", "--purge"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100", gotPath)
 	require.Contains(t, gotQuery, "purge=1")
@@ -604,10 +604,10 @@ func TestQemuDelete_Async(t *testing.T) {
 
 func TestQemuDelete_RequiresConfirmation(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	err := run(&buf, "delete", "100")
+	err := run(deps, &buf, "delete", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "confirm")
 }
@@ -617,10 +617,10 @@ func TestQemuDelete_ServerError(t *testing.T) {
 	f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/100", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "delete", "100", "--yes"))
+	require.Error(t, run(deps, &buf, "delete", "100", "--yes"))
 }
 
 // --- snapshot list / create / delete / rollback ---------------------------
@@ -639,10 +639,10 @@ func TestQemuSnapshotList_Table(t *testing.T) {
 			map[string]any{"name": "current"},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "list", "100"))
+	require.NoError(t, run(deps, &buf, "snapshot", "list", "100"))
 	out := buf.String()
 	require.Contains(t, out, "SNAPNAME")
 	require.Contains(t, out, "pre-upgrade")
@@ -654,10 +654,10 @@ func TestQemuSnapshotList_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/snapshot", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "snapshot", "list", "100"))
+	require.Error(t, run(deps, &buf, "snapshot", "list", "100"))
 }
 
 func TestQemuSnapshotCreate_Blocking(t *testing.T) {
@@ -669,10 +669,10 @@ func TestQemuSnapshotCreate_Blocking(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 	handleTaskStatus(f, validUPID)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "create", "100", "pre-upgrade",
+	require.NoError(t, run(deps, &buf, "snapshot", "create", "100", "pre-upgrade",
 		"--description", "before kernel upgrade", "--vmstate"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
@@ -687,10 +687,10 @@ func TestQemuSnapshotCreate_Blocking(t *testing.T) {
 func TestQemuSnapshotCreate_Async(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleJSON("POST /api2/json/nodes/pve1/qemu/100/snapshot", validUPID)
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "create", "100", "snap1"))
+	require.NoError(t, run(deps, &buf, "snapshot", "create", "100", "snap1"))
 	require.Contains(t, buf.String(), validUPID)
 }
 
@@ -701,10 +701,10 @@ func TestQemuSnapshotDelete_Async(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "delete", "100", "snap1", "--yes"))
+	require.NoError(t, run(deps, &buf, "snapshot", "delete", "100", "snap1", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/snapshot/snap1", gotPath)
 	require.Contains(t, buf.String(), validUPID)
@@ -712,10 +712,10 @@ func TestQemuSnapshotDelete_Async(t *testing.T) {
 
 func TestQemuSnapshotDelete_RequiresConfirmation(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	err := run(&buf, "snapshot", "delete", "100", "snap1")
+	err := run(deps, &buf, "snapshot", "delete", "100", "snap1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "confirm")
 }
@@ -728,10 +728,10 @@ func TestQemuSnapshotRollback_Blocking(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 	handleTaskStatus(f, validUPID)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "snapshot", "rollback", "100", "snap1"))
+	require.NoError(t, run(deps, &buf, "snapshot", "rollback", "100", "snap1"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/snapshot/snap1/rollback", gotPath)
 	require.Contains(t, buf.String(), "rolled back")
@@ -742,10 +742,10 @@ func TestQemuSnapshotRollback_ServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/snapshot/snap1/rollback", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "snapshot", "rollback", "100", "snap1"))
+	require.Error(t, run(deps, &buf, "snapshot", "rollback", "100", "snap1"))
 }
 
 // --- create ---------------------------------------------------------------
@@ -762,10 +762,10 @@ func TestQemuCreate_CloudInit(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "create", "100",
+	require.NoError(t, run(deps, &buf, "create", "100",
 		"--ciuser", "pveadmin",
 		"--cipassword", "s3cret",
 		"--citype", "nocloud",
@@ -801,10 +801,10 @@ func TestQemuCreate_NoCloudInitOmitted(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "create", "100", "--name", "plain"))
+	require.NoError(t, run(deps, &buf, "create", "100", "--name", "plain"))
 
 	form := parseForm(t, body)
 	for _, k := range []string{"ciuser", "cipassword", "citype", "ciupgrade",
@@ -824,14 +824,14 @@ func TestQemuCreate_Agent(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "create", "100", "--agent", "enabled=1,fstrim_cloned_disks=1"))
+	require.NoError(t, run(deps, &buf, "create", "100", "--agent", "enabled=1,fstrim_cloned_disks=1"))
 	require.Equal(t, "enabled=1,fstrim_cloned_disks=1", parseForm(t, body).Get("agent"))
 
 	body = ""
-	require.NoError(t, run(&buf, "create", "101", "--name", "plain"))
+	require.NoError(t, run(deps, &buf, "create", "101", "--name", "plain"))
 	require.Empty(t, parseForm(t, body).Get("agent"))
 }
 
@@ -842,10 +842,10 @@ func TestQemuList_JSON(t *testing.T) {
 	f.HandleJSON("GET /api2/json/nodes/pve1/qemu", []any{
 		map[string]any{"vmid": 100, "name": "web", "status": "running"},
 	})
-	depsFor(t, ac, output.FormatJSON, "pve1", false)
+	deps := depsFor(t, ac, output.FormatJSON, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "list"))
+	require.NoError(t, run(deps, &buf, "list"))
 	out := buf.String()
 	require.True(t, strings.Contains(out, "web"))
 	// list JSON must be a typed array (Raw), not a synthetic {headers, rows}
@@ -893,7 +893,8 @@ func TestQemuCommandTree(t *testing.T) {
 }
 
 func TestQemuGroupRegistered(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	found := false

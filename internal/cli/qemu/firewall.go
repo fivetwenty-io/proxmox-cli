@@ -10,6 +10,7 @@ import (
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -90,7 +91,7 @@ func newFirewallRulesListCmd() *cobra.Command {
 		Short: "List a VM's firewall rules",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -134,7 +135,7 @@ func newFirewallRulesGetCmd() *cobra.Command {
 		Short: "Show a single firewall rule by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -190,7 +191,7 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -288,7 +289,7 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 		Short: "Modify a firewall rule by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -375,7 +376,7 @@ func newFirewallRulesDeleteCmd() *cobra.Command {
 		Short: "Delete a firewall rule by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -431,7 +432,7 @@ func newFirewallIpsetListCmd() *cobra.Command {
 		Short: "List IP sets, or the members of one IP set",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -490,7 +491,7 @@ func newFirewallIpsetCreateCmd() *cobra.Command {
 		Short: "Create a firewall IP set",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -525,7 +526,7 @@ func newFirewallIpsetDeleteCmd() *cobra.Command {
 		Short: "Delete a firewall IP set",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -564,7 +565,7 @@ func newFirewallIpsetAddCmd() *cobra.Command {
 		Short: "Add a CIDR entry to an IP set",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -600,7 +601,7 @@ func newFirewallIpsetRemoveCmd() *cobra.Command {
 		Short: "Remove a CIDR entry from an IP set",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -653,7 +654,7 @@ func newFirewallAliasListCmd() *cobra.Command {
 		Short: "List a VM's firewall aliases",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -694,7 +695,7 @@ func newFirewallAliasCreateCmd() *cobra.Command {
 		Short: "Create a firewall address alias",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -729,7 +730,7 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 		Short: "Update a firewall address alias",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -765,7 +766,7 @@ func newFirewallAliasDeleteCmd() *cobra.Command {
 		Short: "Delete a firewall address alias",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -809,7 +810,7 @@ func newFirewallOptionsGetCmd() *cobra.Command {
 		Short: "Show a VM's firewall options",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -853,7 +854,7 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 		Long:  "Update per-VM firewall options. Only the flags you pass are changed.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

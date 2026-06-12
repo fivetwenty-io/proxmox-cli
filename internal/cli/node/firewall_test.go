@@ -233,7 +233,8 @@ func TestNodeFirewallOptions_RequiresNode(t *testing.T) {
 // TestNodeFirewall_CommandTree asserts the firewall sub-tree exposes the
 // expected rules and options verb sets under `pve node firewall`.
 func TestNodeFirewall_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {

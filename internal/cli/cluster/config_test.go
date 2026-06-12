@@ -24,10 +24,9 @@ func TestClusterConfigJoin_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "join", "list"))
+	require.NoError(t, run(deps, &buf, "config", "join", "list"))
 	require.Contains(t, buf.String(), "pve1")
 }
 
@@ -42,10 +41,9 @@ func TestClusterConfigNodes_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "nodes", "list"))
+	require.NoError(t, run(deps, &buf, "config", "nodes", "list"))
 	require.Contains(t, buf.String(), "pve1")
 }
 
@@ -60,10 +58,9 @@ func TestClusterConfigJoin_AddRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "config", "join", "add",
+	err := run(deps, &buf, "config", "join", "add",
 		"--hostname", "pve1.example.com", "--fingerprint", "AA:BB", "--password", "secret")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
@@ -81,10 +78,9 @@ func TestClusterConfigJoin_AddWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "join", "add",
+	require.NoError(t, run(deps, &buf, "config", "join", "add",
 		"--hostname", "pve1.example.com", "--fingerprint", "AA:BB", "--password", "secret", "--yes"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Contains(t, buf.String(), "initiated")
@@ -100,10 +96,9 @@ func TestClusterConfigNodes_AddRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "config", "nodes", "add", "pve2")
+	err := run(deps, &buf, "config", "nodes", "add", "pve2")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "nodes add must not POST without --yes")
@@ -120,10 +115,9 @@ func TestClusterConfigNodes_AddWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "nodes", "add", "pve2", "--yes"))
+	require.NoError(t, run(deps, &buf, "config", "nodes", "add", "pve2", "--yes"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Contains(t, buf.String(), "abc-key")
 }
@@ -139,10 +133,9 @@ func TestClusterConfigNodes_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "config", "nodes", "delete", "pve2")
+	err := run(deps, &buf, "config", "nodes", "delete", "pve2")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "nodes delete must not DELETE without --yes")
@@ -159,10 +152,9 @@ func TestClusterConfigNodes_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "nodes", "delete", "pve2", "--yes"))
+	require.NoError(t, run(deps, &buf, "config", "nodes", "delete", "pve2", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "removed")
 }

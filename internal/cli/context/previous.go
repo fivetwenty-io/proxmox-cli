@@ -24,7 +24,7 @@ func newPreviousCmd() *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 			if cfg == nil {
 				cfg = &config.Config{}

@@ -17,10 +17,10 @@ import (
 
 func TestQemuRemoteMigrate_RequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "remote-migrate", "100",
+	err := run(deps, &buf, "remote-migrate", "100",
 		"--target-endpoint", "https://remote:8006",
 		"--target-storage", "local-lvm",
 		"--target-bridge", "vmbr0")
@@ -30,10 +30,10 @@ func TestQemuRemoteMigrate_RequiresYes(t *testing.T) {
 
 func TestQemuRemoteMigrate_RequiresTargetEndpoint(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "remote-migrate", "100", "--yes",
+	err := run(deps, &buf, "remote-migrate", "100", "--yes",
 		"--target-storage", "local-lvm",
 		"--target-bridge", "vmbr0")
 	require.Error(t, err)
@@ -42,10 +42,10 @@ func TestQemuRemoteMigrate_RequiresTargetEndpoint(t *testing.T) {
 
 func TestQemuRemoteMigrate_RequiresTargetStorage(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "remote-migrate", "100", "--yes",
+	err := run(deps, &buf, "remote-migrate", "100", "--yes",
 		"--target-endpoint", "https://remote:8006",
 		"--target-bridge", "vmbr0")
 	require.Error(t, err)
@@ -54,10 +54,10 @@ func TestQemuRemoteMigrate_RequiresTargetStorage(t *testing.T) {
 
 func TestQemuRemoteMigrate_RequiresTargetBridge(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "remote-migrate", "100", "--yes",
+	err := run(deps, &buf, "remote-migrate", "100", "--yes",
 		"--target-endpoint", "https://remote:8006",
 		"--target-storage", "local-lvm")
 	require.Error(t, err)
@@ -72,10 +72,10 @@ func TestQemuRemoteMigrate_SuccessAsync(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "remote-migrate", "100", "--yes",
+	require.NoError(t, run(deps, &buf, "remote-migrate", "100", "--yes",
 		"--target-endpoint", "https://remote:8006",
 		"--target-storage", "local-lvm",
 		"--target-bridge", "vmbr0"))
@@ -97,10 +97,10 @@ func TestQemuRemoteMigrate_OptionalFlagsOmitted(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, validUPID)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "remote-migrate", "100", "--yes",
+	require.NoError(t, run(deps, &buf, "remote-migrate", "100", "--yes",
 		"--target-endpoint", "https://remote:8006",
 		"--target-storage", "local-lvm",
 		"--target-bridge", "vmbr0"))
@@ -115,10 +115,10 @@ func TestQemuRemoteMigrate_ServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/remote_migrate", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	err := run(&buf, "remote-migrate", "100", "--yes",
+	err := run(deps, &buf, "remote-migrate", "100", "--yes",
 		"--target-endpoint", "https://remote:8006",
 		"--target-storage", "local-lvm",
 		"--target-bridge", "vmbr0")

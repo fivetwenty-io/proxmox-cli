@@ -27,10 +27,10 @@ func TestQemuMigrateCheck_Success(t *testing.T) {
 			"mapped-resource-info": map[string]any{},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "migrate", "check", "100"))
+	require.NoError(t, run(deps, &buf, "migrate", "check", "100"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/migrate", gotPath)
@@ -54,10 +54,10 @@ func TestQemuMigrateCheck_WithTargetNode(t *testing.T) {
 			"mapped-resource-info": map[string]any{},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "migrate", "check", "100", "--target-node", "pve2"))
+	require.NoError(t, run(deps, &buf, "migrate", "check", "100", "--target-node", "pve2"))
 	require.Contains(t, gotQuery, "target=pve2")
 }
 
@@ -66,20 +66,20 @@ func TestQemuMigrateCheck_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "migrate", "check", "100")
+	err := run(deps, &buf, "migrate", "check", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "migrate check for VM 100")
 }
 
 func TestQemuMigrateCheck_RequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "migrate", "check", "100")
+	err := run(deps, &buf, "migrate", "check", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node")
 }

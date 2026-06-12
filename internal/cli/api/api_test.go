@@ -33,7 +33,8 @@ func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, err
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_CONTEXT", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 	root.AddCommand(api.NewCommand())
 

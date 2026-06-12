@@ -76,7 +76,8 @@ func newNodeRoot(t *testing.T, f *testhelper.FakePVE, format output.Format, runn
 
 	cfgPath := writeFakeConfig(t, f)
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	// Wrap the standard PersistentPreRunE so the test runner replaces the real

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -42,7 +43,7 @@ func newRoleListCmd() *cobra.Command {
 		Short: "List roles",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Access.ListRoles(cmd.Context())
 			if err != nil {
@@ -76,7 +77,7 @@ func newRoleGetCmd() *cobra.Command {
 		Short: "Show the privileges granted by a role",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			roleid := args[0]
 
 			resp, err := deps.API.Access.GetRoles(cmd.Context(), roleid)
@@ -108,7 +109,7 @@ func newRoleCreateCmd() *cobra.Command {
 		Short: "Create a role",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			roleid := args[0]
 
 			params := &access.CreateRolesParams{Roleid: roleid}
@@ -136,7 +137,7 @@ func newRoleSetCmd() *cobra.Command {
 		Short: "Update a role's privileges",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			roleid := args[0]
 
 			if !cmd.Flags().Changed("privs") {
@@ -168,7 +169,7 @@ func newRoleDeleteCmd() *cobra.Command {
 		Short: "Delete a role",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			roleid := args[0]
 
 			if !yes {

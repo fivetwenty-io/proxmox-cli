@@ -46,7 +46,7 @@ func newNotificationsTargetsCmd() *cobra.Command {
 		Short: "List all notification targets",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsTargets(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list notification targets: %w", err)
@@ -62,7 +62,7 @@ func newNotificationsEndpointsCmd() *cobra.Command {
 		Short: "List all notification endpoints",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsEndpoints(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list notification endpoints: %w", err)
@@ -83,7 +83,7 @@ func newNotificationsTargetsTestCmd() *cobra.Command {
 			"Use this to verify endpoint configuration is functional.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if err := deps.API.Cluster.CreateNotificationsTargetsTest(cmd.Context(), name); err != nil {
 				return fmt.Errorf("test notification target %q: %w", name, err)
@@ -104,7 +104,7 @@ func newNotificationsMatcherFieldsCmd() *cobra.Command {
 			"notification matcher rules.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsMatcherFields(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list notification matcher fields: %w", err)
@@ -124,7 +124,7 @@ func newNotificationsMatcherFieldValuesCmd() *cobra.Command {
 			"values it can take. Useful when authoring matcher rules.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsMatcherFieldValues(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list notification matcher field values: %w", err)
@@ -196,7 +196,7 @@ func newGotifyGetCmd() *cobra.Command {
 		Short: "Show a Gotify endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsGotify(cmd.Context(), args[0])
 			if err != nil {
 				return fmt.Errorf("get Gotify endpoint %q: %w", args[0], err)
@@ -216,7 +216,7 @@ func newGotifyCreateCmd() *cobra.Command {
 		Short: "Create a Gotify endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.CreateNotificationsEndpointsGotifyParams{
 				Name: args[0], Server: server, Token: token,
@@ -255,7 +255,7 @@ func newGotifySetCmd() *cobra.Command {
 		Short: "Update a Gotify endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "server", "token", "comment", "disable", "delete", "digest") {
 				return fmt.Errorf("no changes to set: pass at least one flag")
@@ -318,7 +318,7 @@ func newSendmailGetCmd() *cobra.Command {
 		Short: "Show a Sendmail endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsSendmail(cmd.Context(), args[0])
 			if err != nil {
 				return fmt.Errorf("get Sendmail endpoint %q: %w", args[0], err)
@@ -339,7 +339,7 @@ func newSendmailCreateCmd() *cobra.Command {
 		Short: "Create a Sendmail endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.CreateNotificationsEndpointsSendmailParams{Name: args[0]}
 			if fl.Changed("mailto") {
@@ -389,7 +389,7 @@ func newSendmailSetCmd() *cobra.Command {
 		Short: "Update a Sendmail endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "mailto", "mailto-user", "from-address", "author", "comment", "disable", "delete", "digest") {
 				return fmt.Errorf("no changes to set: pass at least one flag")
@@ -460,7 +460,7 @@ func newSMTPGetCmd() *cobra.Command {
 		Short: "Show an SMTP endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsSmtp(cmd.Context(), args[0])
 			if err != nil {
 				return fmt.Errorf("get SMTP endpoint %q: %w", args[0], err)
@@ -484,7 +484,7 @@ func newSMTPCreateCmd() *cobra.Command {
 		Short: "Create an SMTP endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.CreateNotificationsEndpointsSmtpParams{
 				Name: args[0], Server: server, FromAddress: fromAddress,
@@ -555,7 +555,7 @@ func newSMTPSetCmd() *cobra.Command {
 		Short: "Update an SMTP endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "server", "from-address", "mailto", "mailto-user", "username",
 				"password", "mode", "port", "author", "comment", "disable", "delete", "digest") {
@@ -647,7 +647,7 @@ func newWebhookGetCmd() *cobra.Command {
 		Short: "Show a Webhook endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsWebhook(cmd.Context(), args[0])
 			if err != nil {
 				return fmt.Errorf("get Webhook endpoint %q: %w", args[0], err)
@@ -670,7 +670,7 @@ func newWebhookCreateCmd() *cobra.Command {
 			"the form name=<name>,value=<base64 of value>.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.CreateNotificationsEndpointsWebhookParams{
 				Name: args[0], Url: url, Method: method,
@@ -722,7 +722,7 @@ func newWebhookSetCmd() *cobra.Command {
 		Short: "Update a Webhook endpoint",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "url", "method", "header", "secret", "body", "comment", "disable", "delete", "digest") {
 				return fmt.Errorf("no changes to set: pass at least one flag")
@@ -797,7 +797,7 @@ func newMatcherGetCmd() *cobra.Command {
 		Short: "Show a matcher",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsMatchers(cmd.Context(), args[0])
 			if err != nil {
 				return fmt.Errorf("get matcher %q: %w", args[0], err)
@@ -820,7 +820,7 @@ func newMatcherCreateCmd() *cobra.Command {
 			"takes (regex|exact):<field>=<value>.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.CreateNotificationsMatchersParams{Name: args[0]}
 			applyMatcherCreate(fl, params, matcherVals{
@@ -850,7 +850,7 @@ func newMatcherSetCmd() *cobra.Command {
 		Short: "Update a matcher",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "match-field", "match-severity", "match-calendar", "notify-target",
 				"mode", "comment", "invert-match", "disable", "delete", "digest") {
@@ -961,7 +961,7 @@ func simpleRawList(use, short string, fetch func(*cobra.Command, *cli.Deps) ([]j
 		Short: short,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			raws, err := fetch(cmd, deps)
 			if err != nil {
 				return fmt.Errorf("%s: %w", short, err)
@@ -980,7 +980,7 @@ func newDeleteEndpointCmd(what string, del func(*cobra.Command, *cli.Deps, strin
 		Short: fmt.Sprintf("Delete a %s", what),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if err := requireDeleteYes(yes, what, args[0]); err != nil {
 				return err
 			}

@@ -2,6 +2,7 @@ package context
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
@@ -19,26 +19,17 @@ import (
 
 // ---- test helpers -----------------------------------------------------------
 
-// withCtxOpsDeps overrides the package-level resolveDeps so copy/edit/validate
-// tests can inject a pre-built Deps without driving root PersistentPreRunE.
-// The returned func restores the previous value; callers must defer it.
-func withCtxOpsDeps(t *testing.T, cfg *config.Config, tmpPath string) func() {
-	t.Helper()
-	prev := resolveDeps
-	resolveDeps = func(_ *cobra.Command) *cli.Deps {
-		return &cli.Deps{
-			Cfg:        cfg,
-			ConfigPath: tmpPath,
-			Out:        output.New(),
-			Format:     output.FormatJSON,
-		}
+// runOpsCmd builds the context group with injected deps, sets output to buf,
+// and executes args.
+func runOpsCmd(cfg *config.Config, tmpPath string, buf *bytes.Buffer, args ...string) error {
+	deps := &cli.Deps{
+		Cfg:        cfg,
+		ConfigPath: tmpPath,
+		Out:        output.New(),
+		Format:     output.FormatJSON,
 	}
-	return func() { resolveDeps = prev }
-}
-
-// runOpsCmd builds the context group, sets output to buf, and executes args.
-func runOpsCmd(buf *bytes.Buffer, args ...string) error {
-	cmd := newContextCmd(&cli.Deps{})
+	cmd := newContextCmd(nil)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetArgs(args)
@@ -79,10 +70,9 @@ func TestContextCopy_Happy(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "copy", "lab", "staging"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "copy", "lab", "staging"))
 
 	// Reload and verify dst exists and is a deep copy.
 	loaded, err := config.Load(p)
@@ -108,10 +98,9 @@ func TestContextCopy_MissingSrc(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "copy", "nonexistent", "dst")
+	err := runOpsCmd(cfg, p, &buf, "copy", "nonexistent", "dst")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not found")
 }
@@ -124,10 +113,9 @@ func TestContextCopy_ExistingDstNoForce(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "copy", "lab", "staging")
+	err := runOpsCmd(cfg, p, &buf, "copy", "lab", "staging")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "already exists")
 }
@@ -145,10 +133,9 @@ func TestContextCopy_ExistingDstForce(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "copy", "lab", "staging", "--force"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "copy", "lab", "staging", "--force"))
 
 	loaded, err := config.Load(p)
 	require.NoError(t, err)
@@ -163,10 +150,9 @@ func TestContextCopy_Select(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "copy", "lab", "staging", "--select"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "copy", "lab", "staging", "--select"))
 
 	loaded, err := config.Load(p)
 	require.NoError(t, err)
@@ -181,10 +167,9 @@ func TestContextCopy_SameSrcDst(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "copy", "lab", "lab")
+	err := runOpsCmd(cfg, p, &buf, "copy", "lab", "lab")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must differ")
 }
@@ -204,7 +189,6 @@ func TestContextEdit_SuccessfulEdit(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	// Write a fake editor that appends default-node to the temp file.
 	editorDir := t.TempDir()
@@ -217,7 +201,7 @@ printf '\ndefault-node: edited-node\n' >> "$1"
 	t.Setenv("EDITOR", editorPath)
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "edit", "lab"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "edit", "lab"))
 
 	loaded, err := config.Load(p)
 	require.NoError(t, err)
@@ -239,7 +223,6 @@ func TestContextEdit_EditorFailingExitAbortsChange(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	// Fake editor exits non-zero without modifying the file.
 	editorDir := t.TempDir()
@@ -248,7 +231,7 @@ func TestContextEdit_EditorFailingExitAbortsChange(t *testing.T) {
 	t.Setenv("EDITOR", editorPath)
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "edit", "lab")
+	err := runOpsCmd(cfg, p, &buf, "edit", "lab")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "editor exited with error")
 
@@ -271,7 +254,6 @@ func TestContextEdit_InvalidYAMLRejected(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	// Fake editor overwrites the file with broken YAML.
 	editorDir := t.TempDir()
@@ -281,7 +263,7 @@ func TestContextEdit_InvalidYAMLRejected(t *testing.T) {
 	t.Setenv("EDITOR", editorPath)
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "edit", "lab")
+	err := runOpsCmd(cfg, p, &buf, "edit", "lab")
 	require.Error(t, err)
 	// Error must contain a temp file path for recovery.
 	require.Contains(t, err.Error(), "pve-context-")
@@ -296,13 +278,12 @@ func TestContextEdit_NoEditorEnvReturnsError(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	t.Setenv("EDITOR", "")
 	t.Setenv("VISUAL", "")
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "edit", "lab")
+	err := runOpsCmd(cfg, p, &buf, "edit", "lab")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "$EDITOR is not set")
 }
@@ -320,7 +301,6 @@ func TestContextEdit_DefaultsToCurrentContext(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	// Fake editor: no-op (exit 0 without modifying file).
 	editorDir := t.TempDir()
@@ -330,7 +310,7 @@ func TestContextEdit_DefaultsToCurrentContext(t *testing.T) {
 
 	var buf bytes.Buffer
 	// No name arg — should use current context "lab".
-	require.NoError(t, runOpsCmd(&buf, "edit"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "edit"))
 }
 
 // TestContextEdit_NoCurrentContextErrors verifies that with no arg and no
@@ -341,13 +321,12 @@ func TestContextEdit_NoCurrentContextErrors(t *testing.T) {
 		Contexts: map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	t.Setenv("EDITOR", "true") // valid editor path
 	t.Setenv("VISUAL", "")
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "edit")
+	err := runOpsCmd(cfg, p, &buf, "edit")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no current-context")
 }
@@ -360,10 +339,9 @@ func TestContextValidate_ValidContext(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": labContext()},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "validate", "lab"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate", "lab"))
 	require.Contains(t, buf.String(), "OK")
 }
 
@@ -374,10 +352,9 @@ func TestContextValidate_MissingHost(t *testing.T) {
 		Contexts: map[string]*config.Context{"bad": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "bad")
+	err := runOpsCmd(cfg, p, &buf, "validate", "bad")
 	require.Error(t, err)
 	require.Contains(t, buf.String(), "host is required")
 }
@@ -389,10 +366,9 @@ func TestContextValidate_TokenAuthMissingTokenID(t *testing.T) {
 		Contexts: map[string]*config.Context{"bad": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "bad")
+	err := runOpsCmd(cfg, p, &buf, "validate", "bad")
 	require.Error(t, err)
 	require.Contains(t, buf.String(), "token-id")
 }
@@ -407,10 +383,9 @@ func TestContextValidate_PasswordAuthMissingUsername(t *testing.T) {
 		Contexts: map[string]*config.Context{"bad": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "bad")
+	err := runOpsCmd(cfg, p, &buf, "validate", "bad")
 	require.Error(t, err)
 	require.Contains(t, buf.String(), "username")
 }
@@ -422,10 +397,9 @@ func TestContextValidate_BadDefaultOutput(t *testing.T) {
 		Contexts: map[string]*config.Context{"bad": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "bad")
+	err := runOpsCmd(cfg, p, &buf, "validate", "bad")
 	require.Error(t, err)
 	require.Contains(t, buf.String(), "default-output")
 }
@@ -437,10 +411,9 @@ func TestContextValidate_BadFingerprint(t *testing.T) {
 		Contexts: map[string]*config.Context{"bad": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "bad")
+	err := runOpsCmd(cfg, p, &buf, "validate", "bad")
 	require.Error(t, err)
 	require.Contains(t, buf.String(), "fingerprint")
 }
@@ -458,10 +431,9 @@ func TestContextValidate_AllMixed(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "--all")
+	err := runOpsCmd(cfg, p, &buf, "validate", "--all")
 	require.Error(t, err, "--all with any invalid context must exit non-zero")
 	out := buf.String()
 	require.Contains(t, out, "OK")
@@ -477,10 +449,9 @@ func TestContextValidate_AllValid(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "validate", "--all"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate", "--all"))
 }
 
 // TestContextValidate_AllSortedOrder verifies that `validate --all` emits rows
@@ -495,10 +466,9 @@ func TestContextValidate_AllSortedOrder(t *testing.T) {
 		},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "validate", "--all"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate", "--all"))
 
 	out := buf.String()
 	idxAlpha := strings.Index(out, "alpha")
@@ -518,10 +488,9 @@ func TestContextValidate_DefaultsToCurrentContext(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": labContext()},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "validate"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate"))
 	require.Contains(t, buf.String(), "OK")
 }
 
@@ -530,10 +499,9 @@ func TestContextValidate_NoCurrentContextErrors(t *testing.T) {
 		Contexts: map[string]*config.Context{"lab": labContext()},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate")
+	err := runOpsCmd(cfg, p, &buf, "validate")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no current-context")
 }
@@ -543,10 +511,9 @@ func TestContextValidate_UnknownContextErrors(t *testing.T) {
 		Contexts: map[string]*config.Context{"lab": labContext()},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "ghost")
+	err := runOpsCmd(cfg, p, &buf, "validate", "ghost")
 	require.Error(t, err)
 }
 
@@ -558,10 +525,9 @@ func TestContextValidate_ValidFingerprint(t *testing.T) {
 		Contexts: map[string]*config.Context{"ctx": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	require.NoError(t, runOpsCmd(&buf, "validate", "ctx"))
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate", "ctx"))
 }
 
 // ---- validation-drift regression (F2 remediation) --------------------------
@@ -580,7 +546,6 @@ func TestContextEdit_TokenMissingTokenIDRejected(t *testing.T) {
 		Contexts:       map[string]*config.Context{"lab": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	// Fake editor rewrites the file with a valid token context but no token-id.
 	editorDir := t.TempDir()
@@ -601,7 +566,7 @@ YAML
 	t.Setenv("EDITOR", editorPath)
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "edit", "lab")
+	err := runOpsCmd(cfg, p, &buf, "edit", "lab")
 	require.Error(t, err, "edit must be rejected when token-id is missing")
 	require.Contains(t, err.Error(), "token-id")
 
@@ -621,10 +586,9 @@ func TestContextValidate_TokenMissingTokenIDInvalid(t *testing.T) {
 		Contexts: map[string]*config.Context{"bad": ctx},
 	}
 	p := scratchConfig(t, cfg)
-	defer withCtxOpsDeps(t, cfg, p)()
 
 	var buf bytes.Buffer
-	err := runOpsCmd(&buf, "validate", "bad")
+	err := runOpsCmd(cfg, p, &buf, "validate", "bad")
 	require.Error(t, err)
 	require.Contains(t, buf.String(), "token-id")
 }

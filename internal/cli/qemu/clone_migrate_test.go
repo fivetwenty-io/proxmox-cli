@@ -24,10 +24,10 @@ func TestQemuClone_Blocking(t *testing.T) {
 	})
 	handleTaskStatus(f, validUPID)
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "clone", "100", "--newid", "200"))
+	require.NoError(t, run(deps, &buf, "clone", "100", "--newid", "200"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/clone", gotPath)
@@ -36,10 +36,10 @@ func TestQemuClone_Blocking(t *testing.T) {
 
 func TestQemuClone_RequiresNewid(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "clone", "100")
+	err := run(deps, &buf, "clone", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--newid is required")
 }
@@ -54,10 +54,10 @@ func TestQemuClone_FlagParams(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "clone", "100",
+	require.NoError(t, run(deps, &buf, "clone", "100",
 		"--newid", "200", "--name", "pve-cli-clone", "--target-node", "pve2", "--full"))
 
 	form := parseForm(t, gotQuery+"&"+body)
@@ -72,10 +72,10 @@ func TestQemuClone_ServerError(t *testing.T) {
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/clone", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "clone", "100", "--newid", "200"))
+	require.Error(t, run(deps, &buf, "clone", "100", "--newid", "200"))
 }
 
 // --- migrate ----------------------------------------------------------------
@@ -90,10 +90,10 @@ func TestQemuMigrate_Blocking(t *testing.T) {
 	})
 	handleTaskStatus(f, validUPID)
 
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "migrate", "100", "--target-node", "pve2"))
+	require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/migrate", gotPath)
@@ -102,10 +102,10 @@ func TestQemuMigrate_Blocking(t *testing.T) {
 
 func TestQemuMigrate_RequiresTargetNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "migrate", "100")
+	err := run(deps, &buf, "migrate", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--target-node is required")
 }
@@ -120,10 +120,10 @@ func TestQemuMigrate_FlagParams(t *testing.T) {
 		testhelper.WriteData(w, validUPID)
 	})
 
-	depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "migrate", "100",
+	require.NoError(t, run(deps, &buf, "migrate", "100",
 		"--target-node", "pve2", "--online", "--with-local-disks"))
 
 	form := parseForm(t, gotQuery+"&"+body)

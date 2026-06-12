@@ -35,10 +35,9 @@ func TestBackupList_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup", "list"))
+	require.NoError(t, run(deps, &buf, "backup", "list"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/backup", gotPath)
@@ -68,10 +67,9 @@ func TestBackupGet_Single(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup", "get", "backup-pvecli"))
+	require.NoError(t, run(deps, &buf, "backup", "get", "backup-pvecli"))
 
 	require.Equal(t, "/api2/json/cluster/backup/backup-pvecli", gotPath)
 	out := buf.String()
@@ -94,10 +92,9 @@ func TestBackupCreate_PostsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup", "create",
+	require.NoError(t, run(deps, &buf, "backup", "create",
 		"--id", "backup-pvecli", "--schedule", "02:30", "--storage", "local",
 		"--vmid", "100", "--mode", "snapshot"))
 
@@ -125,10 +122,9 @@ func TestBackupSet_PutsChangedFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup", "set", "backup-pvecli",
+	require.NoError(t, run(deps, &buf, "backup", "set", "backup-pvecli",
 		"--schedule", "04:00", "--delete", "comment"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -152,16 +148,15 @@ func TestBackupDelete_RequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "backup", "delete", "backup-pvecli")
+	err := run(deps, &buf, "backup", "delete", "backup-pvecli")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not be issued without --yes")
 
 	buf.Reset()
-	require.NoError(t, run(&buf, "backup", "delete", "backup-pvecli", "--yes"))
+	require.NoError(t, run(deps, &buf, "backup", "delete", "backup-pvecli", "--yes"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -179,10 +174,9 @@ func TestBackupInfo_DynamicTable(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup", "info"))
+	require.NoError(t, run(deps, &buf, "backup", "info"))
 
 	out := buf.String()
 	require.Contains(t, out, "GUEST")
@@ -200,10 +194,9 @@ func TestBackupList_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "backup", "list"))
+	require.Error(t, run(deps, &buf, "backup", "list"))
 }
 
 // TestBackupCommandTree verifies the backup sub-tree exposes the expected verbs.

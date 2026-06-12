@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -46,7 +47,7 @@ a future release).
 
 Exit status: 0 if all validated contexts are valid; 1 if any are invalid.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
 			// Build the list of names to validate.

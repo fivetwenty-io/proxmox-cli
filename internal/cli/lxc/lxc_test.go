@@ -22,25 +22,15 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
 
-// newTestCmd builds the lxc group command, overrides the live-deps lookup with
-// the supplied test Deps, captures stdout/stderr in buf, and sets args.
-//
-// The production RunE bodies call getDeps(cmd) (which defaults to cli.GetDeps).
-// In tests we swap getDeps for a closure returning deps so the command tree can
-// run without a full PersistentPreRunE wiring. The override is restored via
-// t.Cleanup so tests do not leak state.
+// newTestCmd builds the lxc group command, injects deps via context, captures
+// stdout/stderr in buf, and sets args.
 func newTestCmd(t *testing.T, deps *cli.Deps, buf *bytes.Buffer, args ...string) func() error {
 	t.Helper()
-
-	prev := getDeps
-	getDeps = func(_ *cobra.Command) *cli.Deps { return deps }
-	t.Cleanup(func() { getDeps = prev })
-
 	cmd := newGroupCmd(&cli.Deps{})
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetArgs(args)
-	cmd.SetContext(context.Background())
 	return cmd.Execute
 }
 

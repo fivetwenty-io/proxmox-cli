@@ -11,11 +11,6 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// resolveDeps looks up the live Deps for a command. It is a package-level
-// indirection over cli.GetDeps so tests can inject a Deps built from a fake
-// server without driving the root PersistentPreRunE.
-var resolveDeps = cli.GetDeps
-
 func init() {
 	cli.RegisterGroup(newGroupCmd)
 }

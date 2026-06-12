@@ -28,10 +28,9 @@ func TestClusterFirewallMacros_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "macros", "list"))
+	require.NoError(t, run(deps, &buf, "firewall", "macros", "list"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/firewall/macros", gotPath)
@@ -50,10 +49,9 @@ func TestClusterFirewallMacros_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "firewall", "macros", "list"))
+	require.Error(t, run(deps, &buf, "firewall", "macros", "list"))
 }
 
 // TestClusterFirewallRefs_List verifies `pve cluster firewall refs list`
@@ -71,10 +69,9 @@ func TestClusterFirewallRefs_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "refs", "list"))
+	require.NoError(t, run(deps, &buf, "firewall", "refs", "list"))
 
 	require.NotContains(t, gotQuery, "type=", "omitted --type must not appear in query")
 
@@ -97,10 +94,9 @@ func TestClusterFirewallRefs_TypeFilter(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "refs", "list", "--type", "ipset"))
+	require.NoError(t, run(deps, &buf, "firewall", "refs", "list", "--type", "ipset"))
 	require.Contains(t, gotQuery, "type=ipset")
 }
 
@@ -112,10 +108,9 @@ func TestClusterFirewallRefs_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "firewall", "refs", "list"))
+	require.Error(t, run(deps, &buf, "firewall", "refs", "list"))
 }
 
 // TestClusterFirewallCommandTree_GapCommands verifies macros and refs are registered.

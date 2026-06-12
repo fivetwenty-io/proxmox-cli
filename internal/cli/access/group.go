@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -41,7 +42,7 @@ func newGroupListCmd() *cobra.Command {
 		Short: "List groups",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Access.ListGroups(cmd.Context())
 			if err != nil {
@@ -74,7 +75,7 @@ func newGroupGetCmd() *cobra.Command {
 		Short: "Show a group's details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			groupid := args[0]
 
 			resp, err := deps.API.Access.GetGroups(cmd.Context(), groupid)
@@ -101,7 +102,7 @@ func newGroupCreateCmd() *cobra.Command {
 		Short: "Create a group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			groupid := args[0]
 
 			params := &access.CreateGroupsParams{Groupid: groupid}
@@ -127,7 +128,7 @@ func newGroupSetCmd() *cobra.Command {
 		Short: "Update a group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			groupid := args[0]
 
 			params := &access.UpdateGroupsParams{}
@@ -153,7 +154,7 @@ func newGroupDeleteCmd() *cobra.Command {
 		Short: "Delete a group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			groupid := args[0]
 
 			if !yes {

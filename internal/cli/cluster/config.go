@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -55,7 +56,7 @@ func newConfigJoinListCmd() *cobra.Command {
 		Short: "Show the information needed to join this cluster",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigJoin(cmd.Context(), &pvecluster.ListConfigJoinParams{})
 			if err != nil {
 				return fmt.Errorf("get cluster join information: %w", err)
@@ -88,7 +89,7 @@ func newConfigJoinAddCmd() *cobra.Command {
 			"fingerprint. This changes cluster membership and quorum.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to change cluster membership without confirmation: pass --yes/-y")
 			}
@@ -150,7 +151,7 @@ func newConfigNodesListCmd() *cobra.Command {
 		Short: "List the corosync cluster members",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigNodes(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list cluster nodes: %w", err)
@@ -189,7 +190,7 @@ func newConfigNodesAddCmd() *cobra.Command {
 			"cluster membership and quorum.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to add node %q to the cluster without confirmation: pass --yes/-y", node)
@@ -242,7 +243,7 @@ func newConfigNodesDeleteCmd() *cobra.Command {
 			"cluster membership and quorum.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to remove node %q from the cluster without confirmation: pass --yes/-y", node)
@@ -272,7 +273,7 @@ func newConfigApiversionCmd() *cobra.Command {
 			"that needs to verify join protocol compatibility between nodes.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigApiversion(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get cluster config apiversion: %w", err)
@@ -299,7 +300,7 @@ func newConfigQdeviceCmd() *cobra.Command {
 			"Returns an error on clusters without a configured QDevice.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigQdevice(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get cluster config qdevice: %w", err)
@@ -325,7 +326,7 @@ func newConfigTotemCmd() *cobra.Command {
 			"and consensus parameters. Useful for cluster health diagnosis.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigTotem(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get cluster config totem: %w", err)

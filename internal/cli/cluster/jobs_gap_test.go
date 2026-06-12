@@ -28,10 +28,9 @@ func TestJobsScheduleAnalyze_Success(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "schedule-analyze", "--schedule", "02:00"))
+	require.NoError(t, run(deps, &buf, "jobs", "schedule-analyze", "--schedule", "02:00"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/jobs/schedule-analyze", gotPath)
@@ -45,10 +44,9 @@ func TestJobsScheduleAnalyze_Success(t *testing.T) {
 func TestJobsScheduleAnalyze_RequiresSchedule(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "jobs", "schedule-analyze")
+	err := run(deps, &buf, "jobs", "schedule-analyze")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "schedule")
 }
@@ -65,10 +63,9 @@ func TestJobsScheduleAnalyze_OptionalIterationsOmitted(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "schedule-analyze", "--schedule", "daily"))
+	require.NoError(t, run(deps, &buf, "jobs", "schedule-analyze", "--schedule", "daily"))
 
 	require.NotContains(t, gotQuery, "iterations", "unset --iterations must not appear in query")
 	require.NotContains(t, gotQuery, "starttime", "unset --starttime must not appear in query")
@@ -82,10 +79,9 @@ func TestJobsScheduleAnalyze_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "jobs", "schedule-analyze", "--schedule", "badvalue"))
+	require.Error(t, run(deps, &buf, "jobs", "schedule-analyze", "--schedule", "badvalue"))
 }
 
 // TestJobsCommandTree_ScheduleAnalyze verifies schedule-analyze is registered.

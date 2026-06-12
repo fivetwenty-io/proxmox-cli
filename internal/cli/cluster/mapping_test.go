@@ -24,10 +24,9 @@ func TestMappingDir_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "dir", "list"))
+	require.NoError(t, run(deps, &buf, "mapping", "dir", "list"))
 	out := buf.String()
 	require.Contains(t, out, "shared")
 	require.Contains(t, out, "shared data")
@@ -43,10 +42,9 @@ func TestMappingDir_ListCheckNodeQuery(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "dir", "list", "--check-node", "pve"))
+	require.NoError(t, run(deps, &buf, "mapping", "dir", "list", "--check-node", "pve"))
 	require.Equal(t, "pve", gotCheckNode)
 }
 
@@ -61,10 +59,9 @@ func TestMappingDir_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "dir", "get", "shared"))
+	require.NoError(t, run(deps, &buf, "mapping", "dir", "get", "shared"))
 	require.Contains(t, buf.String(), "shared data")
 }
 
@@ -80,10 +77,9 @@ func TestMappingDir_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "dir", "create", "shared",
+	require.NoError(t, run(deps, &buf, "mapping", "dir", "create", "shared",
 		"--map", "node=pve,path=/mnt/data", "--map", "node=pve2,path=/mnt/data"))
 	require.Equal(t, "shared", gotForm.Get("id"))
 	require.Contains(t, gotForm["map"], "node=pve,path=/mnt/data")
@@ -96,10 +92,9 @@ func TestMappingDir_CreateForwardsFields(t *testing.T) {
 func TestMappingDir_CreateRequiresMap(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "dir", "create", "shared")
+	err := run(deps, &buf, "mapping", "dir", "create", "shared")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "map")
 }
@@ -115,10 +110,9 @@ func TestMappingDir_SetRequiresMap(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "dir", "set", "shared", "--description", "renamed")
+	err := run(deps, &buf, "mapping", "dir", "set", "shared", "--description", "renamed")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "map")
 	require.False(t, called, "set must not issue a PUT without the required --map")
@@ -136,10 +130,9 @@ func TestMappingDir_SetForwardsChangedOmitsUnset(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "dir", "set", "shared",
+	require.NoError(t, run(deps, &buf, "mapping", "dir", "set", "shared",
 		"--map", "node=pve,path=/mnt/data", "--description", "renamed"))
 	require.Contains(t, gotForm["map"], "node=pve,path=/mnt/data")
 	require.Equal(t, "renamed", gotForm.Get("description"))
@@ -157,10 +150,9 @@ func TestMappingDir_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "dir", "delete", "shared")
+	err := run(deps, &buf, "mapping", "dir", "delete", "shared")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -176,10 +168,9 @@ func TestMappingDir_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "dir", "delete", "shared", "--yes"))
+	require.NoError(t, run(deps, &buf, "mapping", "dir", "delete", "shared", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -196,10 +187,9 @@ func TestMappingPci_CreateForwardsBools(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "pci", "create", "gpu",
+	require.NoError(t, run(deps, &buf, "mapping", "pci", "create", "gpu",
 		"--map", "node=pve,path=0000:01:00.0,id=10de:1b80", "--live-migration-capable"))
 	require.Equal(t, "gpu", gotForm.Get("id"))
 	require.Contains(t, gotForm["map"], "node=pve,path=0000:01:00.0,id=10de:1b80")
@@ -219,10 +209,9 @@ func TestMappingPci_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "pci", "set", "gpu",
+	require.NoError(t, run(deps, &buf, "mapping", "pci", "set", "gpu",
 		"--map", "node=pve,path=0000:01:00.0,id=10de:1b80", "--mdev=false"))
 	require.Contains(t, gotForm["map"], "node=pve,path=0000:01:00.0,id=10de:1b80")
 	require.Equal(t, "0", gotForm.Get("mdev"))
@@ -241,10 +230,9 @@ func TestMappingUsb_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "usb", "create", "yubikey",
+	require.NoError(t, run(deps, &buf, "mapping", "usb", "create", "yubikey",
 		"--map", "node=pve,path=1-2,id=046d:c52b", "--description", "key"))
 	require.Equal(t, "yubikey", gotForm.Get("id"))
 	require.Contains(t, gotForm["map"], "node=pve,path=1-2,id=046d:c52b")
@@ -261,10 +249,9 @@ func TestMappingPci_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "pci", "get", "gpu"))
+	require.NoError(t, run(deps, &buf, "mapping", "pci", "get", "gpu"))
 	require.Contains(t, buf.String(), "nvidia")
 }
 
@@ -272,10 +259,9 @@ func TestMappingPci_Get(t *testing.T) {
 func TestMappingPci_CreateRequiresMap(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "pci", "create", "gpu")
+	err := run(deps, &buf, "mapping", "pci", "create", "gpu")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "map")
 }
@@ -291,10 +277,9 @@ func TestMappingPci_SetRequiresMap(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "pci", "set", "gpu", "--description", "renamed")
+	err := run(deps, &buf, "mapping", "pci", "set", "gpu", "--description", "renamed")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "map")
 	require.False(t, called, "set must not issue a PUT without the required --map")
@@ -310,10 +295,9 @@ func TestMappingPci_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "pci", "delete", "gpu")
+	err := run(deps, &buf, "mapping", "pci", "delete", "gpu")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -329,10 +313,9 @@ func TestMappingPci_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "pci", "delete", "gpu", "--yes"))
+	require.NoError(t, run(deps, &buf, "mapping", "pci", "delete", "gpu", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -347,10 +330,9 @@ func TestMappingUsb_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "usb", "get", "yubikey"))
+	require.NoError(t, run(deps, &buf, "mapping", "usb", "get", "yubikey"))
 	require.Contains(t, buf.String(), "key")
 }
 
@@ -358,10 +340,9 @@ func TestMappingUsb_Get(t *testing.T) {
 func TestMappingUsb_CreateRequiresMap(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "usb", "create", "yubikey")
+	err := run(deps, &buf, "mapping", "usb", "create", "yubikey")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "map")
 }
@@ -378,10 +359,9 @@ func TestMappingUsb_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "usb", "set", "yubikey",
+	require.NoError(t, run(deps, &buf, "mapping", "usb", "set", "yubikey",
 		"--map", "node=pve,path=1-2,id=046d:c52b", "--description", "renamed"))
 	require.Contains(t, gotForm["map"], "node=pve,path=1-2,id=046d:c52b")
 	require.Equal(t, "renamed", gotForm.Get("description"))
@@ -399,10 +379,9 @@ func TestMappingUsb_SetRequiresMap(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "usb", "set", "yubikey", "--description", "renamed")
+	err := run(deps, &buf, "mapping", "usb", "set", "yubikey", "--description", "renamed")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "map")
 	require.False(t, called, "set must not issue a PUT without the required --map")
@@ -418,10 +397,9 @@ func TestMappingUsb_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "mapping", "usb", "delete", "yubikey")
+	err := run(deps, &buf, "mapping", "usb", "delete", "yubikey")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -437,10 +415,9 @@ func TestMappingUsb_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "mapping", "usb", "delete", "yubikey", "--yes"))
+	require.NoError(t, run(deps, &buf, "mapping", "usb", "delete", "yubikey", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }

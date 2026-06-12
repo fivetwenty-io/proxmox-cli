@@ -329,7 +329,8 @@ func TestNodeDisksDelete_RequiresNode(t *testing.T) {
 
 // TestNodeDisks_ExtendedCommandTree verifies the new ls/get/delete sub-trees.
 func TestNodeDisks_ExtendedCommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
@@ -677,7 +678,8 @@ func TestNodeCapabilities_QemuCpuFlags_APIError(t *testing.T) {
 }
 
 func TestNodeCapabilities_CpuFlagsInCommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
@@ -741,7 +743,8 @@ func TestNodeHardware_PciMdev_APIError(t *testing.T) {
 }
 
 func TestNodeHardware_MdevInCommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
@@ -866,7 +869,8 @@ func TestNodeServicesState_APIError(t *testing.T) {
 }
 
 func TestNodeServicesState_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
@@ -888,7 +892,8 @@ func TestNodeServicesState_CommandTree(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNodeVzdump_ExtendedCommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
@@ -912,7 +917,8 @@ func TestNodeVzdump_ExtendedCommandTree(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNode_GapCommandsInCommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {

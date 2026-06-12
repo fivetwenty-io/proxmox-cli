@@ -70,7 +70,8 @@ func run(t *testing.T, f *testhelper.FakePVE, in string, args ...string) (string
 
 	cfgPath := writeConfig(t, f)
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 	root.AddCommand(newGroupCmd(&cli.Deps{}))
 

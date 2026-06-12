@@ -24,10 +24,9 @@ func TestJobsRealmSync_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "realm-sync", "list"))
+	require.NoError(t, run(deps, &buf, "jobs", "realm-sync", "list"))
 	out := buf.String()
 	require.Contains(t, out, "sync-ldap")
 	require.Contains(t, out, "ldap")
@@ -43,10 +42,9 @@ func TestJobsRealmSync_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "realm-sync", "get", "sync-ldap"))
+	require.NoError(t, run(deps, &buf, "jobs", "realm-sync", "get", "sync-ldap"))
 	require.Contains(t, buf.String(), "both")
 }
 
@@ -62,10 +60,9 @@ func TestJobsRealmSync_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "realm-sync", "create", "sync-ldap",
+	require.NoError(t, run(deps, &buf, "jobs", "realm-sync", "create", "sync-ldap",
 		"--schedule", "daily", "--realm", "ldap", "--scope", "both", "--enabled"))
 	require.Equal(t, "daily", gotForm.Get("schedule"))
 	require.Equal(t, "ldap", gotForm.Get("realm"))
@@ -79,10 +76,9 @@ func TestJobsRealmSync_CreateForwardsFields(t *testing.T) {
 func TestJobsRealmSync_CreateRequiresSchedule(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "jobs", "realm-sync", "create", "sync-ldap", "--realm", "ldap")
+	err := run(deps, &buf, "jobs", "realm-sync", "create", "sync-ldap", "--realm", "ldap")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "schedule")
 }
@@ -98,10 +94,9 @@ func TestJobsRealmSync_SetRequiresSchedule(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "jobs", "realm-sync", "set", "sync-ldap", "--comment", "x")
+	err := run(deps, &buf, "jobs", "realm-sync", "set", "sync-ldap", "--comment", "x")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "schedule")
 	require.False(t, called, "set must not issue a PUT without the required --schedule")
@@ -119,10 +114,9 @@ func TestJobsRealmSync_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "realm-sync", "set", "sync-ldap",
+	require.NoError(t, run(deps, &buf, "jobs", "realm-sync", "set", "sync-ldap",
 		"--schedule", "weekly", "--comment", "nightly"))
 	require.Equal(t, "weekly", gotForm.Get("schedule"))
 	require.Equal(t, "nightly", gotForm.Get("comment"))
@@ -140,10 +134,9 @@ func TestJobsRealmSync_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "jobs", "realm-sync", "delete", "sync-ldap")
+	err := run(deps, &buf, "jobs", "realm-sync", "delete", "sync-ldap")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -159,10 +152,9 @@ func TestJobsRealmSync_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "jobs", "realm-sync", "delete", "sync-ldap", "--yes"))
+	require.NoError(t, run(deps, &buf, "jobs", "realm-sync", "delete", "sync-ldap", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }

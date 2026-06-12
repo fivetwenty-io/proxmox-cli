@@ -24,10 +24,9 @@ func TestAcmeAccount_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "list"))
+	require.NoError(t, run(deps, &buf, "acme", "account", "list"))
 	require.Contains(t, buf.String(), "default")
 }
 
@@ -43,10 +42,9 @@ func TestAcmeAccount_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "get", "default"))
+	require.NoError(t, run(deps, &buf, "acme", "account", "get", "default"))
 	require.Contains(t, buf.String(), "acme.example")
 }
 
@@ -63,10 +61,9 @@ func TestAcmeAccount_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "create", "staging",
+	require.NoError(t, run(deps, &buf, "acme", "account", "create", "staging",
 		"--contact", "admin@example.com", "--directory", "https://acme.example/dir", "--async"))
 	require.Equal(t, "admin@example.com", gotForm.Get("contact"))
 	require.Equal(t, "staging", gotForm.Get("name"))
@@ -89,11 +86,10 @@ func TestAcmeAccount_CreateForwardsEabSecretWithoutEcho(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	const secret = "supersecreteabhmac"
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "create", "staging",
+	require.NoError(t, run(deps, &buf, "acme", "account", "create", "staging",
 		"--contact", "admin@example.com", "--eab-kid", "kid-1", "--eab-hmac-key", secret, "--async"))
 	require.Equal(t, "kid-1", gotForm.Get("eab-kid"))
 	require.Equal(t, secret, gotForm.Get("eab-hmac-key"), "the HMAC key must reach the request body")
@@ -114,10 +110,9 @@ func TestAcmeAccount_CreateBlocksUntilDone(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "create",
+	require.NoError(t, run(deps, &buf, "acme", "account", "create",
 		"--contact", "admin@example.com"))
 	require.Contains(t, buf.String(), "ACME account registered.")
 	require.NotContains(t, buf.String(), acmeUPID, "synchronous create must not print the raw UPID")
@@ -127,10 +122,9 @@ func TestAcmeAccount_CreateBlocksUntilDone(t *testing.T) {
 func TestAcmeAccount_CreateRequiresContact(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "acme", "account", "create", "staging")
+	err := run(deps, &buf, "acme", "account", "create", "staging")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "contact")
 }
@@ -146,10 +140,9 @@ func TestAcmeAccount_SetForwardsContact(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "set", "default",
+	require.NoError(t, run(deps, &buf, "acme", "account", "set", "default",
 		"--contact", "ops@example.com", "--async"))
 	require.Equal(t, "ops@example.com", gotForm.Get("contact"))
 }
@@ -164,10 +157,9 @@ func TestAcmeAccount_SetRequiresContact(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "acme", "account", "set", "default")
+	err := run(deps, &buf, "acme", "account", "set", "default")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "contact")
 	require.False(t, called, "set must not issue a PUT without --contact")
@@ -183,10 +175,9 @@ func TestAcmeAccount_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "acme", "account", "delete", "default")
+	err := run(deps, &buf, "acme", "account", "delete", "default")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -202,10 +193,9 @@ func TestAcmeAccount_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "account", "delete", "default", "--yes", "--async"))
+	require.NoError(t, run(deps, &buf, "acme", "account", "delete", "default", "--yes", "--async"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 }
 
@@ -219,10 +209,9 @@ func TestAcmePlugin_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "plugin", "list"))
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "list"))
 	out := buf.String()
 	require.Contains(t, out, "dns-cf")
 	require.Contains(t, out, "dns")
@@ -238,10 +227,9 @@ func TestAcmePlugin_ListTypeQuery(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "plugin", "list", "--type", "dns"))
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "list", "--type", "dns"))
 	require.Equal(t, "dns", gotType)
 }
 
@@ -253,10 +241,9 @@ func TestAcmePlugin_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "plugin", "get", "dns-cf"))
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "get", "dns-cf"))
 	require.Contains(t, buf.String(), "cf")
 }
 
@@ -272,10 +259,9 @@ func TestAcmePlugin_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "plugin", "create", "dns-cf",
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "create", "dns-cf",
 		"--type", "dns", "--api", "cf", "--data", "Q0ZfVG9rZW49eA=="))
 	require.Equal(t, "dns-cf", gotForm.Get("id"))
 	require.Equal(t, "dns", gotForm.Get("type"))
@@ -289,10 +275,9 @@ func TestAcmePlugin_CreateForwardsFields(t *testing.T) {
 func TestAcmePlugin_CreateRequiresType(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "acme", "plugin", "create", "dns-cf", "--api", "cf")
+	err := run(deps, &buf, "acme", "plugin", "create", "dns-cf", "--api", "cf")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "type")
 }
@@ -307,10 +292,9 @@ func TestAcmePlugin_SetRequiresChange(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "acme", "plugin", "set", "dns-cf")
+	err := run(deps, &buf, "acme", "plugin", "set", "dns-cf")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no changes")
 	require.False(t, called, "set must not issue a PUT with no changed fields")
@@ -327,10 +311,9 @@ func TestAcmePlugin_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "plugin", "set", "dns-cf", "--api", "route53"))
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "set", "dns-cf", "--api", "route53"))
 	require.Equal(t, "route53", gotForm.Get("api"))
 	_, hasData := gotForm["data"]
 	require.False(t, hasData, "unset --data must be omitted from the request body")
@@ -346,10 +329,9 @@ func TestAcmePlugin_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "acme", "plugin", "delete", "dns-cf")
+	err := run(deps, &buf, "acme", "plugin", "delete", "dns-cf")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -365,10 +347,9 @@ func TestAcmePlugin_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "plugin", "delete", "dns-cf", "--yes"))
+	require.NoError(t, run(deps, &buf, "acme", "plugin", "delete", "dns-cf", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -383,10 +364,9 @@ func TestAcmeDirectories_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "directories"))
+	require.NoError(t, run(deps, &buf, "acme", "directories"))
 	require.Contains(t, buf.String(), "acme-v02.example")
 }
 
@@ -401,10 +381,9 @@ func TestAcmeChallengeSchema_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acme", "challenge-schema"))
+	require.NoError(t, run(deps, &buf, "acme", "challenge-schema"))
 	require.Contains(t, buf.String(), "Cloudflare")
 }
 

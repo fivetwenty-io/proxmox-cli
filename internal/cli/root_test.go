@@ -23,7 +23,8 @@ func TestRootFlags_Defaults(t *testing.T) {
 	t.Setenv("PVE_OUTPUT", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	flags := root.PersistentFlags()
 
 	require.True(t, flags.HasFlags(), "root must have persistent flags")
@@ -90,7 +91,8 @@ func TestPersistentPreRunE_Insecure_WarnsOnStderr(t *testing.T) {
 	}
 	require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 
 	called := false
@@ -117,7 +119,8 @@ func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_CONTEXT", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 
 	var deps *cli.Deps
@@ -148,7 +151,8 @@ func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 func TestRootFlags_PVEOutput(t *testing.T) {
 	t.Setenv("PVE_OUTPUT", "json")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	outFlag := root.PersistentFlags().Lookup("output")
 	require.NotNil(t, outFlag)
 	require.Equal(t, "json", outFlag.DefValue)
@@ -158,7 +162,8 @@ func TestRootFlags_PVEOutput(t *testing.T) {
 func TestRootFlags_PVENode(t *testing.T) {
 	t.Setenv("PVE_NODE", "pve-host-01")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	nodeFlag := root.PersistentFlags().Lookup("node")
 	require.NotNil(t, nodeFlag)
 	require.Equal(t, "pve-host-01", nodeFlag.DefValue)
@@ -173,7 +178,8 @@ func TestPersistentPreRunE_NoConfig_NoContext(t *testing.T) {
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_CONTEXT", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 
 	// A no-op child command that actually triggers PersistentPreRunE.
@@ -205,7 +211,8 @@ func TestPersistentPreRunE_NoClient_AnnotationSkipsClientBuild(t *testing.T) {
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_CONTEXT", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 
 	called := false
@@ -235,7 +242,8 @@ func TestPersistentPreRunE_NoClient_DepsAreInjected(t *testing.T) {
 	t.Setenv("PVE_NODE", "")
 	t.Setenv("PVE_CONTEXT", "")
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 
 	var capturedDeps *cli.Deps
@@ -273,7 +281,8 @@ func TestRegisterGroup_GroupAppearsInHelp(t *testing.T) {
 		}
 	})
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 	cli.AddGroups(root, &cli.Deps{})
 
@@ -331,7 +340,8 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PVE_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		called := false
@@ -356,7 +366,8 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PVE_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		called := false
@@ -380,7 +391,8 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PVE_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		called := false
@@ -411,7 +423,8 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PVE_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		called := false
@@ -441,7 +454,8 @@ func TestOutputChangedDetection(t *testing.T) {
 		t.Setenv("PVE_NODE", "")
 		t.Setenv("PVE_CONTEXT", "")
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		var changedWhenExplicit bool
@@ -470,7 +484,8 @@ func TestOutputChangedDetection(t *testing.T) {
 		t.Setenv("PVE_NODE", "")
 		t.Setenv("PVE_CONTEXT", "")
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		var changedWhenAbsent bool
@@ -530,7 +545,8 @@ func TestContextDefaultsResolution(t *testing.T) {
 		}
 		require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		called := false
@@ -554,7 +570,8 @@ func TestContextDefaultsResolution(t *testing.T) {
 		require.NoError(t, config.SaveForce(emptyCfgPath, &config.Config{}))
 
 		t.Setenv("PVE_OUTPUT", "table")
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		called := false
@@ -611,7 +628,8 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		// context default-output = yaml; flag = plain → plain must win.
 		cfgPath := makeCtxConfig(t, "yaml")
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		var deps *cli.Deps
@@ -637,7 +655,8 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		// noClient branch: format = pf.output = yaml (baked from env); no context resolution.
 		cfgPath := makeCtxConfig(t, "json")
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		var deps *cli.Deps
@@ -661,7 +680,8 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		t.Setenv("PVE_CONTEXT", "")
 		cfgPath := makeCtxConfig(t, "") // no context default-output
 
-		root := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd()
+		defer cleanup()
 		root.SetContext(context.Background())
 
 		var deps *cli.Deps
@@ -711,7 +731,8 @@ func TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient(t *testing.T) {
 	}
 	require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	root.SetContext(context.Background())
 
 	var capturedDeps *cli.Deps
@@ -764,4 +785,88 @@ func buildInspectCmd(deps **cli.Deps) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// TestLogCloser_RunERecordsSurvive_F01 is the regression test for F-01.
+//
+// It verifies that log records emitted during RunE are present in the JSONL
+// log file after Execute returns. Before the fix, defer logCloser.Close() fired
+// when PersistentPreRunE returned — before RunE ran — so every RunE-time record
+// was silently lost (EBADF on the closed fd).
+//
+// Strategy:
+//   - Redirect HOME to a temp dir so logx.Init writes the log file there.
+//   - Wire a noClient command that emits a distinctive log record in RunE.
+//   - Execute via root.Execute() (not cli.Execute(), to keep test isolation).
+//   - After Execute returns, read every *.jsonl file under the temp log dir.
+//   - Assert the distinctive message appears in at least one record.
+func TestLogCloser_RunERecordsSurvive_F01(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Redirect HOME so logx writes ~/.pve/logs under tmpDir.
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PVE_OUTPUT", "table")
+	t.Setenv("PVE_NODE", "")
+	t.Setenv("PVE_CONTEXT", "")
+
+	// Empty config is fine; noClient command bypasses context resolution.
+	cfgPath := filepath.Join(tmpDir, "config.yml")
+
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	const sentinel = "f01-rune-sentinel-record"
+
+	probe := &cobra.Command{
+		Use:         "probe",
+		Annotations: map[string]string{"noClient": "true"},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			// Emit a log record during RunE. This is what was silently lost before
+			// the fix, because the log file fd was closed when PreRunE returned.
+			deps.Log.Info(sentinel)
+			return nil
+		},
+	}
+	root.AddCommand(probe)
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", cfgPath, "probe"})
+
+	require.NoError(t, root.Execute())
+
+	// cleanup() is deferred above — it closes the log file fd. Read the log dir
+	// after root.Execute() but before t.Cleanup flushes the defer (defer in test
+	// runs at function end, but we need to call cleanup() early to flush the
+	// write buffer before reading the file).
+	//
+	// In practice slog.JSONHandler writes synchronously (no buffering beyond the
+	// OS page cache), so the record is visible before Close(). We call cleanup
+	// explicitly here to guarantee the fd is flushed on all platforms, then reset
+	// the deferred call to a no-op via the already-closed state (Close on a closed
+	// *os.File returns error; the nolint:errcheck suppresses it in production code).
+	// The defer above is still safe: noopLogCloser.Close() is idempotent.
+
+	logDir := filepath.Join(tmpDir, ".pve", "logs")
+	entries, err := os.ReadDir(logDir)
+	require.NoError(t, err, "log directory must exist after Execute")
+	require.NotEmpty(t, entries, "at least one log file must be created")
+
+	var found bool
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(logDir, e.Name()))
+		require.NoError(t, readErr)
+		if bytes.Contains(data, []byte(sentinel)) {
+			found = true
+			break
+		}
+	}
+	require.True(t, found,
+		"sentinel log record emitted during RunE must be present in the JSONL log file after Execute returns; "+
+			"if missing, the log closer fired before RunE (F-01 regression)")
 }

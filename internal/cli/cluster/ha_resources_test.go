@@ -32,10 +32,9 @@ func TestHaResourceList_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "list"))
+	require.NoError(t, run(deps, &buf, "ha", "resource", "list"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/ha/resources", gotPath)
@@ -62,10 +61,9 @@ func TestHaResourceList_TypeFilter(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "list", "--type", "vm"))
+	require.NoError(t, run(deps, &buf, "ha", "resource", "list", "--type", "vm"))
 	require.Equal(t, "vm", gotType)
 }
 
@@ -83,10 +81,9 @@ func TestHaResourceGet_Single(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "get", "vm:100"))
+	require.NoError(t, run(deps, &buf, "ha", "resource", "get", "vm:100"))
 
 	require.Equal(t, "/api2/json/cluster/ha/resources/vm:100", gotPath)
 	out := buf.String()
@@ -109,10 +106,9 @@ func TestHaResourceCreate_PostsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "create", "vm:100",
+	require.NoError(t, run(deps, &buf, "ha", "resource", "create", "vm:100",
 		"--state", "started", "--group", "ha1", "--max-restart", "3", "--comment", "web"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
@@ -141,10 +137,9 @@ func TestHaResourceSet_PutsChangedFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "set", "vm:100",
+	require.NoError(t, run(deps, &buf, "ha", "resource", "set", "vm:100",
 		"--state", "stopped", "--delete", "comment"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -167,16 +162,15 @@ func TestHaResourceDelete_RequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "resource", "delete", "vm:100")
+	err := run(deps, &buf, "ha", "resource", "delete", "vm:100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not be issued without --yes")
 
 	buf.Reset()
-	require.NoError(t, run(&buf, "ha", "resource", "delete", "vm:100", "--yes"))
+	require.NoError(t, run(deps, &buf, "ha", "resource", "delete", "vm:100", "--yes"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -198,10 +192,9 @@ func TestHaResourceMigrate_PostsTargetNode(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "migrate", "vm:100", "--target-node", "pve2"))
+	require.NoError(t, run(deps, &buf, "ha", "resource", "migrate", "vm:100", "--target-node", "pve2"))
 
 	require.Equal(t, "/api2/json/cluster/ha/resources/vm:100/migrate", gotPath)
 	require.Equal(t, "pve2", gotForm.Get("node"))
@@ -220,10 +213,9 @@ func TestHaResourceMigrate_RequiresTargetNode(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "resource", "migrate", "vm:100")
+	err := run(deps, &buf, "ha", "resource", "migrate", "vm:100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--target-node")
 	require.False(t, called, "migrate must not be issued without --target-node")
@@ -246,10 +238,9 @@ func TestHaResourceRelocate_PostsTargetNode(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "resource", "relocate", "vm:100", "--target-node", "pve2"))
+	require.NoError(t, run(deps, &buf, "ha", "resource", "relocate", "vm:100", "--target-node", "pve2"))
 
 	require.Equal(t, "/api2/json/cluster/ha/resources/vm:100/relocate", gotPath)
 	require.Equal(t, "pve2", gotForm.Get("node"))
@@ -267,10 +258,9 @@ func TestHaResourceRelocate_RequiresTargetNode(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "resource", "relocate", "vm:100")
+	err := run(deps, &buf, "ha", "resource", "relocate", "vm:100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--target-node")
 	require.False(t, called, "relocate must not be issued without --target-node")
@@ -284,10 +274,9 @@ func TestHaResourceList_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "ha", "resource", "list"))
+	require.Error(t, run(deps, &buf, "ha", "resource", "list"))
 }
 
 // TestHaCommandTree verifies the ha → resource sub-tree exposes the expected verbs.

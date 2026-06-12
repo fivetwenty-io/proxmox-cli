@@ -7,6 +7,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -34,7 +35,7 @@ func newOptionsGetCmd() *cobra.Command {
 		Short: "Show the cluster-wide datacenter options",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListOptions(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("get cluster options: %w", err)
@@ -89,7 +90,7 @@ func newOptionsSetCmd() *cobra.Command {
 		Long:  "Update the datacenter options. Only the flags you pass are changed.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, optionsSetFlags...) {
 				return fmt.Errorf("no options to set: pass at least one option flag")

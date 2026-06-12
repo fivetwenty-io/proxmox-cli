@@ -28,7 +28,7 @@ func newSelectCmd() *cobra.Command {
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 			if cfg == nil {
 				cfg = &config.Config{}

@@ -6,10 +6,6 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// resolveDeps is the package-level indirection over cli.GetDeps so that tests
-// can inject a pre-built *cli.Deps without driving root PersistentPreRunE.
-var resolveDeps = cli.GetDeps
-
 func init() {
 	cli.RegisterGroup(newContextCmd)
 	cli.RegisterGroup(newCtxAliasCmd)
@@ -17,7 +13,7 @@ func init() {
 
 // newContextCmd builds `pve context` and attaches all sub-commands.
 // The passed *cli.Deps is a placeholder for command-tree assembly; live deps
-// are resolved per-invocation via resolveDeps (cli.GetDeps).
+// are resolved per-invocation via cli.GetDeps.
 func newContextCmd(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context",

@@ -15,14 +15,9 @@ func init() {
 	cli.RegisterGroup(newGroupCmd)
 }
 
-// resolveDeps returns the live dependencies for a command. It defaults to
-// cli.GetDeps and is overridable in tests so a command tree can run against a
-// fake server without driving the root PersistentPreRunE.
-var resolveDeps = cli.GetDeps
-
 // newGroupCmd builds the `pve qemu` command and all of its sub-commands.
 // The *cli.Deps argument is a placeholder used only so cobra can build the
-// command tree; live dependencies are obtained inside each RunE via resolveDeps.
+// command tree; live dependencies are obtained inside each RunE via cli.GetDeps.
 func newGroupCmd(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "qemu",

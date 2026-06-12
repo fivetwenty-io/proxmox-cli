@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -56,7 +57,7 @@ func newDiskResizeCmd() *cobra.Command {
 			"`32G` or a relative increment such as `+10G`. Shrinking is not supported by PVE.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -123,7 +124,7 @@ func newDiskMoveCmd() *cobra.Command {
 			"VM. The command blocks until the move task completes unless --async is set.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err
@@ -200,7 +201,7 @@ func newDiskUnlinkCmd() *cobra.Command {
 			"Multiple disks may be given as a comma-separated list.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

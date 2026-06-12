@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -49,7 +50,7 @@ func newCephFlagsListCmd() *cobra.Command {
 		Short: "List all cluster-wide Ceph flags and their state",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListCephFlags(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list ceph flags: %w", err)
@@ -69,7 +70,7 @@ func newCephFlagsGetCmd() *cobra.Command {
 		Short: "Show the state of a single Ceph flag",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			flag := args[0]
 			resp, err := deps.API.Cluster.GetCephFlags(cmd.Context(), flag)
 			if err != nil {
@@ -93,7 +94,7 @@ func newCephFlagsSetCmd() *cobra.Command {
 			"'set noout true' to keep OSDs from being marked out during maintenance.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			flag := args[0]
 			value, err := strconv.ParseBool(args[1])
 			if err != nil {
@@ -127,7 +128,7 @@ func newCephMetadataCmd() *cobra.Command {
 			"Requires a configured Ceph cluster; returns an error on nodes without Ceph.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.ListCephMetadataParams{}
 			if fl.Changed("scope") {

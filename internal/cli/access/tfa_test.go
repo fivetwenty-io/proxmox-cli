@@ -25,9 +25,9 @@ func TestAccess_TfaList_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "list"))
+	require.NoError(t, run(deps, &buf, "tfa", "list"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/tfa", rec.path)
@@ -51,9 +51,9 @@ func TestAccess_TfaGet_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "get", "root@pam"))
+	require.NoError(t, run(deps, &buf, "tfa", "get", "root@pam"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/tfa/root@pam", rec.path)
@@ -75,9 +75,9 @@ func TestAccess_TfaDelete_RequiresYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "delete", "root@pam", "totp1")
+	err := run(deps, &buf, "tfa", "delete", "root@pam", "totp1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -93,9 +93,9 @@ func TestAccess_TfaDelete_WithYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "delete", "root@pam", "totp1", "--yes", "--password", "secret"))
+	require.NoError(t, run(deps, &buf, "tfa", "delete", "root@pam", "totp1", "--yes", "--password", "secret"))
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "/api2/json/access/tfa/root@pam/totp1", rec.path)
@@ -112,9 +112,9 @@ func TestAccess_TfaDelete_OmitsPasswordWhenUnset(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "delete", "root@pam", "totp1", "--yes"))
+	require.NoError(t, run(deps, &buf, "tfa", "delete", "root@pam", "totp1", "--yes"))
 
 	// With --password unset, the only-changed-flags forwarding must omit the
 	// query param entirely rather than send an empty value.
@@ -129,9 +129,9 @@ func TestAccess_TfaUnlock_RequiresYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "unlock", "alice@pve")
+	err := run(deps, &buf, "tfa", "unlock", "alice@pve")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "unlock must not issue a PUT without --yes")
@@ -145,9 +145,9 @@ func TestAccess_TfaUnlock_WithYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "unlock", "alice@pve", "--yes"))
+	require.NoError(t, run(deps, &buf, "tfa", "unlock", "alice@pve", "--yes"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "/api2/json/access/users/alice@pve/unlock-tfa", rec.path)
@@ -160,9 +160,9 @@ func TestAccess_TfaUnlock_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "user not found")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "unlock", "alice@pve", "--yes")
+	err := run(deps, &buf, "tfa", "unlock", "alice@pve", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unlock tfa")
 }
@@ -203,9 +203,9 @@ func TestAccess_TfaGetEntry_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "get-entry", "root@pam", "totp1"))
+	require.NoError(t, run(deps, &buf, "tfa", "get-entry", "root@pam", "totp1"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/tfa/root@pam/totp1", rec.path)
@@ -223,9 +223,9 @@ func TestAccess_TfaGetEntry_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusNotFound, "no such entry")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "get-entry", "root@pam", "nope")
+	err := run(deps, &buf, "tfa", "get-entry", "root@pam", "nope")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "get tfa entry")
 }
@@ -245,9 +245,9 @@ func TestAccess_TfaCreate_Success(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "create", "root@pam",
+	require.NoError(t, run(deps, &buf, "tfa", "create", "root@pam",
 		"--type", "totp",
 		"--password", "secret",
 		"--description", "work phone",
@@ -276,9 +276,9 @@ func TestAccess_TfaCreate_RecoveryCodes(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "create", "alice@pve",
+	require.NoError(t, run(deps, &buf, "tfa", "create", "alice@pve",
 		"--type", "recovery",
 		"--password", "secret",
 	))
@@ -292,18 +292,18 @@ func TestAccess_TfaCreate_RecoveryCodes(t *testing.T) {
 
 func TestAccess_TfaCreate_RequiresType(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "create", "root@pam", "--password", "s")
+	err := run(deps, &buf, "tfa", "create", "root@pam", "--password", "s")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type")
 }
 
 func TestAccess_TfaCreate_RejectsInvalidType(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "create", "root@pam", "--type", "bogus", "--password", "s")
+	err := run(deps, &buf, "tfa", "create", "root@pam", "--type", "bogus", "--password", "s")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid --type")
 }
@@ -316,10 +316,10 @@ func TestAccess_TfaCreate_RequiresPassword(t *testing.T) {
 		testhelper.WriteData(w, map[string]any{"id": "x"})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
 	// Feed empty stdin so the prompt returns empty password.
-	err := runWithStdin(&buf, "\n", "tfa", "create", "root@pam", "--type", "totp")
+	err := runWithStdin(deps, &buf, "\n", "tfa", "create", "root@pam", "--type", "totp")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "password")
 	require.False(t, called, "API must not be called without a password")
@@ -331,9 +331,9 @@ func TestAccess_TfaCreate_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusForbidden, "permission denied")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "create", "root@pam", "--type", "totp", "--password", "secret")
+	err := run(deps, &buf, "tfa", "create", "root@pam", "--type", "totp", "--password", "secret")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "create tfa entry")
 }
@@ -350,9 +350,9 @@ func TestAccess_TfaSet_Success(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "set", "root@pam", "totp1",
+	require.NoError(t, run(deps, &buf, "tfa", "set", "root@pam", "totp1",
 		"--description", "updated",
 		"--password", "secret",
 	))
@@ -374,9 +374,9 @@ func TestAccess_TfaSet_EnableFlag(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "set", "root@pam", "totp1",
+	require.NoError(t, run(deps, &buf, "tfa", "set", "root@pam", "totp1",
 		"--enable=false", "--password", "secret",
 	))
 
@@ -398,11 +398,11 @@ func TestAccess_TfaSet_RequiresAtLeastOneField(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
 	// Feed non-empty password via stdin so the password check passes, but no
 	// other update fields are given — the command must still reject this.
-	err := runWithStdin(&buf, "secret\n", "tfa", "set", "root@pam", "totp1")
+	err := runWithStdin(deps, &buf, "secret\n", "tfa", "set", "root@pam", "totp1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "at least one")
 	require.False(t, called, "API must not be called when no fields are being changed")
@@ -414,9 +414,9 @@ func TestAccess_TfaSet_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "set", "root@pam", "totp1",
+	err := run(deps, &buf, "tfa", "set", "root@pam", "totp1",
 		"--description", "x", "--password", "secret")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "update tfa entry")
@@ -438,9 +438,9 @@ func TestAccess_TfaTypes_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tfa", "types", "root@pam"))
+	require.NoError(t, run(deps, &buf, "tfa", "types", "root@pam"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/users/root@pam/tfa", rec.path)
@@ -457,9 +457,9 @@ func TestAccess_TfaTypes_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "tfa", "types", "root@pam")
+	err := run(deps, &buf, "tfa", "types", "root@pam")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "list tfa types")
 }

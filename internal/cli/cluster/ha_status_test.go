@@ -28,10 +28,9 @@ func TestHaStatusList_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "status", "list"))
+	require.NoError(t, run(deps, &buf, "ha", "status", "list"))
 
 	require.Equal(t, "/api2/json/cluster/ha/status", gotPath)
 	out := buf.String()
@@ -54,10 +53,9 @@ func TestHaStatusCurrent_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "status", "current"))
+	require.NoError(t, run(deps, &buf, "ha", "status", "current"))
 
 	require.Equal(t, "/api2/json/cluster/ha/status/current", gotPath)
 	require.Contains(t, buf.String(), "vm:100")
@@ -75,10 +73,9 @@ func TestHaStatusManager_Single(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ha", "status", "manager"))
+	require.NoError(t, run(deps, &buf, "ha", "status", "manager"))
 
 	require.Equal(t, "/api2/json/cluster/ha/status/manager_status", gotPath)
 	require.Contains(t, buf.String(), "pve")
@@ -96,16 +93,15 @@ func TestHaStatusArm_RequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "status", "arm")
+	err := run(deps, &buf, "ha", "status", "arm")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "arm must not be issued without --yes")
 
 	buf.Reset()
-	require.NoError(t, run(&buf, "ha", "status", "arm", "--yes"))
+	require.NoError(t, run(deps, &buf, "ha", "status", "arm", "--yes"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "armed")
 }
@@ -125,21 +121,20 @@ func TestHaStatusDisarm_RequiresYesAndMode(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ha", "status", "disarm")
+	err := run(deps, &buf, "ha", "status", "disarm")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 
 	buf.Reset()
-	err = run(&buf, "ha", "status", "disarm", "--yes")
+	err = run(deps, &buf, "ha", "status", "disarm", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--resource-mode")
 	require.False(t, called, "disarm must not be issued without --resource-mode")
 
 	buf.Reset()
-	require.NoError(t, run(&buf, "ha", "status", "disarm", "--yes", "--resource-mode", "freeze"))
+	require.NoError(t, run(deps, &buf, "ha", "status", "disarm", "--yes", "--resource-mode", "freeze"))
 	require.True(t, called)
 	require.Equal(t, "freeze", gotForm.Get("resource-mode"))
 	require.Contains(t, buf.String(), "disarmed")
@@ -154,8 +149,7 @@ func TestHaStatusList_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "ha", "status", "list"))
+	require.Error(t, run(deps, &buf, "ha", "status", "list"))
 }

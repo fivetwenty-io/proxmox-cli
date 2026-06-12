@@ -26,10 +26,9 @@ func TestClusterFirewallRules_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "list"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "list"))
 
 	out := buf.String()
 	require.Contains(t, out, "POS")
@@ -50,10 +49,9 @@ func TestClusterFirewallRules_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "get", "3"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "get", "3"))
 
 	require.Equal(t, "/api2/json/cluster/firewall/rules/3", gotPath)
 	out := buf.String()
@@ -64,10 +62,9 @@ func TestClusterFirewallRules_Get(t *testing.T) {
 func TestClusterFirewallRules_CreateRequiresType(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "create", "--action", "ACCEPT")
+	err := run(deps, &buf, "firewall", "rules", "create", "--action", "ACCEPT")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type is required")
 }
@@ -75,10 +72,9 @@ func TestClusterFirewallRules_CreateRequiresType(t *testing.T) {
 func TestClusterFirewallRules_CreateRequiresAction(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "create", "--type", "in")
+	err := run(deps, &buf, "firewall", "rules", "create", "--type", "in")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--action is required")
 }
@@ -93,10 +89,9 @@ func TestClusterFirewallRules_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "create",
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "create",
 		"--type", "in", "--action", "ACCEPT", "--proto", "tcp",
 		"--dport", "22", "--source", "+pvecli-ips", "--enable", "0", "--comment", "ssh"))
 
@@ -121,10 +116,9 @@ func TestClusterFirewallRules_UpdateForwardsMoveto(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "update", "2", "--moveto", "0", "--delete", "comment"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "update", "2", "--moveto", "0", "--delete", "comment"))
 
 	require.Equal(t, "/api2/json/cluster/firewall/rules/2", gotPath)
 	require.Equal(t, "0", gotForm.Get("moveto"))
@@ -134,10 +128,9 @@ func TestClusterFirewallRules_UpdateForwardsMoveto(t *testing.T) {
 func TestClusterFirewallRules_DeleteRequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "delete", "1")
+	err := run(deps, &buf, "firewall", "rules", "delete", "1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }
@@ -151,10 +144,9 @@ func TestClusterFirewallRules_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "delete", "1", "--yes"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "delete", "1", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/cluster/firewall/rules/1", gotPath)
 }
@@ -170,10 +162,9 @@ func TestClusterFirewallGroup_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "group", "list"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "list"))
 	out := buf.String()
 	require.Contains(t, out, "GROUP")
 	require.Contains(t, out, "webservers")
@@ -190,10 +181,9 @@ func TestClusterFirewallGroup_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "group", "create", "pvecli-grp", "--comment", "isolated"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "create", "pvecli-grp", "--comment", "isolated"))
 	require.Equal(t, "pvecli-grp", gotForm.Get("group"))
 	require.Equal(t, "isolated", gotForm.Get("comment"))
 }
@@ -201,10 +191,9 @@ func TestClusterFirewallGroup_CreateForwardsFields(t *testing.T) {
 func TestClusterFirewallGroup_DeleteRequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "group", "delete", "pvecli-grp")
+	err := run(deps, &buf, "firewall", "group", "delete", "pvecli-grp")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }
@@ -218,10 +207,9 @@ func TestClusterFirewallGroup_Rules(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "group", "rules", "pvecli-grp"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "rules", "pvecli-grp"))
 	out := buf.String()
 	require.Contains(t, out, "POS")
 	require.Contains(t, out, "ACCEPT")
@@ -238,10 +226,9 @@ func TestClusterFirewallGroup_RuleAddForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "group", "rule-add", "pvecli-grp",
+	require.NoError(t, run(deps, &buf, "firewall", "group", "rule-add", "pvecli-grp",
 		"--type", "in", "--action", "ACCEPT", "--dport", "80"))
 	require.Equal(t, "in", gotForm.Get("type"))
 	require.Equal(t, "ACCEPT", gotForm.Get("action"))
@@ -251,10 +238,9 @@ func TestClusterFirewallGroup_RuleAddForwardsFields(t *testing.T) {
 func TestClusterFirewallGroup_RuleAddRequiresType(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "group", "rule-add", "pvecli-grp", "--action", "ACCEPT")
+	err := run(deps, &buf, "firewall", "group", "rule-add", "pvecli-grp", "--action", "ACCEPT")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type is required")
 }
@@ -268,10 +254,9 @@ func TestClusterFirewallGroup_RuleDeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "group", "rule-delete", "pvecli-grp", "0", "--yes"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "rule-delete", "pvecli-grp", "0", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/cluster/firewall/groups/pvecli-grp/0", gotPath)
 }
@@ -287,10 +272,9 @@ func TestClusterFirewallIpset_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "list"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "pvecli-ips")
@@ -305,10 +289,9 @@ func TestClusterFirewallIpset_ListMembers(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "list", "pvecli-ips"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list", "pvecli-ips"))
 	out := buf.String()
 	require.Contains(t, out, "CIDR")
 	require.Contains(t, out, "172.30.0.0/24")
@@ -324,10 +307,9 @@ func TestClusterFirewallIpset_Create(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "create", "pvecli-ips", "--comment", "isolated"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "create", "pvecli-ips", "--comment", "isolated"))
 	require.Equal(t, "pvecli-ips", gotForm.Get("name"))
 	require.Equal(t, "isolated", gotForm.Get("comment"))
 }
@@ -342,10 +324,9 @@ func TestClusterFirewallIpset_Add(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "add", "pvecli-ips", "172.30.0.5", "--nomatch"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "add", "pvecli-ips", "172.30.0.5", "--nomatch"))
 	require.Equal(t, "172.30.0.5", gotForm.Get("cidr"))
 	require.Equal(t, "1", gotForm.Get("nomatch"))
 }
@@ -353,10 +334,9 @@ func TestClusterFirewallIpset_Add(t *testing.T) {
 func TestClusterFirewallIpset_RemoveRequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "ipset", "remove", "pvecli-ips", "172.30.0.5")
+	err := run(deps, &buf, "firewall", "ipset", "remove", "pvecli-ips", "172.30.0.5")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }
@@ -372,10 +352,9 @@ func TestClusterFirewallAlias_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "alias", "list"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "list"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "pvecli-alias")
@@ -392,10 +371,9 @@ func TestClusterFirewallAlias_Create(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "alias", "create", "pvecli-alias", "172.30.0.0/24", "--comment", "lab"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "create", "pvecli-alias", "172.30.0.0/24", "--comment", "lab"))
 	require.Equal(t, "pvecli-alias", gotForm.Get("name"))
 	require.Equal(t, "172.30.0.0/24", gotForm.Get("cidr"))
 	require.Equal(t, "lab", gotForm.Get("comment"))
@@ -413,10 +391,9 @@ func TestClusterFirewallAlias_Update(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "alias", "update", "pvecli-alias", "172.30.1.0/24", "--rename", "pvecli-alias2"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "update", "pvecli-alias", "172.30.1.0/24", "--rename", "pvecli-alias2"))
 	require.Equal(t, "/api2/json/cluster/firewall/aliases/pvecli-alias", gotPath)
 	require.Equal(t, "172.30.1.0/24", gotForm.Get("cidr"))
 	require.Equal(t, "pvecli-alias2", gotForm.Get("rename"))
@@ -425,10 +402,9 @@ func TestClusterFirewallAlias_Update(t *testing.T) {
 func TestClusterFirewallAlias_DeleteRequiresYes(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "alias", "delete", "pvecli-alias")
+	err := run(deps, &buf, "firewall", "alias", "delete", "pvecli-alias")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }
@@ -444,10 +420,9 @@ func TestClusterFirewallOptions_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "options", "get"))
+	require.NoError(t, run(deps, &buf, "firewall", "options", "get"))
 	out := buf.String()
 	require.Contains(t, out, "DROP")
 	require.Contains(t, out, "ACCEPT")
@@ -456,10 +431,9 @@ func TestClusterFirewallOptions_Get(t *testing.T) {
 func TestClusterFirewallOptions_SetRequiresFlag(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "options", "set")
+	err := run(deps, &buf, "firewall", "options", "set")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no options to set")
 }
@@ -474,10 +448,9 @@ func TestClusterFirewallOptions_SetForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "options", "set",
+	require.NoError(t, run(deps, &buf, "firewall", "options", "set",
 		"--enable", "1", "--policy-in", "DROP", "--ebtables", "--policy-forward", "ACCEPT"))
 	require.Equal(t, "1", gotForm.Get("enable"))
 	require.Equal(t, "DROP", gotForm.Get("policy_in"))

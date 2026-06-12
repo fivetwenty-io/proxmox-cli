@@ -29,9 +29,9 @@ func TestAccess_OpenidList_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "openid", "list"))
+	require.NoError(t, run(deps, &buf, "openid", "list"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/openid", rec.path)
@@ -51,10 +51,10 @@ func TestAccess_OpenidList_Empty(t *testing.T) {
 		testhelper.WriteData(w, []any{})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
 	// Empty list must succeed — headers still rendered.
-	require.NoError(t, run(&buf, "openid", "list"))
+	require.NoError(t, run(deps, &buf, "openid", "list"))
 	require.Contains(t, buf.String(), "REALM")
 }
 
@@ -64,9 +64,9 @@ func TestAccess_OpenidList_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "openid", "list")
+	err := run(deps, &buf, "openid", "list")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "list openid realms")
 }

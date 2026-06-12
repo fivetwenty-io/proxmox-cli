@@ -30,10 +30,10 @@ func TestQemuMetrics_Success(t *testing.T) {
 			},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "100", "--timeframe", "hour"))
+	require.NoError(t, run(deps, &buf, "metrics", "100", "--timeframe", "hour"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/rrddata", gotPath)
@@ -49,10 +49,10 @@ func TestQemuMetrics_WithCF(t *testing.T) {
 		gotQuery = r.URL.RawQuery
 		testhelper.WriteData(w, []any{})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "100", "--timeframe", "day", "--cf", "MAX"))
+	require.NoError(t, run(deps, &buf, "metrics", "100", "--timeframe", "day", "--cf", "MAX"))
 	require.Contains(t, gotQuery, "cf=MAX")
 }
 
@@ -63,19 +63,19 @@ func TestQemuMetrics_OmitCFWhenUnset(t *testing.T) {
 		gotQuery = r.URL.RawQuery
 		testhelper.WriteData(w, []any{})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "metrics", "100", "--timeframe", "hour"))
+	require.NoError(t, run(deps, &buf, "metrics", "100", "--timeframe", "hour"))
 	require.NotContains(t, gotQuery, "cf=")
 }
 
 func TestQemuMetrics_RequiresTimeframe(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "metrics", "100")
+	err := run(deps, &buf, "metrics", "100")
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "timeframe")
 }
@@ -85,20 +85,20 @@ func TestQemuMetrics_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/rrddata", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "metrics", "100", "--timeframe", "hour")
+	err := run(deps, &buf, "metrics", "100", "--timeframe", "hour")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "metrics for VM 100")
 }
 
 func TestQemuMetrics_RequiresNode(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "", false)
+	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "metrics", "100", "--timeframe", "hour")
+	err := run(deps, &buf, "metrics", "100", "--timeframe", "hour")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no node")
 }
@@ -123,10 +123,10 @@ func TestQemuRrd_Success(t *testing.T) {
 			"filename": "/var/lib/rrdcached/db/pve2-node/100/cpu.png",
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "rrd", "100", "--ds", "cpu", "--timeframe", "hour"))
+	require.NoError(t, run(deps, &buf, "rrd", "100", "--ds", "cpu", "--timeframe", "hour"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/rrd", gotPath)
@@ -142,29 +142,29 @@ func TestQemuRrd_WithCF(t *testing.T) {
 		gotQuery = r.URL.RawQuery
 		testhelper.WriteData(w, map[string]any{"filename": "/tmp/x.png"})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "rrd", "100", "--ds", "cpu", "--timeframe", "day", "--cf", "AVERAGE"))
+	require.NoError(t, run(deps, &buf, "rrd", "100", "--ds", "cpu", "--timeframe", "day", "--cf", "AVERAGE"))
 	require.Contains(t, gotQuery, "cf=AVERAGE")
 }
 
 func TestQemuRrd_RequiresDs(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "rrd", "100", "--timeframe", "hour")
+	err := run(deps, &buf, "rrd", "100", "--timeframe", "hour")
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "ds")
 }
 
 func TestQemuRrd_RequiresTimeframe(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "rrd", "100", "--ds", "cpu")
+	err := run(deps, &buf, "rrd", "100", "--ds", "cpu")
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "timeframe")
 }
@@ -174,10 +174,10 @@ func TestQemuRrd_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/rrd", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "rrd", "100", "--ds", "cpu", "--timeframe", "hour")
+	err := run(deps, &buf, "rrd", "100", "--ds", "cpu", "--timeframe", "hour")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rrd for VM 100")
 }

@@ -2,6 +2,7 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -11,7 +12,6 @@ import (
 	"testing"
 
 	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
@@ -19,15 +19,6 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
-
-// withDeps overrides the package-local deps lookup so tests can inject a Deps
-// built from the fake server. The returned function restores the previous
-// lookup and must be deferred.
-func withDeps(deps *cli.Deps) func() {
-	prev := resolveDeps
-	resolveDeps = func(_ *cobra.Command) *cli.Deps { return deps }
-	return func() { resolveDeps = prev }
-}
 
 // newDeps constructs a Deps wired to the fake server with the given format. It
 // splits the fake's host:port so the underlying client does not append a default
@@ -54,9 +45,11 @@ func newDeps(t *testing.T, f *testhelper.FakePVE, format output.Format) *cli.Dep
 	return &cli.Deps{API: ac, Out: output.New(), Format: format}
 }
 
-// run builds the access group command, captures output in buf, and executes it.
-func run(buf *bytes.Buffer, args ...string) error {
+// run builds the access group command, injects deps via context, captures
+// output in buf, and executes it.
+func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 	cmd := newGroupCmd(&cli.Deps{})
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetArgs(args)
@@ -65,8 +58,9 @@ func run(buf *bytes.Buffer, args ...string) error {
 
 // runWithStdin behaves like run but feeds stdin so commands that prompt (such
 // as `access password set` without --password) can read interactive input.
-func runWithStdin(buf *bytes.Buffer, stdin string, args ...string) error {
+func runWithStdin(deps *cli.Deps, buf *bytes.Buffer, stdin string, args ...string) error {
 	cmd := newGroupCmd(&cli.Deps{})
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetIn(strings.NewReader(stdin))
@@ -106,7 +100,8 @@ func captureBody(r *http.Request) map[string]any {
 // ---------------------------------------------------------------------------
 
 func TestAccess_GroupRegistered(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	found := false
@@ -136,9 +131,9 @@ func TestAccess_UserList_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "list"))
+	require.NoError(t, run(deps, &buf, "user", "list"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/users", rec.path)
@@ -157,9 +152,9 @@ func TestAccess_UserList_EnabledFilterFlag(t *testing.T) {
 		testhelper.WriteData(w, []any{})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "list", "--enabled"))
+	require.NoError(t, run(deps, &buf, "user", "list", "--enabled"))
 	require.Contains(t, query, "enabled=1")
 }
 
@@ -169,9 +164,9 @@ func TestAccess_UserList_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "user", "list"))
+	require.Error(t, run(deps, &buf, "user", "list"))
 }
 
 func TestAccess_UserGet_Single(t *testing.T) {
@@ -181,9 +176,9 @@ func TestAccess_UserGet_Single(t *testing.T) {
 		"groups": []string{"admins", "ops"},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "get", "root@pam"))
+	require.NoError(t, run(deps, &buf, "user", "get", "root@pam"))
 
 	out := buf.String()
 	require.Contains(t, out, "root@pam")
@@ -196,9 +191,9 @@ func TestAccess_UserGet_NotFound(t *testing.T) {
 		testhelper.WriteError(w, http.StatusNotFound, "no such user")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "user", "get", "ghost@pam"))
+	require.Error(t, run(deps, &buf, "user", "get", "ghost@pam"))
 }
 
 func TestAccess_UserCreate(t *testing.T) {
@@ -209,9 +204,9 @@ func TestAccess_UserCreate(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "create", "alice@pve",
+	require.NoError(t, run(deps, &buf, "user", "create", "alice@pve",
 		"--email", "a@x.io", "--comment", "qa",
 		"--groups", "admins,ops", "--expire", "3600", "--enable=false"))
 
@@ -233,9 +228,9 @@ func TestAccess_UserSet(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "set", "alice@pve", "--comment", "updated"))
+	require.NoError(t, run(deps, &buf, "user", "set", "alice@pve", "--comment", "updated"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "updated", rec.body["comment"])
@@ -250,9 +245,9 @@ func TestAccess_UserDelete(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "delete", "alice@pve", "--yes"))
+	require.NoError(t, run(deps, &buf, "user", "delete", "alice@pve", "--yes"))
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "/api2/json/access/users/alice@pve", rec.path)
@@ -267,9 +262,9 @@ func TestAccess_UserDelete_RequiresConfirmation(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "user", "delete", "alice@pve"))
+	require.Error(t, run(deps, &buf, "user", "delete", "alice@pve"))
 	require.False(t, called, "delete must not call the API without --yes")
 }
 
@@ -283,9 +278,9 @@ func TestAccess_TokenList(t *testing.T) {
 		map[string]any{"tokenid": "ci", "expire": 0, "privsep": 1, "comment": "ci token"},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "token", "list", "root@pam"))
+	require.NoError(t, run(deps, &buf, "user", "token", "list", "root@pam"))
 
 	out := buf.String()
 	require.Contains(t, out, "TOKENID")
@@ -299,9 +294,9 @@ func TestAccess_TokenList_Error(t *testing.T) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "user", "token", "list", "root@pam"))
+	require.Error(t, run(deps, &buf, "user", "token", "list", "root@pam"))
 }
 
 func TestAccess_TokenGet(t *testing.T) {
@@ -310,9 +305,9 @@ func TestAccess_TokenGet(t *testing.T) {
 		"expire": 0, "privsep": true, "comment": "ci token",
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "token", "get", "root@pam", "ci"))
+	require.NoError(t, run(deps, &buf, "user", "token", "get", "root@pam", "ci"))
 	require.Contains(t, buf.String(), "ci token")
 }
 
@@ -328,9 +323,9 @@ func TestAccess_TokenCreate_PrintsValue(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "token", "create", "root@pam", "ci",
+	require.NoError(t, run(deps, &buf, "user", "token", "create", "root@pam", "ci",
 		"--comment", "ci token", "--expire", "3600", "--privsep"))
 
 	require.Equal(t, http.MethodPost, rec.method)
@@ -357,9 +352,9 @@ func TestAccess_TokenCreate_PrivsepDisabled(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "token", "create", "root@pam", "ci", "--privsep=false"))
+	require.NoError(t, run(deps, &buf, "user", "token", "create", "root@pam", "ci", "--privsep=false"))
 
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, "0", rec.body["privsep"])
@@ -373,9 +368,9 @@ func TestAccess_TokenSet(t *testing.T) {
 		testhelper.WriteData(w, map[string]any{"comment": "rotated"})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "token", "set", "root@pam", "ci", "--comment", "rotated"))
+	require.NoError(t, run(deps, &buf, "user", "token", "set", "root@pam", "ci", "--comment", "rotated"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "rotated", rec.body["comment"])
@@ -390,9 +385,9 @@ func TestAccess_TokenDelete(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "token", "delete", "root@pam", "ci", "--yes"))
+	require.NoError(t, run(deps, &buf, "user", "token", "delete", "root@pam", "ci", "--yes"))
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Contains(t, buf.String(), "Token 'ci' deleted.")
@@ -400,9 +395,9 @@ func TestAccess_TokenDelete(t *testing.T) {
 
 func TestAccess_TokenDelete_RequiresConfirmation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "user", "token", "delete", "root@pam", "ci"))
+	require.Error(t, run(deps, &buf, "user", "token", "delete", "root@pam", "ci"))
 }
 
 // ---------------------------------------------------------------------------
@@ -415,9 +410,9 @@ func TestAccess_GroupList(t *testing.T) {
 		map[string]any{"groupid": "admins", "comment": "operators", "users": "root@pam"},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "group", "list"))
+	require.NoError(t, run(deps, &buf, "group", "list"))
 
 	out := buf.String()
 	require.Contains(t, out, "GROUPID")
@@ -431,9 +426,9 @@ func TestAccess_GroupGet(t *testing.T) {
 		"comment": "operators", "members": []string{"root@pam", "alice@pve"},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "group", "get", "admins"))
+	require.NoError(t, run(deps, &buf, "group", "get", "admins"))
 	require.Contains(t, buf.String(), "root@pam,alice@pve")
 }
 
@@ -443,9 +438,9 @@ func TestAccess_GroupGet_Error(t *testing.T) {
 		testhelper.WriteError(w, http.StatusNotFound, "no group")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "group", "get", "missing"))
+	require.Error(t, run(deps, &buf, "group", "get", "missing"))
 }
 
 func TestAccess_GroupCreate(t *testing.T) {
@@ -456,9 +451,9 @@ func TestAccess_GroupCreate(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "group", "create", "ops", "--comment", "operations"))
+	require.NoError(t, run(deps, &buf, "group", "create", "ops", "--comment", "operations"))
 
 	require.Equal(t, "ops", rec.body["groupid"])
 	require.Equal(t, "operations", rec.body["comment"])
@@ -473,9 +468,9 @@ func TestAccess_GroupSet(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "group", "set", "ops", "--comment", "new"))
+	require.NoError(t, run(deps, &buf, "group", "set", "ops", "--comment", "new"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "new", rec.body["comment"])
@@ -490,9 +485,9 @@ func TestAccess_GroupDelete(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "group", "delete", "ops", "--yes"))
+	require.NoError(t, run(deps, &buf, "group", "delete", "ops", "--yes"))
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Contains(t, buf.String(), "Group 'ops' deleted.")
@@ -500,9 +495,9 @@ func TestAccess_GroupDelete(t *testing.T) {
 
 func TestAccess_GroupDelete_RequiresConfirmation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "group", "delete", "ops"))
+	require.Error(t, run(deps, &buf, "group", "delete", "ops"))
 }
 
 // ---------------------------------------------------------------------------
@@ -515,9 +510,9 @@ func TestAccess_RoleList(t *testing.T) {
 		map[string]any{"roleid": "Administrator", "special": 1, "privs": "VM.Audit,VM.Console"},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "role", "list"))
+	require.NoError(t, run(deps, &buf, "role", "list"))
 
 	out := buf.String()
 	require.Contains(t, out, "ROLEID")
@@ -533,9 +528,9 @@ func TestAccess_RoleGet(t *testing.T) {
 		"VM.Console":      false,
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "role", "get", "PVEAuditor"))
+	require.NoError(t, run(deps, &buf, "role", "get", "PVEAuditor"))
 
 	out := buf.String()
 	require.Contains(t, out, "VM.Audit")
@@ -549,9 +544,9 @@ func TestAccess_RoleGet_Error(t *testing.T) {
 		testhelper.WriteError(w, http.StatusNotFound, "no role")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "role", "get", "Nope"))
+	require.Error(t, run(deps, &buf, "role", "get", "Nope"))
 }
 
 // ---------------------------------------------------------------------------
@@ -569,9 +564,9 @@ func TestAccess_ACLList(t *testing.T) {
 		},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acl", "list"))
+	require.NoError(t, run(deps, &buf, "acl", "list"))
 
 	out := buf.String()
 	require.Contains(t, out, "PATH")
@@ -586,9 +581,9 @@ func TestAccess_ACLList_PathFilter(t *testing.T) {
 		map[string]any{"path": "/vms", "type": "group", "ugid": "ops", "roleid": "PVEVMUser", "propagate": 0},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acl", "list", "--path", "/vms", "--exact"))
+	require.NoError(t, run(deps, &buf, "acl", "list", "--path", "/vms", "--exact"))
 
 	out := buf.String()
 	require.Contains(t, out, "PVEVMUser")
@@ -603,9 +598,9 @@ func TestAccess_ACLSet(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "acl", "set", "--path", "/vms", "--roles", "PVEVMUser", "--users", "alice@pve"))
+	require.NoError(t, run(deps, &buf, "acl", "set", "--path", "/vms", "--roles", "PVEVMUser", "--users", "alice@pve"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "/vms", rec.body["path"])
@@ -616,16 +611,16 @@ func TestAccess_ACLSet(t *testing.T) {
 
 func TestAccess_ACLSet_RequiresPath(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "acl", "set", "--roles", "PVEVMUser"))
+	require.Error(t, run(deps, &buf, "acl", "set", "--roles", "PVEVMUser"))
 }
 
 func TestAccess_ACLSet_RequiresRoles(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "acl", "set", "--path", "/vms"))
+	require.Error(t, run(deps, &buf, "acl", "set", "--path", "/vms"))
 }
 
 // ---------------------------------------------------------------------------
@@ -639,9 +634,9 @@ func TestAccess_Permissions(t *testing.T) {
 		"/vms/100": map[string]any{"VM.Console": 1},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "permissions"))
+	require.NoError(t, run(deps, &buf, "permissions"))
 
 	out := buf.String()
 	require.Contains(t, out, "PATH")
@@ -657,9 +652,9 @@ func TestAccess_Permissions_UseridFlag(t *testing.T) {
 		testhelper.WriteData(w, map[string]any{})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "permissions", "--userid", "alice@pve"))
+	require.NoError(t, run(deps, &buf, "permissions", "--userid", "alice@pve"))
 	require.Contains(t, query, "userid=alice%40pve")
 }
 
@@ -669,9 +664,9 @@ func TestAccess_Permissions_Error(t *testing.T) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "permissions"))
+	require.Error(t, run(deps, &buf, "permissions"))
 }
 
 // ---------------------------------------------------------------------------
@@ -686,9 +681,9 @@ func TestAccess_PasswordSet(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "password", "set", "--userid", "alice@pve", "--password", "s3cret"))
+	require.NoError(t, run(deps, &buf, "password", "set", "--userid", "alice@pve", "--password", "s3cret"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "alice@pve", rec.body["userid"])
@@ -698,9 +693,9 @@ func TestAccess_PasswordSet(t *testing.T) {
 
 func TestAccess_PasswordSet_RequiresUserid(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "password", "set", "--password", "s3cret"))
+	require.Error(t, run(deps, &buf, "password", "set", "--password", "s3cret"))
 }
 
 // TestAccess_PasswordSet_PromptsForPassword verifies the spec contract that
@@ -714,9 +709,9 @@ func TestAccess_PasswordSet_PromptsForPassword(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, runWithStdin(&buf, "prompted-pass\n", "password", "set", "--userid", "alice@pve"))
+	require.NoError(t, runWithStdin(deps, &buf, "prompted-pass\n", "password", "set", "--userid", "alice@pve"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "alice@pve", rec.body["userid"])
@@ -734,9 +729,9 @@ func TestAccess_PasswordSet_EmptyPromptRejected(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.Error(t, runWithStdin(&buf, "\n", "password", "set", "--userid", "alice@pve"))
+	require.Error(t, runWithStdin(deps, &buf, "\n", "password", "set", "--userid", "alice@pve"))
 	require.False(t, called, "empty prompted password must not reach the API")
 }
 
@@ -750,8 +745,8 @@ func TestAccess_UserList_JSON(t *testing.T) {
 		map[string]any{"userid": "root@pam", "enable": 1},
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatJSON))()
+	deps := newDeps(t, f, output.FormatJSON)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "user", "list"))
+	require.NoError(t, run(deps, &buf, "user", "list"))
 	require.Contains(t, buf.String(), `"userid": "root@pam"`)
 }

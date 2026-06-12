@@ -20,10 +20,9 @@ func TestNotifications_Targets(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "targets"))
+	require.NoError(t, run(deps, &buf, "notifications", "targets"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "ORIGIN")
@@ -37,10 +36,9 @@ func TestGotify_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "gotify", "list"))
+	require.NoError(t, run(deps, &buf, "notifications", "gotify", "list"))
 	require.Contains(t, buf.String(), "g1")
 }
 
@@ -53,10 +51,9 @@ func TestGotify_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "gotify", "get", "g1"))
+	require.NoError(t, run(deps, &buf, "notifications", "gotify", "get", "g1"))
 	require.Equal(t, "/api2/json/cluster/notifications/endpoints/gotify/g1", gotPath)
 	require.Contains(t, buf.String(), "gotify.example")
 }
@@ -74,10 +71,9 @@ func TestGotify_CreateTokenNotEchoed(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "gotify", "create", "g1",
+	require.NoError(t, run(deps, &buf, "notifications", "gotify", "create", "g1",
 		"--server", "https://gotify.example", "--token", secret, "--comment", "test"))
 	require.Equal(t, "g1", gotForm.Get("name"))
 	require.Equal(t, secret, gotForm.Get("token"), "token must reach the API")
@@ -93,10 +89,9 @@ func TestGotify_SetRequiresFlag(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "notifications", "gotify", "set", "g1")
+	err := run(deps, &buf, "notifications", "gotify", "set", "g1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no changes to set")
 	require.False(t, called)
@@ -111,10 +106,9 @@ func TestGotify_DeleteRequiresYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "notifications", "gotify", "delete", "g1")
+	err := run(deps, &buf, "notifications", "gotify", "delete", "g1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called)
@@ -129,10 +123,9 @@ func TestGotify_DeleteWithYes(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "gotify", "delete", "g1", "--yes"))
+	require.NoError(t, run(deps, &buf, "notifications", "gotify", "delete", "g1", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -150,10 +143,9 @@ func TestSMTP_CreatePasswordNotEchoed(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "smtp", "create", "s1",
+	require.NoError(t, run(deps, &buf, "notifications", "smtp", "create", "s1",
 		"--server", "smtp.example", "--from-address", "noc@example.com",
 		"--username", "noc", "--password", secret, "--mailto", "root@example.com"))
 	require.Equal(t, "smtp.example", gotForm.Get("server"))
@@ -175,10 +167,9 @@ func TestWebhook_CreateSecretNotEchoed(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "webhook", "create", "w1",
+	require.NoError(t, run(deps, &buf, "notifications", "webhook", "create", "w1",
 		"--url", "https://hook.example", "--method", "post", "--secret", secret))
 	require.Equal(t, "https://hook.example", gotForm.Get("url"))
 	require.Equal(t, secret, gotForm.Get("secret"), "secret must reach the API")
@@ -196,10 +187,9 @@ func TestSendmail_CreateForwardsArrays(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "sendmail", "create", "m1",
+	require.NoError(t, run(deps, &buf, "notifications", "sendmail", "create", "m1",
 		"--mailto", "a@example.com", "--mailto", "b@example.com", "--comment", "ops"))
 	require.Equal(t, "m1", gotForm.Get("name"))
 	require.Contains(t, gotForm["mailto"], "a@example.com")
@@ -218,10 +208,9 @@ func TestMatcher_CreateForwardsFields(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "matcher", "create", "match1",
+	require.NoError(t, run(deps, &buf, "notifications", "matcher", "create", "match1",
 		"--match-severity", "warning", "--match-severity", "error",
 		"--notify-target", "mail-to-root", "--mode", "any"))
 	require.Equal(t, "match1", gotForm.Get("name"))
@@ -240,10 +229,9 @@ func TestMatcher_SetRequiresFlag(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "notifications", "matcher", "set", "match1")
+	err := run(deps, &buf, "notifications", "matcher", "set", "match1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no changes to set")
 	require.False(t, called)
@@ -263,10 +251,9 @@ func TestSMTP_SetForwardsChangedOmitsUnset(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "smtp", "set", "s1", "--server", "smtp2.example", "--disable"))
+	require.NoError(t, run(deps, &buf, "notifications", "smtp", "set", "s1", "--server", "smtp2.example", "--disable"))
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "smtp2.example", gotForm.Get("server"))
 	require.Equal(t, "1", gotForm.Get("disable"))
@@ -283,10 +270,9 @@ func TestSendmail_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "sendmail", "set", "m1", "--author", "ops", "--comment", "c"))
+	require.NoError(t, run(deps, &buf, "notifications", "sendmail", "set", "m1", "--author", "ops", "--comment", "c"))
 	require.Equal(t, "ops", gotForm.Get("author"))
 	require.Equal(t, "c", gotForm.Get("comment"))
 	require.NotContains(t, gotForm, "from-address")
@@ -302,10 +288,9 @@ func TestWebhook_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "webhook", "set", "w1", "--method", "put", "--disable"))
+	require.NoError(t, run(deps, &buf, "notifications", "webhook", "set", "w1", "--method", "put", "--disable"))
 	require.Equal(t, "put", gotForm.Get("method"))
 	require.Equal(t, "1", gotForm.Get("disable"))
 	require.NotContains(t, gotForm, "url")
@@ -321,10 +306,9 @@ func TestMatcher_SetForwardsChanged(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "matcher", "set", "match1",
+	require.NoError(t, run(deps, &buf, "notifications", "matcher", "set", "match1",
 		"--mode", "all", "--notify-target", "mail-to-root"))
 	require.Equal(t, "all", gotForm.Get("mode"))
 	require.Equal(t, "mail-to-root", gotForm.Get("target"))
@@ -346,10 +330,9 @@ func TestSMTP_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "smtp", "get", "s1"))
+	require.NoError(t, run(deps, &buf, "notifications", "smtp", "get", "s1"))
 	require.Equal(t, "/api2/json/cluster/notifications/endpoints/smtp/s1", gotPath)
 	out := buf.String()
 	require.Contains(t, out, "smtp.example")
@@ -370,10 +353,9 @@ func TestWebhook_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "webhook", "get", "w1"))
+	require.NoError(t, run(deps, &buf, "notifications", "webhook", "get", "w1"))
 	require.Equal(t, "/api2/json/cluster/notifications/endpoints/webhook/w1", gotPath)
 	require.Contains(t, buf.String(), "hook.example")
 }
@@ -389,10 +371,9 @@ func TestMatcher_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "notifications", "matcher", "get", "match1"))
+	require.NoError(t, run(deps, &buf, "notifications", "matcher", "get", "match1"))
 	require.Equal(t, "/api2/json/cluster/notifications/matchers/match1", gotPath)
 	require.Contains(t, buf.String(), "mail-to-root")
 }

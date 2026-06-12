@@ -12,11 +12,6 @@ func init() {
 	cli.RegisterGroup(newGroupCmd)
 }
 
-// getDeps resolves the live *cli.Deps for a command. It is a package-level
-// variable so tests can substitute a Deps without a full root wiring; production
-// uses cli.GetDeps which reads the value stashed by the root PersistentPreRunE.
-var getDeps = cli.GetDeps
-
 // newGroupCmd builds the `pve lxc` command and all of its sub-commands.
 func newGroupCmd(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{

@@ -113,7 +113,7 @@ func newAgentCmd() *cobra.Command {
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: append(append([]string{}, agentQueryCommands...), agentMutateCommands...),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

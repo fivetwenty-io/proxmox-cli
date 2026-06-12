@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
 // newRemoteMigrateCmd builds `pve qemu remote-migrate <vmid> --target-endpoint EP
@@ -37,7 +38,7 @@ func newRemoteMigrateCmd() *cobra.Command {
 			"Pass --yes to confirm this irreversible cross-cluster operation.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

@@ -21,13 +21,15 @@ func TestInit_NoLog(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		NoLog:   true,
 		LogDir:  dir,
 		Command: "test",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, logger)
+	require.NotNil(t, closer, "closer must be non-nil even when NoLog=true")
+	require.NoError(t, closer.Close(), "no-op closer must not return an error")
 
 	// Using the logger must not panic.
 	logger.Info("discard message", slog.String("k", "v"))
@@ -42,12 +44,14 @@ func TestInit_CreatesFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "qemu",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, logger)
+	require.NotNil(t, closer)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
@@ -66,11 +70,12 @@ func TestInit_FilePermissions(t *testing.T) {
 	// Use a sub-directory that Init must create.
 	dir := filepath.Join(base, "nested")
 
-	_, err := logx.Init(logx.Config{
+	_, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "perm-test",
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	dirInfo, err := os.Stat(dir)
 	require.NoError(t, err)
@@ -93,7 +98,7 @@ func TestInit_ValidJSONL(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:     dir,
 		Command:    "node",
 		Subcommand: "status",
@@ -102,6 +107,8 @@ func TestInit_ValidJSONL(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, logger)
+	require.NotNil(t, closer)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	logger.Info("test message", slog.String("extra", "value"))
 
@@ -153,12 +160,13 @@ func TestInit_Debug(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "debug-test",
 		Debug:   true,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	logger.Debug("debug entry")
 
@@ -177,12 +185,13 @@ func TestInit_VerboseLevel(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "verbose-test",
 		Verbose: true,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	logger.Debug("verbose debug entry")
 
@@ -202,11 +211,12 @@ func TestInit_InfoLevelSuppressesDebug(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "info-test",
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	logger.Debug("should be suppressed")
 	logger.Info("should appear")
@@ -234,12 +244,13 @@ func TestInit_LevelStringDebug(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 
-			logger, err := logx.Init(logx.Config{
+			logger, closer, err := logx.Init(logx.Config{
 				LogDir:  dir,
 				Command: "level-test",
 				Level:   lvl,
 			})
 			require.NoError(t, err)
+			t.Cleanup(func() { _ = closer.Close() })
 
 			logger.Debug("level-controlled debug")
 
@@ -277,12 +288,13 @@ func TestLogPath(t *testing.T) {
 			dir := t.TempDir()
 
 			before := time.Now().Truncate(time.Second)
-			_, err := logx.Init(logx.Config{
+			_, closer, err := logx.Init(logx.Config{
 				LogDir:     dir,
 				Command:    tc.command,
 				Subcommand: tc.subcommand,
 			})
 			require.NoError(t, err)
+			t.Cleanup(func() { _ = closer.Close() })
 
 			entries, err := os.ReadDir(dir)
 			require.NoError(t, err)
@@ -313,11 +325,12 @@ func TestInit_BaseAttrsPartial(t *testing.T) {
 	dir := t.TempDir()
 
 	// Only Command set; Node and VMID empty.
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "storage",
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
 	logger.Info("partial attrs")
 
 	entries, err := os.ReadDir(dir)
@@ -371,12 +384,13 @@ func TestInit_MultipleEntries(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	logger, err := logx.Init(logx.Config{
+	logger, closer, err := logx.Init(logx.Config{
 		LogDir:  dir,
 		Command: "multi",
 		Debug:   true,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
 
 	messages := []string{"first", "second", "third"}
 	for _, m := range messages {
@@ -398,4 +412,51 @@ func TestInit_MultipleEntries(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(line), &record))
 		require.Equal(t, messages[i], record["msg"])
 	}
+}
+
+// TestInit_CloserNonNilAndReleasesFile verifies that:
+//   - the closer returned by Init is never nil (file and no-file paths),
+//   - Close() on a file closer returns nil and releases the fd so the file
+//     can be renamed/deleted on all platforms, and
+//   - Close() on a no-op closer returns nil.
+func TestInit_CloserNonNilAndReleasesFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("noop closer is non-nil and Close returns nil", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		_, closer, err := logx.Init(logx.Config{
+			NoLog:   true,
+			LogDir:  dir,
+			Command: "closer-noop",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, closer, "closer must be non-nil when NoLog=true")
+		require.NoError(t, closer.Close(), "noop closer.Close() must return nil")
+	})
+
+	t.Run("file closer is non-nil and Close releases fd", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		_, closer, err := logx.Init(logx.Config{
+			LogDir:  dir,
+			Command: "closer-file",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, closer, "closer must be non-nil when a log file is opened")
+
+		// Close must succeed.
+		require.NoError(t, closer.Close(), "file closer.Close() must return nil")
+
+		// After Close the fd is released; we can delete the file on all platforms.
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		require.NoError(t,
+			os.Remove(filepath.Join(dir, entries[0].Name())),
+			"file must be removable after closer.Close()",
+		)
+	})
 }

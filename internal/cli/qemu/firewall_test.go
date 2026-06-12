@@ -23,10 +23,10 @@ func TestQemuFirewallRulesList_Table(t *testing.T) {
 			map[string]any{"pos": 1, "type": "in", "action": "DROP"},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "list", "100"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "list", "100"))
 	out := buf.String()
 	require.Contains(t, out, "POS")
 	require.Contains(t, out, "ACCEPT")
@@ -42,10 +42,10 @@ func TestQemuFirewallRulesGet_Single(t *testing.T) {
 		// the raw-fetch path must tolerate that where the typed client cannot.
 		testhelper.WriteData(w, map[string]any{"pos": "0", "type": "in", "action": "ACCEPT", "dport": "22"})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "get", "100", "0"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "get", "100", "0"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/rules/0", gotPath)
 	require.Contains(t, buf.String(), "ACCEPT")
 }
@@ -58,10 +58,10 @@ func TestQemuFirewallRulesCreate_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "create", "100",
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "create", "100",
 		"--type", "in", "--action", "ACCEPT", "--proto", "tcp",
 		"--dport", "22", "--source", "172.30.0.0/24", "--comment", "ssh", "--enable", "1"))
 
@@ -79,20 +79,20 @@ func TestQemuFirewallRulesCreate_FlagParams(t *testing.T) {
 
 func TestQemuFirewallRulesCreate_RequiresType(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "create", "100", "--action", "ACCEPT")
+	err := run(deps, &buf, "firewall", "rules", "create", "100", "--action", "ACCEPT")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type is required")
 }
 
 func TestQemuFirewallRulesCreate_RequiresAction(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "create", "100", "--type", "in")
+	err := run(deps, &buf, "firewall", "rules", "create", "100", "--type", "in")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--action is required")
 }
@@ -105,10 +105,10 @@ func TestQemuFirewallRulesUpdate_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "update", "100", "2",
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "update", "100", "2",
 		"--action", "DROP", "--moveto", "0", "--delete", "comment"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -127,10 +127,10 @@ func TestQemuFirewallRulesDelete_Confirm(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "rules", "delete", "100", "0", "--yes"))
+	require.NoError(t, run(deps, &buf, "firewall", "rules", "delete", "100", "0", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/rules/0", gotPath)
 	require.Contains(t, buf.String(), "deleted")
@@ -138,10 +138,10 @@ func TestQemuFirewallRulesDelete_Confirm(t *testing.T) {
 
 func TestQemuFirewallRulesDelete_RequiresConfirmation(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "delete", "100", "0")
+	err := run(deps, &buf, "firewall", "rules", "delete", "100", "0")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "confirm")
 }
@@ -151,10 +151,10 @@ func TestQemuFirewallRulesList_ServerError(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/firewall/rules", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "rules", "list", "100")
+	err := run(deps, &buf, "firewall", "rules", "list", "100")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "list firewall rules")
 }
@@ -168,10 +168,10 @@ func TestQemuFirewallIpsetList_Table(t *testing.T) {
 			map[string]any{"name": "trusted", "comment": "trusted nets"},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "list", "100"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list", "100"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "trusted")
@@ -186,10 +186,10 @@ func TestQemuFirewallIpsetListMembers_Table(t *testing.T) {
 			map[string]any{"cidr": "172.30.0.0/24", "nomatch": false, "comment": "lab"},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "list", "100", "trusted"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list", "100", "trusted"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/ipset/trusted", gotPath)
 	out := buf.String()
 	require.Contains(t, out, "CIDR")
@@ -204,10 +204,10 @@ func TestQemuFirewallIpsetCreate_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "create", "100", "trusted", "--comment", "lab nets"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "create", "100", "trusted", "--comment", "lab nets"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	form := parseForm(t, gotQuery+"&"+body)
 	require.Equal(t, "trusted", form.Get("name"))
@@ -223,10 +223,10 @@ func TestQemuFirewallIpsetAdd_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "add", "100", "trusted", "172.30.0.0/24", "--nomatch"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "add", "100", "trusted", "172.30.0.0/24", "--nomatch"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/ipset/trusted", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
@@ -242,10 +242,10 @@ func TestQemuFirewallIpsetRemove_Confirm(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "remove", "100", "trusted", "172.30.0.0/24", "--yes"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "remove", "100", "trusted", "172.30.0.0/24", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/ipset/trusted/172.30.0.0/24", gotPath)
 	require.Contains(t, buf.String(), "removed from IP set")
@@ -253,10 +253,10 @@ func TestQemuFirewallIpsetRemove_Confirm(t *testing.T) {
 
 func TestQemuFirewallIpsetRemove_RequiresConfirmation(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "ipset", "remove", "100", "trusted", "172.30.0.0/24")
+	err := run(deps, &buf, "firewall", "ipset", "remove", "100", "trusted", "172.30.0.0/24")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "confirm")
 }
@@ -269,10 +269,10 @@ func TestQemuFirewallIpsetDelete_Force(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "ipset", "delete", "100", "trusted", "--yes", "--force"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "delete", "100", "trusted", "--yes", "--force"))
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "1", parseForm(t, gotQuery+"&"+body).Get("force"))
 	require.Contains(t, buf.String(), "deleted")
@@ -287,10 +287,10 @@ func TestQemuFirewallAliasList_Table(t *testing.T) {
 			map[string]any{"name": "gw", "cidr": "172.30.0.1", "comment": "gateway"},
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "alias", "list", "100"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "list", "100"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "gw")
@@ -305,10 +305,10 @@ func TestQemuFirewallAliasCreate_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "alias", "create", "100", "gw", "172.30.0.1", "--comment", "gateway"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "create", "100", "gw", "172.30.0.1", "--comment", "gateway"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	form := parseForm(t, gotQuery+"&"+body)
 	require.Equal(t, "gw", form.Get("name"))
@@ -325,10 +325,10 @@ func TestQemuFirewallAliasUpdate_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "alias", "update", "100", "gw", "172.30.0.254", "--rename", "gw2"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "update", "100", "gw", "172.30.0.254", "--rename", "gw2"))
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/aliases/gw", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
@@ -339,10 +339,10 @@ func TestQemuFirewallAliasUpdate_FlagParams(t *testing.T) {
 
 func TestQemuFirewallAliasDelete_RequiresConfirmation(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "alias", "delete", "100", "gw")
+	err := run(deps, &buf, "firewall", "alias", "delete", "100", "gw")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "confirm")
 }
@@ -358,10 +358,10 @@ func TestQemuFirewallOptionsGet_Single(t *testing.T) {
 			"enable": 1, "policy_in": "DROP", "policy_out": "ACCEPT", "log_level_in": "info",
 		})
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "options", "get", "100"))
+	require.NoError(t, run(deps, &buf, "firewall", "options", "get", "100"))
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/options", gotPath)
 	out := buf.String()
 	require.Contains(t, out, "policy_in")
@@ -376,10 +376,10 @@ func TestQemuFirewallOptionsSet_FlagParams(t *testing.T) {
 		body = readBody(t, r)
 		testhelper.WriteData(w, nil)
 	})
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "firewall", "options", "set", "100",
+	require.NoError(t, run(deps, &buf, "firewall", "options", "set", "100",
 		"--enable", "--policy-in", "DROP", "--log-level-in", "info"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
@@ -393,10 +393,10 @@ func TestQemuFirewallOptionsSet_FlagParams(t *testing.T) {
 
 func TestQemuFirewallOptionsSet_RequiresFlag(t *testing.T) {
 	_, ac := newFakeClient(t)
-	depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	err := run(&buf, "firewall", "options", "set", "100")
+	err := run(deps, &buf, "firewall", "options", "set", "100")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no options to set")
 }

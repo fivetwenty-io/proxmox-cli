@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -51,7 +52,7 @@ func newDomainListCmd() *cobra.Command {
 		Short: "List authentication realms",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Access.ListDomains(cmd.Context())
 			if err != nil {
@@ -86,7 +87,7 @@ func newDomainGetCmd() *cobra.Command {
 		Short: "Show a realm's configuration",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			realm := args[0]
 
 			resp, err := deps.API.Access.GetDomains(cmd.Context(), realm)
@@ -156,7 +157,7 @@ func newDomainCreateCmd() *cobra.Command {
 		Short: "Create an authentication realm",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			realm := args[0]
 
 			if realmType == "" {
@@ -203,7 +204,7 @@ func newDomainSetCmd() *cobra.Command {
 		Short: "Update an authentication realm",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			realm := args[0]
 
 			params := &access.UpdateDomainsParams{}
@@ -244,7 +245,7 @@ func newDomainDeleteCmd() *cobra.Command {
 		Short: "Delete an authentication realm",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			realm := args[0]
 
 			if !yes {
@@ -274,7 +275,7 @@ func newDomainSyncCmd() *cobra.Command {
 		Short: "Synchronize users and groups from an ldap/ad realm",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			realm := args[0]
 
 			params := &access.CreateDomainsSyncParams{}

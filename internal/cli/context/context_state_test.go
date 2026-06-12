@@ -2,6 +2,7 @@ package context
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,15 +20,6 @@ import (
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
-
-// withDeps overrides the package-level resolveDeps so tests inject a fixed
-// *cli.Deps without going through PersistentPreRunE. The returned function
-// restores the original and must be deferred.
-func withDeps(deps *cli.Deps) func() {
-	prev := resolveDeps
-	resolveDeps = func(_ *cobra.Command) *cli.Deps { return deps }
-	return func() { resolveDeps = prev }
-}
 
 // makeConfig writes a minimal config YAML to a temp file and returns (path, cfg).
 // The caller may modify cfg before handing it to makeDeps.
@@ -55,9 +47,8 @@ func makeDeps(t *testing.T, path string, cfg *config.Config) *cli.Deps {
 // output buffer. stdin is "" for non-interactive paths.
 func run(t *testing.T, deps *cli.Deps, stdin string, args ...string) (string, error) {
 	t.Helper()
-	defer withDeps(deps)()
-
-	cmd := newContextCmd(deps)
+	cmd := newContextCmd(nil)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -211,8 +202,8 @@ func TestSelect_Picker_ExplicitEOF_Error(t *testing.T) {
 	path, cfg := makeConfig(t, twoContextCfg())
 	deps := makeDeps(t, path, cfg)
 
-	defer withDeps(deps)()
-	cmd := newContextCmd(deps)
+	cmd := newContextCmd(nil)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -227,8 +218,8 @@ func TestSelect_Picker_OutOfRangeIndex_Error(t *testing.T) {
 	path, cfg := makeConfig(t, twoContextCfg())
 	deps := makeDeps(t, path, cfg)
 
-	defer withDeps(deps)()
-	cmd := newContextCmd(deps)
+	cmd := newContextCmd(nil)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

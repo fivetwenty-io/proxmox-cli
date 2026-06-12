@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -38,7 +39,7 @@ func newCopyCmd() *cobra.Command {
 				return fmt.Errorf("src and dst context names must differ")
 			}
 
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 			if cfg == nil {
 				cfg = &config.Config{}

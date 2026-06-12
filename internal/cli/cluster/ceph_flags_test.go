@@ -25,10 +25,9 @@ func TestCephFlags_List(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ceph", "flags", "list"))
+	require.NoError(t, run(deps, &buf, "ceph", "flags", "list"))
 	out := buf.String()
 	require.Contains(t, out, "noout")
 	require.Contains(t, out, "noscrub")
@@ -42,10 +41,9 @@ func TestCephFlags_Get(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ceph", "flags", "get", "noout"))
+	require.NoError(t, run(deps, &buf, "ceph", "flags", "get", "noout"))
 	require.Contains(t, buf.String(), "noout")
 }
 
@@ -60,10 +58,9 @@ func TestCephFlags_Set(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "ceph", "flags", "set", "noout", "true"))
+	require.NoError(t, run(deps, &buf, "ceph", "flags", "set", "noout", "true"))
 	require.Equal(t, "1", gotForm.Get("value"))
 	require.Contains(t, buf.String(), "enabled")
 }
@@ -79,10 +76,9 @@ func TestCephFlags_SetRejectsBadValue(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf, "ceph", "flags", "set", "noout", "maybe")
+	err := run(deps, &buf, "ceph", "flags", "set", "noout", "maybe")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "true or false")
 	require.False(t, called, "set must not issue a PUT for an invalid value")

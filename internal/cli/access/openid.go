@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -35,7 +36,7 @@ func newOpenidListCmd() *cobra.Command {
 		Short: "List OpenID Connect realms",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Access.ListOpenid(cmd.Context())
 			if err != nil {

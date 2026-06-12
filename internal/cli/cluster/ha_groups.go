@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -38,7 +39,7 @@ func newHaGroupListCmd() *cobra.Command {
 		Short: "List HA groups",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Cluster.ListHaGroups(cmd.Context())
 			if err != nil {
@@ -79,7 +80,7 @@ func newHaGroupGetCmd() *cobra.Command {
 		Short: "Show a single HA group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 
 			resp, err := deps.API.Cluster.GetHaGroups(cmd.Context(), group)
@@ -130,7 +131,7 @@ func newHaGroupCreateCmd() *cobra.Command {
 			"required and lists the member nodes, each with an optional priority (node:priority).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 			if !cmd.Flags().Changed("nodes") {
 				return fmt.Errorf("--nodes is required: provide the member node list, e.g. --nodes node1:2,node2")
@@ -175,7 +176,7 @@ func newHaGroupSetCmd() *cobra.Command {
 		Short: "Update an HA group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 
 			params := &pvecluster.UpdateHaGroupsParams{}
@@ -220,7 +221,7 @@ func newHaGroupDeleteCmd() *cobra.Command {
 		Short: "Delete an HA group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			group := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete HA group %q without --yes", group)
@@ -269,7 +270,7 @@ func newHaRuleListCmd() *cobra.Command {
 		Short: "List HA rules",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			params := &pvecluster.ListHaRulesParams{}
 			fl := cmd.Flags()
@@ -325,7 +326,7 @@ func newHaRuleGetCmd() *cobra.Command {
 		Short: "Show a single HA rule",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			rule := args[0]
 
 			// The typed client method decodes only the rule id and type; fetch the
@@ -384,7 +385,7 @@ func newHaRuleCreateCmd() *cobra.Command {
 			"resource-affinity rules take --affinity.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			rule := args[0]
 			fl := cmd.Flags()
 			if !fl.Changed("type") {
@@ -438,7 +439,7 @@ func newHaRuleSetCmd() *cobra.Command {
 			"attributes are validated against.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			rule := args[0]
 			fl := cmd.Flags()
 			if !fl.Changed("type") {
@@ -493,7 +494,7 @@ func newHaRuleDeleteCmd() *cobra.Command {
 		Short: "Delete an HA rule",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			rule := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete HA rule %q without --yes", rule)

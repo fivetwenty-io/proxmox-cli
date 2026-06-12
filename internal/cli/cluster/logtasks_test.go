@@ -33,10 +33,9 @@ func TestClusterLog_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "log"))
+	require.NoError(t, run(deps, &buf, "log"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/log", gotPath)
@@ -71,10 +70,9 @@ func TestClusterLog_StringUID(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "log"))
+	require.NoError(t, run(deps, &buf, "log"))
 
 	out := buf.String()
 	require.Contains(t, out, "root@pam")
@@ -93,10 +91,9 @@ func TestClusterLog_MaxFlag(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "log", "--max", "10"))
+	require.NoError(t, run(deps, &buf, "log", "--max", "10"))
 	require.Contains(t, gotQuery, "max=10")
 }
 
@@ -113,10 +110,9 @@ func TestClusterLog_JSONRaw(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "log"))
+	require.NoError(t, run(deps, &buf, "log"))
 
 	out := buf.String()
 	require.Contains(t, out, "pvedaemon")
@@ -135,10 +131,9 @@ func TestClusterLog_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "log"))
+	require.Error(t, run(deps, &buf, "log"))
 }
 
 // TestClusterTasks_Table verifies `pve cluster tasks` queries GET /cluster/tasks
@@ -163,10 +158,9 @@ func TestClusterTasks_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tasks"))
+	require.NoError(t, run(deps, &buf, "tasks"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/tasks", gotPath)
@@ -196,10 +190,9 @@ func TestClusterTasks_JSONRaw(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "tasks"))
+	require.NoError(t, run(deps, &buf, "tasks"))
 
 	out := buf.String()
 	require.Contains(t, out, "\"upid\"")
@@ -214,8 +207,7 @@ func TestClusterTasks_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "tasks"))
+	require.Error(t, run(deps, &buf, "tasks"))
 }

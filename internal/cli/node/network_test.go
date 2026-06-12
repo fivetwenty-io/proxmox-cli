@@ -305,7 +305,8 @@ func TestNodeNetwork_RequiresNode(t *testing.T) {
 // TestNodeNetwork_CommandTree asserts the network sub-tree exposes the expected
 // verb set under `pve node network`.
 func TestNodeNetwork_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {

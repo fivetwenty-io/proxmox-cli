@@ -20,9 +20,9 @@ func TestAccess_RoleCreate_ForwardsPrivs(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "role", "create", "pve-cli-role", "--privs", "VM.Audit,Datastore.Audit"))
+	require.NoError(t, run(deps, &buf, "role", "create", "pve-cli-role", "--privs", "VM.Audit,Datastore.Audit"))
 
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, "/api2/json/access/roles", rec.path)
@@ -39,9 +39,9 @@ func TestAccess_RoleCreate_OmitsPrivsWhenUnset(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "role", "create", "pve-cli-role"))
+	require.NoError(t, run(deps, &buf, "role", "create", "pve-cli-role"))
 
 	require.Equal(t, "pve-cli-role", rec.body["roleid"])
 	_, hasPrivs := rec.body["privs"]
@@ -56,9 +56,9 @@ func TestAccess_RoleSet_RequiresPrivs(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "role", "set", "pve-cli-role")
+	err := run(deps, &buf, "role", "set", "pve-cli-role")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--privs is required")
 	require.False(t, called, "set must not PUT without --privs")
@@ -73,9 +73,9 @@ func TestAccess_RoleSet_ForwardsPrivsAndAppend(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "role", "set", "pve-cli-role", "--privs", "VM.Audit", "--append"))
+	require.NoError(t, run(deps, &buf, "role", "set", "pve-cli-role", "--privs", "VM.Audit", "--append"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "VM.Audit", rec.body["privs"])
@@ -91,9 +91,9 @@ func TestAccess_RoleDelete_RequiresYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "role", "delete", "pve-cli-role")
+	err := run(deps, &buf, "role", "delete", "pve-cli-role")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -107,9 +107,9 @@ func TestAccess_RoleDelete_WithYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "role", "delete", "pve-cli-role", "--yes"))
+	require.NoError(t, run(deps, &buf, "role", "delete", "pve-cli-role", "--yes"))
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "/api2/json/access/roles/pve-cli-role", rec.path)
@@ -122,9 +122,9 @@ func TestAccess_RoleCreate_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusBadRequest, "role already exists")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "role", "create", "pve-cli-role")
+	err := run(deps, &buf, "role", "create", "pve-cli-role")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "create role")
 }

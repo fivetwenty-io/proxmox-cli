@@ -22,7 +22,7 @@ func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags fu
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
 			if err != nil {
 				return err

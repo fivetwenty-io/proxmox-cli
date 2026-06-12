@@ -25,10 +25,9 @@ func TestConfigApiversion_Success(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "apiversion"))
+	require.NoError(t, run(deps, &buf, "config", "apiversion"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/config/apiversion", gotPath)
@@ -42,10 +41,9 @@ func TestConfigApiversion_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "config", "apiversion"))
+	require.Error(t, run(deps, &buf, "config", "apiversion"))
 }
 
 // TestConfigQdevice_Success verifies `pve cluster config qdevice` queries
@@ -64,10 +62,9 @@ func TestConfigQdevice_Success(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "qdevice"))
+	require.NoError(t, run(deps, &buf, "config", "qdevice"))
 
 	require.Equal(t, "/api2/json/cluster/config/qdevice", gotPath)
 	require.Contains(t, buf.String(), "established")
@@ -81,10 +78,9 @@ func TestConfigQdevice_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "config", "qdevice"))
+	require.Error(t, run(deps, &buf, "config", "qdevice"))
 }
 
 // TestConfigTotem_Success verifies `pve cluster config totem` queries
@@ -103,10 +99,9 @@ func TestConfigTotem_Success(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "config", "totem"))
+	require.NoError(t, run(deps, &buf, "config", "totem"))
 
 	require.Equal(t, "/api2/json/cluster/config/totem", gotPath)
 	require.Contains(t, buf.String(), "knet")
@@ -120,10 +115,9 @@ func TestConfigTotem_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "config", "totem"))
+	require.Error(t, run(deps, &buf, "config", "totem"))
 }
 
 // TestConfigCommandTree_GapCommands verifies apiversion, qdevice, and totem are registered.

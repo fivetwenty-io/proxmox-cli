@@ -91,7 +91,7 @@ func newBulkStartCmd() *cobra.Command {
 			"Requires --yes because it affects all guests by default.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to start cluster guests without confirmation: pass --yes/-y")
 			}
@@ -140,7 +140,7 @@ func newBulkShutdownCmd() *cobra.Command {
 			"--vmids. Requires --yes because it affects all guests by default.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to shut down cluster guests without confirmation: pass --yes/-y")
 			}
@@ -194,7 +194,7 @@ func newBulkSuspendCmd() *cobra.Command {
 			"Requires --yes because it affects all guests by default.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to suspend cluster guests without confirmation: pass --yes/-y")
 			}
@@ -249,7 +249,7 @@ func newBulkMigrateCmd() *cobra.Command {
 			"migrated. Requires --yes because it affects all guests by default.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			if !yes {
 				return fmt.Errorf("refusing to migrate cluster guests without confirmation: pass --yes/-y")
 			}

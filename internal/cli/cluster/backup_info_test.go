@@ -28,10 +28,9 @@ func TestBackupInfoNotBackedUp_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup-info", "not-backed-up"))
+	require.NoError(t, run(deps, &buf, "backup-info", "not-backed-up"))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/cluster/backup-info/not-backed-up", gotPath)
@@ -51,10 +50,9 @@ func TestBackupInfoNotBackedUp_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "backup-info", "not-backed-up"))
+	require.Error(t, run(deps, &buf, "backup-info", "not-backed-up"))
 }
 
 // TestBackupInfoCommandTree verifies backup-info exposes the not-backed-up sub-command.
@@ -92,10 +90,9 @@ func TestBackupIncludedVolumes_Table(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "backup", "included-volumes", "backup-pvecli"))
+	require.NoError(t, run(deps, &buf, "backup", "included-volumes", "backup-pvecli"))
 
 	require.Equal(t, "/api2/json/cluster/backup/backup-pvecli/included_volumes", gotPath)
 	out := buf.String()
@@ -111,10 +108,9 @@ func TestBackupIncludedVolumes_ServerError(t *testing.T) {
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.Error(t, run(&buf, "backup", "included-volumes", "backup-pvecli"))
+	require.Error(t, run(deps, &buf, "backup", "included-volumes", "backup-pvecli"))
 }
 
 // TestBackupCommandTree_IncludedVolumes verifies included-volumes is registered.

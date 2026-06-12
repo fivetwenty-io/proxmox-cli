@@ -81,7 +81,7 @@ func newAcmeAccountListCmd() *cobra.Command {
 		Short: "List registered ACME accounts",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListAcmeAccount(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list acme accounts: %w", err)
@@ -101,7 +101,7 @@ func newAcmeAccountGetCmd() *cobra.Command {
 		Short: "Show a single ACME account",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			resp, err := deps.API.Cluster.GetAcmeAccount(cmd.Context(), name)
 			if err != nil {
@@ -134,7 +134,7 @@ func newAcmeAccountCreateCmd() *cobra.Command {
 			"optional positional name is the account config file name (default 'default').",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if fl.Changed("async") {
 				deps.Async = async
@@ -185,7 +185,7 @@ func newAcmeAccountSetCmd() *cobra.Command {
 			"the ACME CA and runs as an asynchronous task.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			fl := cmd.Flags()
 			if fl.Changed("async") {
@@ -219,7 +219,7 @@ func newAcmeAccountDeleteCmd() *cobra.Command {
 			"contacts the ACME CA and runs as an asynchronous task.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			name := args[0]
 			fl := cmd.Flags()
 			if !yes {
@@ -268,7 +268,7 @@ func newAcmePluginListCmd() *cobra.Command {
 		Short: "List ACME challenge plugins",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			params := &pvecluster.ListAcmePluginsParams{}
 			if cmd.Flags().Changed("type") {
 				params.Type = &pluginType
@@ -294,7 +294,7 @@ func newAcmePluginGetCmd() *cobra.Command {
 		Short: "Show a single ACME plugin",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			resp, err := deps.API.Cluster.GetAcmePlugins(cmd.Context(), id)
 			if err != nil {
@@ -326,7 +326,7 @@ func newAcmePluginCreateCmd() *cobra.Command {
 			"DNS provider and --data carries its base64-encoded credential block.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
 			params := &pvecluster.CreateAcmePluginsParams{Id: id, Type: pluginType}
@@ -379,7 +379,7 @@ func newAcmePluginSetCmd() *cobra.Command {
 		Long:  "Update an ACME challenge plugin. Only flags that are passed are changed.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "api", "data", "nodes", "disable", "validation-delay", "delete") {
@@ -432,7 +432,7 @@ func newAcmePluginDeleteCmd() *cobra.Command {
 		Short: "Delete an ACME challenge plugin",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete acme plugin %q without confirmation: pass --yes/-y", id)
@@ -456,7 +456,7 @@ func newAcmeDirectoriesCmd() *cobra.Command {
 		Short: "List known ACME CA directory endpoints",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListAcmeDirectories(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list acme directories: %w", err)
@@ -476,7 +476,7 @@ func newAcmeChallengeSchemaCmd() *cobra.Command {
 		Short: "List available ACME challenge plugin schemas",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListAcmeChallengeSchema(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list acme challenge schema: %w", err)

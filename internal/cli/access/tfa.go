@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -58,7 +59,7 @@ func newTfaListCmd() *cobra.Command {
 		Short: "List users with two-factor authentication entries",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			resp, err := deps.API.Access.ListTfa(cmd.Context())
 			if err != nil {
@@ -100,7 +101,7 @@ func newTfaGetCmd() *cobra.Command {
 		Short: "List a user's two-factor authentication entries",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			resp, err := deps.API.Access.GetTfa(cmd.Context(), userid)
@@ -140,7 +141,7 @@ func newTfaDeleteCmd() *cobra.Command {
 		Short: "Delete a user's two-factor authentication entry",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]
 
 			if !yes {
@@ -172,7 +173,7 @@ func newTfaUnlockCmd() *cobra.Command {
 		Short: "Unlock a user locked out of two-factor authentication",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			if !yes {
@@ -199,7 +200,7 @@ func newTfaGetEntryCmd() *cobra.Command {
 		Short: "Get a single two-factor authentication entry",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]
 
 			resp, err := deps.API.Access.GetTfa2(cmd.Context(), userid, id)
@@ -252,7 +253,7 @@ func newTfaCreateCmd() *cobra.Command {
 			"and are never logged.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			if tfaType == "" {
@@ -331,7 +332,7 @@ func newTfaSetCmd() *cobra.Command {
 		Short: "Update a two-factor authentication entry",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]
 
 			// At least one field must be changed; otherwise the call is a no-op.
@@ -390,7 +391,7 @@ func newTfaTypesCmd() *cobra.Command {
 			"configured entry types. With --multiple, returns all entries as an array.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			userid := args[0]
 
 			params := &access.ListUsersTfaParams{}

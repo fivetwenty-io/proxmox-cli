@@ -133,7 +133,8 @@ func TestNodeCapabilities_RequiresNode(t *testing.T) {
 }
 
 func TestNodeCapabilities_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	var node, caps, qemu *cobra.Command

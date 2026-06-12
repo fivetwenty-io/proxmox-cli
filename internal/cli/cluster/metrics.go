@@ -9,6 +9,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -50,7 +51,7 @@ func newMetricsServerListCmd() *cobra.Command {
 		Short: "List configured metric servers",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListMetricsServer(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list metric servers: %w", err)
@@ -74,7 +75,7 @@ func newMetricsServerGetCmd() *cobra.Command {
 		Short: "Show a single metric server",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			resp, err := deps.API.Cluster.GetMetricsServer(cmd.Context(), id)
 			if err != nil {
@@ -306,7 +307,7 @@ func newMetricsServerCreateCmd() *cobra.Command {
 			"influxdb, or opentelemetry); --server and --port address the target.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := m.applyCreate(cmd.Flags())
 			if err := deps.API.Cluster.CreateMetricsServer(cmd.Context(), id, params); err != nil {
@@ -332,7 +333,7 @@ func newMetricsServerSetCmd() *cobra.Command {
 			"rewrites the full target address on every update.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			params := m.applyUpdate(cmd.Flags())
 			if err := deps.API.Cluster.UpdateMetricsServer(cmd.Context(), id, params); err != nil {
@@ -355,7 +356,7 @@ func newMetricsServerDeleteCmd() *cobra.Command {
 		Short: "Delete a metric server",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete metric server %q without confirmation: pass --yes/-y", id)
@@ -384,7 +385,7 @@ func newMetricsExportCmd() *cobra.Command {
 		Long:  "Return the metrics Proxmox VE would push to its configured servers.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			params := &pvecluster.ListMetricsExportParams{}
 			if fl.Changed("history") {

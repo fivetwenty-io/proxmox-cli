@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -58,7 +59,7 @@ func newHaResourceListCmd() *cobra.Command {
 		Short: "List HA resources",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			params := &pvecluster.ListHaResourcesParams{}
 			if cmd.Flags().Changed("type") {
@@ -106,7 +107,7 @@ func newHaResourceGetCmd() *cobra.Command {
 		Short: "Show a single HA resource",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			sid := args[0]
 
 			resp, err := deps.API.Cluster.GetHaResources(cmd.Context(), sid)
@@ -161,7 +162,7 @@ func newHaResourceCreateCmd() *cobra.Command {
 			"colon (vm:100 or ct:100); a bare guest ID (100) is also accepted.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			sid := args[0]
 
 			params := &pvecluster.CreateHaResourcesParams{Sid: sid}
@@ -215,7 +216,7 @@ func newHaResourceSetCmd() *cobra.Command {
 		Short: "Update an HA resource",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			sid := args[0]
 
 			params := &pvecluster.UpdateHaResourcesParams{}
@@ -272,7 +273,7 @@ func newHaResourceDeleteCmd() *cobra.Command {
 		Short: "Remove a resource from HA management",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			sid := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete HA resource %q without --yes", sid)
@@ -306,7 +307,7 @@ func newHaResourceMigrateCmd() *cobra.Command {
 			"co-migrate with it.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			sid := args[0]
 			if !cmd.Flags().Changed("target-node") {
 				return fmt.Errorf("--target-node is required: provide the destination node name")
@@ -341,7 +342,7 @@ func newHaResourceRelocateCmd() *cobra.Command {
 			"that block or co-relocate with it.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			sid := args[0]
 			if !cmd.Flags().Changed("target-node") {
 				return fmt.Errorf("--target-node is required: provide the destination node name")

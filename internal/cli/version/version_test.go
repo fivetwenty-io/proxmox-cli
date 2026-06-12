@@ -2,6 +2,7 @@ package version
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -45,19 +46,11 @@ func fakeClient(t *testing.T, f *testhelper.FakePVE) *apiclient.APIClient {
 	return ac
 }
 
-// withDeps overrides the package-local deps lookup so tests can inject a Deps
-// built from the fake server without driving the root PersistentPreRunE. The
-// returned function restores the previous lookup and must be deferred.
-func withDeps(deps *cli.Deps) func() {
-	prev := resolveDeps
-	resolveDeps = func(_ *cobra.Command) *cli.Deps { return deps }
-	return func() { resolveDeps = prev }
-}
-
-// run builds the version group command, captures output in buf, and executes
-// it with the supplied args.
-func run(buf *bytes.Buffer, args ...string) error {
+// run builds the version group command, injects deps via context, captures
+// output in buf, and executes it with the supplied args.
+func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 	cmd := newGroupCmd(&cli.Deps{})
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetArgs(args)
@@ -83,10 +76,9 @@ func TestVersion_ClusterAPI_Table(t *testing.T) {
 	ac := fakeClient(t, f)
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf))
+	require.NoError(t, run(deps, &buf))
 
 	require.Equal(t, http.MethodGet, gotMethod)
 	require.Equal(t, "/api2/json/version", gotPath)
@@ -115,10 +107,9 @@ func TestVersion_ClusterAPI_JSON(t *testing.T) {
 	ac := fakeClient(t, f)
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf))
+	require.NoError(t, run(deps, &buf))
 
 	out := buf.String()
 	require.Contains(t, out, `"version": "8.2.1"`)
@@ -141,10 +132,9 @@ func TestVersion_ClusterAPI_NilConsole(t *testing.T) {
 	ac := fakeClient(t, f)
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf))
+	require.NoError(t, run(deps, &buf))
 
 	out := buf.String()
 	require.Contains(t, out, "8.2.1")
@@ -162,10 +152,9 @@ func TestVersion_ClusterAPI_ServerError(t *testing.T) {
 	ac := fakeClient(t, f)
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	err := run(&buf)
+	err := run(deps, &buf)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "get cluster version")
 }
@@ -174,10 +163,9 @@ func TestVersion_ClusterAPI_ServerError(t *testing.T) {
 // build information without contacting the server (API may be nil).
 func TestVersion_Client_BuildInfo(t *testing.T) {
 	deps := &cli.Deps{API: nil, Out: output.New(), Format: output.FormatTable}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "client"))
+	require.NoError(t, run(deps, &buf, "client"))
 
 	out := buf.String()
 	require.Contains(t, out, selfversion.Version)
@@ -189,10 +177,9 @@ func TestVersion_Client_BuildInfo(t *testing.T) {
 // JSON carrying the version and toolchain fields.
 func TestVersion_Client_JSON(t *testing.T) {
 	deps := &cli.Deps{API: nil, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "client"))
+	require.NoError(t, run(deps, &buf, "client"))
 
 	out := buf.String()
 	require.Contains(t, out, selfversion.Version)
@@ -205,10 +192,9 @@ func TestVersion_Client_JSON(t *testing.T) {
 // divergent runtime value, so the two render paths never disagree.
 func TestVersion_Client_JSONArchMatchesInfo(t *testing.T) {
 	deps := &cli.Deps{API: nil, Out: output.New(), Format: output.FormatJSON}
-	defer withDeps(deps)()
 
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "client"))
+	require.NoError(t, run(deps, &buf, "client"))
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &parsed),
@@ -233,7 +219,8 @@ func TestVersion_Client_HasNoClientAnnotation(t *testing.T) {
 // TestVersion_GroupRegistered verifies that importing this package self-registers
 // a group factory named "version" with the cli root registry.
 func TestVersion_GroupRegistered(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 
 	found := false

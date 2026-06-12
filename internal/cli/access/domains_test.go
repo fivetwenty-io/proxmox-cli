@@ -25,9 +25,9 @@ func TestAccess_DomainList_Table(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "domain", "list"))
+	require.NoError(t, run(deps, &buf, "domain", "list"))
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, "/api2/json/access/domains", rec.path)
@@ -49,9 +49,9 @@ func TestAccess_DomainGet_KeyValue(t *testing.T) {
 		})
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "domain", "get", "corp"))
+	require.NoError(t, run(deps, &buf, "domain", "get", "corp"))
 
 	out := buf.String()
 	require.Contains(t, out, "REALM")
@@ -71,9 +71,9 @@ func TestAccess_DomainCreate_ForwardsFields(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "domain", "create", "corp",
+	require.NoError(t, run(deps, &buf, "domain", "create", "corp",
 		"--type", "ldap", "--server1", "ldap.example.com", "--port", "636",
 		"--base-dn", "dc=example,dc=com", "--user-attr", "uid", "--comment", "corp"))
 
@@ -96,9 +96,9 @@ func TestAccess_DomainCreate_RequiresType(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "domain", "create", "corp")
+	err := run(deps, &buf, "domain", "create", "corp")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--type is required")
 	require.False(t, called, "create must not POST without a realm type")
@@ -113,9 +113,9 @@ func TestAccess_DomainSet_OmitsUnchanged(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "domain", "set", "corp", "--comment", "updated", "--delete", "server2"))
+	require.NoError(t, run(deps, &buf, "domain", "set", "corp", "--comment", "updated", "--delete", "server2"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "updated", rec.body["comment"])
@@ -135,9 +135,9 @@ func TestAccess_DomainDelete_RequiresYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "domain", "delete", "corp")
+	err := run(deps, &buf, "domain", "delete", "corp")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -151,9 +151,9 @@ func TestAccess_DomainDelete_WithYes(t *testing.T) {
 		testhelper.WriteData(w, nil)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "domain", "delete", "corp", "--yes"))
+	require.NoError(t, run(deps, &buf, "domain", "delete", "corp", "--yes"))
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Contains(t, buf.String(), "deleted")
 }
@@ -168,9 +168,9 @@ func TestAccess_DomainSync_RendersUPID(t *testing.T) {
 		testhelper.WriteData(w, upid)
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(&buf, "domain", "sync", "corp", "--dry-run", "--scope", "users"))
+	require.NoError(t, run(deps, &buf, "domain", "sync", "corp", "--dry-run", "--scope", "users"))
 
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, "/api2/json/access/domains/corp/sync", rec.path)
@@ -185,9 +185,9 @@ func TestAccess_DomainSync_ServerError(t *testing.T) {
 		testhelper.WriteError(w, http.StatusBadRequest, "realm type 'pve' does not support sync")
 	})
 
-	defer withDeps(newDeps(t, f, output.FormatTable))()
+	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(&buf, "domain", "sync", "corp")
+	err := run(deps, &buf, "domain", "sync", "corp")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "sync domain")
 }
@@ -209,7 +209,8 @@ func TestAccess_DomainCommandTree(t *testing.T) {
 // persistent -t/--target and --node selectors with a local flag of the same
 // name anywhere in the access command tree.
 func TestAccess_NoLocalTargetOrNodeFlag(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 	var accessCmd *cobra.Command
 	for _, c := range root.Commands() {

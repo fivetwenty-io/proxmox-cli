@@ -257,7 +257,8 @@ func TestNodeStartall_WaitTaskError(t *testing.T) {
 
 // TestNodeBulk_CommandTree verifies the node group exposes every bulk verb.
 func TestNodeBulk_CommandTree(t *testing.T) {
-	root := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{})
 	var nodeCmd *cobra.Command
 	for _, c := range root.Commands() {

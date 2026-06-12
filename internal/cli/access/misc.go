@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -24,7 +25,7 @@ func newPermissionsCmd() *cobra.Command {
 		Short: "Show effective permissions for a user or token",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			params := &access.ListPermissionsParams{}
 			setIfChanged(cmd, "path", &params.Path, path)
@@ -90,7 +91,7 @@ func newPasswordSetCmd() *cobra.Command {
 		Short: "Change a user's password",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 
 			if userid == "" {
 				return fmt.Errorf("--userid is required")

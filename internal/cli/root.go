@@ -20,6 +20,12 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
+// noopLogCloser satisfies io.Closer for the log-init fallback path where no
+// file was opened and there is nothing to close.
+type noopLogCloser struct{}
+
+func (noopLogCloser) Close() error { return nil }
+
 // contextKey is an unexported type used as a key in cobra.Command Context values
 // so that pve CLI data does not collide with keys from other packages.
 type contextKey int
@@ -114,8 +120,25 @@ type persistentFlags struct {
 // config, auth, API client, logger, and output renderer.
 // AddGroups must be called after NewRootCmd to attach group sub-commands from
 // the registry.
-func NewRootCmd() *cobra.Command {
+//
+// The second return value is a cleanup function that closes the log file opened
+// by PersistentPreRunE. It must be called after root.Execute() returns so that
+// log records written during RunE are flushed before the fd is released. The
+// function is safe to call even if PersistentPreRunE never ran (e.g. --help).
+func NewRootCmd() (*cobra.Command, func()) {
 	var pf persistentFlags
+
+	// logCloser is set by persistentPreRunE and closed by the cleanup func
+	// returned to the caller. It is intentionally a closed-over variable so
+	// that no global mutable state is needed and tests that bypass
+	// PersistentPreRunE (WithDeps injection) are unaffected.
+	var activeCloser io.Closer
+
+	cleanup := func() {
+		if activeCloser != nil {
+			_ = activeCloser.Close() //nolint:errcheck // best-effort flush on exit
+		}
+	}
 
 	root := &cobra.Command{
 		Use:   "pve",
@@ -155,10 +178,14 @@ structured output in table, ascii, plain, JSON, and YAML formats.`,
 	// PersistentPreRunE is invoked for every sub-command unless that command
 	// overrides it explicitly.
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		return persistentPreRunE(cmd, args, &pf)
+		closer, err := persistentPreRunE(cmd, args, &pf)
+		if closer != nil {
+			activeCloser = closer
+		}
+		return err
 	}
 
-	return root
+	return root, cleanup
 }
 
 // resolveOutputDefault returns the --output/-o default: PVE_OUTPUT env if set,
@@ -180,11 +207,16 @@ func resolveOutputDefault() string {
 //  6. Initialises the slog logger via logx.Init.
 //  7. Injects the logger into the client.
 //  8. Builds and stashes *Deps in cmd context.
-func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) error {
+//
+// It returns the log file closer alongside any error. The caller (the
+// PersistentPreRunE closure in NewRootCmd) captures the closer so that
+// Execute() can defer it after root.Execute() returns — ensuring log records
+// written during RunE are flushed before the fd is released.
+func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.Closer, error) {
 	// Load config file; an absent file is not an error (empty Config returned).
 	cfg, err := config.Load(pf.config)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 
 	// Resolve output format.
@@ -194,7 +226,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 	cmdName, subName := commandLabels(cmd)
 
 	// Initialise slog JSONL logger.
-	logger, err := logx.Init(logx.Config{
+	logger, logCloser, err := logx.Init(logx.Config{
 		Debug:      pf.debug,
 		Verbose:    pf.verbose,
 		NoLog:      pf.noLog,
@@ -207,8 +239,12 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 			Level: slog.LevelError,
 		}))
+		logCloser = noopLogCloser{}
 		fmt.Fprintf(os.Stderr, "WARN: could not initialise log file: %v\n", err)
 	}
+	// logCloser is returned to the caller (NewRootCmd closure → Execute) so that
+	// Close() fires after root.Execute() returns, not when PreRunE returns.
+	// Do NOT defer here — deferring here was the F-01 regression.
 
 	renderer := output.New()
 
@@ -227,13 +263,13 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 	// This applies to: version (build-info only), context group verbs.
 	if cmd.Annotations["noClient"] == "true" {
 		setDeps(cmd, deps)
-		return nil
+		return logCloser, nil
 	}
 
 	// Resolve context — flag > env > config.
 	contextName := config.Resolve(pf.context, "PVE_CONTEXT", cfg.CurrentContext, "")
 	if contextName == "" {
-		return fmt.Errorf(
+		return logCloser, fmt.Errorf(
 			"no context specified: use --context/-c, set $PVE_CONTEXT, or run 'pve context select' (config: %s)",
 			pf.config,
 		)
@@ -241,7 +277,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 
 	ctx, _, err := config.ResolveContext(cfg, contextName)
 	if err != nil {
-		return fmt.Errorf("resolve context %q: %w", contextName, err)
+		return logCloser, fmt.Errorf("resolve context %q: %w", contextName, err)
 	}
 
 	// Apply per-context defaults for --node and --output.
@@ -270,7 +306,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 	// Resolve the secret (env ref, keychain ref, or literal).
 	secret, err := config.ResolveSecret(ctx.Auth.Secret)
 	if err != nil {
-		return fmt.Errorf("resolve secret for context %q: %w", contextName, err)
+		return logCloser, fmt.Errorf("resolve secret for context %q: %w", contextName, err)
 	}
 
 	// Determine TLS flag: --insecure flag overrides config.
@@ -318,7 +354,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
-		return fmt.Errorf("connect to %s: %w", ctx.Host, err)
+		return logCloser, fmt.Errorf("connect to %s: %w", ctx.Host, err)
 	}
 
 	// Inject the logger so HTTP request/response activity is captured in the
@@ -327,7 +363,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 
 	deps.API = ac
 	setDeps(cmd, deps)
-	return nil
+	return logCloser, nil
 }
 
 // WarnInsecureTLS emits a stderr warning whenever TLS verification is disabled,
@@ -406,8 +442,13 @@ func RequireSubcommands(cmd *cobra.Command) {
 
 // Execute builds the root command, registers all groups, and executes cobra.
 // It returns the first error encountered, or nil on success.
+//
+// The log file closer captured by PersistentPreRunE is deferred here, after
+// root.Execute() returns, so that all log records written during RunE are
+// flushed and the fd is released only once the full command has completed.
 func Execute() error {
-	root := NewRootCmd()
+	root, cleanup := NewRootCmd()
+	defer cleanup()
 
 	// Inject a background context so that commands can always call cmd.Context().
 	root.SetContext(context.Background())
