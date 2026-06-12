@@ -8,12 +8,8 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-}
-
-// newGroupCmd builds the `pve lxc` command and all of its sub-commands.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+// Group builds the `pve lxc` command and all of its sub-commands.
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lxc",
 		Short: "Manage LXC containers",

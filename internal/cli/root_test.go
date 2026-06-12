@@ -41,7 +41,7 @@ func TestRootFlags_Defaults(t *testing.T) {
 	require.Equal(t, "", ctxFlag.DefValue)
 	require.Equal(t, "c", ctxFlag.Shorthand, "--context short flag must be -c")
 
-	// --target must not exist (D-01 full rename).
+	// --target must not exist after the context rename.
 	require.Nil(t, flags.Lookup("target"), "--target flag must not exist after rename")
 
 	// --node default is empty (PVE_NODE unset).
@@ -270,27 +270,26 @@ func TestPersistentPreRunE_NoClient_DepsAreInjected(t *testing.T) {
 	require.Nil(t, capturedDeps.API, "API must be nil for noClient commands")
 }
 
-// TestRegisterGroup_GroupAppearsInHelp verifies that a factory registered via
-// RegisterGroup is wired into the root command by AddGroups.
-func TestRegisterGroup_GroupAppearsInHelp(t *testing.T) {
-	// Register a dummy group factory.
-	cli.RegisterGroup(func(_ *cli.Deps) *cobra.Command {
+// TestAddGroups_GroupAppearsInHelp verifies that a factory passed to AddGroups
+// is wired into the root command.
+func TestAddGroups_GroupAppearsInHelp(t *testing.T) {
+	factory := func(_ *cli.Deps) *cobra.Command {
 		return &cobra.Command{
 			Use:   "testgroup",
 			Short: "test group for unit tests",
 		}
-	})
+	}
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
 	root.SetContext(context.Background())
-	cli.AddGroups(root, &cli.Deps{})
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{factory})
 
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true
 	}
-	require.True(t, names["testgroup"], "testgroup must appear in root commands after RegisterGroup")
+	require.True(t, names["testgroup"], "testgroup must appear in root commands after AddGroups")
 }
 
 // TestMain_HelpExitsZero verifies that Main() exits 0 when invoked with no
@@ -301,7 +300,7 @@ func TestMain_HelpExitsZero(t *testing.T) {
 	os.Args = []string{"pve", "--help"}
 	defer func() { os.Args = old }()
 
-	code := cli.Main()
+	code := cli.Main(nil)
 	// cobra exits 0 for --help.
 	require.Equal(t, 0, code)
 }
@@ -509,7 +508,7 @@ func TestOutputChangedDetection(t *testing.T) {
 	})
 }
 
-// TestContextDefaultsResolution verifies the D-04 three-layer defaults:
+// TestContextDefaultsResolution verifies the three-layer defaults:
 // explicit flag > context default > global default.
 //
 // Strategy: use a noClient probe that captures deps after PersistentPreRunE.

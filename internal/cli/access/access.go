@@ -11,13 +11,9 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-}
-
-// newGroupCmd builds the `pve access` command and all of its sub-commands for
+// Group builds the `pve access` command and all of its sub-commands for
 // managing users, API tokens, groups, roles, ACLs, permissions, and passwords.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "access",
 		Short: "Manage users, tokens, groups, roles, and access control",

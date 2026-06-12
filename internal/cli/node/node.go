@@ -6,15 +6,11 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-func init() {
-	cli.RegisterGroup(newNodeCmd)
-}
-
-// newNodeCmd builds the `pve node` command and all of its sub-commands.
+// Group builds the `pve node` command and all of its sub-commands.
 // The *cli.Deps argument is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained inside each RunE via
 // cli.GetDeps.
-func newNodeCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Manage Proxmox VE nodes",

@@ -18,14 +18,10 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-}
-
-// newGroupCmd builds the `pve sdn` command and all of its sub-commands. The
+// Group builds the `pve sdn` command and all of its sub-commands. The
 // passed *cli.Deps is a placeholder used only so cobra can assemble the command
 // tree; live dependencies are resolved per-invocation via cli.GetDeps.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sdn",
 		Short: "Manage software-defined networking (zones, vnets, subnets)",

@@ -6,25 +6,43 @@ import (
 	"os"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
-
-	// Blank imports trigger each group package's init(), which calls
-	// cli.RegisterGroup to wire the group command into the root. internal/cli
-	// itself imports no group package, so there is no import cycle.
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/access"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/api"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/cluster"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/context"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/initcmd"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/lxc"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/node"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/pool"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/qemu"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/sdn"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/storage"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/task"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/version"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/access"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/api"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/cluster"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/context"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/initcmd"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/lxc"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/node"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/pool"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/qemu"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/sdn"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/storage"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/task"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/version"
 )
 
+// factories is the ordered list of group command factories wired into the root
+// command. The order here controls the help-output listing order and must
+// match the former init()-registration order (= import order in the old
+// blank-import block).
+var factories = []cli.GroupFactory{
+	access.Group,
+	api.Group,
+	api.AuthAlias,
+	cluster.Group,
+	context.Group,
+	context.CtxAlias,
+	initcmd.Group,
+	lxc.Group,
+	node.Group,
+	pool.Group,
+	qemu.Group,
+	sdn.Group,
+	storage.Group,
+	task.Group,
+	version.Group,
+}
+
 func main() {
-	os.Exit(cli.Main())
+	os.Exit(cli.Main(factories))
 }

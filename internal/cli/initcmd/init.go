@@ -11,13 +11,10 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-}
-
-// newGroupCmd is the registry factory; deps are unused because the sub-commands
-// resolve everything from flags and the local filesystem at run time.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+// Group is the factory for the `pve init` command group. Deps are unused
+// because the sub-commands resolve everything from flags and the local
+// filesystem at run time.
+func Group(_ *cli.Deps) *cobra.Command {
 	return NewCommand()
 }
 

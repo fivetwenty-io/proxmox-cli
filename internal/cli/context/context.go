@@ -6,15 +6,10 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-func init() {
-	cli.RegisterGroup(newContextCmd)
-	cli.RegisterGroup(newCtxAliasCmd)
-}
-
-// newContextCmd builds `pve context` and attaches all sub-commands.
+// Group builds `pve context` and attaches all sub-commands.
 // The passed *cli.Deps is a placeholder for command-tree assembly; live deps
 // are resolved per-invocation via cli.GetDeps.
-func newContextCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context",
 		Short: "Manage named pve contexts",
@@ -30,8 +25,8 @@ Proxmox VE API.`,
 	return cmd
 }
 
-// newCtxAliasCmd builds the hidden `pve ctx` alias for the context group.
-func newCtxAliasCmd(_ *cli.Deps) *cobra.Command {
+// CtxAlias builds the hidden `pve ctx` alias for the context group.
+func CtxAlias(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "ctx",
 		Short:  "Alias for 'pve context'",

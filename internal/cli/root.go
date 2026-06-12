@@ -1,5 +1,5 @@
 // Package cli wires the cobra root command, persistent flags, Deps / Ctx types,
-// the group-registration registry, and the Execute / Main entry points.
+// and the Execute / Main entry points.
 package cli
 
 import (
@@ -90,16 +90,12 @@ func WithDeps(ctx context.Context, deps *Deps) context.Context {
 	return context.WithValue(ctx, ctxKey, deps)
 }
 
-// groupFactories is the package-level registry of group command factories.
-// Each command group package calls RegisterGroup from its init, and the binary
-// main blank-imports the group packages to trigger that registration.
-var groupFactories []func(*Deps) *cobra.Command
-
-// RegisterGroup appends a group command factory to the global registry.
-// Group packages call this function to declare their sub-tree to the root.
-func RegisterGroup(f func(*Deps) *cobra.Command) {
-	groupFactories = append(groupFactories, f)
-}
+// GroupFactory is a function that constructs a cobra sub-command group given
+// the placeholder Deps passed by Execute during command-tree assembly. Each
+// group package exports one or more GroupFactory values; cmd/pve/main.go
+// passes them as an explicit slice to Execute so there is no package-level
+// mutable state.
+type GroupFactory = func(*Deps) *cobra.Command
 
 // persistentFlags holds the raw flag values read by cobra before PersistentPreRunE runs.
 type persistentFlags struct {
@@ -405,10 +401,11 @@ func commandChain(cmd *cobra.Command) []string {
 	return chain
 }
 
-// AddGroups calls each registered factory with deps and adds the returned
-// sub-command to root. It is called by Execute after building root.
-func AddGroups(root *cobra.Command, deps *Deps) {
-	for _, factory := range groupFactories {
+// AddGroups calls each factory with deps and adds the returned sub-command to
+// root. It is called by Execute with the explicit factory slice provided by
+// cmd/pve/main.go; there is no package-level registry.
+func AddGroups(root *cobra.Command, deps *Deps, factories []GroupFactory) {
+	for _, factory := range factories {
 		root.AddCommand(factory(deps))
 	}
 	RequireSubcommands(root)
@@ -440,13 +437,16 @@ func RequireSubcommands(cmd *cobra.Command) {
 	}
 }
 
-// Execute builds the root command, registers all groups, and executes cobra.
-// It returns the first error encountered, or nil on success.
+// Execute builds the root command, wires the provided group factories, and
+// executes cobra. It returns the first error encountered, or nil on success.
+//
+// factories is the ordered list of GroupFactory values supplied by
+// cmd/pve/main.go. The order determines the help-output listing order.
 //
 // The log file closer captured by PersistentPreRunE is deferred here, after
 // root.Execute() returns, so that all log records written during RunE are
 // flushed and the fd is released only once the full command has completed.
-func Execute() error {
+func Execute(factories []GroupFactory) error {
 	root, cleanup := NewRootCmd()
 	defer cleanup()
 
@@ -457,7 +457,7 @@ func Execute() error {
 	// real Deps will be injected per-invocation in PersistentPreRunE.
 	// Group commands MUST obtain their Deps via GetDeps(cmd), never from the
 	// placeholder provided here.
-	AddGroups(root, &Deps{})
+	AddGroups(root, &Deps{}, factories)
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -467,9 +467,10 @@ func Execute() error {
 }
 
 // Main is the entry point for cmd/pve/main.go.
-// It calls Execute and maps the returned error to a semantic exit code.
-func Main() int {
-	if err := Execute(); err != nil {
+// It accepts the ordered factory slice and maps the returned error to a
+// semantic exit code.
+func Main(factories []GroupFactory) int {
+	if err := Execute(factories); err != nil {
 		return exitcode.FromError(err)
 	}
 	return exitcode.OK

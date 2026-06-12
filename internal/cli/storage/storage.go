@@ -15,14 +15,10 @@ import (
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/clusterstorage"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-}
-
-// newGroupCmd builds the `pve storage` command and all of its sub-commands.
+// Group builds the `pve storage` command and all of its sub-commands.
 // The supplied *cli.Deps is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained per-invocation via cli.GetDeps.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "storage",
 		Short: "Manage cluster storage configuration",
@@ -451,8 +447,8 @@ func newCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&stType, "type", "",
 		"storage type: dir|nfs|cifs|rbd|lvm|lvmthin|zfspool|btrfs|pbs (required)")
 	sf.registerCreate(cmd)
-	_ = cmd.MarkFlagRequired("storage")
-	_ = cmd.MarkFlagRequired("type")
+	cli.MustMarkRequired(cmd, "storage")
+	cli.MustMarkRequired(cmd, "type")
 	return cmd
 }
 

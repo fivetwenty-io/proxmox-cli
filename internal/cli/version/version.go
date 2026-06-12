@@ -10,16 +10,12 @@ import (
 	selfversion "github.com/fivetwenty-io/pve-cli/internal/version"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-}
-
-// newGroupCmd builds the `pve version` command and its sub-commands.
+// Group builds the `pve version` command and its sub-commands.
 //
 // The group command itself reports the Proxmox VE cluster API version (it
 // contacts the server). The `client` sub-command reports this CLI's own build
 // information and contacts nothing.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the Proxmox VE cluster API version",

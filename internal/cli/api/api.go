@@ -6,17 +6,16 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-func init() {
-	cli.RegisterGroup(newGroupCmd)
-	// Hidden top-level alias: `pve auth ...` behaves identically to `pve api auth ...`.
-	cli.RegisterGroup(func(_ *cli.Deps) *cobra.Command { return hidden(newAuthCmd()) })
-}
-
-// newGroupCmd is the registry factory; the placeholder deps are unused because
-// every sub-command obtains live deps via cli.GetDeps at run time.
-func newGroupCmd(_ *cli.Deps) *cobra.Command {
+// Group is the factory for the `pve api` command group. The placeholder deps
+// are unused because every sub-command obtains live deps via cli.GetDeps at
+// run time.
+func Group(_ *cli.Deps) *cobra.Command {
 	return NewCommand()
 }
+
+// AuthAlias is the factory for the hidden top-level `pve auth` alias, which
+// behaves identically to `pve api auth`.
+func AuthAlias(_ *cli.Deps) *cobra.Command { return hidden(newAuthCmd()) }
 
 // hidden marks cmd as a hidden top-level alias so it works but is omitted from
 // `pve --help` listings.

@@ -14,16 +14,12 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-func init() {
-	cli.RegisterGroup(NewGroupCmd)
-}
-
-// NewGroupCmd builds the `pve task` command and all of its sub-commands.
+// Group builds the `pve task` command and all of its sub-commands.
 //
 // The *cli.Deps argument is a placeholder used only so cobra can assemble the
 // command tree; each sub-command resolves its live dependencies from the cobra
 // context via cli.GetDeps.
-func NewGroupCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and control Proxmox VE tasks",

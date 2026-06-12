@@ -15,14 +15,10 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-func init() {
-	cli.RegisterGroup(newPoolCmd)
-}
-
-// newPoolCmd builds the `pve pool` command and all of its sub-commands.
+// Group builds the `pve pool` command and all of its sub-commands.
 // The passed *cli.Deps is a placeholder used only so cobra can assemble the
 // command tree; live dependencies are resolved per-invocation via cli.GetDeps.
-func newPoolCmd(_ *cli.Deps) *cobra.Command {
+func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pool",
 		Short: "Manage resource pools",
@@ -158,7 +154,7 @@ func newCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&poolid, "poolid", "", "pool identifier (required)")
 	cmd.Flags().StringVar(&comment, "comment", "", "pool comment")
-	_ = cmd.MarkFlagRequired("poolid")
+	cli.MustMarkRequired(cmd, "poolid")
 	return cmd
 }
 
