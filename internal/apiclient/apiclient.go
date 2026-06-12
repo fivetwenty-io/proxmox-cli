@@ -76,10 +76,3 @@ func NewAPIClient(opts pve.Options) (*APIClient, error) {
 		Version:        version.New(raw),
 	}, nil
 }
-
-// SetLogger installs a structured logger on the underlying HTTP client.
-// The logger type is re-exported from pve.Client so callers need not import the
-// internal http package directly.
-func (ac *APIClient) SetLogger(l pve.Logger) {
-	ac.Raw.SetLogger(l)
-}
