@@ -34,7 +34,7 @@ func DefaultPath() string {
 // If the file does not exist, an empty Config is returned without error.
 // Returns an error if the file exists but cannot be read or parsed.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: path is caller-resolved XDG/home config file, not untrusted input
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &Config{}, nil

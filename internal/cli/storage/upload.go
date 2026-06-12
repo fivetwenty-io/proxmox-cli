@@ -43,7 +43,7 @@ func newUploadCmd() *cobra.Command {
 				dest = filepath.Base(file)
 			}
 
-			f, err := os.Open(file)
+			f, err := os.Open(file) //nolint:gosec // G304: file is a CLI --file flag value supplied by the operator, not untrusted remote input
 			if err != nil {
 				return fmt.Errorf("open file %q: %w", file, err)
 			}

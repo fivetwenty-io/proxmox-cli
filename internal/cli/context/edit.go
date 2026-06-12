@@ -9,6 +9,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -37,7 +38,7 @@ is returned and the temp file path is printed so you can recover your edits.
 Note: the context name cannot be changed via edit; rename is not supported.
 Note: config.Save rewrites the config file and does not preserve comments.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := resolveDeps(cmd)
+			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
 			// Resolve context name: explicit arg > current-context.
@@ -119,7 +120,7 @@ Note: config.Save rewrites the config file and does not preserve comments.`,
 			}
 
 			// Read back the edited file.
-			edited, err := os.ReadFile(tmpPath)
+			edited, err := os.ReadFile(tmpPath) //nolint:gosec // G304: tmpPath is os.CreateTemp path created by this process, not untrusted input
 			if err != nil {
 				return fmt.Errorf("read edited temp file: %w", err)
 			}
