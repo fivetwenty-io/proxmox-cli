@@ -5,7 +5,7 @@ A comprehensive command-line interface for the Proxmox VE API, built on
 
 `pve` manages multiple named Proxmox contexts, authenticates with API tokens or
 password tickets, blocks on long-running tasks by default, and renders every
-command as a table, plain text, JSON, or YAML.
+command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
 
 ## Features
 
@@ -193,14 +193,15 @@ pve api auth logout            # invalidate and wipe the stored session
 
 ## Output and logging
 
-Every command honors the global `--output/-o` flag (`table`, `plain`, `json`,
-`yaml`) or the `PVE_OUTPUT` environment variable. JSON and YAML emit the full
-API response with native types; tables show a curated column set.
+Every command honors the global `--output/-o` flag (`table`, `ascii`, `plain`,
+`json`, `yaml`) or the `PVE_OUTPUT` environment variable. JSON and YAML emit the
+full API response with native types; tables show a curated column set, and
+`ascii` renders the same tables with ASCII-only borders.
 
 ```bash
 pve node list -o json | jq '.[].node'
 pve cluster resources -o yaml
-pve qemu list --ascii          # ASCII-only table borders
+pve qemu list -o ascii         # ASCII-only table borders
 ```
 
 Diagnostic logs are written as JSON Lines to

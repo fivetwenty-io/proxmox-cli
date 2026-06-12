@@ -112,7 +112,7 @@ all contexts without contacting the Proxmox VE API:
 - `auth.type` is `token` or `password`; required sub-fields are set.
 - `port`, if non-zero, is in `[1, 65535]`.
 - `protocol`, if set, is `https` or `http`.
-- `default-output`, if set, is one of `table`, `plain`, `json`, `yaml`.
+- `default-output`, if set, is one of `table`, `ascii`, `plain`, `json`, `yaml`.
 - `fingerprint`, if set, matches the `XX:XX:…:XX` hex SHA-256 pattern (32 pairs).
 
 Network connectivity is not checked in v1 (`--connect` is reserved for a future

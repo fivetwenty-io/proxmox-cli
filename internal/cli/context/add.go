@@ -169,7 +169,7 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&f.insecure, "insecure", false, "disable TLS certificate verification")
 	cmd.Flags().StringVar(&f.fingerprint, "fingerprint", "", "expected TLS certificate fingerprint (hex SHA-256)")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
-	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|plain|json|yaml")
+	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the same name")
 

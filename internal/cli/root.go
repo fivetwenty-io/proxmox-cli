@@ -107,7 +107,6 @@ type persistentFlags struct {
 	noLog    bool
 	async    bool
 	insecure bool
-	ascii    bool
 }
 
 // NewRootCmd constructs the top-level 'pve' cobra.Command.
@@ -124,7 +123,7 @@ func NewRootCmd() *cobra.Command {
 		Long: `pve is a command-line interface for the Proxmox VE API.
 
 It supports multiple named contexts, token and password authentication, and
-structured output in table, plain, JSON, and YAML formats.`,
+structured output in table, ascii, plain, JSON, and YAML formats.`,
 		// Silence cobra's built-in error printing; Execute() handles it.
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -144,7 +143,7 @@ structured output in table, plain, JSON, and YAML formats.`,
 
 	root.PersistentFlags().StringVarP(&pf.output, "output", "o",
 		resolveOutputDefault(),
-		"output format: table|plain|json|yaml ($PVE_OUTPUT)")
+		"output format: table|ascii|plain|json|yaml ($PVE_OUTPUT)")
 
 	root.PersistentFlags().BoolVar(&pf.debug, "debug", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&pf.verbose, "verbose", false, "enable verbose (debug-level) logging")
@@ -152,7 +151,6 @@ structured output in table, plain, JSON, and YAML formats.`,
 	root.PersistentFlags().BoolVar(&pf.noLog, "no-log", false, "suppress JSONL log file creation")
 	root.PersistentFlags().BoolVar(&pf.async, "async", false, "return task UPID immediately without waiting")
 	root.PersistentFlags().BoolVar(&pf.insecure, "insecure", false, "disable TLS certificate verification")
-	root.PersistentFlags().BoolVar(&pf.ascii, "ascii", false, "ASCII-only table borders")
 
 	// PersistentPreRunE is invoked for every sub-command unless that command
 	// overrides it explicitly.
@@ -213,7 +211,6 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) erro
 	}
 
 	renderer := output.New()
-	renderer.SetASCII(pf.ascii)
 
 	deps := &Deps{
 		Out:        renderer,

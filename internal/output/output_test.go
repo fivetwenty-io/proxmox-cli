@@ -45,23 +45,18 @@ func singleFixture() output.Result {
 	}
 }
 
-// ---- New / SetASCII --------------------------------------------------------
+// ---- New -------------------------------------------------------------------
 
 func TestNew_ReturnsRenderer(t *testing.T) {
 	r := output.New()
 	require.NotNil(t, r)
 }
 
-func TestNew_SetASCII_DoesNotPanic(t *testing.T) {
-	r := output.New()
-	r.SetASCII(true)
-	r.SetASCII(false)
-}
-
 // ---- Format constants ------------------------------------------------------
 
 func TestFormatConstants(t *testing.T) {
 	require.Equal(t, output.Format("table"), output.FormatTable)
+	require.Equal(t, output.Format("ascii"), output.FormatASCII)
 	require.Equal(t, output.Format("plain"), output.FormatPlain)
 	require.Equal(t, output.Format("json"), output.FormatJSON)
 	require.Equal(t, output.Format("yaml"), output.FormatYAML)
@@ -121,15 +116,15 @@ func TestRenderer_Table_Message(t *testing.T) {
 	require.Contains(t, buf.String(), "Operation completed successfully.")
 }
 
-func TestRenderer_Table_ASCII(t *testing.T) {
+func TestRenderer_ASCII(t *testing.T) {
 	r := output.New()
-	r.SetASCII(true)
 	var buf bytes.Buffer
-	require.NoError(t, r.Render(&buf, fixture(), output.FormatTable))
+	require.NoError(t, r.Render(&buf, fixture(), output.FormatASCII))
 	out := buf.String()
 	// ASCII borders use '+' and '-' not Unicode box-drawing characters.
 	require.Contains(t, out, "+")
 	require.Contains(t, out, "-")
+	require.NotContains(t, out, "─")
 }
 
 func TestRenderer_Table_EmptyResult_NoError(t *testing.T) {

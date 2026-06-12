@@ -125,7 +125,7 @@ func ValidateContext(c *Context) error {
 // writable paths (context add, context edit) and the validate verb enforce.
 // Rules beyond validateContext:
 //   - token auth: token-id must be present (in addition to secret).
-//   - default-output, if set, must be one of: table, plain, json, yaml.
+//   - default-output, if set, must be one of: table, ascii, plain, json, yaml.
 //   - fingerprint, if set, must match the colon-separated hex SHA-256 pattern.
 //   - port, if non-zero, must be in [1, 65535].
 //   - protocol, if non-empty, must be "https" or "http".
@@ -172,10 +172,10 @@ func StrictValidateContext(c *Context) []string {
 
 	if c.DefaultOutput != "" {
 		switch c.DefaultOutput {
-		case "table", "plain", "json", "yaml":
+		case "table", "ascii", "plain", "json", "yaml":
 		default:
 			errs = append(errs, fmt.Sprintf(
-				"default-output %q must be one of: table, plain, json, yaml",
+				"default-output %q must be one of: table, ascii, plain, json, yaml",
 				c.DefaultOutput,
 			))
 		}

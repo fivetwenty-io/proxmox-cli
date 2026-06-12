@@ -54,7 +54,7 @@ func TestRootFlags_Defaults(t *testing.T) {
 	require.Equal(t, "table", outFlag.DefValue)
 
 	// Boolean flags default to false.
-	for _, name := range []string{"debug", "verbose", "trace", "no-log", "async", "insecure", "ascii"} {
+	for _, name := range []string{"debug", "verbose", "trace", "no-log", "async", "insecure"} {
 		f := flags.Lookup(name)
 		require.NotNil(t, f, "flag %s must exist", name)
 		require.Equal(t, "false", f.DefValue, "flag %s default must be false", name)
@@ -108,9 +108,9 @@ func TestPersistentPreRunE_Insecure_WarnsOnStderr(t *testing.T) {
 		"an insecure connection must warn the operator on stderr")
 }
 
-// TestPersistentPreRunE_ASCII_SetsRendererMode verifies the --ascii flag is
-// wired through to the renderer (the deps Out renderer renders ASCII borders).
-func TestPersistentPreRunE_ASCII_SetsRendererMode(t *testing.T) {
+// TestPersistentPreRunE_ASCII_Format verifies that -o ascii is wired through
+// to deps.Format and renders tables with ASCII borders.
+func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yml")
 	t.Setenv("PVE_OUTPUT", "table")
@@ -128,17 +128,18 @@ func TestPersistentPreRunE_ASCII_SetsRendererMode(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"--config", cfgPath, "--ascii", "inspect"})
+	root.SetArgs([]string{"--config", cfgPath, "-o", "ascii", "inspect"})
 	require.NoError(t, root.Execute())
 	require.NotNil(t, deps)
+	require.Equal(t, output.FormatASCII, deps.Format)
 
-	// Render a small table; with --ascii the borders must use ASCII glyphs
+	// Render a small table; with -o ascii the borders must use ASCII glyphs
 	// (e.g. '+') rather than Unicode box-drawing characters.
 	var rb bytes.Buffer
 	require.NoError(t, deps.Out.Render(&rb, output.Result{
 		Headers: []string{"A"},
 		Rows:    [][]string{{"1"}},
-	}, output.FormatTable))
+	}, deps.Format))
 	require.Contains(t, rb.String(), "+", "ascii table borders should contain '+'")
 	require.NotContains(t, rb.String(), "─", "ascii mode must not use Unicode box-drawing")
 }

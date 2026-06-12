@@ -38,7 +38,7 @@ func newValidateCmd() *cobra.Command {
   - password auth: username and secret are set
   - port is in range [1, 65535] (0 means "use default 8006"; accepted)
   - protocol is "https" or "http" (empty means "use default https"; accepted)
-  - default-output, if set, is one of: table, plain, json, yaml
+  - default-output, if set, is one of: table, ascii, plain, json, yaml
   - fingerprint, if set, matches the XX:XX:...:XX hex pattern (32 pairs)
 
 Network connectivity is not checked in this version (--connect is reserved for

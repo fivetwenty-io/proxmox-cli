@@ -10,7 +10,7 @@ type Config struct {
 	// PreviousContext is the name of the last active context, used by `pve context previous`.
 	PreviousContext string `yaml:"previous-context,omitempty"`
 
-	// DefaultOutput is the default output format (table|plain|json|yaml) for all commands.
+	// DefaultOutput is the default output format (table|ascii|plain|json|yaml) for all commands.
 	DefaultOutput string `yaml:"default-output"`
 
 	// Contexts is the named map of PVE endpoint configurations.
