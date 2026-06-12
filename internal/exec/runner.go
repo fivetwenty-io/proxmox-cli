@@ -3,6 +3,7 @@
 package exec
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,11 +50,7 @@ func ExitCodeOf(err error) int {
 	if err == nil {
 		return 0
 	}
-	var ee *ExitError
-	if e, ok := err.(*ExitError); ok {
-		ee = e
-	}
-	if ee != nil {
+	if ee, ok := errors.AsType[*ExitError](err); ok {
 		return ee.Code
 	}
 	return -1

@@ -120,6 +120,27 @@ func TestExitCodeOf_OtherError(t *testing.T) {
 	require.Equal(t, -1, execpkg.ExitCodeOf(fmt.Errorf("boom")))
 }
 
+// TestExitCodeOf_WrappedExitError verifies that ExitCodeOf unwraps through
+// fmt.Errorf("%w", ...) to find a nested *ExitError. The direct type assertion
+// previously used would return -1 for wrapped errors; errors.As must be used.
+func TestExitCodeOf_WrappedExitError(t *testing.T) {
+	t.Parallel()
+
+	// Produce a real *ExitError from a failing child process.
+	r := execpkg.Real()
+	baseErr := r.Run("/bin/sh", []string{"-c", "exit 7"}, nil, nil, nil, nil)
+	require.Error(t, baseErr)
+	require.Equal(t, 7, execpkg.ExitCodeOf(baseErr), "sanity: unwrapped base err")
+
+	// Wrap it one level and confirm ExitCodeOf still finds the code.
+	wrapped := fmt.Errorf("wrap: %w", baseErr)
+	require.Equal(t, 7, execpkg.ExitCodeOf(wrapped), "errors.As must unwrap through fmt.Errorf %%w")
+
+	// Double-wrap — errors.As traverses the full chain.
+	doubleWrapped := fmt.Errorf("outer: %w", wrapped)
+	require.Equal(t, 7, execpkg.ExitCodeOf(doubleWrapped), "errors.As must traverse two wrap layers")
+}
+
 // ---------------------------------------------------------------------------
 // ExitError
 // ---------------------------------------------------------------------------
