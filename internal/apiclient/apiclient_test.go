@@ -29,6 +29,7 @@ const sampleUPID = "UPID:pve:000A1B2C:0012D4E5:66F0A1B2:qmstart:100:root@pam:"
 // ---------------------------------------------------------------------------
 
 func TestUPIDFromRaw_ValidQuotedString(t *testing.T) {
+	t.Parallel()
 	raw, err := json.Marshal(sampleUPID)
 	require.NoError(t, err)
 
@@ -38,12 +39,14 @@ func TestUPIDFromRaw_ValidQuotedString(t *testing.T) {
 }
 
 func TestUPIDFromRaw_EmptyRawMessage(t *testing.T) {
+	t.Parallel()
 	_, err := apiclient.UPIDFromRaw(json.RawMessage{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "empty raw message")
 }
 
 func TestUPIDFromRaw_EmptyStringValue(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`""`)
 	_, err := apiclient.UPIDFromRaw(raw)
 	require.Error(t, err)
@@ -51,6 +54,7 @@ func TestUPIDFromRaw_EmptyStringValue(t *testing.T) {
 }
 
 func TestUPIDFromRaw_NotAString_Numeric(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`42`)
 	_, err := apiclient.UPIDFromRaw(raw)
 	require.Error(t, err)
@@ -58,12 +62,14 @@ func TestUPIDFromRaw_NotAString_Numeric(t *testing.T) {
 }
 
 func TestUPIDFromRaw_NotAString_Object(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"upid":"value"}`)
 	_, err := apiclient.UPIDFromRaw(raw)
 	require.Error(t, err)
 }
 
 func TestUPIDFromRaw_MalformedJSON(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`"unclosed`)
 	_, err := apiclient.UPIDFromRaw(raw)
 	require.Error(t, err)
@@ -74,6 +80,7 @@ func TestUPIDFromRaw_MalformedJSON(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuildOptions_TokenAuth(t *testing.T) {
+	t.Parallel()
 	opts := apiclient.BuildOptions(
 		"pve.example.com", 8006, "https",
 		"root", "pam",
@@ -91,6 +98,7 @@ func TestBuildOptions_TokenAuth(t *testing.T) {
 }
 
 func TestBuildOptions_PasswordAuth(t *testing.T) {
+	t.Parallel()
 	opts := apiclient.BuildOptions(
 		"192.168.1.10", 8006, "https",
 		"admin", "pve",
@@ -106,6 +114,7 @@ func TestBuildOptions_PasswordAuth(t *testing.T) {
 }
 
 func TestBuildOptions_TicketAuth(t *testing.T) {
+	t.Parallel()
 	const ticketVal = "PVE:root@pam:66F0A1B2::fakeb64=="
 	const csrfVal = "66F0A1B2:fakecsrf"
 
@@ -126,6 +135,7 @@ func TestBuildOptions_TicketAuth(t *testing.T) {
 }
 
 func TestBuildOptions_TokenPriorityOverPassword(t *testing.T) {
+	t.Parallel()
 	opts := apiclient.BuildOptions(
 		"pve.local", 0, "",
 		"root", "pam",
@@ -140,6 +150,7 @@ func TestBuildOptions_TokenPriorityOverPassword(t *testing.T) {
 }
 
 func TestBuildOptions_TicketPriorityOverPassword(t *testing.T) {
+	t.Parallel()
 	opts := apiclient.BuildOptions(
 		"pve.local", 0, "",
 		"root", "pam",
@@ -156,6 +167,7 @@ func TestBuildOptions_TicketPriorityOverPassword(t *testing.T) {
 }
 
 func TestBuildOptions_InsecureSetsSSLNone(t *testing.T) {
+	t.Parallel()
 	opts := apiclient.BuildOptions(
 		"pve.local", 0, "",
 		"root", "pam",
@@ -171,6 +183,7 @@ func TestBuildOptions_InsecureSetsSSLNone(t *testing.T) {
 }
 
 func TestBuildOptions_FingerprintAddedToCache(t *testing.T) {
+	t.Parallel()
 	const fp = "AA:BB:CC:DD:EE:FF"
 
 	opts := apiclient.BuildOptions(
@@ -186,6 +199,7 @@ func TestBuildOptions_FingerprintAddedToCache(t *testing.T) {
 }
 
 func TestBuildOptions_UsernameAlreadyQualified(t *testing.T) {
+	t.Parallel()
 	// Pre-qualified username — realm must NOT be appended a second time.
 	opts := apiclient.BuildOptions(
 		"pve.local", 0, "",
@@ -199,6 +213,7 @@ func TestBuildOptions_UsernameAlreadyQualified(t *testing.T) {
 }
 
 func TestBuildOptions_EmptyRealm(t *testing.T) {
+	t.Parallel()
 	opts := apiclient.BuildOptions(
 		"pve.local", 0, "",
 		"root", "",
@@ -235,6 +250,7 @@ func newInsecureTLSTestServer(t *testing.T) (host string, port int) {
 }
 
 func TestNewAPIClient_TokenAuth_ServicesNonNil(t *testing.T) {
+	t.Parallel()
 	host, port := newInsecureTLSTestServer(t)
 
 	opts := pve.Options{
@@ -263,6 +279,7 @@ func TestNewAPIClient_TokenAuth_ServicesNonNil(t *testing.T) {
 }
 
 func TestNewAPIClient_InvalidOptions_EmptyHost(t *testing.T) {
+	t.Parallel()
 	opts := pve.Options{}
 	ac, err := apiclient.NewAPIClient(opts)
 	require.Error(t, err)
@@ -270,6 +287,7 @@ func TestNewAPIClient_InvalidOptions_EmptyHost(t *testing.T) {
 }
 
 func TestNewAPIClient_MissingCredentials_Error(t *testing.T) {
+	t.Parallel()
 	opts := pve.Options{
 		Host: "pve.example.com",
 	}
@@ -330,6 +348,7 @@ func freshTicket() string {
 }
 
 func TestNewAPIClient_TicketAuth_WriteCarriesCSRFHeader(t *testing.T) {
+	t.Parallel()
 	ticketVal := freshTicket()
 	const csrfVal = "66F0A1B2:fakecsrftoken"
 
@@ -361,6 +380,7 @@ func TestNewAPIClient_TicketAuth_WriteCarriesCSRFHeader(t *testing.T) {
 // TestNewAPIClient_TicketAuth_NoCSRF_OmitsHeader is the negative assertion: a
 // ticket-only client with no CSRF token must not fabricate one.
 func TestNewAPIClient_TicketAuth_NoCSRF_OmitsHeader(t *testing.T) {
+	t.Parallel()
 	ticketVal := freshTicket()
 
 	rs := newRecordingServer(t)
@@ -392,6 +412,7 @@ func TestNewAPIClient_TicketAuth_NoCSRF_OmitsHeader(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetSlogLogger_NonNilInstalls(t *testing.T) {
+	t.Parallel()
 	host, port := newInsecureTLSTestServer(t)
 
 	opts := pve.Options{
@@ -420,6 +441,7 @@ func TestSetSlogLogger_NonNilInstalls(t *testing.T) {
 }
 
 func TestSetSlogLogger_NilSkips(t *testing.T) {
+	t.Parallel()
 	host, port := newInsecureTLSTestServer(t)
 
 	opts := pve.Options{
@@ -457,6 +479,7 @@ func (m *mockTaskService) WaitForUPID(_ context.Context, _ string, _ *tasks.Wait
 }
 
 func TestWaitTask_Success(t *testing.T) {
+	t.Parallel()
 	ac := &apiclient.APIClient{
 		Tasks: &mockTaskService{
 			waitStatus: &tasks.Status{Status: "stopped", ExitStatus: "OK"},
@@ -468,6 +491,7 @@ func TestWaitTask_Success(t *testing.T) {
 }
 
 func TestWaitTask_TaskServiceError(t *testing.T) {
+	t.Parallel()
 	ac := &apiclient.APIClient{
 		Tasks: &mockTaskService{
 			waitErr: fmt.Errorf("task timed out"),
@@ -481,6 +505,7 @@ func TestWaitTask_TaskServiceError(t *testing.T) {
 }
 
 func TestWaitTask_NilStatus_Error(t *testing.T) {
+	t.Parallel()
 	// Defensive guard: service returns nil status with nil error.
 	ac := &apiclient.APIClient{
 		Tasks: &mockTaskService{

@@ -16,10 +16,12 @@ func wrap(err error) error {
 }
 
 func TestFromError_Nil(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, exitcode.OK, exitcode.FromError(nil))
 }
 
 func TestFromError_Generic(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  error
@@ -37,6 +39,7 @@ func TestFromError_Generic(t *testing.T) {
 }
 
 func TestFromError_BadArgs(t *testing.T) {
+	t.Parallel()
 	base := &pveerrors.ParameterError{}
 
 	tests := []struct {
@@ -54,6 +57,7 @@ func TestFromError_BadArgs(t *testing.T) {
 }
 
 func TestFromError_Auth(t *testing.T) {
+	t.Parallel()
 	authErr := &pveerrors.AuthenticationError{TFA: false}
 	permErr := &pveerrors.PermissionError{}
 
@@ -78,6 +82,7 @@ func TestFromError_Auth(t *testing.T) {
 }
 
 func TestFromError_TFARequired(t *testing.T) {
+	t.Parallel()
 	tfaErr := &pveerrors.TFARequiredError{Ticket: "PVE:root@pam:TICKET", Types: []string{"totp"}}
 	authTFA := &pveerrors.AuthenticationError{TFA: true}
 
@@ -98,6 +103,7 @@ func TestFromError_TFARequired(t *testing.T) {
 }
 
 func TestFromError_NotFound(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  error
@@ -113,6 +119,7 @@ func TestFromError_NotFound(t *testing.T) {
 }
 
 func TestFromError_Conflict(t *testing.T) {
+	t.Parallel()
 	// ErrConflict sentinel (HTTP 409)
 	tests := []struct {
 		name string
@@ -129,6 +136,7 @@ func TestFromError_Conflict(t *testing.T) {
 }
 
 func TestFromError_Conflict_ResourceLocked(t *testing.T) {
+	t.Parallel()
 	// APIError with HTTP 423 (CodeResourceLocked) must map to Conflict.
 	locked := &pveerrors.APIError{}
 	// Access the unexported HTTPCode field indirectly — we can't set it directly.
@@ -143,6 +151,7 @@ func TestFromError_Conflict_ResourceLocked(t *testing.T) {
 }
 
 func TestFromError_Infra_Connection(t *testing.T) {
+	t.Parallel()
 	connErr := &pveerrors.ConnectionError{Host: "pve.example.com", Port: 8006, Message: "refused"}
 
 	tests := []struct {
@@ -160,6 +169,7 @@ func TestFromError_Infra_Connection(t *testing.T) {
 }
 
 func TestFromError_Infra_SSL(t *testing.T) {
+	t.Parallel()
 	sslErr := &pveerrors.SSLError{Host: "pve.example.com", Message: "cert mismatch"}
 
 	tests := []struct {
@@ -177,6 +187,7 @@ func TestFromError_Infra_SSL(t *testing.T) {
 }
 
 func TestFromError_Infra_Timeout(t *testing.T) {
+	t.Parallel()
 	timeoutErr := &pveerrors.TimeoutError{Operation: "GET /api/version", Duration: "30s"}
 
 	tests := []struct {
@@ -194,7 +205,8 @@ func TestFromError_Infra_Timeout(t *testing.T) {
 }
 
 func TestFromError_Constants(t *testing.T) {
-	// Verify constant values match the A-02 decision table.
+	t.Parallel()
+	// Verify constant values match the exit code decision table.
 	require.Equal(t, 0, exitcode.OK)
 	require.Equal(t, 1, exitcode.Generic)
 	require.Equal(t, 2, exitcode.BadArgs)

@@ -48,6 +48,7 @@ func singleFixture() output.Result {
 // ---- New -------------------------------------------------------------------
 
 func TestNew_ReturnsRenderer(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	require.NotNil(t, r)
 }
@@ -55,6 +56,7 @@ func TestNew_ReturnsRenderer(t *testing.T) {
 // ---- Format constants ------------------------------------------------------
 
 func TestFormatConstants(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, output.Format("table"), output.FormatTable)
 	require.Equal(t, output.Format("ascii"), output.FormatASCII)
 	require.Equal(t, output.Format("plain"), output.FormatPlain)
@@ -65,6 +67,7 @@ func TestFormatConstants(t *testing.T) {
 // ---- Unknown format --------------------------------------------------------
 
 func TestRender_UnknownFormat_ReturnsError(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	err := r.Render(&buf, fixture(), output.Format("csv"))
@@ -76,6 +79,7 @@ func TestRender_UnknownFormat_ReturnsError(t *testing.T) {
 // ---- Table renderer --------------------------------------------------------
 
 func TestRenderer_Table_Headers(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatTable))
@@ -86,6 +90,7 @@ func TestRenderer_Table_Headers(t *testing.T) {
 }
 
 func TestRenderer_Table_Rows(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatTable))
@@ -96,6 +101,7 @@ func TestRenderer_Table_Rows(t *testing.T) {
 }
 
 func TestRenderer_Table_Single(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := singleFixture()
@@ -109,6 +115,7 @@ func TestRenderer_Table_Single(t *testing.T) {
 }
 
 func TestRenderer_Table_Message(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := output.Result{Message: "Operation completed successfully."}
@@ -117,6 +124,7 @@ func TestRenderer_Table_Message(t *testing.T) {
 }
 
 func TestRenderer_ASCII(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatASCII))
@@ -128,6 +136,7 @@ func TestRenderer_ASCII(t *testing.T) {
 }
 
 func TestRenderer_Table_EmptyResult_NoError(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatTable))
@@ -136,6 +145,7 @@ func TestRenderer_Table_EmptyResult_NoError(t *testing.T) {
 // ---- Plain renderer --------------------------------------------------------
 
 func TestRenderer_Plain_Headers(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatPlain))
@@ -150,6 +160,7 @@ func TestRenderer_Plain_Headers(t *testing.T) {
 }
 
 func TestRenderer_Plain_Rows(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatPlain))
@@ -159,6 +170,7 @@ func TestRenderer_Plain_Rows(t *testing.T) {
 }
 
 func TestRenderer_Plain_Single(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := singleFixture()
@@ -170,6 +182,7 @@ func TestRenderer_Plain_Single(t *testing.T) {
 }
 
 func TestRenderer_Plain_Message(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := output.Result{Message: "Deleted."}
@@ -178,6 +191,7 @@ func TestRenderer_Plain_Message(t *testing.T) {
 }
 
 func TestRenderer_Plain_EmptyResult_NoError(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatPlain))
@@ -186,6 +200,7 @@ func TestRenderer_Plain_EmptyResult_NoError(t *testing.T) {
 // ---- JSON renderer ---------------------------------------------------------
 
 func TestRenderer_JSON_RawArray(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatJSON))
@@ -198,6 +213,7 @@ func TestRenderer_JSON_RawArray(t *testing.T) {
 }
 
 func TestRenderer_JSON_SyntheticTable(t *testing.T) {
+	t.Parallel()
 	// No Raw — should emit {headers, rows}.
 	r := output.New()
 	var buf bytes.Buffer
@@ -213,6 +229,7 @@ func TestRenderer_JSON_SyntheticTable(t *testing.T) {
 }
 
 func TestRenderer_JSON_Single(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := singleFixture()
@@ -226,6 +243,7 @@ func TestRenderer_JSON_Single(t *testing.T) {
 }
 
 func TestRenderer_JSON_Message(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := output.Result{Message: "hello"}
@@ -237,6 +255,7 @@ func TestRenderer_JSON_Message(t *testing.T) {
 }
 
 func TestRenderer_JSON_Empty(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatJSON))
@@ -248,6 +267,7 @@ func TestRenderer_JSON_Empty(t *testing.T) {
 // ---- YAML renderer ---------------------------------------------------------
 
 func TestRenderer_YAML_RawArray(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, fixture(), output.FormatYAML))
@@ -260,6 +280,7 @@ func TestRenderer_YAML_RawArray(t *testing.T) {
 }
 
 func TestRenderer_YAML_SyntheticTable(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := fixture()
@@ -274,6 +295,7 @@ func TestRenderer_YAML_SyntheticTable(t *testing.T) {
 }
 
 func TestRenderer_YAML_Single(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := singleFixture()
@@ -287,6 +309,7 @@ func TestRenderer_YAML_Single(t *testing.T) {
 }
 
 func TestRenderer_YAML_Message(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	res := output.Result{Message: "done"}
@@ -298,6 +321,7 @@ func TestRenderer_YAML_Message(t *testing.T) {
 }
 
 func TestRenderer_YAML_Empty(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatYAML))
@@ -311,6 +335,7 @@ func TestRenderer_YAML_Empty(t *testing.T) {
 // both must place the data under a "data" object keyed by the original field
 // names, not a key/value pair list.
 func TestRenderer_SingleMap_JSONAndYAMLSameShape(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	res := singleFixture()
 	res.Raw = nil
@@ -336,6 +361,7 @@ func TestRenderer_SingleMap_JSONAndYAMLSameShape(t *testing.T) {
 // ---- All formats on same fixture -------------------------------------------
 
 func TestRenderer_AllFormats_NoError(t *testing.T) {
+	t.Parallel()
 	r := output.New()
 	fmts := []output.Format{
 		output.FormatTable,
@@ -344,7 +370,6 @@ func TestRenderer_AllFormats_NoError(t *testing.T) {
 		output.FormatYAML,
 	}
 	for _, f := range fmts {
-		f := f
 		t.Run(string(f), func(t *testing.T) {
 			var buf bytes.Buffer
 			require.NoError(t, r.Render(&buf, fixture(), f))
