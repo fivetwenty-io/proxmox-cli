@@ -57,7 +57,7 @@ func TestBackupInfoNotBackedUp_ServerError(t *testing.T) {
 
 // TestBackupInfoCommandTree verifies backup-info exposes the not-backed-up sub-command.
 func TestBackupInfoCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var biCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "backup-info" {
@@ -115,7 +115,7 @@ func TestBackupIncludedVolumes_ServerError(t *testing.T) {
 
 // TestBackupCommandTree_IncludedVolumes verifies included-volumes is registered.
 func TestBackupCommandTree_IncludedVolumes(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var backupCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "backup" {

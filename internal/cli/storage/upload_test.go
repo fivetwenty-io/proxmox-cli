@@ -106,13 +106,28 @@ func TestStorageUpload_AsyncReturnsUPID(t *testing.T) {
 	require.Contains(t, out, upid)
 }
 
-// TestStorageUpload_RequiresFile verifies the command refuses to run without the
-// required --file flag.
-func TestStorageUpload_RequiresFile(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "upload", "local")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "file")
+// TestStorageUpload_RequiredFlags verifies the command refuses to run when a
+// required flag is omitted.
+func TestStorageUpload_RequiredFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing file",
+			args:    []string{"--node", "pve1", "upload", "local"},
+			wantErr: "file",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // TestStorageUpload_OpenError verifies a missing local file is surfaced before
@@ -131,12 +146,21 @@ func TestStorageUpload_OpenError(t *testing.T) {
 	require.False(t, called, "no upload must be attempted when the source file cannot be opened")
 }
 
-// TestStorageUpload_RequiresNode verifies the node-scoped command fails clearly
-// without a resolved node.
+// TestStorageUpload_RequiresNode verifies the node-scoped upload command fails
+// clearly without a resolved node.
 func TestStorageUpload_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	path := writeTempFile(t, "pve-cli-test.iso", "data")
-	_, err := run(t, f, "upload", "local", "--file", path)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	tests := []struct {
+		name string
+	}{
+		{name: "upload without node"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			path := writeTempFile(t, "pve-cli-test.iso", "data")
+			_, err := run(t, f, "upload", "local", "--file", path)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }

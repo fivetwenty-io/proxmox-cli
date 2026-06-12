@@ -379,7 +379,7 @@ func TestMatcher_Get(t *testing.T) {
 }
 
 func TestNotificationsCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	notif := childCommands(root)["notifications"]
 	require.NotNil(t, notif)
 	nc := childCommands(notif)

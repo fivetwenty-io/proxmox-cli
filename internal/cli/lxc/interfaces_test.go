@@ -131,7 +131,7 @@ func TestLxcInterfaces_ServerError(t *testing.T) {
 }
 
 func TestLxcInterfaces_RegisteredAndArgs(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	var ifaces *cobra.Command
 	for _, c := range cmd.Commands() {
 		if c.Name() == "interfaces" {

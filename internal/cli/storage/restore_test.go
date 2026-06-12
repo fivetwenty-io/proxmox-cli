@@ -60,20 +60,57 @@ func TestFileRestoreList_EncodesNonRootFilepath(t *testing.T) {
 	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("/etc")), q.Get("filepath"))
 }
 
-// TestFileRestoreList_RequiresVolume verifies --volume is mandatory.
-func TestFileRestoreList_RequiresVolume(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "file-restore", "list", "pbs")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "volume")
+// TestFileRestore_RequiredFlags verifies that file-restore sub-commands fail when
+// a required flag is omitted.
+func TestFileRestore_RequiredFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "list missing volume",
+			args:    []string{"--node", "pve1", "file-restore", "list", "pbs"},
+			wantErr: "volume",
+		},
+		{
+			name:    "download missing filepath",
+			args:    []string{"--node", "pve1", "file-restore", "download", "pbs", "--volume", "snap"},
+			wantErr: "filepath",
+		},
+		{
+			name:    "import-metadata missing volume",
+			args:    []string{"--node", "pve1", "import-metadata", "import"},
+			wantErr: "volume",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
-// TestFileRestoreList_RequiresNode verifies the command fails without a node.
-func TestFileRestoreList_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "file-restore", "list", "pbs", "--volume", "snap")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestFileRestore_RequiresNode verifies that node-scoped restore commands fail
+// clearly without a resolved node.
+func TestFileRestore_RequiresNode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "list without node", args: []string{"file-restore", "list", "pbs", "--volume", "snap"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // TestFileRestoreDownload_WritesToOutputFile verifies the download command
@@ -118,14 +155,6 @@ func TestFileRestoreDownload_TarForwarded(t *testing.T) {
 	require.Equal(t, "1", q.Get("tar"))
 }
 
-// TestFileRestoreDownload_RequiresFilepath verifies --filepath is mandatory.
-func TestFileRestoreDownload_RequiresFilepath(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "file-restore", "download", "pbs", "--volume", "snap")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "filepath")
-}
-
 // TestImportMetadata_RendersFields verifies import-metadata queries the endpoint
 // with the volume and renders the detected guest type and source.
 func TestImportMetadata_RendersFields(t *testing.T) {
@@ -147,12 +176,4 @@ func TestImportMetadata_RendersFields(t *testing.T) {
 	require.Equal(t, http.MethodGet, method)
 	require.Equal(t, "import:vm.ova", q.Get("volume"))
 	require.Contains(t, out, "esxi")
-}
-
-// TestImportMetadata_RequiresVolume verifies --volume is mandatory.
-func TestImportMetadata_RequiresVolume(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "import-metadata", "import")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "volume")
 }

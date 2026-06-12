@@ -52,26 +52,33 @@ func TestNodeFirewallRules_Get(t *testing.T) {
 	require.Contains(t, buf.String(), "ACCEPT")
 }
 
-func TestNodeFirewallRules_CreateRequiresType(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "firewall", "rules", "create", "--action", "ACCEPT"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
-}
-
-func TestNodeFirewallRules_CreateRequiresAction(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "firewall", "rules", "create", "--type", "in"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--action is required")
+func TestNodeFirewallRules_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "create missing type",
+			args:    []string{"--node", "pve1", "node", "firewall", "rules", "create", "--action", "ACCEPT"},
+			wantErr: "--type is required",
+		},
+		{
+			name:    "create missing action",
+			args:    []string{"--node", "pve1", "node", "firewall", "rules", "create", "--type", "in"},
+			wantErr: "--action is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+			root.SetArgs(append(prefix, tc.args...))
+			err := root.Execute()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 func TestNodeFirewallRules_CreateForwardsFields(t *testing.T) {
@@ -140,17 +147,32 @@ func TestNodeFirewallRules_DeleteWithYes(t *testing.T) {
 	require.Contains(t, buf.String(), "deleted")
 }
 
-// TestNodeFirewallRules_RequiresNode verifies the node-scoped command fails
-// clearly when no node is resolvable.
-func TestNodeFirewallRules_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "firewall", "rules", "list"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestNodeFirewall_RequiresNode verifies that node-scoped firewall sub-commands
+// fail clearly when no node is resolvable.
+func TestNodeFirewall_RequiresNode(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "rules list",
+			args: []string{"node", "firewall", "rules", "list"},
+		},
+		{
+			name: "options get",
+			args: []string{"node", "firewall", "options", "get"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+			root.SetArgs(append(prefix, tc.args...))
+			err := root.Execute()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 func TestNodeFirewallRules_APIError(t *testing.T) {
@@ -215,17 +237,6 @@ func TestNodeFirewallOptions_SetForwardsFields(t *testing.T) {
 	require.Equal(t, "0", gotForm.Get("nosmurfs"))
 }
 
-func TestNodeFirewallOptions_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "firewall", "options", "get"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
-}
-
 // ---------------------------------------------------------------------------
 // command tree
 // ---------------------------------------------------------------------------
@@ -235,7 +246,7 @@ func TestNodeFirewallOptions_RequiresNode(t *testing.T) {
 func TestNodeFirewall_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {

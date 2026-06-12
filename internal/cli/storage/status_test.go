@@ -43,12 +43,24 @@ func TestStorageStatus_RendersFields(t *testing.T) {
 	require.Contains(t, out, "dir")
 }
 
-// TestStorageStatus_RequiresNode verifies the command fails when no node is set.
-func TestStorageStatus_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "status", testStorage)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestStorageNodeScoped_RequiresNode verifies that node-scoped storage commands
+// fail clearly when no node is set.
+func TestStorageNodeScoped_RequiresNode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "status", args: []string{"status", testStorage}},
+		{name: "identity", args: []string{"identity", testStorage}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // TestStorageStatus_ServerError verifies API errors are surfaced.
@@ -78,14 +90,6 @@ func TestStorageIdentity_RendersIdAndType(t *testing.T) {
 	require.Equal(t, identityPath, rec.path)
 	require.Contains(t, out, "/var/lib/vz")
 	require.Contains(t, out, "dir")
-}
-
-// TestStorageIdentity_RequiresNode verifies the command fails when no node is set.
-func TestStorageIdentity_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "identity", testStorage)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 // TestStorageIdentity_ServerError verifies API errors are surfaced.

@@ -48,7 +48,7 @@ func newDeps(t *testing.T, f *testhelper.FakePVE, format output.Format) *cli.Dep
 // run builds the access group command, injects deps via context, captures
 // output in buf, and executes it.
 func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -59,7 +59,7 @@ func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 // runWithStdin behaves like run but feeds stdin so commands that prompt (such
 // as `access password set` without --password) can read interactive input.
 func runWithStdin(deps *cli.Deps, buf *bytes.Buffer, stdin string, args ...string) error {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -102,7 +102,7 @@ func captureBody(r *http.Request) map[string]any {
 func TestAccess_GroupRegistered(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 
 	found := false
 	for _, c := range root.Commands() {
@@ -609,18 +609,35 @@ func TestAccess_ACLSet(t *testing.T) {
 	require.Contains(t, buf.String(), "ACL updated.")
 }
 
-func TestAccess_ACLSet_RequiresPath(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable)
-	var buf bytes.Buffer
-	require.Error(t, run(deps, &buf, "acl", "set", "--roles", "PVEVMUser"))
-}
-
-func TestAccess_ACLSet_RequiresRoles(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable)
-	var buf bytes.Buffer
-	require.Error(t, run(deps, &buf, "acl", "set", "--path", "/vms"))
+func TestAccess_ACL_RequiredFlags(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "acl set missing --path",
+			args:    []string{"acl", "set", "--roles", "PVEVMUser"},
+			wantErr: "path",
+		},
+		{
+			name:    "acl set missing --roles",
+			args:    []string{"acl", "set", "--path", "/vms"},
+			wantErr: "roles",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable)
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -691,11 +708,30 @@ func TestAccess_PasswordSet(t *testing.T) {
 	require.Contains(t, buf.String(), "Password updated.")
 }
 
-func TestAccess_PasswordSet_RequiresUserid(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable)
-	var buf bytes.Buffer
-	require.Error(t, run(deps, &buf, "password", "set", "--password", "s3cret"))
+func TestAccess_Password_RequiredFlags(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "password set missing --userid",
+			args:    []string{"password", "set", "--password", "s3cret"},
+			wantErr: "userid",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable)
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // TestAccess_PasswordSet_PromptsForPassword verifies the spec contract that

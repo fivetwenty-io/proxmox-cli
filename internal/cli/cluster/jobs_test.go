@@ -72,34 +72,49 @@ func TestJobsRealmSync_CreateForwardsFields(t *testing.T) {
 	require.False(t, hasComment, "unset --comment must be omitted from the request body")
 }
 
-// TestJobsRealmSync_CreateRequiresSchedule verifies create rejects a missing schedule.
-func TestJobsRealmSync_CreateRequiresSchedule(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+// TestJobsRealmSyncCommands_RequiredFlags consolidates shape-1 (flag-required) guards
+// for realm-sync create and set. Both require --schedule; each case verifies the error
+// message names the missing flag and that no HTTP request is issued.
+func TestJobsRealmSyncCommands_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		handlerPath string
+		args        []string
+		wantErr     string
+	}{
+		{
+			name:        "RealmSyncCreate_RequiresSchedule",
+			handlerPath: "POST /api2/json/cluster/jobs/realm-sync/sync-ldap",
+			args:        []string{"jobs", "realm-sync", "create", "sync-ldap", "--realm", "ldap"},
+			wantErr:     "schedule",
+		},
+		{
+			name:        "RealmSyncSet_RequiresSchedule",
+			handlerPath: "PUT /api2/json/cluster/jobs/realm-sync/sync-ldap",
+			args:        []string{"jobs", "realm-sync", "set", "sync-ldap", "--comment", "x"},
+			wantErr:     "schedule",
+		},
+	}
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "jobs", "realm-sync", "create", "sync-ldap", "--realm", "ldap")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "schedule")
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ac := newFakeClient(t)
 
-// TestJobsRealmSync_SetRequiresSchedule verifies set rejects a missing schedule,
-// because the API rewrites the full schedule on every update.
-func TestJobsRealmSync_SetRequiresSchedule(t *testing.T) {
-	f, ac := newFakeClient(t)
-	called := false
-	f.HandleFunc("PUT /api2/json/cluster/jobs/realm-sync/sync-ldap", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
+			var called bool
+			f.HandleFunc(tc.handlerPath, func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				testhelper.WriteData(w, nil)
+			})
 
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+			deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "jobs", "realm-sync", "set", "sync-ldap", "--comment", "x")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "schedule")
-	require.False(t, called, "set must not issue a PUT without the required --schedule")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+			require.False(t, called, "request must not be issued when required field %q is missing", tc.wantErr)
+		})
+	}
 }
 
 // TestJobsRealmSync_SetForwardsChanged verifies set forwards the required schedule
@@ -161,7 +176,7 @@ func TestJobsRealmSync_DeleteWithYes(t *testing.T) {
 
 // TestJobsCommandTree verifies the jobs realm-sync verb set is registered.
 func TestJobsCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	jobs := childCommands(root)["jobs"]
 	require.NotNil(t, jobs, "cluster must have a jobs command")
 

@@ -290,22 +290,35 @@ func TestAccess_TfaCreate_RecoveryCodes(t *testing.T) {
 	require.Contains(t, out, "code-c")
 }
 
-func TestAccess_TfaCreate_RequiresType(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable)
-	var buf bytes.Buffer
-	err := run(deps, &buf, "tfa", "create", "root@pam", "--password", "s")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type")
-}
-
-func TestAccess_TfaCreate_RejectsInvalidType(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable)
-	var buf bytes.Buffer
-	err := run(deps, &buf, "tfa", "create", "root@pam", "--type", "bogus", "--password", "s")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid --type")
+func TestAccess_TfaCreate_RequiredFlags(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing --type",
+			args:    []string{"tfa", "create", "root@pam", "--password", "s"},
+			wantErr: "--type",
+		},
+		{
+			name:    "invalid --type value",
+			args:    []string{"tfa", "create", "root@pam", "--type", "bogus", "--password", "s"},
+			wantErr: "invalid --type",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable)
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 func TestAccess_TfaCreate_RequiresPassword(t *testing.T) {

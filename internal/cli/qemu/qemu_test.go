@@ -35,7 +35,7 @@ func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 // tests can inject stdin per-command without touching the process-wide os.Stdin.
 // Pass nil stdin to get the default cobra behaviour (reads os.Stdin).
 func runWithStdin(deps *cli.Deps, buf *bytes.Buffer, stdin io.Reader, args ...string) error {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -861,7 +861,7 @@ func TestQemuList_JSON(t *testing.T) {
 // --- command tree / registration ------------------------------------------
 
 func TestQemuCommandTree(t *testing.T) {
-	root := newGroupCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	require.Equal(t, "qemu", root.Name())
 
 	names := make(map[string]*cobra.Command)
@@ -895,7 +895,7 @@ func TestQemuCommandTree(t *testing.T) {
 func TestQemuGroupRegistered(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 
 	found := false
 	for _, c := range root.Commands() {

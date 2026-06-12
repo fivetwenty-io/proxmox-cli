@@ -59,24 +59,34 @@ func TestDiskResize_WorkerUPID(t *testing.T) {
 	require.Contains(t, buf.String(), "resized")
 }
 
-func TestDiskResize_RequiresDisk(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", false)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "disk", "resize", "101", "--size", "+5G")
-	err := run()
-	require.Error(t, err)
-	require.ErrorContains(t, err, "--disk is required")
-}
-
-func TestDiskResize_RequiresSize(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", false)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "disk", "resize", "101", "--disk", "rootfs")
-	err := run()
-	require.Error(t, err)
-	require.ErrorContains(t, err, "--size is required")
+func TestDiskResize_RequiresFlag(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing --disk",
+			args:    []string{"disk", "resize", "101", "--size", "+5G"},
+			wantErr: "--disk is required",
+		},
+		{
+			name:    "missing --size",
+			args:    []string{"disk", "resize", "101", "--disk", "rootfs"},
+			wantErr: "--size is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable, "pve1", false)
+			var buf bytes.Buffer
+			run := newTestCmd(t, deps, &buf, tc.args...)
+			err := run()
+			require.Error(t, err)
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestDiskResize_ServerError(t *testing.T) {
@@ -207,7 +217,7 @@ func TestDiskMove_ServerError(t *testing.T) {
 // selection uses --target-vmid, --target-volume, and --storage.
 func TestDisk_NoLocalTargetFlag(t *testing.T) {
 	var disk *cobra.Command
-	for _, c := range newGroupCmd(&cli.Deps{}).Commands() {
+	for _, c := range Group(&cli.Deps{}).Commands() {
 		if c.Name() == "disk" {
 			disk = c
 		}

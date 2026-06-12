@@ -162,7 +162,7 @@ func TestClusterConfigNodes_DeleteWithYes(t *testing.T) {
 // TestClusterI15CommandTree verifies the options, config, and replication
 // sub-trees expose their expected verbs.
 func TestClusterI15CommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	top := childCommands(root)
 
 	require.Contains(t, top, "options")

@@ -78,7 +78,7 @@ func TestQemuMonitor_RequiresNode(t *testing.T) {
 }
 
 func TestQemuMonitor_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true
@@ -141,7 +141,7 @@ func TestQemuSendkey_RequiresNode(t *testing.T) {
 }
 
 func TestQemuSendkey_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true

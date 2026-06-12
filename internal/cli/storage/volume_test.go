@@ -47,12 +47,32 @@ func TestVolumeGet_InvalidVolumeID(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid volume ID")
 }
 
-// TestVolumeGet_RequiresNode verifies the command fails without a node.
-func TestVolumeGet_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "volume", "get", testVolume)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestVolume_RequiresNode verifies that node-scoped volume sub-commands fail
+// clearly without a resolved node.
+func TestVolume_RequiresNode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "get", args: []string{"volume", "get", testVolume}},
+		{name: "delete", args: []string{"volume", "delete", testVolume, "--yes"}},
+		{
+			name: "alloc",
+			args: []string{"volume", "alloc",
+				"--vmid", "100",
+				"--filename", "local:vm-100-disk-0",
+				"--size", "4G",
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // TestVolumeSet_ForwardsNotesAndProtected verifies set forwards both attributes
@@ -133,12 +153,28 @@ func TestVolumeCopy_TargetNodeForwarded(t *testing.T) {
 	require.Equal(t, "pve2", rec.form.Get("target_node"))
 }
 
-// TestVolumeCopy_RequiresTarget verifies --target is mandatory.
-func TestVolumeCopy_RequiresTarget(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "volume", "copy", testVolume)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "target")
+// TestVolume_RequiredFlags verifies that volume sub-commands fail when a required
+// flag is omitted.
+func TestVolume_RequiredFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "copy missing target-volume",
+			args:    []string{"--node", "pve1", "volume", "copy", testVolume},
+			wantErr: "target",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // --- volume delete ---
@@ -195,14 +231,6 @@ func TestVolumeDelete_InvalidVolumeID(t *testing.T) {
 	_, err := run(t, f, "--node", "pve1", "volume", "delete", "no-colon-here", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid volume ID")
-}
-
-// TestVolumeDelete_RequiresNode verifies the command fails without a node.
-func TestVolumeDelete_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "volume", "delete", testVolume, "--yes")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 // TestVolumeDelete_ServerError verifies API errors are surfaced.
@@ -319,18 +347,6 @@ func TestVolumeAlloc_InvalidFilenameFormat(t *testing.T) {
 	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "storage")
-}
-
-// TestVolumeAlloc_RequiresNode verifies the command fails without a node.
-func TestVolumeAlloc_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "volume", "alloc",
-		"--vmid", "100",
-		"--filename", "local:vm-100-disk-0",
-		"--size", "4G",
-	)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 // TestVolumeAlloc_ServerError verifies API errors are surfaced.

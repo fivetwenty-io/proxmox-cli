@@ -108,7 +108,7 @@ func TestNodeVzdump_BadUPID(t *testing.T) {
 func TestNodeVzdump_NoLocalTargetFlag(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 	var nodeCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "node" {

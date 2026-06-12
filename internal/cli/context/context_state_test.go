@@ -47,7 +47,7 @@ func makeDeps(t *testing.T, path string, cfg *config.Config) *cli.Deps {
 // output buffer. stdin is "" for non-interactive paths.
 func run(t *testing.T, deps *cli.Deps, stdin string, args ...string) (string, error) {
 	t.Helper()
-	cmd := newContextCmd(nil)
+	cmd := Group(nil)
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -202,7 +202,7 @@ func TestSelect_Picker_ExplicitEOF_Error(t *testing.T) {
 	path, cfg := makeConfig(t, twoContextCfg())
 	deps := makeDeps(t, path, cfg)
 
-	cmd := newContextCmd(nil)
+	cmd := Group(nil)
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -218,7 +218,7 @@ func TestSelect_Picker_OutOfRangeIndex_Error(t *testing.T) {
 	path, cfg := makeConfig(t, twoContextCfg())
 	deps := makeDeps(t, path, cfg)
 
-	cmd := newContextCmd(nil)
+	cmd := Group(nil)
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -435,7 +435,7 @@ func collectLeafCmds(root *cobra.Command) []*cobra.Command {
 // The test is future-proof: any verb added to addSubcommands without the
 // annotation will fail here automatically.
 func TestAnnotations_NoClient_AllVerbs(t *testing.T) {
-	root := newContextCmd(nil)
+	root := Group(nil)
 	leaves := collectLeafCmds(root)
 	require.NotEmpty(t, leaves, "no leaf commands found under context group")
 
@@ -466,7 +466,7 @@ func TestAnnotations_NoClient_ExpectedVerbCount(t *testing.T) {
 		"validate": true,
 	}
 
-	root := newContextCmd(nil)
+	root := Group(nil)
 	leaves := collectLeafCmds(root)
 	got := make(map[string]bool, len(leaves))
 	for _, cmd := range leaves {
@@ -588,7 +588,7 @@ func TestAdd_CreateAlias_Works(t *testing.T) {
 // TestAdd_CreateAlias_HelpContainsAlias verifies the command carries the alias
 // declaration so `pve context create --help` resolves.
 func TestAdd_CreateAlias_HelpContainsAlias(t *testing.T) {
-	root := newContextCmd(nil)
+	root := Group(nil)
 	var addCmd *cobra.Command
 	for _, sub := range root.Commands() {
 		if sub.Name() == "add" {

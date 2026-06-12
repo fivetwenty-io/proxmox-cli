@@ -78,26 +78,38 @@ func TestNodeNetwork_Get(t *testing.T) {
 // node network create
 // ---------------------------------------------------------------------------
 
-func TestNodeNetwork_CreateRequiresIface(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "network", "create", "--type", "bridge"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--iface is required")
-}
-
-func TestNodeNetwork_CreateRequiresType(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "network", "create", "--iface", "vmbr1"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
+func TestNodeNetwork_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "create missing iface",
+			args:    []string{"--node", "pve1", "node", "network", "create", "--type", "bridge"},
+			wantErr: "--iface is required",
+		},
+		{
+			name:    "create missing type",
+			args:    []string{"--node", "pve1", "node", "network", "create", "--iface", "vmbr1"},
+			wantErr: "--type is required",
+		},
+		{
+			name:    "update missing type",
+			args:    []string{"--node", "pve1", "node", "network", "set", "vmbr0", "--cidr", "10.0.0.6/24"},
+			wantErr: "--type is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+			root.SetArgs(append(prefix, tc.args...))
+			err := root.Execute()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 func TestNodeNetwork_CreateForwardsFields(t *testing.T) {
@@ -131,17 +143,6 @@ func TestNodeNetwork_CreateForwardsFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 // node network set
 // ---------------------------------------------------------------------------
-
-func TestNodeNetwork_UpdateRequiresType(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "network", "set", "vmbr0", "--cidr", "10.0.0.6/24"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
-}
 
 func TestNodeNetwork_UpdateForwardsFields(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -307,7 +308,7 @@ func TestNodeNetwork_RequiresNode(t *testing.T) {
 func TestNodeNetwork_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {

@@ -59,24 +59,56 @@ func TestClusterFirewallRules_Get(t *testing.T) {
 	require.Contains(t, out, "tcp")
 }
 
-func TestClusterFirewallRules_CreateRequiresType(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+// TestClusterFirewallCommands_RequiredFlags consolidates shape-1 (flag-required) guards
+// for firewall rules and group sub-commands. Each case omits a single required flag
+// and verifies that the error message names the missing flag and that no HTTP
+// request is issued.
+func TestClusterFirewallCommands_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		handlerPath string
+		args        []string
+		wantErr     string
+	}{
+		{
+			name:        "FirewallRulesCreate_RequiresType",
+			handlerPath: "POST /api2/json/cluster/firewall/rules",
+			args:        []string{"firewall", "rules", "create", "--action", "ACCEPT"},
+			wantErr:     "--type is required",
+		},
+		{
+			name:        "FirewallRulesCreate_RequiresAction",
+			handlerPath: "POST /api2/json/cluster/firewall/rules",
+			args:        []string{"firewall", "rules", "create", "--type", "in"},
+			wantErr:     "--action is required",
+		},
+		{
+			name:        "FirewallGroupRuleAdd_RequiresType",
+			handlerPath: "POST /api2/json/cluster/firewall/groups/pvecli-grp",
+			args:        []string{"firewall", "group", "rule-add", "pvecli-grp", "--action", "ACCEPT"},
+			wantErr:     "--type is required",
+		},
+	}
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "rules", "create", "--action", "ACCEPT")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ac := newFakeClient(t)
 
-func TestClusterFirewallRules_CreateRequiresAction(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+			var called bool
+			f.HandleFunc(tc.handlerPath, func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				testhelper.WriteData(w, nil)
+			})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "rules", "create", "--type", "in")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--action is required")
+			deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+			require.False(t, called, "request must not be issued when required flag %q is missing", tc.wantErr)
+		})
+	}
 }
 
 func TestClusterFirewallRules_CreateForwardsFields(t *testing.T) {
@@ -233,16 +265,6 @@ func TestClusterFirewallGroup_RuleAddForwardsFields(t *testing.T) {
 	require.Equal(t, "in", gotForm.Get("type"))
 	require.Equal(t, "ACCEPT", gotForm.Get("action"))
 	require.Equal(t, "80", gotForm.Get("dport"))
-}
-
-func TestClusterFirewallGroup_RuleAddRequiresType(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "group", "rule-add", "pvecli-grp", "--action", "ACCEPT")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
 }
 
 func TestClusterFirewallGroup_RuleDeleteWithYes(t *testing.T) {
@@ -470,7 +492,7 @@ func TestClusterFirewallOptions_SetForwardsFields(t *testing.T) {
 // expected verb groups and that no command shadows the root -t/--target or
 // --node selector (the latter is also enforced by the package-wide walker).
 func TestClusterFirewallCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var fw *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "firewall" {

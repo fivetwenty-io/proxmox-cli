@@ -49,7 +49,7 @@ func fakeClient(t *testing.T, f *testhelper.FakePVE) *apiclient.APIClient {
 // run builds the version group command, injects deps via context, captures
 // output in buf, and executes it with the supplied args.
 func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -205,7 +205,7 @@ func TestVersion_Client_JSONArchMatchesInfo(t *testing.T) {
 // TestVersion_Client_HasNoClientAnnotation verifies that the client sub-command
 // is annotated so the root skips API client construction for it.
 func TestVersion_Client_HasNoClientAnnotation(t *testing.T) {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	var client *cobra.Command
 	for _, c := range cmd.Commands() {
 		if c.Name() == "client" {
@@ -221,7 +221,7 @@ func TestVersion_Client_HasNoClientAnnotation(t *testing.T) {
 func TestVersion_GroupRegistered(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 
 	found := false
 	for _, c := range root.Commands() {

@@ -15,53 +15,71 @@ import (
 // remote-migrate is classified deferred-irreversible: tests use the fake server
 // to verify flag wiring and the --yes gate; no live e2e is designed.
 
-func TestQemuRemoteMigrate_RequiresYes(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuRemoteMigrate_RequiredFlags consolidates shape-1 (flag-required)
+// cases for remote-migrate. Each case omits one required flag or the --yes
+// confirmation flag and expects the error substring listed (matched
+// case-insensitively where noted). No HTTP handler is registered.
+func TestQemuRemoteMigrate_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string // matched via strings.ToLower(err.Error()) unless noted
+		exactMatch  bool   // when true, match err.Error() directly (no ToLower)
+	}{
+		{
+			name: "missing yes confirmation",
+			args: []string{
+				"remote-migrate", "100",
+				"--target-endpoint", "https://remote:8006",
+				"--target-storage", "local-lvm",
+				"--target-bridge", "vmbr0",
+			},
+			wantContain: "confirmation",
+			exactMatch:  true,
+		},
+		{
+			name: "missing target-endpoint",
+			args: []string{
+				"remote-migrate", "100", "--yes",
+				"--target-storage", "local-lvm",
+				"--target-bridge", "vmbr0",
+			},
+			wantContain: "target-endpoint",
+		},
+		{
+			name: "missing target-storage",
+			args: []string{
+				"remote-migrate", "100", "--yes",
+				"--target-endpoint", "https://remote:8006",
+				"--target-bridge", "vmbr0",
+			},
+			wantContain: "target-storage",
+		},
+		{
+			name: "missing target-bridge",
+			args: []string{
+				"remote-migrate", "100", "--yes",
+				"--target-endpoint", "https://remote:8006",
+				"--target-storage", "local-lvm",
+			},
+			wantContain: "target-bridge",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "remote-migrate", "100",
-		"--target-endpoint", "https://remote:8006",
-		"--target-storage", "local-lvm",
-		"--target-bridge", "vmbr0")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "confirmation")
-}
-
-func TestQemuRemoteMigrate_RequiresTargetEndpoint(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "remote-migrate", "100", "--yes",
-		"--target-storage", "local-lvm",
-		"--target-bridge", "vmbr0")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "target-endpoint")
-}
-
-func TestQemuRemoteMigrate_RequiresTargetStorage(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "remote-migrate", "100", "--yes",
-		"--target-endpoint", "https://remote:8006",
-		"--target-bridge", "vmbr0")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "target-storage")
-}
-
-func TestQemuRemoteMigrate_RequiresTargetBridge(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "remote-migrate", "100", "--yes",
-		"--target-endpoint", "https://remote:8006",
-		"--target-storage", "local-lvm")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "target-bridge")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			if tc.exactMatch {
+				require.Contains(t, err.Error(), tc.wantContain)
+			} else {
+				require.Contains(t, strings.ToLower(err.Error()), tc.wantContain)
+			}
+		})
+	}
 }
 
 func TestQemuRemoteMigrate_SuccessAsync(t *testing.T) {
@@ -127,7 +145,7 @@ func TestQemuRemoteMigrate_ServerError(t *testing.T) {
 }
 
 func TestQemuRemoteMigrate_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true

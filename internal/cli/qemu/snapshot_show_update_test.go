@@ -117,7 +117,7 @@ func TestQemuSnapshotUpdate_ServerError(t *testing.T) {
 }
 
 func TestQemuSnapshotCommandTree_ShowUpdate(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	var snap *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "snapshot" {

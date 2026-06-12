@@ -77,12 +77,24 @@ func TestStorageRrddata_OmitsCfWhenUnset(t *testing.T) {
 	require.NotContains(t, gotQuery, "cf=")
 }
 
-// TestStorageRrddata_RequiresNode verifies the command fails without a node.
-func TestStorageRrddata_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "rrddata", testStorage)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestStorageMetrics_RequiresNode verifies that rrddata and rrd both fail without
+// a node.
+func TestStorageMetrics_RequiresNode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "rrddata", args: []string{"rrddata", testStorage}},
+		{name: "rrd", args: []string{"rrd", testStorage, "--ds", "used"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // TestStorageRrddata_ServerError verifies API errors are surfaced.
@@ -115,18 +127,26 @@ func TestStorageRrd_ForwardsParams(t *testing.T) {
 	require.Contains(t, out, "local-hour.png")
 }
 
-// TestStorageRrd_RequiresDs verifies --ds is mandatory.
-func TestStorageRrd_RequiresDs(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "rrd", testStorage)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "ds")
-}
-
-// TestStorageRrd_RequiresNode verifies the command fails without a node.
-func TestStorageRrd_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "rrd", testStorage, "--ds", "used")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestStorageRrd_RequiredFlags verifies that rrd fails when a required flag is
+// omitted.
+func TestStorageRrd_RequiredFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing ds",
+			args:    []string{"--node", "pve1", "rrd", testStorage},
+			wantErr: "ds",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }

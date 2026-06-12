@@ -115,7 +115,7 @@ func TestClusterFirewallRefs_ServerError(t *testing.T) {
 
 // TestClusterFirewallCommandTree_GapCommands verifies macros and refs are registered.
 func TestClusterFirewallCommandTree_GapCommands(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var fw *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "firewall" {

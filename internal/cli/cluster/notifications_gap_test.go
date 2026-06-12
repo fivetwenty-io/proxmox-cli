@@ -125,7 +125,7 @@ func TestNotificationsMatcherFieldValues_ServerError(t *testing.T) {
 
 // TestNotificationsCommandTree_GapCommands verifies the new gap commands are registered.
 func TestNotificationsCommandTree_GapCommands(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var notif *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "notifications" {

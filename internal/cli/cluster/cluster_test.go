@@ -21,7 +21,7 @@ import (
 // run builds the cluster group command, injects deps via context, captures
 // output in buf, and executes it with the supplied args.
 func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
-	cmd := newClusterCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -280,7 +280,7 @@ func TestClusterNextID_ServerError(t *testing.T) {
 
 // TestClusterCommandTree verifies the group exposes the expected sub-commands.
 func TestClusterCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	require.Equal(t, "cluster", root.Name())
 
 	names := make(map[string]bool)
@@ -297,7 +297,7 @@ func TestClusterCommandTree(t *testing.T) {
 func TestClusterGroupRegistered(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 
 	found := false
 	for _, c := range root.Commands() {

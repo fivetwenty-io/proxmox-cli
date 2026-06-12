@@ -201,24 +201,49 @@ func TestHaResourceMigrate_PostsTargetNode(t *testing.T) {
 	require.Contains(t, buf.String(), "pve2")
 }
 
-// TestHaResourceMigrate_RequiresTargetNode verifies migrate refuses without a
-// --target-node and never issues the request.
-func TestHaResourceMigrate_RequiresTargetNode(t *testing.T) {
-	f, ac := newFakeClient(t)
+// TestHaResourceCommands_RequiredFlags consolidates shape-1 (flag-required) guards
+// for ha resource sub-commands. Each case omits a single required flag and verifies
+// that the error message names the missing flag and that no HTTP request is issued.
+func TestHaResourceCommands_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		handlerPath string
+		args        []string
+		wantErr     string
+	}{
+		{
+			name:        "HaResourceMigrate_RequiresTargetNode",
+			handlerPath: "POST /api2/json/cluster/ha/resources/vm:100/migrate",
+			args:        []string{"ha", "resource", "migrate", "vm:100"},
+			wantErr:     "--target-node",
+		},
+		{
+			name:        "HaResourceRelocate_RequiresTargetNode",
+			handlerPath: "POST /api2/json/cluster/ha/resources/vm:100/relocate",
+			args:        []string{"ha", "resource", "relocate", "vm:100"},
+			wantErr:     "--target-node",
+		},
+	}
 
-	var called bool
-	f.HandleFunc("POST /api2/json/cluster/ha/resources/vm:100/migrate", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ac := newFakeClient(t)
 
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+			var called bool
+			f.HandleFunc(tc.handlerPath, func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				testhelper.WriteData(w, nil)
+			})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "ha", "resource", "migrate", "vm:100")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--target-node")
-	require.False(t, called, "migrate must not be issued without --target-node")
+			deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+			require.False(t, called, "request must not be issued when required flag %q is missing", tc.wantErr)
+		})
+	}
 }
 
 // TestHaResourceRelocate_PostsTargetNode verifies `relocate <sid> --target-node`
@@ -246,26 +271,6 @@ func TestHaResourceRelocate_PostsTargetNode(t *testing.T) {
 	require.Equal(t, "pve2", gotForm.Get("node"))
 }
 
-// TestHaResourceRelocate_RequiresTargetNode verifies relocate refuses without a
-// --target-node and never issues the request.
-func TestHaResourceRelocate_RequiresTargetNode(t *testing.T) {
-	f, ac := newFakeClient(t)
-
-	var called bool
-	f.HandleFunc("POST /api2/json/cluster/ha/resources/vm:100/relocate", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "ha", "resource", "relocate", "vm:100")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--target-node")
-	require.False(t, called, "relocate must not be issued without --target-node")
-}
-
 // TestHaResourceList_ServerError verifies a server failure on list surfaces an error.
 func TestHaResourceList_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -281,7 +286,7 @@ func TestHaResourceList_ServerError(t *testing.T) {
 
 // TestHaCommandTree verifies the ha → resource sub-tree exposes the expected verbs.
 func TestHaCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var ha *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "ha" {

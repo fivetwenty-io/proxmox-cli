@@ -109,7 +109,7 @@ func TestQemuCloudinitRequiresNode(t *testing.T) {
 }
 
 func TestQemuCloudinitCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	var ci *cobra.Command
 	for _, c := range cmd.Commands() {
 		if c.Name() == "cloudinit" {

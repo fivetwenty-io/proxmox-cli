@@ -33,7 +33,7 @@ func runTask(t *testing.T, f *testhelper.FakePVE, node string, format string, ar
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
 	root.SetContext(context.Background())
-	cli.AddGroups(root, &cli.Deps{})
+	addTaskGroup(root)
 
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -278,7 +278,7 @@ func TestGroupCmd_Subcommands(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
 	root.SetContext(context.Background())
-	cli.AddGroups(root, &cli.Deps{})
+	addTaskGroup(root)
 
 	var group *cobra.Command
 	for _, c := range root.Commands() {

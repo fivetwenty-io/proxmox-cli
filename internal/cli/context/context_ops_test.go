@@ -28,7 +28,7 @@ func runOpsCmd(cfg *config.Config, tmpPath string, buf *bytes.Buffer, args ...st
 		Out:        output.New(),
 		Format:     output.FormatJSON,
 	}
-	cmd := newContextCmd(nil)
+	cmd := Group(nil)
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -598,7 +598,7 @@ func TestContextValidate_TokenMissingTokenIDInvalid(t *testing.T) {
 func TestContextCopyEditValidateAreNoClient(t *testing.T) {
 	for _, name := range []string{"copy", "edit", "validate"} {
 		t.Run(name, func(t *testing.T) {
-			cmd := newContextCmd(&cli.Deps{})
+			cmd := Group(&cli.Deps{})
 			found := false
 			for _, sub := range cmd.Commands() {
 				if sub.Name() == name {

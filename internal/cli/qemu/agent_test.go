@@ -135,7 +135,7 @@ func TestQemuAgentServerError(t *testing.T) {
 }
 
 func TestQemuAgentCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	var agent *cobra.Command
 	for _, c := range cmd.Commands() {
 		if c.Name() == "agent" {

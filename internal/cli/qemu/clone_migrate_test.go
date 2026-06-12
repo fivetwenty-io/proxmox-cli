@@ -34,14 +34,37 @@ func TestQemuClone_Blocking(t *testing.T) {
 	require.Contains(t, buf.String(), "cloned")
 }
 
-func TestQemuClone_RequiresNewid(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuCloneMigrate_RequiredFlags consolidates shape-1 (flag-required) cases
+// for clone and migrate. Each case omits one required flag and expects the exact
+// error substring listed; no HTTP handler is registered.
+func TestQemuCloneMigrate_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string
+	}{
+		{
+			name:        "clone missing newid",
+			args:        []string{"clone", "100"},
+			wantContain: "--newid is required",
+		},
+		{
+			name:        "migrate missing target-node",
+			args:        []string{"migrate", "100"},
+			wantContain: "--target-node is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "clone", "100")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--newid is required")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantContain)
+		})
+	}
 }
 
 func TestQemuClone_FlagParams(t *testing.T) {
@@ -100,16 +123,6 @@ func TestQemuMigrate_Blocking(t *testing.T) {
 	require.Contains(t, buf.String(), "migrated")
 }
 
-func TestQemuMigrate_RequiresTargetNode(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "migrate", "100")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--target-node is required")
-}
-
 func TestQemuMigrate_FlagParams(t *testing.T) {
 	f, ac := newFakeClient(t)
 
@@ -139,7 +152,7 @@ func TestQemuMigrate_FlagParams(t *testing.T) {
 // would route the target name into the destination-node parameter. The
 // destination-node flag must therefore be named --target-node.
 func TestQemuCloneMigrate_NoLocalTargetFlag(t *testing.T) {
-	group := newGroupCmd(nil)
+	group := Group(nil)
 	for _, name := range []string{"clone", "migrate"} {
 		var sub *cobra.Command
 		for _, c := range group.Commands() {

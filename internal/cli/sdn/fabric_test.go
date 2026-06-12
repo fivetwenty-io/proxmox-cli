@@ -303,7 +303,7 @@ func TestFabricNodeDelete(t *testing.T) {
 
 // TestFabricCommandTree verifies the fabric verbs and node sub-tree are wired.
 func TestFabricCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	got := map[string]bool{}
 	for _, c := range cmd.Commands() {
 		got[c.Name()] = true

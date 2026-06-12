@@ -133,7 +133,7 @@ func TestLockCommandTree(t *testing.T) {
 
 // TestSdnGroupIncludesLock verifies lock is registered at the sdn group level.
 func TestSdnGroupIncludesLock(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	got := map[string]bool{}
 	for _, c := range cmd.Commands() {
 		got[c.Name()] = true

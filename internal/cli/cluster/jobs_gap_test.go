@@ -86,7 +86,7 @@ func TestJobsScheduleAnalyze_ServerError(t *testing.T) {
 
 // TestJobsCommandTree_ScheduleAnalyze verifies schedule-analyze is registered.
 func TestJobsCommandTree_ScheduleAnalyze(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var jobsCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "jobs" {

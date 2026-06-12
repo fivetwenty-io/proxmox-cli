@@ -209,7 +209,7 @@ func TestMigrate_ServerError(t *testing.T) {
 func TestCloneMigrate_NoLocalTargetFlag(t *testing.T) {
 	for _, name := range []string{"clone", "migrate"} {
 		var sub *cobra.Command
-		for _, c := range newGroupCmd(&cli.Deps{}).Commands() {
+		for _, c := range Group(&cli.Deps{}).Commands() {
 			if c.Name() == name {
 				sub = c
 			}

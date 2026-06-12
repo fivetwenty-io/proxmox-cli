@@ -389,7 +389,7 @@ func TestAcmeChallengeSchema_List(t *testing.T) {
 
 // TestAcmeCommandTree verifies the acme verb set is registered.
 func TestAcmeCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	acme := childCommands(root)["acme"]
 	require.NotNil(t, acme, "cluster must have an acme command")
 

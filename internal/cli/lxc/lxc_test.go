@@ -26,7 +26,7 @@ import (
 // stdout/stderr in buf, and sets args.
 func newTestCmd(t *testing.T, deps *cli.Deps, buf *bytes.Buffer, args ...string) func() error {
 	t.Helper()
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	cmd.SetContext(cli.WithDeps(context.Background(), deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -486,7 +486,7 @@ func TestSnapshotRollback_ServerError(t *testing.T) {
 }
 
 func TestGroupCommand_Registers(t *testing.T) {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	require.Equal(t, "lxc", cmd.Name())
 
 	names := map[string]bool{}

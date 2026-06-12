@@ -139,16 +139,26 @@ func TestStoragePrune_NullResult(t *testing.T) {
 
 // TestStoragePrune_RequiresNode verifies prune fails clearly without a node.
 func TestStoragePrune_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "prune", "local", "--keep-last", "1", "--dry-run")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "prune without node", args: []string{"prune", "local", "--keep-last", "1", "--dry-run"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // TestStoragePrune_InTree verifies the prune command is registered on the storage
 // group.
 func TestStoragePrune_InTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true
@@ -160,7 +170,7 @@ func TestStoragePrune_InTree(t *testing.T) {
 // persistent -t/--target selector with a local --target anywhere in the storage
 // command tree.
 func TestStoragePrune_NoLocalTargetFlag(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		require.Nil(t, c.Flags().Lookup("target"),

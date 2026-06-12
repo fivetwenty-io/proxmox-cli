@@ -78,7 +78,7 @@ func newNodeRoot(t *testing.T, f *testhelper.FakePVE, format output.Format, runn
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	// Wrap the standard PersistentPreRunE so the test runner replaces the real
 	// exec.Runner after Deps are built.

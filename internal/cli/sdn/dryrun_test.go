@@ -107,7 +107,7 @@ func TestRollback_Error(t *testing.T) {
 // TestSdnDryRunRollbackCommandTree verifies both leaf commands are registered on
 // the sdn group.
 func TestSdnDryRunRollbackCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	got := map[string]bool{}
 	for _, c := range cmd.Commands() {
 		got[c.Name()] = true

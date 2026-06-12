@@ -100,7 +100,7 @@ func TestQemuFeature_RequiresNode(t *testing.T) {
 }
 
 func TestQemuFeature_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true

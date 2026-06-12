@@ -50,15 +50,33 @@ func TestNodeDns_Set(t *testing.T) {
 	require.NotContains(t, rec.body, "dns3")
 }
 
-func TestNodeDns_SetRequiresSearch(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "dns", "set", "--dns1", "10.0.0.1"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "search")
+func TestNodeSystem_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "dns set missing search",
+			args:    []string{"--node", "pve1", "node", "dns", "set", "--dns1", "10.0.0.1"},
+			wantErr: "search",
+		},
+		{
+			name:    "time set missing timezone",
+			args:    []string{"--node", "pve1", "node", "time", "set"},
+			wantErr: "timezone",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+			root.SetArgs(append(prefix, tc.args...))
+			err := root.Execute()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // ---- hosts -----------------------------------------------------------------
@@ -136,17 +154,6 @@ func TestNodeTime_Set(t *testing.T) {
 	require.NoError(t, root.Execute())
 	require.Equal(t, "PUT", rec.method)
 	require.Contains(t, rec.body, "timezone=Europe%2FVienna")
-}
-
-func TestNodeTime_SetRequiresTimezone(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "time", "set"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "timezone")
 }
 
 // ---- syslog / journal / report --------------------------------------------
@@ -332,7 +339,7 @@ func TestNodeSystem_RequiresNode(t *testing.T) {
 func TestNodeSystem_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {

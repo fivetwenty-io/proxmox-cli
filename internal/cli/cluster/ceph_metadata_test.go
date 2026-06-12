@@ -80,7 +80,7 @@ func TestCephMetadata_ServerError(t *testing.T) {
 
 // TestCephCommandTree_Metadata verifies metadata is registered under ceph.
 func TestCephCommandTree_Metadata(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var cephCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "ceph" {

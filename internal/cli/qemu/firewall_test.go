@@ -77,24 +77,57 @@ func TestQemuFirewallRulesCreate_FlagParams(t *testing.T) {
 	require.Contains(t, buf.String(), "rule added")
 }
 
-func TestQemuFirewallRulesCreate_RequiresType(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuFirewall_RequiredFlags consolidates shape-1 (flag-required) cases
+// across firewall sub-commands. Each case omits a required flag or condition
+// and expects the error substring listed; no HTTP handler is registered.
+func TestQemuFirewall_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string // matched via require.Contains(err.Error(), ...)
+	}{
+		{
+			name:        "rules create missing type",
+			args:        []string{"firewall", "rules", "create", "100", "--action", "ACCEPT"},
+			wantContain: "--type is required",
+		},
+		{
+			name:        "rules create missing action",
+			args:        []string{"firewall", "rules", "create", "100", "--type", "in"},
+			wantContain: "--action is required",
+		},
+		{
+			name:        "rules delete requires confirmation",
+			args:        []string{"firewall", "rules", "delete", "100", "0"},
+			wantContain: "confirm",
+		},
+		{
+			name:        "ipset remove requires confirmation",
+			args:        []string{"firewall", "ipset", "remove", "100", "trusted", "172.30.0.0/24"},
+			wantContain: "confirm",
+		},
+		{
+			name:        "alias delete requires confirmation",
+			args:        []string{"firewall", "alias", "delete", "100", "gw"},
+			wantContain: "confirm",
+		},
+		{
+			name:        "options set requires at least one flag",
+			args:        []string{"firewall", "options", "set", "100"},
+			wantContain: "no options to set",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "rules", "create", "100", "--action", "ACCEPT")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
-}
-
-func TestQemuFirewallRulesCreate_RequiresAction(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "rules", "create", "100", "--type", "in")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--action is required")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantContain)
+		})
+	}
 }
 
 func TestQemuFirewallRulesUpdate_FlagParams(t *testing.T) {
@@ -134,16 +167,6 @@ func TestQemuFirewallRulesDelete_Confirm(t *testing.T) {
 	require.Equal(t, http.MethodDelete, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/firewall/rules/0", gotPath)
 	require.Contains(t, buf.String(), "deleted")
-}
-
-func TestQemuFirewallRulesDelete_RequiresConfirmation(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "rules", "delete", "100", "0")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "confirm")
 }
 
 func TestQemuFirewallRulesList_ServerError(t *testing.T) {
@@ -251,16 +274,6 @@ func TestQemuFirewallIpsetRemove_Confirm(t *testing.T) {
 	require.Contains(t, buf.String(), "removed from IP set")
 }
 
-func TestQemuFirewallIpsetRemove_RequiresConfirmation(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "ipset", "remove", "100", "trusted", "172.30.0.0/24")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "confirm")
-}
-
 func TestQemuFirewallIpsetDelete_Force(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotMethod, gotQuery, body string
@@ -337,16 +350,6 @@ func TestQemuFirewallAliasUpdate_FlagParams(t *testing.T) {
 	require.Contains(t, buf.String(), "updated")
 }
 
-func TestQemuFirewallAliasDelete_RequiresConfirmation(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "alias", "delete", "100", "gw")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "confirm")
-}
-
 // --- firewall options -------------------------------------------------------
 
 func TestQemuFirewallOptionsGet_Single(t *testing.T) {
@@ -391,20 +394,10 @@ func TestQemuFirewallOptionsSet_FlagParams(t *testing.T) {
 	require.Contains(t, buf.String(), "updated")
 }
 
-func TestQemuFirewallOptionsSet_RequiresFlag(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "options", "set", "100")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no options to set")
-}
-
 // --- command tree + flag-collision regression -------------------------------
 
 func TestQemuFirewallCommandTree(t *testing.T) {
-	root := newGroupCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var fw *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "firewall" {
@@ -433,7 +426,7 @@ func TestQemuFirewallCommandTree(t *testing.T) {
 // TestQemuFirewall_NoLocalTargetFlag guards against shadowing the root's
 // persistent -t/--target selector with a local --target on any firewall command.
 func TestQemuFirewall_NoLocalTargetFlag(t *testing.T) {
-	root := newGroupCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var fw *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "firewall" {

@@ -79,26 +79,34 @@ func TestLxcFirewallRulesCreate_FlagParams(t *testing.T) {
 	require.Contains(t, buf.String(), "rule added")
 }
 
-func TestLxcFirewallRulesCreate_RequiresType(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "firewall", "rules", "create", "100", "--action", "ACCEPT")
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type is required")
-}
-
-func TestLxcFirewallRulesCreate_RequiresAction(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "firewall", "rules", "create", "100", "--type", "in")
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--action is required")
+func TestLxcFirewallRulesCreate_RequiresFlag(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing --type",
+			args:    []string{"firewall", "rules", "create", "100", "--action", "ACCEPT"},
+			wantErr: "--type is required",
+		},
+		{
+			name:    "missing --action",
+			args:    []string{"firewall", "rules", "create", "100", "--type", "in"},
+			wantErr: "--action is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable, "pve1", false)
+			var buf bytes.Buffer
+			run := newTestCmd(t, deps, &buf, tc.args...)
+			err := run()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 func TestLxcFirewallRulesUpdate_FlagParams(t *testing.T) {
@@ -431,7 +439,7 @@ func TestLxcFirewallOptionsSet_RequiresFlag(t *testing.T) {
 // --- command tree + flag-collision regression -------------------------------
 
 func TestLxcFirewallCommandTree(t *testing.T) {
-	root := newGroupCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var fw *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "firewall" {
@@ -460,7 +468,7 @@ func TestLxcFirewallCommandTree(t *testing.T) {
 // TestLxcFirewall_NoLocalTargetFlag guards against shadowing the root's
 // persistent -t/--target selector with a local --target on any firewall command.
 func TestLxcFirewall_NoLocalTargetFlag(t *testing.T) {
-	root := newGroupCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var fw *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "firewall" {

@@ -201,7 +201,7 @@ func TestBackupList_ServerError(t *testing.T) {
 
 // TestBackupCommandTree verifies the backup sub-tree exposes the expected verbs.
 func TestBackupCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var backup *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "backup" {
@@ -223,7 +223,7 @@ func TestBackupCommandTree(t *testing.T) {
 // persistent -t/--target selector with a local --target anywhere in the cluster
 // command tree.
 func TestClusterBackup_NoLocalTargetFlag(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		require.Nil(t, c.Flags().Lookup("target"),

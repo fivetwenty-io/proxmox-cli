@@ -211,7 +211,7 @@ func TestAccess_DomainCommandTree(t *testing.T) {
 func TestAccess_NoLocalTargetOrNodeFlag(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 	var accessCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "access" {

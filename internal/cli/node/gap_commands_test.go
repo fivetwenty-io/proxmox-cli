@@ -109,15 +109,64 @@ func TestNodeDisksLs_Zfs(t *testing.T) {
 	require.Contains(t, buf.String(), "tank")
 }
 
-func TestNodeDisksLs_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "disks", "ls", "zfs"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+// TestNodeGapCommands_RequiresNode verifies every gap-command sub-command fails
+// clearly when no node is resolvable from context or flags.
+func TestNodeGapCommands_RequiresNode(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "disks ls zfs",
+			args: []string{"node", "disks", "ls", "zfs"},
+		},
+		{
+			name: "disks get zfs",
+			args: []string{"node", "disks", "get", "zfs", "tank"},
+		},
+		{
+			name: "disks delete zfs",
+			args: []string{"node", "disks", "delete", "zfs", "tank", "--yes"},
+		},
+		{
+			name: "rrddata",
+			args: []string{"node", "rrddata", "--timeframe", "hour"},
+		},
+		{
+			name: "netstat",
+			args: []string{"node", "netstat"},
+		},
+		{
+			name: "vzdump defaults",
+			args: []string{"node", "vzdump", "defaults"},
+		},
+		{
+			name: "vzdump extract-config",
+			args: []string{"node", "vzdump", "extract-config", "--volume", "local:backup/foo.vma"},
+		},
+		{
+			name: "capabilities qemu cpu-flags",
+			args: []string{"node", "capabilities", "qemu", "cpu-flags"},
+		},
+		{
+			name: "hardware mdev",
+			args: []string{"node", "hardware", "mdev", "0000:03:00.0"},
+		},
+		{
+			name: "query-url-metadata",
+			args: []string{"node", "query-url-metadata", "--url", "https://example.com/iso"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+			root.SetArgs(append(prefix, tc.args...))
+			err := root.Execute()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -152,17 +201,6 @@ func TestNodeDisksGet_Zfs_APIError(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "get ZFS pool")
-}
-
-func TestNodeDisksGet_Zfs_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "disks", "get", "zfs", "tank"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 // ---------------------------------------------------------------------------
@@ -315,23 +353,11 @@ func TestNodeDisksDelete_Zfs_WithYes(t *testing.T) {
 	require.Contains(t, buf.String(), "deleted")
 }
 
-// TestNodeDisksDelete_RequiresNode covers all delete types via the zfs variant.
-func TestNodeDisksDelete_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "disks", "delete", "zfs", "tank", "--yes"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
-}
-
 // TestNodeDisks_ExtendedCommandTree verifies the new ls/get/delete sub-trees.
 func TestNodeDisks_ExtendedCommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {
@@ -423,17 +449,6 @@ func TestNodeRrddata_RequiresTimeframe(t *testing.T) {
 	require.Contains(t, err.Error(), "timeframe")
 }
 
-func TestNodeRrddata_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "rrddata", "--timeframe", "hour"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
-}
-
 func TestNodeRrddata_APIError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/rrddata", func(w http.ResponseWriter, _ *http.Request) {
@@ -466,17 +481,6 @@ func TestNodeNetstat_Success(t *testing.T) {
 	require.Equal(t, "GET", rec.method)
 	require.Equal(t, "/api2/json/nodes/pve1/netstat", rec.path)
 	require.Contains(t, buf.String(), "eth0")
-}
-
-func TestNodeNetstat_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "netstat"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 func TestNodeNetstat_APIError(t *testing.T) {
@@ -537,17 +541,6 @@ func TestNodeVzdumpDefaults_StorageOmittedWhenNotSet(t *testing.T) {
 	require.NotContains(t, rec.query, "storage=")
 }
 
-func TestNodeVzdumpDefaults_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "vzdump", "defaults"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
-}
-
 func TestNodeVzdumpDefaults_APIError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/vzdump/defaults", func(w http.ResponseWriter, _ *http.Request) {
@@ -591,17 +584,6 @@ func TestNodeVzdumpExtractConfig_RequiresVolume(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "volume")
-}
-
-func TestNodeVzdumpExtractConfig_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "vzdump", "extract-config", "--volume", "local:backup/foo.vma"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 func TestNodeVzdumpExtractConfig_APIError(t *testing.T) {
@@ -652,17 +634,6 @@ func TestNodeCapabilities_QemuCpuFlags_WithAccel(t *testing.T) {
 	require.Contains(t, rec.query, "accel=kvm")
 }
 
-func TestNodeCapabilities_QemuCpuFlags_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "capabilities", "qemu", "cpu-flags"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
-}
-
 func TestNodeCapabilities_QemuCpuFlags_APIError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/capabilities/qemu/cpu-flags", func(w http.ResponseWriter, _ *http.Request) {
@@ -680,7 +651,7 @@ func TestNodeCapabilities_QemuCpuFlags_APIError(t *testing.T) {
 func TestNodeCapabilities_CpuFlagsInCommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {
@@ -717,17 +688,6 @@ func TestNodeHardware_PciMdev(t *testing.T) {
 	require.Contains(t, buf.String(), "nvidia-35")
 }
 
-func TestNodeHardware_PciMdev_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "hardware", "mdev", "0000:03:00.0"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
-}
-
 func TestNodeHardware_PciMdev_APIError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/hardware/pci/0000:03:00.0/mdev", func(w http.ResponseWriter, _ *http.Request) {
@@ -745,7 +705,7 @@ func TestNodeHardware_PciMdev_APIError(t *testing.T) {
 func TestNodeHardware_MdevInCommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {
@@ -792,17 +752,6 @@ func TestNodeQueryUrlMetadata_RequiresUrl(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "url")
-}
-
-func TestNodeQueryUrlMetadata_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "query-url-metadata", "--url", "https://example.com/iso"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
 }
 
 func TestNodeQueryUrlMetadata_VerifyCertOmittedByDefault(t *testing.T) {
@@ -871,7 +820,7 @@ func TestNodeServicesState_APIError(t *testing.T) {
 func TestNodeServicesState_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {
@@ -894,7 +843,7 @@ func TestNodeServicesState_CommandTree(t *testing.T) {
 func TestNodeVzdump_ExtendedCommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {
@@ -919,7 +868,7 @@ func TestNodeVzdump_ExtendedCommandTree(t *testing.T) {
 func TestNode_GapCommandsInCommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {

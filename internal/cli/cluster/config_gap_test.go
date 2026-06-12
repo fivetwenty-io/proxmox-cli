@@ -122,7 +122,7 @@ func TestConfigTotem_ServerError(t *testing.T) {
 
 // TestConfigCommandTree_GapCommands verifies apiversion, qdevice, and totem are registered.
 func TestConfigCommandTree_GapCommands(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var configCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "config" {

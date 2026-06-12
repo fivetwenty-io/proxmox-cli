@@ -232,7 +232,7 @@ func TestClusterBulk_StartServerError(t *testing.T) {
 
 // TestClusterBulk_CommandTree verifies the bulk sub-tree exposes every verb.
 func TestClusterBulk_CommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var bulk *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "bulk" {

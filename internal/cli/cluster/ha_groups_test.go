@@ -95,24 +95,50 @@ func TestHaGroupCreate_PostsFields(t *testing.T) {
 	require.Contains(t, buf.String(), "ha1")
 }
 
-// TestHaGroupCreate_RequiresNodes verifies create refuses without --nodes and
-// never issues the request.
-func TestHaGroupCreate_RequiresNodes(t *testing.T) {
-	f, ac := newFakeClient(t)
+// TestHaGroupCommands_RequiredFlags consolidates shape-1 (flag-required) guards
+// for ha group and ha rule sub-commands. Each case omits a single required flag
+// and verifies that the error message names the missing flag and that no HTTP
+// request is issued.
+func TestHaGroupCommands_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		handlerPath string
+		args        []string
+		wantErr     string
+	}{
+		{
+			name:        "HaGroupCreate_RequiresNodes",
+			handlerPath: "POST /api2/json/cluster/ha/groups",
+			args:        []string{"ha", "group", "create", "ha1"},
+			wantErr:     "--nodes",
+		},
+		{
+			name:        "HaRuleSet_RequiresType",
+			handlerPath: "PUT /api2/json/cluster/ha/rules/pin",
+			args:        []string{"ha", "rule", "set", "pin", "--nodes", "pve"},
+			wantErr:     "--type",
+		},
+	}
 
-	var called bool
-	f.HandleFunc("POST /api2/json/cluster/ha/groups", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ac := newFakeClient(t)
 
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+			var called bool
+			f.HandleFunc(tc.handlerPath, func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				testhelper.WriteData(w, nil)
+			})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "ha", "group", "create", "ha1")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--nodes")
-	require.False(t, called, "create must not be issued without --nodes")
+			deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+			require.False(t, called, "request must not be issued when required flag %q is missing", tc.wantErr)
+		})
+	}
 }
 
 // TestHaGroupSet_PutsChangedFields verifies set issues a PUT carrying only the
@@ -329,25 +355,6 @@ func TestHaRuleSet_PutsChangedFields(t *testing.T) {
 	require.Contains(t, buf.String(), "updated")
 }
 
-// TestHaRuleSet_RequiresType verifies set refuses without --type.
-func TestHaRuleSet_RequiresType(t *testing.T) {
-	f, ac := newFakeClient(t)
-
-	var called bool
-	f.HandleFunc("PUT /api2/json/cluster/ha/rules/pin", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "ha", "rule", "set", "pin", "--nodes", "pve")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--type")
-	require.False(t, called, "set must not be issued without --type")
-}
-
 // TestHaRuleDelete_RequiresYes verifies the delete guard refuses without --yes
 // and issues a DELETE once confirmed.
 func TestHaRuleDelete_RequiresYes(t *testing.T) {
@@ -376,7 +383,7 @@ func TestHaRuleDelete_RequiresYes(t *testing.T) {
 // TestHaGroupRuleTree verifies the ha sub-tree exposes group, rule, and status
 // sub-commands with their expected verbs.
 func TestHaGroupRuleTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var ha *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "ha" {

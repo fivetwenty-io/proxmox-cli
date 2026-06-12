@@ -85,7 +85,7 @@ func TestQemuMigrateCheck_RequiresNode(t *testing.T) {
 }
 
 func TestQemuMigrateCheck_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	var migrate *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "migrate" {

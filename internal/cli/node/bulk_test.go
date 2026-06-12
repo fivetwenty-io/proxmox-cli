@@ -259,7 +259,7 @@ func TestNodeStartall_WaitTaskError(t *testing.T) {
 func TestNodeBulk_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 	var nodeCmd *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "node" {

@@ -73,7 +73,7 @@ func run(t *testing.T, f *testhelper.FakePVE, in string, args ...string) (string
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
 	root.SetContext(context.Background())
-	root.AddCommand(newGroupCmd(&cli.Deps{}))
+	root.AddCommand(Group(&cli.Deps{}))
 
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -411,4 +411,4 @@ func TestApplyError(t *testing.T) {
 }
 
 // ensure the package self-registers a factory of the right shape.
-var _ func(*cli.Deps) *cobra.Command = newGroupCmd
+var _ func(*cli.Deps) *cobra.Command = Group

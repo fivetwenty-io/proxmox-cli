@@ -86,7 +86,7 @@ func TestCephFlags_SetRejectsBadValue(t *testing.T) {
 
 // TestCephCommandTree verifies the ceph flags verb set is registered.
 func TestCephCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	ceph := childCommands(root)["ceph"]
 	require.NotNil(t, ceph, "cluster must have a ceph command")
 

@@ -69,7 +69,7 @@ func run(t *testing.T, f *testhelper.FakePVE, args ...string) (string, error) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
 	root.SetContext(context.Background())
-	root.AddCommand(newGroupCmd(&cli.Deps{}))
+	root.AddCommand(Group(&cli.Deps{}))
 
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -491,7 +491,7 @@ func TestStorageGet_ScrubsSecrets(t *testing.T) {
 // TestStorageGroup_HasAllSubcommands verifies the storage group exposes every
 // expected leaf sub-command.
 func TestStorageGroup_HasAllSubcommands(t *testing.T) {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 	names := map[string]bool{}
 	for _, c := range cmd.Commands() {
 		names[c.Name()] = true

@@ -60,7 +60,7 @@ func TestMetrics_WithCF(t *testing.T) {
 	require.Contains(t, gotQuery, "cf=MAX")
 }
 
-func TestMetrics_MissingTimeframe_Errors(t *testing.T) {
+func TestMetrics_RequiresTimeframe(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	deps := newDeps(t, f, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
@@ -173,7 +173,7 @@ func TestFeature_WithSnapname(t *testing.T) {
 	require.Contains(t, gotQuery, "snapname=snap1")
 }
 
-func TestFeature_MissingFlag_Errors(t *testing.T) {
+func TestFeature_RequiresFlag(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	deps := newDeps(t, f, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
@@ -258,7 +258,7 @@ func TestSnapshotUpdate_SendsDescription(t *testing.T) {
 	require.Contains(t, buf.String(), "updated")
 }
 
-func TestSnapshotUpdate_NoFlags_Errors(t *testing.T) {
+func TestSnapshotUpdate_RequiresFlag(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	deps := newDeps(t, f, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
@@ -384,24 +384,34 @@ func TestRrd_ReturnsFilename(t *testing.T) {
 	require.Contains(t, buf.String(), "filename")
 }
 
-func TestRrd_MissingDs_Errors(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", false)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "rrd", "101", "--timeframe", "hour")
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--ds")
-}
-
-func TestRrd_MissingTimeframe_Errors(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", false)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "rrd", "101", "--ds", "cpu")
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--timeframe")
+func TestRrd_RequiresFlag(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing --ds",
+			args:    []string{"rrd", "101", "--timeframe", "hour"},
+			wantErr: "--ds",
+		},
+		{
+			name:    "missing --timeframe",
+			args:    []string{"rrd", "101", "--ds", "cpu"},
+			wantErr: "--timeframe",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable, "pve1", false)
+			var buf bytes.Buffer
+			run := newTestCmd(t, deps, &buf, tc.args...)
+			err := run()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 func TestRrd_ServerError(t *testing.T) {
@@ -442,46 +452,54 @@ func TestRemoteMigrate_RequiresYes(t *testing.T) {
 	require.False(t, called, "POST must not be issued without --yes")
 }
 
-func TestRemoteMigrate_RequiresTargetEndpoint(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", true)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "remote-migrate", "101",
-		"--yes",
-		"--target-storage", "local",
-		"--target-bridge", "vmbr0",
-	)
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--target-endpoint")
-}
-
-func TestRemoteMigrate_RequiresTargetStorage(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", true)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "remote-migrate", "101",
-		"--yes",
-		"--target-endpoint", "https://remote:8006",
-		"--target-bridge", "vmbr0",
-	)
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--target-storage")
-}
-
-func TestRemoteMigrate_RequiresTargetBridge(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	deps := newDeps(t, f, output.FormatTable, "pve1", true)
-	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "remote-migrate", "101",
-		"--yes",
-		"--target-endpoint", "https://remote:8006",
-		"--target-storage", "local",
-	)
-	err := run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--target-bridge")
+func TestRemoteMigrate_RequiresFlag(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name: "missing --target-endpoint",
+			args: []string{
+				"remote-migrate", "101",
+				"--yes",
+				"--target-storage", "local",
+				"--target-bridge", "vmbr0",
+			},
+			wantErr: "--target-endpoint",
+		},
+		{
+			name: "missing --target-storage",
+			args: []string{
+				"remote-migrate", "101",
+				"--yes",
+				"--target-endpoint", "https://remote:8006",
+				"--target-bridge", "vmbr0",
+			},
+			wantErr: "--target-storage",
+		},
+		{
+			name: "missing --target-bridge",
+			args: []string{
+				"remote-migrate", "101",
+				"--yes",
+				"--target-endpoint", "https://remote:8006",
+				"--target-storage", "local",
+			},
+			wantErr: "--target-bridge",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			deps := newDeps(t, f, output.FormatTable, "pve1", true)
+			var buf bytes.Buffer
+			run := newTestCmd(t, deps, &buf, tc.args...)
+			err := run()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 func TestRemoteMigrate_WithYes_SendsBody(t *testing.T) {
@@ -518,7 +536,7 @@ func TestRemoteMigrate_WithYes_SendsBody(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGroupCommand_RegistersNewCommands(t *testing.T) {
-	cmd := newGroupCmd(&cli.Deps{})
+	cmd := Group(&cli.Deps{})
 
 	names := map[string]bool{}
 	for _, c := range cmd.Commands() {

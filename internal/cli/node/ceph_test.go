@@ -816,7 +816,7 @@ func TestNodeCeph_RequiresNode(t *testing.T) {
 func TestNodeCeph_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {

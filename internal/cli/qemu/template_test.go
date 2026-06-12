@@ -92,7 +92,7 @@ func TestQemuTemplate_RequiresNode(t *testing.T) {
 }
 
 func TestQemuTemplateCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	var tmpl *cobra.Command
 	for _, c := range cmd.Commands() {
 		if c.Name() == "template" {

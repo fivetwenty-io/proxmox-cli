@@ -70,14 +70,42 @@ func TestQemuMetrics_OmitCFWhenUnset(t *testing.T) {
 	require.NotContains(t, gotQuery, "cf=")
 }
 
-func TestQemuMetrics_RequiresTimeframe(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuMetricsRrd_RequiredFlags consolidates shape-1 (flag-required) cases
+// for the metrics and rrd commands. Each case omits a required flag and expects
+// the flag name (lowercased) in the error. No HTTP handler is registered.
+func TestQemuMetricsRrd_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string // matched via strings.ToLower(err.Error())
+	}{
+		{
+			name:        "metrics missing timeframe",
+			args:        []string{"metrics", "100"},
+			wantContain: "timeframe",
+		},
+		{
+			name:        "rrd missing ds",
+			args:        []string{"rrd", "100", "--timeframe", "hour"},
+			wantContain: "ds",
+		},
+		{
+			name:        "rrd missing timeframe",
+			args:        []string{"rrd", "100", "--ds", "cpu"},
+			wantContain: "timeframe",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "metrics", "100")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "timeframe")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, strings.ToLower(err.Error()), tc.wantContain)
+		})
+	}
 }
 
 func TestQemuMetrics_ServerError(t *testing.T) {
@@ -93,18 +121,34 @@ func TestQemuMetrics_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "metrics for VM 100")
 }
 
+// TestQemuMetrics_RequiresNode consolidates shape-3 (node-required) cases for
+// the metrics command. Each case runs with an empty node and expects "no node"
+// in the error; no HTTP handler is registered.
 func TestQemuMetrics_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "", false)
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "metrics",
+			args: []string{"metrics", "100", "--timeframe", "hour"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "metrics", "100", "--timeframe", "hour")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node")
+		})
+	}
 }
 
 func TestQemuMetrics_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true
@@ -149,26 +193,6 @@ func TestQemuRrd_WithCF(t *testing.T) {
 	require.Contains(t, gotQuery, "cf=AVERAGE")
 }
 
-func TestQemuRrd_RequiresDs(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "rrd", "100", "--timeframe", "hour")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "ds")
-}
-
-func TestQemuRrd_RequiresTimeframe(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "rrd", "100", "--ds", "cpu")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "timeframe")
-}
-
 func TestQemuRrd_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/rrd", func(w http.ResponseWriter, _ *http.Request) {
@@ -183,7 +207,7 @@ func TestQemuRrd_ServerError(t *testing.T) {
 }
 
 func TestQemuRrd_CommandTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true

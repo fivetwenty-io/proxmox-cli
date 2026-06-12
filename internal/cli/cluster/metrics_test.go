@@ -186,7 +186,7 @@ func TestMetricsExport_OmitsUnsetParams(t *testing.T) {
 }
 
 func TestMetricsCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	metrics := childCommands(root)["metrics"]
 	require.NotNil(t, metrics)
 	mc := childCommands(metrics)

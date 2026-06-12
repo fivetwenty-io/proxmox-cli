@@ -91,38 +91,61 @@ func TestStorageDownloadURL_AsyncReturnsUPID(t *testing.T) {
 	require.Contains(t, out, upid)
 }
 
-// TestStorageDownloadURL_RequiresURL verifies the command refuses to run without
-// the required --url flag.
-func TestStorageDownloadURL_RequiresURL(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "download-url", "local", "--filename", "pve-cli.iso")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "url")
-}
-
-// TestStorageDownloadURL_RequiresFilename verifies the command refuses to run
-// without the required --filename flag.
-func TestStorageDownloadURL_RequiresFilename(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "--node", "pve1", "download-url", "local", "--url", "https://example.test/x.iso")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "filename")
+// TestStorageDownloadURL_RequiredFlags verifies the command refuses to run when
+// a required flag is omitted.
+func TestStorageDownloadURL_RequiredFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "missing url",
+			args:    []string{"--node", "pve1", "download-url", "local", "--filename", "pve-cli.iso"},
+			wantErr: "url",
+		},
+		{
+			name:    "missing filename",
+			args:    []string{"--node", "pve1", "download-url", "local", "--url", "https://example.test/x.iso"},
+			wantErr: "filename",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // TestStorageDownloadURL_RequiresNode verifies the node-scoped command fails
 // clearly without a resolved node.
 func TestStorageDownloadURL_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	_, err := run(t, f, "download-url", "local",
-		"--url", "https://example.test/x.iso", "--filename", "pve-cli.iso")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "download-url",
+			args: []string{"download-url", "local", "--url", "https://example.test/x.iso", "--filename", "pve-cli.iso"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			_, err := run(t, f, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node specified")
+		})
+	}
 }
 
 // TestStorageTransfer_InTree verifies both transfer commands are registered on
 // the storage group.
 func TestStorageTransfer_InTree(t *testing.T) {
-	root := newGroupCmd(nil)
+	root := Group(nil)
 	names := make(map[string]bool)
 	for _, c := range root.Commands() {
 		names[c.Name()] = true

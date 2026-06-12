@@ -72,18 +72,35 @@ func TestQemuAgentExec_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "agent exec for VM 100")
 }
 
-func TestQemuAgentExec_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "", false)
+// TestQemuAgent_RequiresNode consolidates shape-3 (node-required) cases across
+// agent sub-commands. Each case runs with an empty node and expects "no node" in
+// the error; no HTTP handler is registered because the check fires before the
+// API call.
+func TestQemuAgent_RequiresNode(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "exec",
+			args: []string{"agent", "exec", "100", "--command", "ls"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "agent", "exec", "100", "--command", "ls")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no node")
+		})
+	}
 }
 
 func TestQemuAgentExec_CommandTree(t *testing.T) {
-	group := newGroupCmd(nil)
+	group := Group(nil)
 	var agent *cobra.Command
 	for _, c := range group.Commands() {
 		if c.Name() == "agent" {
@@ -127,15 +144,48 @@ func TestQemuAgentExecStatus_Success(t *testing.T) {
 	require.Contains(t, out, "file1.txt")
 }
 
-func TestQemuAgentExecStatus_RequiresPID(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuAgent_RequiredFlags consolidates shape-1 (flag-required) cases for
+// agent sub-commands that use run(). Each case omits one required flag and
+// expects the flag name (lowercased) in the error. No HTTP handler is
+// registered because MarkFlagRequired fires before any API call.
+func TestQemuAgent_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string // matched against strings.ToLower(err.Error())
+	}{
+		{
+			name:        "exec-status missing pid",
+			args:        []string{"agent", "exec-status", "100"},
+			wantContain: "pid",
+		},
+		{
+			name:        "file-read missing file",
+			args:        []string{"agent", "file-read", "100"},
+			wantContain: "file",
+		},
+		{
+			name:        "file-write missing file",
+			args:        []string{"agent", "file-write", "100", "--content", "data"},
+			wantContain: "file",
+		},
+		{
+			name:        "file-write missing content",
+			args:        []string{"agent", "file-write", "100", "--file", "/tmp/x"},
+			wantContain: "content",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "agent", "exec-status", "100")
-	require.Error(t, err)
-	// MarkFlagRequired produces a cobra error containing the flag name.
-	require.Contains(t, strings.ToLower(err.Error()), "pid")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, strings.ToLower(err.Error()), tc.wantContain)
+		})
+	}
 }
 
 func TestQemuAgentExecStatus_ServerError(t *testing.T) {
@@ -188,16 +238,6 @@ func TestQemuAgentFileRead_WithOffsetCount(t *testing.T) {
 	require.Contains(t, gotQuery, "count")
 }
 
-func TestQemuAgentFileRead_RequiresFile(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "agent", "file-read", "100")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "file")
-}
-
 func TestQemuAgentFileRead_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/agent/file-read", func(w http.ResponseWriter, _ *http.Request) {
@@ -232,26 +272,6 @@ func TestQemuAgentFileWrite_Success(t *testing.T) {
 	require.Contains(t, body, "test.txt")
 	require.Contains(t, body, "hello")
 	require.Contains(t, buf.String(), "Wrote to")
-}
-
-func TestQemuAgentFileWrite_RequiresFile(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "agent", "file-write", "100", "--content", "data")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "file")
-}
-
-func TestQemuAgentFileWrite_RequiresContent(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "agent", "file-write", "100", "--file", "/tmp/x")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "content")
 }
 
 func TestQemuAgentFileWrite_ServerError(t *testing.T) {
@@ -292,15 +312,31 @@ func TestQemuAgentSetUserPassword_Success(t *testing.T) {
 	require.Contains(t, buf.String(), "alice")
 }
 
-func TestQemuAgentSetUserPassword_RequiresUsername(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuAgentSetUserPassword_RequiredFlags consolidates shape-1 (flag-required)
+// cases for set-user-password, which reads stdin and requires runWithStdin.
+func TestQemuAgentSetUserPassword_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string
+	}{
+		{
+			name:        "missing username",
+			args:        []string{"agent", "set-user-password", "100"},
+			wantContain: "username",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := runWithStdin(deps, &buf, strings.NewReader("pass\n"),
-		"agent", "set-user-password", "100")
-	require.Error(t, err)
-	require.Contains(t, strings.ToLower(err.Error()), "username")
+			var buf bytes.Buffer
+			err := runWithStdin(deps, &buf, strings.NewReader("pass\n"), tc.args...)
+			require.Error(t, err)
+			require.Contains(t, strings.ToLower(err.Error()), tc.wantContain)
+		})
+	}
 }
 
 func TestQemuAgentSetUserPassword_EmptyStdin(t *testing.T) {

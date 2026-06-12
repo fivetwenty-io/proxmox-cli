@@ -48,15 +48,43 @@ func TestNodeScan_Zfs_JSONLossless(t *testing.T) {
 	require.Contains(t, buf.String(), "tank")
 }
 
-func TestNodeScan_Lvmthin_RequiresVg(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "scan", "lvmthin"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "vg")
+func TestNodeScan_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "lvmthin missing vg",
+			args:    []string{"--node", "pve1", "node", "scan", "lvmthin"},
+			wantErr: "vg",
+		},
+		{
+			name:    "nfs missing server",
+			args:    []string{"--node", "pve1", "node", "scan", "nfs"},
+			wantErr: "server",
+		},
+		{
+			name:    "iscsi missing portal",
+			args:    []string{"--node", "pve1", "node", "scan", "iscsi"},
+			wantErr: "portal",
+		},
+		{
+			name:    "pbs missing username",
+			args:    []string{"--node", "pve1", "node", "scan", "pbs", "--server", "pbs.local"},
+			wantErr: "username",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+			root.SetArgs(append(prefix, tc.args...))
+			err := root.Execute()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }
 
 // ---- remote probes ---------------------------------------------------------
@@ -77,40 +105,6 @@ func TestNodeScan_Nfs(t *testing.T) {
 	require.Contains(t, buf.String(), "/export/data")
 }
 
-func TestNodeScan_Nfs_RequiresServer(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "scan", "nfs"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "server")
-}
-
-func TestNodeScan_Iscsi_RequiresPortal(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "scan", "iscsi"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "portal")
-}
-
-func TestNodeScan_Pbs_RequiresCredentials(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	// Missing --username and --password.
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "scan", "pbs", "--server", "pbs.local"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "username")
-}
-
 // ---- node scoping + command tree -------------------------------------------
 
 func TestNodeScan_RequiresNode(t *testing.T) {
@@ -127,7 +121,7 @@ func TestNodeScan_RequiresNode(t *testing.T) {
 func TestNodeScan_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{})
+	addNodeGroup(root)
 
 	find := func(parent *cobra.Command, name string) *cobra.Command {
 		for _, c := range parent.Commands() {

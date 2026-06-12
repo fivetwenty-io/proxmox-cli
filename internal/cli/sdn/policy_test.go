@@ -352,7 +352,7 @@ func TestRouteMapEntryDeleteRequiresYes(t *testing.T) {
 
 // TestPolicyCommandTree verifies the prefix-list and route-map sub-trees are wired.
 func TestPolicyCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	groups := map[string]*cobra.Command{}
 	for _, c := range cmd.Commands() {
 		groups[c.Name()] = c

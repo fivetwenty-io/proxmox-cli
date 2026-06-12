@@ -240,7 +240,7 @@ func TestClusterCpuModel_Delete(t *testing.T) {
 }
 
 func TestClusterCpuModel_CommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	var cpuModel *cobra.Command
 	for _, c := range root.Commands() {
 		if c.Name() == "cpu-model" {

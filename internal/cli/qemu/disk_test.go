@@ -47,24 +47,52 @@ func TestQemuDiskResize_WorkerUPID(t *testing.T) {
 	require.Contains(t, buf.String(), "resized")
 }
 
-func TestQemuDiskResize_RequiresDisk(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+// TestQemuDisk_RequiredFlags consolidates shape-1 (flag-required) cases across
+// disk sub-commands. Each case omits one required flag or argument and expects
+// the exact error substring listed; no HTTP handler is registered.
+func TestQemuDisk_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string
+	}{
+		{
+			name:        "resize missing disk",
+			args:        []string{"disk", "resize", "100", "--size", "+10G"},
+			wantContain: "--disk is required",
+		},
+		{
+			name:        "resize missing size",
+			args:        []string{"disk", "resize", "100", "--disk", "scsi0"},
+			wantContain: "--size is required",
+		},
+		{
+			name:        "move missing disk",
+			args:        []string{"disk", "move", "100", "--storage", "local-lvm"},
+			wantContain: "--disk is required",
+		},
+		{
+			name:        "move missing storage or target-vmid",
+			args:        []string{"disk", "move", "100", "--disk", "scsi0"},
+			wantContain: "--storage or --target-vmid is required",
+		},
+		{
+			name:        "unlink missing disk",
+			args:        []string{"disk", "unlink", "100"},
+			wantContain: "--disk is required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "disk", "resize", "100", "--size", "+10G")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--disk is required")
-}
-
-func TestQemuDiskResize_RequiresSize(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "disk", "resize", "100", "--disk", "scsi0")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--size is required")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantContain)
+		})
+	}
 }
 
 func TestQemuDiskResize_FlagParams(t *testing.T) {
@@ -111,26 +139,6 @@ func TestQemuDiskMove_Blocking(t *testing.T) {
 	require.Contains(t, buf.String(), "moved")
 }
 
-func TestQemuDiskMove_RequiresDisk(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "disk", "move", "100", "--storage", "local-lvm")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--disk is required")
-}
-
-func TestQemuDiskMove_RequiresTarget(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "disk", "move", "100", "--disk", "scsi0")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--storage or --target-vmid is required")
-}
-
 func TestQemuDiskMove_FlagParams(t *testing.T) {
 	f, ac := newFakeClient(t)
 
@@ -173,16 +181,6 @@ func TestQemuDiskUnlink_Blocking(t *testing.T) {
 	require.Equal(t, http.MethodPut, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/unlink", gotPath)
 	require.Contains(t, buf.String(), "unlinked")
-}
-
-func TestQemuDiskUnlink_RequiresDisk(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "disk", "unlink", "100")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--disk is required")
 }
 
 func TestQemuDiskUnlink_FlagParams(t *testing.T) {

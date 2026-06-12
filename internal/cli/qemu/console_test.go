@@ -134,7 +134,7 @@ func TestQemuConsole_ServerError(t *testing.T) {
 }
 
 func TestQemuConsoleCommandTree(t *testing.T) {
-	cmd := newGroupCmd(nil)
+	cmd := Group(nil)
 	var console *cobra.Command
 	for _, c := range cmd.Commands() {
 		if c.Name() == "console" {

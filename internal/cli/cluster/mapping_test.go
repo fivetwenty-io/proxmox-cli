@@ -88,34 +88,74 @@ func TestMappingDir_CreateForwardsFields(t *testing.T) {
 	require.False(t, hasDesc, "unset --description must be omitted from the request body")
 }
 
-// TestMappingDir_CreateRequiresMap verifies create rejects a missing --map.
-func TestMappingDir_CreateRequiresMap(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+// TestMappingCommands_RequiredFlags consolidates shape-1 (flag-required) guards for
+// mapping dir, pci, and usb create/set commands. Each case omits the required --map
+// flag and verifies the error message names the missing flag and no HTTP request
+// is issued.
+func TestMappingCommands_RequiredFlags(t *testing.T) {
+	cases := []struct {
+		name        string
+		handlerPath string
+		args        []string
+		wantErr     string
+	}{
+		{
+			name:        "MappingDirCreate_RequiresMap",
+			handlerPath: "POST /api2/json/cluster/mapping/dir",
+			args:        []string{"mapping", "dir", "create", "shared"},
+			wantErr:     "map",
+		},
+		{
+			name:        "MappingDirSet_RequiresMap",
+			handlerPath: "PUT /api2/json/cluster/mapping/dir/shared",
+			args:        []string{"mapping", "dir", "set", "shared", "--description", "renamed"},
+			wantErr:     "map",
+		},
+		{
+			name:        "MappingPciCreate_RequiresMap",
+			handlerPath: "POST /api2/json/cluster/mapping/pci",
+			args:        []string{"mapping", "pci", "create", "gpu"},
+			wantErr:     "map",
+		},
+		{
+			name:        "MappingPciSet_RequiresMap",
+			handlerPath: "PUT /api2/json/cluster/mapping/pci/gpu",
+			args:        []string{"mapping", "pci", "set", "gpu", "--description", "renamed"},
+			wantErr:     "map",
+		},
+		{
+			name:        "MappingUsbCreate_RequiresMap",
+			handlerPath: "POST /api2/json/cluster/mapping/usb",
+			args:        []string{"mapping", "usb", "create", "yubikey"},
+			wantErr:     "map",
+		},
+		{
+			name:        "MappingUsbSet_RequiresMap",
+			handlerPath: "PUT /api2/json/cluster/mapping/usb/yubikey",
+			args:        []string{"mapping", "usb", "set", "yubikey", "--description", "renamed"},
+			wantErr:     "map",
+		},
+	}
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "mapping", "dir", "create", "shared")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map")
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ac := newFakeClient(t)
 
-// TestMappingDir_SetRequiresMap verifies set rejects a missing --map: the API
-// rewrites the full per-node map on every update, so it must be re-sent.
-func TestMappingDir_SetRequiresMap(t *testing.T) {
-	f, ac := newFakeClient(t)
-	called := false
-	f.HandleFunc("PUT /api2/json/cluster/mapping/dir/shared", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
+			var called bool
+			f.HandleFunc(tc.handlerPath, func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				testhelper.WriteData(w, nil)
+			})
 
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+			deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, "mapping", "dir", "set", "shared", "--description", "renamed")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map")
-	require.False(t, called, "set must not issue a PUT without the required --map")
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantErr)
+			require.False(t, called, "request must not be issued when required flag %q is missing", tc.wantErr)
+		})
+	}
 }
 
 // TestMappingDir_SetForwardsChangedOmitsUnset verifies set forwards the required
@@ -255,36 +295,6 @@ func TestMappingPci_Get(t *testing.T) {
 	require.Contains(t, buf.String(), "nvidia")
 }
 
-// TestMappingPci_CreateRequiresMap verifies PCI create rejects a missing --map.
-func TestMappingPci_CreateRequiresMap(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "mapping", "pci", "create", "gpu")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map")
-}
-
-// TestMappingPci_SetRequiresMap verifies PCI set rejects a missing --map: the API
-// rewrites the full per-node map on every update, so it must be re-sent.
-func TestMappingPci_SetRequiresMap(t *testing.T) {
-	f, ac := newFakeClient(t)
-	called := false
-	f.HandleFunc("PUT /api2/json/cluster/mapping/pci/gpu", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "mapping", "pci", "set", "gpu", "--description", "renamed")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map")
-	require.False(t, called, "set must not issue a PUT without the required --map")
-}
-
 // TestMappingPci_DeleteRequiresYes verifies PCI delete refuses without --yes.
 func TestMappingPci_DeleteRequiresYes(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -336,17 +346,6 @@ func TestMappingUsb_Get(t *testing.T) {
 	require.Contains(t, buf.String(), "key")
 }
 
-// TestMappingUsb_CreateRequiresMap verifies USB create rejects a missing --map.
-func TestMappingUsb_CreateRequiresMap(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "mapping", "usb", "create", "yubikey")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map")
-}
-
 // TestMappingUsb_SetForwardsChanged verifies USB set forwards the required map
 // plus changed flags and omits unset ones.
 func TestMappingUsb_SetForwardsChanged(t *testing.T) {
@@ -367,24 +366,6 @@ func TestMappingUsb_SetForwardsChanged(t *testing.T) {
 	require.Equal(t, "renamed", gotForm.Get("description"))
 	_, hasDigest := gotForm["digest"]
 	require.False(t, hasDigest, "unset --digest must be omitted from the request body")
-}
-
-// TestMappingUsb_SetRequiresMap verifies USB set rejects a missing --map.
-func TestMappingUsb_SetRequiresMap(t *testing.T) {
-	f, ac := newFakeClient(t)
-	called := false
-	f.HandleFunc("PUT /api2/json/cluster/mapping/usb/yubikey", func(w http.ResponseWriter, _ *http.Request) {
-		called = true
-		testhelper.WriteData(w, nil)
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-
-	var buf bytes.Buffer
-	err := run(deps, &buf, "mapping", "usb", "set", "yubikey", "--description", "renamed")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "map")
-	require.False(t, called, "set must not issue a PUT without the required --map")
 }
 
 // TestMappingUsb_DeleteRequiresYes verifies USB delete refuses without --yes.
@@ -424,7 +405,7 @@ func TestMappingUsb_DeleteWithYes(t *testing.T) {
 
 // TestMappingCommandTree verifies each mapping type exposes the full verb set.
 func TestMappingCommandTree(t *testing.T) {
-	root := newClusterCmd(&cli.Deps{})
+	root := Group(&cli.Deps{})
 	mapping := childCommands(root)["mapping"]
 	require.NotNil(t, mapping, "cluster must have a mapping command")
 
