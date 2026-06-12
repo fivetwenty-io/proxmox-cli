@@ -78,8 +78,8 @@ func newVnetIpsCreateCmd() *cobra.Command {
 	f.StringVar(&ip, "ip", "", "IP address to associate (required)")
 	f.StringVar(&mac, "mac", "", "unicast MAC address")
 	f.StringVar(&zone, "zone", "", "SDN zone the IP belongs to (required)")
-	_ = cmd.MarkFlagRequired("ip")
-	_ = cmd.MarkFlagRequired("zone")
+	cli.MustMarkRequired(cmd, "ip")
+	cli.MustMarkRequired(cmd, "zone")
 	return cmd
 }
 
@@ -125,8 +125,8 @@ func newVnetIpsSetCmd() *cobra.Command {
 	f.StringVar(&mac, "mac", "", "unicast MAC address")
 	f.Int64Var(&vmid, "vmid", 0, "VM ID to associate with the IP")
 	f.StringVar(&zone, "zone", "", "SDN zone the IP belongs to (required)")
-	_ = cmd.MarkFlagRequired("ip")
-	_ = cmd.MarkFlagRequired("zone")
+	cli.MustMarkRequired(cmd, "ip")
+	cli.MustMarkRequired(cmd, "zone")
 	return cmd
 }
 
@@ -165,8 +165,8 @@ func newVnetIpsDeleteCmd() *cobra.Command {
 	f.StringVar(&mac, "mac", "", "unicast MAC address")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
 	f.StringVar(&zone, "zone", "", "SDN zone the IP belongs to (required)")
-	_ = cmd.MarkFlagRequired("ip")
-	_ = cmd.MarkFlagRequired("zone")
+	cli.MustMarkRequired(cmd, "ip")
+	cli.MustMarkRequired(cmd, "zone")
 	return cmd
 }
 
@@ -305,7 +305,7 @@ func newVnetCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&zone, "zone", "", "zone the vnet belongs to (required)")
 	cmd.Flags().Int64Var(&tag, "tag", 0, "VLAN tag or VXLAN VNI")
 	cmd.Flags().StringVar(&alias, "alias", "", "vnet alias/description")
-	_ = cmd.MarkFlagRequired("zone")
+	cli.MustMarkRequired(cmd, "zone")
 	return cmd
 }
 

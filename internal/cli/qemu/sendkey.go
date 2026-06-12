@@ -52,8 +52,6 @@ func newSendkeyCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&key, "key", "", "key to send in QEMU monitor encoding (required)")
 	cmd.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
-	if err := cmd.MarkFlagRequired("key"); err != nil {
-		panic(fmt.Sprintf("sendkey: mark --key required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "key")
 	return cmd
 }

@@ -261,7 +261,7 @@ func newControllerCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&typ, "type", "", "controller type: bgp, evpn, or isis (required)")
-	_ = cmd.MarkFlagRequired("type")
+	cli.MustMarkRequired(cmd, "type")
 	cf.register(cmd)
 	return cmd
 }

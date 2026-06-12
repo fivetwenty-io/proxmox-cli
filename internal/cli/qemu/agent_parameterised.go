@@ -130,11 +130,7 @@ func newAgentExecStatusCmd() *cobra.Command {
 	}
 
 	cmd.Flags().Int64Var(&pid, "pid", 0, "PID returned by `agent exec` (required)")
-	if err := cmd.MarkFlagRequired("pid"); err != nil {
-		// MarkFlagRequired only errors when the flag does not exist; panic is
-		// appropriate here because it indicates a coding error.
-		panic(fmt.Sprintf("agent exec-status: mark --pid required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "pid")
 	return cmd
 }
 
@@ -192,9 +188,7 @@ func newAgentFileReadCmd() *cobra.Command {
 	cmd.Flags().StringVar(&file, "file", "", "path of the file to read inside the guest (required)")
 	cmd.Flags().Int64Var(&offset, "offset", 0, "byte offset to start reading at")
 	cmd.Flags().Int64Var(&count, "count", 0, "number of bytes to read")
-	if err := cmd.MarkFlagRequired("file"); err != nil {
-		panic(fmt.Sprintf("agent file-read: mark --file required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "file")
 	return cmd
 }
 
@@ -237,12 +231,8 @@ func newAgentFileWriteCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&file, "file", "", "path of the file to write inside the guest (required)")
 	cmd.Flags().StringVar(&content, "content", "", "content to write (required)")
-	if err := cmd.MarkFlagRequired("file"); err != nil {
-		panic(fmt.Sprintf("agent file-write: mark --file required: %v", err))
-	}
-	if err := cmd.MarkFlagRequired("content"); err != nil {
-		panic(fmt.Sprintf("agent file-write: mark --content required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "file")
+	cli.MustMarkRequired(cmd, "content")
 	return cmd
 }
 
@@ -315,8 +305,6 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&username, "username", "", "username whose password to set (required)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm setting the password")
-	if err := cmd.MarkFlagRequired("username"); err != nil {
-		panic(fmt.Sprintf("agent set-user-password: mark --username required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "username")
 	return cmd
 }

@@ -180,7 +180,7 @@ func newMappingPciCreateCmd() *cobra.Command {
 	f.StringVar(&description, "description", "", "description of the mapping")
 	f.BoolVar(&liveMig, "live-migration-capable", false, "mark the device(s) as live-migration capable (experimental)")
 	f.BoolVar(&mdev, "mdev", false, "mark the device(s) as able to provide mediated devices")
-	_ = cmd.MarkFlagRequired("map")
+	cli.MustMarkRequired(cmd, "map")
 	return cmd
 }
 
@@ -233,7 +233,7 @@ func newMappingPciSetCmd() *cobra.Command {
 	f.BoolVar(&mdev, "mdev", false, "mark the device(s) as able to provide mediated devices")
 	f.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
-	_ = cmd.MarkFlagRequired("map")
+	cli.MustMarkRequired(cmd, "map")
 	return cmd
 }
 
@@ -289,7 +289,7 @@ func newMappingUsbCreateCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringArrayVar(&entries, "map", nil, "per-node device mapping entry (repeatable, required)")
 	f.StringVar(&description, "description", "", "description of the mapping")
-	_ = cmd.MarkFlagRequired("map")
+	cli.MustMarkRequired(cmd, "map")
 	return cmd
 }
 
@@ -332,7 +332,7 @@ func newMappingUsbSetCmd() *cobra.Command {
 	f.StringVar(&description, "description", "", "description of the mapping")
 	f.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
-	_ = cmd.MarkFlagRequired("map")
+	cli.MustMarkRequired(cmd, "map")
 	return cmd
 }
 
@@ -388,7 +388,7 @@ func newMappingDirCreateCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringArrayVar(&entries, "map", nil, "per-node directory mapping entry (repeatable, required)")
 	f.StringVar(&description, "description", "", "description of the mapping")
-	_ = cmd.MarkFlagRequired("map")
+	cli.MustMarkRequired(cmd, "map")
 	return cmd
 }
 
@@ -431,6 +431,6 @@ func newMappingDirSetCmd() *cobra.Command {
 	f.StringVar(&description, "description", "", "description of the mapping")
 	f.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
-	_ = cmd.MarkFlagRequired("map")
+	cli.MustMarkRequired(cmd, "map")
 	return cmd
 }

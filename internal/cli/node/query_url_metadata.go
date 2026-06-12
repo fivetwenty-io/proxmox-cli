@@ -45,6 +45,6 @@ func newQueryUrlMetadataCmd() *cobra.Command {
 	cmd.Flags().StringVar(&url, "url", "", "URL to query metadata for (required)")
 	cmd.Flags().BoolVar(&verifyCertificates, "verify-certificates", true,
 		"verify SSL/TLS certificates when fetching the URL")
-	_ = cmd.MarkFlagRequired("url")
+	cli.MustMarkRequired(cmd, "url")
 	return cmd
 }

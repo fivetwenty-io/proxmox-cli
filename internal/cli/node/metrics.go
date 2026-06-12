@@ -44,6 +44,6 @@ func newRrddataCmd() *cobra.Command {
 		"time frame for the metrics: hour, day, week, month, or year (required)")
 	cmd.Flags().StringVar(&cf, "cf",
 		"", "RRD consolidation function: AVERAGE or MAX")
-	_ = cmd.MarkFlagRequired("timeframe")
+	cli.MustMarkRequired(cmd, "timeframe")
 	return cmd
 }

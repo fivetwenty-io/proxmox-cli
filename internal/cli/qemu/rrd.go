@@ -59,11 +59,7 @@ func newRrdCmd() *cobra.Command {
 	cmd.Flags().StringVar(&ds, "ds", "", "data source name(s) to graph, comma-separated (required)")
 	cmd.Flags().StringVar(&timeframe, "timeframe", "", "time frame: hour, day, week, month, or year (required)")
 	cmd.Flags().StringVar(&cf, "cf", "", "RRD consolidation function: AVERAGE or MAX")
-	if err := cmd.MarkFlagRequired("ds"); err != nil {
-		panic(fmt.Sprintf("rrd: mark --ds required: %v", err))
-	}
-	if err := cmd.MarkFlagRequired("timeframe"); err != nil {
-		panic(fmt.Sprintf("rrd: mark --timeframe required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "ds")
+	cli.MustMarkRequired(cmd, "timeframe")
 	return cmd
 }

@@ -285,7 +285,7 @@ func newBulkMigrateCmd() *cobra.Command {
 	f.BoolVar(&online, "online", false, "live-migrate VMs / restart-migrate containers")
 	f.BoolVar(&withLocalDisks, "with-local-disks", false, "migrate local disks as well")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the action without prompting")
-	_ = cmd.MarkFlagRequired("target-node")
+	cli.MustMarkRequired(cmd, "target-node")
 	return cmd
 }
 

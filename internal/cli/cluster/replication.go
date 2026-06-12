@@ -127,8 +127,8 @@ func newReplicationCreateCmd() *cobra.Command {
 	f.Float64Var(&rate, "rate", 0, "rate limit in MB/s")
 	f.StringVar(&comment, "comment", "", "description")
 	f.BoolVar(&disable, "disable", false, "create the job disabled")
-	_ = cmd.MarkFlagRequired("id")
-	_ = cmd.MarkFlagRequired("target-node")
+	cli.MustMarkRequired(cmd, "id")
+	cli.MustMarkRequired(cmd, "target-node")
 	return cmd
 }
 

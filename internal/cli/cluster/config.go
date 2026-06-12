@@ -124,9 +124,9 @@ func newConfigJoinAddCmd() *cobra.Command {
 	f.BoolVar(&force, "force", false, "do not error if this node already exists in the cluster")
 	f.Int64Var(&nodeid, "nodeid", 0, "node ID to assign to this node")
 	f.Int64Var(&votes, "votes", 0, "number of corosync votes for this node")
-	_ = cmd.MarkFlagRequired("hostname")
-	_ = cmd.MarkFlagRequired("fingerprint")
-	_ = cmd.MarkFlagRequired("password")
+	cli.MustMarkRequired(cmd, "hostname")
+	cli.MustMarkRequired(cmd, "fingerprint")
+	cli.MustMarkRequired(cmd, "password")
 	return cmd
 }
 

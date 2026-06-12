@@ -128,7 +128,7 @@ func newCpuModelCreateCmd() *cobra.Command {
 		},
 	}
 	registerCpuModelFlags(cmd, &reportedModel, &flags, &guestPhysBits, &hidden, &hvVendorID, &level, &physBits)
-	_ = cmd.MarkFlagRequired("reported-model")
+	cli.MustMarkRequired(cmd, "reported-model")
 	return cmd
 }
 

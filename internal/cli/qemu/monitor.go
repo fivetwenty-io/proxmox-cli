@@ -61,8 +61,6 @@ func newMonitorCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&command, "command", "", "QEMU monitor command to execute (required)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm sending a potentially destructive monitor command")
-	if err := cmd.MarkFlagRequired("command"); err != nil {
-		panic(fmt.Sprintf("monitor: mark --command required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "command")
 	return cmd
 }

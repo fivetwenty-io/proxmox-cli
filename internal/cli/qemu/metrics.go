@@ -84,8 +84,6 @@ func newMetricsCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&timeframe, "timeframe", "", "time frame: hour, day, week, month, or year (required)")
 	cmd.Flags().StringVar(&cf, "cf", "", "RRD consolidation function: AVERAGE or MAX")
-	if err := cmd.MarkFlagRequired("timeframe"); err != nil {
-		panic(fmt.Sprintf("metrics: mark --timeframe required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "timeframe")
 	return cmd
 }

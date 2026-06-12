@@ -62,7 +62,7 @@ func newUploadCmd() *cobra.Command {
 	fl.StringVar(&file, "file", "", "path to the local file to upload (required)")
 	fl.StringVar(&content, "content", "iso", "content type of the upload: iso|vztmpl|import")
 	fl.StringVar(&filename, "filename", "", "destination file name (defaults to the source base name)")
-	_ = cmd.MarkFlagRequired("file")
+	cli.MustMarkRequired(cmd, "file")
 	return cmd
 }
 

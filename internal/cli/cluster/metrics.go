@@ -318,9 +318,9 @@ func newMetricsServerCreateCmd() *cobra.Command {
 		},
 	}
 	m.register(cmd, false)
-	_ = cmd.MarkFlagRequired("type")
-	_ = cmd.MarkFlagRequired("server")
-	_ = cmd.MarkFlagRequired("port")
+	cli.MustMarkRequired(cmd, "type")
+	cli.MustMarkRequired(cmd, "server")
+	cli.MustMarkRequired(cmd, "port")
 	return cmd
 }
 
@@ -344,8 +344,8 @@ func newMetricsServerSetCmd() *cobra.Command {
 		},
 	}
 	m.register(cmd, true)
-	_ = cmd.MarkFlagRequired("server")
-	_ = cmd.MarkFlagRequired("port")
+	cli.MustMarkRequired(cmd, "server")
+	cli.MustMarkRequired(cmd, "port")
 	return cmd
 }
 

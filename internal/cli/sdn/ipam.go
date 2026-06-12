@@ -119,7 +119,7 @@ func newIpamCreateCmd() *cobra.Command {
 	f.StringVar(&token, "token", "", "provider API token (netbox/phpipam); never echoed")
 	f.StringVar(&url, "url", "", "provider API URL")
 	f.StringVar(&fingerprint, "fingerprint", "", "certificate SHA-256 fingerprint")
-	_ = cmd.MarkFlagRequired("type")
+	cli.MustMarkRequired(cmd, "type")
 	return cmd
 }
 

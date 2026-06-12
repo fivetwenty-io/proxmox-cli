@@ -106,14 +106,8 @@ func newRemoteMigrateCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&targetVmid, "target-vmid", 0,
 		"VMID to use on the target cluster (defaults to source VMID)")
 
-	if err := cmd.MarkFlagRequired("target-endpoint"); err != nil {
-		panic(fmt.Sprintf("remote-migrate: mark --target-endpoint required: %v", err))
-	}
-	if err := cmd.MarkFlagRequired("target-storage"); err != nil {
-		panic(fmt.Sprintf("remote-migrate: mark --target-storage required: %v", err))
-	}
-	if err := cmd.MarkFlagRequired("target-bridge"); err != nil {
-		panic(fmt.Sprintf("remote-migrate: mark --target-bridge required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "target-endpoint")
+	cli.MustMarkRequired(cmd, "target-storage")
+	cli.MustMarkRequired(cmd, "target-bridge")
 	return cmd
 }

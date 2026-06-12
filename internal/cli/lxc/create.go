@@ -118,6 +118,6 @@ func newCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tags, "tags", "", "comma- or semicolon-separated tags")
 	cmd.Flags().BoolVar(&unprivileged, "unprivileged", false, "create an unprivileged container")
 	cmd.Flags().BoolVar(&start, "start", false, "start the container immediately after creation")
-	_ = cmd.MarkFlagRequired("ostemplate")
+	cli.MustMarkRequired(cmd, "ostemplate")
 	return cmd
 }

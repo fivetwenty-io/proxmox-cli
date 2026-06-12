@@ -87,7 +87,7 @@ func newDownloadURLCmd() *cobra.Command {
 	fl.StringVar(&checksumAlgo, "checksum-algorithm", "", "checksum algorithm: md5|sha1|sha224|sha256|sha384|sha512")
 	fl.StringVar(&compression, "compression", "", "decompress the download with this algorithm")
 	fl.BoolVar(&verifyCerts, "verify-certificates", true, "verify the server's TLS certificate (use --verify-certificates=false to skip)")
-	_ = cmd.MarkFlagRequired("url")
-	_ = cmd.MarkFlagRequired("filename")
+	cli.MustMarkRequired(cmd, "url")
+	cli.MustMarkRequired(cmd, "filename")
 	return cmd
 }

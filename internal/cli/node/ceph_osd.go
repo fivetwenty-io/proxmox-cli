@@ -135,7 +135,7 @@ func newCephOsdCreateCmd() *cobra.Command {
 	f.Int64Var(&osdsPerDevice, "osds-per-device", 0, "OSD services per physical device (fast NVMe only)")
 	f.BoolVar(&encrypted, "encrypted", false, "enable encryption of the OSD")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("dev")
+	cli.MustMarkRequired(cmd, "dev")
 	return cmd
 }
 

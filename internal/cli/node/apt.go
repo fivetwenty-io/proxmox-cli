@@ -163,7 +163,7 @@ func newAptChangelogCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&name, "name", "", "package name (required)")
 	f.StringVar(&version, "version", "", "package version (defaults to the candidate version)")
-	_ = cmd.MarkFlagRequired("name")
+	cli.MustMarkRequired(cmd, "name")
 	return cmd
 }
 
@@ -338,7 +338,7 @@ func newAptReposAddCmd() *cobra.Command {
 	f.StringVar(&handle, "handle", "", "standard repository handle, for example no-subscription (required)")
 	f.StringVar(&digest, "digest", "", "expected configuration digest to guard against concurrent edits")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the change without prompting")
-	_ = cmd.MarkFlagRequired("handle")
+	cli.MustMarkRequired(cmd, "handle")
 	return cmd
 }
 
@@ -389,7 +389,7 @@ func newAptReposEnableCmd() *cobra.Command {
 	f.BoolVar(&enabled, "enabled", true, "whether the repository should be enabled")
 	f.StringVar(&digest, "digest", "", "expected configuration digest to guard against concurrent edits")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the change without prompting")
-	_ = cmd.MarkFlagRequired("path")
-	_ = cmd.MarkFlagRequired("index")
+	cli.MustMarkRequired(cmd, "path")
+	cli.MustMarkRequired(cmd, "index")
 	return cmd
 }

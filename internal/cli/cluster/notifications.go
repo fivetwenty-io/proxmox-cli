@@ -238,8 +238,8 @@ func newGotifyCreateCmd() *cobra.Command {
 	f.StringVar(&token, "token", "", "Gotify application token (required)")
 	f.StringVar(&comment, "comment", "", "comment")
 	f.BoolVar(&disable, "disable", false, "create the endpoint disabled")
-	_ = cmd.MarkFlagRequired("server")
-	_ = cmd.MarkFlagRequired("token")
+	cli.MustMarkRequired(cmd, "server")
+	cli.MustMarkRequired(cmd, "token")
 	return cmd
 }
 
@@ -534,8 +534,8 @@ func newSMTPCreateCmd() *cobra.Command {
 	f.StringVar(&author, "author", "", "author of the mail")
 	f.StringVar(&comment, "comment", "", "comment")
 	f.BoolVar(&disable, "disable", false, "create the endpoint disabled")
-	_ = cmd.MarkFlagRequired("server")
-	_ = cmd.MarkFlagRequired("from-address")
+	cli.MustMarkRequired(cmd, "server")
+	cli.MustMarkRequired(cmd, "from-address")
 	return cmd
 }
 
@@ -704,8 +704,8 @@ func newWebhookCreateCmd() *cobra.Command {
 	f.StringVar(&body, "body", "", "HTTP body, base64 encoded")
 	f.StringVar(&comment, "comment", "", "comment")
 	f.BoolVar(&disable, "disable", false, "create the endpoint disabled")
-	_ = cmd.MarkFlagRequired("url")
-	_ = cmd.MarkFlagRequired("method")
+	cli.MustMarkRequired(cmd, "url")
+	cli.MustMarkRequired(cmd, "method")
 	return cmd
 }
 

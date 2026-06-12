@@ -276,8 +276,8 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 	f.Int64Var(&le, "le", 0, "maximum prefix length to match (less-or-equal)")
 	f.Int64Var(&seq, "seq", 0, "sequence number of this entry")
 	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
-	_ = cmd.MarkFlagRequired("action")
-	_ = cmd.MarkFlagRequired("prefix")
+	cli.MustMarkRequired(cmd, "action")
+	cli.MustMarkRequired(cmd, "prefix")
 	return cmd
 }
 
@@ -574,8 +574,8 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 	f.StringVar(&call, "call", "", "route map to call")
 	f.StringVar(&exitAction, "exit-action", "", "action on exit: next or goto")
 	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
-	_ = cmd.MarkFlagRequired("order")
-	_ = cmd.MarkFlagRequired("action")
+	cli.MustMarkRequired(cmd, "order")
+	cli.MustMarkRequired(cmd, "action")
 	return cmd
 }
 

@@ -174,7 +174,7 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the same name")
 
-	_ = cmd.MarkFlagRequired("host")
+	cli.MustMarkRequired(cmd, "host")
 
 	return cmd
 }

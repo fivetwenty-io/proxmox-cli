@@ -261,7 +261,7 @@ func newCertCustomUploadCmd() *cobra.Command {
 	f.BoolVar(&force, "force", false, "overwrite an existing custom or ACME certificate")
 	f.BoolVar(&restart, "restart", false, "restart pveproxy so the certificate takes effect")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm uploading a custom certificate")
-	_ = cmd.MarkFlagRequired("certificates")
+	cli.MustMarkRequired(cmd, "certificates")
 	return cmd
 }
 

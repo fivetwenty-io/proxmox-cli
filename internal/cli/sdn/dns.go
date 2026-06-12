@@ -123,9 +123,9 @@ func newDnsCreateCmd() *cobra.Command {
 	f.Int64Var(&reversemaskv6, "reversemaskv6", 0, "IPv6 reverse DNS mask")
 	f.Int64Var(&reversev6mask, "reversev6mask", 0, "IPv6 reverse DNS mask (legacy alias)")
 	f.Int64Var(&ttl, "ttl", 0, "default TTL for records")
-	_ = cmd.MarkFlagRequired("type")
-	_ = cmd.MarkFlagRequired("url")
-	_ = cmd.MarkFlagRequired("key")
+	cli.MustMarkRequired(cmd, "type")
+	cli.MustMarkRequired(cmd, "url")
+	cli.MustMarkRequired(cmd, "key")
 	return cmd
 }
 

@@ -192,6 +192,6 @@ func newVzdumpExtractConfigCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&volume, "volume", "", "storage volume identifier of the backup archive (required)")
-	_ = cmd.MarkFlagRequired("volume")
+	cli.MustMarkRequired(cmd, "volume")
 	return cmd
 }

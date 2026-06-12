@@ -169,7 +169,7 @@ func newAcmeAccountCreateCmd() *cobra.Command {
 	f.StringVar(&eabHmac, "eab-hmac-key", "", "HMAC key for External Account Binding (sensitive)")
 	f.StringVar(&tosURL, "tos-url", "", "URL of the CA Terms of Service; setting it indicates agreement")
 	f.BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
-	_ = cmd.MarkFlagRequired("contact")
+	cli.MustMarkRequired(cmd, "contact")
 	return cmd
 }
 
@@ -203,7 +203,7 @@ func newAcmeAccountSetCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&contact, "contact", "", "contact email address(es), comma-separated (required)")
 	f.BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
-	_ = cmd.MarkFlagRequired("contact")
+	cli.MustMarkRequired(cmd, "contact")
 	return cmd
 }
 
@@ -359,7 +359,7 @@ func newAcmePluginCreateCmd() *cobra.Command {
 	f.StringVar(&nodes, "nodes", "", "comma-separated list of nodes the plugin applies to")
 	f.BoolVar(&disable, "disable", false, "create the plugin in a disabled state")
 	f.Int64Var(&valDelay, "validation-delay", 0, "seconds to wait before requesting validation")
-	_ = cmd.MarkFlagRequired("type")
+	cli.MustMarkRequired(cmd, "type")
 	return cmd
 }
 

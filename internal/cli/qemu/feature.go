@@ -59,8 +59,6 @@ func newFeatureCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&feature, "feature", "", "feature to check: clone, snapshot, copy (required)")
 	cmd.Flags().StringVar(&snapname, "snapname", "", "name of a snapshot to check feature against")
-	if err := cmd.MarkFlagRequired("feature"); err != nil {
-		panic(fmt.Sprintf("feature: mark --feature required: %v", err))
-	}
+	cli.MustMarkRequired(cmd, "feature")
 	return cmd
 }

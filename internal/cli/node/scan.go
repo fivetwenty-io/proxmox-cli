@@ -153,7 +153,7 @@ func newScanLvmthinCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&vg, "vg", "", "volume group to scan for thin pools (required)")
-	_ = cmd.MarkFlagRequired("vg")
+	cli.MustMarkRequired(cmd, "vg")
 	return cmd
 }
 
@@ -179,7 +179,7 @@ func newScanNfsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&server, "server", "", "NFS server address (name or IP) (required)")
-	_ = cmd.MarkFlagRequired("server")
+	cli.MustMarkRequired(cmd, "server")
 	return cmd
 }
 
@@ -222,7 +222,7 @@ func newScanCifsCmd() *cobra.Command {
 	f.StringVar(&domain, "domain", "", "SMB domain (workgroup)")
 	f.StringVar(&username, "username", "", "user name for authenticated shares")
 	f.StringVar(&password, "password", "", "user password for authenticated shares")
-	_ = cmd.MarkFlagRequired("server")
+	cli.MustMarkRequired(cmd, "server")
 	return cmd
 }
 
@@ -246,7 +246,7 @@ func newScanIscsiCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&portal, "portal", "", "iSCSI portal (IP or DNS name, optional :port) (required)")
-	_ = cmd.MarkFlagRequired("portal")
+	cli.MustMarkRequired(cmd, "portal")
 	return cmd
 }
 
@@ -288,8 +288,8 @@ func newScanPbsCmd() *cobra.Command {
 	f.StringVar(&password, "password", "", "user password or API token secret (required)")
 	f.Int64Var(&port, "port", 0, "optional PBS port")
 	f.StringVar(&fingerprint, "fingerprint", "", "certificate SHA-256 fingerprint")
-	_ = cmd.MarkFlagRequired("server")
-	_ = cmd.MarkFlagRequired("username")
-	_ = cmd.MarkFlagRequired("password")
+	cli.MustMarkRequired(cmd, "server")
+	cli.MustMarkRequired(cmd, "username")
+	cli.MustMarkRequired(cmd, "password")
 	return cmd
 }

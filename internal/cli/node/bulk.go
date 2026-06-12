@@ -224,7 +224,7 @@ func newMigrateallCmd() *cobra.Command {
 	f.Int64Var(&maxWorkers, "max-workers", 0, "maximum number of concurrent tasks")
 	f.BoolVar(&withLocalDisks, "with-local-disks", false, "migrate local disks as well")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the action without prompting")
-	_ = cmd.MarkFlagRequired("target-node")
+	cli.MustMarkRequired(cmd, "target-node")
 	return cmd
 }
 

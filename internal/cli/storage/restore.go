@@ -77,7 +77,7 @@ func newFileRestoreListCmd() *cobra.Command {
 	fl := cmd.Flags()
 	fl.StringVar(&volume, "volume", "", "backup volume ID or snapshot to browse (required)")
 	fl.StringVar(&filepath, "filepath", "/", "path within the backup to list (base64-encoded for the API)")
-	_ = cmd.MarkFlagRequired("volume")
+	cli.MustMarkRequired(cmd, "volume")
 	return cmd
 }
 
@@ -137,8 +137,8 @@ func newFileRestoreDownloadCmd() *cobra.Command {
 	fl.StringVar(&filepath, "filepath", "", "path within the backup to download (required)")
 	fl.BoolVar(&tar, "tar", false, "download a directory as tar.zst instead of zip")
 	fl.StringVar(&outputFile, "output-file", "", "write the download to this file instead of standard output")
-	_ = cmd.MarkFlagRequired("volume")
-	_ = cmd.MarkFlagRequired("filepath")
+	cli.MustMarkRequired(cmd, "volume")
+	cli.MustMarkRequired(cmd, "filepath")
 	return cmd
 }
 
@@ -179,7 +179,7 @@ func newImportMetadataCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&volume, "volume", "", "guest archive volume to inspect (required)")
-	_ = cmd.MarkFlagRequired("volume")
+	cli.MustMarkRequired(cmd, "volume")
 	return cmd
 }
 

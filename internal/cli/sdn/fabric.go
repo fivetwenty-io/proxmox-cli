@@ -208,7 +208,7 @@ func newFabricCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&protocol, "protocol", "", "fabric protocol: openfabric, ospf, or evpn (required)")
-	_ = cmd.MarkFlagRequired("protocol")
+	cli.MustMarkRequired(cmd, "protocol")
 	ff.register(cmd)
 	return cmd
 }
@@ -264,7 +264,7 @@ func newFabricSetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&protocol, "protocol", "", "fabric protocol: openfabric, ospf, or evpn (required)")
-	_ = cmd.MarkFlagRequired("protocol")
+	cli.MustMarkRequired(cmd, "protocol")
 	ff.register(cmd)
 	cmd.Flags().StringArrayVar(&del, "delete", nil, "property to clear (repeatable)")
 	cmd.Flags().StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
@@ -487,7 +487,7 @@ func newFabricNodeCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&protocol, "protocol", "", "fabric protocol: openfabric, ospf, or evpn (required)")
-	_ = cmd.MarkFlagRequired("protocol")
+	cli.MustMarkRequired(cmd, "protocol")
 	nf.register(cmd)
 	return cmd
 }
@@ -525,7 +525,7 @@ func newFabricNodeSetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&protocol, "protocol", "", "fabric protocol: openfabric, ospf, or evpn (required)")
-	_ = cmd.MarkFlagRequired("protocol")
+	cli.MustMarkRequired(cmd, "protocol")
 	nf.register(cmd)
 	cmd.Flags().StringArrayVar(&del, "delete", nil, "property to clear (repeatable)")
 	cmd.Flags().StringVar(&digest, "digest", "", "digest guarding against concurrent modification")

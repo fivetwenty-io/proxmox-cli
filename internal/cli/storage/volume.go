@@ -262,9 +262,9 @@ func newVolumeAllocCmd() *cobra.Command {
 	fl.StringVar(&filename, "filename", "", "volume name in <storage>:<name> form (required)")
 	fl.StringVar(&size, "size", "", "volume size, e.g. 4G, 1024M, 2048 (kilobytes; required)")
 	fl.StringVar(&format, "format", "", "image format: raw|qcow2|vmdk")
-	_ = cmd.MarkFlagRequired("vmid")
-	_ = cmd.MarkFlagRequired("filename")
-	_ = cmd.MarkFlagRequired("size")
+	cli.MustMarkRequired(cmd, "vmid")
+	cli.MustMarkRequired(cmd, "filename")
+	cli.MustMarkRequired(cmd, "size")
 	return cmd
 }
 
@@ -321,6 +321,6 @@ func newVolumeCopyCmd() *cobra.Command {
 	fl := cmd.Flags()
 	fl.StringVar(&target, "target-volume", "", "target volume identifier (required)")
 	fl.StringVar(&targetNode, "target-node", "", "target node (default: the resolved node)")
-	_ = cmd.MarkFlagRequired("target-volume")
+	cli.MustMarkRequired(cmd, "target-volume")
 	return cmd
 }

@@ -103,7 +103,7 @@ func newDnsSetCmd() *cobra.Command {
 	f.StringVar(&dns1, "dns1", "", "first name-server IP address")
 	f.StringVar(&dns2, "dns2", "", "second name-server IP address")
 	f.StringVar(&dns3, "dns3", "", "third name-server IP address")
-	_ = cmd.MarkFlagRequired("search")
+	cli.MustMarkRequired(cmd, "search")
 	return cmd
 }
 
@@ -179,7 +179,7 @@ func newHostsSetCmd() *cobra.Command {
 	f.StringVar(&data, "data", "", "the complete target content of /etc/hosts (required)")
 	f.StringVar(&digest, "digest", "", "expected configuration digest to guard against concurrent changes")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm replacing /etc/hosts")
-	_ = cmd.MarkFlagRequired("data")
+	cli.MustMarkRequired(cmd, "data")
 	return cmd
 }
 
@@ -236,7 +236,7 @@ func newTimeSetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&timezone, "timezone", "", "time zone name, e.g. UTC or Europe/Vienna (required)")
-	_ = cmd.MarkFlagRequired("timezone")
+	cli.MustMarkRequired(cmd, "timezone")
 	return cmd
 }
 
@@ -446,7 +446,7 @@ func newSubscriptionSetCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&key, "key", "", "Proxmox VE subscription key (required)")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm setting the subscription key")
-	_ = cmd.MarkFlagRequired("key")
+	cli.MustMarkRequired(cmd, "key")
 	return cmd
 }
 

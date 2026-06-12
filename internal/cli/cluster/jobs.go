@@ -145,7 +145,7 @@ func newJobsRealmSyncCreateCmd() *cobra.Command {
 		"semicolon-separated list of items to remove when vanished: entry, properties, acl, or none")
 	f.BoolVar(&enabled, "enabled", false, "enable the job")
 	f.BoolVar(&enableNew, "enable-new", false, "enable newly synced users immediately")
-	_ = cmd.MarkFlagRequired("schedule")
+	cli.MustMarkRequired(cmd, "schedule")
 	return cmd
 }
 
@@ -204,7 +204,7 @@ func newJobsRealmSyncSetCmd() *cobra.Command {
 	f.BoolVar(&enabled, "enabled", false, "enable the job")
 	f.BoolVar(&enableNew, "enable-new", false, "enable newly synced users immediately")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
-	_ = cmd.MarkFlagRequired("schedule")
+	cli.MustMarkRequired(cmd, "schedule")
 	return cmd
 }
 
@@ -281,6 +281,6 @@ func newJobsScheduleAnalyzeCmd() *cobra.Command {
 	f.StringVar(&schedule, "schedule", "", "systemd calendar expression to analyze (required)")
 	f.Int64Var(&iterations, "iterations", 0, "number of upcoming run times to return")
 	f.Int64Var(&starttime, "starttime", 0, "UNIX timestamp to start the calculation from (default: now)")
-	_ = cmd.MarkFlagRequired("schedule")
+	cli.MustMarkRequired(cmd, "schedule")
 	return cmd
 }

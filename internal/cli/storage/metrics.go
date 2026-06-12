@@ -122,6 +122,6 @@ func newStorageRrdCmd() *cobra.Command {
 	fl.StringVar(&timeframe, "timeframe", "hour", "time frame: hour|day|week|month|year")
 	fl.StringVar(&ds, "ds", "", "datasource name(s) to display (required by PVE API)")
 	fl.StringVar(&cf, "cf", "", "RRD consolidation function: AVERAGE|MAX")
-	_ = cmd.MarkFlagRequired("ds")
+	cli.MustMarkRequired(cmd, "ds")
 	return cmd
 }

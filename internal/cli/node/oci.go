@@ -83,7 +83,7 @@ func newOciTagsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&reference, "reference", "",
 		"OCI repository reference to query, for example docker.io/library/alpine (required)")
-	_ = cmd.MarkFlagRequired("reference")
+	cli.MustMarkRequired(cmd, "reference")
 	return cmd
 }
 
@@ -129,6 +129,6 @@ func newOciPullCmd() *cobra.Command {
 		"OCI image reference to download, for example docker.io/library/alpine:latest (required)")
 	f.StringVar(&filename, "filename", "", "custom destination file name (will be normalized)")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the pull without prompting")
-	_ = cmd.MarkFlagRequired("reference")
+	cli.MustMarkRequired(cmd, "reference")
 	return cmd
 }

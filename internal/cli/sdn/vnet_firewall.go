@@ -297,8 +297,8 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 		},
 	}
 	f.register(cmd, true, false, false)
-	_ = cmd.MarkFlagRequired("type")
-	_ = cmd.MarkFlagRequired("action")
+	cli.MustMarkRequired(cmd, "type")
+	cli.MustMarkRequired(cmd, "action")
 	return cmd
 }
 

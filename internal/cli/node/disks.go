@@ -156,7 +156,7 @@ func newDisksSmartCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&disk, "disk", "", "block device name, for example /dev/sda (required)")
 	f.BoolVar(&healthOnly, "health-only", false, "return only the overall health status")
-	_ = cmd.MarkFlagRequired("disk")
+	cli.MustMarkRequired(cmd, "disk")
 	return cmd
 }
 
@@ -224,8 +224,8 @@ func newDisksCreateLvmCmd() *cobra.Command {
 	f.StringVar(&name, "name", "", "storage identifier for the new volume group (required)")
 	f.BoolVar(&addStorage, "add-storage", false, "configure storage using the new volume group")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("device")
-	_ = cmd.MarkFlagRequired("name")
+	cli.MustMarkRequired(cmd, "device")
+	cli.MustMarkRequired(cmd, "name")
 	return cmd
 }
 
@@ -265,8 +265,8 @@ func newDisksCreateLvmthinCmd() *cobra.Command {
 	f.StringVar(&name, "name", "", "storage identifier for the new thin pool (required)")
 	f.BoolVar(&addStorage, "add-storage", false, "configure storage using the new thin pool")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("device")
-	_ = cmd.MarkFlagRequired("name")
+	cli.MustMarkRequired(cmd, "device")
+	cli.MustMarkRequired(cmd, "name")
 	return cmd
 }
 
@@ -319,9 +319,9 @@ func newDisksCreateZfsCmd() *cobra.Command {
 	f.StringVar(&compression, "compression", "", "compression algorithm: on, off, lz4, lzjb, zle, gzip, zstd")
 	f.BoolVar(&addStorage, "add-storage", false, "configure storage using the new pool")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("devices")
-	_ = cmd.MarkFlagRequired("name")
-	_ = cmd.MarkFlagRequired("raidlevel")
+	cli.MustMarkRequired(cmd, "devices")
+	cli.MustMarkRequired(cmd, "name")
+	cli.MustMarkRequired(cmd, "raidlevel")
 	return cmd
 }
 
@@ -367,8 +367,8 @@ func newDisksCreateDirectoryCmd() *cobra.Command {
 	f.StringVar(&filesystem, "filesystem", "", "filesystem to create: ext4 or xfs")
 	f.BoolVar(&addStorage, "add-storage", false, "configure storage using the new directory")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("device")
-	_ = cmd.MarkFlagRequired("name")
+	cli.MustMarkRequired(cmd, "device")
+	cli.MustMarkRequired(cmd, "name")
 	return cmd
 }
 
@@ -652,7 +652,7 @@ func newDisksDeleteLvmthinCmd() *cobra.Command {
 	f.BoolVar(&cleanupConfig, "cleanup-config", false, "remove associated storage configuration for this node")
 	f.BoolVar(&cleanupDisks, "cleanup-disks", false, "wipe the underlying disks so they can be reused")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("volume-group")
+	cli.MustMarkRequired(cmd, "volume-group")
 	return cmd
 }
 
@@ -735,7 +735,7 @@ func newDisksInitGptCmd() *cobra.Command {
 	f.StringVar(&disk, "disk", "", "block device name, for example /dev/sdb (required)")
 	f.StringVar(&uuid, "uuid", "", "UUID for the new GPT table")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("disk")
+	cli.MustMarkRequired(cmd, "disk")
 	return cmd
 }
 
@@ -770,7 +770,7 @@ func newDisksWipeCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&disk, "disk", "", "block device name, for example /dev/sdb (required)")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
-	_ = cmd.MarkFlagRequired("disk")
+	cli.MustMarkRequired(cmd, "disk")
 	return cmd
 }
 
