@@ -17,7 +17,7 @@ import (
 //  2. res.Rows   — rendered with res.Headers as column headers.
 //  3. res.Message — printed as a plain line when neither Single nor Rows is set.
 func renderTable(w io.Writer, res Result, ascii bool) error {
-	style := tw.StyleGraphical
+	style := tw.StyleLight
 	if ascii {
 		style = tw.StyleASCII
 	}
