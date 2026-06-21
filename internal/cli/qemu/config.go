@@ -119,6 +119,7 @@ func newConfigSetCmd() *cobra.Command {
 	var (
 		cores       int64
 		memory      string
+		balloon     int64
 		name        string
 		description string
 		boot        string
@@ -128,9 +129,25 @@ func newConfigSetCmd() *cobra.Command {
 		deleteKeys  string
 		revertKeys  string
 		net0        string
+		net1        string
 		scsi0       string
+		scsi1       string
 		ide0        string
+		ide2        string
+		virtio0     string
+		virtio1     string
 		agent       string
+
+		ciuser       string
+		cipassword   string
+		citype       string
+		ciupgrade    bool
+		cicustom     string
+		nameserver   string
+		searchdomain string
+		sshkeys      string
+		ipconfig0    string
+		ipconfig1    string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <vmid>",
@@ -155,6 +172,7 @@ func newConfigSetCmd() *cobra.Command {
 
 			set("cores", func() { params.Cores = int64Ptr(cores) })
 			set("memory", func() { params.Memory = strPtr(memory) })
+			set("balloon", func() { params.Balloon = int64Ptr(balloon) })
 			set("name", func() { params.Name = strPtr(name) })
 			set("description", func() { params.Description = strPtr(description) })
 			set("boot", func() { params.Boot = strPtr(boot) })
@@ -164,9 +182,50 @@ func newConfigSetCmd() *cobra.Command {
 			set("agent", func() { params.Agent = strPtr(agent) })
 			set("delete", func() { params.Delete = strPtr(deleteKeys) })
 			set("revert", func() { params.Revert = strPtr(revertKeys) })
-			set("net0", func() { params.Net = map[int]string{0: net0} })
-			set("scsi0", func() { params.Scsi = map[int]string{0: scsi0} })
-			set("ide0", func() { params.Ide = map[int]string{0: ide0} })
+
+			// Cloud-init scalars (mirror `qemu create`).
+			set("ciuser", func() { params.Ciuser = strPtr(ciuser) })
+			set("cipassword", func() { params.Cipassword = strPtr(cipassword) })
+			set("citype", func() { params.Citype = strPtr(citype) })
+			set("ciupgrade", func() { params.Ciupgrade = boolPtr(ciupgrade) })
+			set("cicustom", func() { params.Cicustom = strPtr(cicustom) })
+			set("nameserver", func() { params.Nameserver = strPtr(nameserver) })
+			set("searchdomain", func() { params.Searchdomain = strPtr(searchdomain) })
+			set("sshkeys", func() { params.Sshkeys = strPtr(sshkeys) })
+
+			// Indexed device + ipconfig maps. Accumulate each changed slot so
+			// multiple indices (e.g. net0 + net1) coexist in a single request;
+			// the apiclient marshals map[int]string into net0, net1, … keys.
+			net := map[int]string{}
+			set("net0", func() { net[0] = net0 })
+			set("net1", func() { net[1] = net1 })
+			if len(net) > 0 {
+				params.Net = net
+			}
+			scsi := map[int]string{}
+			set("scsi0", func() { scsi[0] = scsi0 })
+			set("scsi1", func() { scsi[1] = scsi1 })
+			if len(scsi) > 0 {
+				params.Scsi = scsi
+			}
+			ide := map[int]string{}
+			set("ide0", func() { ide[0] = ide0 })
+			set("ide2", func() { ide[2] = ide2 })
+			if len(ide) > 0 {
+				params.Ide = ide
+			}
+			virtio := map[int]string{}
+			set("virtio0", func() { virtio[0] = virtio0 })
+			set("virtio1", func() { virtio[1] = virtio1 })
+			if len(virtio) > 0 {
+				params.Virtio = virtio
+			}
+			ipconfig := map[int]string{}
+			set("ipconfig0", func() { ipconfig[0] = ipconfig0 })
+			set("ipconfig1", func() { ipconfig[1] = ipconfig1 })
+			if len(ipconfig) > 0 {
+				params.Ipconfig = ipconfig
+			}
 
 			if !changed {
 				return fmt.Errorf("no configuration changes specified: pass at least one --<key> flag")
@@ -183,6 +242,7 @@ func newConfigSetCmd() *cobra.Command {
 
 	cmd.Flags().Int64Var(&cores, "cores", 0, "number of CPU cores")
 	cmd.Flags().StringVar(&memory, "memory", "", "memory in MiB")
+	cmd.Flags().Int64Var(&balloon, "balloon", 0, "target balloon memory in MiB (0 disables ballooning)")
 	cmd.Flags().StringVar(&name, "name", "", "VM name")
 	cmd.Flags().StringVar(&description, "description", "", "VM description")
 	cmd.Flags().StringVar(&boot, "boot", "", "boot order specification")
@@ -193,8 +253,23 @@ func newConfigSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&deleteKeys, "delete", "", "comma-separated config keys to remove")
 	cmd.Flags().StringVar(&revertKeys, "revert", "", "comma-separated pending config keys to revert")
 	cmd.Flags().StringVar(&net0, "net0", "", "network device net0 specification")
+	cmd.Flags().StringVar(&net1, "net1", "", "network device net1 specification")
 	cmd.Flags().StringVar(&scsi0, "scsi0", "", "SCSI disk scsi0 specification")
+	cmd.Flags().StringVar(&scsi1, "scsi1", "", "SCSI disk scsi1 specification")
 	cmd.Flags().StringVar(&ide0, "ide0", "", "IDE disk ide0 specification")
+	cmd.Flags().StringVar(&ide2, "ide2", "", "IDE device ide2, e.g. <storage>:cloudinit for the cloud-init drive")
+	cmd.Flags().StringVar(&virtio0, "virtio0", "", "VirtIO disk virtio0 specification")
+	cmd.Flags().StringVar(&virtio1, "virtio1", "", "VirtIO disk virtio1 specification, e.g. <storage>:32 to allocate a data disk")
+	cmd.Flags().StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
+	cmd.Flags().StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")
+	cmd.Flags().StringVar(&citype, "citype", "", "cloud-init: config format, e.g. nocloud or configdrive2")
+	cmd.Flags().BoolVar(&ciupgrade, "ciupgrade", false, "cloud-init: run a package upgrade on first boot")
+	cmd.Flags().StringVar(&cicustom, "cicustom", "", "cloud-init: custom config files, e.g. user=local:snippets/user.yml")
+	cmd.Flags().StringVar(&nameserver, "nameserver", "", "cloud-init: DNS server IP address")
+	cmd.Flags().StringVar(&searchdomain, "searchdomain", "", "cloud-init: DNS search domain")
+	cmd.Flags().StringVar(&sshkeys, "sshkeys", "", "cloud-init: public SSH keys (one per line, OpenSSH format)")
+	cmd.Flags().StringVar(&ipconfig0, "ipconfig0", "", "cloud-init: IP config for net0, e.g. ip=dhcp or ip=10.0.0.5/24,gw=10.0.0.1")
+	cmd.Flags().StringVar(&ipconfig1, "ipconfig1", "", "cloud-init: IP config for net1, e.g. ip=10.43.0.5/24")
 	return cmd
 }
 

@@ -376,6 +376,68 @@ func TestQemuConfigSet_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "config", "set", "100", "--cores", "2"))
 }
 
+// TestQemuConfigSet_CloudInit verifies the cloud-init scalar flags and
+// --balloon land as their PVE option keys in the update request body.
+func TestQemuConfigSet_CloudInit(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "set", "100",
+		"--balloon", "0",
+		"--ciuser", "ubuntu",
+		"--nameserver", "1.1.1.1",
+		"--searchdomain", "peppi.internal",
+		"--citype", "nocloud",
+		"--ciupgrade"))
+
+	form := parseForm(t, body)
+	require.Equal(t, "0", form.Get("balloon"))
+	require.Equal(t, "ubuntu", form.Get("ciuser"))
+	require.Equal(t, "1.1.1.1", form.Get("nameserver"))
+	require.Equal(t, "peppi.internal", form.Get("searchdomain"))
+	require.Equal(t, "nocloud", form.Get("citype"))
+	require.Equal(t, "1", form.Get("ciupgrade"))
+}
+
+// TestQemuConfigSet_IndexedSlots verifies that multiple indexed slots (net0 +
+// net1, ipconfig0 + ipconfig1, ide2, virtio1) coexist in one update request.
+func TestQemuConfigSet_IndexedSlots(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "set", "100",
+		"--net0", "virtio,bridge=vmbr1,firewall=1",
+		"--net1", "virtio,bridge=peppivn0,firewall=1",
+		"--ipconfig0", "ip=192.168.1.63/24,gw=192.168.1.1",
+		"--ipconfig1", "ip=10.43.0.5/24",
+		"--ide2", "zfs-0:cloudinit",
+		"--virtio1", "zfs-0:32"))
+
+	form := parseForm(t, body)
+	require.Equal(t, "virtio,bridge=vmbr1,firewall=1", form.Get("net0"))
+	require.Equal(t, "virtio,bridge=peppivn0,firewall=1", form.Get("net1"))
+	require.Equal(t, "ip=192.168.1.63/24,gw=192.168.1.1", form.Get("ipconfig0"))
+	require.Equal(t, "ip=10.43.0.5/24", form.Get("ipconfig1"))
+	require.Equal(t, "zfs-0:cloudinit", form.Get("ide2"))
+	require.Equal(t, "zfs-0:32", form.Get("virtio1"))
+}
+
 // --- config pending -------------------------------------------------------
 
 func TestQemuConfigPending_Table(t *testing.T) {
