@@ -407,6 +407,29 @@ func TestQemuConfigSet_CloudInit(t *testing.T) {
 	require.Equal(t, "1", form.Get("ciupgrade"))
 }
 
+// TestQemuConfigSet_OnbootStartup verifies the boot-time flags land as their PVE
+// option keys (onboot as the PVEBool "1", startup as the order/up/down string).
+func TestQemuConfigSet_OnbootStartup(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "set", "100",
+		"--onboot",
+		"--startup", "order=1,up=30,down=60"))
+
+	form := parseForm(t, body)
+	require.Equal(t, "1", form.Get("onboot"))
+	require.Equal(t, "order=1,up=30,down=60", form.Get("startup"))
+}
+
 // TestQemuConfigSet_SSHKeysEncoded verifies the public key is percent-encoded
 // before transport: PVE uri_unescapes the sshkeys value but does NOT treat '+'
 // as space, so spaces must be sent as %20 (and '+'/'='/'@' as %2B/%3D/%40).

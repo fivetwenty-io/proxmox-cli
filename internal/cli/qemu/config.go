@@ -138,6 +138,8 @@ func newConfigSetCmd() *cobra.Command {
 		virtio0     string
 		virtio1     string
 		agent       string
+		onboot      bool
+		startup     string
 
 		ciuser       string
 		cipassword   string
@@ -181,6 +183,10 @@ func newConfigSetCmd() *cobra.Command {
 			set("cpu", func() { params.Cpu = strPtr(cpu) })
 			set("ostype", func() { params.Ostype = strPtr(ostype) })
 			set("agent", func() { params.Agent = strPtr(agent) })
+			// Boot-time behavior: onboot starts the VM on host boot; startup
+			// controls order + up/down delays, e.g. order=1,up=30,down=60.
+			set("onboot", func() { params.Onboot = boolPtr(onboot) })
+			set("startup", func() { params.Startup = strPtr(startup) })
 			set("delete", func() { params.Delete = strPtr(deleteKeys) })
 			set("revert", func() { params.Revert = strPtr(revertKeys) })
 
@@ -255,6 +261,8 @@ func newConfigSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cpu, "cpu", "", "CPU type")
 	cmd.Flags().StringVar(&ostype, "ostype", "", "guest OS type")
 	cmd.Flags().StringVar(&agent, "agent", "", "QEMU guest-agent option string, e.g. 1 or enabled=1,fstrim_cloned_disks=1")
+	cmd.Flags().BoolVar(&onboot, "onboot", false, "start the VM automatically on host boot")
+	cmd.Flags().StringVar(&startup, "startup", "", "startup/shutdown behavior, e.g. order=1,up=30,down=60")
 	cmd.Flags().StringVar(&deleteKeys, "delete", "", "comma-separated config keys to remove")
 	cmd.Flags().StringVar(&revertKeys, "revert", "", "comma-separated pending config keys to revert")
 	cmd.Flags().StringVar(&net0, "net0", "", "network device net0 specification")
