@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -191,7 +192,11 @@ func newConfigSetCmd() *cobra.Command {
 			set("cicustom", func() { params.Cicustom = strPtr(cicustom) })
 			set("nameserver", func() { params.Nameserver = strPtr(nameserver) })
 			set("searchdomain", func() { params.Searchdomain = strPtr(searchdomain) })
-			set("sshkeys", func() { params.Sshkeys = strPtr(sshkeys) })
+			// PVE requires the sshkeys value percent-encoded; it uri_unescapes
+			// %XX but does NOT treat '+' as space, so encode space as %20.
+			set("sshkeys", func() {
+				params.Sshkeys = strPtr(strings.ReplaceAll(url.QueryEscape(sshkeys), "+", "%20"))
+			})
 
 			// Indexed device + ipconfig maps. Accumulate each changed slot so
 			// multiple indices (e.g. net0 + net1) coexist in a single request;

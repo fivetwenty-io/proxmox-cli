@@ -407,6 +407,31 @@ func TestQemuConfigSet_CloudInit(t *testing.T) {
 	require.Equal(t, "1", form.Get("ciupgrade"))
 }
 
+// TestQemuConfigSet_SSHKeysEncoded verifies the public key is percent-encoded
+// before transport: PVE uri_unescapes the sshkeys value but does NOT treat '+'
+// as space, so spaces must be sent as %20 (and '+'/'='/'@' as %2B/%3D/%40).
+func TestQemuConfigSet_SSHKeysEncoded(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "set", "100",
+		"--sshkeys", "ssh-ed25519 AAAAB3+/= ubuntu@host"))
+
+	// parseForm decodes the form transport layer once, yielding the value the
+	// CLI placed on the wire — which must itself be percent-encoded for PVE.
+	got := parseForm(t, body).Get("sshkeys")
+	require.Equal(t, "ssh-ed25519%20AAAAB3%2B%2F%3D%20ubuntu%40host", got)
+	require.NotContains(t, got, " ", "sshkeys must not contain raw spaces")
+}
+
 // TestQemuConfigSet_IndexedSlots verifies that multiple indexed slots (net0 +
 // net1, ipconfig0 + ipconfig1, ide2, virtio1) coexist in one update request.
 func TestQemuConfigSet_IndexedSlots(t *testing.T) {
