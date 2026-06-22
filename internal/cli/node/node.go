@@ -20,6 +20,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd.AddCommand(
 		newListCmd(),
 		newStatusCmd(),
+		newNodeConfigCmd(),
+		newRebootCmd(),
+		newShutdownCmd(),
 		newSSHCmd(),
 		newShellCmd(),
 		newConsoleCmd(),

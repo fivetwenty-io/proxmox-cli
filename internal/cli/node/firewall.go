@@ -27,7 +27,74 @@ func newFirewallCmd() *cobra.Command {
 	cmd.AddCommand(
 		newNodeFirewallRulesCmd(),
 		newNodeFirewallOptionsCmd(),
+		newNodeFirewallLogCmd(),
 	)
+	return cmd
+}
+
+// fwLogEntry is the decoded shape of one firewall log list entry: a line number
+// and the log text.
+type fwLogEntry struct {
+	N int64  `json:"n"`
+	T string `json:"t"`
+}
+
+func newNodeFirewallLogCmd() *cobra.Command {
+	var (
+		limit int64
+		since int64
+		start int64
+		until int64
+	)
+	cmd := &cobra.Command{
+		Use:   "log",
+		Short: "Read the host firewall log",
+		Long:  "Read the firewall log of the resolved node. Use --start and --limit to page through entries.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			fl := cmd.Flags()
+			params := &nodes.ListFirewallLogParams{}
+			if fl.Changed("limit") {
+				params.Limit = &limit
+			}
+			if fl.Changed("since") {
+				params.Since = &since
+			}
+			if fl.Changed("start") {
+				params.Start = &start
+			}
+			if fl.Changed("until") {
+				params.Until = &until
+			}
+			resp, err := deps.API.Nodes.ListFirewallLog(cmd.Context(), deps.Node, params)
+			if err != nil {
+				return fmt.Errorf("read firewall log on node %q: %w", deps.Node, err)
+			}
+			entries := make([]fwLogEntry, 0)
+			rows := make([][]string, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var e fwLogEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode firewall log entry: %w", err)
+					}
+					entries = append(entries, e)
+					rows = append(rows, []string{strconv.FormatInt(e.N, 10), e.T})
+				}
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: []string{"N", "LINE"}, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.Int64Var(&limit, "limit", 0, "maximum number of log lines to return")
+	f.Int64Var(&since, "since", 0, "only return entries newer than this UNIX epoch timestamp")
+	f.Int64Var(&start, "start", 0, "line number to start reading from (for paging)")
+	f.Int64Var(&until, "until", 0, "only return entries older than this UNIX epoch timestamp")
 	return cmd
 }
 
@@ -85,6 +152,7 @@ func decodeRuleList(raws []json.RawMessage) ([]string, [][]string, []fwRuleEntry
 type nodeRuleFlags struct {
 	action, ruleType, source, dest, proto, dport, sport string
 	iface, macro, logLevel, icmpType, comment           string
+	digest                                              string
 	enable, pos, moveto                                 int64
 	del                                                 string
 }
@@ -103,6 +171,8 @@ func (f *nodeRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDe
 	cmd.Flags().StringVar(&f.logLevel, "log", "", "log level: emerg, alert, crit, err, warning, notice, info, debug, or nolog")
 	cmd.Flags().StringVar(&f.comment, "comment", "", "descriptive comment")
 	cmd.Flags().Int64Var(&f.enable, "enable", 1, "1 to enable the rule, 0 to disable it")
+	cmd.Flags().StringVar(&f.digest, "digest", "",
+		"SHA1 digest of the current rules to guard against concurrent edits")
 	if withPos {
 		cmd.Flags().Int64Var(&f.pos, "pos", 0, "insert the rule at this position")
 	}
@@ -257,6 +327,9 @@ func applyNodeRuleCreateFlags(cmd *cobra.Command, f *nodeRuleFlags, params *node
 	if fl.Changed("enable") {
 		params.Enable = &f.enable
 	}
+	if fl.Changed("digest") {
+		params.Digest = &f.digest
+	}
 	if fl.Changed("pos") {
 		params.Pos = &f.pos
 	}
@@ -330,6 +403,9 @@ func applyNodeRuleUpdateFlags(cmd *cobra.Command, f *nodeRuleFlags, params *node
 	if fl.Changed("enable") {
 		params.Enable = &f.enable
 	}
+	if fl.Changed("digest") {
+		params.Digest = &f.digest
+	}
 	if fl.Changed("moveto") {
 		params.Moveto = &f.moveto
 	}
@@ -339,7 +415,10 @@ func applyNodeRuleUpdateFlags(cmd *cobra.Command, f *nodeRuleFlags, params *node
 }
 
 func newNodeFirewallRulesDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes    bool
+		digest string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <pos>",
 		Short: "Delete a host firewall rule by position",
@@ -353,7 +432,11 @@ func newNodeFirewallRulesDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete firewall rule %s without confirmation: pass --yes/-y", pos)
 			}
-			if err := deps.API.Nodes.DeleteFirewallRules(cmd.Context(), deps.Node, pos, &nodes.DeleteFirewallRulesParams{}); err != nil {
+			params := &nodes.DeleteFirewallRulesParams{}
+			if cmd.Flags().Changed("digest") {
+				params.Digest = &digest
+			}
+			if err := deps.API.Nodes.DeleteFirewallRules(cmd.Context(), deps.Node, pos, params); err != nil {
 				return fmt.Errorf("delete firewall rule %s on node %q: %w", pos, deps.Node, err)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
@@ -361,6 +444,8 @@ func newNodeFirewallRulesDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&digest, "digest", "",
+		"SHA1 digest of the current rules to guard against concurrent edits")
 	return cmd
 }
 
@@ -423,6 +508,7 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 		nfConntrackSynRecv      int64
 		synfloodBurst           int64
 		synfloodRate            int64
+		digest                  string
 		del                     string
 	)
 	optionFlags := []string{
@@ -431,7 +517,7 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 		"log-level-out", "log-level-forward", "nf-conntrack-helpers",
 		"smurf-log-level", "tcp-flags-log-level", "nf-conntrack-max",
 		"nf-conntrack-tcp-timeout-established", "nf-conntrack-tcp-timeout-syn-recv",
-		"protection-synflood-burst", "protection-synflood-rate", "delete",
+		"protection-synflood-burst", "protection-synflood-rate", "digest", "delete",
 	}
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -506,6 +592,9 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 			if fl.Changed("protection-synflood-rate") {
 				params.ProtectionSynfloodRate = &synfloodRate
 			}
+			if fl.Changed("digest") {
+				params.Digest = &digest
+			}
 			if fl.Changed("delete") {
 				params.Delete = &del
 			}
@@ -537,6 +626,8 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 	fl.Int64Var(&nfConntrackSynRecv, "nf-conntrack-tcp-timeout-syn-recv", 0, "conntrack syn-recv timeout in seconds")
 	fl.Int64Var(&synfloodBurst, "protection-synflood-burst", 0, "synflood protection rate burst by source IP")
 	fl.Int64Var(&synfloodRate, "protection-synflood-rate", 0, "synflood protection rate (syn/sec) by source IP")
+	fl.StringVar(&digest, "digest", "",
+		"SHA1 digest of the current options to guard against concurrent edits")
 	fl.StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
 	return cmd
 }

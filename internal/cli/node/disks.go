@@ -277,6 +277,7 @@ func newDisksCreateZfsCmd() *cobra.Command {
 		raidlevel   string
 		ashift      int64
 		compression string
+		draidConfig string
 		addStorage  bool
 		yes         bool
 	)
@@ -300,6 +301,9 @@ func newDisksCreateZfsCmd() *cobra.Command {
 			if fl.Changed("compression") {
 				params.Compression = &compression
 			}
+			if fl.Changed("draid-config") {
+				params.DraidConfig = &draidConfig
+			}
 			if fl.Changed("add-storage") {
 				params.AddStorage = &addStorage
 			}
@@ -317,6 +321,8 @@ func newDisksCreateZfsCmd() *cobra.Command {
 	f.StringVar(&raidlevel, "raidlevel", "", "RAID level: single, mirror, raid10, raidz, raidz2, raidz3 (required)")
 	f.Int64Var(&ashift, "ashift", 12, "pool sector size exponent")
 	f.StringVar(&compression, "compression", "", "compression algorithm: on, off, lz4, lzjb, zle, gzip, zstd")
+	f.StringVar(&draidConfig, "draid-config", "",
+		"dRAID configuration, for example data=4,spares=1 (only with a draid raidlevel)")
 	f.BoolVar(&addStorage, "add-storage", false, "configure storage using the new pool")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	cli.MustMarkRequired(cmd, "devices")

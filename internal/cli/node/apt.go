@@ -31,6 +31,7 @@ func newAptCmd() *cobra.Command {
 		newAptChangelogCmd(),
 		newAptUpdateCmd(),
 		newAptRepositoriesCmd(),
+		newAptTemplatesCmd(),
 	)
 	return cmd
 }

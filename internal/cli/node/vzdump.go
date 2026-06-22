@@ -29,6 +29,28 @@ func newVzdumpCmd() *cobra.Command {
 		remove        bool
 		notesTemplate string
 		mailto        string
+
+		bwlimit                int64
+		ionice                 int64
+		fleecing               string
+		lockwait               int64
+		stopwait               int64
+		tmpdir                 string
+		dumpdir                string
+		script                 string
+		stdexcludes            bool
+		stdout                 bool
+		exclude                string
+		excludePath            []string
+		zstd                   int64
+		pigz                   int64
+		notificationMode       string
+		pbsChangeDetectionMode string
+		performance            string
+		jobID                  string
+		pruneBackups           string
+		stop                   bool
+		quiet                  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "vzdump",
@@ -76,6 +98,69 @@ func newVzdumpCmd() *cobra.Command {
 			if fl.Changed("mailto") {
 				params.Mailto = &mailto
 			}
+			if fl.Changed("bwlimit") {
+				params.Bwlimit = &bwlimit
+			}
+			if fl.Changed("ionice") {
+				params.Ionice = &ionice
+			}
+			if fl.Changed("fleecing") {
+				params.Fleecing = &fleecing
+			}
+			if fl.Changed("lockwait") {
+				params.Lockwait = &lockwait
+			}
+			if fl.Changed("stopwait") {
+				params.Stopwait = &stopwait
+			}
+			if fl.Changed("tmpdir") {
+				params.Tmpdir = &tmpdir
+			}
+			if fl.Changed("dumpdir") {
+				params.Dumpdir = &dumpdir
+			}
+			if fl.Changed("script") {
+				params.Script = &script
+			}
+			if fl.Changed("stdexcludes") {
+				params.Stdexcludes = &stdexcludes
+			}
+			if fl.Changed("stdout") {
+				params.Stdout = &stdout
+			}
+			if fl.Changed("exclude") {
+				params.Exclude = &exclude
+			}
+			if fl.Changed("exclude-path") {
+				params.ExcludePath = excludePath
+			}
+			if fl.Changed("zstd") {
+				params.Zstd = &zstd
+			}
+			if fl.Changed("pigz") {
+				params.Pigz = &pigz
+			}
+			if fl.Changed("notification-mode") {
+				params.NotificationMode = &notificationMode
+			}
+			if fl.Changed("pbs-change-detection-mode") {
+				params.PbsChangeDetectionMode = &pbsChangeDetectionMode
+			}
+			if fl.Changed("performance") {
+				params.Performance = &performance
+			}
+			if fl.Changed("job-id") {
+				params.JobId = &jobID
+			}
+			if fl.Changed("prune-backups") {
+				params.PruneBackups = &pruneBackups
+			}
+			if fl.Changed("stop") {
+				params.Stop = &stop
+			}
+			if fl.Changed("quiet") {
+				params.Quiet = &quiet
+			}
 
 			resp, err := deps.API.Nodes.CreateVzdump(cmd.Context(), deps.Node, params)
 			if err != nil {
@@ -119,6 +204,32 @@ func newVzdumpCmd() *cobra.Command {
 	fl.BoolVar(&remove, "remove", false, "prune older backups according to the storage retention settings")
 	fl.StringVar(&notesTemplate, "notes-template", "", "template for backup notes (supports {{guestname}}, {{node}}, {{vmid}})")
 	fl.StringVar(&mailto, "mailto", "", "comma-separated email addresses for notifications")
+	fl.Int64Var(&bwlimit, "bwlimit", 0, "I/O rate limit in KiB/s (0 for unlimited)")
+	fl.Int64Var(&ionice, "ionice", 7, "ionice priority for the backup process (0-8)")
+	fl.StringVar(&fleecing, "fleecing", "", "backup fleecing options, for example enabled=1,storage=local-lvm")
+	fl.Int64Var(&lockwait, "lockwait", 0, "maximal time to wait for the global lock, in minutes")
+	fl.Int64Var(&stopwait, "stopwait", 0, "maximal time to wait until a guest is stopped, in minutes")
+	fl.StringVar(&tmpdir, "tmpdir", "", "store temporary files in this directory")
+	fl.StringVar(&dumpdir, "dumpdir", "", "store the resulting backup in this directory instead of a storage")
+	fl.StringVar(&script, "script", "", "run this hook script during the backup")
+	fl.BoolVar(&stdexcludes, "stdexcludes", true, "exclude default temporary and log files")
+	fl.BoolVar(&stdout, "stdout", false, "write the backup to stdout instead of a file")
+	fl.StringVar(&exclude, "exclude", "", "comma-separated guest IDs to exclude (only with --all)")
+	fl.StringArrayVar(&excludePath, "exclude-path", nil,
+		"path or glob to exclude from the backup; repeat for multiple paths")
+	fl.Int64Var(&zstd, "zstd", 1, "number of zstd threads (0 for all available cores)")
+	fl.Int64Var(&pigz, "pigz", 0, "number of pigz threads when using gzip (0 to use a single thread)")
+	fl.StringVar(&notificationMode, "notification-mode", "",
+		"how to send notifications: auto, legacy-sendmail, or notification-system")
+	fl.StringVar(&pbsChangeDetectionMode, "pbs-change-detection-mode", "",
+		"PBS change detection mode: legacy, data, or metadata")
+	fl.StringVar(&performance, "performance", "",
+		"performance tuning, for example max-workers=4,pbs-entries-max=1048576")
+	fl.StringVar(&jobID, "job-id", "", "job ID to attribute this backup to (informational)")
+	fl.StringVar(&pruneBackups, "prune-backups", "",
+		"retention policy, for example keep-last=3,keep-daily=7 (implies --remove)")
+	fl.BoolVar(&stop, "stop", false, "stop any running backup job before starting this one")
+	fl.BoolVar(&quiet, "quiet", false, "run quietly, only logging warnings and errors")
 
 	cmd.AddCommand(
 		newVzdumpDefaultsCmd(),

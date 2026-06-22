@@ -7,6 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
+
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -75,6 +77,45 @@ func newStatusCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+}
+
+// newNodePowerCmd builds a node power-control command (reboot or shutdown) that
+// wraps POST /nodes/{node}/status with the matching command. Both actions are
+// disruptive, so each is gated behind --yes.
+func newNodePowerCmd(verb, short string) *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   verb,
+		Short: short,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			if !yes {
+				return fmt.Errorf("refusing to %s node %q without confirmation: pass --yes/-y", verb, deps.Node)
+			}
+			params := &nodes.CreateStatusParams{Command: verb}
+			if err := deps.API.Nodes.CreateStatus(cmd.Context(), deps.Node, params); err != nil {
+				return fmt.Errorf("%s node %q: %w", verb, deps.Node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: fmt.Sprintf("Node %q %s initiated.", deps.Node, verb)}, deps.Format)
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the disruptive operation without prompting")
+	return cmd
+}
+
+// newRebootCmd builds `pve node reboot`.
+func newRebootCmd() *cobra.Command {
+	return newNodePowerCmd("reboot", "Reboot the node")
+}
+
+// newShutdownCmd builds `pve node shutdown`.
+func newShutdownCmd() *cobra.Command {
+	return newNodePowerCmd("shutdown", "Shut down the node")
 }
 
 // decodeMemUsage unmarshals a memory/rootfs total+used sub-object. It returns
