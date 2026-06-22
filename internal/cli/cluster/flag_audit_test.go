@@ -54,6 +54,33 @@ func TestBackupCreate_AuditFields(t *testing.T) {
 	require.ElementsMatch(t, []string{"/tmp", "/var/log"}, gotForm["exclude-path"])
 }
 
+// TestBackupCreate_LargeBwlimitNoScientificNotation is a regression guard for
+// the apiclient-go encoder bug (fixed in v3.2.8) where int64 params >= 1e6 were
+// JSON round-tripped through float64 and emitted in scientific notation
+// (bwlimit=1048576 -> "1.048576e+06"), which PVE rejects. A value below 1e6
+// (as used elsewhere in these tests) does not exercise the path, so this asserts
+// the exact decimal digits on the wire for a realistic 1 GiB/s limit.
+func TestBackupCreate_LargeBwlimitNoScientificNotation(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	var gotForm url.Values
+	f.HandleFunc("POST /api2/json/cluster/backup", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotForm = r.Form
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "backup", "create",
+		"--id", "job1", "--all", "--bwlimit", "1048576"))
+
+	require.Equal(t, "1048576", gotForm.Get("bwlimit"))
+	require.NotContains(t, gotForm.Get("bwlimit"), "e",
+		"bwlimit must be plain decimal, not scientific notation")
+}
+
 // TestBackupSet_AuditFields verifies the audit flags also forward on PUT.
 func TestBackupSet_AuditFields(t *testing.T) {
 	f, ac := newFakeClient(t)

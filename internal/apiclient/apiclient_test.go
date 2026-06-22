@@ -478,6 +478,10 @@ func (m *mockTaskService) WaitForUPID(_ context.Context, _ string, _ *tasks.Wait
 	return m.waitStatus, m.waitErr
 }
 
+func (m *mockTaskService) GetStatus(_ context.Context, _, _ string) (*tasks.Status, error) {
+	return m.waitStatus, m.waitErr
+}
+
 func TestWaitTask_Success(t *testing.T) {
 	t.Parallel()
 	ac := &apiclient.APIClient{
