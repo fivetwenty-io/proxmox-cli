@@ -151,6 +151,28 @@ type backupFlags struct {
 	mailto        string
 	notesTemplate string
 	runNode       string
+
+	bwlimit                int64
+	exclude                string
+	pruneBackups           string
+	remove                 bool
+	protected              bool
+	notificationMode       string
+	dumpdir                string
+	excludePath            []string
+	fleecing               string
+	ionice                 int64
+	pbsChangeDetectionMode string
+	performance            string
+	repeatMissed           bool
+	lockwait               int64
+	script                 string
+	stdexcludes            bool
+	stopwait               int64
+	tmpdir                 string
+	zstd                   int64
+	pigz                   int64
+	stop                   bool
 }
 
 // register binds the backup-job attribute flags shared by create and set onto cmd.
@@ -168,6 +190,32 @@ func (bf *backupFlags) register(cmd *cobra.Command) {
 	fl.StringVar(&bf.mailto, "mailto", "", "comma-separated email addresses for notifications")
 	fl.StringVar(&bf.notesTemplate, "notes-template", "", "template for backup notes (supports {{guestname}}, {{node}}, {{vmid}})")
 	fl.StringVar(&bf.runNode, "run-node", "", "only run the job when executed on this node")
+
+	fl.Int64Var(&bf.bwlimit, "bwlimit", 0, "limit backup I/O bandwidth in KiB/s")
+	fl.StringVar(&bf.exclude, "exclude", "", "comma-separated guest IDs to exclude (implies --all)")
+	fl.StringVar(&bf.pruneBackups, "prune-backups", "", "retention policy, for example keep-last=3,keep-daily=7")
+	fl.BoolVar(&bf.remove, "remove", false, "prune older backups according to --prune-backups")
+	fl.BoolVar(&bf.protected, "protected", false, "mark the resulting backups as protected")
+	fl.StringVar(&bf.notificationMode, "notification-mode", "",
+		"notification system to use: auto, legacy-sendmail, or notification-system")
+	fl.StringVar(&bf.dumpdir, "dumpdir", "", "store resulting files in this directory")
+	fl.StringArrayVar(&bf.excludePath, "exclude-path", nil,
+		"exclude files/directories matching this shell glob (repeatable)")
+	fl.StringVar(&bf.fleecing, "fleecing", "", "backup fleecing options (VM only), for example enabled=1,storage=local")
+	fl.Int64Var(&bf.ionice, "ionice", 0, "I/O priority for the BFQ scheduler (0-8)")
+	fl.StringVar(&bf.pbsChangeDetectionMode, "pbs-change-detection-mode", "",
+		"PBS change detection mode for container backups: legacy, data, or metadata")
+	fl.StringVar(&bf.performance, "performance", "",
+		"performance settings, for example max-workers=4,pbs-entries-max=1048576")
+	fl.BoolVar(&bf.repeatMissed, "repeat-missed", false, "run as soon as possible if a scheduled run was missed")
+	fl.Int64Var(&bf.lockwait, "lockwait", 0, "maximum minutes to wait for the global lock")
+	fl.StringVar(&bf.script, "script", "", "hook script to run during the backup")
+	fl.BoolVar(&bf.stdexcludes, "stdexcludes", true, "exclude temporary files and logs")
+	fl.Int64Var(&bf.stopwait, "stopwait", 0, "maximum minutes to wait for a guest to stop")
+	fl.StringVar(&bf.tmpdir, "tmpdir", "", "store temporary files in this directory")
+	fl.Int64Var(&bf.zstd, "zstd", 0, "zstd thread count (0 uses half the cores)")
+	fl.Int64Var(&bf.pigz, "pigz", 0, "use pigz instead of gzip when N>0 (thread count)")
+	fl.BoolVar(&bf.stop, "stop", false, "stop running backup jobs on the host")
 }
 
 // applyCreate copies the changed flag values onto a CreateBackupParams.
@@ -209,6 +257,69 @@ func (bf *backupFlags) applyCreate(cmd *cobra.Command, p *pvecluster.CreateBacku
 	if fl.Changed("run-node") {
 		p.Node = &bf.runNode
 	}
+	if fl.Changed("bwlimit") {
+		p.Bwlimit = &bf.bwlimit
+	}
+	if fl.Changed("exclude") {
+		p.Exclude = &bf.exclude
+	}
+	if fl.Changed("prune-backups") {
+		p.PruneBackups = &bf.pruneBackups
+	}
+	if fl.Changed("remove") {
+		p.Remove = &bf.remove
+	}
+	if fl.Changed("protected") {
+		p.Protected = &bf.protected
+	}
+	if fl.Changed("notification-mode") {
+		p.NotificationMode = &bf.notificationMode
+	}
+	if fl.Changed("dumpdir") {
+		p.Dumpdir = &bf.dumpdir
+	}
+	if fl.Changed("exclude-path") {
+		p.ExcludePath = bf.excludePath
+	}
+	if fl.Changed("fleecing") {
+		p.Fleecing = &bf.fleecing
+	}
+	if fl.Changed("ionice") {
+		p.Ionice = &bf.ionice
+	}
+	if fl.Changed("pbs-change-detection-mode") {
+		p.PbsChangeDetectionMode = &bf.pbsChangeDetectionMode
+	}
+	if fl.Changed("performance") {
+		p.Performance = &bf.performance
+	}
+	if fl.Changed("repeat-missed") {
+		p.RepeatMissed = &bf.repeatMissed
+	}
+	if fl.Changed("lockwait") {
+		p.Lockwait = &bf.lockwait
+	}
+	if fl.Changed("script") {
+		p.Script = &bf.script
+	}
+	if fl.Changed("stdexcludes") {
+		p.Stdexcludes = &bf.stdexcludes
+	}
+	if fl.Changed("stopwait") {
+		p.Stopwait = &bf.stopwait
+	}
+	if fl.Changed("tmpdir") {
+		p.Tmpdir = &bf.tmpdir
+	}
+	if fl.Changed("zstd") {
+		p.Zstd = &bf.zstd
+	}
+	if fl.Changed("pigz") {
+		p.Pigz = &bf.pigz
+	}
+	if fl.Changed("stop") {
+		p.Stop = &bf.stop
+	}
 }
 
 // applySet copies the changed flag values onto an UpdateBackupParams.
@@ -249,6 +360,69 @@ func (bf *backupFlags) applySet(cmd *cobra.Command, p *pvecluster.UpdateBackupPa
 	}
 	if fl.Changed("run-node") {
 		p.Node = &bf.runNode
+	}
+	if fl.Changed("bwlimit") {
+		p.Bwlimit = &bf.bwlimit
+	}
+	if fl.Changed("exclude") {
+		p.Exclude = &bf.exclude
+	}
+	if fl.Changed("prune-backups") {
+		p.PruneBackups = &bf.pruneBackups
+	}
+	if fl.Changed("remove") {
+		p.Remove = &bf.remove
+	}
+	if fl.Changed("protected") {
+		p.Protected = &bf.protected
+	}
+	if fl.Changed("notification-mode") {
+		p.NotificationMode = &bf.notificationMode
+	}
+	if fl.Changed("dumpdir") {
+		p.Dumpdir = &bf.dumpdir
+	}
+	if fl.Changed("exclude-path") {
+		p.ExcludePath = bf.excludePath
+	}
+	if fl.Changed("fleecing") {
+		p.Fleecing = &bf.fleecing
+	}
+	if fl.Changed("ionice") {
+		p.Ionice = &bf.ionice
+	}
+	if fl.Changed("pbs-change-detection-mode") {
+		p.PbsChangeDetectionMode = &bf.pbsChangeDetectionMode
+	}
+	if fl.Changed("performance") {
+		p.Performance = &bf.performance
+	}
+	if fl.Changed("repeat-missed") {
+		p.RepeatMissed = &bf.repeatMissed
+	}
+	if fl.Changed("lockwait") {
+		p.Lockwait = &bf.lockwait
+	}
+	if fl.Changed("script") {
+		p.Script = &bf.script
+	}
+	if fl.Changed("stdexcludes") {
+		p.Stdexcludes = &bf.stdexcludes
+	}
+	if fl.Changed("stopwait") {
+		p.Stopwait = &bf.stopwait
+	}
+	if fl.Changed("tmpdir") {
+		p.Tmpdir = &bf.tmpdir
+	}
+	if fl.Changed("zstd") {
+		p.Zstd = &bf.zstd
+	}
+	if fl.Changed("pigz") {
+		p.Pigz = &bf.pigz
+	}
+	if fl.Changed("stop") {
+		p.Stop = &bf.stop
 	}
 }
 

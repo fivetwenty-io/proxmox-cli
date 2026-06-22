@@ -3,6 +3,8 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,6 +13,31 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
+
+// parseLinkFlags converts repeated --link "N=spec" values into the indexed
+// corosync link map the API expects (link0..link7). The spec is the corosync
+// link address, optionally followed by ",priority=N".
+func parseLinkFlags(vals []string) (map[int]string, error) {
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	links := make(map[int]string, len(vals))
+	for _, v := range vals {
+		idx, spec, ok := strings.Cut(v, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid --link %q: want INDEX=ADDRESS, for example 0=10.0.0.1", v)
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(idx))
+		if err != nil || n < 0 || n > 7 {
+			return nil, fmt.Errorf("invalid --link index in %q: want an integer 0-7", v)
+		}
+		if _, dup := links[n]; dup {
+			return nil, fmt.Errorf("duplicate --link index %d", n)
+		}
+		links[n] = spec
+	}
+	return links, nil
+}
 
 // newConfigCmd builds the `pve cluster config` sub-tree for corosync cluster
 // membership: reading the join information a new node needs, and adding or
@@ -27,12 +54,73 @@ func newConfigCmd() *cobra.Command {
 			"Membership changes affect quorum and are gated behind --yes.",
 	}
 	cmd.AddCommand(
+		newConfigCreateCmd(),
 		newConfigJoinCmd(),
 		newConfigNodesCmd(),
 		newConfigApiversionCmd(),
 		newConfigQdeviceCmd(),
 		newConfigTotemCmd(),
 	)
+	return cmd
+}
+
+// newConfigCreateCmd builds `pve cluster config create` — initial cluster
+// formation on the local node (POST /cluster/config). This is a one-time,
+// disruptive operation, so it is gated behind --yes.
+func newConfigCreateCmd() *cobra.Command {
+	var (
+		yes              bool
+		clustername      string
+		nodeid           int64
+		votes            int64
+		tokenCoefficient int64
+		links            []string
+	)
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new cluster on this node",
+		Long: "Initialize a new corosync cluster on the local node. This is a one-time " +
+			"cluster-formation step; afterwards other nodes join with `cluster config join add`.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if !yes {
+				return fmt.Errorf("refusing to create a cluster without confirmation: pass --yes/-y")
+			}
+			params := &pvecluster.CreateConfigParams{Clustername: clustername}
+			fl := cmd.Flags()
+			if fl.Changed("nodeid") {
+				params.Nodeid = &nodeid
+			}
+			if fl.Changed("votes") {
+				params.Votes = &votes
+			}
+			if fl.Changed("token-coefficient") {
+				params.TokenCoefficient = &tokenCoefficient
+			}
+			linkMap, err := parseLinkFlags(links)
+			if err != nil {
+				return err
+			}
+			params.Link = linkMap
+			resp, err := deps.API.Cluster.CreateConfig(cmd.Context(), params)
+			if err != nil {
+				return fmt.Errorf("create cluster %q: %w", clustername, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: fmt.Sprintf("Cluster %q created.", clustername), Raw: resp}, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVarP(&yes, "yes", "y", false, "confirm cluster creation without prompting")
+	f.StringVar(&clustername, "clustername", "", "name of the cluster (required)")
+	f.Int64Var(&nodeid, "nodeid", 0, "node ID for this node")
+	f.Int64Var(&votes, "votes", 0, "number of corosync votes for this node")
+	f.Int64Var(&tokenCoefficient, "token-coefficient", 0,
+		"coefficient used to determine the corosync token timeout")
+	f.StringArrayVar(&links, "link", nil,
+		"corosync link as INDEX=ADDRESS (repeatable, up to 8: link0..link7), for example 0=10.0.0.1")
+	cli.MustMarkRequired(cmd, "clustername")
 	return cmd
 }
 
@@ -80,6 +168,7 @@ func newConfigJoinAddCmd() *cobra.Command {
 		force       bool
 		nodeid      int64
 		votes       int64
+		links       []string
 	)
 	cmd := &cobra.Command{
 		Use:   "add",
@@ -108,6 +197,11 @@ func newConfigJoinAddCmd() *cobra.Command {
 			if fl.Changed("votes") {
 				params.Votes = &votes
 			}
+			linkMap, err := parseLinkFlags(links)
+			if err != nil {
+				return err
+			}
+			params.Link = linkMap
 			resp, err := deps.API.Cluster.CreateConfigJoin(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("join cluster at %q: %w", hostname, err)
@@ -124,6 +218,8 @@ func newConfigJoinAddCmd() *cobra.Command {
 	f.BoolVar(&force, "force", false, "do not error if this node already exists in the cluster")
 	f.Int64Var(&nodeid, "nodeid", 0, "node ID to assign to this node")
 	f.Int64Var(&votes, "votes", 0, "number of corosync votes for this node")
+	f.StringArrayVar(&links, "link", nil,
+		"corosync link as INDEX=ADDRESS (repeatable, up to 8: link0..link7), for example 0=10.0.0.1")
 	cli.MustMarkRequired(cmd, "hostname")
 	cli.MustMarkRequired(cmd, "fingerprint")
 	cli.MustMarkRequired(cmd, "password")
@@ -181,6 +277,7 @@ func newConfigNodesAddCmd() *cobra.Command {
 		nodeid     int64
 		votes      int64
 		apiversion int64
+		links      []string
 	)
 	cmd := &cobra.Command{
 		Use:   "add <node>",
@@ -212,6 +309,11 @@ func newConfigNodesAddCmd() *cobra.Command {
 			if fl.Changed("apiversion") {
 				params.Apiversion = &apiversion
 			}
+			linkMap, err := parseLinkFlags(links)
+			if err != nil {
+				return err
+			}
+			params.Link = linkMap
 			resp, err := deps.API.Cluster.CreateConfigNodes(cmd.Context(), node, params)
 			if err != nil {
 				return fmt.Errorf("add cluster node %q: %w", node, err)
@@ -231,6 +333,8 @@ func newConfigNodesAddCmd() *cobra.Command {
 	f.Int64Var(&nodeid, "nodeid", 0, "node ID to assign")
 	f.Int64Var(&votes, "votes", 0, "number of corosync votes for the node")
 	f.Int64Var(&apiversion, "apiversion", 0, "JOIN_API_VERSION of the new node")
+	f.StringArrayVar(&links, "link", nil,
+		"corosync link as INDEX=ADDRESS (repeatable, up to 8: link0..link7), for example 0=10.0.0.1")
 	return cmd
 }
 

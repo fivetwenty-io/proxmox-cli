@@ -55,8 +55,8 @@ func newOptionsGetCmd() *cobra.Command {
 var optionsSetFlags = []string{
 	"bwlimit", "console", "consent-text", "crs", "description", "email-from",
 	"fencing", "ha", "http-proxy", "keyboard", "language", "location",
-	"mac-prefix", "max-workers", "migration", "next-id", "notify",
-	"registered-tags", "replication", "tag-style", "user-tag-access", "delete",
+	"mac-prefix", "max-workers", "migration", "migration-unsecure", "next-id", "notify",
+	"registered-tags", "replication", "tag-style", "u2f", "user-tag-access", "webauthn", "delete",
 }
 
 func newOptionsSetCmd() *cobra.Command {
@@ -76,12 +76,15 @@ func newOptionsSetCmd() *cobra.Command {
 		macPrefix      string
 		maxWorkers     int64
 		migration      string
+		migrationUnsec bool
 		nextID         string
 		notify         string
 		registeredTags string
 		replication    string
 		tagStyle       string
+		u2f            string
 		userTagAccess  string
+		webauthn       string
 		del            string
 	)
 	cmd := &cobra.Command{
@@ -142,6 +145,9 @@ func newOptionsSetCmd() *cobra.Command {
 			if fl.Changed("migration") {
 				params.Migration = &migration
 			}
+			if fl.Changed("migration-unsecure") {
+				params.MigrationUnsecure = &migrationUnsec
+			}
 			if fl.Changed("next-id") {
 				params.NextId = &nextID
 			}
@@ -157,8 +163,14 @@ func newOptionsSetCmd() *cobra.Command {
 			if fl.Changed("tag-style") {
 				params.TagStyle = &tagStyle
 			}
+			if fl.Changed("u2f") {
+				params.U2f = &u2f
+			}
 			if fl.Changed("user-tag-access") {
 				params.UserTagAccess = &userTagAccess
+			}
+			if fl.Changed("webauthn") {
+				params.Webauthn = &webauthn
 			}
 			if fl.Changed("delete") {
 				params.Delete = &del
@@ -187,12 +199,16 @@ func newOptionsSetCmd() *cobra.Command {
 	f.StringVar(&macPrefix, "mac-prefix", "", "prefix for auto-generated guest MAC addresses")
 	f.Int64Var(&maxWorkers, "max-workers", 0, "maximum workers per node for bulk actions")
 	f.StringVar(&migration, "migration", "", "cluster-wide migration settings, for example type=insecure")
+	f.BoolVar(&migrationUnsec, "migration-unsecure", false,
+		"disable the SSH migration tunnel (deprecated; prefer --migration type=insecure)")
 	f.StringVar(&nextID, "next-id", "", "range for free VMID auto-selection, for example lower=100,upper=10000")
 	f.StringVar(&notify, "notify", "", "cluster-wide notification settings")
 	f.StringVar(&registeredTags, "registered-tags", "", "tags that require Sys.Modify on '/' to set or delete")
 	f.StringVar(&replication, "replication", "", "cluster-wide replication settings")
 	f.StringVar(&tagStyle, "tag-style", "", "tag style options, for example color-map=...")
+	f.StringVar(&u2f, "u2f", "", "U2F/FIDO2 authentication settings, for example origin=https://...")
 	f.StringVar(&userTagAccess, "user-tag-access", "", "privilege options for user-settable tags")
+	f.StringVar(&webauthn, "webauthn", "", "WebAuthn authentication settings, for example rp=...,origin=...")
 	f.StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
 	return cmd
 }

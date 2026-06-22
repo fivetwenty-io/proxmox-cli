@@ -80,6 +80,7 @@ func decodeRuleList(raws []json.RawMessage) ([]string, [][]string, []fwRuleEntry
 // two commands stay in sync.
 type clusterRuleFlags struct {
 	action, ruleType, source, dest, proto, dport, sport, iface, macro, logLevel, comment string
+	icmpType, digest                                                                     string
 	enable, pos, moveto                                                                  int64
 	del                                                                                  string
 }
@@ -96,6 +97,10 @@ func (f *clusterRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, wit
 	cmd.Flags().StringVar(&f.macro, "macro", "", "predefined standard macro")
 	cmd.Flags().StringVar(&f.logLevel, "log", "", "log level: emerg, alert, crit, err, warning, notice, info, debug, or nolog")
 	cmd.Flags().StringVar(&f.comment, "comment", "", "descriptive comment")
+	cmd.Flags().StringVar(&f.icmpType, "icmp-type", "",
+		"ICMP type, valid only when --proto is icmp or icmpv6/ipv6-icmp")
+	cmd.Flags().StringVar(&f.digest, "digest", "",
+		"reject the change unless the current config matches this SHA-1 digest")
 	cmd.Flags().Int64Var(&f.enable, "enable", 1, "1 to enable the rule, 0 to disable it")
 	if withPos {
 		cmd.Flags().Int64Var(&f.pos, "pos", 0, "insert the rule at this position")
@@ -236,6 +241,12 @@ func applyRuleCreateFlags(cmd *cobra.Command, f *clusterRuleFlags, params *pvecl
 	if fl.Changed("comment") {
 		params.Comment = &f.comment
 	}
+	if fl.Changed("icmp-type") {
+		params.IcmpType = &f.icmpType
+	}
+	if fl.Changed("digest") {
+		params.Digest = &f.digest
+	}
 	if fl.Changed("enable") {
 		params.Enable = &f.enable
 	}
@@ -302,6 +313,12 @@ func applyRuleUpdateFlags(cmd *cobra.Command, f *clusterRuleFlags, params *pvecl
 	}
 	if fl.Changed("comment") {
 		params.Comment = &f.comment
+	}
+	if fl.Changed("icmp-type") {
+		params.IcmpType = &f.icmpType
+	}
+	if fl.Changed("digest") {
+		params.Digest = &f.digest
 	}
 	if fl.Changed("enable") {
 		params.Enable = &f.enable
@@ -536,6 +553,12 @@ func applyGroupRuleAddFlags(cmd *cobra.Command, f *clusterRuleFlags, params *pve
 	if fl.Changed("comment") {
 		params.Comment = &f.comment
 	}
+	if fl.Changed("icmp-type") {
+		params.IcmpType = &f.icmpType
+	}
+	if fl.Changed("digest") {
+		params.Digest = &f.digest
+	}
 	if fl.Changed("enable") {
 		params.Enable = &f.enable
 	}
@@ -603,6 +626,12 @@ func applyGroupRuleUpdateFlags(cmd *cobra.Command, f *clusterRuleFlags, params *
 	if fl.Changed("comment") {
 		params.Comment = &f.comment
 	}
+	if fl.Changed("icmp-type") {
+		params.IcmpType = &f.icmpType
+	}
+	if fl.Changed("digest") {
+		params.Digest = &f.digest
+	}
 	if fl.Changed("enable") {
 		params.Enable = &f.enable
 	}
@@ -658,6 +687,7 @@ func newClusterFirewallIpsetCmd() *cobra.Command {
 		newClusterFirewallIpsetCreateCmd(),
 		newClusterFirewallIpsetDeleteCmd(),
 		newClusterFirewallIpsetAddCmd(),
+		newClusterFirewallIpsetUpdateCmd(),
 		newClusterFirewallIpsetRemoveCmd(),
 	)
 	return cmd
@@ -804,6 +834,49 @@ func newClusterFirewallIpsetAddCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
 	cmd.Flags().BoolVar(&nomatch, "nomatch", false, "treat this entry as an exclusion")
+	return cmd
+}
+
+func newClusterFirewallIpsetUpdateCmd() *cobra.Command {
+	var (
+		comment string
+		nomatch bool
+		digest  string
+	)
+	cmd := &cobra.Command{
+		Use:   "update <name> <cidr>",
+		Short: "Update a CIDR entry in an IP set",
+		Long: "Update the comment or nomatch flag of an existing CIDR entry in an IP set, " +
+			"without deleting and re-adding it.",
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			name, cidr := args[0], args[1]
+			fl := cmd.Flags()
+			if !anyFlagChanged(fl, "comment", "nomatch", "digest") {
+				return fmt.Errorf("no changes to set: pass --comment, --nomatch, or --digest")
+			}
+			params := &pvecluster.UpdateFirewallIpsetParams{}
+			if fl.Changed("comment") {
+				params.Comment = &comment
+			}
+			if fl.Changed("nomatch") {
+				params.Nomatch = &nomatch
+			}
+			if fl.Changed("digest") {
+				params.Digest = &digest
+			}
+			if err := deps.API.Cluster.UpdateFirewallIpset(cmd.Context(), name, cidr, params); err != nil {
+				return fmt.Errorf("update %s in IP set %q: %w", cidr, name, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: fmt.Sprintf("%s updated in IP set %s.", cidr, name)}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
+	cmd.Flags().BoolVar(&nomatch, "nomatch", false, "treat this entry as an exclusion")
+	cmd.Flags().StringVar(&digest, "digest", "",
+		"reject the change unless the current config matches this SHA-1 digest")
 	return cmd
 }
 
@@ -1004,6 +1077,7 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 		policyOut     string
 		policyForward string
 		logRatelimit  string
+		digest        string
 		del           string
 	)
 	cmd := &cobra.Command{
@@ -1015,7 +1089,7 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "enable", "ebtables", "policy-in", "policy-out",
-				"policy-forward", "log-ratelimit", "delete") {
+				"policy-forward", "log-ratelimit", "digest", "delete") {
 				return fmt.Errorf("no options to set: pass at least one option flag")
 			}
 
@@ -1038,6 +1112,9 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 			if fl.Changed("log-ratelimit") {
 				params.LogRatelimit = &logRatelimit
 			}
+			if fl.Changed("digest") {
+				params.Digest = &digest
+			}
 			if fl.Changed("delete") {
 				params.Delete = &del
 			}
@@ -1055,6 +1132,8 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&policyOut, "policy-out", "", "output policy: ACCEPT, REJECT, or DROP")
 	cmd.Flags().StringVar(&policyForward, "policy-forward", "", "forward policy: ACCEPT or DROP")
 	cmd.Flags().StringVar(&logRatelimit, "log-ratelimit", "", "log rate-limiting settings, for example enable=1,rate=1/second")
+	cmd.Flags().StringVar(&digest, "digest", "",
+		"reject the change unless the current config matches this SHA-1 digest")
 	cmd.Flags().StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
 	return cmd
 }
