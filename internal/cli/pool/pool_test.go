@@ -25,6 +25,7 @@ import (
 type recordedRequest struct {
 	method string
 	path   string
+	query  string
 	body   map[string]any
 }
 
@@ -138,7 +139,7 @@ func mustNewClientAndRecord(f *testhelper.FakePVE, rec *[]recordedRequest, patte
 				_ = json.Unmarshal(b, &body)
 			}
 		}
-		*rec = append(*rec, recordedRequest{method: r.Method, path: r.URL.Path, body: body})
+		*rec = append(*rec, recordedRequest{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, body: body})
 		if status >= 400 {
 			testhelper.WriteError(w, status, "boom")
 			return
@@ -254,6 +255,32 @@ func TestPoolSetDelete(t *testing.T) {
 	require.Len(t, rec, 1)
 	require.Equal(t, "1", rec[0].body["delete"])
 	require.Equal(t, "101", rec[0].body["vms"])
+}
+
+func TestPoolSetAllowMove(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools/prod", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "set", "prod", "--vms", "100", "--allow-move")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "100", rec[0].body["vms"])
+	require.Equal(t, "1", rec[0].body["allow-move"])
+}
+
+func TestPoolListPoolidFilter(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools", []any{
+		map[string]any{"poolid": "prod", "comment": "production", "members": []any{}},
+	}, 200)
+
+	out, err := run(t, f, "", "list", "--poolid", "prod")
+	require.NoError(t, err)
+	require.Contains(t, out, "prod")
+	require.Len(t, rec, 1)
+	require.Contains(t, rec[0].query, "poolid=prod")
 }
 
 func TestPoolSetError(t *testing.T) {

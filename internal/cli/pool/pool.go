@@ -43,7 +43,7 @@ type poolListEntry struct {
 
 // newListCmd builds `pve pool list`.
 func newListCmd() *cobra.Command {
-	var poolType string
+	var poolType, poolid string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List resource pools",
@@ -54,6 +54,9 @@ func newListCmd() *cobra.Command {
 			params := &pools.ListPoolsParams{}
 			if poolType != "" {
 				params.Type = &poolType
+			}
+			if poolid != "" {
+				params.Poolid = &poolid
 			}
 
 			resp, err := deps.API.Pools.ListPools(cmd.Context(), params)
@@ -84,6 +87,7 @@ func newListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&poolType, "type", "", "filter by member type: qemu|lxc|storage")
+	cmd.Flags().StringVar(&poolid, "poolid", "", "show only the pool with this identifier")
 	return cmd
 }
 
@@ -161,7 +165,7 @@ func newCreateCmd() *cobra.Command {
 // newSetCmd builds `pve pool set <poolid>`.
 func newSetCmd() *cobra.Command {
 	var comment, vms, storage string
-	var del bool
+	var del, allowMove bool
 	cmd := &cobra.Command{
 		Use:   "set <poolid>",
 		Short: "Update a resource pool's members or comment",
@@ -183,6 +187,9 @@ func newSetCmd() *cobra.Command {
 			if del {
 				params.Delete = &del
 			}
+			if allowMove {
+				params.AllowMove = &allowMove
+			}
 
 			if err := deps.API.Pools.UpdatePools2(cmd.Context(), poolid, params); err != nil {
 				return fmt.Errorf("update pool %q: %w", poolid, err)
@@ -196,6 +203,8 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&vms, "vms", "", "comma-separated guest VMIDs to add (or remove with --delete)")
 	cmd.Flags().StringVar(&storage, "storage", "", "comma-separated storage IDs to add (or remove with --delete)")
 	cmd.Flags().BoolVar(&del, "delete", false, "remove the passed VMIDs and/or storage IDs instead of adding them")
+	cmd.Flags().BoolVar(&allowMove, "allow-move", false,
+		"add a guest even if it already belongs to another pool, moving it from its current pool")
 	return cmd
 }
 
