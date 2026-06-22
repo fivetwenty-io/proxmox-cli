@@ -53,6 +53,16 @@ func TestUPIDFromRaw_EmptyStringValue(t *testing.T) {
 	require.Contains(t, err.Error(), "empty UPID string")
 }
 
+func TestUPIDFromRaw_NonUPIDString(t *testing.T) {
+	t.Parallel()
+	// A non-empty string that is not a UPID (e.g. a synchronous body that some
+	// backends return) must be rejected, not mistaken for a task handle.
+	raw := json.RawMessage(`"ok"`)
+	_, err := apiclient.UPIDFromRaw(raw)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not a UPID")
+}
+
 func TestUPIDFromRaw_NotAString_Numeric(t *testing.T) {
 	t.Parallel()
 	raw := json.RawMessage(`42`)

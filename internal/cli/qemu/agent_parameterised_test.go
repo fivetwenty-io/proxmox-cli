@@ -56,7 +56,26 @@ func TestQemuAgentExec_MissingCommand(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "agent", "exec", "100")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "--command is required")
+	require.Contains(t, err.Error(), "provide a command")
+}
+
+// TestQemuAgentExec_PositionalArgs verifies the `-- <cmd>...` form forwards each
+// token verbatim, including an argument that itself contains spaces — something
+// the whitespace-splitting --command flag cannot express.
+func TestQemuAgentExec_PositionalArgs(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotCommand []string
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/agent/exec", func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseForm())
+		gotCommand = r.Form["command"]
+		testhelper.WriteData(w, map[string]any{"pid": 7})
+	})
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "agent", "exec", "100", "--", "sh", "-c", "echo hi there"))
+
+	require.Equal(t, []string{"sh", "-c", "echo hi there"}, gotCommand)
 }
 
 func TestQemuAgentExec_ServerError(t *testing.T) {

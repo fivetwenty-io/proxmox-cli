@@ -56,6 +56,7 @@ func TestCreate_AuditScalarFlags(t *testing.T) {
 	)
 	require.NoError(t, run())
 
+	require.Equal(t, "local:vztmpl/alpine.tar.zst", body["ostemplate"])
 	require.Equal(t, "web container", body["description"])
 	require.Equal(t, "1.1.1.1", body["nameserver"])
 	require.Equal(t, "example.com", body["searchdomain"])
@@ -87,6 +88,25 @@ func TestCreate_AuditScalarFlags(t *testing.T) {
 
 // TestCreate_IndexedSlots verifies the repeatable --net/--mp/--dev flags expand
 // into indexed net0/net1/mp0/dev0 keys.
+// TestCreate_ServerError verifies a 500 from the API surfaces a wrapped error
+// naming the container and node, matching the error-path coverage of peer
+// create/lifecycle commands.
+func TestCreate_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", true)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "create", "101",
+		"--ostemplate", "local:vztmpl/alpine.tar.zst")
+
+	err := run()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "create container 101 on node")
+}
+
 func TestCreate_IndexedSlots(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var body map[string]any

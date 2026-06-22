@@ -2,6 +2,7 @@ package node_test
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -63,16 +64,33 @@ func TestNodeVzdump_AuditFlags(t *testing.T) {
 		"--quiet"))
 
 	require.NoError(t, root.Execute())
-	for _, want := range []string{
-		"bwlimit=51200", "ionice=5", "fleecing=enabled", "lockwait=30", "stopwait=10",
-		"tmpdir=%2Ftmp%2Fbk", "dumpdir=%2Fmnt%2Fbk", "script=%2Froot%2Fhook.sh",
-		"stdexcludes=0", "stdout=1", "exclude=100", "zstd=4", "pigz=2",
-		"notification-mode=notification-system", "pbs-change-detection-mode=metadata",
-		"performance=max-workers", "job-id=job-1", "prune-backups=keep-last", "stop=1", "quiet=1",
+	form, err := url.ParseQuery(rec.query)
+	require.NoError(t, err)
+	for k, want := range map[string]string{
+		"bwlimit":                   "51200",
+		"ionice":                    "5",
+		"fleecing":                  "enabled=1,storage=local-lvm",
+		"lockwait":                  "30",
+		"stopwait":                  "10",
+		"tmpdir":                    "/tmp/bk",
+		"dumpdir":                   "/mnt/bk",
+		"script":                    "/root/hook.sh",
+		"stdexcludes":               "0",
+		"stdout":                    "1",
+		"exclude":                   "100,101",
+		"exclude-path":              "/var/cache",
+		"zstd":                      "4",
+		"pigz":                      "2",
+		"notification-mode":         "notification-system",
+		"pbs-change-detection-mode": "metadata",
+		"performance":               "max-workers=4",
+		"job-id":                    "job-1",
+		"prune-backups":             "keep-last=3",
+		"stop":                      "1",
+		"quiet":                     "1",
 	} {
-		require.Contains(t, rec.query, want)
+		require.Equal(t, want, form.Get(k), "form field %q", k)
 	}
-	require.Contains(t, rec.query, "exclude-path=")
 }
 
 // ---------------------------------------------------------------------------

@@ -348,13 +348,13 @@ func TestAuthLogout_WipesSession(t *testing.T) {
 		},
 	}
 	writeConfig(t, path, cfg)
-	_ = logoutCalled
 
 	deps := newTestDeps(t)
 	deps.Cfg = loadCfg(t, path)
 
 	out, err := run(t, deps, path, "auth", "logout", "--context", "lab")
 	require.NoError(t, err)
+	require.True(t, logoutCalled, "logout must call DELETE /access/ticket to invalidate the server ticket")
 	require.Contains(t, out, "lab")
 
 	saved := loadCfg(t, path)

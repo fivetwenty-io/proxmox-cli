@@ -74,7 +74,7 @@ func TestQemuConsole_VNCWebsocket(t *testing.T) {
 
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/vncproxy", gotPath)
 	form := parseForm(t, gotQuery+"&"+body)
-	require.NotEmpty(t, form.Get("websocket"))
+	require.Equal(t, "1", form.Get("websocket"))
 }
 
 func TestQemuConsole_Term(t *testing.T) {
