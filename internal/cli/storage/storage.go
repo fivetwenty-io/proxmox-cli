@@ -26,6 +26,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newListCmd(),
+		newStorageNodeListCmd(),
 		newGetCmd(),
 		newContentCmd(),
 		newCreateCmd(),
@@ -184,43 +185,60 @@ type storageFlags struct {
 	portal      string
 	iscsiTarget string
 
+	// create-only tunables (no update parameter)
+	authsupported string
+	iscsiprovider string
+	base          string
+
 	// shared tunables
-	server         string
-	content        string
-	contentDirs    string
-	nodes          string
-	shared         bool
-	enabled        bool
-	username       string
-	password       string
-	domain         string
-	smbversion     string
-	options        string
-	subdir         string
-	mountpoint     string
-	pool           string
-	dataPool       string
-	monhost        string
-	fsName         string
-	namespace      string
-	krbd           bool
-	fuse           bool
-	keyring        string
-	fingerprint    string
-	encryptionKey  string
-	masterPubkey   string
-	port           int64
-	format         string
-	preallocation  string
-	bwlimit        string
-	pruneBackups   string
-	maxProtected   int64
-	mkdir          bool
-	createBasePath bool
-	createSubdirs  bool
-	sparse         bool
-	isMountpoint   string
-	skipCertVerify bool
+	server                string
+	content               string
+	contentDirs           string
+	nodes                 string
+	shared                bool
+	enabled               bool
+	username              string
+	password              string
+	domain                string
+	smbversion            string
+	options               string
+	subdir                string
+	mountpoint            string
+	pool                  string
+	dataPool              string
+	monhost               string
+	fsName                string
+	namespace             string
+	krbd                  bool
+	fuse                  bool
+	keyring               string
+	fingerprint           string
+	encryptionKey         string
+	masterPubkey          string
+	port                  int64
+	format                string
+	preallocation         string
+	bwlimit               string
+	pruneBackups          string
+	maxProtected          int64
+	mkdir                 bool
+	createBasePath        bool
+	createSubdirs         bool
+	sparse                bool
+	isMountpoint          string
+	skipCertVerify        bool
+	blocksize             string
+	nocow                 bool
+	saferemove            bool
+	nowritecache          bool
+	saferemoveStepsize    int64
+	saferemoveThroughput  string
+	snapshotAsVolumeChain bool
+	taggedOnly            bool
+	zfsBasePath           string
+	comstarHg             string
+	comstarTg             string
+	lioTpg                string
 
 	// update-only
 	del    string
@@ -239,6 +257,9 @@ func (sf *storageFlags) registerCreate(cmd *cobra.Command) {
 	f.StringVar(&sf.datastore, "datastore", "", "Proxmox Backup Server datastore name (pbs)")
 	f.StringVar(&sf.portal, "portal", "", "iSCSI portal, IP or DNS name with optional port (iscsi)")
 	f.StringVar(&sf.iscsiTarget, "iscsi-target", "", "iSCSI target (iscsi)")
+	f.StringVar(&sf.authsupported, "authsupported", "", "supported authentication methods (iscsi)")
+	f.StringVar(&sf.iscsiprovider, "iscsiprovider", "", "iSCSI provider: comstar|istgt|iet|LIO (iscsi)")
+	f.StringVar(&sf.base, "base", "", "base volume; automatically activated (zfspool, lvm)")
 	sf.registerCommon(cmd)
 }
 
@@ -289,6 +310,18 @@ func (sf *storageFlags) registerCommon(cmd *cobra.Command) {
 	f.BoolVar(&sf.sparse, "sparse", false, "use sparse volumes (zfspool)")
 	f.StringVar(&sf.isMountpoint, "is-mountpoint", "", "treat the path as an externally managed mountpoint (dir)")
 	f.BoolVar(&sf.skipCertVerify, "skip-cert-verification", false, "disable TLS certificate verification (trusted networks only)")
+	f.StringVar(&sf.blocksize, "blocksize", "", "ZFS block size (zfspool)")
+	f.BoolVar(&sf.nocow, "nocow", false, "set the NOCOW flag, disabling checksumming (btrfs)")
+	f.BoolVar(&sf.saferemove, "saferemove", false, "zero-out data when removing LVs (lvm, lvmthin)")
+	f.BoolVar(&sf.nowritecache, "nowritecache", false, "disable write caching on the target (iscsi)")
+	f.Int64Var(&sf.saferemoveStepsize, "saferemove-stepsize", 0, "wipe step size in MiB (lvm, lvmthin)")
+	f.StringVar(&sf.saferemoveThroughput, "saferemove-throughput", "", "wipe throughput, cstream -t value (lvm, lvmthin)")
+	f.BoolVar(&sf.snapshotAsVolumeChain, "snapshot-as-volume-chain", false, "enable storage-agnostic snapshots via volume backing chains")
+	f.BoolVar(&sf.taggedOnly, "tagged-only", false, "only list LVs tagged with 'pve-vm-ID' (lvm)")
+	f.StringVar(&sf.zfsBasePath, "zfs-base-path", "", "base path for created ZFS block devices, usually /dev/zvol (zfspool)")
+	f.StringVar(&sf.comstarHg, "comstar-hg", "", "host group for comstar views (iscsi)")
+	f.StringVar(&sf.comstarTg, "comstar-tg", "", "target group for comstar views (iscsi)")
+	f.StringVar(&sf.lioTpg, "lio-tpg", "", "target portal group for Linux LIO targets (iscsi)")
 }
 
 // applyCreate builds the create payload, forwarding optional flags only when set.
@@ -355,6 +388,21 @@ func (sf *storageFlags) applyCreate(cmd *cobra.Command, p *clusterstorage.Create
 	bl("sparse", &sf.sparse, &p.Sparse)
 	str("is-mountpoint", &sf.isMountpoint, &p.IsMountpoint)
 	bl("skip-cert-verification", &sf.skipCertVerify, &p.SkipCertVerification)
+	str("authsupported", &sf.authsupported, &p.Authsupported)
+	str("iscsiprovider", &sf.iscsiprovider, &p.Iscsiprovider)
+	str("base", &sf.base, &p.Base)
+	str("blocksize", &sf.blocksize, &p.Blocksize)
+	bl("nocow", &sf.nocow, &p.Nocow)
+	bl("saferemove", &sf.saferemove, &p.Saferemove)
+	bl("nowritecache", &sf.nowritecache, &p.Nowritecache)
+	i64("saferemove-stepsize", &sf.saferemoveStepsize, &p.SaferemoveStepsize)
+	str("saferemove-throughput", &sf.saferemoveThroughput, &p.SaferemoveThroughput)
+	bl("snapshot-as-volume-chain", &sf.snapshotAsVolumeChain, &p.SnapshotAsVolumeChain)
+	bl("tagged-only", &sf.taggedOnly, &p.TaggedOnly)
+	str("zfs-base-path", &sf.zfsBasePath, &p.ZfsBasePath)
+	str("comstar-hg", &sf.comstarHg, &p.ComstarHg)
+	str("comstar-tg", &sf.comstarTg, &p.ComstarTg)
+	str("lio-tpg", &sf.lioTpg, &p.LioTpg)
 }
 
 // applyUpdate builds the update payload, forwarding optional flags only when set.
@@ -413,6 +461,18 @@ func (sf *storageFlags) applyUpdate(cmd *cobra.Command, p *clusterstorage.Update
 	bl("sparse", &sf.sparse, &p.Sparse)
 	str("is-mountpoint", &sf.isMountpoint, &p.IsMountpoint)
 	bl("skip-cert-verification", &sf.skipCertVerify, &p.SkipCertVerification)
+	str("blocksize", &sf.blocksize, &p.Blocksize)
+	bl("nocow", &sf.nocow, &p.Nocow)
+	bl("saferemove", &sf.saferemove, &p.Saferemove)
+	bl("nowritecache", &sf.nowritecache, &p.Nowritecache)
+	i64("saferemove-stepsize", &sf.saferemoveStepsize, &p.SaferemoveStepsize)
+	str("saferemove-throughput", &sf.saferemoveThroughput, &p.SaferemoveThroughput)
+	bl("snapshot-as-volume-chain", &sf.snapshotAsVolumeChain, &p.SnapshotAsVolumeChain)
+	bl("tagged-only", &sf.taggedOnly, &p.TaggedOnly)
+	str("zfs-base-path", &sf.zfsBasePath, &p.ZfsBasePath)
+	str("comstar-hg", &sf.comstarHg, &p.ComstarHg)
+	str("comstar-tg", &sf.comstarTg, &p.ComstarTg)
+	str("lio-tpg", &sf.lioTpg, &p.LioTpg)
 	str("delete", &sf.del, &p.Delete)
 	str("digest", &sf.digest, &p.Digest)
 }
