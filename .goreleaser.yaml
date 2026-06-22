@@ -5,6 +5,8 @@
 #   - darwin/arm64   (Apple Silicon)
 #   - linux/amd64    (x86-64)
 #   - linux/arm64    (aarch64)
+#   - freebsd/amd64  (x86-64)
+#   - freebsd/arm64  (aarch64)
 #   - windows/amd64  (64-bit)
 #
 # Local snapshot:  goreleaser release --snapshot --clean
@@ -37,6 +39,7 @@ builds:
     goos:
       - linux
       - darwin
+      - freebsd
       - windows
     goarch:
       - amd64
