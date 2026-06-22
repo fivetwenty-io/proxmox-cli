@@ -28,6 +28,7 @@ func TestMustMarkRequired_DefinedFlag(t *testing.T) {
 	f := cmd.Flags().Lookup("vmid")
 	if f == nil {
 		t.Fatal("flag 'vmid' not found after registration")
+		return
 	}
 	annotations := f.Annotations
 	if annotations == nil {
