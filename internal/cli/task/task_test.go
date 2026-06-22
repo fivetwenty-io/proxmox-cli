@@ -166,6 +166,74 @@ func TestList_Filters(t *testing.T) {
 	require.Contains(t, gotQuery, "limit=10")
 }
 
+// TestList_NewFilters verifies the pagination/error/source/user filters are
+// forwarded as query params.
+func TestList_NewFilters(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotQuery string
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testhelper.WriteData(w, []map[string]any{})
+	})
+
+	_, err := runTask(t, f, "pve1", "json", "list",
+		"--start", "20", "--errors", "--source", "all", "--userfilter", "root@pam")
+	require.NoError(t, err)
+
+	require.Contains(t, gotQuery, "start=20")
+	require.Contains(t, gotQuery, "errors=1")
+	require.Contains(t, gotQuery, "source=all")
+	require.Contains(t, gotQuery, "userfilter=root%40pam")
+}
+
+// TestClusterList_Success verifies that `task cluster-list` calls the
+// cluster-wide tasks endpoint and renders the task rows.
+func TestClusterList_Success(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotPath string
+	f.HandleFunc("GET /api2/json/cluster/tasks", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, []map[string]any{
+			{
+				"upid":      testUPID,
+				"type":      "vzdump",
+				"id":        "100",
+				"node":      "pve1",
+				"starttime": 1700000000,
+				"endtime":   1700000100,
+				"status":    "OK",
+				"user":      "root@pam",
+			},
+		})
+	})
+
+	// No node required for the cluster-wide listing.
+	out, err := runTask(t, f, "", "table", "cluster-list")
+	require.NoError(t, err)
+
+	require.Equal(t, "/api2/json/cluster/tasks", gotPath)
+	require.Contains(t, out, "vzdump")
+	require.Contains(t, out, "pve1")
+}
+
+// TestLog_Download verifies the --download flag is forwarded as a query param.
+func TestLog_Download(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotQuery string
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+testUPID+"/log", func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testhelper.WriteData(w, []map[string]any{})
+	})
+
+	_, err := runTask(t, f, "pve1", "json", "log", testUPID, "--download")
+	require.NoError(t, err)
+
+	require.Contains(t, gotQuery, "download=1")
+}
+
 // TestLog_Success verifies that `task log` renders the log lines.
 func TestLog_Success(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -250,6 +318,25 @@ func TestWait_Success(t *testing.T) {
 	require.Contains(t, out, "OK")
 }
 
+// TestWait_Backoff verifies the --backoff/--max-interval flags parse and the
+// command still completes against a terminal status.
+func TestWait_Backoff(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+testUPID+"/status", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"upid":       testUPID,
+			"status":     "stopped",
+			"exitstatus": "OK",
+		})
+	})
+
+	out, err := runTask(t, f, "", "table", "wait", testUPID,
+		"--backoff", "--max-interval", "2000")
+	require.NoError(t, err)
+	require.Contains(t, out, "stopped")
+}
+
 // TestWait_TaskFailed verifies that a failed task surfaces an error.
 func TestWait_TaskFailed(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -293,7 +380,7 @@ func TestGroupCmd_Subcommands(t *testing.T) {
 	for _, c := range group.Commands() {
 		names[c.Name()] = true
 	}
-	for _, want := range []string{"list", "log", "wait", "stop"} {
+	for _, want := range []string{"list", "cluster-list", "log", "wait", "stop"} {
 		require.True(t, names[want], "expected sub-command %q", want)
 	}
 }

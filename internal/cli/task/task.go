@@ -29,6 +29,7 @@ log, wait for a task to finish, or stop a running task.`,
 
 	cmd.AddCommand(
 		newListCmd(),
+		newClusterListCmd(),
 		newLogCmd(),
 		newWaitCmd(),
 		newStopCmd(),
@@ -56,6 +57,10 @@ func newListCmd() *cobra.Command {
 		since        int
 		until        int
 		limit        int
+		start        int
+		errorsOnly   bool
+		source       string
+		userFilter   string
 	)
 
 	cmd := &cobra.Command{
@@ -93,6 +98,19 @@ func newListCmd() *cobra.Command {
 				v := int64(limit)
 				params.Limit = &v
 			}
+			if cmd.Flags().Changed("start") {
+				v := int64(start)
+				params.Start = &v
+			}
+			if errorsOnly {
+				params.Errors = &errorsOnly
+			}
+			if source != "" {
+				params.Source = &source
+			}
+			if userFilter != "" {
+				params.Userfilter = &userFilter
+			}
 
 			resp, err := deps.API.Nodes.ListTasks(cmd.Context(), node, params)
 			if err != nil {
@@ -114,6 +132,10 @@ func newListCmd() *cobra.Command {
 	cmd.Flags().IntVar(&since, "since", 0, "only list tasks since this Unix timestamp")
 	cmd.Flags().IntVar(&until, "until", 0, "only list tasks until this Unix timestamp")
 	cmd.Flags().IntVar(&limit, "limit", 50, "maximum number of tasks to return")
+	cmd.Flags().IntVar(&start, "start", 0, "list tasks beginning from this offset (pagination)")
+	cmd.Flags().BoolVar(&errorsOnly, "errors", false, "only list tasks with a status of ERROR")
+	cmd.Flags().StringVar(&source, "source", "", "list tasks from this source: archive|active|all")
+	cmd.Flags().StringVar(&userFilter, "userfilter", "", "only list tasks from this user")
 
 	return cmd
 }
@@ -133,15 +155,21 @@ type taskEntry struct {
 // buildTaskListResult converts the raw task list response into a renderable
 // Result, preserving the raw payload for JSON/YAML output.
 func buildTaskListResult(resp *nodes.ListTasksResponse) (output.Result, error) {
-	headers := []string{"UPID", "TYPE", "ID", "NODE", "STARTTIME", "ENDTIME", "STATUS", "USER"}
-
 	if resp == nil {
-		return output.Result{Headers: headers, Raw: []taskEntry{}}, nil
+		return buildTaskRowsFromRaw(nil)
 	}
 
-	entries := make([]taskEntry, 0, len(*resp))
-	rows := make([][]string, 0, len(*resp))
-	for i, raw := range *resp {
+	return buildTaskRowsFromRaw(*resp)
+}
+
+// buildTaskRowsFromRaw renders a slice of raw task entries (shared by node and
+// cluster task listings, both of which return identically-shaped entries).
+func buildTaskRowsFromRaw(raws []json.RawMessage) (output.Result, error) {
+	headers := []string{"UPID", "TYPE", "ID", "NODE", "STARTTIME", "ENDTIME", "STATUS", "USER"}
+
+	entries := make([]taskEntry, 0, len(raws))
+	rows := make([][]string, 0, len(raws))
+	for i, raw := range raws {
 		var e taskEntry
 		if err := json.Unmarshal(raw, &e); err != nil {
 			return output.Result{}, fmt.Errorf("decode task entry %d: %w", i, err)
@@ -162,6 +190,36 @@ func buildTaskListResult(resp *nodes.ListTasksResponse) (output.Result, error) {
 	return output.Result{Headers: headers, Rows: rows, Raw: entries}, nil
 }
 
+// newClusterListCmd builds `pve task cluster-list`.
+func newClusterListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "cluster-list",
+		Short: "List recent tasks across the whole cluster",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+
+			resp, err := deps.API.Cluster.ListTasks(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			var raws []json.RawMessage
+			if resp != nil {
+				raws = *resp
+			}
+			result, err := buildTaskRowsFromRaw(raws)
+			if err != nil {
+				return err
+			}
+
+			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
+		},
+	}
+
+	return cmd
+}
+
 // formatTimestamp renders a Unix timestamp as a string; zero renders as "-".
 func formatTimestamp(ts int64) string {
 	if ts == 0 {
@@ -174,8 +232,9 @@ func formatTimestamp(ts int64) string {
 // newLogCmd builds `pve task log <upid>`.
 func newLogCmd() *cobra.Command {
 	var (
-		limit int
-		start int
+		limit    int
+		start    int
+		download bool
 	)
 
 	cmd := &cobra.Command{
@@ -200,6 +259,9 @@ func newLogCmd() *cobra.Command {
 				v := int64(start)
 				params.Start = &v
 			}
+			if download {
+				params.Download = &download
+			}
 
 			resp, err := deps.API.Nodes.ListTasksLog(cmd.Context(), node, upid, params)
 			if err != nil {
@@ -217,6 +279,8 @@ func newLogCmd() *cobra.Command {
 
 	cmd.Flags().IntVar(&limit, "limit", 500, "number of log lines to read")
 	cmd.Flags().IntVar(&start, "start", 0, "start reading from this line offset")
+	cmd.Flags().BoolVar(&download, "download", false,
+		"download the full tasklog file (cannot be combined with --limit/--start)")
 
 	return cmd
 }
@@ -279,8 +343,10 @@ func newStopCmd() *cobra.Command {
 // newWaitCmd builds `pve task wait <upid>`.
 func newWaitCmd() *cobra.Command {
 	var (
-		timeout  int
-		interval int
+		timeout     int
+		interval    int
+		backoff     bool
+		maxInterval int
 	)
 
 	cmd := &cobra.Command{
@@ -292,8 +358,10 @@ func newWaitCmd() *cobra.Command {
 
 			upid := args[0]
 			opts := &tasks.WaitOptions{
-				TimeoutSeconds: timeout,
-				IntervalMillis: interval,
+				TimeoutSeconds:    timeout,
+				IntervalMillis:    interval,
+				Backoff:           backoff,
+				MaxIntervalMillis: maxInterval,
 			}
 
 			status, err := deps.API.Tasks.WaitForUPID(cmd.Context(), upid, opts)
@@ -308,6 +376,9 @@ func newWaitCmd() *cobra.Command {
 
 	cmd.Flags().IntVar(&timeout, "timeout", 300, "maximum seconds to wait")
 	cmd.Flags().IntVar(&interval, "interval", 500, "polling interval in milliseconds")
+	cmd.Flags().BoolVar(&backoff, "backoff", false, "exponentially back off the polling interval")
+	cmd.Flags().IntVar(&maxInterval, "max-interval", 0,
+		"cap the backoff interval in milliseconds (default 5000 when --backoff is set)")
 
 	return cmd
 }
