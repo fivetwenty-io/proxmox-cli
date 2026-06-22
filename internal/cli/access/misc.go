@@ -85,7 +85,7 @@ func newPasswordCmd() *cobra.Command {
 
 // newPasswordSetCmd builds `pve access password set`.
 func newPasswordSetCmd() *cobra.Command {
-	var userid, password string
+	var userid, password, confirmationPassword string
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Change a user's password",
@@ -108,6 +108,7 @@ func newPasswordSetCmd() *cobra.Command {
 			}
 
 			params := &access.UpdatePasswordParams{Userid: userid, Password: password}
+			setIfChanged(cmd, "confirmation-password", &params.ConfirmationPassword, confirmationPassword)
 			if err := deps.API.Access.UpdatePassword(cmd.Context(), params); err != nil {
 				return fmt.Errorf("update password for %q: %w", userid, err)
 			}
@@ -118,6 +119,7 @@ func newPasswordSetCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&userid, "userid", "", "full user ID in name@realm format (required)")
 	cmd.Flags().StringVar(&password, "password", "", "new password (prompts if absent)")
+	cmd.Flags().StringVar(&confirmationPassword, "confirmation-password", "", "current password of the operator performing the change")
 	return cmd
 }
 

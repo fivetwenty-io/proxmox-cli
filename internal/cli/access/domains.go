@@ -113,20 +113,45 @@ func newDomainGetCmd() *cobra.Command {
 // forwarded only when the user actually changed it, so an update never clears a
 // field the caller did not mention.
 type domainFlags struct {
-	comment      string
-	defaultRealm bool
-	server1      string
-	server2      string
-	port         int64
-	mode         string
-	baseDn       string
-	bindDn       string
-	userAttr     string
-	domain       string
-	issuerURL    string
-	clientID     string
-	clientKey    string
-	autocreate   bool
+	comment          string
+	defaultRealm     bool
+	server1          string
+	server2          string
+	port             int64
+	mode             string
+	baseDn           string
+	bindDn           string
+	userAttr         string
+	domain           string
+	issuerURL        string
+	clientID         string
+	clientKey        string
+	autocreate       bool
+	password         string
+	verify           bool
+	acrValues        string
+	audiences        string
+	capath           string
+	caseSensitive    bool
+	cert             string
+	certkey          string
+	filter           string
+	groupDn          string
+	groupFilter      string
+	groupsAutocreate bool
+	groupsClaim      string
+	groupsOverwrite  bool
+	prompt           string
+	scopes           string
+	syncDefaultsOpts string
+	syncAttributes   string
+	tfa              string
+	checkConnection  bool
+	groupClasses     string
+	groupNameAttr    string
+	queryUserinfo    bool
+	sslversion       string
+	userClasses      string
 }
 
 // register attaches the shared realm-config flags to a command.
@@ -146,6 +171,120 @@ func (df *domainFlags) register(cmd *cobra.Command) {
 	f.StringVar(&df.clientID, "client-id", "", "openid client ID")
 	f.StringVar(&df.clientKey, "client-key", "", "openid client key")
 	f.BoolVar(&df.autocreate, "autocreate", false, "automatically create users on login")
+	// HIGH
+	f.StringVar(&df.password, "password", "", "ldap bind password (stored in /etc/pve/priv/realm/<REALM>.pw)")
+	f.BoolVar(&df.verify, "verify", false, "verify the server's SSL certificate")
+	// MEDIUM
+	f.StringVar(&df.acrValues, "acr-values", "", "openid Authentication Context Class Reference values")
+	f.StringVar(&df.audiences, "audiences", "", "openid audiences accepted in addition to client-id")
+	f.StringVar(&df.capath, "capath", "", "path to the CA certificate store")
+	f.BoolVar(&df.caseSensitive, "case-sensitive", false, "username is case-sensitive")
+	f.StringVar(&df.cert, "cert", "", "path to the client certificate")
+	f.StringVar(&df.certkey, "certkey", "", "path to the client certificate key")
+	f.StringVar(&df.filter, "filter", "", "ldap filter for user sync")
+	f.StringVar(&df.groupDn, "group-dn", "", "ldap base domain name for group sync")
+	f.StringVar(&df.groupFilter, "group-filter", "", "ldap filter for group sync")
+	f.BoolVar(&df.groupsAutocreate, "groups-autocreate", false, "automatically create groups if they do not exist")
+	f.StringVar(&df.groupsClaim, "groups-claim", "", "openid claim used to retrieve groups")
+	f.BoolVar(&df.groupsOverwrite, "groups-overwrite", false, "overwrite all user groups on login")
+	f.StringVar(&df.prompt, "prompt", "", "openid prompt parameter for the authorization server")
+	f.StringVar(&df.scopes, "scopes", "", "openid scopes to authorize (e.g. email,profile)")
+	f.StringVar(&df.syncDefaultsOpts, "sync-defaults-options", "", "default options for synchronization behavior")
+	f.StringVar(&df.syncAttributes, "sync-attributes", "", "comma-separated key=value ldap-to-PVE attribute mappings")
+	f.StringVar(&df.tfa, "tfa", "", "two-factor authentication configuration")
+	// LOW
+	f.BoolVar(&df.checkConnection, "check-connection", false, "check bind connection to the server")
+	f.StringVar(&df.groupClasses, "group-classes", "", "objectclasses for groups")
+	f.StringVar(&df.groupNameAttr, "group-name-attr", "", "ldap attribute representing a group's name")
+	f.BoolVar(&df.queryUserinfo, "query-userinfo", false, "query the userinfo endpoint for claims values")
+	f.StringVar(&df.sslversion, "sslversion", "", "ldaps TLS/SSL version (e.g. tlsv1_3)")
+	f.StringVar(&df.userClasses, "user-classes", "", "objectclasses for users")
+}
+
+// applyDomainFlagsToCreate copies changed domain flags into a CreateDomainsParams.
+func applyDomainFlagsToCreate(cmd *cobra.Command, df *domainFlags, p *access.CreateDomainsParams) {
+	setIfChanged(cmd, "comment", &p.Comment, df.comment)
+	setBoolIfChanged(cmd, "default", &p.Default, df.defaultRealm)
+	setIfChanged(cmd, "server1", &p.Server1, df.server1)
+	setIfChanged(cmd, "server2", &p.Server2, df.server2)
+	setInt64IfChanged(cmd, "port", &p.Port, df.port)
+	setIfChanged(cmd, "mode", &p.Mode, df.mode)
+	setIfChanged(cmd, "base-dn", &p.BaseDn, df.baseDn)
+	setIfChanged(cmd, "bind-dn", &p.BindDn, df.bindDn)
+	setIfChanged(cmd, "user-attr", &p.UserAttr, df.userAttr)
+	setIfChanged(cmd, "domain", &p.Domain, df.domain)
+	setIfChanged(cmd, "issuer-url", &p.IssuerUrl, df.issuerURL)
+	setIfChanged(cmd, "client-id", &p.ClientId, df.clientID)
+	setIfChanged(cmd, "client-key", &p.ClientKey, df.clientKey)
+	setBoolIfChanged(cmd, "autocreate", &p.Autocreate, df.autocreate)
+	setIfChanged(cmd, "password", &p.Password, df.password)
+	setBoolIfChanged(cmd, "verify", &p.Verify, df.verify)
+	setIfChanged(cmd, "acr-values", &p.AcrValues, df.acrValues)
+	setIfChanged(cmd, "audiences", &p.Audiences, df.audiences)
+	setIfChanged(cmd, "capath", &p.Capath, df.capath)
+	setBoolIfChanged(cmd, "case-sensitive", &p.CaseSensitive, df.caseSensitive)
+	setIfChanged(cmd, "cert", &p.Cert, df.cert)
+	setIfChanged(cmd, "certkey", &p.Certkey, df.certkey)
+	setIfChanged(cmd, "filter", &p.Filter, df.filter)
+	setIfChanged(cmd, "group-dn", &p.GroupDn, df.groupDn)
+	setIfChanged(cmd, "group-filter", &p.GroupFilter, df.groupFilter)
+	setBoolIfChanged(cmd, "groups-autocreate", &p.GroupsAutocreate, df.groupsAutocreate)
+	setIfChanged(cmd, "groups-claim", &p.GroupsClaim, df.groupsClaim)
+	setBoolIfChanged(cmd, "groups-overwrite", &p.GroupsOverwrite, df.groupsOverwrite)
+	setIfChanged(cmd, "prompt", &p.Prompt, df.prompt)
+	setIfChanged(cmd, "scopes", &p.Scopes, df.scopes)
+	setIfChanged(cmd, "sync-defaults-options", &p.SyncDefaultsOptions, df.syncDefaultsOpts)
+	setIfChanged(cmd, "sync-attributes", &p.SyncAttributes, df.syncAttributes)
+	setIfChanged(cmd, "tfa", &p.Tfa, df.tfa)
+	setBoolIfChanged(cmd, "check-connection", &p.CheckConnection, df.checkConnection)
+	setIfChanged(cmd, "group-classes", &p.GroupClasses, df.groupClasses)
+	setIfChanged(cmd, "group-name-attr", &p.GroupNameAttr, df.groupNameAttr)
+	setBoolIfChanged(cmd, "query-userinfo", &p.QueryUserinfo, df.queryUserinfo)
+	setIfChanged(cmd, "sslversion", &p.Sslversion, df.sslversion)
+	setIfChanged(cmd, "user-classes", &p.UserClasses, df.userClasses)
+}
+
+// applyDomainFlagsToUpdate copies changed domain flags into an UpdateDomainsParams.
+func applyDomainFlagsToUpdate(cmd *cobra.Command, df *domainFlags, p *access.UpdateDomainsParams) {
+	setIfChanged(cmd, "comment", &p.Comment, df.comment)
+	setBoolIfChanged(cmd, "default", &p.Default, df.defaultRealm)
+	setIfChanged(cmd, "server1", &p.Server1, df.server1)
+	setIfChanged(cmd, "server2", &p.Server2, df.server2)
+	setInt64IfChanged(cmd, "port", &p.Port, df.port)
+	setIfChanged(cmd, "mode", &p.Mode, df.mode)
+	setIfChanged(cmd, "base-dn", &p.BaseDn, df.baseDn)
+	setIfChanged(cmd, "bind-dn", &p.BindDn, df.bindDn)
+	setIfChanged(cmd, "user-attr", &p.UserAttr, df.userAttr)
+	setIfChanged(cmd, "domain", &p.Domain, df.domain)
+	setIfChanged(cmd, "issuer-url", &p.IssuerUrl, df.issuerURL)
+	setIfChanged(cmd, "client-id", &p.ClientId, df.clientID)
+	setIfChanged(cmd, "client-key", &p.ClientKey, df.clientKey)
+	setBoolIfChanged(cmd, "autocreate", &p.Autocreate, df.autocreate)
+	setIfChanged(cmd, "password", &p.Password, df.password)
+	setBoolIfChanged(cmd, "verify", &p.Verify, df.verify)
+	setIfChanged(cmd, "acr-values", &p.AcrValues, df.acrValues)
+	setIfChanged(cmd, "audiences", &p.Audiences, df.audiences)
+	setIfChanged(cmd, "capath", &p.Capath, df.capath)
+	setBoolIfChanged(cmd, "case-sensitive", &p.CaseSensitive, df.caseSensitive)
+	setIfChanged(cmd, "cert", &p.Cert, df.cert)
+	setIfChanged(cmd, "certkey", &p.Certkey, df.certkey)
+	setIfChanged(cmd, "filter", &p.Filter, df.filter)
+	setIfChanged(cmd, "group-dn", &p.GroupDn, df.groupDn)
+	setIfChanged(cmd, "group-filter", &p.GroupFilter, df.groupFilter)
+	setBoolIfChanged(cmd, "groups-autocreate", &p.GroupsAutocreate, df.groupsAutocreate)
+	setIfChanged(cmd, "groups-claim", &p.GroupsClaim, df.groupsClaim)
+	setBoolIfChanged(cmd, "groups-overwrite", &p.GroupsOverwrite, df.groupsOverwrite)
+	setIfChanged(cmd, "prompt", &p.Prompt, df.prompt)
+	setIfChanged(cmd, "scopes", &p.Scopes, df.scopes)
+	setIfChanged(cmd, "sync-defaults-options", &p.SyncDefaultsOptions, df.syncDefaultsOpts)
+	setIfChanged(cmd, "sync-attributes", &p.SyncAttributes, df.syncAttributes)
+	setIfChanged(cmd, "tfa", &p.Tfa, df.tfa)
+	setBoolIfChanged(cmd, "check-connection", &p.CheckConnection, df.checkConnection)
+	setIfChanged(cmd, "group-classes", &p.GroupClasses, df.groupClasses)
+	setIfChanged(cmd, "group-name-attr", &p.GroupNameAttr, df.groupNameAttr)
+	setBoolIfChanged(cmd, "query-userinfo", &p.QueryUserinfo, df.queryUserinfo)
+	setIfChanged(cmd, "sslversion", &p.Sslversion, df.sslversion)
+	setIfChanged(cmd, "user-classes", &p.UserClasses, df.userClasses)
 }
 
 // newDomainCreateCmd builds `pve access domain create <realm> --type <type>`.
@@ -165,21 +304,8 @@ func newDomainCreateCmd() *cobra.Command {
 			}
 
 			params := &access.CreateDomainsParams{Realm: realm, Type: realmType}
-			setIfChanged(cmd, "comment", &params.Comment, df.comment)
-			setBoolIfChanged(cmd, "default", &params.Default, df.defaultRealm)
-			setIfChanged(cmd, "server1", &params.Server1, df.server1)
-			setIfChanged(cmd, "server2", &params.Server2, df.server2)
-			setInt64IfChanged(cmd, "port", &params.Port, df.port)
-			setIfChanged(cmd, "mode", &params.Mode, df.mode)
-			setIfChanged(cmd, "base-dn", &params.BaseDn, df.baseDn)
-			setIfChanged(cmd, "bind-dn", &params.BindDn, df.bindDn)
-			setIfChanged(cmd, "user-attr", &params.UserAttr, df.userAttr)
-			setIfChanged(cmd, "domain", &params.Domain, df.domain)
-			setIfChanged(cmd, "issuer-url", &params.IssuerUrl, df.issuerURL)
-			setIfChanged(cmd, "client-id", &params.ClientId, df.clientID)
-			setIfChanged(cmd, "client-key", &params.ClientKey, df.clientKey)
+			applyDomainFlagsToCreate(cmd, &df, params)
 			setIfChanged(cmd, "username-claim", &params.UsernameClaim, usernameClaim)
-			setBoolIfChanged(cmd, "autocreate", &params.Autocreate, df.autocreate)
 
 			if err := deps.API.Access.CreateDomains(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create domain %q: %w", realm, err)
@@ -198,7 +324,7 @@ func newDomainCreateCmd() *cobra.Command {
 // newDomainSetCmd builds `pve access domain set <realm>`.
 func newDomainSetCmd() *cobra.Command {
 	var df domainFlags
-	var deleteKeys string
+	var deleteKeys, digest string
 	cmd := &cobra.Command{
 		Use:   "set <realm>",
 		Short: "Update an authentication realm",
@@ -208,21 +334,9 @@ func newDomainSetCmd() *cobra.Command {
 			realm := args[0]
 
 			params := &access.UpdateDomainsParams{}
-			setIfChanged(cmd, "comment", &params.Comment, df.comment)
-			setBoolIfChanged(cmd, "default", &params.Default, df.defaultRealm)
-			setIfChanged(cmd, "server1", &params.Server1, df.server1)
-			setIfChanged(cmd, "server2", &params.Server2, df.server2)
-			setInt64IfChanged(cmd, "port", &params.Port, df.port)
-			setIfChanged(cmd, "mode", &params.Mode, df.mode)
-			setIfChanged(cmd, "base-dn", &params.BaseDn, df.baseDn)
-			setIfChanged(cmd, "bind-dn", &params.BindDn, df.bindDn)
-			setIfChanged(cmd, "user-attr", &params.UserAttr, df.userAttr)
-			setIfChanged(cmd, "domain", &params.Domain, df.domain)
-			setIfChanged(cmd, "issuer-url", &params.IssuerUrl, df.issuerURL)
-			setIfChanged(cmd, "client-id", &params.ClientId, df.clientID)
-			setIfChanged(cmd, "client-key", &params.ClientKey, df.clientKey)
-			setBoolIfChanged(cmd, "autocreate", &params.Autocreate, df.autocreate)
+			applyDomainFlagsToUpdate(cmd, &df, params)
 			setIfChanged(cmd, "delete", &params.Delete, deleteKeys)
+			setIfChanged(cmd, "digest", &params.Digest, digest)
 
 			if err := deps.API.Access.UpdateDomains(cmd.Context(), realm, params); err != nil {
 				return fmt.Errorf("update domain %q: %w", realm, err)
@@ -234,6 +348,7 @@ func newDomainSetCmd() *cobra.Command {
 	}
 	df.register(cmd)
 	cmd.Flags().StringVar(&deleteKeys, "delete", "", "comma-separated list of settings to clear")
+	cmd.Flags().StringVar(&digest, "digest", "", "prevent changes if config digest differs (optimistic concurrency)")
 	return cmd
 }
 

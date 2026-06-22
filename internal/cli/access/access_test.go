@@ -237,6 +237,29 @@ func TestAccess_UserSet(t *testing.T) {
 	require.Contains(t, buf.String(), "User 'alice@pve' updated.")
 }
 
+func TestAccess_UserSet_Append(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/users/alice@pve", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.body = r.Method, captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "user", "set", "alice@pve", "--groups", "ops", "--append"))
+
+	require.Equal(t, http.MethodPut, rec.method)
+	require.Equal(t, "ops", rec.body["groups"])
+	require.Equal(t, "1", rec.body["append"])
+	require.Contains(t, buf.String(), "User 'alice@pve' updated.")
+}
+
+func TestAccess_UserSet_AppendFlagRegistered(t *testing.T) {
+	cmd := newUserSetCmd()
+	require.NotNil(t, cmd.Flags().Lookup("append"), "user set must expose --append")
+}
+
 func TestAccess_UserDelete(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordReq
@@ -375,6 +398,51 @@ func TestAccess_TokenSet(t *testing.T) {
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "rotated", rec.body["comment"])
 	require.Contains(t, buf.String(), "Token updated.")
+}
+
+func TestAccess_TokenSet_Regenerate(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/users/root@pam/token/ci", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.body = r.Method, captureBody(r)
+		testhelper.WriteData(w, map[string]any{
+			"full-tokenid": "root@pam!ci",
+			"value":        "new-secret-value",
+		})
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "user", "token", "set", "root@pam", "ci", "--regenerate"))
+
+	require.Equal(t, http.MethodPut, rec.method)
+	require.Equal(t, "1", rec.body["regenerate"])
+
+	out := buf.String()
+	require.Contains(t, out, "root@pam!ci")
+	require.Contains(t, out, "new-secret-value")
+}
+
+func TestAccess_TokenSet_Delete(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/users/root@pam/token/ci", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.body = r.Method, captureBody(r)
+		testhelper.WriteData(w, map[string]any{})
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "user", "token", "set", "root@pam", "ci", "--delete", "comment"))
+
+	require.Equal(t, "comment", rec.body["delete"])
+	require.Contains(t, buf.String(), "Token updated.")
+}
+
+func TestAccess_TokenSet_FlagsRegistered(t *testing.T) {
+	cmd := newTokenSetCmd()
+	require.NotNil(t, cmd.Flags().Lookup("regenerate"), "token set must expose --regenerate")
+	require.NotNil(t, cmd.Flags().Lookup("delete"), "token set must expose --delete")
 }
 
 func TestAccess_TokenDelete(t *testing.T) {
@@ -732,6 +800,31 @@ func TestAccess_Password_RequiredFlags(t *testing.T) {
 			require.Contains(t, err.Error(), tc.wantErr)
 		})
 	}
+}
+
+func TestAccess_PasswordSet_ConfirmationPassword(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/password", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.body = r.Method, captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "password", "set",
+		"--userid", "alice@pve", "--password", "newpass", "--confirmation-password", "oldpass"))
+
+	require.Equal(t, http.MethodPut, rec.method)
+	require.Equal(t, "alice@pve", rec.body["userid"])
+	require.Equal(t, "newpass", rec.body["password"])
+	require.Equal(t, "oldpass", rec.body["confirmation-password"])
+	require.Contains(t, buf.String(), "Password updated.")
+}
+
+func TestAccess_PasswordSet_ConfirmationPasswordFlagRegistered(t *testing.T) {
+	cmd := newPasswordSetCmd()
+	require.NotNil(t, cmd.Flags().Lookup("confirmation-password"), "password set must expose --confirmation-password")
 }
 
 // TestAccess_PasswordSet_PromptsForPassword verifies the spec contract that

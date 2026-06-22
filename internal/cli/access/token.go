@@ -146,9 +146,11 @@ func newTokenCreateCmd() *cobra.Command {
 // newTokenSetCmd builds `pve access user token set <userid> <tokenid>`.
 func newTokenSetCmd() *cobra.Command {
 	var (
-		comment string
-		expire  int64
-		privsep bool
+		comment    string
+		expire     int64
+		privsep    bool
+		regenerate bool
+		deleteKeys string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <userid> <tokenid>",
@@ -166,9 +168,28 @@ func newTokenSetCmd() *cobra.Command {
 			if cmd.Flags().Changed("privsep") {
 				params.Privsep = &privsep
 			}
+			if cmd.Flags().Changed("regenerate") {
+				params.Regenerate = &regenerate
+			}
+			setIfChanged(cmd, "delete", &params.Delete, deleteKeys)
 
-			if _, err := deps.API.Access.UpdateUsersToken(cmd.Context(), userid, tokenid, params); err != nil {
+			resp, err := deps.API.Access.UpdateUsersToken(cmd.Context(), userid, tokenid, params)
+			if err != nil {
 				return fmt.Errorf("update token %q for %q: %w", tokenid, userid, err)
+			}
+
+			// When regenerate is set the response carries the new token value.
+			if resp != nil && resp.Value != nil && *resp.Value != "" {
+				tokenID := tokenid
+				if resp.FullTokenid != nil && *resp.FullTokenid != "" {
+					tokenID = *resp.FullTokenid
+				}
+				result := output.Result{
+					Headers: []string{"TOKENID", "VALUE"},
+					Rows:    [][]string{{tokenID, *resp.Value}},
+					Raw:     resp,
+				}
+				return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
 			}
 
 			result := output.Result{Message: "Token updated."}
@@ -178,6 +199,8 @@ func newTokenSetCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&expire, "expire", 0, "expiration (epoch seconds; 0 = never)")
 	cmd.Flags().BoolVar(&privsep, "privsep", true, "restrict token privileges with separate ACLs")
 	cmd.Flags().StringVar(&comment, "comment", "", "comment")
+	cmd.Flags().BoolVar(&regenerate, "regenerate", false, "regenerate the token secret; new value is printed once")
+	cmd.Flags().StringVar(&deleteKeys, "delete", "", "comma-separated list of token settings to clear")
 	return cmd
 }
 

@@ -181,7 +181,7 @@ func newUserSetCmd() *cobra.Command {
 	var (
 		firstname, lastname, email, groups, comment, keys string
 		expire                                            int64
-		enable                                            bool
+		enable, appendGroups                              bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set <userid>",
@@ -204,6 +204,9 @@ func newUserSetCmd() *cobra.Command {
 			if cmd.Flags().Changed("enable") {
 				params.Enable = &enable
 			}
+			if cmd.Flags().Changed("append") {
+				params.Append = &appendGroups
+			}
 
 			if err := deps.API.Access.UpdateUsers(cmd.Context(), userid, params); err != nil {
 				return fmt.Errorf("update user %q: %w", userid, err)
@@ -221,6 +224,7 @@ func newUserSetCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&enable, "enable", true, "enable the account")
 	cmd.Flags().StringVar(&comment, "comment", "", "comment")
 	cmd.Flags().StringVar(&keys, "keys", "", "two-factor (yubico) keys")
+	cmd.Flags().BoolVar(&appendGroups, "append", false, "merge --groups into existing membership instead of replacing")
 	return cmd
 }
 

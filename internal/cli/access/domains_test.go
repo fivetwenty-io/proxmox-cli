@@ -192,6 +192,154 @@ func TestAccess_DomainSync_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "sync domain")
 }
 
+func TestAccess_DomainCreate_PasswordAndVerify(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("POST /api2/json/access/domains", func(w http.ResponseWriter, r *http.Request) {
+		rec.method, rec.path = r.Method, r.URL.Path
+		rec.body = captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "domain", "create", "ldapcorp",
+		"--type", "ldap",
+		"--server1", "ldap.example.com",
+		"--password", "bindpass",
+		"--verify"))
+
+	require.Equal(t, http.MethodPost, rec.method)
+	require.Equal(t, "ldapcorp", rec.body["realm"])
+	require.Equal(t, "bindpass", rec.body["password"])
+	require.Equal(t, "1", rec.body["verify"])
+	require.Contains(t, buf.String(), "created")
+}
+
+func TestAccess_DomainCreate_MediumLowFlags(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("POST /api2/json/access/domains", func(w http.ResponseWriter, r *http.Request) {
+		rec.body = captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "domain", "create", "oidcrealm",
+		"--type", "openid",
+		"--acr-values", "phr",
+		"--audiences", "app1,app2",
+		"--capath", "/etc/ssl/certs",
+		"--case-sensitive",
+		"--cert", "/etc/pve/certs/client.pem",
+		"--certkey", "/etc/pve/certs/client.key",
+		"--filter", "(objectClass=person)",
+		"--group-dn", "ou=groups,dc=example,dc=com",
+		"--group-filter", "(objectClass=groupOfNames)",
+		"--groups-autocreate",
+		"--groups-claim", "groups",
+		"--groups-overwrite",
+		"--prompt", "login",
+		"--scopes", "email,profile",
+		"--sync-defaults-options", "scope=users",
+		"--sync-attributes", "email=mail",
+		"--tfa", "type=oath",
+		"--check-connection",
+		"--group-classes", "groupOfNames",
+		"--group-name-attr", "cn",
+		"--query-userinfo",
+		"--sslversion", "tlsv1_3",
+		"--user-classes", "inetOrgPerson",
+	))
+
+	require.Equal(t, "phr", rec.body["acr-values"])
+	require.Equal(t, "app1,app2", rec.body["audiences"])
+	require.Equal(t, "/etc/ssl/certs", rec.body["capath"])
+	require.Equal(t, "1", rec.body["case-sensitive"])
+	require.Equal(t, "/etc/pve/certs/client.pem", rec.body["cert"])
+	require.Equal(t, "/etc/pve/certs/client.key", rec.body["certkey"])
+	require.Equal(t, "(objectClass=person)", rec.body["filter"])
+	require.Equal(t, "ou=groups,dc=example,dc=com", rec.body["group_dn"])
+	require.Equal(t, "(objectClass=groupOfNames)", rec.body["group_filter"])
+	require.Equal(t, "1", rec.body["groups-autocreate"])
+	require.Equal(t, "groups", rec.body["groups-claim"])
+	require.Equal(t, "1", rec.body["groups-overwrite"])
+	require.Equal(t, "login", rec.body["prompt"])
+	require.Equal(t, "email,profile", rec.body["scopes"])
+	require.Equal(t, "scope=users", rec.body["sync-defaults-options"])
+	require.Equal(t, "email=mail", rec.body["sync_attributes"])
+	require.Equal(t, "type=oath", rec.body["tfa"])
+	require.Equal(t, "1", rec.body["check-connection"])
+	require.Equal(t, "groupOfNames", rec.body["group_classes"])
+	require.Equal(t, "cn", rec.body["group_name_attr"])
+	require.Equal(t, "1", rec.body["query-userinfo"])
+	require.Equal(t, "tlsv1_3", rec.body["sslversion"])
+	require.Equal(t, "inetOrgPerson", rec.body["user_classes"])
+}
+
+func TestAccess_DomainSet_PasswordAndVerify(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/domains/corp", func(w http.ResponseWriter, r *http.Request) {
+		rec.body = captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "domain", "set", "corp",
+		"--password", "newbindpass",
+		"--verify=false"))
+
+	require.Equal(t, "newbindpass", rec.body["password"])
+	require.Equal(t, "0", rec.body["verify"])
+	require.Contains(t, buf.String(), "updated")
+}
+
+func TestAccess_DomainSet_Digest(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordReq
+	f.HandleFunc("PUT /api2/json/access/domains/corp", func(w http.ResponseWriter, r *http.Request) {
+		rec.body = captureBody(r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "domain", "set", "corp",
+		"--digest", "abc123", "--comment", "updated"))
+
+	require.Equal(t, "abc123", rec.body["digest"])
+	require.Equal(t, "updated", rec.body["comment"])
+}
+
+func TestAccess_DomainCreate_FlagsRegistered(t *testing.T) {
+	cmd := newDomainCreateCmd()
+	for _, name := range []string{
+		"password", "verify", "acr-values", "audiences", "capath", "case-sensitive",
+		"cert", "certkey", "filter", "group-dn", "group-filter", "groups-autocreate",
+		"groups-claim", "groups-overwrite", "prompt", "scopes", "sync-defaults-options",
+		"sync-attributes", "tfa", "check-connection", "group-classes", "group-name-attr",
+		"query-userinfo", "sslversion", "user-classes",
+	} {
+		require.NotNilf(t, cmd.Flags().Lookup(name), "domain create must expose --%s", name)
+	}
+}
+
+func TestAccess_DomainSet_FlagsRegistered(t *testing.T) {
+	cmd := newDomainSetCmd()
+	for _, name := range []string{
+		"password", "verify", "acr-values", "audiences", "capath", "case-sensitive",
+		"cert", "certkey", "filter", "group-dn", "group-filter", "groups-autocreate",
+		"groups-claim", "groups-overwrite", "prompt", "scopes", "sync-defaults-options",
+		"sync-attributes", "tfa", "check-connection", "group-classes", "group-name-attr",
+		"query-userinfo", "sslversion", "user-classes", "digest",
+	} {
+		require.NotNilf(t, cmd.Flags().Lookup(name), "domain set must expose --%s", name)
+	}
+}
+
 func TestAccess_DomainCommandTree(t *testing.T) {
 	cmd := newDomainCmd()
 	want := map[string]bool{"list": false, "get": false, "create": false, "set": false, "delete": false, "sync": false}
