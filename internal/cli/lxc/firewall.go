@@ -28,7 +28,129 @@ func newFirewallCmd() *cobra.Command {
 		newFirewallIpsetCmd(),
 		newFirewallAliasCmd(),
 		newFirewallOptionsCmd(),
+		newFirewallLogCmd(),
+		newFirewallRefsCmd(),
 	)
+	return cmd
+}
+
+// fwLogEntry is the decoded shape of one firewall log line: a line number and
+// the log text.
+type fwLogEntry struct {
+	N int64  `json:"n"`
+	T string `json:"t"`
+}
+
+// newFirewallLogCmd builds `pve lxc firewall log <vmid|name>` — the per-container
+// firewall log (GET /nodes/{node}/lxc/{vmid}/firewall/log).
+func newFirewallLogCmd() *cobra.Command {
+	var (
+		limit int64
+		since int64
+		start int64
+		until int64
+	)
+	cmd := &cobra.Command{
+		Use:   "log <vmid|name>",
+		Short: "Read a container's firewall log",
+		Long:  "Read the firewall log of a container. Use --start and --limit to page through entries.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			if err != nil {
+				return err
+			}
+			fl := cmd.Flags()
+			params := &nodes.ListLxcFirewallLogParams{}
+			if fl.Changed("limit") {
+				params.Limit = &limit
+			}
+			if fl.Changed("since") {
+				params.Since = &since
+			}
+			if fl.Changed("start") {
+				params.Start = &start
+			}
+			if fl.Changed("until") {
+				params.Until = &until
+			}
+			resp, err := deps.API.Nodes.ListLxcFirewallLog(cmd.Context(), node, vmid, params)
+			if err != nil {
+				return fmt.Errorf("read firewall log for container %s on node %q: %w", vmid, node, err)
+			}
+			entries := make([]fwLogEntry, 0)
+			rows := make([][]string, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var e fwLogEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode firewall log entry: %w", err)
+					}
+					entries = append(entries, e)
+					rows = append(rows, []string{strconv.FormatInt(e.N, 10), e.T})
+				}
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: []string{"N", "LINE"}, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
+	f := cmd.Flags()
+	f.Int64Var(&limit, "limit", 0, "maximum number of log lines to return")
+	f.Int64Var(&since, "since", 0, "only return entries newer than this UNIX epoch timestamp")
+	f.Int64Var(&start, "start", 0, "line number to start reading from (for paging)")
+	f.Int64Var(&until, "until", 0, "only return entries older than this UNIX epoch timestamp")
+	return cmd
+}
+
+// fwRefEntry is the decoded shape of one firewall reference: an IP set or alias
+// that rules may reference by name.
+type fwRefEntry struct {
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Ref     string `json:"ref"`
+	Comment string `json:"comment"`
+}
+
+// newFirewallRefsCmd builds `pve lxc firewall refs <vmid|name>` — the IP sets and
+// aliases a rule may reference (GET /nodes/{node}/lxc/{vmid}/firewall/refs).
+func newFirewallRefsCmd() *cobra.Command {
+	var refType string
+	cmd := &cobra.Command{
+		Use:   "refs <vmid|name>",
+		Short: "List IP sets and aliases rules can reference",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			if err != nil {
+				return err
+			}
+			params := &nodes.ListLxcFirewallRefsParams{}
+			if cmd.Flags().Changed("type") {
+				params.Type = &refType
+			}
+			resp, err := deps.API.Nodes.ListLxcFirewallRefs(cmd.Context(), node, vmid, params)
+			if err != nil {
+				return fmt.Errorf("list firewall references for container %s on node %q: %w", vmid, node, err)
+			}
+			entries := make([]fwRefEntry, 0)
+			rows := make([][]string, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var e fwRefEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode firewall reference entry: %w", err)
+					}
+					entries = append(entries, e)
+					rows = append(rows, []string{e.Type, e.Name, e.Ref, e.Comment})
+				}
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: []string{"TYPE", "NAME", "REF", "COMMENT"}, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&refType, "type", "", "only list references of this type: alias or ipset")
 	return cmd
 }
 
@@ -156,6 +278,7 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 		iface    string
 		macro    string
 		logLevel string
+		icmpType string
 		comment  string
 		enable   int64
 		pos      int64
@@ -205,6 +328,9 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 			if fl.Changed("log") {
 				params.Log = &logLevel
 			}
+			if fl.Changed("icmp-type") {
+				params.IcmpType = &icmpType
+			}
 			if fl.Changed("comment") {
 				params.Comment = &comment
 			}
@@ -233,6 +359,7 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&iface, "iface", "", "network interface, for example net0")
 	cmd.Flags().StringVar(&macro, "macro", "", "predefined standard macro")
 	cmd.Flags().StringVar(&logLevel, "log", "", "log level: emerg, alert, crit, err, warning, notice, info, debug, or nolog")
+	cmd.Flags().StringVar(&icmpType, "icmp-type", "", "ICMP type, valid only when proto is icmp or icmpv6")
 	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
 	cmd.Flags().Int64Var(&enable, "enable", 1, "1 to enable the rule, 0 to disable it")
 	cmd.Flags().Int64Var(&pos, "pos", 0, "insert the rule at this position")
@@ -251,6 +378,7 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 		iface    string
 		macro    string
 		logLevel string
+		icmpType string
 		comment  string
 		enable   int64
 		moveto   int64
@@ -300,6 +428,9 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 			if fl.Changed("log") {
 				params.Log = &logLevel
 			}
+			if fl.Changed("icmp-type") {
+				params.IcmpType = &icmpType
+			}
 			if fl.Changed("comment") {
 				params.Comment = &comment
 			}
@@ -331,6 +462,7 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&iface, "iface", "", "network interface, for example net0")
 	cmd.Flags().StringVar(&macro, "macro", "", "predefined standard macro")
 	cmd.Flags().StringVar(&logLevel, "log", "", "log level for the rule")
+	cmd.Flags().StringVar(&icmpType, "icmp-type", "", "ICMP type, valid only when proto is icmp or icmpv6")
 	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
 	cmd.Flags().Int64Var(&enable, "enable", 1, "1 to enable the rule, 0 to disable it")
 	cmd.Flags().Int64Var(&moveto, "moveto", 0, "move the rule to this position (other arguments ignored)")
@@ -388,7 +520,53 @@ func newFirewallIpsetCmd() *cobra.Command {
 		newFirewallIpsetDeleteCmd(),
 		newFirewallIpsetAddCmd(),
 		newFirewallIpsetRemoveCmd(),
+		newFirewallIpsetUpdateMemberCmd(),
 	)
+	return cmd
+}
+
+// newFirewallIpsetUpdateMemberCmd builds
+// `pve lxc firewall ipset update-member <vmid|name> <name> <cidr>` — update an
+// existing IP set entry (PUT .../firewall/ipset/{name}/{cidr}).
+func newFirewallIpsetUpdateMemberCmd() *cobra.Command {
+	var (
+		comment string
+		nomatch bool
+		digest  string
+	)
+	cmd := &cobra.Command{
+		Use:   "update-member <vmid|name> <name> <cidr>",
+		Short: "Update a CIDR entry of an IP set",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			if err != nil {
+				return err
+			}
+			name, cidr := args[1], args[2]
+
+			params := &nodes.UpdateLxcFirewallIpsetParams{}
+			fl := cmd.Flags()
+			if fl.Changed("comment") {
+				params.Comment = &comment
+			}
+			if fl.Changed("nomatch") {
+				params.Nomatch = &nomatch
+			}
+			if fl.Changed("digest") {
+				params.Digest = &digest
+			}
+			if err := deps.API.Nodes.UpdateLxcFirewallIpset(cmd.Context(), node, vmid, name, cidr, params); err != nil {
+				return fmt.Errorf("update %s in IP set %q for container %s on node %q: %w", cidr, name, vmid, node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Message: fmt.Sprintf("%s in IP set %s on container %s updated.", cidr, name, vmid)}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
+	cmd.Flags().BoolVar(&nomatch, "nomatch", false, "treat this entry as an exclusion")
+	cmd.Flags().StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
 	return cmd
 }
 

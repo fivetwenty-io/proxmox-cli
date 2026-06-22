@@ -96,6 +96,8 @@ func newDiskMoveCmd() *cobra.Command {
 		targetVolume string
 		bwlimit      float64
 		del          bool
+		digest       string
+		targetDigest string
 	)
 	cmd := &cobra.Command{
 		Use:   "move <vmid|name>",
@@ -136,6 +138,12 @@ func newDiskMoveCmd() *cobra.Command {
 			if fl.Changed("delete") {
 				params.Delete = &del
 			}
+			if fl.Changed("digest") {
+				params.Digest = &digest
+			}
+			if fl.Changed("target-digest") {
+				params.TargetDigest = &targetDigest
+			}
 
 			resp, err := deps.API.Nodes.CreateLxcMoveVolume(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -153,5 +161,7 @@ func newDiskMoveCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetVolume, "target-volume", "", "config key the volume will take on the target, for example mp1")
 	cmd.Flags().Float64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s")
 	cmd.Flags().BoolVar(&del, "delete", false, "remove the source volume after a successful copy")
+	cmd.Flags().StringVar(&digest, "digest", "", "only apply if the source config matches this SHA1 digest")
+	cmd.Flags().StringVar(&targetDigest, "target-digest", "", "only apply if the target config matches this SHA1 digest")
 	return cmd
 }

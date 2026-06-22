@@ -79,6 +79,30 @@ func newConfigSetCmd() *cobra.Command {
 		description string
 		deleteKeys  string
 		revertKeys  string
+
+		netSlots     []string
+		mpSlots      []string
+		devSlots     []string
+		nameserver   string
+		searchdomain string
+		onboot       bool
+		startup      string
+		tags         string
+		arch         string
+		features     string
+		hookscript   string
+		protection   bool
+		unprivileged bool
+		timezone     string
+		tty          int64
+		console      bool
+		cmode        string
+		template     bool
+		env          string
+		entrypoint   string
+		lock         string
+		digest       string
+		debug        bool
 	)
 
 	cmd := &cobra.Command{
@@ -141,6 +165,106 @@ func newConfigSetCmd() *cobra.Command {
 				set = true
 			}
 
+			if net, err := parseIndexedSlots(netSlots, "net"); err != nil {
+				return err
+			} else if len(net) > 0 {
+				params.Net = net
+				set = true
+			}
+			if mp, err := parseIndexedSlots(mpSlots, "mp"); err != nil {
+				return err
+			} else if len(mp) > 0 {
+				params.Mp = mp
+				set = true
+			}
+			if dev, err := parseIndexedSlots(devSlots, "dev"); err != nil {
+				return err
+			} else if len(dev) > 0 {
+				params.Dev = dev
+				set = true
+			}
+
+			if fl.Changed("nameserver") {
+				params.Nameserver = &nameserver
+				set = true
+			}
+			if fl.Changed("searchdomain") {
+				params.Searchdomain = &searchdomain
+				set = true
+			}
+			if fl.Changed("onboot") {
+				params.Onboot = &onboot
+				set = true
+			}
+			if fl.Changed("startup") {
+				params.Startup = &startup
+				set = true
+			}
+			if fl.Changed("tags") {
+				params.Tags = &tags
+				set = true
+			}
+			if fl.Changed("arch") {
+				params.Arch = &arch
+				set = true
+			}
+			if fl.Changed("features") {
+				params.Features = &features
+				set = true
+			}
+			if fl.Changed("hookscript") {
+				params.Hookscript = &hookscript
+				set = true
+			}
+			if fl.Changed("protection") {
+				params.Protection = &protection
+				set = true
+			}
+			if fl.Changed("unprivileged") {
+				params.Unprivileged = &unprivileged
+				set = true
+			}
+			if fl.Changed("timezone") {
+				params.Timezone = &timezone
+				set = true
+			}
+			if fl.Changed("tty") {
+				params.Tty = &tty
+				set = true
+			}
+			if fl.Changed("console") {
+				params.Console = &console
+				set = true
+			}
+			if fl.Changed("cmode") {
+				params.Cmode = &cmode
+				set = true
+			}
+			if fl.Changed("template") {
+				params.Template = &template
+				set = true
+			}
+			if fl.Changed("env") {
+				params.Env = &env
+				set = true
+			}
+			if fl.Changed("entrypoint") {
+				params.Entrypoint = &entrypoint
+				set = true
+			}
+			if fl.Changed("lock") {
+				params.Lock = &lock
+				set = true
+			}
+			if fl.Changed("digest") {
+				params.Digest = &digest
+				set = true
+			}
+			if fl.Changed("debug") {
+				params.Debug = &debug
+				set = true
+			}
+
 			if !set {
 				return fmt.Errorf("no configuration fields given: specify at least one --hostname/--memory/--cores/... flag")
 			}
@@ -166,6 +290,29 @@ func newConfigSetCmd() *cobra.Command {
 	fl.StringVar(&description, "description", "", "container description")
 	fl.StringVar(&deleteKeys, "delete", "", "comma-separated list of settings to delete")
 	fl.StringVar(&revertKeys, "revert", "", "comma-separated list of pending changes to revert")
+	fl.StringArrayVar(&netSlots, "net", nil, "network interface as INDEX=VALUE (repeatable), e.g. 0=name=eth0,bridge=vmbr0,ip=dhcp")
+	fl.StringArrayVar(&mpSlots, "mp", nil, "mount point as INDEX=VALUE (repeatable), e.g. 0=local-lvm:8,mp=/data")
+	fl.StringArrayVar(&devSlots, "dev", nil, "device passthrough as INDEX=VALUE (repeatable)")
+	fl.StringVar(&nameserver, "nameserver", "", "DNS server IP(s) for the container")
+	fl.StringVar(&searchdomain, "searchdomain", "", "DNS search domain(s) for the container")
+	fl.BoolVar(&onboot, "onboot", false, "start the container during host bootup")
+	fl.StringVar(&startup, "startup", "", "startup/shutdown behavior, e.g. order=1,up=30,down=60")
+	fl.StringVar(&tags, "tags", "", "comma- or semicolon-separated tags")
+	fl.StringVar(&arch, "arch", "", "OS architecture type, e.g. amd64 or arm64")
+	fl.StringVar(&features, "features", "", "advanced features, e.g. nesting=1,keyctl=1")
+	fl.StringVar(&hookscript, "hookscript", "", "hookscript volume run during lifecycle events")
+	fl.BoolVar(&protection, "protection", false, "set the protection flag to block remove/update")
+	fl.BoolVar(&unprivileged, "unprivileged", false, "run the container as an unprivileged user")
+	fl.StringVar(&timezone, "timezone", "", "time zone, e.g. host or Europe/Berlin")
+	fl.Int64Var(&tty, "tty", 0, "number of ttys available to the container")
+	fl.BoolVar(&console, "console", false, "attach a console device (/dev/console)")
+	fl.StringVar(&cmode, "cmode", "", "console mode: tty, console, or shell")
+	fl.BoolVar(&template, "template", false, "mark the container as a template")
+	fl.StringVar(&env, "env", "", "runtime environment as NUL-separated list")
+	fl.StringVar(&entrypoint, "entrypoint", "", "command to run as init")
+	fl.StringVar(&lock, "lock", "", "lock/unlock the container")
+	fl.StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
+	fl.BoolVar(&debug, "debug", false, "enable debug log-level on start")
 	return cmd
 }
 
