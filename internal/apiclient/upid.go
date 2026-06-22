@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/tasks"
 )
@@ -13,7 +14,10 @@ import (
 // All async PVE responses (DeleteQemu, CreateQemuStatusStart, etc.) are typed
 // as json.RawMessage aliases whose underlying data is a JSON-encoded string, for
 // example: `"UPID:pve:000A1B2C:..."`. This helper unmarshals the message to a
-// plain string and validates that it is non-empty.
+// plain string and validates that it is a well-formed UPID (every PVE UPID
+// begins with the "UPID:" prefix). Callers that classify a response as async vs
+// sync — e.g. disk resize and SDN apply — rely on this rejecting a non-UPID
+// body rather than mistaking it for a task handle.
 func UPIDFromRaw(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 {
 		return "", fmt.Errorf("decode UPID: empty raw message")
@@ -26,6 +30,10 @@ func UPIDFromRaw(raw json.RawMessage) (string, error) {
 
 	if upid == "" {
 		return "", fmt.Errorf("decode UPID: empty UPID string in response")
+	}
+
+	if !strings.HasPrefix(upid, "UPID:") {
+		return "", fmt.Errorf("decode UPID: %q is not a UPID", upid)
 	}
 
 	return upid, nil

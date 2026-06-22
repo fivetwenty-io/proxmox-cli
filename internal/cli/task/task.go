@@ -250,6 +250,9 @@ func newLogCmd() *cobra.Command {
 			}
 
 			upid := args[0]
+			if download && (cmd.Flags().Changed("limit") || cmd.Flags().Changed("start")) {
+				return fmt.Errorf("--download cannot be combined with --limit or --start")
+			}
 			params := &nodes.ListTasksLogParams{}
 			if cmd.Flags().Changed("limit") {
 				v := int64(limit)

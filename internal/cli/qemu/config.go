@@ -375,7 +375,7 @@ func newConfigSetCmd() *cobra.Command {
 	f.Int64Var(&sockets, "sockets", 0, "number of CPU sockets")
 	f.Int64Var(&vcpus, "vcpus", 0, "number of hotplugged vCPUs")
 	f.Float64Var(&cpulimit, "cpulimit", 0, "CPU usage limit (0 = unlimited)")
-	f.Int64Var(&cpuunits, "cpuunits", 0, "CPU weight, clamped to [1,10000]")
+	f.Int64Var(&cpuunits, "cpuunits", 0, "CPU weight relative to other guests (valid range 1-10000)")
 	f.StringVar(&affinity, "affinity", "", "host cores used to run guest processes, e.g. 0,5,8-11")
 	f.Int64Var(&shares, "shares", 0, "memory shares for auto-ballooning (0 disables)")
 	f.BoolVar(&numa, "numa", false, "enable NUMA")

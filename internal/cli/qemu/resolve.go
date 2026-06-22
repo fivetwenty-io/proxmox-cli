@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
@@ -63,7 +64,7 @@ func guestIP(ctx context.Context, deps *cli.Deps, node, vmid string) (string, er
 			continue
 		}
 		for _, addr := range iface.Addresses {
-			if addr.Type != "ipv4" {
+			if !isIPv4Addr(addr) {
 				continue
 			}
 			if isLoopbackIP(addr.Address) {
@@ -76,6 +77,21 @@ func guestIP(ctx context.Context, deps *cli.Deps, node, vmid string) (string, er
 	return "", fmt.Errorf(
 		"no non-loopback IPv4 address found via the guest agent for VM %s on node %q; pass --host to connect directly",
 		vmid, node)
+}
+
+// isIPv4Addr reports whether the agent address is IPv4. The guest agent
+// normally tags addresses with ip-address-type, but some agents omit it; fall
+// back to parsing the literal when the type is absent.
+func isIPv4Addr(addr agentIPAddress) bool {
+	switch addr.Type {
+	case "ipv4":
+		return true
+	case "":
+		ip := net.ParseIP(addr.Address)
+		return ip != nil && ip.To4() != nil
+	default:
+		return false
+	}
 }
 
 // isLoopbackName reports whether the interface name is the loopback device.

@@ -3,36 +3,12 @@ package lxc
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
-
-// parseIndexedSlots converts repeated "INDEX=VALUE" flag values into the
-// map[int]string shape the apiclient-go expands into indexed keys such as
-// net0, mp0, and dev0. It rejects malformed entries and duplicate indices so a
-// typo never silently overwrites another slot.
-func parseIndexedSlots(vals []string, flagName string) (map[int]string, error) {
-	out := make(map[int]string, len(vals))
-	for _, v := range vals {
-		idxStr, val, ok := strings.Cut(v, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid --%s %q: want INDEX=VALUE", flagName, v)
-		}
-		idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
-		if err != nil || idx < 0 {
-			return nil, fmt.Errorf("invalid --%s %q: index must be a non-negative integer", flagName, v)
-		}
-		if _, dup := out[idx]; dup {
-			return nil, fmt.Errorf("invalid --%s: index %d specified more than once", flagName, idx)
-		}
-		out[idx] = val
-	}
-	return out, nil
-}
 
 // newCreateCmd builds `pve lxc create <vmid>`. The container is created as an
 // asynchronous task; the command blocks until it completes unless --async is
@@ -148,7 +124,7 @@ func newCreateCmd() *cobra.Command {
 				params.Start = &start
 			}
 
-			net, err := parseIndexedSlots(netSlots, "net")
+			net, err := cli.ParseIndexedValues(netSlots, "net")
 			if err != nil {
 				return err
 			}
@@ -161,12 +137,12 @@ func newCreateCmd() *cobra.Command {
 			if len(net) > 0 {
 				params.Net = net
 			}
-			if mp, err := parseIndexedSlots(mpSlots, "mp"); err != nil {
+			if mp, err := cli.ParseIndexedValues(mpSlots, "mp"); err != nil {
 				return err
 			} else if len(mp) > 0 {
 				params.Mp = mp
 			}
-			if dev, err := parseIndexedSlots(devSlots, "dev"); err != nil {
+			if dev, err := cli.ParseIndexedValues(devSlots, "dev"); err != nil {
 				return err
 			} else if len(dev) > 0 {
 				params.Dev = dev

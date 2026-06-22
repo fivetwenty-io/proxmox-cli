@@ -137,7 +137,11 @@ func newConfigSetCmd() *cobra.Command {
 				set = true
 			}
 			if fl.Changed("cpulimit") {
-				params.Cpulimit = parseFloatPtr(cpulimit)
+				v, perr := parseFloatPtr(cpulimit)
+				if perr != nil {
+					return fmt.Errorf("invalid --cpulimit %q: %w", cpulimit, perr)
+				}
+				params.Cpulimit = v
 				set = true
 			}
 			if fl.Changed("cpuunits") {
@@ -165,19 +169,19 @@ func newConfigSetCmd() *cobra.Command {
 				set = true
 			}
 
-			if net, err := parseIndexedSlots(netSlots, "net"); err != nil {
+			if net, err := cli.ParseIndexedValues(netSlots, "net"); err != nil {
 				return err
 			} else if len(net) > 0 {
 				params.Net = net
 				set = true
 			}
-			if mp, err := parseIndexedSlots(mpSlots, "mp"); err != nil {
+			if mp, err := cli.ParseIndexedValues(mpSlots, "mp"); err != nil {
 				return err
 			} else if len(mp) > 0 {
 				params.Mp = mp
 				set = true
 			}
-			if dev, err := parseIndexedSlots(devSlots, "dev"); err != nil {
+			if dev, err := cli.ParseIndexedValues(devSlots, "dev"); err != nil {
 				return err
 			} else if len(dev) > 0 {
 				params.Dev = dev
@@ -396,12 +400,13 @@ func structToStringMap(v any) (map[string]string, error) {
 	return out, nil
 }
 
-// parseFloatPtr converts a string flag value to a *float64, returning nil on a
-// parse failure so an invalid value is simply omitted from the request.
-func parseFloatPtr(s string) *float64 {
+// parseFloatPtr converts a string flag value to a *float64, returning an error
+// on a parse failure so an invalid value is surfaced rather than silently
+// dropped from the request.
+func parseFloatPtr(s string) (*float64, error) {
 	var f float64
 	if _, err := fmt.Sscanf(s, "%g", &f); err != nil {
-		return nil
+		return nil, err
 	}
-	return &f
+	return &f, nil
 }

@@ -48,7 +48,11 @@ func newApplyCmd() *cobra.Command {
 
 			// PUT /cluster/sdn returns a UPID string for the reload task. Older
 			// servers may return null/empty; treat that as an immediate success.
-			upid, perr := apiclient.UPIDFromRaw(json.RawMessage(*resp))
+			var raw json.RawMessage
+			if resp != nil {
+				raw = *resp
+			}
+			upid, perr := apiclient.UPIDFromRaw(raw)
 			if perr != nil || upid == "" {
 				res := output.Result{Message: "SDN configuration applied."}
 				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

@@ -274,7 +274,7 @@ func newCreateCmd() *cobra.Command {
 				{numaNodeSlots, "numa-node", &params.NumaMap},
 				{virtiofsSlots, "virtiofs", &params.Virtiofs},
 			} {
-				m, perr := parseIndexedSlots(s.vals, s.name)
+				m, perr := cli.ParseIndexedValues(s.vals, s.name)
 				if perr != nil {
 					return perr
 				}
@@ -307,7 +307,7 @@ func newCreateCmd() *cobra.Command {
 	f.Int64Var(&vcpus, "vcpus", 0, "number of hotplugged vCPUs")
 	f.StringVar(&cpu, "cpu", "", "emulated CPU type, e.g. host or x86-64-v2-AES")
 	f.Float64Var(&cpulimit, "cpulimit", 0, "CPU usage limit (0 = unlimited)")
-	f.Int64Var(&cpuunits, "cpuunits", 0, "CPU weight, clamped to [1,10000]")
+	f.Int64Var(&cpuunits, "cpuunits", 0, "CPU weight relative to other guests (valid range 1-10000)")
 	f.StringVar(&affinity, "affinity", "", "host cores used to run guest processes, e.g. 0,5,8-11")
 	f.StringVar(&memory, "memory", "", "RAM in MiB")
 	f.Int64Var(&balloon, "balloon", 0, "target balloon memory in MiB (0 disables ballooning)")
@@ -406,7 +406,7 @@ type legacySlot struct {
 func mergeLegacySlots(
 	vals []string, family string, fl flagSet, legacy ...legacySlot,
 ) (map[int]string, error) {
-	m, err := parseIndexedSlots(vals, family)
+	m, err := cli.ParseIndexedValues(vals, family)
 	if err != nil {
 		return nil, err
 	}

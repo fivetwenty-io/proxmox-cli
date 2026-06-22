@@ -131,13 +131,16 @@ func newSubnetListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list subnets of vnet %q: %w", vnet, err)
 			}
-			entries := make([]subnetEntry, 0, len(*resp))
-			for _, raw := range *resp {
-				var e subnetEntry
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode subnet entry: %w", err)
+			var entries []subnetEntry
+			if resp != nil {
+				entries = make([]subnetEntry, 0, len(*resp))
+				for _, raw := range *resp {
+					var e subnetEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode subnet entry: %w", err)
+					}
+					entries = append(entries, e)
 				}
-				entries = append(entries, e)
 			}
 			res := output.Result{Headers: []string{"SUBNET", "CIDR", "GATEWAY", "ZONE"}, Raw: entries}
 			for _, e := range entries {

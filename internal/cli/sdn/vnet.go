@@ -261,13 +261,16 @@ func newVnetListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list SDN vnets: %w", err)
 			}
-			entries := make([]vnetEntry, 0, len(*resp))
-			for _, raw := range *resp {
-				var e vnetEntry
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode vnet entry: %w", err)
+			var entries []vnetEntry
+			if resp != nil {
+				entries = make([]vnetEntry, 0, len(*resp))
+				for _, raw := range *resp {
+					var e vnetEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode vnet entry: %w", err)
+					}
+					entries = append(entries, e)
 				}
-				entries = append(entries, e)
 			}
 			res := output.Result{Headers: []string{"VNET", "ZONE", "TAG", "ALIAS"}, Raw: entries}
 			for _, e := range entries {

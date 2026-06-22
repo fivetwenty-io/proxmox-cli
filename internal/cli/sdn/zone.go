@@ -236,13 +236,16 @@ func newZoneListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list SDN zones: %w", err)
 			}
-			entries := make([]zoneEntry, 0, len(*resp))
-			for _, raw := range *resp {
-				var e zoneEntry
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode zone entry: %w", err)
+			var entries []zoneEntry
+			if resp != nil {
+				entries = make([]zoneEntry, 0, len(*resp))
+				for _, raw := range *resp {
+					var e zoneEntry
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode zone entry: %w", err)
+					}
+					entries = append(entries, e)
 				}
-				entries = append(entries, e)
 			}
 			res := output.Result{Headers: []string{"ZONE", "TYPE", "NODES", "IPAM"}, Raw: entries}
 			for _, e := range entries {

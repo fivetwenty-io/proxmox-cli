@@ -2,8 +2,6 @@ package node
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -98,7 +96,7 @@ func newNodeConfigSetCmd() *cobra.Command {
 				params.Acme = &acme
 			}
 			if fl.Changed("acme-domain") {
-				domains, err := parseIndexedFlags(acmeDomain, "acme-domain")
+				domains, err := cli.ParseIndexedValues(acmeDomain, "acme-domain")
 				if err != nil {
 					return err
 				}
@@ -130,7 +128,7 @@ func newNodeConfigSetCmd() *cobra.Command {
 	f.StringVar(&description, "description", "", "node description shown in the web UI (supports markdown)")
 	f.StringVar(&acme, "acme", "", "node ACME configuration, for example domains=example.com,account=default")
 	f.StringArrayVar(&acmeDomain, "acme-domain", nil,
-		"ACME domain as INDEX=DOMAIN[,settings]; repeat for multiple domains (index 0-9)")
+		"ACME domain as INDEX=DOMAIN[,settings]; repeat for multiple domains (INDEX is a non-negative integer)")
 	f.StringVar(&wakeonlan, "wakeonlan", "", "MAC address used to wake the node via wake-on-LAN")
 	f.Int64Var(&ballooningTarget, "ballooning-target", 0,
 		"RAM usage target percentage at which host ballooning starts (0-100, 0 disables)")
@@ -140,26 +138,4 @@ func newNodeConfigSetCmd() *cobra.Command {
 		"SHA1 digest of the current configuration to guard against concurrent edits")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
 	return cmd
-}
-
-// parseIndexedFlags converts repeated "INDEX=VALUE" flag values into the
-// map[int]string shape the apiclient-go expands into indexed keys (for example
-// acmedomain0, acmedomain1). It rejects malformed entries and duplicate indices.
-func parseIndexedFlags(vals []string, flagName string) (map[int]string, error) {
-	out := make(map[int]string, len(vals))
-	for _, v := range vals {
-		idxStr, val, ok := strings.Cut(v, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid --%s %q: want INDEX=VALUE", flagName, v)
-		}
-		idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
-		if err != nil || idx < 0 {
-			return nil, fmt.Errorf("invalid --%s %q: index must be a non-negative integer", flagName, v)
-		}
-		if _, dup := out[idx]; dup {
-			return nil, fmt.Errorf("invalid --%s: index %d specified more than once", flagName, idx)
-		}
-		out[idx] = val
-	}
-	return out, nil
 }

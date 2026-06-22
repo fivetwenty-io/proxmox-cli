@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,36 +14,43 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newAgentExecCmd builds `pve qemu agent exec <vmid> --command CMD [--input-data DATA]`.
-// The command field accepts space-separated tokens that are split into a slice
-// and forwarded to the API as the JSON array field. The caller must quote the
-// whole value if it contains shell metacharacters.
+// newAgentExecCmd builds `pve qemu agent exec <vmid> [-- <cmd>...]`.
+// Prefer the positional `-- program arg...` form: each token is forwarded
+// verbatim, so arguments may contain spaces. The legacy --command flag is kept
+// for backward compatibility; it splits on whitespace and therefore cannot
+// express an argument that itself contains a space.
 func newAgentExecCmd() *cobra.Command {
 	var (
 		command   string
 		inputData string
 	)
 	cmd := &cobra.Command{
-		Use:   "exec <vmid|name>",
+		Use:   "exec <vmid|name> [-- <cmd>...]",
 		Short: "Execute a command inside a VM via the guest agent",
 		Long: "Run a command inside the VM via the QEMU guest agent and return the\n" +
-			"PID of the spawned process. Use `pve qemu agent exec-status` to poll\n" +
-			"for completion and retrieve stdout/stderr.",
-		Args: cobra.ExactArgs(1),
+			"PID of the spawned process. Pass the program and its arguments after\n" +
+			"`--` so each argument is preserved exactly (spaces included); the\n" +
+			"legacy --command flag splits on whitespace. Use\n" +
+			"`pve qemu agent exec-status` to poll for completion and output.",
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			if !cmd.Flags().Changed("command") {
-				return fmt.Errorf("--command is required: provide the program and its arguments")
-			}
 
-			// Split the command string into argv so the API receives a proper array.
-			argv := strings.Fields(command)
+			// Positional argv after `--` takes precedence and preserves each
+			// token verbatim; fall back to splitting the legacy --command flag.
+			argv := args[1:]
 			if len(argv) == 0 {
-				return fmt.Errorf("--command must not be empty")
+				if !cmd.Flags().Changed("command") {
+					return fmt.Errorf("provide a command: `exec <vmid> -- <program> [args...]` or --command")
+				}
+				argv = strings.Fields(command)
+			}
+			if len(argv) == 0 {
+				return fmt.Errorf("command must not be empty")
 			}
 
 			params := &nodes.CreateQemuAgentExecParams{Command: argv}
@@ -64,7 +72,8 @@ func newAgentExecCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&command, "command", "", "command to run (program and arguments, space-separated)")
+	cmd.Flags().StringVar(&command, "command", "",
+		"legacy: whitespace-split command line (prefer `-- <program> [args...]` for spaced arguments)")
 	cmd.Flags().StringVar(&inputData, "input-data", "", "data to pass as stdin to the command")
 	return cmd
 }
@@ -248,18 +257,19 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 					username, vmid)
 			}
 
-			// Read password from stdin without echoing it. bufio.Scanner reads
-			// up to the first newline; the caller pipes the password in or uses
-			// a terminal that does not echo (e.g. `read -rs PW && echo "$PW" | pve ...`).
-			// cmd.InOrStdin() is used so tests can inject a reader via cmd.SetIn.
-			scanner := bufio.NewScanner(cmd.InOrStdin())
-			if !scanner.Scan() {
-				if scanErr := scanner.Err(); scanErr != nil {
-					return fmt.Errorf("agent set-user-password: read password from stdin: %w", scanErr)
+			// Read the first line of stdin as the password, without echoing it.
+			// The caller pipes the password in or uses a terminal that does not
+			// echo (e.g. `read -rs PW && echo "$PW" | pve ...`). bufio.Reader is
+			// used instead of bufio.Scanner so there is no token-size cap, and
+			// cmd.InOrStdin() lets tests inject a reader via cmd.SetIn.
+			line, rerr := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+			if rerr != nil && line == "" {
+				if rerr == io.EOF {
+					return fmt.Errorf("agent set-user-password: no password provided on stdin")
 				}
-				return fmt.Errorf("agent set-user-password: no password provided on stdin")
+				return fmt.Errorf("agent set-user-password: read password from stdin: %w", rerr)
 			}
-			password := scanner.Text()
+			password := strings.TrimRight(line, "\r\n")
 			if password == "" {
 				return fmt.Errorf("agent set-user-password: password must not be empty")
 			}
