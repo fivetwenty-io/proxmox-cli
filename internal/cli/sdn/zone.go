@@ -210,13 +210,29 @@ func newZoneSetCmd() *cobra.Command {
 
 // newZoneListCmd builds `pve sdn zone list`.
 func newZoneListCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		pending  bool
+		running  bool
+		zoneType string
+	)
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN zones",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.ListSdnZones(cmd.Context(), &cluster.ListSdnZonesParams{})
+			params := &cluster.ListSdnZonesParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			if fl.Changed("type") {
+				params.Type = strPtr(zoneType)
+			}
+			resp, err := deps.API.Cluster.ListSdnZones(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("list SDN zones: %w", err)
 			}
@@ -235,21 +251,51 @@ func newZoneListCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
+	f.StringVar(&zoneType, "type", "", "only list zones of this type")
+	return cmd
 }
 
 // newZoneCreateCmd builds `pve sdn zone create <zone>`.
 func newZoneCreateCmd() *cobra.Command {
 	var (
-		zoneType string
-		nodes    string
-		bridge   string
-		ipam     string
+		zoneType                 string
+		advertiseSubnets         bool
+		bridge                   string
+		bridgeDisableMacLearning bool
+		controller               string
+		dhcp                     string
+		disableArpNdSuppression  bool
+		dns                      string
+		dnszone                  string
+		dpID                     int64
+		exitnodes                string
+		exitnodesLocalRouting    bool
+		exitnodesPrimary         string
+		fabric                   string
+		ipam                     string
+		lockToken                string
+		mac                      string
+		mtu                      int64
+		nodes                    string
+		peers                    string
+		reversedns               string
+		rtImport                 string
+		secondaryControllers     []string
+		tag                      int64
+		vlanProtocol             string
+		vrfVxlan                 int64
+		vxlanPort                int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create <zone>",
 		Short: "Create an SDN zone",
 		Long: "Create an SDN zone. The change is staged until `pve sdn apply`. " +
-			"A simple zone needs no bridge or uplink and provides an isolated L2 segment.",
+			"A simple zone needs no bridge or uplink and provides an isolated L2 segment. " +
+			"VLAN/QinQ zones need a --bridge; VXLAN zones need --peers (or a --fabric); " +
+			"EVPN zones need a --controller and --vrf-vxlan.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -257,14 +303,83 @@ func newZoneCreateCmd() *cobra.Command {
 
 			params := &cluster.CreateSdnZonesParams{Zone: zone, Type: zoneType}
 			fl := cmd.Flags()
-			if fl.Changed("nodes") {
-				params.Nodes = strPtr(nodes)
+			if fl.Changed("advertise-subnets") {
+				params.AdvertiseSubnets = boolPtr(advertiseSubnets)
 			}
 			if fl.Changed("bridge") {
 				params.Bridge = strPtr(bridge)
 			}
+			if fl.Changed("bridge-disable-mac-learning") {
+				params.BridgeDisableMacLearning = boolPtr(bridgeDisableMacLearning)
+			}
+			if fl.Changed("controller") {
+				params.Controller = strPtr(controller)
+			}
+			if fl.Changed("dhcp") {
+				params.Dhcp = strPtr(dhcp)
+			}
+			if fl.Changed("disable-arp-nd-suppression") {
+				params.DisableArpNdSuppression = boolPtr(disableArpNdSuppression)
+			}
+			if fl.Changed("dns") {
+				params.Dns = strPtr(dns)
+			}
+			if fl.Changed("dnszone") {
+				params.Dnszone = strPtr(dnszone)
+			}
+			if fl.Changed("dp-id") {
+				params.DpId = int64Ptr(dpID)
+			}
+			if fl.Changed("exitnodes") {
+				params.Exitnodes = strPtr(exitnodes)
+			}
+			if fl.Changed("exitnodes-local-routing") {
+				params.ExitnodesLocalRouting = boolPtr(exitnodesLocalRouting)
+			}
+			if fl.Changed("exitnodes-primary") {
+				params.ExitnodesPrimary = strPtr(exitnodesPrimary)
+			}
+			if fl.Changed("fabric") {
+				params.Fabric = strPtr(fabric)
+			}
 			if fl.Changed("ipam") {
 				params.Ipam = strPtr(ipam)
+			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if fl.Changed("mac") {
+				params.Mac = strPtr(mac)
+			}
+			if fl.Changed("mtu") {
+				params.Mtu = int64Ptr(mtu)
+			}
+			if fl.Changed("nodes") {
+				params.Nodes = strPtr(nodes)
+			}
+			if fl.Changed("peers") {
+				params.Peers = strPtr(peers)
+			}
+			if fl.Changed("reversedns") {
+				params.Reversedns = strPtr(reversedns)
+			}
+			if fl.Changed("rt-import") {
+				params.RtImport = strPtr(rtImport)
+			}
+			if fl.Changed("secondary-controller") {
+				params.SecondaryControllers = secondaryControllers
+			}
+			if fl.Changed("tag") {
+				params.Tag = int64Ptr(tag)
+			}
+			if fl.Changed("vlan-protocol") {
+				params.VlanProtocol = strPtr(vlanProtocol)
+			}
+			if fl.Changed("vrf-vxlan") {
+				params.VrfVxlan = int64Ptr(vrfVxlan)
+			}
+			if fl.Changed("vxlan-port") {
+				params.VxlanPort = int64Ptr(vxlanPort)
 			}
 
 			if err := deps.API.Cluster.CreateSdnZones(cmd.Context(), params); err != nil {
@@ -274,16 +389,43 @@ func newZoneCreateCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-	cmd.Flags().StringVar(&zoneType, "type", "simple", "zone type: simple|vlan|qinq|vxlan|evpn")
-	cmd.Flags().StringVar(&nodes, "nodes", "", "comma-separated nodes the zone applies to")
-	cmd.Flags().StringVar(&bridge, "bridge", "", "bridge for vlan/qinq zones")
-	cmd.Flags().StringVar(&ipam, "ipam", "", "IPAM backend (e.g. pve)")
+	f := cmd.Flags()
+	f.StringVar(&zoneType, "type", "simple", "zone type: simple|vlan|qinq|vxlan|evpn")
+	f.BoolVar(&advertiseSubnets, "advertise-subnets", false, "advertise IP prefixes (Type-5 routes) instead of MAC/IP pairs")
+	f.StringVar(&bridge, "bridge", "", "bridge for which VLANs should be managed")
+	f.BoolVar(&bridgeDisableMacLearning, "bridge-disable-mac-learning", false, "disable auto MAC learning")
+	f.StringVar(&controller, "controller", "", "controller for this zone")
+	f.StringVar(&dhcp, "dhcp", "", "type of the DHCP backend for this zone")
+	f.BoolVar(&disableArpNdSuppression, "disable-arp-nd-suppression", false, "suppress IPv4 ARP and IPv6 ND messages")
+	f.StringVar(&dns, "dns", "", "DNS API server")
+	f.StringVar(&dnszone, "dnszone", "", "DNS domain zone, e.g. mydomain.com")
+	f.Int64Var(&dpID, "dp-id", 0, "Faucet dataplane ID")
+	f.StringVar(&exitnodes, "exitnodes", "", "comma-separated list of exit nodes")
+	f.BoolVar(&exitnodesLocalRouting, "exitnodes-local-routing", false, "allow exit nodes to connect to EVPN guests")
+	f.StringVar(&exitnodesPrimary, "exitnodes-primary", "", "force traffic through this exit node first")
+	f.StringVar(&fabric, "fabric", "", "SDN fabric to use as underlay for this VXLAN zone")
+	f.StringVar(&ipam, "ipam", "", "IPAM backend (e.g. pve)")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
+	f.StringVar(&mac, "mac", "", "anycast logical router MAC address")
+	f.Int64Var(&mtu, "mtu", 0, "MTU of the zone")
+	f.StringVar(&nodes, "nodes", "", "comma-separated nodes the zone applies to")
+	f.StringVar(&peers, "peers", "", "comma-separated list of VXLAN peers (usually node IPs)")
+	f.StringVar(&reversedns, "reversedns", "", "reverse DNS API server")
+	f.StringVar(&rtImport, "rt-import", "", "list of route targets to import into the VRF of the zone")
+	f.StringArrayVar(&secondaryControllers, "secondary-controller", nil, "additional controller (repeatable)")
+	f.Int64Var(&tag, "tag", 0, "service-VLAN tag (outer VLAN)")
+	f.StringVar(&vlanProtocol, "vlan-protocol", "", "VLAN protocol for QinQ zones")
+	f.Int64Var(&vrfVxlan, "vrf-vxlan", 0, "VNI for the zone VRF")
+	f.Int64Var(&vxlanPort, "vxlan-port", 0, "UDP port for the VXLAN tunnel (default 4789)")
 	return cmd
 }
 
 // newZoneDeleteCmd builds `pve sdn zone delete <zone>`.
 func newZoneDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <zone>",
 		Short: "Delete an SDN zone",
@@ -294,7 +436,11 @@ func newZoneDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete SDN zone %q without confirmation: pass --yes", zone)
 			}
-			if err := deps.API.Cluster.DeleteSdnZones(cmd.Context(), zone, &cluster.DeleteSdnZonesParams{}); err != nil {
+			params := &cluster.DeleteSdnZonesParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if err := deps.API.Cluster.DeleteSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("delete SDN zone %q: %w", zone, err)
 			}
 			res := output.Result{Message: fmt.Sprintf("SDN zone %q deleted (run `pve sdn apply` to commit).", zone)}
@@ -302,5 +448,6 @@ func newZoneDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }

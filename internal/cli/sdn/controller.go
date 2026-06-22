@@ -239,8 +239,9 @@ func newControllerListCmd() *cobra.Command {
 
 func newControllerCreateCmd() *cobra.Command {
 	var (
-		typ string
-		cf  controllerFlags
+		typ       string
+		cf        controllerFlags
+		lockToken string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <controller> --type <type>",
@@ -251,7 +252,11 @@ func newControllerCreateCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			controller := args[0]
 			params := &cluster.CreateSdnControllersParams{Controller: controller, Type: typ}
-			cf.applyCreate(cmd.Flags(), params)
+			fl := cmd.Flags()
+			cf.applyCreate(fl, params)
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.CreateSdnControllers(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN controller %q: %w", controller, err)
 			}
@@ -263,6 +268,7 @@ func newControllerCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&typ, "type", "", "controller type: bgp, evpn, or isis (required)")
 	cli.MustMarkRequired(cmd, "type")
 	cf.register(cmd)
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 
@@ -340,7 +346,10 @@ func newControllerSetCmd() *cobra.Command {
 }
 
 func newControllerDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <controller>",
 		Short: "Delete an SDN controller",
@@ -351,7 +360,11 @@ func newControllerDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete SDN controller %q without confirmation: pass --yes", controller)
 			}
-			err := deps.API.Cluster.DeleteSdnControllers(cmd.Context(), controller, &cluster.DeleteSdnControllersParams{})
+			params := &cluster.DeleteSdnControllersParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			err := deps.API.Cluster.DeleteSdnControllers(cmd.Context(), controller, params)
 			if err != nil {
 				return fmt.Errorf("delete SDN controller %q: %w", controller, err)
 			}
@@ -361,5 +374,6 @@ func newControllerDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }

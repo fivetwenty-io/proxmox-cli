@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ type recordedRequest struct {
 	method string
 	path   string
 	body   map[string]any
+	query  url.Values
 }
 
 // writeConfig writes a token-auth config pointing the named target at the fake
@@ -108,7 +110,7 @@ func record(f *testhelper.FakePVE, rec *[]recordedRequest, pattern string, paylo
 				_ = json.Unmarshal(b, &body)
 			}
 		}
-		*rec = append(*rec, recordedRequest{method: r.Method, path: r.URL.Path, body: body})
+		*rec = append(*rec, recordedRequest{method: r.Method, path: r.URL.Path, body: body, query: r.URL.Query()})
 		if status >= 400 {
 			testhelper.WriteError(w, status, "boom")
 			return

@@ -108,14 +108,26 @@ func newSubnetSetCmd() *cobra.Command {
 
 // newSubnetListCmd builds `pve sdn subnet list <vnet>`.
 func newSubnetListCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		pending bool
+		running bool
+	)
+	cmd := &cobra.Command{
 		Use:   "list <vnet>",
 		Short: "List subnets of a vnet",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
-			resp, err := deps.API.Cluster.ListSdnVnetsSubnets(cmd.Context(), vnet, &cluster.ListSdnVnetsSubnetsParams{})
+			params := &cluster.ListSdnVnetsSubnetsParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.ListSdnVnetsSubnets(cmd.Context(), vnet, params)
 			if err != nil {
 				return fmt.Errorf("list subnets of vnet %q: %w", vnet, err)
 			}
@@ -134,13 +146,21 @@ func newSubnetListCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
+	return cmd
 }
 
 // newSubnetCreateCmd builds `pve sdn subnet create <vnet> <cidr>`.
 func newSubnetCreateCmd() *cobra.Command {
 	var (
-		gateway string
-		snat    bool
+		gateway       string
+		snat          bool
+		dhcpDnsServer string
+		dhcpRange     []string
+		dnszoneprefix string
+		lockToken     string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vnet> <cidr>",
@@ -160,6 +180,18 @@ func newSubnetCreateCmd() *cobra.Command {
 			if fl.Changed("snat") {
 				params.Snat = boolPtr(snat)
 			}
+			if fl.Changed("dhcp-dns-server") {
+				params.DhcpDnsServer = strPtr(dhcpDnsServer)
+			}
+			if fl.Changed("dhcp-range") {
+				params.DhcpRange = dhcpRange
+			}
+			if fl.Changed("dnszoneprefix") {
+				params.Dnszoneprefix = strPtr(dnszoneprefix)
+			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 
 			if err := deps.API.Cluster.CreateSdnVnetsSubnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("create subnet %q on vnet %q: %w", cidr, vnet, err)
@@ -168,14 +200,22 @@ func newSubnetCreateCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-	cmd.Flags().StringVar(&gateway, "gateway", "", "gateway IP for the subnet, e.g. 10.241.0.1")
-	cmd.Flags().BoolVar(&snat, "snat", false, "enable source NAT (masquerade) for the subnet")
+	f := cmd.Flags()
+	f.StringVar(&gateway, "gateway", "", "gateway IP for the subnet, e.g. 10.241.0.1")
+	f.BoolVar(&snat, "snat", false, "enable source NAT (masquerade) for the subnet")
+	f.StringVar(&dhcpDnsServer, "dhcp-dns-server", "", "IP address for the DHCP DNS server")
+	f.StringArrayVar(&dhcpRange, "dhcp-range", nil, "DHCP range for this subnet (repeatable)")
+	f.StringVar(&dnszoneprefix, "dnszoneprefix", "", "DNS domain zone prefix, e.g. adm")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 
 // newSubnetDeleteCmd builds `pve sdn subnet delete <vnet> <subnet>`.
 func newSubnetDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <vnet> <subnet>",
 		Short: "Delete a subnet from a vnet",
@@ -186,7 +226,11 @@ func newSubnetDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete subnet %q without confirmation: pass --yes", subnet)
 			}
-			err := deps.API.Cluster.DeleteSdnVnetsSubnets(cmd.Context(), vnet, subnet, &cluster.DeleteSdnVnetsSubnetsParams{})
+			params := &cluster.DeleteSdnVnetsSubnetsParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			err := deps.API.Cluster.DeleteSdnVnetsSubnets(cmd.Context(), vnet, subnet, params)
 			if err != nil {
 				return fmt.Errorf("delete subnet %q on vnet %q: %w", subnet, vnet, err)
 			}
@@ -195,5 +239,6 @@ func newSubnetDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }

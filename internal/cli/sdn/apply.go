@@ -17,18 +17,31 @@ import (
 // as an asynchronous task; the command blocks until it completes unless --async
 // is set.
 func newApplyCmd() *cobra.Command {
-	var async bool
+	var (
+		async       bool
+		lockToken   string
+		releaseLock bool
+	)
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Commit pending SDN configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			if cmd.Flags().Changed("async") {
+			fl := cmd.Flags()
+			if fl.Changed("async") {
 				deps.Async = async
 			}
 
-			resp, err := deps.API.Cluster.UpdateSdn(cmd.Context(), &cluster.UpdateSdnParams{})
+			params := &cluster.UpdateSdnParams{}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if fl.Changed("release-lock") {
+				params.ReleaseLock = boolPtr(releaseLock)
+			}
+
+			resp, err := deps.API.Cluster.UpdateSdn(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("apply SDN configuration: %w", err)
 			}
@@ -57,5 +70,7 @@ func newApplyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&async, "async", false, "return the reload task UPID immediately without waiting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
+	cmd.Flags().BoolVar(&releaseLock, "release-lock", false, "release the lock after a successful commit (requires --lock-token)")
 	return cmd
 }

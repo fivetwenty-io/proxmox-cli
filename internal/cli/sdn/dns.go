@@ -83,6 +83,7 @@ func newDnsCreateCmd() *cobra.Command {
 		reversemaskv6 int64
 		reversev6mask int64
 		ttl           int64
+		lockToken     string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <dns> --type <type> --url <url> --key <key>",
@@ -107,6 +108,9 @@ func newDnsCreateCmd() *cobra.Command {
 			if fl.Changed("ttl") {
 				params.Ttl = int64Ptr(ttl)
 			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.CreateSdnDns(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN DNS provider %q: %w", dns, err)
 			}
@@ -123,6 +127,7 @@ func newDnsCreateCmd() *cobra.Command {
 	f.Int64Var(&reversemaskv6, "reversemaskv6", 0, "IPv6 reverse DNS mask")
 	f.Int64Var(&reversev6mask, "reversev6mask", 0, "IPv6 reverse DNS mask (legacy alias)")
 	f.Int64Var(&ttl, "ttl", 0, "default TTL for records")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	cli.MustMarkRequired(cmd, "type")
 	cli.MustMarkRequired(cmd, "url")
 	cli.MustMarkRequired(cmd, "key")
@@ -213,7 +218,10 @@ func newDnsSetCmd() *cobra.Command {
 }
 
 func newDnsDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <dns>",
 		Short: "Delete an SDN DNS provider",
@@ -224,7 +232,11 @@ func newDnsDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete SDN DNS provider %q without confirmation: pass --yes", dns)
 			}
-			if err := deps.API.Cluster.DeleteSdnDns(cmd.Context(), dns, &cluster.DeleteSdnDnsParams{}); err != nil {
+			params := &cluster.DeleteSdnDnsParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if err := deps.API.Cluster.DeleteSdnDns(cmd.Context(), dns, params); err != nil {
 				return fmt.Errorf("delete SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
@@ -233,5 +245,6 @@ func newDnsDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }

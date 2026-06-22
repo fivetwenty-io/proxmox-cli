@@ -81,6 +81,7 @@ func newIpamCreateCmd() *cobra.Command {
 		token       string
 		url         string
 		fingerprint string
+		lockToken   string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <ipam> --type <type>",
@@ -105,6 +106,9 @@ func newIpamCreateCmd() *cobra.Command {
 			if fl.Changed("fingerprint") {
 				params.Fingerprint = strPtr(fingerprint)
 			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.CreateSdnIpams(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN IPAM %q: %w", ipam, err)
 			}
@@ -119,6 +123,7 @@ func newIpamCreateCmd() *cobra.Command {
 	f.StringVar(&token, "token", "", "provider API token (netbox/phpipam); never echoed")
 	f.StringVar(&url, "url", "", "provider API URL")
 	f.StringVar(&fingerprint, "fingerprint", "", "certificate SHA-256 fingerprint")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	cli.MustMarkRequired(cmd, "type")
 	return cmd
 }
@@ -202,7 +207,10 @@ func newIpamSetCmd() *cobra.Command {
 }
 
 func newIpamDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <ipam>",
 		Short: "Delete an SDN IPAM backend",
@@ -213,7 +221,11 @@ func newIpamDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete SDN IPAM %q without confirmation: pass --yes", ipam)
 			}
-			if err := deps.API.Cluster.DeleteSdnIpams(cmd.Context(), ipam, &cluster.DeleteSdnIpamsParams{}); err != nil {
+			params := &cluster.DeleteSdnIpamsParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if err := deps.API.Cluster.DeleteSdnIpams(cmd.Context(), ipam, params); err != nil {
 				return fmt.Errorf("delete SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
@@ -222,6 +234,7 @@ func newIpamDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 

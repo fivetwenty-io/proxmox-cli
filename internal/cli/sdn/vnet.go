@@ -239,13 +239,25 @@ func newVnetSetCmd() *cobra.Command {
 
 // newVnetListCmd builds `pve sdn vnet list`.
 func newVnetListCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		pending bool
+		running bool
+	)
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN vnets",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.ListSdnVnets(cmd.Context(), &cluster.ListSdnVnetsParams{})
+			params := &cluster.ListSdnVnetsParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.ListSdnVnets(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("list SDN vnets: %w", err)
 			}
@@ -268,14 +280,22 @@ func newVnetListCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
+	return cmd
 }
 
 // newVnetCreateCmd builds `pve sdn vnet create <vnet> --zone <zone>`.
 func newVnetCreateCmd() *cobra.Command {
 	var (
-		zone  string
-		tag   int64
-		alias string
+		zone         string
+		tag          int64
+		alias        string
+		vlanaware    bool
+		isolatePorts bool
+		vnetType     string
+		lockToken    string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vnet>",
@@ -294,6 +314,18 @@ func newVnetCreateCmd() *cobra.Command {
 			if fl.Changed("alias") {
 				params.Alias = strPtr(alias)
 			}
+			if fl.Changed("vlanaware") {
+				params.Vlanaware = boolPtr(vlanaware)
+			}
+			if fl.Changed("isolate-ports") {
+				params.IsolatePorts = boolPtr(isolatePorts)
+			}
+			if fl.Changed("type") {
+				params.Type = strPtr(vnetType)
+			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 
 			if err := deps.API.Cluster.CreateSdnVnets(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN vnet %q: %w", vnet, err)
@@ -302,16 +334,24 @@ func newVnetCreateCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-	cmd.Flags().StringVar(&zone, "zone", "", "zone the vnet belongs to (required)")
-	cmd.Flags().Int64Var(&tag, "tag", 0, "VLAN tag or VXLAN VNI")
-	cmd.Flags().StringVar(&alias, "alias", "", "vnet alias/description")
+	f := cmd.Flags()
+	f.StringVar(&zone, "zone", "", "zone the vnet belongs to (required)")
+	f.Int64Var(&tag, "tag", 0, "VLAN tag or VXLAN VNI")
+	f.StringVar(&alias, "alias", "", "vnet alias/description")
+	f.BoolVar(&vlanaware, "vlanaware", false, "allow VLANs to pass through this vnet")
+	f.BoolVar(&isolatePorts, "isolate-ports", false, "isolate all interfaces on this vnet's bridge")
+	f.StringVar(&vnetType, "type", "", "type of the vnet")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	cli.MustMarkRequired(cmd, "zone")
 	return cmd
 }
 
 // newVnetDeleteCmd builds `pve sdn vnet delete <vnet>`.
 func newVnetDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <vnet>",
 		Short: "Delete an SDN vnet",
@@ -322,7 +362,11 @@ func newVnetDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete SDN vnet %q without confirmation: pass --yes", vnet)
 			}
-			if err := deps.API.Cluster.DeleteSdnVnets(cmd.Context(), vnet, &cluster.DeleteSdnVnetsParams{}); err != nil {
+			params := &cluster.DeleteSdnVnetsParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			if err := deps.API.Cluster.DeleteSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("delete SDN vnet %q: %w", vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf("SDN vnet %q deleted (run `pve sdn apply` to commit).", vnet)}
@@ -330,5 +374,6 @@ func newVnetDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
