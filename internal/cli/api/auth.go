@@ -30,6 +30,7 @@ func newAuthCmd() *cobra.Command {
 		newAuthLoginCmd(),
 		newAuthLogoutCmd(),
 		newAuthStatusCmd(),
+		newAuthWhoamiCmd(),
 		newAuthRefreshCmd(),
 		newAuthSetTokenCmd(),
 		newAuthSetPasswordCmd(),
@@ -61,10 +62,14 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 // newAuthLoginCmd builds `pve api auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
-		contextName string
-		username    string
-		realm       string
-		password    string
+		contextName  string
+		username     string
+		realm        string
+		password     string
+		otp          string
+		tfaChallenge string
+		verifyPath   string
+		verifyPrivs  string
 	)
 
 	cmd := &cobra.Command{
@@ -91,7 +96,12 @@ func newAuthLoginCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := createTicket(cmd, ctx, user, rlm, pw)
+			resp, err := createTicket(cmd, ctx, user, rlm, pw, ticketOptions{
+				otp:          otp,
+				tfaChallenge: tfaChallenge,
+				verifyPath:   verifyPath,
+				verifyPrivs:  verifyPrivs,
+			})
 			if err != nil {
 				return err
 			}
@@ -113,13 +123,20 @@ func newAuthLoginCmd() *cobra.Command {
 	cmd.Flags().StringVar(&username, "username", "", "PVE username (defaults to context's username)")
 	cmd.Flags().StringVar(&realm, "realm", "", "authentication realm (defaults to context's realm)")
 	cmd.Flags().StringVar(&password, "password", "", "password (defaults to the context's resolved secret)")
+	cmd.Flags().StringVar(&otp, "otp", "", "one-time password for TOTP-based two-factor authentication")
+	cmd.Flags().StringVar(&tfaChallenge, "tfa-challenge", "", "signed challenge response for second-step two-factor authentication")
+	cmd.Flags().StringVar(&verifyPath, "path", "", "ticket-verification mode: ACL path to check privileges on (requires --privs)")
+	cmd.Flags().StringVar(&verifyPrivs, "privs", "", "ticket-verification mode: privileges to verify on --path")
 	return noClient(cmd)
 }
 
 // newAuthRefreshCmd builds `pve api auth refresh`, re-obtaining a session ticket
 // for a password context.
 func newAuthRefreshCmd() *cobra.Command {
-	var contextName string
+	var (
+		contextName  string
+		tfaChallenge string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "refresh",
@@ -148,7 +165,9 @@ func newAuthRefreshCmd() *cobra.Command {
 			}
 			rlm := firstNonEmpty(ctx.Realm, "pam")
 
-			resp, err := createTicket(cmd, ctx, ctx.Auth.Username, rlm, pw)
+			resp, err := createTicket(cmd, ctx, ctx.Auth.Username, rlm, pw, ticketOptions{
+				tfaChallenge: tfaChallenge,
+			})
 			if err != nil {
 				return err
 			}
@@ -167,6 +186,7 @@ func newAuthRefreshCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
+	cmd.Flags().StringVar(&tfaChallenge, "tfa-challenge", "", "signed challenge response for second-step two-factor authentication")
 	return noClient(cmd)
 }
 
@@ -256,6 +276,62 @@ func newAuthStatusCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	return noClient(cmd)
+}
+
+// newAuthWhoamiCmd builds `pve api auth whoami`. Unlike the other auth
+// sub-commands it requires a live API client (built by the root from the
+// resolved context), so it is NOT annotated noClient: it calls
+// GET /access/permissions to confirm the stored credentials authenticate and
+// reports the effective identity plus the accessible ACL paths.
+func newAuthWhoamiCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "whoami",
+		Short: "Show the identity the current credentials authenticate as",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+
+			// The root resolved and built the client for this context name using
+			// the same precedence (--context/-c > $PVE_CONTEXT > current-context).
+			flagContext := ""
+			if f := cmd.Flags().Lookup("context"); f != nil {
+				flagContext = f.Value.String()
+			}
+			name := config.Resolve(flagContext, "PVE_CONTEXT", deps.Cfg.CurrentContext, "")
+			ctx, _, err := config.ResolveContext(deps.Cfg, name)
+			if err != nil {
+				return err
+			}
+
+			perms, err := deps.API.Access.ListPermissions(cmd.Context(), nil)
+			if err != nil {
+				return fmt.Errorf("verify credentials for context %q: %w", name, err)
+			}
+
+			single := map[string]string{
+				"Context":   name,
+				"Auth-type": ctx.Auth.Type,
+				"Identity":  authIdentity(ctx),
+			}
+
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: perms}, deps.Format)
+		},
+	}
+
+	return cmd
+}
+
+// authIdentity returns the display identity for a context: the API token id
+// (user!tokenid) for token auth, otherwise the username.
+func authIdentity(ctx *config.Context) string {
+	if ctx.Auth.Type == "token" && ctx.Auth.TokenID != "" {
+		if ctx.Auth.Username != "" {
+			return ctx.Auth.Username + "!" + ctx.Auth.TokenID
+		}
+		return ctx.Auth.TokenID
+	}
+	return ctx.Auth.Username
 }
 
 // newAuthSetTokenCmd builds `pve api auth set-token`.
@@ -370,12 +446,23 @@ func newAuthSetPasswordCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
+// ticketOptions carries the optional two-factor and ticket-verification inputs
+// for a CreateTicket request. Empty fields are omitted from the API payload.
+type ticketOptions struct {
+	otp          string // one-time password for TOTP-based 2FA
+	tfaChallenge string // signed challenge response for second-step TFA
+	verifyPath   string // ticket-verification: ACL path to check
+	verifyPrivs  string // ticket-verification: privileges to check on verifyPath
+}
+
 // createTicket builds a password-authenticated client for ctx and requests a
-// session ticket using the given user, realm, and password.
+// session ticket using the given user, realm, password, and optional 2FA /
+// ticket-verification inputs.
 func createTicket(
 	cmd *cobra.Command,
 	ctx *config.Context,
 	user, realm, password string,
+	opts ticketOptions,
 ) (*access.CreateTicketResponse, error) {
 	ac, err := clientForContext(ctx, user, realm, password, "", "")
 	if err != nil {
@@ -389,6 +476,18 @@ func createTicket(
 	if realm != "" {
 		r := realm
 		params.Realm = &r
+	}
+	if opts.otp != "" {
+		params.Otp = &opts.otp
+	}
+	if opts.tfaChallenge != "" {
+		params.TfaChallenge = &opts.tfaChallenge
+	}
+	if opts.verifyPath != "" {
+		params.Path = &opts.verifyPath
+	}
+	if opts.verifyPrivs != "" {
+		params.Privs = &opts.verifyPrivs
 	}
 
 	resp, err := ac.Access.CreateTicket(cmd.Context(), params)

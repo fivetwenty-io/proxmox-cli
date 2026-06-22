@@ -210,6 +210,107 @@ func TestAuthLogin_ServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAuthLogin_OTPAndTfaChallenge(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	gotBody := map[string]string{}
+	f.HandleFunc("POST /api2/json/access/ticket", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotBody["otp"] = r.PostFormValue("otp")
+		gotBody["tfa-challenge"] = r.PostFormValue("tfa-challenge")
+		testhelper.WriteData(w, map[string]any{
+			"username":            "admin@pam",
+			"ticket":              "PVE:admin@pam:DEADBEEF",
+			"CSRFPreventionToken": "csrf",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: host, Port: port, Protocol: "http", Realm: "pam",
+				Auth: config.AuthBlock{Type: "password", Username: "admin@pam", Secret: "pw"},
+				TLS:  config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path, "auth", "login", "--context", "lab",
+		"--password", "pw", "--otp", "123456", "--tfa-challenge", "totp:resp")
+	require.NoError(t, err)
+	require.Equal(t, "123456", gotBody["otp"])
+	require.Equal(t, "totp:resp", gotBody["tfa-challenge"])
+}
+
+// ---------------------------------------------------------------------------
+// auth whoami
+// ---------------------------------------------------------------------------
+
+func TestAuthWhoami_Success(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/access/permissions", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"/": map[string]int{"Sys.Audit": 1}})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "prod",
+		Contexts: map[string]*config.Context{
+			"prod": {
+				Host: host, Port: port, Protocol: "http", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "cli", Secret: "s3cr3t"},
+				TLS:  config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "whoami", "--context", "prod")
+	require.NoError(t, err)
+	require.Contains(t, out, "root@pam!cli")
+}
+
+func TestAuthWhoami_AuthFailure(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/access/permissions", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusUnauthorized, "invalid token")
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "prod",
+		Contexts: map[string]*config.Context{
+			"prod": {
+				Host: host, Port: port, Protocol: "http", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "cli", Secret: "bad"},
+				TLS:  config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path, "auth", "whoami", "--context", "prod")
+	require.Error(t, err)
+}
+
 // ---------------------------------------------------------------------------
 // auth logout
 // ---------------------------------------------------------------------------
@@ -477,7 +578,15 @@ func TestGroup_AllSubcommandsNoClient(t *testing.T) {
 	group := api.NewCommand()
 	leaves := leafCommands(group)
 	require.NotEmpty(t, leaves)
+	// whoami is the deliberate exception: it queries GET /access/permissions to
+	// confirm the stored credentials authenticate, so it needs a live client.
+	clientCommands := map[string]bool{"api auth whoami": true}
 	for _, c := range leaves {
+		if clientCommands[c.CommandPath()] {
+			require.NotEqual(t, "true", c.Annotations["noClient"],
+				"command %q must NOT set noClient annotation (needs a live client)", c.CommandPath())
+			continue
+		}
 		require.Equal(t, "true", c.Annotations["noClient"],
 			"command %q must set noClient annotation", c.CommandPath())
 	}
