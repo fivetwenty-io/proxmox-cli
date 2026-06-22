@@ -896,7 +896,8 @@ func TestQemuCreate_CloudInit(t *testing.T) {
 	require.Equal(t, "user=local:snippets/user.yml", form.Get("cicustom"))
 	require.Equal(t, "10.241.0.1", form.Get("nameserver"))
 	require.Equal(t, "pve-cli.local", form.Get("searchdomain"))
-	require.Equal(t, "ssh-ed25519 AAAA test@host", form.Get("sshkeys"))
+	// sshkeys are percent-encoded for PVE (spaces as %20), matching config set.
+	require.Equal(t, "ssh-ed25519%20AAAA%20test%40host", form.Get("sshkeys"))
 	require.Equal(t, "ip=dhcp", form.Get("ipconfig0"))
 }
 

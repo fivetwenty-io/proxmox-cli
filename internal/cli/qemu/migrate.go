@@ -70,13 +70,16 @@ func newMigrateCheckCmd() *cobra.Command {
 // flags explicitly set by the caller are forwarded to the API.
 func newMigrateCmd() *cobra.Command {
 	var (
-		async            bool
-		target           string
-		online           bool
-		withLocalDisks   bool
-		force            bool
-		migrationNetwork string
-		targetstorage    string
+		async              bool
+		target             string
+		online             bool
+		withLocalDisks     bool
+		force              bool
+		migrationNetwork   string
+		migrationType      string
+		withConntrackState bool
+		bwlimit            int64
+		targetstorage      string
 	)
 	cmd := &cobra.Command{
 		Use:   "migrate <vmid|name>",
@@ -114,6 +117,15 @@ func newMigrateCmd() *cobra.Command {
 			if fl.Changed("migration-network") {
 				params.MigrationNetwork = strPtr(migrationNetwork)
 			}
+			if fl.Changed("migration-type") {
+				params.MigrationType = strPtr(migrationType)
+			}
+			if fl.Changed("with-conntrack-state") {
+				params.WithConntrackState = boolPtr(withConntrackState)
+			}
+			if fl.Changed("bwlimit") {
+				params.Bwlimit = int64Ptr(bwlimit)
+			}
 			if fl.Changed("targetstorage") {
 				params.Targetstorage = strPtr(targetstorage)
 			}
@@ -136,6 +148,12 @@ func newMigrateCmd() *cobra.Command {
 		"allow migration of VMs that use local devices (root only)")
 	cmd.Flags().StringVar(&migrationNetwork, "migration-network", "",
 		"CIDR of the sub-network to use for migration traffic")
+	cmd.Flags().StringVar(&migrationType, "migration-type", "",
+		"migration traffic protection: secure (default) or insecure")
+	cmd.Flags().BoolVar(&withConntrackState, "with-conntrack-state", false,
+		"migrate conntrack state for running VMs with a configured firewall")
+	cmd.Flags().Int64Var(&bwlimit, "bwlimit", 0,
+		"override I/O bandwidth limit in KiB/s for migrated disks")
 	cmd.Flags().StringVar(&targetstorage, "targetstorage", "",
 		"target storage mapping; a single storage ID maps all source storages, "+
 			"or '1' maps each source storage to itself")

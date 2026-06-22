@@ -39,6 +39,7 @@ func newDiskResizeCmd() *cobra.Command {
 		disk     string
 		size     string
 		skiplock bool
+		digest   string
 	)
 	cmd := &cobra.Command{
 		Use:   "resize <vmid|name>",
@@ -66,6 +67,9 @@ func newDiskResizeCmd() *cobra.Command {
 			if cmd.Flags().Changed("skiplock") {
 				params.Skiplock = boolPtr(skiplock)
 			}
+			if cmd.Flags().Changed("digest") {
+				params.Digest = strPtr(digest)
+			}
 
 			resp, err := deps.API.Nodes.UpdateQemuResize(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -84,6 +88,7 @@ func newDiskResizeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&disk, "disk", "", "disk to resize, for example scsi0 or virtio0 (required)")
 	cmd.Flags().StringVar(&size, "size", "", "new size: absolute (32G) or relative increment (+10G) (required)")
 	cmd.Flags().BoolVar(&skiplock, "skiplock", false, "ignore VM locks (root only)")
+	cmd.Flags().StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
 	return cmd
 }
 
@@ -94,14 +99,16 @@ func newDiskResizeCmd() *cobra.Command {
 // as an unused disk; pass --delete to remove it after a successful copy.
 func newDiskMoveCmd() *cobra.Command {
 	var (
-		async      bool
-		disk       string
-		storage    string
-		targetDisk string
-		targetVMID int64
-		format     string
-		bwlimit    int64
-		del        bool
+		async        bool
+		disk         string
+		storage      string
+		targetDisk   string
+		targetVMID   int64
+		format       string
+		bwlimit      int64
+		del          bool
+		digest       string
+		targetDigest string
 	)
 	cmd := &cobra.Command{
 		Use:   "move <vmid|name>",
@@ -145,6 +152,12 @@ func newDiskMoveCmd() *cobra.Command {
 			if fl.Changed("delete") {
 				params.Delete = boolPtr(del)
 			}
+			if fl.Changed("digest") {
+				params.Digest = strPtr(digest)
+			}
+			if fl.Changed("target-digest") {
+				params.TargetDigest = strPtr(targetDigest)
+			}
 
 			resp, err := deps.API.Nodes.CreateQemuMoveDisk(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -163,6 +176,8 @@ func newDiskMoveCmd() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "", "target disk format, for example raw or qcow2")
 	cmd.Flags().Int64Var(&bwlimit, "bwlimit", 0, "I/O bandwidth limit in KiB/s")
 	cmd.Flags().BoolVar(&del, "delete", false, "remove the source disk after a successful copy")
+	cmd.Flags().StringVar(&digest, "digest", "", "only apply if the source config matches this SHA1 digest")
+	cmd.Flags().StringVar(&targetDigest, "target-digest", "", "only apply if the target config matches this SHA1 digest")
 	return cmd
 }
 

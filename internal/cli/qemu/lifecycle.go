@@ -52,6 +52,9 @@ func newStartCmd() *cobra.Command {
 		timeout      int64
 		migratedfrom string
 		stateuri     string
+		forceCPU     string
+		machine      string
+		skiplock     bool
 	)
 	cmd := newLifecycleCmd("start", "Start a VM", "VM %s started.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
@@ -65,6 +68,15 @@ func newStartCmd() *cobra.Command {
 			if cmd.Flags().Changed("stateuri") {
 				params.Stateuri = strPtr(stateuri)
 			}
+			if cmd.Flags().Changed("force-cpu") {
+				params.ForceCpu = strPtr(forceCPU)
+			}
+			if cmd.Flags().Changed("machine") {
+				params.Machine = strPtr(machine)
+			}
+			if cmd.Flags().Changed("skiplock") {
+				params.Skiplock = boolPtr(skiplock)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStart(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("start VM %s on node %q: %w", vmid, node, err)
@@ -75,6 +87,9 @@ func newStartCmd() *cobra.Command {
 			c.Flags().Int64Var(&timeout, "timeout", 300, "wait maximal timeout seconds")
 			c.Flags().StringVar(&migratedfrom, "migratedfrom", "", "source cluster node name")
 			c.Flags().StringVar(&stateuri, "stateuri", "", "saved-state URI to restore from")
+			c.Flags().StringVar(&forceCPU, "force-cpu", "", "override the QEMU '-cpu' argument (live migration only)")
+			c.Flags().StringVar(&machine, "machine", "", "specify the QEMU machine type for this start")
+			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
 		})
 	return cmd
 }
@@ -82,9 +97,10 @@ func newStartCmd() *cobra.Command {
 // newStopCmd builds `pve qemu stop <vmid>`.
 func newStopCmd() *cobra.Command {
 	var (
-		timeout    int64
-		skiplock   bool
-		keepActive bool
+		timeout          int64
+		skiplock         bool
+		keepActive       bool
+		overruleShutdown bool
 	)
 	cmd := newLifecycleCmd("stop", "Stop a VM (hard power off)", "VM %s stopped.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
@@ -98,6 +114,9 @@ func newStopCmd() *cobra.Command {
 			if cmd.Flags().Changed("keepActive") {
 				params.KeepActive = boolPtr(keepActive)
 			}
+			if cmd.Flags().Changed("overrule-shutdown") {
+				params.OverruleShutdown = boolPtr(overruleShutdown)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStop(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("stop VM %s on node %q: %w", vmid, node, err)
@@ -108,6 +127,8 @@ func newStopCmd() *cobra.Command {
 			c.Flags().Int64Var(&timeout, "timeout", 300, "wait maximal timeout seconds")
 			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
 			c.Flags().BoolVar(&keepActive, "keepActive", false, "do not deactivate storage volumes")
+			c.Flags().BoolVar(&overruleShutdown, "overrule-shutdown", false,
+				"abort a pending graceful shutdown task before stopping")
 		})
 	return cmd
 }
@@ -139,6 +160,7 @@ func newShutdownCmd() *cobra.Command {
 		timeout    int64
 		forceStop  bool
 		keepActive bool
+		skiplock   bool
 	)
 	cmd := newLifecycleCmd("shutdown", "Shut down a VM (graceful)", "VM %s shut down.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
@@ -152,6 +174,9 @@ func newShutdownCmd() *cobra.Command {
 			if cmd.Flags().Changed("keepActive") {
 				params.KeepActive = boolPtr(keepActive)
 			}
+			if cmd.Flags().Changed("skiplock") {
+				params.Skiplock = boolPtr(skiplock)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusShutdown(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("shut down VM %s on node %q: %w", vmid, node, err)
@@ -162,6 +187,7 @@ func newShutdownCmd() *cobra.Command {
 			c.Flags().Int64Var(&timeout, "timeout", 300, "wait maximal timeout seconds")
 			c.Flags().BoolVar(&forceStop, "force-stop", false, "make sure the VM stops")
 			c.Flags().BoolVar(&keepActive, "keepActive", false, "do not deactivate storage volumes")
+			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
 		})
 	return cmd
 }
@@ -190,8 +216,9 @@ func newResetCmd() *cobra.Command {
 // newSuspendCmd builds `pve qemu suspend <vmid>`.
 func newSuspendCmd() *cobra.Command {
 	var (
-		skiplock bool
-		todisk   bool
+		skiplock     bool
+		todisk       bool
+		statestorage string
 	)
 	cmd := newLifecycleCmd("suspend", "Suspend a VM", "VM %s suspended.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
@@ -202,6 +229,9 @@ func newSuspendCmd() *cobra.Command {
 			if cmd.Flags().Changed("todisk") {
 				params.Todisk = boolPtr(todisk)
 			}
+			if cmd.Flags().Changed("statestorage") {
+				params.Statestorage = strPtr(statestorage)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusSuspend(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("suspend VM %s on node %q: %w", vmid, node, err)
@@ -211,6 +241,8 @@ func newSuspendCmd() *cobra.Command {
 		func(c *cobra.Command) {
 			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
 			c.Flags().BoolVar(&todisk, "todisk", false, "suspend to disk")
+			c.Flags().StringVar(&statestorage, "statestorage", "",
+				"target storage for the VM state (requires --todisk)")
 		})
 	return cmd
 }

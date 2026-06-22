@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -93,6 +96,36 @@ func finishAsync(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, msg st
 		return err
 	}
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+}
+
+// parseIndexedSlots converts repeated "INDEX=VALUE" flag values into the
+// map[int]string shape the apiclient-go expands into indexed keys such as
+// scsi0, net1, and hostpci0. It rejects malformed entries and duplicate indices
+// so a typo never silently overwrites another slot.
+func parseIndexedSlots(vals []string, flagName string) (map[int]string, error) {
+	out := make(map[int]string, len(vals))
+	for _, v := range vals {
+		idxStr, val, ok := strings.Cut(v, "=")
+		if !ok {
+			return nil, fmt.Errorf("invalid --%s %q: want INDEX=VALUE", flagName, v)
+		}
+		idx, err := strconv.Atoi(strings.TrimSpace(idxStr))
+		if err != nil || idx < 0 {
+			return nil, fmt.Errorf("invalid --%s %q: index must be a non-negative integer", flagName, v)
+		}
+		if _, dup := out[idx]; dup {
+			return nil, fmt.Errorf("invalid --%s: index %d specified more than once", flagName, idx)
+		}
+		out[idx] = val
+	}
+	return out, nil
+}
+
+// encodeSSHKeys percent-encodes cloud-init SSH keys for the PVE API. PVE
+// uri_unescapes the value but does NOT treat '+' as a space, so spaces are
+// encoded as %20 rather than '+'.
+func encodeSSHKeys(keys string) string {
+	return strings.ReplaceAll(url.QueryEscape(keys), "+", "%20")
 }
 
 // boolPtr returns a pointer to v.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -128,17 +127,57 @@ func newConfigSetCmd() *cobra.Command {
 		ostype      string
 		deleteKeys  string
 		revertKeys  string
-		net0        string
-		net1        string
-		scsi0       string
-		scsi1       string
-		ide0        string
-		ide2        string
-		virtio0     string
-		virtio1     string
+		digest      string
 		agent       string
 		onboot      bool
 		startup     string
+
+		sockets        int64
+		vcpus          int64
+		cpulimit       float64
+		cpuunits       int64
+		affinity       string
+		shares         int64
+		numa           bool
+		hugepages      string
+		keephugepages  bool
+		allowKsm       bool
+		smbios1        string
+		machine        string
+		arch           string
+		bios           string
+		efidisk0       string
+		tpmstate0      string
+		vga            string
+		tags           string
+		acpi           bool
+		kvm            bool
+		freeze         bool
+		localtime      bool
+		tablet         bool
+		tdf            bool
+		reboot         bool
+		protection     bool
+		template       bool
+		force          bool
+		skiplock       bool
+		hotplug        string
+		hookscript     string
+		watchdog       string
+		rng0           string
+		audio0         string
+		keyboard       string
+		spiceEnhance   string
+		amdSev         string
+		intelTdx       string
+		ivshmem        string
+		kvmArgs        string
+		lock           string
+		vmgenid        string
+		startdate      string
+		vmstatestorage string
+		migrateDownt   float64
+		migrateSpeed   int64
 
 		ciuser       string
 		cipassword   string
@@ -148,8 +187,32 @@ func newConfigSetCmd() *cobra.Command {
 		nameserver   string
 		searchdomain string
 		sshkeys      string
-		ipconfig0    string
-		ipconfig1    string
+
+		// Indexed device slots (repeatable INDEX=VALUE).
+		netSlots      []string
+		scsiSlots     []string
+		ideSlots      []string
+		virtioSlots   []string
+		sataSlots     []string
+		ipconfigSlots []string
+		hostpciSlots  []string
+		serialSlots   []string
+		usbSlots      []string
+		parallelSlots []string
+		numaNodeSlots []string
+		virtiofsSlots []string
+
+		// Legacy single-slot scalars retained for backward compatibility.
+		net0      string
+		net1      string
+		scsi0     string
+		scsi1     string
+		ide0      string
+		ide2      string
+		virtio0   string
+		virtio1   string
+		ipconfig0 string
+		ipconfig1 string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
@@ -163,9 +226,10 @@ func newConfigSetCmd() *cobra.Command {
 			}
 
 			params := &nodes.UpdateQemuConfigParams{}
+			fl := cmd.Flags()
 			changed := false
 			set := func(name string, apply func()) {
-				if cmd.Flags().Changed(name) {
+				if fl.Changed(name) {
 					apply()
 					changed = true
 				}
@@ -187,6 +251,54 @@ func newConfigSetCmd() *cobra.Command {
 			set("startup", func() { params.Startup = strPtr(startup) })
 			set("delete", func() { params.Delete = strPtr(deleteKeys) })
 			set("revert", func() { params.Revert = strPtr(revertKeys) })
+			set("digest", func() { params.Digest = strPtr(digest) })
+
+			set("sockets", func() { params.Sockets = int64Ptr(sockets) })
+			set("vcpus", func() { params.Vcpus = int64Ptr(vcpus) })
+			set("cpulimit", func() { params.Cpulimit = &cpulimit })
+			set("cpuunits", func() { params.Cpuunits = int64Ptr(cpuunits) })
+			set("affinity", func() { params.Affinity = strPtr(affinity) })
+			set("shares", func() { params.Shares = int64Ptr(shares) })
+			set("numa", func() { params.Numa = boolPtr(numa) })
+			set("hugepages", func() { params.Hugepages = strPtr(hugepages) })
+			set("keephugepages", func() { params.Keephugepages = boolPtr(keephugepages) })
+			set("allow-ksm", func() { params.AllowKsm = boolPtr(allowKsm) })
+			set("smbios1", func() { params.Smbios1 = strPtr(smbios1) })
+			set("machine", func() { params.Machine = strPtr(machine) })
+			set("arch", func() { params.Arch = strPtr(arch) })
+			set("bios", func() { params.Bios = strPtr(bios) })
+			set("efidisk0", func() { params.Efidisk0 = strPtr(efidisk0) })
+			set("tpmstate0", func() { params.Tpmstate0 = strPtr(tpmstate0) })
+			set("vga", func() { params.Vga = strPtr(vga) })
+			set("tags", func() { params.Tags = strPtr(tags) })
+			set("acpi", func() { params.Acpi = boolPtr(acpi) })
+			set("kvm", func() { params.Kvm = boolPtr(kvm) })
+			set("freeze", func() { params.Freeze = boolPtr(freeze) })
+			set("localtime", func() { params.Localtime = boolPtr(localtime) })
+			set("tablet", func() { params.Tablet = boolPtr(tablet) })
+			set("tdf", func() { params.Tdf = boolPtr(tdf) })
+			set("reboot", func() { params.Reboot = boolPtr(reboot) })
+			set("protection", func() { params.Protection = boolPtr(protection) })
+			set("template", func() { params.Template = boolPtr(template) })
+			set("force", func() { params.Force = boolPtr(force) })
+			set("skiplock", func() { params.Skiplock = boolPtr(skiplock) })
+			set("hotplug", func() { params.Hotplug = strPtr(hotplug) })
+			set("hookscript", func() { params.Hookscript = strPtr(hookscript) })
+			set("watchdog", func() { params.Watchdog = strPtr(watchdog) })
+			set("rng0", func() { params.Rng0 = strPtr(rng0) })
+			set("audio0", func() { params.Audio0 = strPtr(audio0) })
+			set("keyboard", func() { params.Keyboard = strPtr(keyboard) })
+			set("spice-enhancements", func() { params.SpiceEnhancements = strPtr(spiceEnhance) })
+			set("amd-sev", func() { params.AmdSev = strPtr(amdSev) })
+			set("intel-tdx", func() { params.IntelTdx = strPtr(intelTdx) })
+			set("ivshmem", func() { params.Ivshmem = strPtr(ivshmem) })
+			set("args", func() { params.Args = strPtr(kvmArgs) })
+			set("lock", func() { params.Lock = strPtr(lock) })
+			set("vmgenid", func() { params.Vmgenid = strPtr(vmgenid) })
+			set("startdate", func() { params.Startdate = strPtr(startdate) })
+			set("vmstatestorage", func() { params.Vmstatestorage = strPtr(vmstatestorage) })
+			set("migrate-downtime", func() { params.MigrateDowntime = &migrateDownt })
+			set("migrate-speed", func() { params.MigrateSpeed = int64Ptr(migrateSpeed) })
 
 			// Cloud-init scalars (mirror `qemu create`).
 			set("ciuser", func() { params.Ciuser = strPtr(ciuser) })
@@ -196,44 +308,38 @@ func newConfigSetCmd() *cobra.Command {
 			set("cicustom", func() { params.Cicustom = strPtr(cicustom) })
 			set("nameserver", func() { params.Nameserver = strPtr(nameserver) })
 			set("searchdomain", func() { params.Searchdomain = strPtr(searchdomain) })
-			// PVE requires the sshkeys value percent-encoded; it uri_unescapes
-			// %XX but does NOT treat '+' as space, so encode space as %20.
-			set("sshkeys", func() {
-				params.Sshkeys = strPtr(strings.ReplaceAll(url.QueryEscape(sshkeys), "+", "%20"))
-			})
+			set("sshkeys", func() { params.Sshkeys = strPtr(encodeSSHKeys(sshkeys)) })
 
-			// Indexed device + ipconfig maps. Accumulate each changed slot so
-			// multiple indices (e.g. net0 + net1) coexist in a single request;
-			// the apiclient marshals map[int]string into net0, net1, … keys.
-			net := map[int]string{}
-			set("net0", func() { net[0] = net0 })
-			set("net1", func() { net[1] = net1 })
-			if len(net) > 0 {
-				params.Net = net
-			}
-			scsi := map[int]string{}
-			set("scsi0", func() { scsi[0] = scsi0 })
-			set("scsi1", func() { scsi[1] = scsi1 })
-			if len(scsi) > 0 {
-				params.Scsi = scsi
-			}
-			ide := map[int]string{}
-			set("ide0", func() { ide[0] = ide0 })
-			set("ide2", func() { ide[2] = ide2 })
-			if len(ide) > 0 {
-				params.Ide = ide
-			}
-			virtio := map[int]string{}
-			set("virtio0", func() { virtio[0] = virtio0 })
-			set("virtio1", func() { virtio[1] = virtio1 })
-			if len(virtio) > 0 {
-				params.Virtio = virtio
-			}
-			ipconfig := map[int]string{}
-			set("ipconfig0", func() { ipconfig[0] = ipconfig0 })
-			set("ipconfig1", func() { ipconfig[1] = ipconfig1 })
-			if len(ipconfig) > 0 {
-				params.Ipconfig = ipconfig
+			// Indexed device + ipconfig maps. Repeatable INDEX=VALUE slots merge
+			// with the legacy single-slot scalars; the apiclient marshals each
+			// map[int]string into net0, net1, … keys.
+			for _, s := range []struct {
+				vals   []string
+				family string
+				dst    *map[int]string
+				legacy []legacySlot
+			}{
+				{netSlots, "net", &params.Net, []legacySlot{{"net0", net0, 0}, {"net1", net1, 1}}},
+				{scsiSlots, "scsi", &params.Scsi, []legacySlot{{"scsi0", scsi0, 0}, {"scsi1", scsi1, 1}}},
+				{ideSlots, "ide", &params.Ide, []legacySlot{{"ide0", ide0, 0}, {"ide2", ide2, 2}}},
+				{virtioSlots, "virtio", &params.Virtio, []legacySlot{{"virtio0", virtio0, 0}, {"virtio1", virtio1, 1}}},
+				{sataSlots, "sata", &params.Sata, nil},
+				{ipconfigSlots, "ipconfig", &params.Ipconfig, []legacySlot{{"ipconfig0", ipconfig0, 0}, {"ipconfig1", ipconfig1, 1}}},
+				{hostpciSlots, "hostpci", &params.Hostpci, nil},
+				{serialSlots, "serial", &params.Serial, nil},
+				{usbSlots, "usb", &params.Usb, nil},
+				{parallelSlots, "parallel", &params.Parallel, nil},
+				{numaNodeSlots, "numa-node", &params.NumaMap, nil},
+				{virtiofsSlots, "virtiofs", &params.Virtiofs, nil},
+			} {
+				m, merr := mergeLegacySlots(s.vals, s.family, fl, s.legacy...)
+				if merr != nil {
+					return merr
+				}
+				if len(m) > 0 {
+					*s.dst = m
+					changed = true
+				}
 			}
 
 			if !changed {
@@ -249,38 +355,102 @@ func newConfigSetCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().Int64Var(&cores, "cores", 0, "number of CPU cores")
-	cmd.Flags().StringVar(&memory, "memory", "", "memory in MiB")
-	cmd.Flags().Int64Var(&balloon, "balloon", 0, "target balloon memory in MiB (0 disables ballooning)")
-	cmd.Flags().StringVar(&name, "name", "", "VM name")
-	cmd.Flags().StringVar(&description, "description", "", "VM description")
-	cmd.Flags().StringVar(&boot, "boot", "", "boot order specification")
-	cmd.Flags().StringVar(&scsihw, "scsihw", "", "SCSI controller model")
-	cmd.Flags().StringVar(&cpu, "cpu", "", "CPU type")
-	cmd.Flags().StringVar(&ostype, "ostype", "", "guest OS type")
-	cmd.Flags().StringVar(&agent, "agent", "", "QEMU guest-agent option string, e.g. 1 or enabled=1,fstrim_cloned_disks=1")
-	cmd.Flags().BoolVar(&onboot, "onboot", false, "start the VM automatically on host boot")
-	cmd.Flags().StringVar(&startup, "startup", "", "startup/shutdown behavior, e.g. order=1,up=30,down=60")
-	cmd.Flags().StringVar(&deleteKeys, "delete", "", "comma-separated config keys to remove")
-	cmd.Flags().StringVar(&revertKeys, "revert", "", "comma-separated pending config keys to revert")
-	cmd.Flags().StringVar(&net0, "net0", "", "network device net0 specification")
-	cmd.Flags().StringVar(&net1, "net1", "", "network device net1 specification")
-	cmd.Flags().StringVar(&scsi0, "scsi0", "", "SCSI disk scsi0 specification")
-	cmd.Flags().StringVar(&scsi1, "scsi1", "", "SCSI disk scsi1 specification")
-	cmd.Flags().StringVar(&ide0, "ide0", "", "IDE disk ide0 specification")
-	cmd.Flags().StringVar(&ide2, "ide2", "", "IDE device ide2, e.g. <storage>:cloudinit for the cloud-init drive")
-	cmd.Flags().StringVar(&virtio0, "virtio0", "", "VirtIO disk virtio0 specification")
-	cmd.Flags().StringVar(&virtio1, "virtio1", "", "VirtIO disk virtio1 specification, e.g. <storage>:32 to allocate a data disk")
-	cmd.Flags().StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
-	cmd.Flags().StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")
-	cmd.Flags().StringVar(&citype, "citype", "", "cloud-init: config format, e.g. nocloud or configdrive2")
-	cmd.Flags().BoolVar(&ciupgrade, "ciupgrade", false, "cloud-init: run a package upgrade on first boot")
-	cmd.Flags().StringVar(&cicustom, "cicustom", "", "cloud-init: custom config files, e.g. user=local:snippets/user.yml")
-	cmd.Flags().StringVar(&nameserver, "nameserver", "", "cloud-init: DNS server IP address")
-	cmd.Flags().StringVar(&searchdomain, "searchdomain", "", "cloud-init: DNS search domain")
-	cmd.Flags().StringVar(&sshkeys, "sshkeys", "", "cloud-init: public SSH keys (one per line, OpenSSH format)")
-	cmd.Flags().StringVar(&ipconfig0, "ipconfig0", "", "cloud-init: IP config for net0, e.g. ip=dhcp or ip=10.0.0.5/24,gw=10.0.0.1")
-	cmd.Flags().StringVar(&ipconfig1, "ipconfig1", "", "cloud-init: IP config for net1, e.g. ip=10.43.0.5/24")
+	f := cmd.Flags()
+	f.Int64Var(&cores, "cores", 0, "number of CPU cores per socket")
+	f.StringVar(&memory, "memory", "", "memory in MiB")
+	f.Int64Var(&balloon, "balloon", 0, "target balloon memory in MiB (0 disables ballooning)")
+	f.StringVar(&name, "name", "", "VM name")
+	f.StringVar(&description, "description", "", "VM description")
+	f.StringVar(&boot, "boot", "", "boot order specification")
+	f.StringVar(&scsihw, "scsihw", "", "SCSI controller model")
+	f.StringVar(&cpu, "cpu", "", "emulated CPU type")
+	f.StringVar(&ostype, "ostype", "", "guest OS type")
+	f.StringVar(&agent, "agent", "", "QEMU guest-agent option string, e.g. 1 or enabled=1,fstrim_cloned_disks=1")
+	f.BoolVar(&onboot, "onboot", false, "start the VM automatically on host boot")
+	f.StringVar(&startup, "startup", "", "startup/shutdown behavior, e.g. order=1,up=30,down=60")
+	f.StringVar(&deleteKeys, "delete", "", "comma-separated config keys to remove")
+	f.StringVar(&revertKeys, "revert", "", "comma-separated pending config keys to revert")
+	f.StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
+
+	f.Int64Var(&sockets, "sockets", 0, "number of CPU sockets")
+	f.Int64Var(&vcpus, "vcpus", 0, "number of hotplugged vCPUs")
+	f.Float64Var(&cpulimit, "cpulimit", 0, "CPU usage limit (0 = unlimited)")
+	f.Int64Var(&cpuunits, "cpuunits", 0, "CPU weight, clamped to [1,10000]")
+	f.StringVar(&affinity, "affinity", "", "host cores used to run guest processes, e.g. 0,5,8-11")
+	f.Int64Var(&shares, "shares", 0, "memory shares for auto-ballooning (0 disables)")
+	f.BoolVar(&numa, "numa", false, "enable NUMA")
+	f.StringVar(&hugepages, "hugepages", "", "hugepage size in MiB, e.g. 2, 1024, or any")
+	f.BoolVar(&keephugepages, "keephugepages", false, "keep hugepages after VM shutdown")
+	f.BoolVar(&allowKsm, "allow-ksm", false, "allow this guest's pages to be merged via KSM")
+	f.StringVar(&smbios1, "smbios1", "", "SMBIOS type 1 fields, e.g. uuid=...,manufacturer=...")
+	f.StringVar(&machine, "machine", "", "QEMU machine type, e.g. q35 or pc-i440fx-8.1")
+	f.StringVar(&arch, "arch", "", "virtual processor architecture, e.g. x86_64 or aarch64")
+	f.StringVar(&bios, "bios", "", "BIOS implementation: seabios or ovmf (UEFI)")
+	f.StringVar(&efidisk0, "efidisk0", "", "EFI vars disk, e.g. local-lvm:0 or local-lvm:0,efitype=4m")
+	f.StringVar(&tpmstate0, "tpmstate0", "", "TPM state disk, e.g. local-lvm:0,version=v2.0")
+	f.StringVar(&vga, "vga", "", "VGA hardware, e.g. std, qxl, virtio, or serial0")
+	f.StringVar(&tags, "tags", "", "comma- or semicolon-separated tags")
+	f.BoolVar(&acpi, "acpi", false, "enable ACPI")
+	f.BoolVar(&kvm, "kvm", false, "enable KVM hardware virtualization")
+	f.BoolVar(&freeze, "freeze", false, "freeze CPU at startup")
+	f.BoolVar(&localtime, "localtime", false, "set the RTC to local time (default for Windows)")
+	f.BoolVar(&tablet, "tablet", false, "enable the USB tablet pointer device")
+	f.BoolVar(&tdf, "tdf", false, "enable time drift fix")
+	f.BoolVar(&reboot, "reboot", false, "allow reboot (if false the VM exits on reboot)")
+	f.BoolVar(&protection, "protection", false, "set the protection flag to block remove/update")
+	f.BoolVar(&template, "template", false, "mark the VM as a template")
+	f.BoolVar(&force, "force", false, "force physical removal of unlinked disks (with --delete)")
+	f.BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
+	f.StringVar(&hotplug, "hotplug", "", "hotplug features, e.g. network,disk,usb or 0 to disable")
+	f.StringVar(&hookscript, "hookscript", "", "hookscript volume run during lifecycle events")
+	f.StringVar(&watchdog, "watchdog", "", "virtual watchdog device, e.g. model=i6300esb,action=reset")
+	f.StringVar(&rng0, "rng0", "", "VirtIO RNG, e.g. source=/dev/urandom")
+	f.StringVar(&audio0, "audio0", "", "audio device, e.g. device=ich9-intel-hda,driver=spice")
+	f.StringVar(&keyboard, "keyboard", "", "VNC keyboard layout, e.g. en-us or de")
+	f.StringVar(&spiceEnhance, "spice-enhancements", "", "SPICE enhancements, e.g. foldersharing=1,videostreaming=all")
+	f.StringVar(&amdSev, "amd-sev", "", "AMD SEV options, e.g. type=std")
+	f.StringVar(&intelTdx, "intel-tdx", "", "Intel TDX options, e.g. 1")
+	f.StringVar(&ivshmem, "ivshmem", "", "inter-VM shared memory, e.g. size=32,name=foo")
+	f.StringVar(&kvmArgs, "args", "", "arbitrary arguments passed to kvm")
+	f.StringVar(&lock, "lock", "", "lock the VM, e.g. backup, migrate, or suspended")
+	f.StringVar(&vmgenid, "vmgenid", "", "VM generation ID; 1 to autogenerate, 0 to disable")
+	f.StringVar(&startdate, "startdate", "", "initial RTC date, e.g. now or 2006-06-17T16:01:21")
+	f.StringVar(&vmstatestorage, "vmstatestorage", "", "default storage for VM state volumes")
+	f.Float64Var(&migrateDownt, "migrate-downtime", 0, "maximum tolerated migration downtime in seconds")
+	f.Int64Var(&migrateSpeed, "migrate-speed", 0, "maximum migration speed in MB/s (0 = no limit)")
+
+	f.StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
+	f.StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")
+	f.StringVar(&citype, "citype", "", "cloud-init: config format, e.g. nocloud or configdrive2")
+	f.BoolVar(&ciupgrade, "ciupgrade", false, "cloud-init: run a package upgrade on first boot")
+	f.StringVar(&cicustom, "cicustom", "", "cloud-init: custom config files, e.g. user=local:snippets/user.yml")
+	f.StringVar(&nameserver, "nameserver", "", "cloud-init: DNS server IP address")
+	f.StringVar(&searchdomain, "searchdomain", "", "cloud-init: DNS search domain")
+	f.StringVar(&sshkeys, "sshkeys", "", "cloud-init: public SSH keys (one per line, OpenSSH format)")
+
+	f.StringArrayVar(&netSlots, "net", nil, "network device as INDEX=VALUE (repeatable), e.g. 0=virtio,bridge=vmbr0")
+	f.StringArrayVar(&scsiSlots, "scsi", nil, "SCSI disk as INDEX=VALUE (repeatable), e.g. 0=local-lvm:8")
+	f.StringArrayVar(&ideSlots, "ide", nil, "IDE device as INDEX=VALUE (repeatable), e.g. 2=local:iso/img.iso,media=cdrom")
+	f.StringArrayVar(&virtioSlots, "virtio", nil, "VirtIO disk as INDEX=VALUE (repeatable), e.g. 0=local-lvm:32")
+	f.StringArrayVar(&sataSlots, "sata", nil, "SATA disk as INDEX=VALUE (repeatable), e.g. 0=local-lvm:16")
+	f.StringArrayVar(&ipconfigSlots, "ipconfig", nil, "cloud-init IP config as INDEX=VALUE (repeatable), e.g. 0=ip=dhcp")
+	f.StringArrayVar(&hostpciSlots, "hostpci", nil, "PCI passthrough as INDEX=VALUE (repeatable), e.g. 0=0000:01:00,pcie=1")
+	f.StringArrayVar(&serialSlots, "serial", nil, "serial device as INDEX=VALUE (repeatable), e.g. 0=socket")
+	f.StringArrayVar(&usbSlots, "usb", nil, "USB device as INDEX=VALUE (repeatable), e.g. 0=host=1234:5678")
+	f.StringArrayVar(&parallelSlots, "parallel", nil, "parallel device as INDEX=VALUE (repeatable), e.g. 0=/dev/parport0")
+	f.StringArrayVar(&numaNodeSlots, "numa-node", nil, "NUMA topology node as INDEX=VALUE (repeatable), e.g. 0=cpus=0-3,memory=1024")
+	f.StringArrayVar(&virtiofsSlots, "virtiofs", nil, "virtio-fs share as INDEX=VALUE (repeatable), e.g. 0=dirid=shared")
+
+	f.StringVar(&net0, "net0", "", "network device net0 (alias for --net 0=...)")
+	f.StringVar(&net1, "net1", "", "network device net1 (alias for --net 1=...)")
+	f.StringVar(&scsi0, "scsi0", "", "SCSI disk scsi0 (alias for --scsi 0=...)")
+	f.StringVar(&scsi1, "scsi1", "", "SCSI disk scsi1 (alias for --scsi 1=...)")
+	f.StringVar(&ide0, "ide0", "", "IDE disk ide0 (alias for --ide 0=...)")
+	f.StringVar(&ide2, "ide2", "", "IDE device ide2, e.g. <storage>:cloudinit for the cloud-init drive (alias for --ide 2=...)")
+	f.StringVar(&virtio0, "virtio0", "", "VirtIO disk virtio0 (alias for --virtio 0=...)")
+	f.StringVar(&virtio1, "virtio1", "", "VirtIO disk virtio1 (alias for --virtio 1=...)")
+	f.StringVar(&ipconfig0, "ipconfig0", "", "cloud-init IP config for net0 (alias for --ipconfig 0=...)")
+	f.StringVar(&ipconfig1, "ipconfig1", "", "cloud-init IP config for net1 (alias for --ipconfig 1=...)")
 	return cmd
 }
 

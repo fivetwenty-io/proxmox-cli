@@ -26,6 +26,8 @@ func newCloneCmd() *cobra.Command {
 		full        bool
 		pool        string
 		storage     string
+		format      string
+		bwlimit     int64
 		description string
 		snapname    string
 	)
@@ -67,6 +69,12 @@ func newCloneCmd() *cobra.Command {
 			if fl.Changed("storage") {
 				params.Storage = strPtr(storage)
 			}
+			if fl.Changed("format") {
+				params.Format = strPtr(format)
+			}
+			if fl.Changed("bwlimit") {
+				params.Bwlimit = int64Ptr(bwlimit)
+			}
 			if fl.Changed("description") {
 				params.Description = strPtr(description)
 			}
@@ -90,6 +98,8 @@ func newCloneCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&full, "full", false, "create a full copy of all disks (always true for non-template VMs)")
 	cmd.Flags().StringVar(&pool, "pool", "", "resource pool to place the new VM in")
 	cmd.Flags().StringVar(&storage, "storage", "", "target storage for the cloned disks (full clone only)")
+	cmd.Flags().StringVar(&format, "format", "", "target disk format, e.g. raw, qcow2, or vmdk (full clone only)")
+	cmd.Flags().Int64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s")
 	cmd.Flags().StringVar(&description, "description", "", "description for the new VM")
 	cmd.Flags().StringVar(&snapname, "snapname", "", "snapshot to clone from")
 	return cmd
