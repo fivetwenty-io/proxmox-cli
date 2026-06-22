@@ -121,10 +121,9 @@ func TestQemuMetrics_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "metrics for VM 100")
 }
 
-// TestQemuMetrics_RequiresNode consolidates shape-3 (node-required) cases for
-// the metrics command. Each case runs with an empty node and expects "no node"
-// in the error; no HTTP handler is registered.
-func TestQemuMetrics_RequiresNode(t *testing.T) {
+// TestQemuMetrics_UnknownGuestErrors verifies the metrics command returns a
+// not-found error when the cluster resources endpoint returns no matching guest.
+func TestQemuMetrics_UnknownGuestErrors(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
@@ -136,13 +135,16 @@ func TestQemuMetrics_RequiresNode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, ac := newFakeClient(t)
+			f, ac := newFakeClient(t)
+			f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+				testhelper.WriteData(w, []any{})
+			})
 			deps := depsFor(t, ac, output.FormatTable, "", false)
 
 			var buf bytes.Buffer
 			err := run(deps, &buf, tc.args...)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node")
+			require.ErrorContains(t, err, "not found")
 		})
 	}
 }

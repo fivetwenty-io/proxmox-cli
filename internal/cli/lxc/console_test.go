@@ -36,6 +36,29 @@ func TestLxcConsole_VNCDefault(t *testing.T) {
 	require.Contains(t, out, "5900")
 }
 
+// TestLxcConsole_ByName verifies a container name (no --node) is resolved to its
+// VMID and node via cluster/resources, and the proxy POST lands on that node.
+func TestLxcConsole_ByName(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "lxc", "vmid": 101, "name": "peppi-ct", "node": "pve1"},
+		})
+	})
+	var gotPath string
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/vncproxy", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{"ticket": "T", "port": 5900})
+	})
+	// No node configured: it must be resolved from the container name.
+	deps := newDeps(t, f, output.FormatTable, "", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "console", "peppi-ct")
+	require.NoError(t, run())
+
+	require.Equal(t, "/api2/json/nodes/pve1/lxc/101/vncproxy", gotPath)
+}
+
 func TestLxcConsole_VNCDimensions(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var body map[string]any

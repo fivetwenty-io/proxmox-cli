@@ -3,7 +3,6 @@ package lxc
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -30,23 +29,19 @@ func newMigrateCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "migrate <vmid>",
+		Use:   "migrate <vmid|name>",
 		Short: "Migrate an LXC container to another node",
 		Long: "Migrate an LXC container to a different cluster node. " +
 			"--target-node is required. A running container cannot be live-migrated; " +
 			"pass --restart to migrate it by briefly restarting it on the target node. " +
 			"The command blocks until the migration task completes unless --async is set. " +
-			"Use `pve lxc migrate check <vmid>` for a pre-flight feasibility check.",
+			"Use `pve lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 			if !cmd.Flags().Changed("target-node") {
 				return fmt.Errorf("--target-node is required: provide the destination node name")
@@ -103,7 +98,7 @@ func newMigrateCheckCmd() *cobra.Command {
 	var target string
 
 	cmd := &cobra.Command{
-		Use:   "check <vmid>",
+		Use:   "check <vmid|name>",
 		Short: "Check migration feasibility for a container",
 		Long: "Query PVE for migration pre-flight information. " +
 			"Returns allowed destination nodes, blocked nodes, local resource dependencies, " +
@@ -111,13 +106,9 @@ func newMigrateCheckCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 
 			params := &nodes.ListLxcMigrateParams{}

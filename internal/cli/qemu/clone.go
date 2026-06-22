@@ -3,7 +3,6 @@ package qemu
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -31,7 +30,7 @@ func newCloneCmd() *cobra.Command {
 		snapname    string
 	)
 	cmd := &cobra.Command{
-		Use:   "clone <vmid>",
+		Use:   "clone <vmid|name>",
 		Short: "Clone a QEMU virtual machine",
 		Long: "Clone an existing QEMU VM or template to a new VM. " +
 			"By default a linked clone is created when the source is a template; " +
@@ -40,13 +39,9 @@ func newCloneCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 			if !cmd.Flags().Changed("newid") {
 				return fmt.Errorf("--newid is required: provide the VMID for the new clone")

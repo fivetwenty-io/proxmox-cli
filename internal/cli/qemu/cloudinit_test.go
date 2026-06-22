@@ -98,14 +98,17 @@ func TestQemuCloudinitUpdate(t *testing.T) {
 	require.Contains(t, buf.String(), "Regenerated cloud-init drive")
 }
 
-func TestQemuCloudinitRequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuCloudinit_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "cloudinit", "pending", "100")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestQemuCloudinitCommandTree(t *testing.T) {

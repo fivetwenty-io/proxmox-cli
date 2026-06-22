@@ -37,6 +37,28 @@ func TestQemuConsole_VNCDefault(t *testing.T) {
 	require.Contains(t, out, "5900")
 }
 
+// TestQemuConsole_ByName verifies a guest name (no --node) is resolved to its
+// VMID and node via cluster/resources, and the proxy POST lands on that node.
+func TestQemuConsole_ByName(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "qemu", "vmid": 100, "name": "peppi-cp", "node": "pve1"},
+		})
+	})
+	var gotPath string
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/vncproxy", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{"ticket": "T", "port": 5900})
+	})
+	// No node configured: it must be resolved from the guest name.
+	deps := depsFor(t, ac, output.FormatTable, "", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "console", "peppi-cp"))
+	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/vncproxy", gotPath)
+}
+
 func TestQemuConsole_VNCWebsocket(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotPath, gotQuery, body string

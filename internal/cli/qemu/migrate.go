@@ -3,7 +3,6 @@ package qemu
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,7 +18,7 @@ import (
 func newMigrateCheckCmd() *cobra.Command {
 	var targetNode string
 	cmd := &cobra.Command{
-		Use:   "check <vmid>",
+		Use:   "check <vmid|name>",
 		Short: "Pre-flight check for migrating a VM",
 		Long: "Query migration feasibility for a VM without performing the migration. " +
 			"Returns allowed target nodes, local resources that block migration, " +
@@ -27,13 +26,9 @@ func newMigrateCheckCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 
 			params := &nodes.ListQemuMigrateParams{}
@@ -84,7 +79,7 @@ func newMigrateCmd() *cobra.Command {
 		targetstorage    string
 	)
 	cmd := &cobra.Command{
-		Use:   "migrate <vmid>",
+		Use:   "migrate <vmid|name>",
 		Short: "Migrate a QEMU virtual machine to another node",
 		Long: "Migrate a QEMU VM to a different cluster node. " +
 			"--target-node is required. For running VMs pass --online to perform a " +
@@ -94,13 +89,9 @@ func newMigrateCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 			if !cmd.Flags().Changed("target-node") {
 				return fmt.Errorf("--target-node is required: provide the destination node name")

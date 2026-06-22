@@ -21,22 +21,21 @@ func newConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigGetCmd builds `pve lxc config get <vmid>`.
+// newConfigGetCmd builds `pve lxc config get <vmid|name>`.
 func newConfigGetCmd() *cobra.Command {
 	var snapshot string
 	var current bool
 
 	cmd := &cobra.Command{
-		Use:   "get <vmid>",
+		Use:   "get <vmid|name>",
 		Short: "Show the configuration of a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.ListLxcConfigParams{}
 			if snapshot != "" {
@@ -66,7 +65,7 @@ func newConfigGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigSetCmd builds `pve lxc config set <vmid>`.
+// newConfigSetCmd builds `pve lxc config set <vmid|name>`.
 func newConfigSetCmd() *cobra.Command {
 	var (
 		hostname    string
@@ -83,16 +82,15 @@ func newConfigSetCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "set <vmid>",
+		Use:   "set <vmid|name>",
 		Short: "Update the configuration of a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.UpdateLxcConfigParams{}
 			set := false
@@ -181,22 +179,21 @@ type lxcPendingEntry struct {
 	Delete  int    `json:"delete"`
 }
 
-// newConfigPendingCmd builds `pve lxc config pending <vmid>`.
+// newConfigPendingCmd builds `pve lxc config pending <vmid|name>`.
 //
 // Returns the diff between the currently committed configuration and any
 // changes that take effect after the next container restart.
 func newConfigPendingCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "pending <vmid>",
+		Use:   "pending <vmid|name>",
 		Short: "Show pending configuration changes for a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.ListLxcPending(cmd.Context(), node, vmid)
 			if err != nil {

@@ -72,11 +72,9 @@ func TestQemuAgentExec_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "agent exec for VM 100")
 }
 
-// TestQemuAgent_RequiresNode consolidates shape-3 (node-required) cases across
-// agent sub-commands. Each case runs with an empty node and expects "no node" in
-// the error; no HTTP handler is registered because the check fires before the
-// API call.
-func TestQemuAgent_RequiresNode(t *testing.T) {
+// TestQemuAgent_UnknownGuestErrors verifies agent sub-commands return a
+// not-found error when the cluster resources endpoint returns no matching guest.
+func TestQemuAgent_UnknownGuestErrors(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
@@ -88,13 +86,16 @@ func TestQemuAgent_RequiresNode(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, ac := newFakeClient(t)
+			f, ac := newFakeClient(t)
+			f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+				testhelper.WriteData(w, []any{})
+			})
 			deps := depsFor(t, ac, output.FormatTable, "", false)
 
 			var buf bytes.Buffer
 			err := run(deps, &buf, tc.args...)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node")
+			require.ErrorContains(t, err, "not found")
 		})
 	}
 }

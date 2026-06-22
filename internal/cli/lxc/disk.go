@@ -3,7 +3,6 @@ package lxc
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -41,20 +40,16 @@ func newDiskResizeCmd() *cobra.Command {
 		size  string
 	)
 	cmd := &cobra.Command{
-		Use:   "resize <vmid>",
+		Use:   "resize <vmid|name>",
 		Short: "Grow an LXC container volume",
 		Long: "Increase the size of an attached volume such as rootfs or mp0. Use an absolute " +
 			"size such as `16G` or a relative increment such as `+5G`. Shrinking is not supported by PVE.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 			if !cmd.Flags().Changed("disk") {
 				return fmt.Errorf("--disk is required: provide the volume to resize (for example, rootfs)")
@@ -103,20 +98,16 @@ func newDiskMoveCmd() *cobra.Command {
 		del          bool
 	)
 	cmd := &cobra.Command{
-		Use:   "move <vmid>",
+		Use:   "move <vmid|name>",
 		Short: "Relocate an LXC container volume",
 		Long: "Move an attached volume to a different storage, or reassign it to another " +
 			"container. The command blocks until the move task completes unless --async is set.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
-			}
-			vmid := args[0]
-			if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-				return fmt.Errorf("invalid vmid %q: %w", vmid, err)
 			}
 			if !cmd.Flags().Changed("volume") {
 				return fmt.Errorf("--volume is required: provide the volume to move (for example, rootfs)")

@@ -38,23 +38,23 @@ func newSnapshotCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotCreateCmd builds `pve lxc snapshot create <vmid> <snapname>`.
+// newSnapshotCreateCmd builds `pve lxc snapshot create <vmid|name> <snapname>`.
 func newSnapshotCreateCmd() *cobra.Command {
 	var (
 		async       bool
 		description string
 	)
 	cmd := &cobra.Command{
-		Use:   "create <vmid> <snapname>",
+		Use:   "create <vmid|name> <snapname>",
 		Short: "Create a snapshot of a container",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -77,23 +77,23 @@ func newSnapshotCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotDeleteCmd builds `pve lxc snapshot delete <vmid> <snapname>`.
+// newSnapshotDeleteCmd builds `pve lxc snapshot delete <vmid|name> <snapname>`.
 func newSnapshotDeleteCmd() *cobra.Command {
 	var (
 		async bool
 		force bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete <vmid> <snapname>",
+		Use:   "delete <vmid|name> <snapname>",
 		Short: "Delete a snapshot of a container",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -116,23 +116,23 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotRollbackCmd builds `pve lxc snapshot rollback <vmid> <snapname>`.
+// newSnapshotRollbackCmd builds `pve lxc snapshot rollback <vmid|name> <snapname>`.
 func newSnapshotRollbackCmd() *cobra.Command {
 	var (
 		async bool
 		start bool
 	)
 	cmd := &cobra.Command{
-		Use:   "rollback <vmid> <snapname>",
+		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a container back to a snapshot",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -155,19 +155,18 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotListCmd builds `pve lxc snapshot list <vmid>`.
+// newSnapshotListCmd builds `pve lxc snapshot list <vmid|name>`.
 func newSnapshotListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <vmid>",
+		Use:   "list <vmid|name>",
 		Short: "List snapshots of a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.ListLxcSnapshot(cmd.Context(), node, vmid)
 			if err != nil {
@@ -197,21 +196,21 @@ func newSnapshotListCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotShowCmd builds `pve lxc snapshot show <vmid> <snapname>`.
+// newSnapshotShowCmd builds `pve lxc snapshot show <vmid|name> <snapname>`.
 //
 // Returns the configuration stored with a named snapshot.
 func newSnapshotShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <vmid> <snapname>",
+		Use:   "show <vmid|name> <snapname>",
 		Short: "Show the configuration stored with a snapshot",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 
 			resp, err := deps.API.Nodes.ListLxcSnapshotConfig(cmd.Context(), node, vmid, snapname)
 			if err != nil {
@@ -242,23 +241,23 @@ func newSnapshotShowCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotUpdateCmd builds `pve lxc snapshot update <vmid> <snapname> --description DESC`.
+// newSnapshotUpdateCmd builds `pve lxc snapshot update <vmid|name> <snapname> --description DESC`.
 //
 // Updates metadata (description) stored with an existing snapshot.
 func newSnapshotUpdateCmd() *cobra.Command {
 	var description string
 
 	cmd := &cobra.Command{
-		Use:   "update <vmid> <snapname>",
+		Use:   "update <vmid|name> <snapname>",
 		Short: "Update the description of a snapshot",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 
 			if !cmd.Flags().Changed("description") {
 				return fmt.Errorf("no fields specified: pass --description to update the snapshot")

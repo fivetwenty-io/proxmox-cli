@@ -111,14 +111,17 @@ func TestQemuAgentInvalidVMID(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestQemuAgentRequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuAgentDispatch_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "agent", "100", "ping")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestQemuAgentServerError(t *testing.T) {

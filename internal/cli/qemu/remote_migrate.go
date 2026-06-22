@@ -30,7 +30,7 @@ func newRemoteMigrateCmd() *cobra.Command {
 		targetVmid     int64
 	)
 	cmd := &cobra.Command{
-		Use:   "remote-migrate <vmid>",
+		Use:   "remote-migrate <vmid|name>",
 		Short: "Migrate a VM to a remote (different) Proxmox cluster",
 		Long: "Migrate a QEMU VM to a different Proxmox VE cluster. " +
 			"--target-endpoint, --target-storage, and --target-bridge are required. " +
@@ -39,12 +39,8 @@ func newRemoteMigrateCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !yes {

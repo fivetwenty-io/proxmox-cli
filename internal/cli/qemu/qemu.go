@@ -1,6 +1,7 @@
 package qemu
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -61,6 +62,13 @@ func resolveNode(deps *cli.Deps) (string, error) {
 		return "", fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
 	}
 	return deps.Node, nil
+}
+
+// resolveGuest maps a <vmid|name> target to a numeric VMID and the node the VM
+// runs on, auto-resolving the node from the cluster when it is not already known.
+// See cli.ResolveGuest for the full lookup semantics.
+func resolveGuest(ctx context.Context, deps *cli.Deps, target string) (vmid, node string, err error) {
+	return cli.ResolveGuest(ctx, deps, target, cli.GuestQemu)
 }
 
 // finishAsync renders the outcome of an asynchronous task. When deps.Async is

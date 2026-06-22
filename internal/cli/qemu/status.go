@@ -13,16 +13,15 @@ import (
 // newStatusCmd builds `pve qemu status <vmid>`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <vmid>",
+		Use:   "status <vmid|name>",
 		Short: "Show the current status of a VM",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.ListQemuStatusCurrent(cmd.Context(), node, vmid)
 			if err != nil {

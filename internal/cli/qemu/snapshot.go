@@ -42,16 +42,15 @@ type snapshotEntry struct {
 // newSnapshotListCmd builds `pve qemu snapshot list <vmid>`.
 func newSnapshotListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <vmid>",
+		Use:   "list <vmid|name>",
 		Short: "List snapshots of a VM",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.ListQemuSnapshot(cmd.Context(), node, vmid)
 			if err != nil {
@@ -96,16 +95,16 @@ func newSnapshotCreateCmd() *cobra.Command {
 		vmstate     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "create <vmid> <snapname>",
+		Use:   "create <vmid|name> <snapname>",
 		Short: "Create a snapshot of a VM",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -141,16 +140,16 @@ func newSnapshotDeleteCmd() *cobra.Command {
 		force bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete <vmid> <snapname>",
+		Use:   "delete <vmid|name> <snapname>",
 		Short: "Delete a snapshot of a VM",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if !yes {
 				return fmt.Errorf("refusing to delete snapshot %q without confirmation: pass --yes/-y", snapname)
 			}
@@ -181,16 +180,16 @@ func newSnapshotDeleteCmd() *cobra.Command {
 // newSnapshotShowCmd builds `pve qemu snapshot show <vmid> <snapname>`.
 func newSnapshotShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <vmid> <snapname>",
+		Use:   "show <vmid|name> <snapname>",
 		Short: "Show the configuration of a named snapshot",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 
 			resp, err := deps.API.Nodes.ListQemuSnapshotConfig(cmd.Context(), node, vmid, snapname)
 			if err != nil {
@@ -230,16 +229,16 @@ func newSnapshotShowCmd() *cobra.Command {
 func newSnapshotUpdateCmd() *cobra.Command {
 	var description string
 	cmd := &cobra.Command{
-		Use:   "update <vmid> <snapname>",
+		Use:   "update <vmid|name> <snapname>",
 		Short: "Update the description of a snapshot",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if !cmd.Flags().Changed("description") {
 				return fmt.Errorf("no configuration changes provided: set --description")
 			}
@@ -270,16 +269,16 @@ func newSnapshotRollbackCmd() *cobra.Command {
 		start bool
 	)
 	cmd := &cobra.Command{
-		Use:   "rollback <vmid> <snapname>",
+		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a VM back to a snapshot",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, snapname := args[0], args[1]
+			snapname := args[1]
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}

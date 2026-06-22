@@ -60,14 +60,17 @@ func TestQemuSnapshotShow_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "show snapshot")
 }
 
-func TestQemuSnapshotShow_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuSnapshotShow_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "snapshot", "show", "100", "snap1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node")
+	require.ErrorContains(t, err, "not found")
 }
 
 // --- snapshot update --------------------------------------------------------

@@ -25,7 +25,7 @@ func newConsoleCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "console <vmid>",
+		Use:   "console <vmid|name>",
 		Short: "Open a console proxy to a container and return its connection ticket",
 		Long: "Request a console proxy ticket for a container. The --type flag selects\n" +
 			"the proxy kind: vnc (default), term (xterm.js terminal), or spice.\n\n" +
@@ -35,12 +35,8 @@ func newConsoleCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

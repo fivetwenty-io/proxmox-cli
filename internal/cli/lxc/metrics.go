@@ -20,7 +20,7 @@ func newMetricsCmd() *cobra.Command {
 	var timeframe, cf string
 
 	cmd := &cobra.Command{
-		Use:   "metrics <vmid>",
+		Use:   "metrics <vmid|name>",
 		Short: "Show time-series metrics for a container (RRD data)",
 		Long: "Retrieve time-series RRD data points for a container. " +
 			"--timeframe is required; supported values are hour, day, week, month, year. " +
@@ -28,11 +28,10 @@ func newMetricsCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			if !cmd.Flags().Changed("timeframe") {
 				return fmt.Errorf("--timeframe is required: specify hour, day, week, month, or year")

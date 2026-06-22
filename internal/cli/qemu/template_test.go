@@ -81,14 +81,17 @@ func TestQemuTemplate_Async(t *testing.T) {
 	require.Contains(t, buf.String(), validUPID)
 }
 
-func TestQemuTemplate_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuTemplate_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "template", "100", "--yes")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestQemuTemplateCommandTree(t *testing.T) {

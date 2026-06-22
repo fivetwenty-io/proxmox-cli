@@ -18,7 +18,7 @@ func newFeatureCmd() *cobra.Command {
 		snapname string
 	)
 	cmd := &cobra.Command{
-		Use:   "feature <vmid>",
+		Use:   "feature <vmid|name>",
 		Short: "Check whether a VM supports a feature",
 		Long: "Pre-flight check: query whether the given VM supports a specific " +
 			"feature (e.g. clone, snapshot, copy) and which nodes can perform it. " +
@@ -26,12 +26,8 @@ func newFeatureCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

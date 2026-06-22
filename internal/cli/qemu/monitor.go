@@ -20,7 +20,7 @@ func newMonitorCmd() *cobra.Command {
 		yes     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "monitor <vmid>",
+		Use:   "monitor <vmid|name>",
 		Short: "Send a raw QEMU monitor command to a VM",
 		Long: "Execute a raw QEMU monitor command against the running VM. " +
 			"Some monitor commands are destructive or service-affecting. " +
@@ -29,12 +29,8 @@ func newMonitorCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !yes {

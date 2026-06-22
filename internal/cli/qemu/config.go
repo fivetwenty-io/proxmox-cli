@@ -35,16 +35,15 @@ func newConfigGetCmd() *cobra.Command {
 		snapshot string
 	)
 	cmd := &cobra.Command{
-		Use:   "get <vmid>",
+		Use:   "get <vmid|name>",
 		Short: "Show the configuration of a VM",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := map[string]any{}
 			if cmd.Flags().Changed("current") {
@@ -153,16 +152,15 @@ func newConfigSetCmd() *cobra.Command {
 		ipconfig1    string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <vmid>",
+		Use:   "set <vmid|name>",
 		Short: "Update the configuration of a VM",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.UpdateQemuConfigParams{}
 			changed := false
@@ -296,16 +294,15 @@ type pendingEntry struct {
 // newConfigPendingCmd builds `pve qemu config pending <vmid>`.
 func newConfigPendingCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "pending <vmid>",
+		Use:   "pending <vmid|name>",
 		Short: "Show pending configuration changes for a VM",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.ListQemuPending(cmd.Context(), node, vmid)
 			if err != nil {

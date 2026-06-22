@@ -19,7 +19,7 @@ func newSendkeyCmd() *cobra.Command {
 		skiplock bool
 	)
 	cmd := &cobra.Command{
-		Use:   "sendkey <vmid>",
+		Use:   "sendkey <vmid|name>",
 		Short: "Send a keypress to a VM's console",
 		Long: "Inject a key event into the VM console using QEMU monitor key encoding " +
 			"(e.g. ctrl-alt-delete, ret, esc). Useful for navigating BIOS menus or " +
@@ -27,12 +27,8 @@ func newSendkeyCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

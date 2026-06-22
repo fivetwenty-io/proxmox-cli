@@ -18,12 +18,12 @@ type lifecycleCall func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (
 func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags func(*cobra.Command)) *cobra.Command {
 	var async bool
 	cmd := &cobra.Command{
-		Use:   use + " <vmid>",
+		Use:   use + " <vmid|name>",
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
@@ -31,7 +31,6 @@ func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags fu
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
-			vmid := args[0]
 
 			raw, err := call(cmd, deps, node, vmid)
 			if err != nil {

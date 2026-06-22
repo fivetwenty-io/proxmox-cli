@@ -89,14 +89,17 @@ func TestQemuFeature_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "feature check for VM 100")
 }
 
-func TestQemuFeature_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuFeature_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "feature", "100", "--feature", "clone")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestQemuFeature_CommandTree(t *testing.T) {

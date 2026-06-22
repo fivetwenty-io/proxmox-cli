@@ -20,7 +20,7 @@ func newRrdCmd() *cobra.Command {
 		cf        string
 	)
 	cmd := &cobra.Command{
-		Use:   "rrd <vmid>",
+		Use:   "rrd <vmid|name>",
 		Short: "Get the RRD PNG filename for a VM metric",
 		Long: "Return the server-side path of the generated RRD graph PNG for one " +
 			"or more data sources. The file is created on the PVE node; the command " +
@@ -28,12 +28,8 @@ func newRrdCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

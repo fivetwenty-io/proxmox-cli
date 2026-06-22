@@ -37,20 +37,19 @@ func emitTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, successMs
 	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 }
 
-// newStartCmd builds `pve lxc start <vmid>`.
+// newStartCmd builds `pve lxc start <vmid|name>`.
 func newStartCmd() *cobra.Command {
 	var skiplock, debug bool
 	cmd := &cobra.Command{
-		Use:   "start <vmid>",
+		Use:   "start <vmid|name>",
 		Short: "Start a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.CreateLxcStatusStartParams{}
 			fl := cmd.Flags()
@@ -73,20 +72,19 @@ func newStartCmd() *cobra.Command {
 	return cmd
 }
 
-// newStopCmd builds `pve lxc stop <vmid>`.
+// newStopCmd builds `pve lxc stop <vmid|name>`.
 func newStopCmd() *cobra.Command {
 	var skiplock, overruleShutdown bool
 	cmd := &cobra.Command{
-		Use:   "stop <vmid>",
+		Use:   "stop <vmid|name>",
 		Short: "Stop a container immediately",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.CreateLxcStatusStopParams{}
 			fl := cmd.Flags()
@@ -109,20 +107,19 @@ func newStopCmd() *cobra.Command {
 	return cmd
 }
 
-// newRebootCmd builds `pve lxc reboot <vmid>`.
+// newRebootCmd builds `pve lxc reboot <vmid|name>`.
 func newRebootCmd() *cobra.Command {
 	var timeout int64
 	cmd := &cobra.Command{
-		Use:   "reboot <vmid>",
+		Use:   "reboot <vmid|name>",
 		Short: "Reboot a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.CreateLxcStatusRebootParams{}
 			if cmd.Flags().Changed("timeout") {
@@ -140,21 +137,20 @@ func newRebootCmd() *cobra.Command {
 	return cmd
 }
 
-// newShutdownCmd builds `pve lxc shutdown <vmid>`.
+// newShutdownCmd builds `pve lxc shutdown <vmid|name>`.
 func newShutdownCmd() *cobra.Command {
 	var timeout int64
 	var forceStop bool
 	cmd := &cobra.Command{
-		Use:   "shutdown <vmid>",
+		Use:   "shutdown <vmid|name>",
 		Short: "Gracefully shut down a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			params := &nodes.CreateLxcStatusShutdownParams{}
 			fl := cmd.Flags()
@@ -177,20 +173,19 @@ func newShutdownCmd() *cobra.Command {
 	return cmd
 }
 
-// newSuspendCmd builds `pve lxc suspend <vmid>`. The LXC suspend endpoint takes
+// newSuspendCmd builds `pve lxc suspend <vmid|name>`. The LXC suspend endpoint takes
 // no parameters.
 func newSuspendCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "suspend <vmid>",
+		Use:   "suspend <vmid|name>",
 		Short: "Suspend a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.CreateLxcStatusSuspend(cmd.Context(), node, vmid)
 			if err != nil {
@@ -201,20 +196,19 @@ func newSuspendCmd() *cobra.Command {
 	}
 }
 
-// newResumeCmd builds `pve lxc resume <vmid>`. The LXC resume endpoint takes no
+// newResumeCmd builds `pve lxc resume <vmid|name>`. The LXC resume endpoint takes no
 // parameters.
 func newResumeCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "resume <vmid>",
+		Use:   "resume <vmid|name>",
 		Short: "Resume a suspended container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			resp, err := deps.API.Nodes.CreateLxcStatusResume(cmd.Context(), node, vmid)
 			if err != nil {
@@ -225,20 +219,19 @@ func newResumeCmd() *cobra.Command {
 	}
 }
 
-// newDeleteCmd builds `pve lxc delete <vmid>`.
+// newDeleteCmd builds `pve lxc delete <vmid|name>`.
 func newDeleteCmd() *cobra.Command {
 	var yes, purge, force, destroyUnreferenced bool
 	cmd := &cobra.Command{
-		Use:   "delete <vmid>",
+		Use:   "delete <vmid|name>",
 		Short: "Destroy a container",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			if !yes {
 				return fmt.Errorf("refusing to delete container %s without confirmation: pass --yes to proceed", vmid)

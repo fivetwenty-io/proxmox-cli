@@ -20,16 +20,15 @@ func newDeleteCmd() *cobra.Command {
 		destroyUnreferencedDisks bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete <vmid>",
+		Use:   "delete <vmid|name>",
 		Short: "Destroy a VM and its configuration",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid := args[0]
 
 			if !yes {
 				return fmt.Errorf("refusing to delete VM %s without confirmation: pass --yes/-y", vmid)

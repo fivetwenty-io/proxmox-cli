@@ -20,7 +20,7 @@ func newMetricsCmd() *cobra.Command {
 		cf        string
 	)
 	cmd := &cobra.Command{
-		Use:   "metrics <vmid>",
+		Use:   "metrics <vmid|name>",
 		Short: "Show time-series metrics for a VM",
 		Long: "Retrieve RRD time-series data points (cpu, memory, disk I/O, network) " +
 			"for a VM. --timeframe is required. Optional --cf selects the RRD " +
@@ -28,12 +28,8 @@ func newMetricsCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

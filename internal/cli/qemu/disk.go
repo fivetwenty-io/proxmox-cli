@@ -3,12 +3,10 @@ package qemu
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
-
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
@@ -29,14 +27,6 @@ func newDiskCmd() *cobra.Command {
 	return cmd
 }
 
-// parseVMID validates that vmid is numeric and returns it unchanged.
-func parseVMID(vmid string) error {
-	if _, err := strconv.ParseInt(vmid, 10, 64); err != nil {
-		return fmt.Errorf("invalid vmid %q: %w", vmid, err)
-	}
-	return nil
-}
-
 // newDiskResizeCmd builds `pve qemu disk resize <vmid> --disk scsi0 --size +10G`.
 //
 // Resize is normally a synchronous operation that returns no task; some storage
@@ -51,19 +41,15 @@ func newDiskResizeCmd() *cobra.Command {
 		skiplock bool
 	)
 	cmd := &cobra.Command{
-		Use:   "resize <vmid>",
+		Use:   "resize <vmid|name>",
 		Short: "Grow a QEMU virtual machine disk",
 		Long: "Increase the size of an attached disk. Use an absolute size such as " +
 			"`32G` or a relative increment such as `+10G`. Shrinking is not supported by PVE.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !cmd.Flags().Changed("disk") {
@@ -118,19 +104,15 @@ func newDiskMoveCmd() *cobra.Command {
 		del        bool
 	)
 	cmd := &cobra.Command{
-		Use:   "move <vmid>",
+		Use:   "move <vmid|name>",
 		Short: "Relocate a QEMU virtual machine disk",
 		Long: "Move an attached disk to a different storage, or reassign it to another " +
 			"VM. The command blocks until the move task completes unless --async is set.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !cmd.Flags().Changed("disk") {
@@ -194,7 +176,7 @@ func newDiskUnlinkCmd() *cobra.Command {
 		force bool
 	)
 	cmd := &cobra.Command{
-		Use:   "unlink <vmid>",
+		Use:   "unlink <vmid|name>",
 		Short: "Detach a QEMU virtual machine disk",
 		Long: "Detach one or more disks from a VM. By default each disk is kept as an " +
 			"`unused[n]` config entry; pass --force to physically remove the underlying volume. " +
@@ -202,12 +184,8 @@ func newDiskUnlinkCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !cmd.Flags().Changed("disk") {

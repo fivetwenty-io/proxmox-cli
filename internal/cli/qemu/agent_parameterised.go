@@ -23,7 +23,7 @@ func newAgentExecCmd() *cobra.Command {
 		inputData string
 	)
 	cmd := &cobra.Command{
-		Use:   "exec <vmid>",
+		Use:   "exec <vmid|name>",
 		Short: "Execute a command inside a VM via the guest agent",
 		Long: "Run a command inside the VM via the QEMU guest agent and return the\n" +
 			"PID of the spawned process. Use `pve qemu agent exec-status` to poll\n" +
@@ -31,12 +31,8 @@ func newAgentExecCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !cmd.Flags().Changed("command") {
@@ -77,19 +73,15 @@ func newAgentExecCmd() *cobra.Command {
 func newAgentExecStatusCmd() *cobra.Command {
 	var pid int64
 	cmd := &cobra.Command{
-		Use:   "exec-status <vmid>",
+		Use:   "exec-status <vmid|name>",
 		Short: "Poll exit status and output of a guest-agent exec process",
 		Long: "Query the status of a process started with `pve qemu agent exec`. " +
 			"Returns stdout/stderr and exit code once the process has exited.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -142,7 +134,7 @@ func newAgentFileReadCmd() *cobra.Command {
 		count  int64
 	)
 	cmd := &cobra.Command{
-		Use:   "file-read <vmid>",
+		Use:   "file-read <vmid|name>",
 		Short: "Read a file from inside a VM via the guest agent",
 		Long: "Read up to 16 MiB of a file from the running guest via the QEMU " +
 			"guest agent. Content is returned as plain text (decoded from base64 " +
@@ -150,12 +142,8 @@ func newAgentFileReadCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -199,19 +187,15 @@ func newAgentFileWriteCmd() *cobra.Command {
 		content string
 	)
 	cmd := &cobra.Command{
-		Use:   "file-write <vmid>",
+		Use:   "file-write <vmid|name>",
 		Short: "Write content to a file inside a VM via the guest agent",
 		Long: "Write the value of --content to the specified file path inside the " +
 			"running guest. The QEMU guest agent handles base64 encoding automatically.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -244,7 +228,7 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 		yes      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "set-user-password <vmid>",
+		Use:   "set-user-password <vmid|name>",
 		Short: "Set a user's password inside a VM via the guest agent",
 		Long: "Set the password for a user account inside the running guest. The " +
 			"password is read from stdin so it is never exposed in process arguments, " +
@@ -252,12 +236,8 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

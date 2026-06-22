@@ -107,14 +107,17 @@ func TestLxcInterfaces_RejectsNonNumericVMID(t *testing.T) {
 	require.Error(t, run())
 }
 
-func TestLxcInterfaces_NoNode_Errors(t *testing.T) {
+func TestLxcInterfaces_UnknownGuestErrors(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := newDeps(t, f, output.FormatTable, "", false)
 	var buf bytes.Buffer
 	run := newTestCmd(t, deps, &buf, "interfaces", "101")
 	err := run()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "node")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestLxcInterfaces_ServerError(t *testing.T) {

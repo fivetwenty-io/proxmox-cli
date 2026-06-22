@@ -22,21 +22,17 @@ type lxcInterfaceEntry struct {
 	HardName string `json:"hardware-address"`
 }
 
-// newInterfacesCmd builds `pve lxc interfaces <vmid>`. It lists the container's
+// newInterfacesCmd builds `pve lxc interfaces <vmid|name>`. It lists the container's
 // network interfaces as reported by the host. The call is purely read-only.
 func newInterfacesCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "interfaces <vmid>",
+		Use:   "interfaces <vmid|name>",
 		Short: "List a container's network interfaces",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 

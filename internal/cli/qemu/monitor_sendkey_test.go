@@ -67,14 +67,17 @@ func TestQemuMonitor_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "monitor command for VM 100")
 }
 
-func TestQemuMonitor_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuMonitor_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "monitor", "100", "--command", "info", "--yes")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestQemuMonitor_CommandTree(t *testing.T) {
@@ -130,14 +133,17 @@ func TestQemuSendkey_ServerError(t *testing.T) {
 	require.Contains(t, err.Error(), "sendkey")
 }
 
-func TestQemuSendkey_RequiresNode(t *testing.T) {
-	_, ac := newFakeClient(t)
+func TestQemuSendkey_UnknownGuestErrors(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{})
+	})
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, "sendkey", "100", "--key", "ret")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node")
+	require.ErrorContains(t, err, "not found")
 }
 
 func TestQemuSendkey_CommandTree(t *testing.T) {

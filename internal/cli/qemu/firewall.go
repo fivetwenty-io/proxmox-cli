@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
-
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -87,17 +86,13 @@ func newFirewallRulesCmd() *cobra.Command {
 
 func newFirewallRulesListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <vmid>",
+		Use:   "list <vmid|name>",
 		Short: "List a VM's firewall rules",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -131,19 +126,16 @@ func newFirewallRulesListCmd() *cobra.Command {
 
 func newFirewallRulesGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <vmid> <pos>",
+		Use:   "get <vmid|name> <pos>",
 		Short: "Show a single firewall rule by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, pos := args[0], args[1]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			pos := args[1]
 
 			// The typed client method cannot decode this endpoint: PVE returns
 			// `pos` as a string here while the generated struct expects int64.
@@ -185,19 +177,15 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 		pos      int64
 	)
 	cmd := &cobra.Command{
-		Use:   "create <vmid>",
+		Use:   "create <vmid|name>",
 		Short: "Append a firewall rule to a VM",
 		Long: "Create a new firewall rule. --type (in|out|group) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 			if !cmd.Flags().Changed("type") {
@@ -285,19 +273,16 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 		del      string
 	)
 	cmd := &cobra.Command{
-		Use:   "update <vmid> <pos>",
+		Use:   "update <vmid|name> <pos>",
 		Short: "Modify a firewall rule by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, pos := args[0], args[1]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			pos := args[1]
 
 			params := &nodes.UpdateQemuFirewallRulesParams{}
 			fl := cmd.Flags()
@@ -372,19 +357,16 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 func newFirewallRulesDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <vmid> <pos>",
+		Use:   "delete <vmid|name> <pos>",
 		Short: "Delete a firewall rule by position",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, pos := args[0], args[1]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			pos := args[1]
 			if !yes {
 				return fmt.Errorf("refusing to delete firewall rule %s without confirmation: pass --yes/-y", pos)
 			}
@@ -428,17 +410,13 @@ func newFirewallIpsetCmd() *cobra.Command {
 
 func newFirewallIpsetListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <vmid> [name]",
+		Use:   "list <vmid|name> [name]",
 		Short: "List IP sets, or the members of one IP set",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -487,19 +465,16 @@ func newFirewallIpsetListCmd() *cobra.Command {
 func newFirewallIpsetCreateCmd() *cobra.Command {
 	var comment string
 	cmd := &cobra.Command{
-		Use:   "create <vmid> <name>",
+		Use:   "create <vmid|name> <name>",
 		Short: "Create a firewall IP set",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name := args[0], args[1]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name := args[1]
 
 			params := &nodes.CreateQemuFirewallIpsetParams{Name: name}
 			if cmd.Flags().Changed("comment") {
@@ -522,19 +497,16 @@ func newFirewallIpsetDeleteCmd() *cobra.Command {
 		force bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete <vmid> <name>",
+		Use:   "delete <vmid|name> <name>",
 		Short: "Delete a firewall IP set",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name := args[0], args[1]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name := args[1]
 			if !yes {
 				return fmt.Errorf("refusing to delete IP set %q without confirmation: pass --yes/-y", name)
 			}
@@ -561,19 +533,16 @@ func newFirewallIpsetAddCmd() *cobra.Command {
 		nomatch bool
 	)
 	cmd := &cobra.Command{
-		Use:   "add <vmid> <name> <cidr>",
+		Use:   "add <vmid|name> <name> <cidr>",
 		Short: "Add a CIDR entry to an IP set",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name, cidr := args[0], args[1], args[2]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name, cidr := args[1], args[2]
 
 			params := &nodes.CreateQemuFirewallIpset2Params{Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
@@ -597,19 +566,16 @@ func newFirewallIpsetAddCmd() *cobra.Command {
 func newFirewallIpsetRemoveCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "remove <vmid> <name> <cidr>",
+		Use:   "remove <vmid|name> <name> <cidr>",
 		Short: "Remove a CIDR entry from an IP set",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name, cidr := args[0], args[1], args[2]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name, cidr := args[1], args[2]
 			if !yes {
 				return fmt.Errorf("refusing to remove %s from IP set %q without confirmation: pass --yes/-y", cidr, name)
 			}
@@ -650,17 +616,13 @@ func newFirewallAliasCmd() *cobra.Command {
 
 func newFirewallAliasListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <vmid>",
+		Use:   "list <vmid|name>",
 		Short: "List a VM's firewall aliases",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -691,19 +653,16 @@ func newFirewallAliasListCmd() *cobra.Command {
 func newFirewallAliasCreateCmd() *cobra.Command {
 	var comment string
 	cmd := &cobra.Command{
-		Use:   "create <vmid> <name> <cidr>",
+		Use:   "create <vmid|name> <name> <cidr>",
 		Short: "Create a firewall address alias",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name, cidr := args[0], args[1], args[2]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name, cidr := args[1], args[2]
 
 			params := &nodes.CreateQemuFirewallAliasesParams{Name: name, Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
@@ -726,19 +685,16 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 		rename  string
 	)
 	cmd := &cobra.Command{
-		Use:   "update <vmid> <name> <cidr>",
+		Use:   "update <vmid|name> <name> <cidr>",
 		Short: "Update a firewall address alias",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name, cidr := args[0], args[1], args[2]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name, cidr := args[1], args[2]
 
 			params := &nodes.UpdateQemuFirewallAliasesParams{Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
@@ -762,19 +718,16 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 func newFirewallAliasDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <vmid> <name>",
+		Use:   "delete <vmid|name> <name>",
 		Short: "Delete a firewall address alias",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
 				return err
 			}
-			vmid, name := args[0], args[1]
-			if err := parseVMID(vmid); err != nil {
-				return err
-			}
+			name := args[1]
 			if !yes {
 				return fmt.Errorf("refusing to delete alias %q without confirmation: pass --yes/-y", name)
 			}
@@ -806,17 +759,13 @@ func newFirewallOptionsCmd() *cobra.Command {
 
 func newFirewallOptionsGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <vmid>",
+		Use:   "get <vmid|name>",
 		Short: "Show a VM's firewall options",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
@@ -849,18 +798,14 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 		del         string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <vmid>",
+		Use:   "set <vmid|name>",
 		Short: "Set a VM's firewall options",
 		Long:  "Update per-VM firewall options. Only the flags you pass are changed.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
 			if err != nil {
-				return err
-			}
-			vmid := args[0]
-			if err := parseVMID(vmid); err != nil {
 				return err
 			}
 
