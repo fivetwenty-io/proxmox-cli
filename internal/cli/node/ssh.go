@@ -2,49 +2,27 @@ package node
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
 )
 
 // sshFlags holds the connection options shared by ssh, shell, console, and exec.
-type sshFlags struct {
-	user     string
-	identity string
-	port     int
-	agent    bool
-	noStrict bool
-}
+type sshFlags = sshcmd.Flags
 
 // registerSSHFlags installs the shared SSH connection flags on cmd.
 func registerSSHFlags(cmd *cobra.Command, f *sshFlags) {
-	cmd.Flags().StringVarP(&f.user, "user", "l", "root", "SSH login user")
-	cmd.Flags().StringVarP(&f.identity, "identity", "i", "", "path to SSH identity (private key) file")
-	cmd.Flags().IntVarP(&f.port, "port", "p", 22, "SSH port")
-	cmd.Flags().BoolVarP(&f.agent, "agent", "A", false, "enable SSH agent forwarding")
-	cmd.Flags().BoolVar(&f.noStrict, "no-strict", false, "disable strict host key checking")
+	sshcmd.RegisterFlags(cmd, f)
 }
 
 // sshBaseArgs builds the leading ssh argv (options + user@host) for the given
 // host using the supplied flags. The remote command, if any, is appended by the
 // caller.
 func sshBaseArgs(f *sshFlags, host string) []string {
-	args := make([]string, 0, 12)
-	args = append(args, "-p", strconv.Itoa(f.port))
-	if f.identity != "" {
-		args = append(args, "-i", f.identity)
-	}
-	if f.agent {
-		args = append(args, "-A")
-	}
-	if f.noStrict {
-		args = append(args, "-o", "StrictHostKeyChecking=no")
-	}
-	args = append(args, fmt.Sprintf("%s@%s", f.user, host))
-	return args
+	return sshcmd.BaseArgs(f, host)
 }
 
 // resolveHost resolves node to an SSH host (IP) via cluster status, falling back
