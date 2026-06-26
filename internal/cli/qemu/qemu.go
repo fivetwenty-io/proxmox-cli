@@ -54,6 +54,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newMonitorCmd(),
 		newSendkeyCmd(),
 		newRemoteMigrateCmd(),
+		newCpuCmd(),
+		newMachineCmd(),
+		newCpuFlagsCmd(),
 	)
 	return cmd
 }

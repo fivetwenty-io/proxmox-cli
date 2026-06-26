@@ -42,6 +42,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newLockCmd(),
 		newPrefixListCmd(),
 		newRouteMapCmd(),
+		newStatusCmd(),
 	)
 	return cmd
 }

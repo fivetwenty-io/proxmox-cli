@@ -49,12 +49,17 @@ func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags fu
 // newStartCmd builds `pve qemu start <vmid>`.
 func newStartCmd() *cobra.Command {
 	var (
-		timeout      int64
-		migratedfrom string
-		stateuri     string
-		forceCPU     string
-		machine      string
-		skiplock     bool
+		timeout            int64
+		migratedfrom       string
+		stateuri           string
+		forceCPU           string
+		machine            string
+		skiplock           bool
+		migrationNetwork   string
+		migrationType      string
+		targetstorage      string
+		netsHostMtu        string
+		withConntrackState bool
 	)
 	cmd := newLifecycleCmd("start", "Start a VM", "VM %s started.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
@@ -77,6 +82,21 @@ func newStartCmd() *cobra.Command {
 			if cmd.Flags().Changed("skiplock") {
 				params.Skiplock = boolPtr(skiplock)
 			}
+			if cmd.Flags().Changed("migration-network") {
+				params.MigrationNetwork = strPtr(migrationNetwork)
+			}
+			if cmd.Flags().Changed("migration-type") {
+				params.MigrationType = strPtr(migrationType)
+			}
+			if cmd.Flags().Changed("targetstorage") {
+				params.Targetstorage = strPtr(targetstorage)
+			}
+			if cmd.Flags().Changed("nets-host-mtu") {
+				params.NetsHostMtu = strPtr(netsHostMtu)
+			}
+			if cmd.Flags().Changed("with-conntrack-state") {
+				params.WithConntrackState = boolPtr(withConntrackState)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStart(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("start VM %s on node %q: %w", vmid, node, err)
@@ -90,6 +110,16 @@ func newStartCmd() *cobra.Command {
 			c.Flags().StringVar(&forceCPU, "force-cpu", "", "override the QEMU '-cpu' argument (live migration only)")
 			c.Flags().StringVar(&machine, "machine", "", "specify the QEMU machine type for this start")
 			c.Flags().BoolVar(&skiplock, "skiplock", false, "ignore locks (root only)")
+			c.Flags().StringVar(&migrationNetwork, "migration-network", "",
+				"[advanced] CIDR of the (sub) network used for migration traffic")
+			c.Flags().StringVar(&migrationType, "migration-type", "",
+				"[advanced] migration traffic encryption type: secure or insecure")
+			c.Flags().StringVar(&targetstorage, "targetstorage", "",
+				"[advanced] mapping from source to target storages, e.g. local-lvm:local-lvm or 1 for all")
+			c.Flags().StringVar(&netsHostMtu, "nets-host-mtu", "",
+				"[advanced] list of VirtIO network devices and their effective host MTU for migration")
+			c.Flags().BoolVar(&withConntrackState, "with-conntrack-state", false,
+				"[advanced] migrate conntrack entries for running VMs")
 		})
 	return cmd
 }
@@ -101,6 +131,7 @@ func newStopCmd() *cobra.Command {
 		skiplock         bool
 		keepActive       bool
 		overruleShutdown bool
+		migratedfrom     string
 	)
 	cmd := newLifecycleCmd("stop", "Stop a VM (hard power off)", "VM %s stopped.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
@@ -117,6 +148,9 @@ func newStopCmd() *cobra.Command {
 			if cmd.Flags().Changed("overrule-shutdown") {
 				params.OverruleShutdown = boolPtr(overruleShutdown)
 			}
+			if cmd.Flags().Changed("migratedfrom") {
+				params.Migratedfrom = strPtr(migratedfrom)
+			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStop(cmd.Context(), node, vmid, params)
 			if err != nil {
 				return nil, fmt.Errorf("stop VM %s on node %q: %w", vmid, node, err)
@@ -129,6 +163,8 @@ func newStopCmd() *cobra.Command {
 			c.Flags().BoolVar(&keepActive, "keepActive", false, "do not deactivate storage volumes")
 			c.Flags().BoolVar(&overruleShutdown, "overrule-shutdown", false,
 				"abort a pending graceful shutdown task before stopping")
+			c.Flags().StringVar(&migratedfrom, "migratedfrom", "",
+				"[advanced] source cluster node name (set automatically during migration)")
 		})
 	return cmd
 }

@@ -62,6 +62,8 @@ func newCreateCmd() *cobra.Command {
 		entrypoint         string
 		lock               string
 		debug              bool
+
+		unusedSlots []string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vmid>",
@@ -146,6 +148,11 @@ func newCreateCmd() *cobra.Command {
 				return err
 			} else if len(dev) > 0 {
 				params.Dev = dev
+			}
+			if unused, err := cli.ParseIndexedValues(unusedSlots, "unused"); err != nil {
+				return err
+			} else if len(unused) > 0 {
+				params.Unused = unused
 			}
 
 			if fl.Changed("description") {
@@ -283,6 +290,9 @@ func newCreateCmd() *cobra.Command {
 	f.StringVar(&entrypoint, "entrypoint", "", "command to run as init")
 	f.StringVar(&lock, "lock", "", "lock/unlock the container")
 	f.BoolVar(&debug, "debug", false, "enable debug log-level on start")
+	f.StringArrayVar(&unusedSlots, "unused", nil,
+		"unused volume slot as INDEX=VALUE (repeatable; these volumes are normally "+
+			"PVE-managed and set during restore, e.g. --unused 0=local-lvm:vm-101-disk-1)")
 	cli.MustMarkRequired(cmd, "ostemplate")
 	return cmd
 }

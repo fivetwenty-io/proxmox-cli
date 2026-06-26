@@ -235,6 +235,7 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 	var (
 		username string
 		yes      bool
+		crypted  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set-user-password <vmid|name>",
@@ -278,6 +279,9 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 				Username: username,
 				Password: password,
 			}
+			if cmd.Flags().Changed("crypted") {
+				params.Crypted = boolPtr(crypted)
+			}
 
 			resp, err := deps.API.Nodes.CreateQemuAgentSetUserPassword(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -295,6 +299,8 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&username, "username", "", "username whose password to set (required)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm setting the password")
+	cmd.Flags().BoolVar(&crypted, "crypted", false,
+		"[advanced] the password has already been passed through crypt(3)")
 	cli.MustMarkRequired(cmd, "username")
 	return cmd
 }

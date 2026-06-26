@@ -48,7 +48,8 @@ func TestNodeCeph_Cfg(t *testing.T) {
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "cfg"))
+	// cfg is now a sub-group; the original list functionality lives under cfg index.
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "cfg", "index"))
 
 	require.NoError(t, root.Execute())
 	require.Contains(t, buf.String(), "cephx")

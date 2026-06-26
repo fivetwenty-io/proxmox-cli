@@ -1,7 +1,11 @@
 package api
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -70,6 +74,11 @@ func newAuthLoginCmd() *cobra.Command {
 		tfaChallenge string
 		verifyPath   string
 		verifyPrivs  string
+		// OIDC flags
+		oidc        bool
+		redirectURL string
+		code        string
+		state       string
 	)
 
 	cmd := &cobra.Command{
@@ -87,6 +96,10 @@ func newAuthLoginCmd() *cobra.Command {
 			ctx, err := lookupContext(cfg, name)
 			if err != nil {
 				return err
+			}
+
+			if oidc {
+				return performOIDCLogin(cmd, deps, cfg, ctx, name, realm, redirectURL, code, state)
 			}
 
 			user := firstNonEmpty(username, ctx.Auth.Username)
@@ -127,7 +140,179 @@ func newAuthLoginCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tfaChallenge, "tfa-challenge", "", "signed challenge response for second-step two-factor authentication")
 	cmd.Flags().StringVar(&verifyPath, "path", "", "ticket-verification mode: ACL path to check privileges on (requires --privs)")
 	cmd.Flags().StringVar(&verifyPrivs, "privs", "", "ticket-verification mode: privileges to verify on --path")
+	cmd.Flags().BoolVar(&oidc, "oidc", false, "authenticate via OpenID Connect instead of username/password")
+	cmd.Flags().StringVar(&redirectURL, "redirect-url", "",
+		"OIDC redirect URL sent to the identity provider (defaults to the configured PVE endpoint base URL; requires --oidc)")
+	cmd.Flags().StringVar(&code, "code", "",
+		"OIDC authorization code for non-interactive login (requires --oidc and --state)")
+	cmd.Flags().StringVar(&state, "state", "",
+		"OIDC state parameter for non-interactive login (requires --oidc and --code)")
 	return noClient(cmd)
+}
+
+// performOIDCLogin carries out the OpenID Connect login flow for the given context.
+// It calls CreateOpenidAuthUrl to obtain the authorization URL, then either reads
+// code+state from the supplied flags (non-interactive) or prompts the user to
+// authenticate in a browser and paste the redirect URL (interactive). On success it
+// unmarshals the login response into the CreateTicketResponse shape, persists the
+// session ticket via storeSession, and saves the config file.
+func performOIDCLogin(
+	cmd *cobra.Command,
+	deps *cli.Deps,
+	cfg *config.Config,
+	ctx *config.Context,
+	contextName string,
+	realmFlag string,
+	redirectURLFlag string,
+	code string,
+	state string,
+) error {
+	fl := cmd.Flags()
+
+	// Flags incompatible with OIDC.
+	if fl.Changed("password") {
+		return fmt.Errorf("--password cannot be used with --oidc")
+	}
+	if fl.Changed("otp") {
+		return fmt.Errorf("--otp cannot be used with --oidc")
+	}
+	if fl.Changed("tfa-challenge") {
+		return fmt.Errorf("--tfa-challenge cannot be used with --oidc")
+	}
+
+	// --code and --state must be supplied together for non-interactive login.
+	if fl.Changed("code") != fl.Changed("state") {
+		return fmt.Errorf("--code and --state must both be supplied for non-interactive OIDC login")
+	}
+
+	// Realm is required for OIDC; do NOT fall back to "pam" (which is not an OIDC realm).
+	rlm := firstNonEmpty(realmFlag, ctx.Realm)
+	if rlm == "" {
+		return fmt.Errorf("OIDC login requires --realm or a realm configured in context %q", contextName)
+	}
+
+	// Build a client for the context. The OIDC auth-url and login endpoints are
+	// public (PVE marks them noauthentication), so any credential satisfies the
+	// HTTP transport — the server does not validate credentials on these paths.
+	// Prefer an existing session ticket; fall back to a placeholder token that
+	// passes the pve-apiclient-go options validator without real credentials.
+	ac, err := buildClientForOIDC(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Determine the redirect URL sent to the identity provider.
+	redir := redirectURLFlag
+	if redir == "" {
+		redir = fmt.Sprintf("%s://%s:%d", ctx.Protocol, ctx.Host, ctx.Port)
+	}
+
+	// Step 1: obtain the OIDC authorization URL from PVE.
+	authURLResp, err := ac.Access.CreateOpenidAuthUrl(cmd.Context(), &access.CreateOpenidAuthUrlParams{
+		Realm:       rlm,
+		RedirectUrl: redir,
+	})
+	if err != nil {
+		return fmt.Errorf("get OIDC auth URL for realm %q: %w", rlm, err)
+	}
+	if authURLResp == nil {
+		return fmt.Errorf("get OIDC auth URL for realm %q: server returned no data", rlm)
+	}
+	var authURL string
+	if err := json.Unmarshal(*authURLResp, &authURL); err != nil {
+		return fmt.Errorf("parse OIDC auth URL response: %w", err)
+	}
+	if authURL == "" {
+		return fmt.Errorf("get OIDC auth URL for realm %q: server returned empty URL", rlm)
+	}
+
+	// Step 2: obtain code + state.
+	var oidcCode, oidcState string
+	if fl.Changed("code") {
+		// Non-interactive path: use the supplied flags directly.
+		oidcCode = code
+		oidcState = state
+	} else {
+		// Interactive path: print the URL, ask the user to authenticate and paste the redirect.
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+			"Open the following URL in your browser to authenticate:\n\n  %s\n\nAfter authenticating, paste the full redirect URL here and press Enter:\n",
+			authURL)
+		reader := bufio.NewReader(cmd.InOrStdin())
+		pasted, readErr := reader.ReadString('\n')
+		pasted = strings.TrimSpace(pasted)
+		if pasted == "" && readErr != nil {
+			return fmt.Errorf("read redirect URL from stdin: %w", readErr)
+		}
+		// io.EOF on last line without trailing newline is acceptable if we got data.
+		if readErr != nil && readErr != io.EOF {
+			return fmt.Errorf("read redirect URL from stdin: %w", readErr)
+		}
+		oidcCode, oidcState, err = parseOIDCRedirect(pasted)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Step 3: complete the OIDC login. RedirectUrl must equal the one from step 1.
+	loginResp, err := ac.Access.CreateOpenidLogin(cmd.Context(), &access.CreateOpenidLoginParams{
+		Code:        oidcCode,
+		State:       oidcState,
+		RedirectUrl: redir,
+	})
+	if err != nil {
+		return fmt.Errorf("OIDC login for realm %q: %w", rlm, err)
+	}
+	if loginResp == nil {
+		return fmt.Errorf("OIDC login for realm %q: server returned no data", rlm)
+	}
+
+	// Unmarshal the raw JSON response into the ticket-response shape.
+	// The PVE OIDC login endpoint returns the same fields as POST /access/ticket:
+	// username, ticket, CSRFPreventionToken.
+	var ticketResp access.CreateTicketResponse
+	if err := json.Unmarshal(*loginResp, &ticketResp); err != nil {
+		return fmt.Errorf("parse OIDC login response: %w", err)
+	}
+	if ticketResp.Ticket == nil || *ticketResp.Ticket == "" {
+		return fmt.Errorf("OIDC login for realm %q: server returned no ticket", rlm)
+	}
+	if ticketResp.Username == "" {
+		return fmt.Errorf("OIDC login for realm %q: server returned no username", rlm)
+	}
+
+	// Persist the session identically to password login.
+	storeSession(ctx, &ticketResp)
+	if err := config.SaveForce(configPath(cmd), cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	expires := time.Now().Add(ticketLifetime).Format(time.RFC3339)
+	msg := fmt.Sprintf("Logged in as %s via OIDC. Session valid until %s.", ticketResp.Username, expires)
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+}
+
+// parseOIDCRedirect extracts the code and state query parameters from a full
+// OIDC redirect URL (the URL the identity provider sends the browser to after
+// authentication). Returns an error if the URL cannot be parsed or if either
+// required parameter is absent.
+func parseOIDCRedirect(rawURL string) (code, state string, err error) {
+	if rawURL == "" {
+		return "", "", fmt.Errorf("redirect URL is empty")
+	}
+	u, parseErr := url.Parse(rawURL)
+	if parseErr != nil {
+		return "", "", fmt.Errorf("parse redirect URL %q: %w", rawURL, parseErr)
+	}
+	q := u.Query()
+	code = q.Get("code")
+	state = q.Get("state")
+	if code == "" {
+		return "", "", fmt.Errorf("redirect URL %q is missing the 'code' query parameter", rawURL)
+	}
+	if state == "" {
+		return "", "", fmt.Errorf("redirect URL %q is missing the 'state' query parameter", rawURL)
+	}
+	return code, state, nil
 }
 
 // newAuthRefreshCmd builds `pve api auth refresh`, re-obtaining a session ticket
@@ -509,6 +694,39 @@ func serverLogout(ctx *config.Context) error {
 		return fmt.Errorf("logout from %s: %w", ctx.Host, err)
 	}
 	return nil
+}
+
+// buildClientForOIDC constructs an API client suitable for calling the two public
+// OIDC endpoints (POST /access/openid/auth-url and POST /access/openid/login).
+// Both endpoints are marked noauthentication by PVE, meaning the server does not
+// validate credentials on those paths. However, the pve-apiclient-go options
+// validator requires at least one credential to be set, so:
+//   - If the context carries a live session ticket, that ticket is used.
+//   - Otherwise a placeholder API token is constructed to pass validation; the
+//     token value is never checked by the server on these public endpoints.
+func buildClientForOIDC(ctx *config.Context) (*apiclient.APIClient, error) {
+	if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
+		return clientForContext(ctx, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
+	}
+	// No live session: build with a placeholder API token.
+	if ctx.TLS.Insecure {
+		cli.WarnInsecureTLS(os.Stderr)
+	}
+	opts := apiclient.BuildOptions(
+		ctx.Host,
+		ctx.Port,
+		ctx.Protocol,
+		"", "",
+		"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
+		"", "", "",
+		ctx.TLS.Insecure,
+		ctx.TLS.Fingerprint,
+	)
+	ac, err := apiclient.NewAPIClient(opts)
+	if err != nil {
+		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+	return ac, nil
 }
 
 // clientForContext constructs an APIClient for the given context. Exactly one of

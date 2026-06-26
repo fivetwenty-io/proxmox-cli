@@ -178,13 +178,19 @@ func TestPoolListError(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestPoolGet verifies pool get uses GET /pools?poolid=<id> (non-deprecated endpoint).
 func TestPoolGet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools/prod", map[string]any{
-		"comment": "production",
-		"members": []any{
-			map[string]any{"id": "qemu/100", "type": "qemu", "vmid": 100},
+	// Response is a list (GET /pools) filtered by poolid, not the single-object
+	// shape returned by the deprecated GET /pools/{poolid}.
+	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools", []any{
+		map[string]any{
+			"poolid":  "prod",
+			"comment": "production",
+			"members": []any{
+				map[string]any{"id": "qemu/100", "type": "qemu", "vmid": 100},
+			},
 		},
 	}, 200)
 
@@ -194,13 +200,28 @@ func TestPoolGet(t *testing.T) {
 	require.Contains(t, out, "production")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/pools/prod", rec[0].path)
+	require.Equal(t, "/api2/json/pools", rec[0].path)
+	require.Contains(t, rec[0].query, "poolid=prod")
+}
+
+// TestPoolGetNotFound verifies pool get returns an error when the filtered list
+// is empty (pool does not exist but API returns 200 with zero elements).
+func TestPoolGetNotFound(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools", []any{}, 200)
+
+	_, err := run(t, f, "", "get", "ghost")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "not found")
+	require.Len(t, rec, 1)
+	require.Contains(t, rec[0].query, "poolid=ghost")
 }
 
 func TestPoolGetError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools/missing", nil, 404)
+	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools", nil, 404)
 
 	_, err := run(t, f, "", "get", "missing")
 	require.Error(t, err)
@@ -228,10 +249,12 @@ func TestPoolCreateMissingPoolid(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestPoolSet verifies pool set uses PUT /pools (non-deprecated endpoint).
+// poolid is transmitted in the request body, not the URL path.
 func TestPoolSet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools", map[string]any{}, 200)
 
 	out, err := run(t, f, "", "set", "prod", "--comment", "updated", "--vms", "100,101", "--storage", "local")
 	require.NoError(t, err)
@@ -239,16 +262,18 @@ func TestPoolSet(t *testing.T) {
 	require.Contains(t, out, "updated")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPut, rec[0].method)
-	require.Equal(t, "/api2/json/pools/prod", rec[0].path)
+	require.Equal(t, "/api2/json/pools", rec[0].path)
+	require.Equal(t, "prod", rec[0].body["poolid"])
 	require.Equal(t, "updated", rec[0].body["comment"])
 	require.Equal(t, "100,101", rec[0].body["vms"])
 	require.Equal(t, "local", rec[0].body["storage"])
 }
 
+// TestPoolSetDelete verifies --delete flag reaches the PUT /pools body.
 func TestPoolSetDelete(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools", map[string]any{}, 200)
 
 	_, err := run(t, f, "", "set", "prod", "--vms", "101", "--delete")
 	require.NoError(t, err)
@@ -257,10 +282,11 @@ func TestPoolSetDelete(t *testing.T) {
 	require.Equal(t, "101", rec[0].body["vms"])
 }
 
+// TestPoolSetAllowMove verifies --allow-move flag reaches the PUT /pools body.
 func TestPoolSetAllowMove(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools", map[string]any{}, 200)
 
 	_, err := run(t, f, "", "set", "prod", "--vms", "100", "--allow-move")
 	require.NoError(t, err)
@@ -286,16 +312,18 @@ func TestPoolListPoolidFilter(t *testing.T) {
 func TestPoolSetError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools/prod", nil, 500)
+	mustNewClientAndRecord(f, &rec, "PUT /api2/json/pools", nil, 500)
 
 	_, err := run(t, f, "", "set", "prod", "--comment", "x")
 	require.Error(t, err)
 }
 
+// TestPoolDeleteWithYes verifies pool delete uses DELETE /pools (non-deprecated endpoint).
+// poolid is transmitted in the request body, not the URL path.
 func TestPoolDeleteWithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools", map[string]any{}, 200)
 
 	out, err := run(t, f, "", "delete", "prod", "--yes")
 	require.NoError(t, err)
@@ -303,13 +331,13 @@ func TestPoolDeleteWithYes(t *testing.T) {
 	require.Contains(t, out, "deleted")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodDelete, rec[0].method)
-	require.Equal(t, "/api2/json/pools/prod", rec[0].path)
+	require.Equal(t, "/api2/json/pools", rec[0].path)
 }
 
 func TestPoolDeleteConfirmYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools", map[string]any{}, 200)
 
 	out, err := run(t, f, "y\n", "delete", "prod")
 	require.NoError(t, err)
@@ -320,7 +348,7 @@ func TestPoolDeleteConfirmYes(t *testing.T) {
 func TestPoolDeleteConfirmAbort(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools", map[string]any{}, 200)
 
 	out, err := run(t, f, "n\n", "delete", "prod")
 	require.NoError(t, err)
@@ -331,7 +359,7 @@ func TestPoolDeleteConfirmAbort(t *testing.T) {
 func TestPoolDeleteError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools/prod", nil, 500)
+	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools", nil, 500)
 
 	_, err := run(t, f, "", "delete", "prod", "--yes")
 	require.Error(t, err)
@@ -347,7 +375,7 @@ func TestPoolDeleteError(t *testing.T) {
 func TestPoolDeleteConfirmPromptToStderr(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools/prod", map[string]any{}, 200)
+	mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools", map[string]any{}, 200)
 
 	stdout, stderr, err := runSplit(t, f, "y\n", "json", "delete", "prod")
 	require.NoError(t, err)
@@ -365,7 +393,7 @@ func TestPoolDeleteRejectsDestroyFlags(t *testing.T) {
 		t.Run(flag, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
 			var rec []recordedRequest
-			mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools/prod", map[string]any{}, 200)
+			mustNewClientAndRecord(f, &rec, "DELETE /api2/json/pools", map[string]any{}, 200)
 
 			_, err := run(t, f, "", "delete", "prod", "--yes", flag)
 			require.Error(t, err)

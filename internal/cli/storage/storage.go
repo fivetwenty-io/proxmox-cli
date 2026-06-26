@@ -42,6 +42,8 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newStorageIdentityCmd(),
 		newStorageRrddataCmd(),
 		newStorageRrdCmd(),
+		newAplinfoCmd(),
+		newOciPullCmd(),
 	)
 	return cmd
 }

@@ -592,4 +592,45 @@ func TestGroupCommand_RegistersNewCommands(t *testing.T) {
 		migNames[c.Name()] = true
 	}
 	require.True(t, migNames["check"], "missing migrate sub-command check")
+
+	// Verify to-template is registered at the top level.
+	require.True(t, names["to-template"], "missing sub-command to-template")
+}
+
+// ---------------------------------------------------------------------------
+// to-template (CreateLxcTemplate)
+// ---------------------------------------------------------------------------
+
+func TestToTemplate_Success(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var gotMethod, gotPath string
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/template", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "to-template", "101")
+	require.NoError(t, run())
+
+	require.Equal(t, http.MethodPost, gotMethod)
+	require.Equal(t, "/api2/json/nodes/pve1/lxc/101/template", gotPath)
+	require.Contains(t, buf.String(), "101")
+	require.Contains(t, buf.String(), "template")
+}
+
+func TestToTemplate_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/template", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "container is running")
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "to-template", "101")
+	err := run()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "convert container")
+	require.ErrorContains(t, err, "101")
 }

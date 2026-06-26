@@ -24,6 +24,7 @@ func newTaskCmd() *cobra.Command {
 		newTaskLogCmd(),
 		newTaskStopCmd(),
 		newTaskWaitCmd(),
+		newTaskStatusCmd(),
 	)
 	return cmd
 }
@@ -197,6 +198,43 @@ func newTaskStopCmd() *cobra.Command {
 
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf("Task %s stopped.", upid)}, deps.Format)
+		},
+	}
+}
+
+// newTaskStatusCmd builds `pve node task status <upid>`. The node is resolved
+// from deps.Node (--node flag, PVE_NODE env, or configured default).
+func newTaskStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status <upid>",
+		Short: "Show the runtime status of a task by UPID",
+		Long: "Query the current status of a single task on the resolved node by its UPID. " +
+			"Reports whether the task is still running and, when finished, the exit status.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			upid := args[0]
+			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), deps.Node, upid)
+			if err != nil {
+				return fmt.Errorf("get status of task %q on node %q: %w", upid, deps.Node, err)
+			}
+			single := map[string]string{
+				"STATUS": resp.Status,
+				"ID":     resp.Id,
+				"TYPE":   resp.Type,
+				"USER":   resp.User,
+				"NODE":   resp.Node,
+				"PID":    strconv.FormatInt(resp.Pid, 10),
+				"UPID":   resp.Upid,
+			}
+			if resp.Exitstatus != nil {
+				single["EXITSTATUS"] = *resp.Exitstatus
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: resp}, deps.Format)
 		},
 	}
 }

@@ -121,6 +121,10 @@ func newCreateCmd() *cobra.Command {
 		ipconfig0 string
 
 		agent string
+
+		// Convenience / scheduling.
+		autostart bool
+		cdrom     string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vmid>",
@@ -220,6 +224,8 @@ func newCreateCmd() *cobra.Command {
 			set("ha-managed", func() { params.HaManaged = boolPtr(haManaged) })
 
 			set("agent", func() { params.Agent = strPtr(agent) })
+			set("autostart", func() { params.Autostart = boolPtr(autostart) })
+			set("cdrom", func() { params.Cdrom = strPtr(cdrom) })
 			set("ciuser", func() { params.Ciuser = strPtr(ciuser) })
 			set("cipassword", func() { params.Cipassword = strPtr(cipassword) })
 			set("citype", func() { params.Citype = strPtr(citype) })
@@ -363,6 +369,8 @@ func newCreateCmd() *cobra.Command {
 	f.BoolVar(&haManaged, "ha-managed", false, "register the VM as a HA resource after creation")
 
 	f.StringVar(&agent, "agent", "", "QEMU guest-agent option string, e.g. 1 or enabled=1,fstrim_cloned_disks=1")
+	f.BoolVar(&autostart, "autostart", false, "automatically restart after crash (currently ignored by PVE)")
+	f.StringVar(&cdrom, "cdrom", "", "CD-ROM image alias for --ide 2=<volume>,media=cdrom")
 	f.StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
 	f.StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")
 	f.StringVar(&citype, "citype", "", "cloud-init: config format, e.g. nocloud or configdrive2")

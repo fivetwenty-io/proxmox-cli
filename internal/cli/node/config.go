@@ -69,10 +69,11 @@ func newNodeConfigSetCmd() *cobra.Command {
 		startallOnbootDelay int64
 		digest              string
 		del                 string
+		location            string
 	)
 	setFlags := []string{
 		"description", "acme", "acme-domain", "wakeonlan", "ballooning-target",
-		"startall-onboot-delay", "digest", "delete",
+		"startall-onboot-delay", "digest", "delete", "location",
 	}
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -117,6 +118,9 @@ func newNodeConfigSetCmd() *cobra.Command {
 			if fl.Changed("delete") {
 				params.Delete = &del
 			}
+			if fl.Changed("location") {
+				params.Location = &location
+			}
 			if err := deps.API.Nodes.UpdateConfig(cmd.Context(), deps.Node, params); err != nil {
 				return fmt.Errorf("set config for node %q: %w", deps.Node, err)
 			}
@@ -137,5 +141,7 @@ func newNodeConfigSetCmd() *cobra.Command {
 	f.StringVar(&digest, "digest", "",
 		"SHA1 digest of the current configuration to guard against concurrent edits")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
+	f.StringVar(&location, "location", "",
+		"geographic location of the node, overrides the datacenter-level default")
 	return cmd
 }

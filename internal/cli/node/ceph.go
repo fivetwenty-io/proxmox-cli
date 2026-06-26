@@ -14,6 +14,37 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
+// renderRawMessage renders a *json.RawMessage response by inspecting the JSON
+// shape at runtime: object → Single key/value map, array → scan table,
+// string → Message text, other → Message with raw bytes.
+func renderRawMessage(cmd *cobra.Command, deps *cli.Deps, resp *json.RawMessage) error {
+	if resp == nil {
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{}, deps.Format)
+	}
+	raw := []byte(*resp)
+	// Try object.
+	var obj map[string]any
+	if json.Unmarshal(raw, &obj) == nil {
+		single := make(map[string]string, len(obj))
+		for k, v := range obj {
+			single[k] = anyCell(v)
+		}
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: obj}, deps.Format)
+	}
+	// Try array.
+	var arr []json.RawMessage
+	if json.Unmarshal(raw, &arr) == nil {
+		return renderScan(cmd, deps, arr, arr)
+	}
+	// Try string (text content, e.g. ceph.conf or CRUSH map text).
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: s, Raw: s}, deps.Format)
+	}
+	// Fallback: render raw bytes as-is.
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: string(raw), Raw: raw}, deps.Format)
+}
+
 // renderCephTask renders the asynchronous task started by a Ceph operation. The
 // write endpoints return a worker UPID; honour --async and otherwise block on
 // the task, but tolerate a non-UPID or empty body by falling back to a plain
@@ -48,6 +79,9 @@ func newCephCmd() *cobra.Command {
 	cmd.AddCommand(
 		newCephStatusCmd(),
 		newCephCfgCmd(),
+		newCephLogCmd(),
+		newCephRulesCmd(),
+		newCephCrushCmd(),
 		newCephOsdCmd(),
 		newCephPoolCmd(),
 		newCephMonCmd(),
@@ -83,21 +117,196 @@ func newCephStatusCmd() *cobra.Command {
 }
 
 func newCephCfgCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "cfg",
-		Short: "Show the Ceph configuration database",
+		Short: "Inspect the Ceph configuration database and files",
+		Long: "Show the Ceph configuration index, the config-DB overrides, the raw ceph.conf text, " +
+			"or individual per-section configuration values.\n\n" +
+			"With no subcommand, lists the configuration index (same as `cfg index`).",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runCephCfgIndex(cmd)
+		},
+	}
+	cmd.AddCommand(
+		newCephCfgIndexCmd(),
+		newCephCfgDbCmd(),
+		newCephCfgRawCmd(),
+		newCephCfgValueCmd(),
+	)
+	return cmd
+}
+
+// runCephCfgIndex lists the Ceph configuration sections and keys for the
+// resolved node. Shared by the `cfg` group (no subcommand) and `cfg index`.
+func runCephCfgIndex(cmd *cobra.Command) error {
+	deps := cli.GetDeps(cmd)
+	if err := requireNode(deps); err != nil {
+		return err
+	}
+	resp, err := deps.API.Nodes.ListCephCfg(cmd.Context(), deps.Node)
+	if err != nil {
+		return fmt.Errorf("list Ceph configuration on node %q: %w", deps.Node, err)
+	}
+	return renderScan(cmd, deps, derefRaws(resp), resp)
+}
+
+// newCephCfgIndexCmd preserves the original `cfg` leaf behaviour: lists the
+// Ceph configuration sections and keys from the config API.
+func newCephCfgIndexCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "index",
+		Short: "List all Ceph configuration sections and keys",
 		Long:  "Show the Ceph configuration entries (ceph.conf and the config database) as seen from the resolved node.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runCephCfgIndex(cmd)
+		},
+	}
+}
+
+func newCephCfgDbCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "db",
+		Short: "Show the Ceph configuration-DB overrides",
+		Long:  "List the per-daemon configuration overrides stored in the Ceph config-DB on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.ListCephCfg(cmd.Context(), deps.Node)
+			resp, err := deps.API.Nodes.ListCephCfgDb(cmd.Context(), deps.Node)
 			if err != nil {
-				return fmt.Errorf("get Ceph configuration on node %q: %w", deps.Node, err)
+				return fmt.Errorf("get Ceph config-DB on node %q: %w", deps.Node, err)
 			}
 			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+func newCephCfgRawCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "raw",
+		Short: "Show the raw ceph.conf text",
+		Long:  "Retrieve the full contents of ceph.conf as plain text from the resolved node.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephCfgRaw(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("get raw Ceph configuration on node %q: %w", deps.Node, err)
+			}
+			return renderRawMessage(cmd, deps, resp)
+		},
+	}
+}
+
+func newCephCfgValueCmd() *cobra.Command {
+	var keys string
+	cmd := &cobra.Command{
+		Use:   "value",
+		Short: "Look up specific Ceph configuration values",
+		Long: "Retrieve the value of one or more Ceph configuration keys. Each key must be " +
+			"given as <section>:<key>; separate multiple keys with a semicolon, comma, or space.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephCfgValue(cmd.Context(), deps.Node,
+				&nodes.ListCephCfgValueParams{ConfigKeys: keys})
+			if err != nil {
+				return fmt.Errorf("get Ceph configuration values on node %q: %w", deps.Node, err)
+			}
+			return renderRawMessage(cmd, deps, resp)
+		},
+	}
+	cmd.Flags().StringVar(&keys, "keys", "",
+		"configuration keys to look up, each as <section>:<key>, separated by semicolon, comma, or space (required)")
+	cli.MustMarkRequired(cmd, "keys")
+	return cmd
+}
+
+// newCephLogCmd builds `pve node ceph log`.
+func newCephLogCmd() *cobra.Command {
+	var (
+		limit int64
+		start int64
+	)
+	cmd := &cobra.Command{
+		Use:   "log",
+		Short: "Show the Ceph cluster log",
+		Long:  "Retrieve recent Ceph log lines from the resolved node. Use --limit and --start to page through the log.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			params := &nodes.ListCephLogParams{}
+			fl := cmd.Flags()
+			if fl.Changed("limit") {
+				params.Limit = &limit
+			}
+			if fl.Changed("start") {
+				params.Start = &start
+			}
+			resp, err := deps.API.Nodes.ListCephLog(cmd.Context(), deps.Node, params)
+			if err != nil {
+				return fmt.Errorf("get Ceph log on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+	f := cmd.Flags()
+	f.Int64Var(&limit, "limit", 0, "maximum number of log lines to return")
+	f.Int64Var(&start, "start", 0, "first log line index to return")
+	return cmd
+}
+
+// newCephRulesCmd builds `pve node ceph rules`.
+func newCephRulesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rules",
+		Short: "List CRUSH rules in the Ceph cluster",
+		Long:  "Show all CRUSH rules defined in the Ceph cluster as seen from the resolved node.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephRules(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list Ceph CRUSH rules on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+// newCephCrushCmd builds `pve node ceph crush`.
+func newCephCrushCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "crush",
+		Short: "Show the CRUSH map text",
+		Long:  "Retrieve the full CRUSH map as plain text from the resolved node.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephCrush(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("get Ceph CRUSH map on node %q: %w", deps.Node, err)
+			}
+			return renderRawMessage(cmd, deps, resp)
 		},
 	}
 }

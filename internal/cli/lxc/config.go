@@ -83,6 +83,7 @@ func newConfigSetCmd() *cobra.Command {
 		netSlots     []string
 		mpSlots      []string
 		devSlots     []string
+		unusedSlots  []string
 		nameserver   string
 		searchdomain string
 		onboot       bool
@@ -185,6 +186,12 @@ func newConfigSetCmd() *cobra.Command {
 				return err
 			} else if len(dev) > 0 {
 				params.Dev = dev
+				set = true
+			}
+			if unused, err := cli.ParseIndexedValues(unusedSlots, "unused"); err != nil {
+				return err
+			} else if len(unused) > 0 {
+				params.Unused = unused
 				set = true
 			}
 
@@ -297,6 +304,9 @@ func newConfigSetCmd() *cobra.Command {
 	fl.StringArrayVar(&netSlots, "net", nil, "network interface as INDEX=VALUE (repeatable), e.g. 0=name=eth0,bridge=vmbr0,ip=dhcp")
 	fl.StringArrayVar(&mpSlots, "mp", nil, "mount point as INDEX=VALUE (repeatable), e.g. 0=local-lvm:8,mp=/data")
 	fl.StringArrayVar(&devSlots, "dev", nil, "device passthrough as INDEX=VALUE (repeatable)")
+	fl.StringArrayVar(&unusedSlots, "unused", nil,
+		"unused volume slot as INDEX=VALUE (repeatable; volumes are normally PVE-managed "+
+			"and appear here after disk removal or restore, e.g. --unused 0=local-lvm:vm-101-disk-1)")
 	fl.StringVar(&nameserver, "nameserver", "", "DNS server IP(s) for the container")
 	fl.StringVar(&searchdomain, "searchdomain", "", "DNS search domain(s) for the container")
 	fl.BoolVar(&onboot, "onboot", false, "start the container during host bootup")

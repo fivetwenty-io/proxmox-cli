@@ -38,6 +38,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newCephCmd(),
 		newBulkCmd(),
 		newCpuModelCmd(),
+		newClusterQemuCmd(),
 	)
 
 	return cmd

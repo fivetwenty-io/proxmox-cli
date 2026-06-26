@@ -91,7 +91,15 @@ func newListCmd() *cobra.Command {
 	return cmd
 }
 
+// poolGetEntry is the shape of a single element returned by GET /pools?poolid=<id>.
+type poolGetEntry struct {
+	Poolid  string            `json:"poolid"`
+	Comment *string           `json:"comment"`
+	Members []json.RawMessage `json:"members"`
+}
+
 // newGetCmd builds `pve pool get <poolid>`.
+// Uses GET /pools?poolid=<id> (non-deprecated) instead of GET /pools/{poolid}.
 func newGetCmd() *cobra.Command {
 	var poolType string
 	cmd := &cobra.Command{
@@ -102,28 +110,37 @@ func newGetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]
 
-			params := &pools.GetPoolsParams{}
+			params := &pools.ListPoolsParams{Poolid: &poolid}
 			if poolType != "" {
 				params.Type = &poolType
 			}
 
-			resp, err := deps.API.Pools.GetPools(cmd.Context(), poolid, params)
+			resp, err := deps.API.Pools.ListPools(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("get pool %q: %w", poolid, err)
 			}
 
-			single := map[string]string{"poolid": poolid}
-			if resp.Comment != nil {
-				single["comment"] = *resp.Comment
+			if resp == nil || len(*resp) == 0 {
+				return fmt.Errorf("get pool %q: not found", poolid)
 			}
-			single["members"] = fmt.Sprintf("%d", len(resp.Members))
+
+			var entry poolGetEntry
+			if err := json.Unmarshal((*resp)[0], &entry); err != nil {
+				return fmt.Errorf("get pool %q: decode response: %w", poolid, err)
+			}
+
+			single := map[string]string{"poolid": poolid}
+			if entry.Comment != nil {
+				single["comment"] = *entry.Comment
+			}
+			single["members"] = fmt.Sprintf("%d", len(entry.Members))
 
 			res := output.Result{
 				Single: single,
 				Raw: map[string]any{
 					"poolid":  poolid,
-					"comment": resp.Comment,
-					"members": resp.Members,
+					"comment": entry.Comment,
+					"members": entry.Members,
 				},
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
@@ -163,6 +180,7 @@ func newCreateCmd() *cobra.Command {
 }
 
 // newSetCmd builds `pve pool set <poolid>`.
+// Uses PUT /pools (non-deprecated) instead of PUT /pools/{poolid}.
 func newSetCmd() *cobra.Command {
 	var comment, vms, storage string
 	var del, allowMove bool
@@ -174,7 +192,7 @@ func newSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]
 
-			params := &pools.UpdatePools2Params{}
+			params := &pools.UpdatePoolsParams{Poolid: poolid}
 			if cmd.Flags().Changed("comment") {
 				params.Comment = &comment
 			}
@@ -191,7 +209,7 @@ func newSetCmd() *cobra.Command {
 				params.AllowMove = &allowMove
 			}
 
-			if err := deps.API.Pools.UpdatePools2(cmd.Context(), poolid, params); err != nil {
+			if err := deps.API.Pools.UpdatePools(cmd.Context(), params); err != nil {
 				return fmt.Errorf("update pool %q: %w", poolid, err)
 			}
 
@@ -209,6 +227,7 @@ func newSetCmd() *cobra.Command {
 }
 
 // newDeleteCmd builds `pve pool delete <poolid>`.
+// Uses DELETE /pools (non-deprecated) instead of DELETE /pools/{poolid}.
 func newDeleteCmd() *cobra.Command {
 	var yes, destroyVMs, destroyStorage bool
 	cmd := &cobra.Command{
@@ -219,9 +238,8 @@ func newDeleteCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]
 
-			// The DELETE /pools/{poolid} endpoint exposed by the client library
-			// takes no parameters, so member destruction cannot be requested. Fail
-			// loudly rather than silently ignoring the documented flags.
+			// The DELETE /pools endpoint still does not support member destruction.
+			// Fail loudly rather than silently ignoring the documented flags.
 			if destroyVMs || destroyStorage {
 				return fmt.Errorf(
 					"--destroy-vms/--destroy-storage are not supported: the Proxmox VE pool delete API " +
@@ -239,7 +257,7 @@ func newDeleteCmd() *cobra.Command {
 				}
 			}
 
-			if err := deps.API.Pools.DeletePools2(cmd.Context(), poolid); err != nil {
+			if err := deps.API.Pools.DeletePools(cmd.Context(), &pools.DeletePoolsParams{Poolid: poolid}); err != nil {
 				return fmt.Errorf("delete pool %q: %w", poolid, err)
 			}
 

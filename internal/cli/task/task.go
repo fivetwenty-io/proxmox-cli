@@ -31,6 +31,7 @@ log, wait for a task to finish, or stop a running task.`,
 		newListCmd(),
 		newClusterListCmd(),
 		newLogCmd(),
+		newStatusCmd(),
 		newWaitCmd(),
 		newStopCmd(),
 	)

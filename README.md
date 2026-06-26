@@ -189,6 +189,18 @@ explicit flag > environment variable (`$PVE_NODE` / `$PVE_OUTPUT`) > context def
 pve api auth login --username root@pam
 pve api auth status            # show the active identity and expiry
 pve api auth logout            # invalidate and wipe the stored session
+
+# Two-factor auth (TOTP): first login returns a TFA challenge; re-issue with the
+# one-time password and the signed challenge the server returned.
+pve api auth login --username root@pam --otp 123456 --tfa-challenge <signed-challenge>
+
+# OIDC login (interactive): prints the authorization URL; open it in a browser,
+# authenticate, then paste the full redirect URL at the prompt.
+pve api auth login --oidc --realm myoidc
+
+# OIDC login (non-interactive): supply the authorization code and state directly,
+# e.g. from a script that completes the browser step out of band.
+pve api auth login --oidc --realm myoidc --code <auth-code> --state <state>
 ```
 
 ## Output and logging

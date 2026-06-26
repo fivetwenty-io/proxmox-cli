@@ -179,6 +179,9 @@ func newConfigSetCmd() *cobra.Command {
 		migrateDownt   float64
 		migrateSpeed   int64
 
+		autostart bool
+		cdrom     string
+
 		ciuser       string
 		cipassword   string
 		citype       string
@@ -299,6 +302,8 @@ func newConfigSetCmd() *cobra.Command {
 			set("vmstatestorage", func() { params.Vmstatestorage = strPtr(vmstatestorage) })
 			set("migrate-downtime", func() { params.MigrateDowntime = &migrateDownt })
 			set("migrate-speed", func() { params.MigrateSpeed = int64Ptr(migrateSpeed) })
+			set("autostart", func() { params.Autostart = boolPtr(autostart) })
+			set("cdrom", func() { params.Cdrom = strPtr(cdrom) })
 
 			// Cloud-init scalars (mirror `qemu create`).
 			set("ciuser", func() { params.Ciuser = strPtr(ciuser) })
@@ -418,6 +423,8 @@ func newConfigSetCmd() *cobra.Command {
 	f.StringVar(&vmstatestorage, "vmstatestorage", "", "default storage for VM state volumes")
 	f.Float64Var(&migrateDownt, "migrate-downtime", 0, "maximum tolerated migration downtime in seconds")
 	f.Int64Var(&migrateSpeed, "migrate-speed", 0, "maximum migration speed in MB/s (0 = no limit)")
+	f.BoolVar(&autostart, "autostart", false, "automatically restart after crash (currently ignored by PVE)")
+	f.StringVar(&cdrom, "cdrom", "", "CD-ROM image alias for -ide2, e.g. local:iso/img.iso,media=cdrom")
 
 	f.StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
 	f.StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")

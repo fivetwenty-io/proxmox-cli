@@ -571,6 +571,382 @@ func TestAuthSetPassword_MissingUsername(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// auth login --oidc
+// ---------------------------------------------------------------------------
+
+func TestAuthLogin_OIDC_NonInteractive_Success(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	// auth-url endpoint returns a JSON string (the authorization URL).
+	var gotAuthURLBody map[string]string
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotAuthURLBody = map[string]string{
+			"realm":        r.PostFormValue("realm"),
+			"redirect-url": r.PostFormValue("redirect-url"),
+		}
+		testhelper.WriteData(w, "https://idp.example.com/auth?response_type=code&client_id=pve")
+	})
+
+	// login endpoint returns the same shape as POST /access/ticket.
+	var gotLoginBody map[string]string
+	f.HandleFunc("POST /api2/json/access/openid/login", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotLoginBody = map[string]string{
+			"code":         r.PostFormValue("code"),
+			"state":        r.PostFormValue("state"),
+			"redirect-url": r.PostFormValue("redirect-url"),
+		}
+		testhelper.WriteData(w, map[string]any{
+			"username":            "alice@corp",
+			"ticket":              "PVE:alice@corp:OIDCTOKEN",
+			"CSRFPreventionToken": "csrf-oidc-xyz",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "corp",
+		Contexts: map[string]*config.Context{
+			"corp": {
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "corp-oidc",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "alice@corp",
+					Secret:   "unused",
+				},
+				TLS: config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path,
+		"auth", "login",
+		"--context", "corp",
+		"--oidc",
+		"--realm", "corp-oidc",
+		"--code", "mycode123",
+		"--state", "mystate456",
+	)
+	require.NoError(t, err)
+	require.Contains(t, out, "alice@corp")
+
+	// auth-url must carry the realm and redirect-url.
+	require.Equal(t, "corp-oidc", gotAuthURLBody["realm"])
+	require.NotEmpty(t, gotAuthURLBody["redirect-url"])
+
+	// login must carry the code, state, and the same redirect-url.
+	require.Equal(t, "mycode123", gotLoginBody["code"])
+	require.Equal(t, "mystate456", gotLoginBody["state"])
+	require.Equal(t, gotAuthURLBody["redirect-url"], gotLoginBody["redirect-url"],
+		"redirect-url in login call must match the one sent to auth-url")
+
+	// Session must be persisted with the returned ticket.
+	saved := loadCfg(t, path)
+	require.NotNil(t, saved.Contexts["corp"].Auth.Session)
+	require.Equal(t, "PVE:alice@corp:OIDCTOKEN", saved.Contexts["corp"].Auth.Session.Ticket)
+	require.Equal(t, "csrf-oidc-xyz", saved.Contexts["corp"].Auth.Session.CSRF)
+}
+
+func TestAuthLogin_OIDC_ExplicitRedirectUrl(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotAuthURLBody, gotLoginBody map[string]string
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotAuthURLBody = map[string]string{"redirect-url": r.PostFormValue("redirect-url")}
+		testhelper.WriteData(w, "https://idp.example.com/auth")
+	})
+	f.HandleFunc("POST /api2/json/access/openid/login", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotLoginBody = map[string]string{"redirect-url": r.PostFormValue("redirect-url")}
+		testhelper.WriteData(w, map[string]any{
+			"username":            "bob@corp",
+			"ticket":              "PVE:bob@corp:TOK",
+			"CSRFPreventionToken": "csrf2",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "myoidc",
+				Auth:     config.AuthBlock{Type: "password", Username: "bob@corp", Secret: "x"},
+				TLS:      config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--realm", "myoidc",
+		"--redirect-url", "https://custom.example.com",
+		"--code", "c1", "--state", "s1",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "https://custom.example.com", gotAuthURLBody["redirect-url"])
+	require.Equal(t, "https://custom.example.com", gotLoginBody["redirect-url"])
+}
+
+func TestAuthLogin_OIDC_RealmFromContext(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, "https://idp.example.com/auth")
+	})
+	f.HandleFunc("POST /api2/json/access/openid/login", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"username":            "carol@corp",
+			"ticket":              "PVE:carol@corp:T",
+			"CSRFPreventionToken": "x",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: host, Port: port, Protocol: "http",
+				Realm: "corp-oidc", // realm in context — no --realm flag needed
+				Auth:  config.AuthBlock{Type: "password", Username: "carol@corp", Secret: "pw"},
+				TLS:   config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	// No --realm flag: must fall back to context's realm.
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--code", "c1", "--state", "s1",
+	)
+	require.NoError(t, err)
+}
+
+func TestAuthLogin_OIDC_RealmRequired(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	// Context has no realm configured; --realm not supplied either.
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Auth: config.AuthBlock{Type: "password", Username: "u@pam", Secret: "pw"},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--code", "x", "--state", "y",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "realm")
+}
+
+func TestAuthLogin_OIDC_PasswordConflict(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Realm: "corp",
+				Auth:  config.AuthBlock{Type: "password", Username: "u@corp", Secret: "pw"},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--realm", "corp",
+		"--password", "somepw",
+		"--code", "x", "--state", "y",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--password")
+}
+
+func TestAuthLogin_OIDC_OTPConflict(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Realm: "corp",
+				Auth:  config.AuthBlock{Type: "password", Username: "u@corp", Secret: "pw"},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--realm", "corp",
+		"--otp", "123456",
+		"--code", "x", "--state", "y",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--otp")
+}
+
+func TestAuthLogin_OIDC_TfaChallengeConflict(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Realm: "corp",
+				Auth:  config.AuthBlock{Type: "password", Username: "u@corp", Secret: "pw"},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--realm", "corp",
+		"--tfa-challenge", "totp:resp",
+		"--code", "x", "--state", "y",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--tfa-challenge")
+}
+
+func TestAuthLogin_OIDC_CodeWithoutState(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Realm: "corp",
+				Auth:  config.AuthBlock{Type: "password", Username: "u@corp", Secret: "pw"},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--realm", "corp",
+		"--code", "x",
+		// --state intentionally omitted
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--state")
+}
+
+func TestAuthLogin_OIDC_AuthUrlServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusBadRequest, "unknown realm")
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: host, Port: port, Protocol: "http",
+				Realm: "badoidc",
+				Auth:  config.AuthBlock{Type: "password", Username: "u@corp", Secret: "pw"},
+				TLS:   config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--code", "x", "--state", "y",
+	)
+	require.Error(t, err)
+}
+
+func TestAuthLogin_OIDC_LoginServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, "https://idp.example.com/auth")
+	})
+	f.HandleFunc("POST /api2/json/access/openid/login", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusUnauthorized, "invalid code")
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "c",
+		Contexts: map[string]*config.Context{
+			"c": {
+				Host: host, Port: port, Protocol: "http",
+				Realm: "myoidc",
+				Auth:  config.AuthBlock{Type: "password", Username: "u@corp", Secret: "pw"},
+				TLS:   config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path,
+		"auth", "login", "--context", "c",
+		"--oidc", "--code", "expired-code", "--state", "s1",
+	)
+	require.Error(t, err)
+}
+
+// ---------------------------------------------------------------------------
 // registration + annotations
 // ---------------------------------------------------------------------------
 

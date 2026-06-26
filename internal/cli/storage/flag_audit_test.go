@@ -176,6 +176,63 @@ func TestStorageNodeList_ForwardsFilters(t *testing.T) {
 	require.Equal(t, "pve2", rec.form.Get("target"))
 }
 
+// TestStorageUpload_AuditChecksumFlags verifies --checksum and
+// --checksum-algorithm are forwarded as multipart form fields with their exact
+// API parameter keys.
+func TestStorageUpload_AuditChecksumFlags(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:imgcopy::root@pam:"
+	var gotChecksum, gotAlgo string
+	f.HandleFunc("POST /api2/json/nodes/pve1/storage/local/upload", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			testhelper.WriteError(w, http.StatusBadRequest, "bad multipart")
+			return
+		}
+		gotChecksum = r.FormValue("checksum")
+		gotAlgo = r.FormValue("checksum-algorithm")
+		testhelper.WriteData(w, upid)
+	})
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "OK", "upid": upid,
+	})
+
+	path := writeTempFile(t, "pve-cli-test.iso", "fake-iso-bytes")
+	_, err := run(t, f, "--node", "pve1", "upload", "local",
+		"--file", path,
+		"--checksum", "abcdef1234567890abcdef1234567890",
+		"--checksum-algorithm", "sha256",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "abcdef1234567890abcdef1234567890", gotChecksum)
+	require.Equal(t, "sha256", gotAlgo)
+}
+
+// TestStorageUpload_OmitsChecksumWhenAbsent verifies checksum fields are not
+// sent in the multipart body when --checksum and --checksum-algorithm are omitted.
+func TestStorageUpload_OmitsChecksumWhenAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:imgcopy::root@pam:"
+	var gotChecksum, gotAlgo string
+	f.HandleFunc("POST /api2/json/nodes/pve1/storage/local/upload", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			testhelper.WriteError(w, http.StatusBadRequest, "bad multipart")
+			return
+		}
+		gotChecksum = r.FormValue("checksum")
+		gotAlgo = r.FormValue("checksum-algorithm")
+		testhelper.WriteData(w, upid)
+	})
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+upid+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "OK", "upid": upid,
+	})
+
+	path := writeTempFile(t, "pve-cli-no-checksum.iso", "fake-iso-bytes")
+	_, err := run(t, f, "--node", "pve1", "upload", "local", "--file", path)
+	require.NoError(t, err)
+	require.Empty(t, gotChecksum, "checksum must not be sent when --checksum is absent")
+	require.Empty(t, gotAlgo, "checksum-algorithm must not be sent when --checksum-algorithm is absent")
+}
+
 // TestStorageNodeList_RequiresNode verifies the command fails without a node.
 func TestStorageNodeList_RequiresNode(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

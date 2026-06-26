@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -19,16 +20,19 @@ import (
 // prints the task UPID and returns immediately.
 func newUploadCmd() *cobra.Command {
 	var (
-		file     string
-		content  string
-		filename string
+		file         string
+		content      string
+		filename     string
+		checksum     string
+		checksumAlgo string
 	)
 	cmd := &cobra.Command{
 		Use:   "upload <storage>",
 		Short: "Upload a local file to a storage",
 		Long: "Stream a local file to the resolved node's storage as an ISO image or container " +
 			"template. The destination name defaults to the source file's base name; override it " +
-			"with --filename. The upload runs as an asynchronous task and the command blocks until " +
+			"with --filename. Optionally verify the upload with --checksum and --checksum-algorithm. " +
+			"The upload runs as an asynchronous task and the command blocks until " +
 			"it finishes unless --async is set.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -37,6 +41,7 @@ func newUploadCmd() *cobra.Command {
 				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
 			}
 			storage := args[0]
+			fl := cmd.Flags()
 
 			dest := filename
 			if dest == "" {
@@ -49,9 +54,36 @@ func newUploadCmd() *cobra.Command {
 			}
 			defer func() { _ = f.Close() }()
 
-			upid, err := deps.API.Storage.Upload(cmd.Context(), deps.Node, storage, content, dest, f)
+			// Build the multipart form fields. The PVE upload endpoint expects
+			// "content" as a plain form field; the file is sent as the "filename"
+			// file part (its filename attribute carries the destination name). Do
+			// NOT also pass "filename" as a plain form field — PVE rejects (HTTP
+			// 400) when the same multipart part name appears twice.
+			fields := map[string]string{"content": content}
+			if fl.Changed("checksum") {
+				fields["checksum"] = checksum
+			}
+			if fl.Changed("checksum-algorithm") {
+				fields["checksum-algorithm"] = checksumAlgo
+			}
+
+			path := fmt.Sprintf("/nodes/%s/storage/%s/upload",
+				url.PathEscape(deps.Node), url.PathEscape(storage))
+
+			resp, err := deps.API.Raw.UploadCtx(cmd.Context(), path, fields, "filename", dest, f)
 			if err != nil {
 				return fmt.Errorf("upload %q to storage %q on node %q: %w", dest, storage, deps.Node, err)
+			}
+
+			var upid string
+			if resp != nil {
+				if s, ok := resp.Data.(string); ok {
+					upid = s
+				} else if m, ok := resp.Data.(map[string]interface{}); ok {
+					if v, ok := m["upid"].(string); ok {
+						upid = v
+					}
+				}
 			}
 
 			return renderStorageTask(cmd, deps, upid,
@@ -62,6 +94,8 @@ func newUploadCmd() *cobra.Command {
 	fl.StringVar(&file, "file", "", "path to the local file to upload (required)")
 	fl.StringVar(&content, "content", "iso", "content type of the upload: iso|vztmpl|import")
 	fl.StringVar(&filename, "filename", "", "destination file name (defaults to the source base name)")
+	fl.StringVar(&checksum, "checksum", "", "expected checksum of the uploaded file")
+	fl.StringVar(&checksumAlgo, "checksum-algorithm", "", "checksum algorithm: md5|sha1|sha224|sha256|sha384|sha512")
 	cli.MustMarkRequired(cmd, "file")
 	return cmd
 }

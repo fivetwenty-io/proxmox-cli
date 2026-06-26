@@ -306,6 +306,91 @@ func TestFirewallIpsetUpdateMember(t *testing.T) {
 	require.Equal(t, true, body["nomatch"])
 }
 
+// TestCreate_UnusedSlots verifies the repeatable --unused flag on lxc create
+// expands into indexed unused0, unused1, ... keys (L1).
+func TestCreate_UnusedSlots(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var body map[string]any
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc", func(w http.ResponseWriter, r *http.Request) {
+		body = recordBody(t, r)
+		testhelper.WriteData(w, "UPID:pve1:0:0:0:vzcreate:101:root@pam:")
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", true)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "create", "101",
+		"--ostemplate", "local:vztmpl/alpine.tar.zst",
+		"--unused", "0=local-lvm:vm-101-disk-1",
+		"--unused", "1=local-lvm:vm-101-disk-2",
+	)
+	require.NoError(t, run())
+
+	require.Equal(t, "local-lvm:vm-101-disk-1", body["unused0"])
+	require.Equal(t, "local-lvm:vm-101-disk-2", body["unused1"])
+}
+
+// TestCreate_NoUnused_SlotAbsent verifies --unused is omitted from the body
+// when not supplied.
+func TestCreate_NoUnused_SlotAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var body map[string]any
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc", func(w http.ResponseWriter, r *http.Request) {
+		body = recordBody(t, r)
+		testhelper.WriteData(w, "UPID:pve1:0:0:0:vzcreate:101:root@pam:")
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", true)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "create", "101",
+		"--ostemplate", "local:vztmpl/alpine.tar.zst",
+	)
+	require.NoError(t, run())
+
+	_, has0 := body["unused0"]
+	require.False(t, has0, "unused0 must not appear in body when --unused is not supplied")
+}
+
+// TestConfigSet_UnusedSlots verifies the repeatable --unused flag on lxc config
+// set expands into indexed unused0, unused1, ... keys (L1).
+func TestConfigSet_UnusedSlots(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var body map[string]any
+	f.HandleFunc("PUT /api2/json/nodes/pve1/lxc/101/config", func(w http.ResponseWriter, r *http.Request) {
+		body = recordBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "config", "set", "101",
+		"--unused", "0=local-lvm:vm-101-disk-3",
+	)
+	require.NoError(t, run())
+
+	require.Equal(t, "local-lvm:vm-101-disk-3", body["unused0"])
+}
+
+// TestConfigSet_NoUnused_SlotAbsent verifies --unused is omitted from the body
+// when not supplied on config set.
+func TestConfigSet_NoUnused_SlotAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var body map[string]any
+	f.HandleFunc("PUT /api2/json/nodes/pve1/lxc/101/config", func(w http.ResponseWriter, r *http.Request) {
+		body = recordBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "config", "set", "101",
+		"--hostname", "web",
+	)
+	require.NoError(t, run())
+
+	_, has0 := body["unused0"]
+	require.False(t, has0, "unused0 must not appear in body when --unused is not supplied")
+}
+
 // TestDiskMove_DigestFlags verifies --digest and --target-digest reach the
 // move_volume body.
 func TestDiskMove_DigestFlags(t *testing.T) {

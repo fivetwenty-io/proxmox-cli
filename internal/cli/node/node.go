@@ -57,6 +57,10 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newSuspendallCmd(),
 		newMigrateallCmd(),
 		newWakeonlanCmd(),
+		newNodeExecuteCmd(),
+		newTermproxyCmd(),
+		newVncshellCmd(),
+		newSpiceshellCmd(),
 	)
 
 	return cmd

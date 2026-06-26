@@ -275,3 +275,132 @@ func TestDnsDeleteLockToken(t *testing.T) {
 	require.Len(t, rec, 1)
 	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
 }
+
+// --- M1: --redistribute on fabric create / set ---
+
+// TestFabricCreateRedistribute verifies --redistribute values reach the
+// `redistribute` API parameter and that multiple occurrences are forwarded.
+func TestFabricCreateRedistribute(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/fabric", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "create", "fab1",
+		"--protocol", "ospf",
+		"--redistribute", "connected",
+		"--redistribute", "static")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	// The form captures the first repeated value; assert it equals the first element.
+	require.Equal(t, "connected", rec[0].body["redistribute"],
+		"first --redistribute value must reach API key \"redistribute\"")
+}
+
+// TestFabricCreateRedistributeAbsent verifies that when --redistribute is not
+// passed on create, the `redistribute` key is absent from the request.
+func TestFabricCreateRedistributeAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/fabric", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "create", "fab1", "--protocol", "ospf")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.NotContains(t, rec[0].body, "redistribute",
+		"omitted --redistribute must not appear in the request body")
+}
+
+// TestFabricSetRedistribute verifies --redistribute is forwarded on set when
+// explicitly passed and gated (absent when not passed).
+func TestFabricSetRedistribute(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/fabrics/fabric/fab1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "set", "fab1",
+		"--protocol", "ospf",
+		"--redistribute", "bgp")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "bgp", rec[0].body["redistribute"],
+		"--redistribute value must reach API key \"redistribute\" on set")
+}
+
+// TestFabricSetRedistributeAbsent verifies that when --redistribute is not
+// passed on set, the `redistribute` key is absent (gated behind Changed).
+func TestFabricSetRedistributeAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/fabrics/fabric/fab1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "set", "fab1", "--protocol", "ospf", "--area", "0.0.0.1")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.NotContains(t, rec[0].body, "redistribute",
+		"omitted --redistribute must not appear in the set request body")
+}
+
+// --- M2: --interface on fabric node create / set ---
+
+// TestFabricNodeCreateInterface verifies --interface values reach the
+// `interfaces` API parameter (singular flag → plural API key).
+func TestFabricNodeCreateInterface(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/node/fab1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "node", "create", "fab1", "n1",
+		"--protocol", "openfabric",
+		"--interface", "eth0",
+		"--interface", "eth1")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "eth0", rec[0].body["interfaces"],
+		"first --interface value must reach API key \"interfaces\"")
+}
+
+// TestFabricNodeCreateInterfaceAbsent verifies that when --interface is not
+// passed on create, the `interfaces` key is absent from the request.
+func TestFabricNodeCreateInterfaceAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/fabrics/node/fab1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "node", "create", "fab1", "n1",
+		"--protocol", "openfabric", "--ip", "10.0.0.1")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.NotContains(t, rec[0].body, "interfaces",
+		"omitted --interface must not appear in the request body")
+}
+
+// TestFabricNodeSetInterface verifies --interface is forwarded on set when
+// explicitly passed.
+func TestFabricNodeSetInterface(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/fabrics/node/fab1/n1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "node", "set", "fab1", "n1",
+		"--protocol", "openfabric",
+		"--interface", "bond0")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "bond0", rec[0].body["interfaces"],
+		"--interface value must reach API key \"interfaces\" on set")
+}
+
+// TestFabricNodeSetInterfaceAbsent verifies that when --interface is not
+// passed on set, the `interfaces` key is absent (gated behind Changed).
+func TestFabricNodeSetInterfaceAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/fabrics/node/fab1/n1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "fabric", "node", "set", "fab1", "n1",
+		"--protocol", "openfabric", "--ip", "10.0.0.2")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.NotContains(t, rec[0].body, "interfaces",
+		"omitted --interface must not appear in the set request body")
+}

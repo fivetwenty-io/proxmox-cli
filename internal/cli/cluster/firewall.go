@@ -372,6 +372,7 @@ func newClusterFirewallGroupCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newClusterFirewallGroupListCmd(),
+		newClusterFirewallGroupGetCmd(),
 		newClusterFirewallGroupCreateCmd(),
 		newClusterFirewallGroupDeleteCmd(),
 		newClusterFirewallGroupRulesCmd(),
@@ -380,6 +381,28 @@ func newClusterFirewallGroupCmd() *cobra.Command {
 		newClusterFirewallGroupRuleDeleteCmd(),
 	)
 	return cmd
+}
+
+func newClusterFirewallGroupGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <group> <pos>",
+		Short: "Show a single rule from a security group by position",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			group, pos := args[0], args[1]
+			resp, err := deps.API.Cluster.GetFirewallGroups2(cmd.Context(), group, pos)
+			if err != nil {
+				return fmt.Errorf("get rule %s in security group %q: %w", pos, group, err)
+			}
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("decode rule %s in security group %q: %w", pos, group, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
 }
 
 func newClusterFirewallGroupListCmd() *cobra.Command {
@@ -684,6 +707,7 @@ func newClusterFirewallIpsetCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newClusterFirewallIpsetListCmd(),
+		newClusterFirewallIpsetGetCmd(),
 		newClusterFirewallIpsetCreateCmd(),
 		newClusterFirewallIpsetDeleteCmd(),
 		newClusterFirewallIpsetAddCmd(),
@@ -691,6 +715,28 @@ func newClusterFirewallIpsetCmd() *cobra.Command {
 		newClusterFirewallIpsetRemoveCmd(),
 	)
 	return cmd
+}
+
+func newClusterFirewallIpsetGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <name> <cidr>",
+		Short: "Show a single CIDR entry from an IP set",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			name, cidr := args[0], args[1]
+			resp, err := deps.API.Cluster.GetFirewallIpset2(cmd.Context(), name, cidr)
+			if err != nil {
+				return fmt.Errorf("get %s from IP set %q: %w", cidr, name, err)
+			}
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("decode %s from IP set %q: %w", cidr, name, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
 }
 
 func newClusterFirewallIpsetListCmd() *cobra.Command {
@@ -919,11 +965,34 @@ func newClusterFirewallAliasCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newClusterFirewallAliasListCmd(),
+		newClusterFirewallAliasGetCmd(),
 		newClusterFirewallAliasCreateCmd(),
 		newClusterFirewallAliasUpdateCmd(),
 		newClusterFirewallAliasDeleteCmd(),
 	)
 	return cmd
+}
+
+func newClusterFirewallAliasGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <name>",
+		Short: "Show a single firewall address alias",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			name := args[0]
+			resp, err := deps.API.Cluster.GetFirewallAliases(cmd.Context(), name)
+			if err != nil {
+				return fmt.Errorf("get firewall alias %q: %w", name, err)
+			}
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("decode firewall alias %q: %w", name, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
 }
 
 func newClusterFirewallAliasListCmd() *cobra.Command {

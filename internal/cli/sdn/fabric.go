@@ -37,6 +37,7 @@ type fabricFlags struct {
 	persistentKeepalive float64
 	routeFilter         string
 	lockToken           string
+	redistVals          []string
 }
 
 func (ff *fabricFlags) register(cmd *cobra.Command) {
@@ -50,6 +51,8 @@ func (ff *fabricFlags) register(cmd *cobra.Command) {
 		"WireGuard persistent keepalive interval (1-65535 seconds, 0 disables)")
 	f.StringVar(&ff.routeFilter, "route-filter", "", "prefix list used to filter routes installed into the kernel")
 	f.StringVar(&ff.lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
+	f.StringArrayVar(&ff.redistVals, "redistribute", nil,
+		"routing protocol to redistribute into this fabric (repeatable, e.g. --redistribute connected --redistribute static)")
 }
 
 func (ff *fabricFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsFabricParams) {
@@ -78,6 +81,9 @@ func (ff *fabricFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabric
 	if f.Changed("lock-token") {
 		p.LockToken = strPtr(ff.lockToken)
 	}
+	if f.Changed("redistribute") {
+		p.Redistribute = rawStringList(ff.redistVals)
+	}
 }
 
 func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsFabricParams) {
@@ -105,6 +111,9 @@ func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabric
 	}
 	if f.Changed("lock-token") {
 		p.LockToken = strPtr(ff.lockToken)
+	}
+	if f.Changed("redistribute") {
+		p.Redistribute = rawStringList(ff.redistVals)
 	}
 }
 
@@ -306,6 +315,7 @@ type nodeFlags struct {
 	allowedIps []string
 	peers      []string
 	lockToken  string
+	ifaceVals  []string
 }
 
 func (nf *nodeFlags) register(cmd *cobra.Command) {
@@ -318,6 +328,8 @@ func (nf *nodeFlags) register(cmd *cobra.Command) {
 	f.StringArrayVar(&nf.allowedIps, "allowed-ip", nil, "IP routable via this node (repeatable)")
 	f.StringArrayVar(&nf.peers, "peer", nil, "peer of this node (repeatable)")
 	f.StringVar(&nf.lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
+	f.StringArrayVar(&nf.ifaceVals, "interface", nil,
+		"interface property-string for this node (repeatable, maps to API `interfaces`)")
 }
 
 func (nf *nodeFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsNodeParams) {
@@ -346,6 +358,9 @@ func (nf *nodeFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsN
 	if f.Changed("lock-token") {
 		p.LockToken = strPtr(nf.lockToken)
 	}
+	if f.Changed("interface") {
+		p.Interfaces = rawStringList(nf.ifaceVals)
+	}
 }
 
 func (nf *nodeFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsNodeParams) {
@@ -373,6 +388,9 @@ func (nf *nodeFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsN
 	}
 	if f.Changed("lock-token") {
 		p.LockToken = strPtr(nf.lockToken)
+	}
+	if f.Changed("interface") {
+		p.Interfaces = rawStringList(nf.ifaceVals)
 	}
 }
 
