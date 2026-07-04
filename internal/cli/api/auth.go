@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
@@ -18,6 +19,7 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
 )
 
 // ticketLifetime is the PVE ticket validity window used to compute a session's
@@ -109,7 +111,7 @@ func newAuthLoginCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := createTicket(cmd, ctx, user, rlm, pw, ticketOptions{
+			resp, err := createTicket(cmd, ctx, name, user, rlm, pw, ticketOptions{
 				otp:          otp,
 				tfaChallenge: tfaChallenge,
 				verifyPath:   verifyPath,
@@ -196,7 +198,7 @@ func performOIDCLogin(
 	// HTTP transport — the server does not validate credentials on these paths.
 	// Prefer an existing session ticket; fall back to a placeholder token that
 	// passes the pve-apiclient-go options validator without real credentials.
-	ac, err := buildClientForOIDC(ctx)
+	ac, err := buildClientForOIDC(cmd, ctx, contextName)
 	if err != nil {
 		return err
 	}
@@ -350,7 +352,7 @@ func newAuthRefreshCmd() *cobra.Command {
 			}
 			rlm := firstNonEmpty(ctx.Realm, "pam")
 
-			resp, err := createTicket(cmd, ctx, ctx.Auth.Username, rlm, pw, ticketOptions{
+			resp, err := createTicket(cmd, ctx, name, ctx.Auth.Username, rlm, pw, ticketOptions{
 				tfaChallenge: tfaChallenge,
 			})
 			if err != nil {
@@ -398,7 +400,7 @@ func newAuthLogoutCmd() *cobra.Command {
 
 			// If a live session exists, best-effort invalidate it server-side.
 			if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
-				if err := serverLogout(ctx); err != nil {
+				if err := serverLogout(cmd, ctx, name); err != nil {
 					return err
 				}
 			}
@@ -642,14 +644,16 @@ type ticketOptions struct {
 
 // createTicket builds a password-authenticated client for ctx and requests a
 // session ticket using the given user, realm, password, and optional 2FA /
-// ticket-verification inputs.
+// ticket-verification inputs. contextName is the resolved context name (see
+// resolveContextName), used only to derive the per-context TOFU fingerprint
+// cache path (see contextOptions).
 func createTicket(
 	cmd *cobra.Command,
 	ctx *config.Context,
-	user, realm, password string,
+	contextName, user, realm, password string,
 	opts ticketOptions,
 ) (*access.CreateTicketResponse, error) {
-	ac, err := clientForContext(ctx, user, realm, password, "", "")
+	ac, err := clientForContext(cmd, ctx, contextName, user, realm, password, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -685,8 +689,10 @@ func createTicket(
 // serverLogout builds a ticket-authenticated client and invalidates the session
 // server-side. The session's CSRF token is supplied so the logout (a non-GET
 // request) carries the PVECSRFPreventionToken header Proxmox requires.
-func serverLogout(ctx *config.Context) error {
-	ac, err := clientForContext(ctx, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
+// contextName is the resolved context name (see resolveContextName), used only
+// to derive the per-context TOFU fingerprint cache path (see contextOptions).
+func serverLogout(cmd *cobra.Command, ctx *config.Context, contextName string) error {
+	ac, err := clientForContext(cmd, ctx, contextName, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	if err != nil {
 		return err
 	}
@@ -704,24 +710,21 @@ func serverLogout(ctx *config.Context) error {
 //   - If the context carries a live session ticket, that ticket is used.
 //   - Otherwise a placeholder API token is constructed to pass validation; the
 //     token value is never checked by the server on these public endpoints.
-func buildClientForOIDC(ctx *config.Context) (*apiclient.APIClient, error) {
+//
+// contextName is the resolved context name (see resolveContextName); it is used
+// only to derive the per-context TOFU fingerprint cache path (see
+// contextOptions) and has no bearing on which credential is selected.
+func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName string) (*apiclient.APIClient, error) {
 	if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
-		return clientForContext(ctx, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
+		return clientForContext(cmd, ctx, contextName, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	}
 	// No live session: build with a placeholder API token.
 	if ctx.TLS.Insecure {
 		cli.WarnInsecureTLS(os.Stderr)
 	}
-	opts := apiclient.BuildOptions(
-		ctx.Host,
-		ctx.Port,
-		ctx.Protocol,
-		"", "",
+	opts := contextOptions(cmd, ctx, contextName, "", "",
 		"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
-		"", "", "",
-		ctx.TLS.Insecure,
-		ctx.TLS.Fingerprint,
-	)
+		"", "", "")
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
@@ -733,7 +736,15 @@ func buildClientForOIDC(ctx *config.Context) (*apiclient.APIClient, error) {
 // (user+password) or (ticket+csrf) should be supplied so the underlying client
 // has valid credentials. The csrf token is required alongside a ticket for
 // non-GET requests under session authentication.
-func clientForContext(ctx *config.Context, user, realm, password, ticket, csrf string) (*apiclient.APIClient, error) {
+//
+// contextName is the resolved context name (see resolveContextName); it is used
+// only to derive the per-context TOFU fingerprint cache path (see
+// contextOptions).
+func clientForContext(
+	cmd *cobra.Command,
+	ctx *config.Context,
+	contextName, user, realm, password, ticket, csrf string,
+) (*apiclient.APIClient, error) {
 	if ctx.TLS.Insecure {
 		cli.WarnInsecureTLS(os.Stderr)
 	}
@@ -741,24 +752,73 @@ func clientForContext(ctx *config.Context, user, realm, password, ticket, csrf s
 	if rlm == "" {
 		rlm = ctx.Realm
 	}
+	opts := contextOptions(cmd, ctx, contextName, user, rlm,
+		"", // no token: login/logout use ticket or password
+		password, ticket, csrf)
+	ac, err := apiclient.NewAPIClient(opts)
+	if err != nil {
+		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+	return ac, nil
+}
+
+// contextOptions builds the pve.Options for ctx, applying the same
+// Trust-On-First-Use (TOFU) certificate wiring the root command applies for
+// regular commands (see cli.ApplyTOFUOptions): a context with tls.tofu set
+// gets FingerprintCachePath and a manual-verify callback that prompts on a
+// TTY and fails closed (no prompt, no read) otherwise; a context without
+// tls.tofu set, or with tls.insecure set, gets neither — options identical to
+// pre-TOFU behavior. user/realm/token/password/ticket/csrf select which
+// credential BuildOptions embeds; contextName is used only to derive the
+// per-context fingerprint cache path.
+func contextOptions(
+	cmd *cobra.Command,
+	ctx *config.Context,
+	contextName, user, realm, token, password, ticket, csrf string,
+) pve.Options {
 	opts := apiclient.BuildOptions(
 		ctx.Host,
 		ctx.Port,
 		ctx.Protocol,
 		user,
-		rlm,
-		"", // no token: login/logout use ticket or password
+		realm,
+		token,
 		password,
 		ticket,
 		csrf,
 		ctx.TLS.Insecure,
 		ctx.TLS.Fingerprint,
 	)
-	ac, err := apiclient.NewAPIClient(opts)
-	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+
+	return cli.ApplyTOFUOptions(
+		opts,
+		ctx.TLS.Tofu,
+		ctx.TLS.Insecure,
+		configPath(cmd),
+		contextName,
+		cmd.ErrOrStderr(),
+		cmd.InOrStdin(),
+		func() bool { return isInteractiveInput(cmd.InOrStdin()) },
+	)
+}
+
+// isInteractiveInput reports whether in is an interactive terminal, used to
+// decide whether the TOFU manual-verify callback (see contextOptions and
+// cli.ApplyTOFUOptions) may prompt for a trust decision. Only a live *os.File
+// that the terminal package recognises as a TTY counts as interactive; pipes,
+// redirected files, and the in-memory readers/buffers used by tests are
+// always treated as non-interactive, so the callback fails closed for them
+// exactly as it does for a genuinely non-interactive process. Mirrors
+// internal/cli.isInteractiveInput, duplicated here because that helper is
+// unexported and this package builds its own clients independently of the
+// root command's PersistentPreRunE.
+func isInteractiveInput(in io.Reader) bool {
+	f, ok := in.(*os.File)
+	if !ok {
+		return false
 	}
-	return ac, nil
+
+	return term.IsTerminal(int(f.Fd()))
 }
 
 // storeSession records the ticket, CSRF token, and expiry from resp on ctx.
