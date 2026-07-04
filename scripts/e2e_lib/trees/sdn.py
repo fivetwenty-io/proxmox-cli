@@ -18,8 +18,22 @@ def run(ctx: Ctx) -> None:
     def is_list(res: CmdResult) -> str | None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
 
-    ctx.check("zone list", "sdn", "zone", "list", validate=is_list)
+    zones = ctx.check("zone list", "sdn", "zone", "list", validate=is_list)
     vnets = ctx.check("vnet list", "sdn", "vnet", "list", validate=is_list)
+
+    # zone show: per-zone configuration detail. Discover a real zone from the
+    # list above; a fresh cluster always has at least the built-in `localnetwork`
+    # zone, but skip gracefully if somehow none is reported.
+    zone_id = None
+    if zones.rc == 0:
+        try:
+            zone_id = ctx.first(zones.json(), "zone")
+        except ValueError:
+            zone_id = None
+    if zone_id:
+        ctx.check("zone show", "sdn", "zone", "show", str(zone_id))
+    else:
+        ctx.skip("zone show", "no zone defined")
 
     vnet = None
     if vnets.rc == 0:
@@ -28,13 +42,28 @@ def run(ctx: Ctx) -> None:
         except ValueError:
             vnet = None
     if vnet:
-        ctx.check("subnet list", "sdn", "subnet", "list", str(vnet), validate=is_list)
+        ctx.check("vnet show", "sdn", "vnet", "show", str(vnet))
+        subnets = ctx.check("subnet list", "sdn", "subnet", "list", str(vnet), validate=is_list)
+        # subnet show: per-subnet configuration detail. Discover a real subnet id
+        # from the list just checked; skip when the vnet has no subnet defined.
+        subnet_id = None
+        if subnets.rc == 0:
+            try:
+                subnet_id = ctx.first(subnets.json(), "subnet")
+            except ValueError:
+                subnet_id = None
+        if subnet_id:
+            ctx.check("subnet show", "sdn", "subnet", "show", str(vnet), str(subnet_id))
+        else:
+            ctx.skip("subnet show", "no subnet defined on the discovered vnet")
         ctx.check("vnet firewall rules list", "sdn", "vnet", "firewall", "rules", "list",
                   str(vnet), validate=is_list)
         ctx.check("vnet firewall options get", "sdn", "vnet", "firewall", "options", "get",
                   str(vnet))
     else:
+        ctx.skip("vnet show", "no vnet defined")
         ctx.skip("subnet list", "no vnet defined")
+        ctx.skip("subnet show", "no vnet defined")
         ctx.skip("vnet firewall rules list", "no vnet defined")
         ctx.skip("vnet firewall options get", "no vnet defined")
 
@@ -103,6 +132,36 @@ def run(ctx: Ctx) -> None:
     ctx.check("fabric create --help", "sdn", "fabric", "create", "--help", fmt="")
     ctx.check("prefix-list create --help", "sdn", "prefix-list", "create", "--help", fmt="")
     ctx.check("route-map entry add --help", "sdn", "route-map", "entry", "add", "--help", fmt="")
+
+    # sdn status fabrics *: live FRR routing-daemon state for a fabric. The
+    # mutate phase's fabric create/get/set/delete cycle deliberately never
+    # applies (see the fabric defer below), so no fabric is ever actually
+    # running FRR in this lab — these read-only verbs have no live target to
+    # query and are not exercised.
+    ctx.defer(
+        "status fabrics get",
+        "requires applied FRR fabric backend not present in lab",
+        "pve sdn status fabrics get <fabric> --node <node>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "status fabrics interfaces",
+        "requires applied FRR fabric backend not present in lab",
+        "pve sdn status fabrics interfaces <fabric> --node <node>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "status fabrics neighbors",
+        "requires applied FRR fabric backend not present in lab",
+        "pve sdn status fabrics neighbors <fabric> --node <node>",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "status fabrics routes",
+        "requires applied FRR fabric backend not present in lab",
+        "pve sdn status fabrics routes <fabric> --node <node>",
+        isolation=False, live_covered=False,
+    )
 
     # A fabric, prefix list, and route map are staged cluster-config entries
     # until `sdn apply`; the FRR routing stack is only engaged at apply time. The

@@ -59,6 +59,8 @@ def run(ctx: Ctx) -> None:
         ctx.skip("migrate check", "no VM on node")
         ctx.skip("firewall rules list", "no VM on node")
         ctx.skip("firewall options get", "no VM on node")
+        ctx.skip("firewall log", "no VM on node")
+        ctx.skip("firewall refs", "no VM on node")
         ctx.skip("console vnc ticket", "no VM on node")
         ctx.skip("cloudinit pending", "no VM on node")
     else:
@@ -127,6 +129,8 @@ def run(ctx: Ctx) -> None:
         ctx.check("firewall rules list", "qemu", "firewall", "rules", "list", vid,
                   node=n, validate=is_list)
         ctx.check("firewall options get", "qemu", "firewall", "options", "get", vid, node=n)
+        ctx.check("firewall log", "qemu", "firewall", "log", vid, node=n)
+        ctx.check("firewall refs", "qemu", "firewall", "refs", vid, node=n, validate=is_list)
         # Requesting a VNC proxy ticket is non-disruptive — it spawns an
         # ephemeral proxy the same way the web GUI does and changes no VM state.
         ctx.check("console vnc ticket", "qemu", "console", vid, "--type", "vnc",
@@ -136,6 +140,13 @@ def run(ctx: Ctx) -> None:
         # cloud-init drive, so it is safe against any existing VM.
         ctx.check("cloudinit pending", "qemu", "cloudinit", "pending", vid,
                   node=n, validate=is_list)
+
+    # QEMU capability queries are node-scoped and always safe: they report the
+    # CPU models, CPU flags, and machine types the node's QEMU binary can offer
+    # guests, independent of whether any VM exists.
+    ctx.check("cpu list", "qemu", "cpu", "list", node=n, validate=is_list)
+    ctx.check("cpu-flags", "qemu", "cpu-flags", node=n, validate=is_list)
+    ctx.check("machine list", "qemu", "machine", "list", node=n, validate=is_list)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
@@ -295,4 +306,10 @@ def run(ctx: Ctx) -> None:
         "templated and then destroyed",
         "pve qemu template <vmid> --yes",
         isolation=True, live_covered=True,
+    )
+    ctx.defer(
+        "ssh",
+        "opens an interactive SSH tunnel into a guest — not automatable head-less, "
+        "same class as `node shell`/`node console`; covered by unit tests",
+        "pve qemu ssh <vmid>",
     )

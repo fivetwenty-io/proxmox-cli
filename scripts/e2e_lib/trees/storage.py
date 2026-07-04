@@ -112,6 +112,26 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.skip("volume get", "no volume found on any storage" if ctx.node else "no node discovered")
 
+    # node-list: runtime storage availability/usage as seen from a specific node
+    # (distinct from `storage list`'s cluster-wide configuration). Needs a node.
+    if ctx.node:
+        ctx.check("node-list", "storage", "node-list", node=ctx.node, validate=is_list)
+    else:
+        ctx.skip("node-list", "no node discovered")
+
+    # aplinfo list: the appliance-template catalog index. It needs egress to the
+    # Proxmox template repository; probe first and skip gracefully when the lab
+    # has no reachable catalog rather than recording a failure.
+    if ctx.node:
+        aplinfo_probe = ctx.run("storage", "aplinfo", "list", node=ctx.node)
+        if aplinfo_probe.rc == 0:
+            ctx.check("aplinfo list", "storage", "aplinfo", "list",
+                      node=ctx.node, validate=is_list)
+        else:
+            ctx.skip("aplinfo list", "appliance template catalog not reachable from this node")
+    else:
+        ctx.skip("aplinfo list", "no node discovered")
+
     # The remaining browsing verbs need backends or sources the lab does not
     # provide, so they are checked read-only via --help here and gated below.
     ctx.check("volume set --help", "storage", "volume", "set", "--help", fmt="")
@@ -235,4 +255,21 @@ def run(ctx: Ctx) -> None:
         "inspects an importable guest archive — covered live by `e2e --mutate`, which stages a crafted OVF on the node's import dir and reads its metadata",
         "pve storage import-metadata <import-storage> --volume <archive>",
         isolation=True, live_covered=True,
+    )
+    # Downloading a real appliance template consumes bandwidth and storage; not
+    # exercised live.
+    ctx.defer(
+        "aplinfo download",
+        "downloads a real appliance template tarball to a storage — bandwidth/storage-consuming; not exercised live; covered by unit tests",
+        "pve storage aplinfo download --node <node> --storage local --template pve-cli-template",
+        isolation=False, live_covered=False,
+    )
+    # Pulling an OCI image needs registry egress and consumes storage; not
+    # exercised live from this tree (the equivalent `node oci pull` verb is
+    # covered live by the mutate phase against a small public image).
+    ctx.defer(
+        "oci-pull",
+        "pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests",
+        "pve storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
+        isolation=False, live_covered=False,
     )

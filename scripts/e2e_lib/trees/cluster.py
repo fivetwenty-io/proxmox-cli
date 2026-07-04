@@ -147,11 +147,75 @@ def run(ctx: Ctx) -> None:
     # (empty on a fresh datacenter); options is a key/value object. All are
     # read-only and safe to query directly.
     ctx.check("firewall rules list", "cluster", "firewall", "rules", "list", validate=is_list)
-    ctx.check("firewall group list", "cluster", "firewall", "group", "list", validate=is_list)
-    ctx.check("firewall ipset list", "cluster", "firewall", "ipset", "list", validate=is_list)
-    ctx.check("firewall alias list", "cluster", "firewall", "alias", "list", validate=is_list)
+    group_list = ctx.check("firewall group list", "cluster", "firewall", "group", "list", validate=is_list)
+    ipset_list = ctx.check("firewall ipset list", "cluster", "firewall", "ipset", "list", validate=is_list)
+    alias_list = ctx.check("firewall alias list", "cluster", "firewall", "alias", "list", validate=is_list)
     ctx.check("firewall options get", "cluster", "firewall", "options", "get")
     ctx.check("firewall rules create --help", "cluster", "firewall", "rules", "create", "--help", fmt="")
+
+    # firewall alias get: per-alias detail. Discover a real alias name from the
+    # list just checked; skip when the datacenter has none defined.
+    alias_name = None
+    if alias_list.rc == 0:
+        try:
+            alias_name = ctx.first(alias_list.json(), "name")
+        except ValueError:
+            alias_name = None
+    if alias_name:
+        ctx.check("firewall alias get", "cluster", "firewall", "alias", "get", str(alias_name))
+    else:
+        ctx.skip("firewall alias get", "no cluster firewall alias defined")
+
+    # firewall group get: reads a single rule within a security group by
+    # position (GET /cluster/firewall/groups/{group}/{pos}), not the group
+    # itself. Discover a group, then a rule position inside it; skip when
+    # either is missing.
+    group_name = None
+    if group_list.rc == 0:
+        try:
+            group_name = ctx.first(group_list.json(), "group")
+        except ValueError:
+            group_name = None
+    if group_name:
+        group_rules = ctx.run("cluster", "firewall", "group", "rules", str(group_name))
+        rule_pos = None
+        if group_rules.rc == 0:
+            try:
+                rule_pos = ctx.first(group_rules.json(), "pos")
+            except (ValueError, KeyError):
+                rule_pos = None
+        if rule_pos is not None:
+            ctx.check("firewall group get", "cluster", "firewall", "group", "get",
+                      str(group_name), str(rule_pos))
+        else:
+            ctx.skip("firewall group get", f"security group {group_name} has no rules")
+    else:
+        ctx.skip("firewall group get", "no cluster firewall security group defined")
+
+    # firewall ipset get: reads a single CIDR member of an IP set
+    # (GET /cluster/firewall/ipset/{name}/{cidr}). Discover an IP set, then a
+    # member CIDR inside it; skip when either is missing.
+    ipset_name = None
+    if ipset_list.rc == 0:
+        try:
+            ipset_name = ctx.first(ipset_list.json(), "name")
+        except ValueError:
+            ipset_name = None
+    if ipset_name:
+        ipset_members = ctx.run("cluster", "firewall", "ipset", "list", str(ipset_name))
+        member_cidr = None
+        if ipset_members.rc == 0:
+            try:
+                member_cidr = ctx.first(ipset_members.json(), "cidr")
+            except (ValueError, KeyError):
+                member_cidr = None
+        if member_cidr:
+            ctx.check("firewall ipset get", "cluster", "firewall", "ipset", "get",
+                      str(ipset_name), str(member_cidr))
+        else:
+            ctx.skip("firewall ipset get", f"IP set {ipset_name} has no members")
+    else:
+        ctx.skip("firewall ipset get", "no cluster firewall IP set defined")
     # The mutate phase creates a pve-cli-namespaced security group (with a rule),
     # a disabled top-level rule, an IP set, and an alias on the e2e subnet, then
     # removes them all — covered live there. Datacenter firewall options are read
@@ -186,6 +250,18 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.check("config join list", "cluster", "config", "join", "list")
     ctx.check("config nodes list", "cluster", "config", "nodes", "list", validate=is_list)
+    ctx.check("config create --help", "cluster", "config", "create", "--help", fmt="")
+    # config create initializes brand-new corosync cluster membership on the
+    # local node — a one-time, cluster-formation operation that would disrupt
+    # or reformat an already-clustered target; not exercised live.
+    ctx.defer(
+        "config create",
+        "creates/initializes a new corosync cluster on the local node — one-time "
+        "and disruptive to run against an already-clustered target; not "
+        "exercised live; covered by unit tests",
+        "pve cluster config create --clustername pve-cli-test --yes",
+        isolation=False, live_covered=False,
+    )
     # The mutate phase sets a reversible marker on the datacenter description and
     # restores it — covered live there.
     ctx.defer(
@@ -378,15 +454,17 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # Ceph flags require a configured Ceph cluster; the lab node has no Ceph, so the
-    # API returns an error — record a skip there rather than a failure. The flag set
-    # is cluster-disruptive and is parsed-and-deferred, never run live.
+    # Ceph flags/status require a configured Ceph cluster; the lab node has no
+    # Ceph, so the API returns an error — record a skip there rather than a
+    # failure. The flag set and set-all are cluster-disruptive and are
+    # parsed-and-deferred, never run live.
     flags = ctx.run("cluster", "ceph", "flags", "list")
     flags_err = (flags.stderr or flags.stdout).lower()
     if flags.rc != 0 and "ceph" in flags_err:
         ctx.skip("ceph flags list", "Ceph is not configured on the lab node")
         ctx.skip("ceph flags get", "Ceph is not configured on the lab node")
         ctx.skip("ceph metadata", "Ceph is not configured on the lab node")
+        ctx.skip("ceph status", "Ceph is not configured on the lab node")
     else:
         ctx.check("ceph flags list", "cluster", "ceph", "flags", "list", validate=is_list)
         # ceph flags get: read a single cluster-wide Ceph flag. `noout` is a
@@ -395,11 +473,22 @@ def run(ctx: Ctx) -> None:
         ctx.check("ceph flags get", "cluster", "ceph", "flags", "get", "noout")
         # ceph metadata: cluster-wide OSD/mon/mgr/mds daemon metadata; read-only.
         ctx.check("ceph metadata", "cluster", "ceph", "metadata")
+        # ceph status: cluster-wide Ceph health/capacity summary; read-only.
+        ctx.check("ceph status", "cluster", "ceph", "status")
     ctx.check("ceph flags set --help", "cluster", "ceph", "flags", "set", "--help", fmt="")
+    ctx.check("ceph flags set-all --help", "cluster", "ceph", "flags", "set-all", "--help", fmt="")
     ctx.defer(
         "ceph flags set",
         "toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live",
         "pve cluster ceph flags set noout true",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph flags set-all",
+        "toggles several cluster-wide Ceph OSD flags atomically (e.g. noout, "
+        "norebalance) in one request during maintenance — cluster-disruptive; "
+        "not exercised live; covered by unit tests",
+        "pve cluster ceph flags set-all --noout=true --norebalance=true",
         isolation=False, live_covered=False,
     )
 
@@ -433,6 +522,9 @@ def run(ctx: Ctx) -> None:
     # touch no other workload (`suspend` pauses the running QEMU process, the
     # same operation as `qemu suspend`). `migrate` needs a second node, so it
     # stays deferred; its argument parsing is still exercised via --help.
+    # bulk guest: a preview listing of the guests a bulk action would target
+    # (GET /cluster/bulk-action/guest). Read-only, no --vmids narrowing needed.
+    ctx.check("bulk guest", "cluster", "bulk", "guest", validate=is_list)
     ctx.check("bulk start --help", "cluster", "bulk", "start", "--help", fmt="")
     ctx.check("bulk shutdown --help", "cluster", "bulk", "shutdown", "--help", fmt="")
     ctx.check("bulk suspend --help", "cluster", "bulk", "suspend", "--help", fmt="")
@@ -465,6 +557,10 @@ def run(ctx: Ctx) -> None:
         "pve cluster bulk migrate --target-node <node> --yes",
         isolation=False, live_covered=False,
     )
+
+    # Cluster-wide QEMU CPU flags: a static capability catalog, always present
+    # and safe to query directly regardless of guest inventory.
+    ctx.check("qemu cpu-flags", "cluster", "qemu", "cpu-flags", validate=is_list)
 
     # Custom QEMU CPU models are datacenter-wide configuration. The list is
     # read-only; create/get/set/delete are reversible and infra-independent (a

@@ -59,8 +59,12 @@ def run(ctx: Ctx) -> None:
                 upid = None
         if upid:
             ctx.check("task log", "node", "task", "log", n, str(upid))
+            # task status: single-UPID runtime status, resolved against the
+            # already-known node (--node/global node context).
+            ctx.check("task status", "node", "task", "status", str(upid), node=n)
         else:
             ctx.skip("task log", "no task in the node task list")
+            ctx.skip("task status", "no task in the node task list")
         # `node task wait` against an already-finished UPID returns immediately —
         # WaitForUPID sees a `stopped` task, so no hang (◑). It must target a task
         # that finished SUCCESSFULLY: `wait` reports a non-zero exit when the task
@@ -92,6 +96,7 @@ def run(ctx: Ctx) -> None:
         ctx.check("firewall rules list", "node", "firewall", "rules", "list",
                   node=n, validate=is_list)
         ctx.check("firewall options get", "node", "firewall", "options", "get", node=n)
+        ctx.check("firewall log", "node", "firewall", "log", node=n)
         ctx.check("firewall rules create --help", "node", "firewall", "rules", "create",
                   "--help", fmt="")
 
@@ -133,6 +138,14 @@ def run(ctx: Ctx) -> None:
             ctx.skip("apt changelog", "no installed package to inspect")
         ctx.check("apt repositories list", "node", "apt", "repositories", "list", node=n)
         ctx.check("apt update --help", "node", "apt", "update", "--help", fmt="")
+        # apt templates list mirrors `storage aplinfo list` (same underlying
+        # catalog); it needs egress to the Proxmox template repository, so probe
+        # first and skip gracefully rather than failing the sweep.
+        apt_templates_probe = ctx.run("node", "apt", "templates", "list", node=n)
+        if apt_templates_probe.rc == 0:
+            ctx.check("apt templates list", "node", "apt", "templates", "list", node=n)
+        else:
+            ctx.skip("apt templates list", "appliance template catalog not reachable from this node")
 
         # Disks: the physical-disk inventory is an array; SMART is read per disk
         # (discover a block device from the inventory). The disk-initialization
@@ -240,6 +253,9 @@ def run(ctx: Ctx) -> None:
         def is_object(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
+        # config get: node-level configuration (description, ACME, wake-on-LAN,
+        # ballooning target, startall delay) — a key/value object, always safe.
+        ctx.check("config get", "node", "config", "get", node=n, validate=is_object)
         ctx.check("dns get", "node", "dns", "get", node=n, validate=is_object)
         ctx.check("time get", "node", "time", "get", node=n, validate=is_object)
         ctx.check("hosts get", "node", "hosts", "get", node=n, fmt="")
@@ -309,9 +325,11 @@ def run(ctx: Ctx) -> None:
             except ValueError:
                 repl_id = None
         if repl_id:
+            ctx.check("replication get", "node", "replication", "get", str(repl_id), node=n)
             ctx.check("replication status", "node", "replication", "status", str(repl_id), node=n)
             ctx.check("replication log", "node", "replication", "log", str(repl_id), node=n, validate=is_list)
         else:
+            ctx.skip("replication get", "no replication job configured on this node")
             ctx.skip("replication status", "no replication job configured on this node")
             ctx.skip("replication log", "no replication job configured on this node")
         ctx.check("replication run --help", "node", "replication", "run", "--help", fmt="")
@@ -333,11 +351,31 @@ def run(ctx: Ctx) -> None:
                 "ceph status", "ceph cfg", "ceph osd list", "ceph pool list",
                 "ceph fs list", "ceph mds list", "ceph mgr list", "ceph mon list",
                 "ceph osd get", "ceph pool get", "ceph pool status",
+                "ceph cfg index", "ceph cfg db", "ceph cfg raw", "ceph cfg value",
+                "ceph crush", "ceph log", "ceph rules",
+                "ceph cmd-safety", "ceph osd lv-info", "ceph osd metadata",
             ):
                 ctx.skip(probe, "Ceph is not configured on the lab node")
         else:
             ctx.check("ceph status", "node", "ceph", "status", node=n, validate=is_object)
             ctx.check("ceph cfg", "node", "ceph", "cfg", node=n, validate=is_list)
+            # cfg index/db/raw are alternate views of the same configuration
+            # store; each is read-only and safe once Ceph is configured.
+            ctx.check("ceph cfg index", "node", "ceph", "cfg", "index", node=n, validate=is_list)
+            ctx.check("ceph cfg db", "node", "ceph", "cfg", "db", node=n, validate=is_list)
+            ctx.check("ceph cfg raw", "node", "ceph", "cfg", "raw", node=n, fmt="")
+            # cfg value looks up specific <section>:<key> pairs; fsid is written
+            # to ceph.conf's [global] section by `ceph init` and is always
+            # present once Ceph is configured, so probe it before asserting.
+            cfg_value_probe = ctx.run("node", "ceph", "cfg", "value", "--keys", "global:fsid", node=n)
+            if cfg_value_probe.rc == 0:
+                ctx.check("ceph cfg value", "node", "ceph", "cfg", "value",
+                          "--keys", "global:fsid", node=n, fmt="")
+            else:
+                ctx.skip("ceph cfg value", "global:fsid not present in this cluster's ceph.conf")
+            ctx.check("ceph crush", "node", "ceph", "crush", node=n, fmt="")
+            ctx.check("ceph log", "node", "ceph", "log", "--limit", "20", node=n, validate=is_list)
+            ctx.check("ceph rules", "node", "ceph", "rules", node=n, validate=is_list)
             osd_tree = ctx.check("ceph osd list", "node", "ceph", "osd", "list",
                                  node=n, validate=is_object)
             pool_list = ctx.check("ceph pool list", "node", "ceph", "pool", "list",
@@ -369,8 +407,20 @@ def run(ctx: Ctx) -> None:
             if osd_id is not None:
                 ctx.check("ceph osd get", "node", "ceph", "osd", "get", osd_id,
                           node=n, validate=is_object)
+                ctx.check("ceph osd lv-info", "node", "ceph", "osd", "lv-info", osd_id,
+                          node=n, validate=is_object)
+                ctx.check("ceph osd metadata", "node", "ceph", "osd", "metadata", osd_id,
+                          node=n, validate=is_object)
+                # cmd-safety asks Ceph's own heuristics whether stopping this OSD
+                # would be safe right now — a read-only query, not a mutation.
+                ctx.check("ceph cmd-safety", "node", "ceph", "cmd-safety",
+                          "--action", "stop", "--id", f"osd.{osd_id}", "--service", "osd",
+                          node=n, validate=is_object)
             else:
                 ctx.skip("ceph osd get", "no OSD deployed on this Ceph cluster")
+                ctx.skip("ceph osd lv-info", "no OSD deployed on this Ceph cluster")
+                ctx.skip("ceph osd metadata", "no OSD deployed on this Ceph cluster")
+                ctx.skip("ceph cmd-safety", "no OSD deployed on this Ceph cluster")
 
             # pool get / pool status: per-pool parameters and runtime status.
             # Discover a pool name from the pool list; skip when no pool exists.
@@ -514,6 +564,16 @@ def run(ctx: Ctx) -> None:
         "pve node apt repositories enable --node <node> --yes",
         isolation=False, live_covered=False,
     )
+    # apt templates download pulls a real template tarball onto the node's
+    # storage — bandwidth/storage-consuming; not exercised live from this tree
+    # (distinct from `node oci pull`, which is mutate-covered).
+    ctx.defer(
+        "apt templates download",
+        "downloads a real appliance template tarball to a storage — "
+        "bandwidth/storage-consuming; not exercised live; covered by unit tests",
+        "pve node apt templates download --node <node> --storage local --template debian-12-standard",
+        isolation=False, live_covered=False,
+    )
 
     # Disk initialization formats physical media. The lifecycle runner exercises
     # the create/init-gpt and delete verbs live against a single dedicated spare
@@ -614,6 +674,16 @@ def run(ctx: Ctx) -> None:
         "reconfigures node DNS or time zone — reversible; covered live by `e2e --mutate`",
         "pve node dns set --node <node> --search <domain>",
         isolation=True, live_covered=True,
+    )
+    # node config set mutates node-level configuration (description, ACME,
+    # wake-on-LAN, ballooning target, startall delay). Unlike dns/time set it is
+    # not yet driven by the mutate phase, so it is parsed-and-deferred here.
+    ctx.defer(
+        "config set",
+        "mutates node-level configuration (description, ACME, wake-on-LAN, "
+        "ballooning target, startall delay); not exercised live; covered by unit tests",
+        "pve node config set --node <node> --description 'pve-cli-e2e'",
+        isolation=False, live_covered=False,
     )
     # /etc/hosts is covered live by `e2e --mutate`: it reads the current file
     # plus its digest and writes the identical bytes back under that digest
@@ -878,6 +948,46 @@ def run(ctx: Ctx) -> None:
               "pve node shell <node>")
     ctx.defer("console", "opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests",
               "pve node console <node>")
+
+    # `execute` runs arbitrary commands on the real host via the Proxmox API
+    # (distinct from the SSH-based `exec`); security-sensitive regardless of
+    # guarding, so it is out of scope for automated e2e.
+    ctx.defer(
+        "execute",
+        "runs arbitrary commands on the real host via the PVE API — "
+        "security-sensitive; out of scope for automated e2e regardless of guarding",
+        "pve node execute --node <node> --commands '[\"uname -a\"]'",
+    )
+    # reboot/shutdown take the real lab node offline — not automatable against a
+    # shared lab regardless of guarding.
+    ctx.defer(
+        "reboot",
+        "reboots the real host — would take the shared lab node offline; not automatable",
+        "pve node reboot --node <node> --yes",
+    )
+    ctx.defer(
+        "shutdown",
+        "shuts down the real host — would take the shared lab node offline; not automatable",
+        "pve node shutdown --node <node> --yes",
+    )
+    # spiceshell/termproxy/vncshell are websocket/interactive console-proxy
+    # endpoints — the same class as the already-deferred SSH shell/console and
+    # the qemu/lxc console tickets; not automatable head-less.
+    ctx.defer(
+        "spiceshell",
+        "requests an interactive SPICE console-proxy ticket — not automatable head-less; covered by unit tests",
+        "pve node spiceshell --node <node>",
+    )
+    ctx.defer(
+        "termproxy",
+        "requests an interactive websocket terminal-proxy ticket — not automatable head-less; covered by unit tests",
+        "pve node termproxy --node <node>",
+    )
+    ctx.defer(
+        "vncshell",
+        "requests an interactive VNC console-proxy ticket — not automatable head-less; covered by unit tests",
+        "pve node vncshell --node <node>",
+    )
 
     # Service control mutates running host services on the live node. Every verb
     # is built by the same factory and covered by a unit test (argument contract

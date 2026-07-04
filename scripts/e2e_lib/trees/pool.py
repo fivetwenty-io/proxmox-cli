@@ -29,8 +29,12 @@ def run(ctx: Ctx) -> None:
 
     if pid is None:
         ctx.skip("get", "no pool defined")
+        ctx.skip("show", "no pool defined")
     else:
         ctx.check("get", "pool", "get", str(pid))
+        # show: the deprecated-but-still-live single-item endpoint
+        # (GET /pools/{poolid}), distinct from `get`'s list-filtered endpoint.
+        ctx.check("show", "pool", "show", str(pid))
 
     # The mutate phase provisions the `pve-cli` pool and deletes it in teardown,
     # so create + delete are exercised live by it. `set` is not yet driven.

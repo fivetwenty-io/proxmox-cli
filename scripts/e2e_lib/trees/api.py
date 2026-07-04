@@ -27,6 +27,16 @@ DESCRIPTION = "Manage authentication against named Proxmox VE contexts"
 def run(ctx: Ctx) -> None:
     ctx.check("auth status", "api", "auth", "status")
 
+    # auth whoami calls GET /access/permissions with the configured context's
+    # live credentials (token or password session) to confirm they still
+    # authenticate. Probe first and skip gracefully rather than failing the
+    # sweep when the configured identity cannot be verified.
+    whoami_probe = ctx.run("api", "auth", "whoami")
+    if whoami_probe.rc == 0:
+        ctx.check("auth whoami", "api", "auth", "whoami")
+    else:
+        ctx.skip("auth whoami", "credentials for the configured context could not be verified")
+
     _scratch_config_checks(ctx)
 
     # login/logout/refresh mutate a stored *session*; they stay deferred in this

@@ -60,6 +60,8 @@ def run(ctx: Ctx) -> None:
         ctx.skip("migrate check", "no container on node")
         ctx.skip("firewall rules list", "no container on node")
         ctx.skip("firewall options get", "no container on node")
+        ctx.skip("firewall log", "no container on node")
+        ctx.skip("firewall refs", "no container on node")
         ctx.skip("console vnc ticket", "no container on node")
     else:
         cid = str(ctid)
@@ -132,6 +134,8 @@ def run(ctx: Ctx) -> None:
         ctx.check("firewall rules list", "lxc", "firewall", "rules", "list", cid,
                   node=n, validate=is_list)
         ctx.check("firewall options get", "lxc", "firewall", "options", "get", cid, node=n)
+        ctx.check("firewall log", "lxc", "firewall", "log", cid, node=n)
+        ctx.check("firewall refs", "lxc", "firewall", "refs", cid, node=n, validate=is_list)
         # Requesting a VNC proxy ticket is non-disruptive — it spawns an
         # ephemeral proxy the same way the web GUI does and changes no CT state.
         ctx.check("console vnc ticket", "lxc", "console", cid, "--type", "vnc",
@@ -226,4 +230,12 @@ def run(ctx: Ctx) -> None:
         "pve lxc remote-migrate <ctid> --yes --target-endpoint https://remote:8006 "
         "--target-storage local-lvm",
         isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "to-template",
+        "converts the discovered container into a template — irreversible for that "
+        "instance and only sensible as the terminal step of a dedicated throwaway "
+        "guest lifecycle; not exercised against a live container; covered by unit tests",
+        "pve lxc to-template <ctid> --node <node>",
+        isolation=True, live_covered=False,
     )
