@@ -276,6 +276,88 @@ func TestDnsDeleteLockToken(t *testing.T) {
 	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
 }
 
+func TestVnetSetLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "vnet", "set", "pvecli0", "--alias", "e2e", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "e2e", rec[0].body["alias"])
+	require.Equal(t, "tok", rec[0].body["lock-token"])
+}
+
+func TestControllerSetLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/controllers/ctl0", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "controller", "set", "ctl0", "--asn", "65001", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "65001", rec[0].body["asn"])
+	require.Equal(t, "tok", rec[0].body["lock-token"])
+}
+
+func TestIpamSetLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/ipams/ipam0", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "ipam", "set", "ipam0",
+		"--url", "https://ipam.example.com", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "https://ipam.example.com", rec[0].body["url"])
+	require.Equal(t, "tok", rec[0].body["lock-token"])
+}
+
+func TestDnsSetLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "PUT /api2/json/cluster/sdn/dns/dns0", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "dns", "set", "dns0", "--ttl", "600", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "600", rec[0].body["ttl"])
+	require.Equal(t, "tok", rec[0].body["lock-token"])
+}
+
+func TestPrefixListDeleteLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/prefix-lists/pl1", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "prefix-list", "delete", "pl1", "--yes", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
+}
+
+func TestPrefixListEntryDeleteLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/prefix-lists/pl1/entries/10", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "prefix-list", "entry", "delete", "pl1", "10", "--yes", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
+}
+
+func TestRouteMapEntryDeleteLockToken(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/route-maps/entries/rm1/entry/10", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "route-map", "entry", "delete", "rm1", "10", "--yes", "--lock-token", "tok")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
+}
+
 // --- M1: --redistribute on fabric create / set ---
 
 // TestFabricCreateRedistribute verifies --redistribute values reach the

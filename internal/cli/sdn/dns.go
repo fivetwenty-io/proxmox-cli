@@ -162,6 +162,7 @@ func newDnsSetCmd() *cobra.Command {
 		ttl           int64
 		del           string
 		digest        string
+		lockToken     string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <dns>",
@@ -198,6 +199,9 @@ func newDnsSetCmd() *cobra.Command {
 			if fl.Changed("digest") {
 				params.Digest = strPtr(digest)
 			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.UpdateSdnDns(cmd.Context(), dns, params); err != nil {
 				return fmt.Errorf("update SDN DNS provider %q: %w", dns, err)
 			}
@@ -214,6 +218,7 @@ func newDnsSetCmd() *cobra.Command {
 	f.Int64Var(&ttl, "ttl", 0, "default TTL for records")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to delete")
 	f.StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 

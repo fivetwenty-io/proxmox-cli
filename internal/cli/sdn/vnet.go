@@ -219,6 +219,7 @@ func newVnetSetCmd() *cobra.Command {
 		isolatePorts bool
 		del          string
 		digest       string
+		lockToken    string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <vnet>",
@@ -254,6 +255,9 @@ func newVnetSetCmd() *cobra.Command {
 			if fl.Changed("digest") {
 				params.Digest = strPtr(digest)
 			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.UpdateSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("update SDN vnet %q: %w", vnet, err)
 			}
@@ -269,6 +273,7 @@ func newVnetSetCmd() *cobra.Command {
 	f.BoolVar(&isolatePorts, "isolate-ports", false, "isolate all interfaces on this vnet's bridge")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to delete")
 	f.StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 

@@ -155,6 +155,7 @@ func newIpamSetCmd() *cobra.Command {
 		fingerprint string
 		del         string
 		digest      string
+		lockToken   string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <ipam>",
@@ -188,6 +189,9 @@ func newIpamSetCmd() *cobra.Command {
 			if fl.Changed("digest") {
 				params.Digest = strPtr(digest)
 			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.UpdateSdnIpams(cmd.Context(), ipam, params); err != nil {
 				return fmt.Errorf("update SDN IPAM %q: %w", ipam, err)
 			}
@@ -203,6 +207,7 @@ func newIpamSetCmd() *cobra.Command {
 	f.StringVar(&fingerprint, "fingerprint", "", "certificate SHA-256 fingerprint")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to delete")
 	f.StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
+	f.StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 

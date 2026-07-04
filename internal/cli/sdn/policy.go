@@ -172,7 +172,10 @@ func newPrefixListSetCmd() *cobra.Command {
 }
 
 func newPrefixListDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete an SDN prefix list",
@@ -183,7 +186,11 @@ func newPrefixListDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete SDN prefix list %q without confirmation: pass --yes", id)
 			}
-			err := deps.API.Cluster.DeleteSdnPrefixLists(cmd.Context(), id, &cluster.DeleteSdnPrefixListsParams{})
+			params := &cluster.DeleteSdnPrefixListsParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			err := deps.API.Cluster.DeleteSdnPrefixLists(cmd.Context(), id, params)
 			if err != nil {
 				return fmt.Errorf("delete SDN prefix list %q: %w", id, err)
 			}
@@ -193,6 +200,7 @@ func newPrefixListDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 
@@ -368,7 +376,10 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 }
 
 func newPrefixListEntryDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <id> <seq>",
 		Short: "Delete a single entry of an SDN prefix list",
@@ -380,8 +391,11 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 				return fmt.Errorf(
 					"refusing to delete entry %q of SDN prefix list %q without confirmation: pass --yes", seq, id)
 			}
-			err := deps.API.Cluster.DeleteSdnPrefixListsEntries(
-				cmd.Context(), id, seq, &cluster.DeleteSdnPrefixListsEntriesParams{})
+			params := &cluster.DeleteSdnPrefixListsEntriesParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			err := deps.API.Cluster.DeleteSdnPrefixListsEntries(cmd.Context(), id, seq, params)
 			if err != nil {
 				return fmt.Errorf("delete entry %q of SDN prefix list %q: %w", seq, id, err)
 			}
@@ -391,6 +405,7 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 
@@ -666,7 +681,10 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 }
 
 func newRouteMapEntryDeleteCmd() *cobra.Command {
-	var yes bool
+	var (
+		yes       bool
+		lockToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <route-map> <order>",
 		Short: "Delete a single entry of an SDN route map",
@@ -678,8 +696,11 @@ func newRouteMapEntryDeleteCmd() *cobra.Command {
 				return fmt.Errorf(
 					"refusing to delete entry %q of SDN route map %q without confirmation: pass --yes", order, routeMap)
 			}
-			err := deps.API.Cluster.DeleteSdnRouteMapsEntriesEntry(
-				cmd.Context(), routeMap, order, &cluster.DeleteSdnRouteMapsEntriesEntryParams{})
+			params := &cluster.DeleteSdnRouteMapsEntriesEntryParams{}
+			if cmd.Flags().Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
+			err := deps.API.Cluster.DeleteSdnRouteMapsEntriesEntry(cmd.Context(), routeMap, order, params)
 			if err != nil {
 				return fmt.Errorf("delete entry %q of SDN route map %q: %w", order, routeMap, err)
 			}
@@ -689,5 +710,6 @@ func newRouteMapEntryDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }

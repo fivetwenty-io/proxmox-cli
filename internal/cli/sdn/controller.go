@@ -307,9 +307,10 @@ func newControllerGetCmd() *cobra.Command {
 
 func newControllerSetCmd() *cobra.Command {
 	var (
-		cf     controllerFlags
-		del    string
-		digest string
+		cf        controllerFlags
+		del       string
+		digest    string
+		lockToken string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <controller>",
@@ -331,6 +332,9 @@ func newControllerSetCmd() *cobra.Command {
 			if fl.Changed("digest") {
 				params.Digest = strPtr(digest)
 			}
+			if fl.Changed("lock-token") {
+				params.LockToken = strPtr(lockToken)
+			}
 			if err := deps.API.Cluster.UpdateSdnControllers(cmd.Context(), controller, params); err != nil {
 				return fmt.Errorf("update SDN controller %q: %w", controller, err)
 			}
@@ -342,6 +346,7 @@ func newControllerSetCmd() *cobra.Command {
 	cf.register(cmd)
 	cmd.Flags().StringVar(&del, "delete", "", "comma-separated list of settings to delete")
 	cmd.Flags().StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
+	cmd.Flags().StringVar(&lockToken, "lock-token", "", "token for unlocking the global SDN configuration")
 	return cmd
 }
 
