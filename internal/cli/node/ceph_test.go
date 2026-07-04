@@ -41,38 +41,6 @@ func TestNodeCeph_Status(t *testing.T) {
 	require.Contains(t, buf.String(), "abc-123")
 }
 
-func TestNodeCeph_Index(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	var rec recordedRequest
-	recordOn(f, "GET /api2/json/nodes/pve1/ceph", &rec, []any{
-		map[string]any{"subdir": "osd"},
-		map[string]any{"subdir": "mon"},
-	})
-
-	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "index"))
-
-	require.NoError(t, root.Execute())
-	require.Equal(t, "GET", rec.method)
-	require.Equal(t, "/api2/json/nodes/pve1/ceph", rec.path)
-	require.Contains(t, buf.String(), "osd")
-	require.Contains(t, buf.String(), "mon")
-}
-
-func TestNodeCeph_Index_APIError(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	f.HandleFunc("GET /api2/json/nodes/pve1/ceph", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
-	})
-
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "index"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "list Ceph API index on node")
-}
-
 func TestNodeCeph_CmdSafety(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
@@ -1007,7 +975,7 @@ func TestNodeCeph_CommandTree(t *testing.T) {
 	require.NotNil(t, ceph, "node ceph command must be registered")
 
 	for _, verb := range []string{
-		"index", "status", "cmd-safety", "cfg", "osd", "pool", "mon", "mds", "mgr", "fs",
+		"status", "cmd-safety", "cfg", "osd", "pool", "mon", "mds", "mgr", "fs",
 		"init", "start", "stop", "restart",
 	} {
 		require.NotNil(t, find(ceph, verb), "ceph must expose %q", verb)
