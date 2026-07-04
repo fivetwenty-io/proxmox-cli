@@ -49,19 +49,14 @@ type APIClient struct {
 // It creates the raw pve.Client and wires all 8 service handles; no network
 // calls are made during construction.
 //
-// When ticket authentication carries a CSRF prevention token, that token is
-// pushed onto the live authenticator via UpdateCSRFToken. The library's
-// authenticator factory seeds a ticket authenticator from Options.Ticket but
-// does not read Options.CSRFToken, so without this step non-GET requests under
-// session auth would omit the PVECSRFPreventionToken header and be rejected.
+// pve.NewClient applies opts.CSRFToken to the authenticator at construction
+// time, so a ticket-authenticated client with a configured CSRF token already
+// carries the CSRFPreventionToken header on non-GET requests without further
+// action here.
 func NewAPIClient(opts pve.Options) (*APIClient, error) {
 	raw, err := pve.NewClient(opts)
 	if err != nil {
 		return nil, err
-	}
-
-	if opts.Ticket != "" && opts.CSRFToken != "" {
-		raw.UpdateCSRFToken(opts.CSRFToken)
 	}
 
 	return &APIClient{
