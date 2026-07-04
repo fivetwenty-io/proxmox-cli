@@ -443,6 +443,34 @@ def provision_network(r: Runner) -> None:
            "sdn", "subnet", "create", Isolation.SDN_VNET, Isolation.SDN_SUBNET,
            "--gateway", Isolation.SDN_GATEWAY)
     r.step("infra", "sdn apply", "sdn apply", "sdn", "apply")
+    # Live status reads against the just-applied pvecli zone/vnet, while they
+    # are genuinely running. ip-vrf/mac-vrf only carry data for EVPN zones
+    # (per the API's own description — "Get the IP VRF of an EVPN zone" /
+    # "Get the MAC VRF for a VNet in an EVPN zone"); pvecli is a plain simple
+    # zone, so those two are soft-stepped and record SKIP rather than FAIL if
+    # the node rejects/empties the query for a non-EVPN zone.
+    r.step("infra", "sdn status zones get", f"sdn status zones get {Isolation.SDN_ZONE}",
+           "sdn", "status", "zones", "get", Isolation.SDN_ZONE, json_out=True)
+    r.step("infra", "sdn status zones bridges",
+           f"sdn status zones bridges {Isolation.SDN_ZONE}",
+           "sdn", "status", "zones", "bridges", Isolation.SDN_ZONE, json_out=True)
+    r.step("infra", "sdn status zones content",
+           f"sdn status zones content {Isolation.SDN_ZONE}",
+           "sdn", "status", "zones", "content", Isolation.SDN_ZONE, json_out=True)
+    r.soft_step("infra", "sdn status zones ip-vrf",
+                f"sdn status zones ip-vrf {Isolation.SDN_ZONE}",
+                "sdn", "status", "zones", "ip-vrf", Isolation.SDN_ZONE,
+                skip_markers=("evpn", "not supported", "not implemented", "no such",
+                              "not found"),
+                skip_reason="IP-VRF data only applies to EVPN zones; pvecli is a simple zone")
+    r.step("infra", "sdn status vnets get", f"sdn status vnets get {Isolation.SDN_VNET}",
+           "sdn", "status", "vnets", "get", Isolation.SDN_VNET, json_out=True)
+    r.soft_step("infra", "sdn status vnets mac-vrf",
+                f"sdn status vnets mac-vrf {Isolation.SDN_VNET}",
+                "sdn", "status", "vnets", "mac-vrf", Isolation.SDN_VNET,
+                skip_markers=("evpn", "not supported", "not implemented", "no such",
+                              "not found"),
+                skip_reason="MAC-VRF data only applies to EVPN zones; pvecli is a simple vnet")
     r.step("infra", "pool create", f"pool create {Isolation.POOL}",
            "pool", "create", "--poolid", Isolation.POOL)
     r.step("infra", "pool set", f"pool set {Isolation.POOL}",
@@ -720,6 +748,10 @@ def vm_lifecycle(r: Runner) -> None:
                "qemu", "firewall", "ipset", "create", vmid, FW_IPSET, "--comment", "pve-cli-e2e")
         r.step("qemu", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
                "qemu", "firewall", "ipset", "add", vmid, FW_IPSET, Isolation.SDN_SUBNET)
+        r.step("qemu", "firewall ipset update-member",
+               f"firewall ipset update-member {Isolation.SDN_SUBNET}",
+               "qemu", "firewall", "ipset", "update-member", vmid, FW_IPSET,
+               Isolation.SDN_SUBNET, "--comment", "pve-cli-e2e-updated")
         r.step("qemu", "firewall ipset list", "firewall ipset member list",
                "qemu", "firewall", "ipset", "list", vmid, FW_IPSET, json_out=True)
         r.del_step("qemu", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
@@ -969,6 +1001,10 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "lxc", "firewall", "ipset", "create", ctid, FW_IPSET, "--comment", "pve-cli-e2e")
         r.step("lxc", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
                "lxc", "firewall", "ipset", "add", ctid, FW_IPSET, Isolation.SDN_SUBNET)
+        r.step("lxc", "firewall ipset update-member",
+               f"firewall ipset update-member {Isolation.SDN_SUBNET}",
+               "lxc", "firewall", "ipset", "update-member", ctid, FW_IPSET,
+               Isolation.SDN_SUBNET, "--comment", "pve-cli-e2e-updated")
         r.step("lxc", "firewall ipset list", "firewall ipset member list",
                "lxc", "firewall", "ipset", "list", ctid, FW_IPSET, json_out=True)
         r.del_step("lxc", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
@@ -3100,6 +3136,10 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
                "cluster", "firewall", "ipset", "create", CL_FW_IPSET, "--comment", "pve-cli-e2e")
         r.step("cluster", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
                "cluster", "firewall", "ipset", "add", CL_FW_IPSET, Isolation.SDN_SUBNET)
+        r.step("cluster", "firewall ipset update",
+               f"firewall ipset update {Isolation.SDN_SUBNET}",
+               "cluster", "firewall", "ipset", "update", CL_FW_IPSET,
+               Isolation.SDN_SUBNET, "--comment", "pve-cli-e2e-updated")
         r.step("cluster", "firewall ipset list", "firewall ipset member list",
                "cluster", "firewall", "ipset", "list", CL_FW_IPSET, json_out=True)
         r.del_step("cluster", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
