@@ -293,6 +293,39 @@ func TestQemuConfigGet_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "config", "get", "100"))
 }
 
+// TestQemuConfigGet_DynamicKeysPreserved is a regression guard for the raw
+// decode path in newConfigGetCmd: nodes.ListQemuConfigResponse models
+// indexed device keys with literal placeholder field names (Netn tagged
+// json:"net[n]", Scsin tagged json:"scsi[n]", …), so it can never bind an
+// actual response key like "net0" or "scsi0" to any field, typed or not. If
+// this test starts failing after a refactor toward the typed struct, that
+// refactor has reintroduced silent data loss for every dynamically indexed
+// device key — do not "fix" the test, fix the regression.
+func TestQemuConfigGet_DynamicKeysPreserved(t *testing.T) {
+	f, ac := newFakeClient(t)
+
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"cores": 4,
+			"net0":  "virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0",
+			"scsi0": "local-lvm:vm-100-disk-0,size=32G",
+		})
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "get", "100"))
+
+	out := buf.String()
+	require.Contains(t, out, "cores", "statically named field must render")
+	require.Contains(t, out, "4", "statically named field's value must render")
+	require.Contains(t, out, "net0", "dynamically indexed net key must survive the raw decode")
+	require.Contains(t, out, "virtio=AA:BB:CC:DD:EE:FF,bridge=vmbr0", "net0 value must survive the raw decode")
+	require.Contains(t, out, "scsi0", "dynamically indexed scsi key must survive the raw decode")
+	require.Contains(t, out, "local-lvm:vm-100-disk-0,size=32G", "scsi0 value must survive the raw decode")
+}
+
 // --- config set -----------------------------------------------------------
 
 func TestQemuConfigSet_TypedFields(t *testing.T) {

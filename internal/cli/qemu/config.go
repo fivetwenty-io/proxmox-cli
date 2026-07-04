@@ -25,9 +25,15 @@ func newConfigCmd() *cobra.Command {
 
 // newConfigGetCmd builds `pve qemu config get <vmid>`.
 //
-// The raw API response is read directly so that dynamically named disk and
-// network keys (net0, scsi0, ide0, …) are preserved; the generated typed struct
-// only models statically named fields.
+// The raw API response is read directly (deps.API.Raw.GetCtx) instead of
+// through nodes.ListQemuConfig/ListQemuConfigResponse because that generated
+// struct cannot represent dynamically indexed keys at all: its fields for
+// indexed devices are literal placeholders — e.g. Netn tagged json:"net[n]",
+// Scsin tagged json:"scsi[n]" — that never match a real response key such as
+// "net0" or "scsi0". Decoding into that struct would silently drop every
+// disk and network key present in the config. This is a fixed-field
+// limitation of the generated struct, not tech debt to migrate away from;
+// see TestQemuConfigGet_DynamicKeysPreserved for the regression guard.
 func newConfigGetCmd() *cobra.Command {
 	var (
 		current  bool
