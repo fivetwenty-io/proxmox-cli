@@ -2,6 +2,7 @@ package storage
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -126,15 +127,40 @@ func TestStoragePrune_KeepLastZero(t *testing.T) {
 
 // TestStoragePrune_NullResult verifies a DELETE that prunes nothing (server
 // replies with a null data field) is normalised to an empty result rather than
-// erroring.
+// erroring, and renders as a header-only table with zero data rows — the real
+// render path (rawMessageToEntries -> renderPrune) emits no synthetic "nothing
+// pruned" message, since the table renderer falls back to headers whenever
+// res.Headers is set, even with zero rows.
 func TestStoragePrune_NullResult(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("DELETE /api2/json/nodes/pve1/storage/local/prunebackups", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, nil)
 	})
 
-	_, err := run(t, f, "--node", "pve1", "prune", "local", "--vmid", "100", "--keep-last", "1", "--yes")
+	out, err := run(t, f, "--node", "pve1", "prune", "local", "--vmid", "100", "--keep-last", "1", "--yes")
 	require.NoError(t, err)
+
+	require.Contains(t, out, "VOLID")
+	require.Contains(t, out, "MARK")
+	require.Contains(t, out, "TYPE")
+	require.Contains(t, out, "VMID")
+	require.Contains(t, out, "CTIME")
+
+	// tablewriter only draws a header/body separator ("├...┤") when at least one
+	// data row follows the header, and only emits a "│"-bordered content line per
+	// row. A null result must produce neither: exactly one "│" line (the header)
+	// and no "├" separator, proving zero data rows were rendered.
+	var contentLines, separatorLines int
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "│") {
+			contentLines++
+		}
+		if strings.Contains(line, "├") {
+			separatorLines++
+		}
+	}
+	require.Equal(t, 1, contentLines, "null result must render only the header row, zero data rows: %q", out)
+	require.Zero(t, separatorLines, "null result must omit the header/body separator emitted only when data rows exist: %q", out)
 }
 
 // TestStoragePrune_RequiresNode verifies prune fails clearly without a node.
