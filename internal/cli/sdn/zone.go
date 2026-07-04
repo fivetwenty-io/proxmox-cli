@@ -36,7 +36,41 @@ func newZoneCmd() *cobra.Command {
 		Use:   "zone",
 		Short: "Manage SDN zones",
 	}
-	cmd.AddCommand(newZoneListCmd(), newZoneCreateCmd(), newZoneSetCmd(), newZoneDeleteCmd())
+	cmd.AddCommand(newZoneListCmd(), newZoneShowCmd(), newZoneCreateCmd(), newZoneSetCmd(), newZoneDeleteCmd())
+	return cmd
+}
+
+// newZoneShowCmd builds `pve sdn zone show <zone>`.
+func newZoneShowCmd() *cobra.Command {
+	var (
+		pending bool
+		running bool
+	)
+	cmd := &cobra.Command{
+		Use:   "show <zone>",
+		Short: "Show an SDN zone's configuration",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			zone := args[0]
+			params := &cluster.GetSdnZonesParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.GetSdnZones(cmd.Context(), zone, params)
+			if err != nil {
+				return fmt.Errorf("get SDN zone %q: %w", zone, err)
+			}
+			return renderObject(cmd, deps, resp)
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
 	return cmd
 }
 
