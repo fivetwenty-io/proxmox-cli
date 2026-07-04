@@ -2068,23 +2068,48 @@ def sdn_dns_lifecycle(r: Runner) -> None:
             return
 
         # create + set both run the connectivity probe against the stub; get and
-        # delete touch only the staged config. Nothing is ever applied.
-        r.step("sdn", "dns create", "dns create (powerdns -> host stub)",
-               "sdn", "dns", "create", dns_id,
-               "--type", "powerdns", "--url", url, "--key", "pve-cli-e2e",
-               json_out=True)
-        r.step("sdn", "dns get", "dns get (read staged provider)",
-               "sdn", "dns", "get", dns_id, json_out=True)
-        r.step("sdn", "dns set", "dns set (edit ttl)",
-               "sdn", "dns", "set", dns_id, "--ttl", "600")
-        r.del_step("sdn", "dns delete", "dns delete (remove staged provider)",
-                   "sdn", "dns", "delete", dns_id, "--yes")
+        # delete touch only the staged config. Nothing is ever applied. The
+        # staged window runs under the global SDN lock so no foreign `sdn apply`
+        # can commit the throwaway provider; a mid-cycle failure is rolled back
+        # rather than left staged.
+        acq = r.pve("sdn", "lock", "acquire", json_out=True, node=False)
+        if acq.rc != 0:
+            why = (acq.err.strip() or acq.out.strip()).splitlines()
+            skip_all("SDN lock unavailable: " + (why[-1][:80] if why else "failed"))
+            return
+        token = _sdn_lock_token(acq)
+        if not token:
+            r.undo("force-release SDN lock (token not captured)",
+                   "sdn", "lock", "release", "--force", "--yes")
+            skip_all("SDN lock token not captured")
+            return
+        ok = False
+        try:
+            r.step("sdn", "dns create", "dns create (powerdns -> host stub)",
+                   "sdn", "dns", "create", dns_id,
+                   "--type", "powerdns", "--url", url, "--key", "pve-cli-e2e",
+                   "--lock-token", token, json_out=True)
+            r.step("sdn", "dns get", "dns get (read staged provider)",
+                   "sdn", "dns", "get", dns_id, json_out=True)
+            r.step("sdn", "dns set", "dns set (edit ttl)",
+                   "sdn", "dns", "set", dns_id, "--ttl", "600", "--lock-token", token)
+            r.del_step("sdn", "dns delete", "dns delete (remove staged provider)",
+                       "sdn", "dns", "delete", dns_id, "--yes", "--lock-token", token)
+            ok = True
+        finally:
+            if ok:
+                r.undo("sdn lock release", "sdn", "lock", "release",
+                       "--lock-token", token, "--yes")
+            else:
+                # Discard the partially staged provider and release the lock.
+                r.undo("sdn rollback (discard partial staging, release lock)",
+                       "sdn", "rollback", "--yes", "--lock-token", token,
+                       "--release-lock")
     finally:
-        # Safety net: drop the provider if a mid-cycle failure left it staged
-        # (a clean run already deleted it, so this just no-ops). Then stop the
-        # stub by its pid (never `pkill -f`, which would match this very shell)
-        # and remove its files.
-        r.undo(f"sdn dns delete {dns_id}", "sdn", "dns", "delete", dns_id, "--yes")
+        # Stop the stub by its pid (never `pkill -f`, which would match this
+        # very shell) and remove its files. The staged provider needs no safety
+        # net here: the locked window above deletes it on success and rolls it
+        # back on failure.
         if pid:
             _ssh_node(host, "kill", "-9", pid)
         rc, _, err = _ssh_node(host, "rm", "-f", remote_py, remote_log)
@@ -3659,55 +3684,216 @@ def sdn_objects_lifecycle(r: Runner) -> None:
     path live. Every created object is removed in a finally block, leaving the
     SDN config as found. Backend-validated IPAM/DNS providers and routing
     controllers are deferred live and covered by unit tests.
+
+    Locking: every staged-config section below runs under the global SDN lock,
+    so a foreign `sdn apply` can never commit this suite's transient staging
+    and a crash mid-stage leaves the config locked (a foreign apply cannot
+    accidentally commit the leftovers) until the printed recovery commands are
+    run. The fabric, vnet-ips, and vnet-firewall sections run after the lock is
+    released: the fabric delete endpoints accept no lock-token (API gap), and
+    vnet-ips/vnet-firewall write live data outside the staged SDN config.
     """
     print(BOLD("sdn: pve IPAM + vnet edit (reversible, staged-only)"))
 
-    # Best-effort clean of an object left by a crashed prior run (never raises).
+    # Best-effort clean of objects left by a crashed prior run (never raises).
+    # These run unlocked, before the lock window below: provision's locked
+    # acquire already proved the config free of foreign pending edits, so these
+    # only ever touch leftovers from this suite's own namespace.
     r.undo(f"pre-clean {SDN_IPAM}", "sdn", "ipam", "delete", SDN_IPAM, "--yes")
-
-    # ---- IPAM (pve-type, staged-only, no external backend) ------------------
-    try:
-        r.step("sdn", "ipam create", f"ipam create {SDN_IPAM}",
-               "sdn", "ipam", "create", SDN_IPAM, "--type", "pve")
-        got = r.step("sdn", "ipam get", f"ipam get {SDN_IPAM}",
-                     "sdn", "ipam", "get", SDN_IPAM, json_out=True)
-        if "pve" not in got.out:
-            raise LifecycleError(f"ipam get did not report the type for {SDN_IPAM}")
-        r.step("sdn", "ipam list", "ipam list", "sdn", "ipam", "list", json_out=True)
-        # `ipam status` is only supported for the default `pve` IPAM (covered by
-        # the read-only tree); the API rejects it for any other IPAM id.
-    finally:
-        r.del_step("sdn", "ipam delete", f"ipam delete {SDN_IPAM}",
-                   "sdn", "ipam", "delete", SDN_IPAM, "--yes")
-
-    # ---- controller create/get/set/delete (evpn, staged-only, no apply) ------
-    # An EVPN controller is a pure cluster-config entry until `sdn apply`; the
-    # FRR routing daemon is only engaged at apply time. This block creates, reads,
-    # edits, and deletes the isolated controller WITHOUT ever applying, so no
-    # routing daemon is reconfigured and live networking is untouched. The
-    # asn/peers values are arbitrary staged config that is never committed. The
-    # controller is removed in a finally block, leaving the SDN config as found.
-    # node=False on every controller step: `sdn controller` defines its own
-    # `--node` field flag, so the suite's auto-injected `--node` would be
-    # forwarded as a controller property and rejected by the EVPN type.
     r.undo(f"pre-clean {SDN_CTRL}", "sdn", "controller", "delete", SDN_CTRL, "--yes")
+    r.undo(f"pre-clean {SDN_PREFIX}", "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes")
+    r.undo(f"pre-clean {SDN_RTMAP}", "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes")
+
+    acq = r.pve("sdn", "lock", "acquire", json_out=True, node=False)
+    if acq.rc != 0:
+        why = (acq.err.strip() or acq.out.strip()).splitlines()
+        tail = why[-1][:120] if why else "failed"
+        print(YELLOW(f"      sdn lock acquire failed mid-run: {tail}"))
+        print(YELLOW("      another operator holds the SDN lock or staged edits appeared;"))
+        print(YELLOW("      refusing to edit the SDN config unlocked."))
+        raise LifecycleError("sdn objects: lock acquire failed")
+    token = _sdn_lock_token(acq)
+    if not token:
+        r.undo("force-release SDN lock (token not captured)",
+               "sdn", "lock", "release", "--force", "--yes")
+        raise LifecycleError("sdn objects: lock token not captured")
+    ok = False
     try:
-        r.step("sdn", "controller create", f"controller create {SDN_CTRL}",
-               "sdn", "controller", "create", SDN_CTRL, "--type", "evpn",
-               "--asn", "65000", "--peers", "172.30.0.2", node=False)
-        got = r.step("sdn", "controller get", f"controller get {SDN_CTRL}",
-                     "sdn", "controller", "get", SDN_CTRL, json_out=True, node=False)
-        if "evpn" not in got.out:
-            raise LifecycleError(f"controller get did not report the type for {SDN_CTRL}")
-        r.step("sdn", "controller set", f"controller set {SDN_CTRL} (asn)",
-               "sdn", "controller", "set", SDN_CTRL, "--asn", "65001", node=False)
-        got = r.step("sdn", "controller get", f"controller get {SDN_CTRL} (after set)",
-                     "sdn", "controller", "get", SDN_CTRL, json_out=True, node=False)
-        if "65001" not in got.out:
-            raise LifecycleError(f"controller set asn not reflected in get for {SDN_CTRL}")
+        # ---- IPAM (pve-type, staged-only, no external backend) ------------------
+        try:
+            r.step("sdn", "ipam create", f"ipam create {SDN_IPAM}",
+                   "sdn", "ipam", "create", SDN_IPAM, "--type", "pve",
+                   "--lock-token", token)
+            got = r.step("sdn", "ipam get", f"ipam get {SDN_IPAM}",
+                         "sdn", "ipam", "get", SDN_IPAM, json_out=True)
+            if "pve" not in got.out:
+                raise LifecycleError(f"ipam get did not report the type for {SDN_IPAM}")
+            r.step("sdn", "ipam list", "ipam list", "sdn", "ipam", "list", json_out=True)
+            # `ipam status` is only supported for the default `pve` IPAM (covered by
+            # the read-only tree); the API rejects it for any other IPAM id.
+        finally:
+            r.del_step("sdn", "ipam delete", f"ipam delete {SDN_IPAM}",
+                       "sdn", "ipam", "delete", SDN_IPAM, "--yes",
+                       "--lock-token", token)
+
+        # ---- controller create/get/set/delete (evpn, staged-only, no apply) ------
+        # An EVPN controller is a pure cluster-config entry until `sdn apply`; the
+        # FRR routing daemon is only engaged at apply time. This block creates, reads,
+        # edits, and deletes the isolated controller WITHOUT ever applying, so no
+        # routing daemon is reconfigured and live networking is untouched. The
+        # asn/peers values are arbitrary staged config that is never committed. The
+        # controller is removed in a finally block, leaving the SDN config as found.
+        # node=False on every controller step: `sdn controller` defines its own
+        # `--node` field flag, so the suite's auto-injected `--node` would be
+        # forwarded as a controller property and rejected by the EVPN type.
+        try:
+            r.step("sdn", "controller create", f"controller create {SDN_CTRL}",
+                   "sdn", "controller", "create", SDN_CTRL, "--type", "evpn",
+                   "--asn", "65000", "--peers", "172.30.0.2",
+                   "--lock-token", token, node=False)
+            got = r.step("sdn", "controller get", f"controller get {SDN_CTRL}",
+                         "sdn", "controller", "get", SDN_CTRL, json_out=True, node=False)
+            if "evpn" not in got.out:
+                raise LifecycleError(f"controller get did not report the type for {SDN_CTRL}")
+            r.step("sdn", "controller set", f"controller set {SDN_CTRL} (asn)",
+                   "sdn", "controller", "set", SDN_CTRL, "--asn", "65001",
+                   "--lock-token", token, node=False)
+            got = r.step("sdn", "controller get", f"controller get {SDN_CTRL} (after set)",
+                         "sdn", "controller", "get", SDN_CTRL, json_out=True, node=False)
+            if "65001" not in got.out:
+                raise LifecycleError(f"controller set asn not reflected in get for {SDN_CTRL}")
+        finally:
+            r.del_step("sdn", "controller delete", f"controller delete {SDN_CTRL}",
+                       "sdn", "controller", "delete", SDN_CTRL, "--yes",
+                       "--lock-token", token, node=False)
+
+        # ---- prefix-list + entries (staged-only, no apply) ----------------------
+        # A prefix list and its entries are pure config until `sdn apply`. The list
+        # is created empty, one entry is added/listed/read/edited/deleted, the list
+        # itself is edited via `set` (a replacement entry in property-string form),
+        # then the whole list is removed. No fabric references it, so nothing is
+        # committed to FRR. The list is removed in a finally block.
+        try:
+            r.step("sdn", "prefix-list create", f"prefix-list create {SDN_PREFIX}",
+                   "sdn", "prefix-list", "create", SDN_PREFIX, "--lock-token", token)
+            r.step("sdn", "prefix-list get", f"prefix-list get {SDN_PREFIX}",
+                   "sdn", "prefix-list", "get", SDN_PREFIX, json_out=True)
+            r.step("sdn", "prefix-list entry add", f"prefix-list entry add {SDN_PREFIX} (seq 10)",
+                   "sdn", "prefix-list", "entry", "add", SDN_PREFIX,
+                   "--action", "permit", "--prefix", "172.30.0.0/24", "--seq", "10",
+                   "--lock-token", token)
+            got = r.step("sdn", "prefix-list entry list", f"prefix-list entry list {SDN_PREFIX}",
+                         "sdn", "prefix-list", "entry", "list", SDN_PREFIX, json_out=True)
+            if "172.30.0.0/24" not in got.out:
+                raise LifecycleError(f"prefix-list entry list missing the added entry for {SDN_PREFIX}")
+            r.step("sdn", "prefix-list entry get", f"prefix-list entry get {SDN_PREFIX} 10",
+                   "sdn", "prefix-list", "entry", "get", SDN_PREFIX, "10", json_out=True)
+            r.step("sdn", "prefix-list entry set", f"prefix-list entry set {SDN_PREFIX} 10 (action)",
+                   "sdn", "prefix-list", "entry", "set", SDN_PREFIX, "10", "--action", "deny",
+                   "--lock-token", token)
+            r.del_step("sdn", "prefix-list entry delete", f"prefix-list entry delete {SDN_PREFIX} 10",
+                       "sdn", "prefix-list", "entry", "delete", SDN_PREFIX, "10", "--yes",
+                       "--lock-token", token)
+            # `prefix-list set` replaces entries via the key=value property-string form.
+            r.step("sdn", "prefix-list set", f"prefix-list set {SDN_PREFIX} (entry)",
+                   "sdn", "prefix-list", "set", SDN_PREFIX,
+                   "--entry", "action=permit,prefix=10.0.0.0/8,seq=20",
+                   "--lock-token", token)
+        finally:
+            r.del_step("sdn", "prefix-list delete", f"prefix-list delete {SDN_PREFIX}",
+                       "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes",
+                       "--lock-token", token)
+
+        # ---- route-map entries (staged-only, no apply) --------------------------
+        # A route map has no standalone object; it exists once its first entry is
+        # added and disappears when the last entry is removed. Pure config until
+        # `sdn apply`. An entry is added, the map is read via `get`, the entry is
+        # read/edited, then deleted (removing the map). Nothing is committed to FRR.
+        try:
+            r.step("sdn", "route-map entry add", f"route-map entry add {SDN_RTMAP} (order 10)",
+                   "sdn", "route-map", "entry", "add", SDN_RTMAP, "--order", "10",
+                   "--action", "permit", "--lock-token", token)
+            got = r.step("sdn", "route-map get", f"route-map get {SDN_RTMAP}",
+                         "sdn", "route-map", "get", SDN_RTMAP, json_out=True)
+            if "permit" not in got.out:
+                raise LifecycleError(f"route-map get did not report the added entry for {SDN_RTMAP}")
+            r.step("sdn", "route-map entry get", f"route-map entry get {SDN_RTMAP} 10",
+                   "sdn", "route-map", "entry", "get", SDN_RTMAP, "10", json_out=True)
+            r.step("sdn", "route-map entry set", f"route-map entry set {SDN_RTMAP} 10 (action)",
+                   "sdn", "route-map", "entry", "set", SDN_RTMAP, "10", "--action", "deny",
+                   "--lock-token", token)
+        finally:
+            r.del_step("sdn", "route-map entry delete", f"route-map entry delete {SDN_RTMAP} 10",
+                       "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes",
+                       "--lock-token", token)
+
+        # ---- zone set on the isolated pvecli zone (staged-only) ------------------
+        # Stage an MTU change on the zone, then clear it in the same run. MTU is a
+        # generic, reversible attribute. Soft: if a simple zone rejects the field on
+        # this PVE version, record SKIP rather than aborting the suite.
+        zset = r.pve("sdn", "zone", "set", Isolation.SDN_ZONE, "--mtu", "1400",
+                     "--lock-token", token)
+        if zset.rc != 0:
+            reason_z = (zset.err.strip() or zset.out.strip())[:120]
+            r.cover_skip("sdn", "zone set", "zone set", f"zone set rejected: {reason_z}")
+        else:
+            print(f"  {GREEN('✓')} zone set {Isolation.SDN_ZONE} (mtu)")
+            r.cov.append(Step("sdn", "zone set", PASS))
+            r.del_step("sdn", "zone set delete", f"zone set {Isolation.SDN_ZONE} (--delete mtu)",
+                       "sdn", "zone", "set", Isolation.SDN_ZONE, "--delete", "mtu",
+                       "--lock-token", token)
+
+        # ---- subnet set on the isolated pvecli0/10.241.0.0-24 subnet (staged-only)
+        # The subnet id uses the API's dash notation; discover it from the list so
+        # the test is robust to subnet id format changes. Stage a DNS zone prefix,
+        # then clear it. Soft: SKIP on rejection rather than aborting.
+        sub_res = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
+        subnet_id: str | None = None
+        if sub_res.rc == 0:
+            try:
+                for s in sub_res.json():
+                    if isinstance(s, dict) and s.get("subnet"):
+                        subnet_id = str(s["subnet"])
+                        break
+            except (ValueError, KeyError):
+                subnet_id = None
+        if subnet_id:
+            sset = r.pve("sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
+                         "--dnszoneprefix", "pvecli", "--lock-token", token)
+            if sset.rc != 0:
+                reason_s = (sset.err.strip() or sset.out.strip())[:120]
+                r.cover_skip("sdn", "subnet set", "subnet set", f"subnet set rejected: {reason_s}")
+            else:
+                print(f"  {GREEN('✓')} subnet set {subnet_id} (dnszoneprefix)")
+                r.cov.append(Step("sdn", "subnet set", PASS))
+                r.del_step("sdn", "subnet set delete", f"subnet set {subnet_id} (--delete dnszoneprefix)",
+                           "sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
+                           "--delete", "dnszoneprefix", "--lock-token", token)
+        else:
+            r.cover_skip("sdn", "subnet set", "subnet set",
+                         "could not discover the isolated subnet id")
+
+        # ---- vnet edit on the isolated pvecli0 vnet (staged-only) ---------------
+        # Covers the shared set/update path; restored via --delete in the same run.
+        r.step("sdn", "vnet set", f"vnet set {Isolation.SDN_VNET} (alias)",
+               "sdn", "vnet", "set", Isolation.SDN_VNET, "--alias", "pve-cli-e2e",
+               "--lock-token", token)
+        r.step("sdn", "vnet set delete", f"vnet set {Isolation.SDN_VNET} (--delete alias)",
+               "sdn", "vnet", "set", Isolation.SDN_VNET, "--delete", "alias",
+               "--lock-token", token)
+        ok = True
     finally:
-        r.del_step("sdn", "controller delete", f"controller delete {SDN_CTRL}",
-                   "sdn", "controller", "delete", SDN_CTRL, "--yes", node=False)
+        if ok:
+            # Net-zero staging: everything created above was deleted again, so
+            # a plain release leaves the committed config exactly as found.
+            r.undo("sdn lock release", "sdn", "lock", "release",
+                   "--lock-token", token, "--yes")
+        else:
+            # Discard whatever staging the failure left behind and release the
+            # lock; the config was clean when the lock was acquired, so rollback
+            # can only ever drop this suite's own staged edits.
+            r.undo("sdn rollback (discard partial staging, release lock)",
+                   "sdn", "rollback", "--yes", "--lock-token", token, "--release-lock")
 
     # ---- fabric + fabric node (openfabric, staged-only, no apply) ------------
     # An SDN fabric and its member nodes are pure cluster-config entries until
@@ -3718,6 +3904,9 @@ def sdn_objects_lifecycle(r: Runner) -> None:
     # the node IP both sit in the isolated e2e subnet (172.30.0.0/24); the node
     # id is the target node but it is never committed. The member node and the
     # fabric are removed in nested finally blocks, leaving the config as found.
+    # This section runs OUTSIDE the lock window above: the fabric and fabric
+    # node delete endpoints accept no lock-token (unlike their create/update
+    # counterparts), so the cleanup here could not run while the lock is held.
     r.undo(f"pre-clean {SDN_FABRIC}", "sdn", "fabric", "delete", SDN_FABRIC, "--yes")
     try:
         r.step("sdn", "fabric create", f"fabric create {SDN_FABRIC}",
@@ -3748,108 +3937,12 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         r.del_step("sdn", "fabric delete", f"fabric delete {SDN_FABRIC}",
                    "sdn", "fabric", "delete", SDN_FABRIC, "--yes")
 
-    # ---- prefix-list + entries (staged-only, no apply) ----------------------
-    # A prefix list and its entries are pure config until `sdn apply`. The list
-    # is created empty, one entry is added/listed/read/edited/deleted, the list
-    # itself is edited via `set` (a replacement entry in property-string form),
-    # then the whole list is removed. No fabric references it, so nothing is
-    # committed to FRR. The list is removed in a finally block.
-    r.undo(f"pre-clean {SDN_PREFIX}", "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes")
-    try:
-        r.step("sdn", "prefix-list create", f"prefix-list create {SDN_PREFIX}",
-               "sdn", "prefix-list", "create", SDN_PREFIX)
-        r.step("sdn", "prefix-list get", f"prefix-list get {SDN_PREFIX}",
-               "sdn", "prefix-list", "get", SDN_PREFIX, json_out=True)
-        r.step("sdn", "prefix-list entry add", f"prefix-list entry add {SDN_PREFIX} (seq 10)",
-               "sdn", "prefix-list", "entry", "add", SDN_PREFIX,
-               "--action", "permit", "--prefix", "172.30.0.0/24", "--seq", "10")
-        got = r.step("sdn", "prefix-list entry list", f"prefix-list entry list {SDN_PREFIX}",
-                     "sdn", "prefix-list", "entry", "list", SDN_PREFIX, json_out=True)
-        if "172.30.0.0/24" not in got.out:
-            raise LifecycleError(f"prefix-list entry list missing the added entry for {SDN_PREFIX}")
-        r.step("sdn", "prefix-list entry get", f"prefix-list entry get {SDN_PREFIX} 10",
-               "sdn", "prefix-list", "entry", "get", SDN_PREFIX, "10", json_out=True)
-        r.step("sdn", "prefix-list entry set", f"prefix-list entry set {SDN_PREFIX} 10 (action)",
-               "sdn", "prefix-list", "entry", "set", SDN_PREFIX, "10", "--action", "deny")
-        r.del_step("sdn", "prefix-list entry delete", f"prefix-list entry delete {SDN_PREFIX} 10",
-                   "sdn", "prefix-list", "entry", "delete", SDN_PREFIX, "10", "--yes")
-        # `prefix-list set` replaces entries via the key=value property-string form.
-        r.step("sdn", "prefix-list set", f"prefix-list set {SDN_PREFIX} (entry)",
-               "sdn", "prefix-list", "set", SDN_PREFIX,
-               "--entry", "action=permit,prefix=10.0.0.0/8,seq=20")
-    finally:
-        r.del_step("sdn", "prefix-list delete", f"prefix-list delete {SDN_PREFIX}",
-                   "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes")
-
-    # ---- route-map entries (staged-only, no apply) --------------------------
-    # A route map has no standalone object; it exists once its first entry is
-    # added and disappears when the last entry is removed. Pure config until
-    # `sdn apply`. An entry is added, the map is read via `get`, the entry is
-    # read/edited, then deleted (removing the map). Nothing is committed to FRR.
-    r.undo(f"pre-clean {SDN_RTMAP}", "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes")
-    try:
-        r.step("sdn", "route-map entry add", f"route-map entry add {SDN_RTMAP} (order 10)",
-               "sdn", "route-map", "entry", "add", SDN_RTMAP, "--order", "10", "--action", "permit")
-        got = r.step("sdn", "route-map get", f"route-map get {SDN_RTMAP}",
-                     "sdn", "route-map", "get", SDN_RTMAP, json_out=True)
-        if "permit" not in got.out:
-            raise LifecycleError(f"route-map get did not report the added entry for {SDN_RTMAP}")
-        r.step("sdn", "route-map entry get", f"route-map entry get {SDN_RTMAP} 10",
-               "sdn", "route-map", "entry", "get", SDN_RTMAP, "10", json_out=True)
-        r.step("sdn", "route-map entry set", f"route-map entry set {SDN_RTMAP} 10 (action)",
-               "sdn", "route-map", "entry", "set", SDN_RTMAP, "10", "--action", "deny")
-    finally:
-        r.del_step("sdn", "route-map entry delete", f"route-map entry delete {SDN_RTMAP} 10",
-                   "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes")
-
-    # ---- zone set on the isolated pvecli zone (staged-only) ------------------
-    # Stage an MTU change on the zone, then clear it in the same run. MTU is a
-    # generic, reversible attribute. Soft: if a simple zone rejects the field on
-    # this PVE version, record SKIP rather than aborting the suite.
-    zset = r.pve("sdn", "zone", "set", Isolation.SDN_ZONE, "--mtu", "1400")
-    if zset.rc != 0:
-        reason_z = (zset.err.strip() or zset.out.strip())[:120]
-        r.cover_skip("sdn", "zone set", "zone set", f"zone set rejected: {reason_z}")
-    else:
-        print(f"  {GREEN('✓')} zone set {Isolation.SDN_ZONE} (mtu)")
-        r.cov.append(Step("sdn", "zone set", PASS))
-        r.del_step("sdn", "zone set delete", f"zone set {Isolation.SDN_ZONE} (--delete mtu)",
-                   "sdn", "zone", "set", Isolation.SDN_ZONE, "--delete", "mtu")
-
-    # ---- subnet set on the isolated pvecli0/10.241.0.0-24 subnet (staged-only)
-    # The subnet id uses the API's dash notation; discover it from the list so
-    # the test is robust to subnet id format changes. Stage a DNS zone prefix,
-    # then clear it. Soft: SKIP on rejection rather than aborting.
-    sub_res = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
-    subnet_id: str | None = None
-    if sub_res.rc == 0:
-        try:
-            for s in sub_res.json():
-                if isinstance(s, dict) and s.get("subnet"):
-                    subnet_id = str(s["subnet"])
-                    break
-        except (ValueError, KeyError):
-            subnet_id = None
-    if subnet_id:
-        sset = r.pve("sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
-                     "--dnszoneprefix", "pvecli")
-        if sset.rc != 0:
-            reason_s = (sset.err.strip() or sset.out.strip())[:120]
-            r.cover_skip("sdn", "subnet set", "subnet set", f"subnet set rejected: {reason_s}")
-        else:
-            print(f"  {GREEN('✓')} subnet set {subnet_id} (dnszoneprefix)")
-            r.cov.append(Step("sdn", "subnet set", PASS))
-            r.del_step("sdn", "subnet set delete", f"subnet set {subnet_id} (--delete dnszoneprefix)",
-                       "sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
-                       "--delete", "dnszoneprefix")
-    else:
-        r.cover_skip("sdn", "subnet set", "subnet set",
-                     "could not discover the isolated subnet id")
-
     # ---- vnet ips create/set/delete (pve IPAM, isolated pvecli zone/vnet) ----
     # Create an IP allocation in the isolated zone's IPAM, update its vmid, then
     # delete it. Requires the pve IPAM to be enabled on the zone; if the create
     # is rejected (no IPAM configured), record as SKIP rather than failing.
+    # Runs unlocked: IPAM allocations are live data written immediately, not
+    # staged SDN config, so the ips endpoints accept no lock-token.
     TEST_IP = "10.241.0.10"
     ips_create = r.pve("sdn", "vnet", "ips", "create", Isolation.SDN_VNET,
                        "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE)
@@ -3871,18 +3964,13 @@ def sdn_objects_lifecycle(r: Runner) -> None:
                        "sdn", "vnet", "ips", "delete", Isolation.SDN_VNET,
                        "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE, "--yes")
 
-    # ---- vnet edit on the isolated pvecli0 vnet (staged-only) ---------------
-    # Covers the shared set/update path; restored via --delete in the same run.
-    r.step("sdn", "vnet set", f"vnet set {Isolation.SDN_VNET} (alias)",
-           "sdn", "vnet", "set", Isolation.SDN_VNET, "--alias", "pve-cli-e2e")
-    r.step("sdn", "vnet set delete", f"vnet set {Isolation.SDN_VNET} (--delete alias)",
-           "sdn", "vnet", "set", Isolation.SDN_VNET, "--delete", "alias")
-
     # ---- vnet firewall on the isolated pvecli0 vnet (staged-only) -----------
     # A disabled rule (--enable 0) is appended, read back, edited, then deleted,
     # and a forward policy is staged then reverted. The vnet firewall is never
     # enabled (--enable is never set) and nothing is applied, so no guest traffic
-    # is affected; every edit is staged and undone within the same run.
+    # is affected; every edit is staged and undone within the same run. Runs
+    # outside the lock window: the vnet firewall endpoints accept no lock-token
+    # (firewall config is not part of the `sdn apply` pending flow).
     vnet = Isolation.SDN_VNET
     stale = _vnet_fw_rule_pos_by_comment(r, vnet, CL_FW_COMMENT)
     if stale is not None:
