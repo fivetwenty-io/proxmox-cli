@@ -433,16 +433,64 @@ def _sweep_stale(r: Runner) -> list[str]:
 # --- provisioning -----------------------------------------------------------
 
 
+def _sdn_lock_token(res: Cmd) -> str:
+    """Parse the lock token out of `sdn lock acquire -o json` output."""
+    raw = res.out.strip()
+    if not raw:
+        return ""
+    try:
+        parsed = json.loads(raw)
+        token = str(parsed.get("data", "")) if isinstance(parsed, dict) else str(parsed)
+    except ValueError:
+        token = raw.strip('"')
+    return token.strip()
+
+
 def provision_network(r: Runner) -> None:
     print(BOLD("provision: isolated SDN + pool"))
-    r.step("infra", "sdn zone create", f"sdn zone create {Isolation.SDN_ZONE}",
-           "sdn", "zone", "create", Isolation.SDN_ZONE, "--type", "simple")
-    r.step("infra", "sdn vnet create", f"sdn vnet create {Isolation.SDN_VNET}",
-           "sdn", "vnet", "create", Isolation.SDN_VNET, "--zone", Isolation.SDN_ZONE)
-    r.step("infra", "sdn subnet create", f"sdn subnet create {Isolation.SDN_SUBNET}",
-           "sdn", "subnet", "create", Isolation.SDN_VNET, Isolation.SDN_SUBNET,
-           "--gateway", Isolation.SDN_GATEWAY)
-    r.step("infra", "sdn apply", "sdn apply", "sdn", "apply")
+    # `sdn apply` commits ALL pending SDN changes cluster-wide — the API has no
+    # per-zone apply. To guarantee the apply below only ever commits this
+    # suite's own staging, the whole stage→apply window runs under the global
+    # SDN lock: acquiring without --allow-pending refuses when foreign
+    # uncommitted edits already exist, and while the lock is held no other
+    # writer can stage anything into our apply window.
+    try:
+        acq = r.step("infra", "sdn lock acquire", "sdn lock acquire",
+                     "sdn", "lock", "acquire", json_out=True, node=False)
+    except LifecycleError:
+        print(YELLOW("      the cluster has uncommitted SDN changes or another operator"))
+        print(YELLOW("      holds the SDN lock; refusing to provision (an unlocked apply"))
+        print(YELLOW("      would commit their staged edits). Review `pve sdn dry-run`;"))
+        print(YELLOW("      if this is leftover state from a crashed run, recover with"))
+        print(YELLOW("      `pve sdn rollback --yes` / `pve sdn lock release --force --yes`."))
+        raise
+    token = _sdn_lock_token(acq)
+    if not token:
+        # Locked but the token was not captured: release and abort rather than
+        # provision unlocked, which would reintroduce the foreign-commit hazard.
+        r.undo("force-release SDN lock (token not captured)",
+               "sdn", "lock", "release", "--force", "--yes")
+        raise LifecycleError("sdn lock acquire: token not captured")
+    try:
+        r.step("infra", "sdn zone create", f"sdn zone create {Isolation.SDN_ZONE}",
+               "sdn", "zone", "create", Isolation.SDN_ZONE, "--type", "simple",
+               "--lock-token", token)
+        r.step("infra", "sdn vnet create", f"sdn vnet create {Isolation.SDN_VNET}",
+               "sdn", "vnet", "create", Isolation.SDN_VNET, "--zone", Isolation.SDN_ZONE,
+               "--lock-token", token)
+        r.step("infra", "sdn subnet create", f"sdn subnet create {Isolation.SDN_SUBNET}",
+               "sdn", "subnet", "create", Isolation.SDN_VNET, Isolation.SDN_SUBNET,
+               "--gateway", Isolation.SDN_GATEWAY, "--lock-token", token)
+        r.step("infra", "sdn apply", "sdn apply", "sdn", "apply",
+               "--lock-token", token, "--release-lock")
+    except BaseException:
+        # Discard this suite's partial staging and release the lock, so an
+        # aborted provision leaves the cluster's SDN config exactly as found.
+        # The config was clean when the lock was acquired, so rollback can only
+        # ever drop our own staged objects.
+        r.undo("sdn rollback (discard partial staging, release lock)",
+               "sdn", "rollback", "--yes", "--lock-token", token, "--release-lock")
+        raise
     # Live status reads against the just-applied pvecli zone/vnet, while they
     # are genuinely running. ip-vrf/mac-vrf only carry data for EVPN zones
     # (per the API's own description — "Get the IP VRF of an EVPN zone" /
@@ -1058,19 +1106,59 @@ def teardown_network(r: Runner) -> None:
     # run already cleaned up). teardown is also called as a pre-clean before
     # provisioning, where these objects do not yet exist — del_step records that
     # as a benign cleanup SKIP rather than aborting.
-    # Subnet must be deleted by its id (zone-prefixed), not the CIDR.
-    sub = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
-    if sub.rc == 0:
-        for s in sub.json():
-            sid = s.get("subnet")
-            if sid:
-                r.del_step("infra", "sdn subnet delete", f"sdn subnet delete {sid}",
-                           "sdn", "subnet", "delete", Isolation.SDN_VNET, sid, "--yes")
-    r.del_step("infra", "sdn vnet delete", f"sdn vnet delete {Isolation.SDN_VNET}",
-               "sdn", "vnet", "delete", Isolation.SDN_VNET, "--yes")
-    r.del_step("infra", "sdn zone delete", f"sdn zone delete {Isolation.SDN_ZONE}",
-               "sdn", "zone", "delete", Isolation.SDN_ZONE, "--yes")
-    r.undo("sdn apply", "sdn", "apply")
+    # The delete→apply window holds the global SDN lock for the same reason
+    # provisioning does: the closing `sdn apply` commits everything pending
+    # cluster-wide, so the lock guarantees only this suite's own deletions are
+    # staged when it runs. Teardown is best-effort (it also runs as a
+    # pre-clean), so a failed acquire skips the SDN portion with a warning
+    # instead of applying foreign pending edits.
+    acq = r.pve("sdn", "lock", "acquire", json_out=True, node=False)
+    token = _sdn_lock_token(acq) if acq.rc == 0 else ""
+    if acq.rc != 0:
+        lines = (acq.err.strip() or acq.out.strip()).splitlines()
+        why = lines[-1][:160] if lines else "acquire failed"
+        print(f"  {YELLOW('·')} sdn teardown skipped {DIM('(lock not acquired: ' + why + ')')}")
+        print(DIM("      foreign pending SDN changes or a held lock; resolve them, then"))
+        print(DIM("      delete the pvecli zone/vnet/subnet and run `pve sdn apply` manually"))
+        print(DIM("      (crashed-run leftovers: `pve sdn rollback --yes` / "
+                  "`pve sdn lock release --force --yes`)"))
+    elif not token:
+        r.undo("force-release SDN lock (token not captured)",
+               "sdn", "lock", "release", "--force", "--yes")
+        print(f"  {YELLOW('·')} sdn teardown skipped {DIM('(lock token not captured)')}")
+    else:
+        released = False
+        try:
+            # Subnet must be deleted by its id (zone-prefixed), not the CIDR.
+            sub = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
+            if sub.rc == 0:
+                for s in sub.json():
+                    sid = s.get("subnet")
+                    if sid:
+                        r.del_step("infra", "sdn subnet delete", f"sdn subnet delete {sid}",
+                                   "sdn", "subnet", "delete", Isolation.SDN_VNET, sid,
+                                   "--yes", "--lock-token", token)
+            r.del_step("infra", "sdn vnet delete", f"sdn vnet delete {Isolation.SDN_VNET}",
+                       "sdn", "vnet", "delete", Isolation.SDN_VNET, "--yes",
+                       "--lock-token", token)
+            r.del_step("infra", "sdn zone delete", f"sdn zone delete {Isolation.SDN_ZONE}",
+                       "sdn", "zone", "delete", Isolation.SDN_ZONE, "--yes",
+                       "--lock-token", token)
+            app = r.pve("sdn", "apply", "--lock-token", token, "--release-lock")
+            if app.rc == 0:
+                print(f"  {GREEN('✓')} sdn apply")
+                released = True
+            else:
+                lines = (app.err.strip() or app.out.strip()).splitlines()
+                tail = lines[-1][:160] if lines else "failed"
+                print(f"  {YELLOW('·')} sdn apply {DIM('(skip: ' + tail + ')')}")
+        finally:
+            if not released:
+                # Never leak the global lock: release it even when the apply
+                # failed or teardown was interrupted (any staged deletions stay
+                # pending for the operator to review).
+                r.undo("sdn lock release", "sdn", "lock", "release",
+                       "--lock-token", token, "--yes")
     # Deleting the isolated pve-cli pool is the live coverage for `pool delete`:
     # it removes the exact pool this suite provisioned, recorded as a del_step
     # (PASS on a normal teardown, SKIP when a prior run already cleaned it up).
@@ -3854,15 +3942,7 @@ def sdn_lock_lifecycle(r: Runner) -> None:
     print(BOLD("sdn: global config lock acquire/release"))
     acq = r.step("sdn", "lock acquire", "lock acquire",
                  "sdn", "lock", "acquire", json_out=True, node=False)
-    token = ""
-    raw = acq.out.strip()
-    if raw:
-        try:
-            parsed = json.loads(raw)
-            token = str(parsed.get("data", "")) if isinstance(parsed, dict) else str(parsed)
-        except ValueError:
-            token = raw.strip('"')
-    token = token.strip()
+    token = _sdn_lock_token(acq)
     if token:
         r.del_step("sdn", "lock release", "lock release (by token)",
                    "sdn", "lock", "release", "--lock-token", token, "--yes", node=False)
