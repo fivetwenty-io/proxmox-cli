@@ -28,12 +28,47 @@ func newVnetCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newVnetListCmd(),
+		newVnetShowCmd(),
 		newVnetCreateCmd(),
 		newVnetSetCmd(),
 		newVnetDeleteCmd(),
 		newVnetFirewallCmd(),
 		newVnetIpsCmd(),
 	)
+	return cmd
+}
+
+// newVnetShowCmd builds `pve sdn vnet show <vnet>`.
+func newVnetShowCmd() *cobra.Command {
+	var (
+		pending bool
+		running bool
+	)
+	cmd := &cobra.Command{
+		Use:   "show <vnet>",
+		Short: "Show an SDN vnet's configuration",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet := args[0]
+			params := &cluster.GetSdnVnetsParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.GetSdnVnets(cmd.Context(), vnet, params)
+			if err != nil {
+				return fmt.Errorf("get SDN vnet %q: %w", vnet, err)
+			}
+			return renderObject(cmd, deps, resp)
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
 	return cmd
 }
 

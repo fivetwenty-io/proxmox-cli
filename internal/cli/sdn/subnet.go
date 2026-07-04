@@ -32,7 +32,43 @@ func newSubnetCmd() *cobra.Command {
 		Use:   "subnet",
 		Short: "Manage SDN subnets",
 	}
-	cmd.AddCommand(newSubnetListCmd(), newSubnetCreateCmd(), newSubnetSetCmd(), newSubnetDeleteCmd())
+	cmd.AddCommand(
+		newSubnetListCmd(), newSubnetShowCmd(), newSubnetCreateCmd(), newSubnetSetCmd(), newSubnetDeleteCmd(),
+	)
+	return cmd
+}
+
+// newSubnetShowCmd builds `pve sdn subnet show <vnet> <subnet>`.
+func newSubnetShowCmd() *cobra.Command {
+	var (
+		pending bool
+		running bool
+	)
+	cmd := &cobra.Command{
+		Use:   "show <vnet> <subnet>",
+		Short: "Show a subnet's configuration",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vnet, subnet := args[0], args[1]
+			params := &cluster.GetSdnVnetsSubnetsParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.GetSdnVnetsSubnets(cmd.Context(), vnet, subnet, params)
+			if err != nil {
+				return fmt.Errorf("get subnet %q on vnet %q: %w", subnet, vnet, err)
+			}
+			return renderObject(cmd, deps, resp)
+		},
+	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
 	return cmd
 }
 
