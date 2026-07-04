@@ -13,8 +13,9 @@ import (
 )
 
 // newJobsCmd builds the `pve cluster jobs` sub-tree for managing scheduled
-// cluster jobs. Currently this exposes realm-sync jobs, which periodically
-// synchronize users and groups from an authentication realm (LDAP/AD).
+// cluster jobs: a directory-wide `list` of job-type endpoints, and realm-sync
+// jobs, which periodically synchronize users and groups from an
+// authentication realm (LDAP/AD).
 func newJobsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "jobs",
@@ -22,10 +23,43 @@ func newJobsCmd() *cobra.Command {
 		Long:  "Manage scheduled cluster jobs, such as periodic realm (LDAP/AD) user synchronization.",
 	}
 	cmd.AddCommand(
+		newJobsListCmd(),
 		newJobsRealmSyncCmd(),
 		newJobsScheduleAnalyzeCmd(),
 	)
 	return cmd
+}
+
+// newJobsListCmd builds `pve cluster jobs list`, a directory-wide index of
+// scheduled-job endpoints under /cluster/jobs (for example realm-sync). This
+// is distinct from `jobs realm-sync list`, which lists the realm-sync jobs
+// themselves; this command lists the job-type sub-directories available.
+func newJobsListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List scheduled-job sub-directories",
+		Long: "List the scheduled-job endpoint sub-directories exposed under /cluster/jobs " +
+			"(for example realm-sync). Use `jobs realm-sync list` to list realm-sync jobs themselves.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			resp, err := deps.API.Cluster.ListJobs(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("list jobs: %w", err)
+			}
+			entries := make([]map[string]any, 0)
+			for _, raw := range derefRawList(resp) {
+				var m map[string]any
+				if err := json.Unmarshal(raw, &m); err != nil {
+					return fmt.Errorf("decode job entry: %w", err)
+				}
+				entries = append(entries, m)
+			}
+			headers, rows := dynamicTable(entries)
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
+		},
+	}
 }
 
 func newJobsRealmSyncCmd() *cobra.Command {

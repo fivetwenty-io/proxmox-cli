@@ -13,6 +13,46 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
 
+// TestJobsList_Success verifies `pve cluster jobs list` reads GET /cluster/jobs
+// and renders each returned sub-directory entry.
+func TestJobsList_Success(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var gotMethod, gotPath string
+	f.HandleFunc("GET /api2/json/cluster/jobs", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		testhelper.WriteData(w, []any{
+			map[string]any{"subdir": "realm-sync"},
+		})
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "jobs", "list"))
+
+	require.Equal(t, http.MethodGet, gotMethod)
+	require.Equal(t, "/api2/json/cluster/jobs", gotPath)
+
+	out := buf.String()
+	require.Contains(t, out, "SUBDIR")
+	require.Contains(t, out, "realm-sync")
+}
+
+// TestJobsList_ServerError verifies a server error surfaces from `jobs list`.
+func TestJobsList_ServerError(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/jobs", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "jobs", "list")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list jobs")
+}
+
 // TestJobsRealmSync_List verifies `pve cluster jobs realm-sync list` reads
 // GET /cluster/jobs/realm-sync and renders the focused columns.
 func TestJobsRealmSync_List(t *testing.T) {
@@ -174,13 +214,16 @@ func TestJobsRealmSync_DeleteWithYes(t *testing.T) {
 	require.Contains(t, buf.String(), "deleted")
 }
 
-// TestJobsCommandTree verifies the jobs realm-sync verb set is registered.
+// TestJobsCommandTree verifies the jobs list and realm-sync verb set is registered.
 func TestJobsCommandTree(t *testing.T) {
 	root := Group(&cli.Deps{})
 	jobs := childCommands(root)["jobs"]
 	require.NotNil(t, jobs, "cluster must have a jobs command")
 
-	realmSync := childCommands(jobs)["realm-sync"]
+	jobVerbs := childCommands(jobs)
+	require.Contains(t, jobVerbs, "list", "jobs must have a list command")
+
+	realmSync := jobVerbs["realm-sync"]
 	require.NotNil(t, realmSync, "jobs must have a realm-sync command")
 
 	verbs := childCommands(realmSync)
