@@ -112,19 +112,24 @@ func TestNewManualVerifyCallback_TTY_PromptsAndDecides(t *testing.T) {
 	}
 }
 
-func TestNewManualVerifyCallback_TTY_ReadsOnlyOneLine(t *testing.T) {
+func TestNewManualVerifyCallback_TTY_FirstLineDecidesTrailingDataIgnored(t *testing.T) {
 	t.Parallel()
 
-	// Two lines are available; only the first is consumed by a single
-	// invocation of the callback, leaving the rest for a subsequent prompt
-	// (e.g. a retry) rather than silently draining stdin.
+	// Two lines are available; the callback's decision comes from the first
+	// line only. bufio.Reader.ReadString stops returning at the first '\n',
+	// so the second line plays no part in the true/false result below. Note
+	// this does NOT assert the second line survives for a later prompt: a
+	// fresh bufio.Reader wraps in on every call, and bufio typically reads
+	// ahead into its own internal buffer in one underlying Read, so a
+	// single-pass reader like this bytes.Buffer is fully drained by this one
+	// call and the second line would not be available to a subsequent call.
 	var promptOut bytes.Buffer
-	in := bytes.NewBufferString("y\nsecond-line-untouched\n")
+	in := bytes.NewBufferString("y\nsecond-line-ignored-for-decision\n")
 
 	cb := apiclient.NewManualVerifyCallback(&promptOut, in, func() bool { return true })
 
 	got := cb(sampleRequest())
-	require.True(t, got)
+	require.True(t, got, "decision must be driven by the first line (\"y\") alone")
 }
 
 // ---------------------------------------------------------------------------
