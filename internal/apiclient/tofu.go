@@ -59,23 +59,45 @@ func NewManualVerifyCallback(
 	}
 }
 
-// fingerprintCacheFileName reduces contextName to a filesystem-safe file name
-// component: only ASCII letters, digits, '-', and '_' pass through unchanged;
-// every other rune (including '/', '\', and '.') is replaced with '_'. This
-// keeps a maliciously or accidentally crafted context name (config.yml is
-// user-editable) from escaping the fingerprints directory or colliding with a
-// reserved file name, without imposing character restrictions on context
-// names elsewhere in the CLI.
+// fingerprintCacheFileName encodes contextName into a filesystem-safe,
+// path-separator-free file name component using an injective (collision-free)
+// escape scheme: ASCII letters, digits, and '-' pass through unchanged; every
+// other byte of contextName's UTF-8 encoding — including a literal '_', which
+// is reserved as the escape character — is replaced with '_' followed by two
+// uppercase hex digits for that byte's value, e.g. '.' -> "_2E", '/' ->
+// "_2F", '_' -> "_5F". Because passthrough bytes never include '_' and every
+// escape sequence is exactly three bytes ('_' plus two hex digits), the
+// mapping is injective: distinct context names never encode to the same file
+// name. This keeps a maliciously or accidentally crafted context name
+// (config.yml is user-editable) from escaping the fingerprints directory or
+// colliding with another context's cache file, without imposing character
+// restrictions on context names elsewhere in the CLI.
+//
+// Names using only ASCII letters, digits, and '-' encode byte-for-byte
+// identically to the pre-fix sanitizer, so existing cache files for such
+// context names remain valid. Names containing any other character
+// (including '_') produce a different file name than the pre-fix sanitizer
+// did; any corresponding old cache file is orphaned. This is benign: a cache
+// miss only costs one additional TOFU accept prompt on the next connection
+// (or a fail-closed rejection for a non-TTY invocation), matching the normal
+// cache-miss behavior already documented on NewManualVerifyCallback — it
+// never silently trusts a certificate.
 func fingerprintCacheFileName(contextName string) string {
+	const hexDigits = "0123456789ABCDEF"
+
 	var b strings.Builder
 	b.Grow(len(contextName))
 
-	for _, r := range contextName {
+	for i := 0; i < len(contextName); i++ {
+		c := contextName[i]
+
 		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
-			b.WriteRune(r)
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-':
+			b.WriteByte(c)
 		default:
-			b.WriteRune('_')
+			b.WriteByte('_')
+			b.WriteByte(hexDigits[c>>4])
+			b.WriteByte(hexDigits[c&0x0F])
 		}
 	}
 

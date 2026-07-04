@@ -158,10 +158,13 @@ func TestFingerprintCachePath_SanitizesUnsafeContextNameCharacters(t *testing.T)
 
 	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "../../etc/passwd")
 
-	// The sanitized file name must stay a single path component directly under
+	// The encoded file name must stay a single path component directly under
 	// the fingerprints directory: no path separators survive, so the result
-	// cannot escape that directory regardless of how the context name is spelled.
-	require.Equal(t, "/home/user/.config/pve/fingerprints/______etc_passwd.json", got)
+	// cannot escape that directory regardless of how the context name is
+	// spelled. Each '.' encodes to "_2E" and each '/' encodes to "_2F".
+	require.Equal(t, "/home/user/.config/pve/fingerprints/_2E_2E_2F_2E_2E_2Fetc_2Fpasswd.json", got)
+	require.NotContains(t, got[len("/home/user/.config/pve/fingerprints/"):], "/")
+	require.NotContains(t, got[len("/home/user/.config/pve/fingerprints/"):], "\\")
 }
 
 func TestFingerprintCachePath_EmptyContextNameCollapsesToPlaceholder(t *testing.T) {
@@ -170,4 +173,142 @@ func TestFingerprintCachePath_EmptyContextNameCollapsesToPlaceholder(t *testing.
 	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "")
 
 	require.Equal(t, "/home/user/.config/pve/fingerprints/_.json", got)
+}
+
+// ---------------------------------------------------------------------------
+// FingerprintCachePath / fingerprintCacheFileName — collision resistance
+// ---------------------------------------------------------------------------
+
+func TestFingerprintCachePath_DifferingOnlyByDisallowedChar_NoCollision(t *testing.T) {
+	t.Parallel()
+
+	// Prior to the fix, every rune outside [A-Za-z0-9-_] collapsed to a
+	// single '_', so all four of these distinct context names mapped to the
+	// same cache file ("prod_1.json"), letting one context's accepted TLS
+	// fingerprint be silently reused (or overwritten) by another. Each pair
+	// must now produce a distinct path.
+	names := []string{"prod.1", "prod_1", "prod:1", "prod/1"}
+
+	seen := make(map[string]string, len(names))
+
+	for _, name := range names {
+		path := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+
+		if other, ok := seen[path]; ok {
+			t.Fatalf("context names %q and %q collide on cache path %q", other, name, path)
+		}
+
+		seen[path] = name
+	}
+
+	require.Len(t, seen, len(names))
+}
+
+func TestFingerprintCachePath_PassthroughAlphabetUnchanged(t *testing.T) {
+	t.Parallel()
+
+	// Context names using only the passthrough alphabet (ASCII letters,
+	// digits, and '-') must encode byte-for-byte identically to the pre-fix
+	// sanitizer, so existing cache files for these names remain valid after
+	// the fix.
+	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "Prod-Cluster-01")
+
+	require.Equal(t, "/home/user/.config/pve/fingerprints/Prod-Cluster-01.json", got)
+}
+
+func TestFingerprintCachePath_EncodingIsInjectiveForAdversarialInputs(t *testing.T) {
+	t.Parallel()
+
+	// These names are deliberately crafted so that a naive or partial escape
+	// scheme could produce the same output for more than one of them (e.g. if
+	// a literal '_' were left as a passthrough character instead of being
+	// escaped itself, "a_5Fb" could collide with the encoded form of "a_b").
+	names := []string{"a_b", "a.b", "a__b", "a_5Fb", "a_2Eb"}
+
+	seen := make(map[string]string, len(names))
+
+	for _, name := range names {
+		path := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+
+		if other, ok := seen[path]; ok {
+			t.Fatalf("context names %q and %q collide on cache path %q", other, name, path)
+		}
+
+		seen[path] = name
+	}
+
+	require.Len(t, seen, len(names))
+}
+
+func TestFingerprintCachePath_EncodingIsCollisionFreeOverRandomSet(t *testing.T) {
+	t.Parallel()
+
+	// A broader, fuzz-flavored set of context names covering reserved
+	// characters, hex-digit look-alikes, Unicode, and empty/short strings.
+	// The full resulting path set must contain no duplicates.
+	names := []string{
+		"prod", "prod-1", "prod.1", "prod_1", "prod:1", "prod/1", "prod\\1",
+		"prod 1", "prod\t1", "prod\n1", "PROD.1", "Prod_1",
+		"a_2E", "a.", "a_5F", "a_",
+		"staging.eu", "staging_eu", "staging-eu",
+		"..", "../..", "../../etc/passwd", "/etc/passwd", "\\etc\\passwd",
+		"ctx-ü", "ctx-ü", "日本語", "emoji-😀",
+		"", "_", "-", "__", "--",
+		"a", "A", "0", "9",
+	}
+
+	seen := make(map[string]string, len(names))
+
+	for _, name := range names {
+		path := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+
+		if other, ok := seen[path]; ok && other != name {
+			t.Fatalf("context names %q and %q collide on cache path %q", other, name, path)
+		}
+
+		seen[path] = name
+	}
+}
+
+func TestFingerprintCachePath_MultiByteRuneEncodesPerByteAndStaysFilesystemSafe(t *testing.T) {
+	t.Parallel()
+
+	// 'ü' (U+00FC) is a two-byte UTF-8 sequence (0xC3 0xBC). Each byte of the
+	// multi-byte rune must be escaped independently, and the resulting file
+	// name must contain only ASCII letters, digits, '-', and '_' so it is
+	// safe on any filesystem regardless of locale/encoding support.
+	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "ctx-ü")
+
+	require.Equal(t, "/home/user/.config/pve/fingerprints/ctx-_C3_BC.json", got)
+
+	fileName := got[len("/home/user/.config/pve/fingerprints/") : len(got)-len(".json")]
+	for _, r := range fileName {
+		safe := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_'
+		require.True(t, safe, "file name %q contains unsafe rune %q", fileName, r)
+	}
+}
+
+func FuzzFingerprintCacheFileName(f *testing.F) {
+	seeds := []string{
+		"prod", "prod.1", "prod_1", "prod:1", "prod/1", "../../etc/passwd",
+		"", "_", "a_b", "a.b", "ctx-ü", "日本語",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, name string) {
+		// Must never panic, and must never produce a path separator that
+		// could escape the fingerprints directory.
+		got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+
+		fileName := got[len("/home/user/.config/pve/fingerprints/") : len(got)-len(".json")]
+		require.NotContains(t, fileName, "/")
+		require.NotContains(t, fileName, "\\")
+
+		// Encoding a second, different name must not collide with this one.
+		other := name + "-distinct-suffix-marker"
+		gotOther := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", other)
+		require.NotEqual(t, got, gotOther)
+	})
 }
