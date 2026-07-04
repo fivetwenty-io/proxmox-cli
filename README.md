@@ -109,12 +109,38 @@ contexts:
       insecure: false
       fingerprint: ""          # pin a hex SHA-256 cert fingerprint
       ca-cert: ""              # path to a PEM CA bundle for custom trust
+      tofu: false              # opt-in Trust-On-First-Use cert pinning
 ```
 
 Configs written by an earlier version of `pve` use `targets:` and
 `current-target:`. Run `scripts/migrate-config.py` (or
 `python3 scripts/migrate-config.py`) to rename those keys in place. The script
 is idempotent and supports `--dry-run`.
+
+### TLS trust
+
+By default `pve` verifies the server certificate against the system CA bundle
+(or `tls.ca-cert` / `tls.fingerprint` / `tls.insecure` if the context sets
+them). For a self-signed lab or homelab node, set `tls.tofu: true` (or pass
+`--tofu` to `pve context add`) to opt into Trust-On-First-Use pinning, the
+same model SSH uses for `known_hosts`. `pve context copy` carries the
+setting over from the source context automatically.
+
+- On an interactive terminal, an unrecognized certificate is shown to you as a
+  host + fingerprint prompt; answering `y`/`yes` accepts it for that context
+  only, and the accepted fingerprint is cached per context under
+  `~/.config/pve/fingerprints/<context>.json`. Later connections to the same
+  context trust that fingerprint without prompting again.
+
+- On a non-interactive run (scripts, CI, piped input), an unrecognized
+  certificate is always rejected outright — no prompt, no blocking read on
+  stdin. Only fingerprints already cached (or explicitly set via
+  `tls.fingerprint`) are trusted.
+
+`tls.tofu` is ignored when `tls.insecure` is set, since that already disables
+certificate verification. `tofu` is not a substitute for a real CA-signed
+certificate in production; it exists to make self-signed lab nodes usable
+without `--insecure`.
 
 ### Secret resolution
 
@@ -240,8 +266,8 @@ uses the `pve node` subtree.
 | `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
 | `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
 | `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete` |
-| `sdn` | Software-defined networking | `zone`, `vnet`, `subnet` (each `list\|create\|delete`), `apply` |
-| `pool` | Resource pools | `list`, `get`, `create`, `set`, `delete` |
+| `sdn` | Software-defined networking | `zone`, `vnet`, `subnet` (each `list\|show\|create\|delete`), `apply` |
+| `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
 
 The top-level alias `pve ctx` resolves to `pve context`; `pve auth` resolves to

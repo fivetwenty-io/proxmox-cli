@@ -67,21 +67,21 @@ swept clean before the next provisions.
 | Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred | n/a | uncovered |
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `access` | 39 | 9 | 8 | 28 | 0 | 0 | 0 | 0 |
-| `api` | 6 | 3 | 0 | 3 | 0 | 0 | 0 | 0 |
-| `cluster` | 157 | 42 | 12 | 108 | 5 | 11 | 0 | 0 |
+| `api` | 7 | 3 | 0 | 3 | 0 | 0 | 0 | 1 |
+| `cluster` | 166 | 42 | 12 | 108 | 5 | 11 | 0 | 9 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 48 | 2 | 13 | 38 | 0 | 1 | 0 | 0 |
-| `node` | 138 | 1 | 59 | 47 | 0 | 36 | 0 | 0 |
-| `pool` | 5 | 1 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `qemu` | 59 | 1 | 12 | 51 | 1 | 1 | 0 | 0 |
-| `sdn` | 71 | 5 | 11 | 56 | 0 | 2 | 0 | 0 |
-| `storage` | 21 | 1 | 8 | 12 | 0 | 3 | 0 | 0 |
-| `task` | 4 | 1 | 1 | 2 | 0 | 0 | 0 | 0 |
+| `lxc` | 52 | 2 | 13 | 38 | 0 | 1 | 0 | 4 |
+| `node` | 160 | 1 | 58 | 47 | 0 | 36 | 0 | 23 |
+| `pool` | 6 | 1 | 1 | 3 | 0 | 0 | 0 | 1 |
+| `qemu` | 66 | 1 | 12 | 51 | 1 | 1 | 0 | 7 |
+| `sdn` | 84 | 5 | 11 | 56 | 0 | 2 | 0 | 13 |
+| `storage` | 25 | 1 | 8 | 12 | 0 | 3 | 0 | 4 |
+| `task` | 6 | 1 | 1 | 2 | 0 | 0 | 0 | 2 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **560** | **77** | **125** | **348** | **6** | **54** | **1** | **0** |
+| **Total** | **623** | **77** | **124** | **348** | **6** | **54** | **1** | **64** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **560** leaves, **505** are exercised by at least one live suite, **54** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **1** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **623** leaves, **504** are exercised by at least one live suite, **54** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **1** are n/a by design, and **64** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -137,6 +137,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `api auth set-password` | ✓ | — |  |
 | `api auth set-token` | ✓ | — |  |
 | `api auth status` | ✓ | — |  |
+| `api auth whoami` | — | — | **uncovered** |
 
 ## `cluster`
 
@@ -162,6 +163,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster backup list` | ✓ | ✓ |  |
 | `cluster backup set` | — | ✓ |  |
 | `cluster backup-info not-backed-up` | ◑ | — |  |
+| `cluster bulk guest` | — | — | **uncovered** |
 | `cluster bulk migrate` | — | — | deferred — migrates guests cluster-wide — requires a second node; not exercisable on a single-node lab |
 | `cluster bulk shutdown` | — | ✓ |  |
 | `cluster bulk start` | — | ✓ |  |
@@ -169,8 +171,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ceph flags get` | ◑ | — |  |
 | `cluster ceph flags list` | ◑ | — |  |
 | `cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
+| `cluster ceph flags set-all` | — | — | **uncovered** |
 | `cluster ceph metadata` | ◑ | — |  |
+| `cluster ceph status` | — | — | **uncovered** |
 | `cluster config apiversion` | ✓ | — |  |
+| `cluster config create` | — | — | **uncovered** |
 | `cluster config join add` | — | — | deferred — joins the local node to an existing cluster — changes membership and quorum; not exercised live; covered by unit tests |
 | `cluster config join list` | ◑ | — |  |
 | `cluster config nodes add` | — | — | deferred — registers a new node in the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests |
@@ -185,10 +190,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster cpu-model set` | — | ✓ |  |
 | `cluster firewall alias create` | — | ✓ |  |
 | `cluster firewall alias delete` | — | ✓ |  |
+| `cluster firewall alias get` | — | — | **uncovered** |
 | `cluster firewall alias list` | ✓ | ✓ |  |
 | `cluster firewall alias update` | — | ✓ |  |
 | `cluster firewall group create` | — | ✓ |  |
 | `cluster firewall group delete` | — | ✓ |  |
+| `cluster firewall group get` | — | — | **uncovered** |
 | `cluster firewall group list` | ✓ | ✓ |  |
 | `cluster firewall group rule-add` | — | ✓ |  |
 | `cluster firewall group rule-delete` | — | ✓ |  |
@@ -197,8 +204,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster firewall ipset add` | — | ✓ |  |
 | `cluster firewall ipset create` | — | ✓ |  |
 | `cluster firewall ipset delete` | — | ✓ |  |
+| `cluster firewall ipset get` | — | — | **uncovered** |
 | `cluster firewall ipset list` | ✓ | ✓ |  |
 | `cluster firewall ipset remove` | — | ✓ |  |
+| `cluster firewall ipset update` | — | — | **uncovered** |
 | `cluster firewall macros list` | ✓ | — |  |
 | `cluster firewall options get` | ✓ | ✓ |  |
 | `cluster firewall options set` | — | ✓ |  |
@@ -291,6 +300,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster notifications webhook set` | — | ✓ |  |
 | `cluster options get` | ✓ | ✓ |  |
 | `cluster options set` | — | ✓ |  |
+| `cluster qemu cpu-flags` | — | — | **uncovered** |
 | `cluster replication create` | — | · |  |
 | `cluster replication delete` | — | · |  |
 | `cluster replication get` | — | · |  |
@@ -343,8 +353,11 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc firewall ipset delete` | — | ✓ |  |
 | `lxc firewall ipset list` | — | ✓ |  |
 | `lxc firewall ipset remove` | — | ✓ |  |
+| `lxc firewall ipset update-member` | — | — | **uncovered** |
+| `lxc firewall log` | — | — | **uncovered** |
 | `lxc firewall options get` | ◑ | ✓ |  |
 | `lxc firewall options set` | — | ✓ |  |
+| `lxc firewall refs` | — | — | **uncovered** |
 | `lxc firewall rules create` | — | ✓ |  |
 | `lxc firewall rules delete` | — | ✓ |  |
 | `lxc firewall rules get` | — | ✓ |  |
@@ -372,6 +385,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc suspend` | — | ✓ |  |
 | `lxc template download` | — | ✓ |  |
 | `lxc template list` | ✓ | — |  |
+| `lxc to-template` | — | — | **uncovered** |
 
 ## `node`
 
@@ -382,17 +396,25 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node apt repositories add` | — | — | deferred — adds a standard APT repository to the node's sources; not exercised live |
 | `node apt repositories enable` | — | — | deferred — enables or disables a configured APT repository on the node; not exercised live |
 | `node apt repositories list` | ◑ | — |  |
+| `node apt templates download` | — | — | **uncovered** |
+| `node apt templates list` | — | — | **uncovered** |
 | `node apt update` | — | ✓ |  |
 | `node apt versions` | ◑ | — |  |
 | `node capabilities qemu cpu` | ◑ | — |  |
 | `node capabilities qemu cpu-flags` | ◑ | — |  |
 | `node capabilities qemu machines` | ◑ | — |  |
 | `node capabilities qemu migration` | ◑ | — |  |
-| `node ceph cfg` | ◑ | — |  |
+| `node ceph cfg db` | — | — | **uncovered** |
+| `node ceph cfg index` | — | — | **uncovered** |
+| `node ceph cfg raw` | — | — | **uncovered** |
+| `node ceph cfg value` | — | — | **uncovered** |
+| `node ceph cmd-safety` | — | — | **uncovered** |
+| `node ceph crush` | — | — | **uncovered** |
 | `node ceph fs create` | — | — | deferred — creates a CephFS filesystem and its backing pools; not exercised live |
 | `node ceph fs delete` | — | — | deferred — destroys a CephFS filesystem and optionally its pools; not exercised live |
 | `node ceph fs list` | ◑ | — |  |
 | `node ceph init` | — | — | deferred — initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live |
+| `node ceph log` | — | — | **uncovered** |
 | `node ceph mds create` | — | — | deferred — provisions a Ceph metadata-server daemon on the node; not exercised live |
 | `node ceph mds delete` | — | — | deferred — destroys a Ceph metadata-server daemon on the node; not exercised live |
 | `node ceph mds list` | ◑ | — |  |
@@ -407,6 +429,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node ceph osd get` | ◑ | — |  |
 | `node ceph osd in` | — | — | deferred — marks an OSD in, triggering cluster data movement; not exercised live |
 | `node ceph osd list` | ◑ | — |  |
+| `node ceph osd lv-info` | — | — | **uncovered** |
+| `node ceph osd metadata` | — | — | **uncovered** |
 | `node ceph osd out` | — | — | deferred — marks an OSD out, draining its data across the cluster; not exercised live |
 | `node ceph osd scrub` | — | — | deferred — triggers an OSD scrub that adds cluster I/O load; not exercised live |
 | `node ceph pool create` | — | — | deferred — creates a Ceph pool, consuming cluster capacity; not exercised live |
@@ -416,6 +440,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node ceph pool set` | — | — | deferred — reconfigures an existing Ceph pool's parameters; not exercised live |
 | `node ceph pool status` | ◑ | — |  |
 | `node ceph restart` | — | — | deferred — restarts Ceph services on the node — disruptive; not exercised live |
+| `node ceph rules` | — | — | **uncovered** |
 | `node ceph start` | — | — | deferred — starts Ceph services on the node — disruptive; not exercised live |
 | `node ceph status` | ◑ | — |  |
 | `node ceph stop` | — | — | deferred — stops Ceph services on the node — disruptive; not exercised live |
@@ -426,6 +451,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node cert custom delete` | — | — | deferred — removes the node's custom API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert custom upload` | — | — | deferred — replaces the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
+| `node config get` | — | — | **uncovered** |
+| `node config set` | — | — | **uncovered** |
 | `node console` | — | — | deferred — opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests |
 | `node disks create directory` | — | ✓ |  |
 | `node disks create lvm` | — | ✓ |  |
@@ -447,6 +474,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node dns get` | ◑ | ✓ |  |
 | `node dns set` | — | ✓ |  |
 | `node exec` | — | ✓ |  |
+| `node execute` | — | — | **uncovered** |
+| `node firewall log` | — | — | **uncovered** |
 | `node firewall options get` | ◑ | ✓ |  |
 | `node firewall options set` | — | — | deferred — changes the host firewall policy — could cut the node off the network; not exercised live |
 | `node firewall rules create` | — | ✓ |  |
@@ -473,6 +502,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node oci pull` | — | ✓ |  |
 | `node oci tags` | — | ✓ |  |
 | `node query-url-metadata` | — | ✓ |  |
+| `node reboot` | — | — | **uncovered** |
+| `node replication get` | — | — | **uncovered** |
 | `node replication list` | ◑ | — |  |
 | `node replication log` | ◑ | — |  |
 | `node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
@@ -495,6 +526,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node services state` | ◑ | — |  |
 | `node services stop` | — | ✓ |  |
 | `node shell` | — | — | deferred — opens a live SSH terminal on the node, so it cannot be driven head-less; not run live; covered by unit tests |
+| `node shutdown` | — | — | **uncovered** |
+| `node spiceshell` | — | — | **uncovered** |
 | `node ssh` | — | ✓ |  |
 | `node startall` | — | ✓ |  |
 | `node status` | ◑ | — |  |
@@ -507,10 +540,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node syslog` | ◑ | — |  |
 | `node task list` | ◑ | — |  |
 | `node task log` | ◑ | — |  |
+| `node task status` | — | — | **uncovered** |
 | `node task stop` | — | ✓ |  |
 | `node task wait` | ◑ | — |  |
+| `node termproxy` | — | — | **uncovered** |
 | `node time get` | ◑ | ✓ |  |
 | `node time set` | — | ✓ |  |
+| `node vncshell` | — | — | **uncovered** |
 | `node vzdump` | — | ✓ |  |
 | `node vzdump defaults` | ◑ | — |  |
 | `node vzdump extract-config` | ◑ | — |  |
@@ -525,6 +561,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `pool get` | ◑ | — |  |
 | `pool list` | ✓ | — |  |
 | `pool set` | — | ✓ |  |
+| `pool show` | — | — | **uncovered** |
 
 ## `qemu`
 
@@ -544,6 +581,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu config pending` | — | ✓ |  |
 | `qemu config set` | — | ✓ |  |
 | `qemu console` | ◑ | ✓ |  |
+| `qemu cpu list` | — | — | **uncovered** |
+| `qemu cpu-flags` | — | — | **uncovered** |
 | `qemu create` | — | ✓ |  |
 | `qemu delete` | — | ✓ |  |
 | `qemu disk move` | — | ✓ |  |
@@ -559,14 +598,18 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu firewall ipset delete` | — | ✓ |  |
 | `qemu firewall ipset list` | — | ✓ |  |
 | `qemu firewall ipset remove` | — | ✓ |  |
+| `qemu firewall ipset update-member` | — | — | **uncovered** |
+| `qemu firewall log` | — | — | **uncovered** |
 | `qemu firewall options get` | ◑ | ✓ |  |
 | `qemu firewall options set` | — | ✓ |  |
+| `qemu firewall refs` | — | — | **uncovered** |
 | `qemu firewall rules create` | — | ✓ |  |
 | `qemu firewall rules delete` | — | ✓ |  |
 | `qemu firewall rules get` | — | ✓ |  |
 | `qemu firewall rules list` | ◑ | ✓ |  |
 | `qemu firewall rules update` | — | ✓ |  |
 | `qemu list` | ✓ | — |  |
+| `qemu machine list` | — | — | **uncovered** |
 | `qemu metrics` | ◑ | — |  |
 | `qemu migrate` | — | ✓ |  |
 | `qemu migrate check` | ◑ | — |  |
@@ -584,6 +627,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu snapshot rollback` | — | ✓ |  |
 | `qemu snapshot show` | ◑ | — |  |
 | `qemu snapshot update` | — | ✓ |  |
+| `qemu ssh` | — | — | **uncovered** |
 | `qemu start` | — | ✓ |  |
 | `qemu status` | ◑ | ✓ |  |
 | `qemu stop` | — | ✓ |  |
@@ -643,10 +687,21 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn route-map entry set` | — | ✓ |  |
 | `sdn route-map get` | — | ✓ |  |
 | `sdn route-map list` | ◑ | — |  |
+| `sdn status fabrics get` | — | — | **uncovered** |
+| `sdn status fabrics interfaces` | — | — | **uncovered** |
+| `sdn status fabrics neighbors` | — | — | **uncovered** |
+| `sdn status fabrics routes` | — | — | **uncovered** |
+| `sdn status vnets get` | — | — | **uncovered** |
+| `sdn status vnets mac-vrf` | — | — | **uncovered** |
+| `sdn status zones bridges` | — | — | **uncovered** |
+| `sdn status zones content` | — | — | **uncovered** |
+| `sdn status zones get` | — | — | **uncovered** |
+| `sdn status zones ip-vrf` | — | — | **uncovered** |
 | `sdn subnet create` | — | ✓ |  |
 | `sdn subnet delete` | — | ✓ |  |
 | `sdn subnet list` | ◑ | — |  |
 | `sdn subnet set` | — | ✓ |  |
+| `sdn subnet show` | — | — | **uncovered** |
 | `sdn vnet create` | — | ✓ |  |
 | `sdn vnet delete` | — | ✓ |  |
 | `sdn vnet firewall options get` | ◑ | ✓ |  |
@@ -661,15 +716,19 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn vnet ips set` | — | ✓ |  |
 | `sdn vnet list` | ✓ | — |  |
 | `sdn vnet set` | — | ✓ |  |
+| `sdn vnet show` | — | — | **uncovered** |
 | `sdn zone create` | — | ✓ |  |
 | `sdn zone delete` | — | ✓ |  |
 | `sdn zone list` | ✓ | — |  |
 | `sdn zone set` | — | ✓ |  |
+| `sdn zone show` | — | — | **uncovered** |
 
 ## `storage`
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
+| `storage aplinfo download` | — | — | **uncovered** |
+| `storage aplinfo list` | — | — | **uncovered** |
 | `storage content` | ◑ | — |  |
 | `storage create` | — | ✓ |  |
 | `storage delete` | — | ✓ |  |
@@ -680,6 +739,8 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage identity` | ◑ | — |  |
 | `storage import-metadata` | — | ✓ |  |
 | `storage list` | ✓ | — |  |
+| `storage node-list` | — | — | **uncovered** |
+| `storage oci-pull` | — | — | **uncovered** |
 | `storage prune` | ◑ | ✓ |  |
 | `storage rrd` | ◑ | — |  |
 | `storage rrddata` | ◑ | — |  |
@@ -696,8 +757,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
+| `task cluster-list` | — | — | **uncovered** |
 | `task list` | ✓ | — |  |
 | `task log` | ◑ | — |  |
+| `task status` | — | — | **uncovered** |
 | `task stop` | — | ✓ |  |
 | `task wait` | — | ✓ |  |
 
@@ -712,7 +775,23 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
 
-_None — every leaf is exercised or explicitly deferred._
+**`api`** (1) — `api auth whoami`
+
+**`cluster`** (9) — `cluster bulk guest`, `cluster ceph flags set-all`, `cluster ceph status`, `cluster config create`, `cluster firewall alias get`, `cluster firewall group get`, `cluster firewall ipset get`, `cluster firewall ipset update`, `cluster qemu cpu-flags`
+
+**`lxc`** (4) — `lxc firewall ipset update-member`, `lxc firewall log`, `lxc firewall refs`, `lxc to-template`
+
+**`node`** (23) — `node apt templates download`, `node apt templates list`, `node ceph cfg db`, `node ceph cfg index`, `node ceph cfg raw`, `node ceph cfg value`, `node ceph cmd-safety`, `node ceph crush`, `node ceph log`, `node ceph osd lv-info`, `node ceph osd metadata`, `node ceph rules`, `node config get`, `node config set`, `node execute`, `node firewall log`, `node reboot`, `node replication get`, `node shutdown`, `node spiceshell`, `node task status`, `node termproxy`, `node vncshell`
+
+**`pool`** (1) — `pool show`
+
+**`qemu`** (7) — `qemu cpu list`, `qemu cpu-flags`, `qemu firewall ipset update-member`, `qemu firewall log`, `qemu firewall refs`, `qemu machine list`, `qemu ssh`
+
+**`sdn`** (13) — `sdn status fabrics get`, `sdn status fabrics interfaces`, `sdn status fabrics neighbors`, `sdn status fabrics routes`, `sdn status vnets get`, `sdn status vnets mac-vrf`, `sdn status zones bridges`, `sdn status zones content`, `sdn status zones get`, `sdn status zones ip-vrf`, `sdn subnet show`, `sdn vnet show`, `sdn zone show`
+
+**`storage`** (4) — `storage aplinfo download`, `storage aplinfo list`, `storage node-list`, `storage oci-pull`
+
+**`task`** (2) — `task cluster-list`, `task status`
 
 ## Running the suites
 

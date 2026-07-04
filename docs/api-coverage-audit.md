@@ -11,8 +11,16 @@ Three sources were compared for each command:
 2. The `pve-apiclient-go` Go binding, generated from that specification.
 3. The `pve` CLI commands and the flags they define.
 
-> **Remediation note (2026-06-26).** All gaps identified in this audit have since
-> been remediated in the CLI. Specifically: appliance and container template
+> **Remediation note (2026-06-26, extended 2026-07-04).** Every gap identified
+> in this audit — high severity and medium severity alike — has since been
+> closed in the CLI. The sections below (High-severity gaps through The
+> deprecated-endpoint case in pool) describe the state as it was on the audit
+> date and are kept only as the historical record of what was found and when
+> it was fixed; none of the "missing" language in them is still true. Read
+> [Coverage status as of 2026-07-04](#coverage-status-as-of-2026-07-04) below
+> for the current picture instead.
+>
+> Fixed in the first pass (2026-06-26): appliance and container template
 > management (`pve storage`), single-task status (`pve task`), OIDC login
 > (`pve api auth login --oidc`), SDN fabric redistribute and interfaces flags
 > plus per-node SDN status views, storage OCI pull and upload checksums, QEMU
@@ -20,7 +28,13 @@ Three sources were compared for each command:
 > console-proxy and execute commands, cluster firewall single-item reads and
 > bulk/cpu-flags previews, the LXC container-to-template command, and pool
 > modernization to non-deprecated endpoints. The client pin was bumped to
-> v3.2.10. The gap analysis below stands as the historical record.
+> v3.2.10.
+>
+> Fixed in a follow-up completion pass (2026-07-04): the remaining ten true
+> gaps a corrected, per-method re-audit turned up (the original ~60-gap
+> estimate had counted methods that were already wired through map-dispatch
+> call sites, `Raw` passthroughs, or same-named methods on a different
+> service). See [Coverage status as of 2026-07-04](#coverage-status-as-of-2026-07-04).
 
 ## Audit date and versions
 
@@ -73,12 +87,52 @@ work:
 "Endpoint coverage" counts endpoints reached by at least one CLI command and
 excludes pure directory-index endpoints where noted. Parameter counts exclude
 path and context values (such as node and VM ID) that the CLI supplies
-positionally.
+positionally. Both tables reflect the audit date; see the next section for the
+current state.
 
-## High-severity gaps
+## Coverage status as of 2026-07-04
 
-These three block real operator workflows. Each maps to a client method that
-already exists.
+A follow-up pass re-verified this audit against the CLI as it stands today,
+after the `pve-apiclient-go` client pin moved to v3.3.0. The pass corrected
+the original gap estimate: a plain textual grep for `.Nodes.<Method>(` /
+`.Cluster.<Method>(` had missed methods that were already called indirectly —
+through a map-dispatch value (used as a func reference rather than a direct
+call), through a `Raw` HTTP passthrough that bypasses the typed method, or
+through a same-named method that actually belongs to a different service
+(node-scoped vs. cluster-scoped SDN views share names like `GetSdnZones`).
+Reading every call site individually brought the true remaining gap count
+from roughly sixty down to ten, all of which are now closed:
+
+| Area | Command added | What it exposes |
+|---|---|---|
+| Node Ceph | `pve node ceph cmd-safety` | Whether a stop/destroy action on a Ceph service is currently safe to perform |
+| Node Ceph | `pve node ceph osd lv-info <osdid>` | LVM logical-volume detail (name, path, size, UUID, volume group) backing an OSD |
+| Node Ceph | `pve node ceph osd metadata <osdid>` | Detailed OSD runtime metadata, including backing devices |
+| SDN | `pve sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
+| SDN | `pve sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
+| SDN | `pve sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |
+| Pool | `pve pool show <poolid>` | Single-item pool detail via the current (non-deprecated) endpoint, alongside the existing `pool get` |
+| QEMU firewall | `pve qemu firewall log`, `refs`, `ipset update-member` | Brings VM firewall command parity with the equivalent LXC container commands |
+
+Two related, non-coverage fixes landed alongside the gap closure:
+
+- `pve qemu console` and `pve lxc console` now call the typed
+  `CreateQemu{Vncproxy,Termproxy,Spiceproxy}` / `CreateLxc{...}` client
+  methods instead of a raw HTTP passthrough; the CLI surface, flags, and
+  output are unchanged.
+- Connecting to a context with `tls.tofu: true` (or `pve context add --tofu`)
+  now offers interactive Trust-On-First-Use certificate pinning on an unknown
+  self-signed certificate instead of failing outright; see the
+  [README](../README.md#tls-trust) for the full behavior. This is opt-in and
+  does not change the default (CA-chain-only) verification behavior.
+
+No coverage gaps remain open as of this pass.
+
+## High-severity gaps (historical, resolved)
+
+These three blocked real operator workflows at audit time; each has since been
+closed (see the remediation note at the top). Each mapped to a client method
+that already existed.
 
 ### Storage cannot manage appliance and container templates
 
@@ -114,9 +168,10 @@ OIDC-only realm cannot log in.
 Suggested shape: `pve api auth login --oidc`, which would request the
 authorization URL, accept the pasted redirect, and complete the login.
 
-## Medium-severity gaps
+## Medium-severity gaps (historical, resolved)
 
-These add coverage without blocking any core workflow.
+These would have added coverage without blocking any core workflow; all are
+now closed (see the remediation note at the top).
 
 ### sdn — fabric configuration is incomplete
 
@@ -210,8 +265,11 @@ Safe to leave open or document rather than build.
   `with-conntrack-state`, `migratedfrom`) that the migration commands set
   internally.
 - **Index endpoints.** Across `cluster` (12), `node` (several), `sdn` (2), and
-  others, bare directory-index GET endpoints are unexposed. Their data is already
-  reachable through child commands.
+  others, bare directory-index GET endpoints stay unexposed by design, since
+  their data is already reachable through child commands. A 2026-07-04
+  re-review of this design choice, including `pve cluster jobs` (which lists
+  only its `realm-sync` child) and the per-node Ceph directory index,
+  confirmed the same judgment holds and left them unexposed.
 - **Internal and websocket endpoints.** `dbus-vmstate`, `mtunnel`,
   `vncwebsocket`, `vncticket`, and the access ticket primitives are transport or
   session internals, not operator commands.
@@ -219,18 +277,21 @@ Safe to leave open or document rather than build.
   challenge sequence on `api auth login` would benefit from a documentation
   example.
 
-## The deprecated-endpoint case in pool
+## The deprecated-endpoint case in pool (resolved)
 
-`pve pool` is parameter-complete: all five commands expose every parameter their
-endpoints accept, and there are no missing verbs. One structural note: `get`,
-`set`, and `delete` route through the deprecated
-`/pools/{poolid}` endpoint variants rather than the current `/pools` forms that
-accept a pool ID as a query parameter. As a result, nested resource pools
-(introduced in Proxmox VE 8.x) are not supported. The non-deprecated client
-methods exist but are unused. This is a medium-term modernisation rather than a
-coverage gap.
+At audit time, `pve pool get`, `set`, and `delete` routed through the
+deprecated `/pools/{poolid}` endpoint variants rather than the current
+`/pools` forms that accept a pool ID as a query parameter, so nested resource
+pools (introduced in Proxmox VE 8.x) were not supported. This has since been
+fixed: `get`, `set`, `create`, and `delete` all use the current, non-deprecated
+`/pools` endpoint. `pve pool show`, added in the 2026-07-04 completion pass,
+is a deliberate exception — it targets the deprecated-but-still-live
+single-item `GET /pools/{poolid}` endpoint on purpose, for parity with
+scripts and operators who already address a pool that way; it does not
+reintroduce the nested-pool limitation, since `get`/`set`/`delete` cover that
+case.
 
-## The client is complete; only the version pin lags
+## The client is complete, and the version pin is current
 
 No namespace turned up a single endpoint missing from `pve-apiclient-go`. In the
 two largest namespaces the counts match exactly: the specification lists 181
@@ -238,27 +299,31 @@ non-SDN cluster endpoints and the client exposes 181; every SDN endpoint, every
 node-management endpoint, and every access endpoint likewise has a method. The
 client is generated from the specification, and the generation is current.
 
-The one client-side action is housekeeping: the CLI pins `pve-apiclient-go`
-v3.2.8 while v3.2.10 is current. The newer tags carry bug fixes (large-integer
-parameter encoding, cache, stream, pool, auth, and batch fixes) but no coverage
-that the audit depends on. Bumping the pin is worth doing regardless of the gaps
-in this report.
+At audit time the one client-side action was housekeeping: bumping the pin
+from v3.2.8 to v3.2.10. That bump has since happened, and the pin has moved
+again to v3.3.0, which also brought in the opt-in TLS Trust-On-First-Use
+support described in the [README](../README.md#tls-trust).
 
-## Suggested order of work
+## Suggested order of work (historical, all complete)
 
-When remediation proceeds, a reasonable sequence:
+This was the order followed to close the gaps above; it is kept for
+reference only, since every item is now done.
 
 1. **High severity, CLI only.** Add `pve storage aplinfo` (list and download),
-   `pve task status`, and `pve api auth login --oidc`.
+   `pve task status`, and `pve api auth login --oidc`. Done.
 2. **Medium, completeness.** SDN fabric `redistribute` and `interfaces`; storage
    `oci-registry-pull` and upload checksums; the qemu convenience and discovery
-   flags; the lxc template-convert command.
+   flags; the lxc template-convert command. Done.
 3. **Medium, read-only surface.** The single-item reads in `cluster` and `node`,
    the SDN per-node status views, and the node ceph and console-proxy endpoints.
+   Done.
 4. **Housekeeping.** Bump the `pve-apiclient-go` pin from v3.2.8 to v3.2.10, and
    modernise `pool` onto the non-deprecated endpoints to gain nested-pool
-   support.
+   support. Done; the pin has since moved again to v3.3.0.
 5. **Documentation.** Note the deprecated parameters and their replacements in
-   help text rather than adding flags for them.
-
-Because every gap is CLI-side, none of this work requires a new client release.
+   help text rather than adding flags for them. Done.
+6. **Completion pass (2026-07-04).** The ten true remaining gaps a corrected
+   per-method audit found: node Ceph command-safety and OSD LV-info/metadata,
+   SDN zone/vnet/subnet single-item show, pool single-item show, and QEMU
+   firewall command parity with LXC (`log`, `refs`, `ipset update-member`).
+   Done — see [Coverage status as of 2026-07-04](#coverage-status-as-of-2026-07-04).
