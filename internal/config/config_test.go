@@ -225,6 +225,81 @@ contexts:
 	require.Equal(t, "dev.example.com", loaded.Contexts["dev"].Host)
 }
 
+// ── ApplyDefaults ─────────────────────────────────────────────────────────────
+
+func TestApplyDefaults_FillsMissingFields(t *testing.T) {
+	c := &config.Context{Host: "host.example.com"}
+	config.ApplyDefaults(c)
+	require.Equal(t, 8006, c.Port)
+	require.Equal(t, "https", c.Protocol)
+	require.Equal(t, "pam", c.Realm)
+}
+
+func TestApplyDefaults_PreservesExplicitValues(t *testing.T) {
+	c := &config.Context{
+		Host:     "host.example.com",
+		Port:     8007,
+		Protocol: "http",
+		Realm:    "ldap",
+	}
+	config.ApplyDefaults(c)
+	require.Equal(t, 8007, c.Port, "explicit port must not be overwritten")
+	require.Equal(t, "http", c.Protocol, "explicit protocol must not be overwritten")
+	require.Equal(t, "ldap", c.Realm, "explicit realm must not be overwritten")
+}
+
+// ── ValidateContext ────────────────────────────────────────────────────────────
+
+func TestValidateContext_ValidTokenAuth_NoError(t *testing.T) {
+	c := &config.Context{
+		Host: "host.example.com",
+		Auth: config.AuthBlock{Type: "token", Secret: "s"},
+	}
+	require.NoError(t, config.ValidateContext(c))
+}
+
+func TestValidateContext_MissingHost_ReturnsError(t *testing.T) {
+	c := &config.Context{
+		Auth: config.AuthBlock{Type: "token", Secret: "s"},
+	}
+	err := config.ValidateContext(c)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "host is required")
+}
+
+// ── StrictValidateContext ──────────────────────────────────────────────────────
+
+func TestStrictValidateContext_FullyValidContext_NoErrors(t *testing.T) {
+	c := &config.Context{
+		Host:     "host.example.com",
+		Port:     8006,
+		Protocol: "https",
+		Auth:     config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+		TLS:      config.TLSBlock{Fingerprint: strictFingerprint},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Empty(t, errs)
+}
+
+func TestStrictValidateContext_MissingTokenID_ReturnsWarning(t *testing.T) {
+	// Lenient ValidateContext accepts a token auth with no token-id, but the
+	// strict write-time rule set requires it.
+	c := &config.Context{
+		Host: "host.example.com",
+		Auth: config.AuthBlock{Type: "token", Secret: "s"},
+	}
+	require.NoError(t, config.ValidateContext(c), "lenient validation should not require token-id")
+
+	errs := config.StrictValidateContext(c)
+	require.NotEmpty(t, errs)
+	require.Contains(t, errs, "auth.token-id is required for token auth")
+}
+
+// strictFingerprint is a syntactically valid colon-separated hex SHA-256
+// fingerprint (32 pairs) used to exercise the passing StrictValidateContext case.
+const strictFingerprint = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:" +
+	"AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+
 // ── ResolveContext ─────────────────────────────────────────────────────────────
 
 func TestResolveContext_UsesCurrentContext(t *testing.T) {
