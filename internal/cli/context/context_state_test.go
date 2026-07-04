@@ -548,6 +548,28 @@ func TestShow_NoCurrentContext_ExitsNonZero(t *testing.T) {
 		"error must come from the verb logic, not API client construction")
 }
 
+// TestShow_RendersTofuField asserts `context show` surfaces tls.tofu so an
+// operator can see whether TOFU certificate pinning is active for a context.
+func TestShow_RendersTofuField(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "prod",
+		Contexts: map[string]*config.Context{
+			"prod": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				TLS:  config.TLSBlock{Tofu: true},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "show")
+	require.NoError(t, err)
+	require.Contains(t, out, "TOFU")
+	require.Contains(t, out, "true")
+}
+
 // TestPrevious_NoContexts_ExitsNonZero asserts `context previous` on an empty
 // config returns a verb-level error, not an API-client error.
 func TestPrevious_NoContexts_ExitsNonZero(t *testing.T) {
@@ -600,4 +622,48 @@ func TestAdd_CreateAlias_HelpContainsAlias(t *testing.T) {
 
 	found := slices.Contains(addCmd.Aliases, "create")
 	require.True(t, found, "add command must carry 'create' alias")
+}
+
+// ---------------------------------------------------------------------------
+// add --tofu flag (IMP-02b — per-context opt-in TOFU)
+// ---------------------------------------------------------------------------
+
+// TestAdd_TofuFlag_Persisted asserts --tofu is written through to tls.tofu.
+func TestAdd_TofuFlag_Persisted(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "newctx",
+		"--host", "10.0.0.5",
+		"--auth-type", "token",
+		"--token-id", "mytoken",
+		"--secret", "${MY_SECRET}",
+		"--tofu",
+	)
+	require.NoError(t, err)
+
+	updated := reloadCfg(t, path)
+	ctx, ok := updated.Contexts["newctx"]
+	require.True(t, ok)
+	require.True(t, ctx.TLS.Tofu, "--tofu must persist as tls.tofu: true")
+}
+
+// TestAdd_TofuFlag_DefaultsFalse asserts omitting --tofu leaves tls.tofu at
+// its zero value (false), preserving the pre-TOFU default behavior.
+func TestAdd_TofuFlag_DefaultsFalse(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "newctx",
+		"--host", "10.0.0.5",
+		"--auth-type", "token",
+		"--token-id", "mytoken",
+		"--secret", "${MY_SECRET}",
+	)
+	require.NoError(t, err)
+
+	updated := reloadCfg(t, path)
+	ctx, ok := updated.Contexts["newctx"]
+	require.True(t, ok)
+	require.False(t, ctx.TLS.Tofu, "omitting --tofu must default to tls.tofu: false")
 }

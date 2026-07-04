@@ -5,10 +5,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+
+	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
@@ -868,4 +871,67 @@ func TestLogCloser_RunERecordsSurvive_F01(t *testing.T) {
 	require.True(t, found,
 		"sentinel log record emitted during RunE must be present in the JSONL log file after Execute returns; "+
 			"if missing, the log closer fired before RunE (F-01 regression)")
+}
+
+// ---------------------------------------------------------------------------
+// ApplyTOFUOptions (IMP-02b — per-context opt-in TOFU)
+// ---------------------------------------------------------------------------
+
+// alwaysTTY and neverTTY are fixed isTTY funcs for ApplyTOFUOptions tests;
+// they are never actually invoked because gating happens before the callback
+// is built (tofu disabled or insecure) or the callback is only invoked by a
+// real certificate-verification handshake, which these tests do not perform.
+func alwaysTTY() bool { return true }
+
+func TestApplyTOFUOptions_TofuDisabled_OptionsUnchanged(t *testing.T) {
+	base := pve.Options{Host: "pve.example.com"}
+	var promptOut bytes.Buffer
+
+	got := cli.ApplyTOFUOptions(base, false, false, "/home/user/.config/pve/config.yml", "prod",
+		&promptOut, strings.NewReader(""), alwaysTTY)
+
+	require.Empty(t, got.FingerprintCachePath,
+		"tofu=false must leave FingerprintCachePath empty")
+	require.Nil(t, got.ManualVerifyCallback,
+		"tofu=false must leave ManualVerifyCallback nil")
+	require.Equal(t, base.Host, got.Host, "unrelated Options fields must be preserved")
+}
+
+func TestApplyTOFUOptions_TofuEnabled_WiresFingerprintPinning(t *testing.T) {
+	base := pve.Options{Host: "pve.example.com"}
+	var promptOut bytes.Buffer
+
+	got := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pve/config.yml", "prod",
+		&promptOut, strings.NewReader(""), alwaysTTY)
+
+	require.Equal(t, "/home/user/.config/pve/fingerprints/prod.json", got.FingerprintCachePath,
+		"tofu=true must set the per-context fingerprint cache path")
+	require.NotNil(t, got.ManualVerifyCallback,
+		"tofu=true must install the manual-verify callback")
+}
+
+func TestApplyTOFUOptions_TofuEnabledButInsecure_OptionsUnchanged(t *testing.T) {
+	base := pve.Options{Host: "pve.example.com"}
+	var promptOut bytes.Buffer
+
+	got := cli.ApplyTOFUOptions(base, true, true, "/home/user/.config/pve/config.yml", "prod",
+		&promptOut, strings.NewReader(""), alwaysTTY)
+
+	require.Empty(t, got.FingerprintCachePath,
+		"--insecure must suppress TOFU wiring even when tofu=true, so it never re-imposes "+
+			"a trust decision the operator explicitly opted out of")
+	require.Nil(t, got.ManualVerifyCallback)
+}
+
+func TestApplyTOFUOptions_DifferentContexts_DistinctCachePaths(t *testing.T) {
+	base := pve.Options{Host: "pve.example.com"}
+	var promptOut bytes.Buffer
+
+	prod := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pve/config.yml", "prod",
+		&promptOut, strings.NewReader(""), alwaysTTY)
+	staging := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pve/config.yml", "staging",
+		&promptOut, strings.NewReader(""), alwaysTTY)
+
+	require.NotEqual(t, prod.FingerprintCachePath, staging.FingerprintCachePath,
+		"each context must persist trust decisions to its own cache file")
 }

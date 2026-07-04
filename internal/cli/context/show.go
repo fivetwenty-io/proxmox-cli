@@ -68,6 +68,7 @@ func newShowCmd() *cobra.Command {
 				"SECRET":         redactedSecret,
 				"INSECURE":       fmt.Sprintf("%v", ctx.TLS.Insecure),
 				"FINGERPRINT":    ctx.TLS.Fingerprint,
+				"TOFU":           fmt.Sprintf("%v", ctx.TLS.Tofu),
 				"DEFAULT NODE":   ctx.DefaultNode,
 				"DEFAULT OUTPUT": ctx.DefaultOutput,
 			}
@@ -85,6 +86,7 @@ func newShowCmd() *cobra.Command {
 				Secret        string `json:"secret"`
 				Insecure      bool   `json:"insecure"`
 				Fingerprint   string `json:"fingerprint"`
+				Tofu          bool   `json:"tofu"`
 				DefaultNode   string `json:"default_node"`
 				DefaultOutput string `json:"default_output"`
 			}
@@ -101,6 +103,7 @@ func newShowCmd() *cobra.Command {
 				Secret:        redactedSecret,
 				Insecure:      ctx.TLS.Insecure,
 				Fingerprint:   ctx.TLS.Fingerprint,
+				Tofu:          ctx.TLS.Tofu,
 				DefaultNode:   ctx.DefaultNode,
 				DefaultOutput: ctx.DefaultOutput,
 			}

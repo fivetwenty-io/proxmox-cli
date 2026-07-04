@@ -122,6 +122,7 @@ func deepCopyContext(src *config.Context) *config.Context {
 			Insecure:    src.TLS.Insecure,
 			Fingerprint: src.TLS.Fingerprint,
 			CACert:      src.TLS.CACert,
+			Tofu:        src.TLS.Tofu,
 		},
 	}
 	if src.Auth.Session != nil {

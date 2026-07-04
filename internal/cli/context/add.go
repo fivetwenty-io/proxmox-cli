@@ -23,6 +23,7 @@ type addFlags struct {
 	secret        string
 	insecure      bool
 	fingerprint   string
+	tofu          bool
 	defaultNode   string
 	defaultOutput string
 	selectCtx     bool
@@ -129,6 +130,7 @@ func newAddCmd() *cobra.Command {
 				TLS: config.TLSBlock{
 					Insecure:    f.insecure,
 					Fingerprint: f.fingerprint,
+					Tofu:        f.tofu,
 				},
 			}
 
@@ -169,6 +171,8 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.secret, "secret", "", "token value or password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
 	cmd.Flags().BoolVar(&f.insecure, "insecure", false, "disable TLS certificate verification")
 	cmd.Flags().StringVar(&f.fingerprint, "fingerprint", "", "expected TLS certificate fingerprint (hex SHA-256)")
+	cmd.Flags().BoolVar(&f.tofu, "tofu", false,
+		"opt in to Trust-On-First-Use certificate pinning (TTY prompt on unknown cert; ignored with --insecure)")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")

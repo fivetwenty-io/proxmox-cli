@@ -35,6 +35,7 @@ func sampleConfig() *config.Config {
 					Insecure:    false,
 					Fingerprint: "AA:BB:CC",
 					CACert:      "/etc/ssl/certs/ca.pem",
+					Tofu:        true,
 				},
 			},
 			"staging": {
@@ -110,6 +111,7 @@ func TestLoad_ValidFile(t *testing.T) {
 	require.Equal(t, "${PVE_TOKEN_SECRET}", prod.Auth.Secret)
 	require.Equal(t, "AA:BB:CC", prod.TLS.Fingerprint)
 	require.Equal(t, "/etc/ssl/certs/ca.pem", prod.TLS.CACert)
+	require.True(t, prod.TLS.Tofu)
 
 	staging := loaded.Contexts["staging"]
 	require.NotNil(t, staging)
@@ -420,6 +422,7 @@ func TestSave_Atomic_ThenLoad_Equality(t *testing.T) {
 		require.Equal(t, orig.TLS.Insecure, got.TLS.Insecure)
 		require.Equal(t, orig.TLS.Fingerprint, got.TLS.Fingerprint)
 		require.Equal(t, orig.TLS.CACert, got.TLS.CACert)
+		require.Equal(t, orig.TLS.Tofu, got.TLS.Tofu)
 	}
 }
 
@@ -534,7 +537,7 @@ func TestTLSBlock_ZeroValue_RoundTrip(t *testing.T) {
 					Type:   "token",
 					Secret: "s",
 				},
-				// TLS left at zero value — no insecure, no fingerprint, no ca-cert.
+				// TLS left at zero value — no insecure, no fingerprint, no ca-cert, no tofu.
 			},
 		},
 	}
@@ -548,4 +551,5 @@ func TestTLSBlock_ZeroValue_RoundTrip(t *testing.T) {
 	require.False(t, ctx.TLS.Insecure)
 	require.Empty(t, ctx.TLS.Fingerprint)
 	require.Empty(t, ctx.TLS.CACert)
+	require.False(t, ctx.TLS.Tofu)
 }

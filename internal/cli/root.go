@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/exec"
@@ -349,21 +351,16 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		ctx.TLS.Fingerprint,
 	)
 
-	// Wire Trust-On-First-Use (TOFU) certificate handling, unless --insecure (or
-	// the context's tls.insecure) already disables verification entirely: in
-	// that case the operator has explicitly opted out of certificate trust
-	// decisions, and TOFU pinning must not re-impose one. FingerprintCachePath
-	// persists accepted fingerprints per context so unrelated contexts never
-	// share trust decisions; ManualVerifyCallback prompts on a TTY and fails
-	// closed (no prompt, no read, unconditional reject) on a non-TTY invocation.
-	if !insecure {
-		opts.FingerprintCachePath = apiclient.FingerprintCachePath(pf.config, contextName)
-		opts.ManualVerifyCallback = apiclient.NewManualVerifyCallback(
-			cmd.ErrOrStderr(),
-			cmd.InOrStdin(),
-			func() bool { return isInteractiveInput(cmd.InOrStdin()) },
-		)
-	}
+	opts = ApplyTOFUOptions(
+		opts,
+		ctx.TLS.Tofu,
+		insecure,
+		pf.config,
+		contextName,
+		cmd.ErrOrStderr(),
+		cmd.InOrStdin(),
+		func() bool { return isInteractiveInput(cmd.InOrStdin()) },
+	)
 
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
@@ -377,6 +374,44 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	deps.API = ac
 	setDeps(cmd, deps)
 	return logCloser, nil
+}
+
+// ApplyTOFUOptions augments opts with Trust-On-First-Use (TOFU) certificate
+// wiring (see apiclient.NewManualVerifyCallback and
+// apiclient.FingerprintCachePath) when tofuEnabled is true and insecure is
+// false, and returns the result. In every other case — tofuEnabled false, or
+// insecure true — opts is returned completely unmodified: no
+// FingerprintCachePath, no ManualVerifyCallback, normal CA-chain-only
+// certificate verification, byte-identical to the pre-TOFU behavior. This is
+// deliberate: a context opts in per-context via tls.tofu, and --insecure (or
+// a context's tls.insecure) already means the operator has chosen to skip
+// certificate verification entirely, so TOFU pinning must never re-impose a
+// trust decision on top of that explicit choice.
+//
+// configPath and contextName derive the per-context fingerprint cache file
+// path (see apiclient.FingerprintCachePath); prompt, in, and isTTY are the
+// writer/reader/terminal-detector the TOFU callback uses if it activates —
+// see apiclient.NewManualVerifyCallback for their exact contract.
+//
+// Exported so the gating logic is directly unit-testable without a real or
+// mocked network connection (pve.Client does not expose the Options it was
+// built from).
+func ApplyTOFUOptions(
+	opts pve.Options,
+	tofuEnabled, insecure bool,
+	configPath, contextName string,
+	prompt io.Writer,
+	in io.Reader,
+	isTTY func() bool,
+) pve.Options {
+	if !tofuEnabled || insecure {
+		return opts
+	}
+
+	opts.FingerprintCachePath = apiclient.FingerprintCachePath(configPath, contextName)
+	opts.ManualVerifyCallback = apiclient.NewManualVerifyCallback(prompt, in, isTTY)
+
+	return opts
 }
 
 // isInteractiveInput reports whether in is an interactive terminal, used to

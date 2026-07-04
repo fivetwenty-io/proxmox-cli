@@ -73,6 +73,17 @@ type TLSBlock struct {
 
 	// CACert is the path to a PEM-encoded CA certificate file for custom TLS trust.
 	CACert string `yaml:"ca-cert"`
+
+	// Tofu opts this context into Trust-On-First-Use certificate fingerprint
+	// pinning: on an interactive terminal, a certificate whose fingerprint is
+	// not already trusted is shown to the operator (host + fingerprint) for a
+	// one-time accept/reject decision, and an accepted fingerprint is persisted
+	// per context so later connections do not prompt again. A non-interactive
+	// invocation always rejects an unknown certificate outright (no prompt, no
+	// blocking read). Default false preserves the original CA-chain-only
+	// verification behavior unchanged; Tofu is ignored entirely when Insecure
+	// is true, since that already disables certificate verification.
+	Tofu bool `yaml:"tofu"`
 }
 
 // Session holds a live ticket and CSRF token obtained after password login.

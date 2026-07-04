@@ -91,6 +91,39 @@ func TestContextCopy_Happy(t *testing.T) {
 	require.NotEqual(t, loaded.Contexts["lab"].Host, dst.Host, "copy must be independent")
 }
 
+// TestContextCopy_PreservesTLSFields guards against a copy verb silently
+// dropping a TLSBlock field added after deepCopyContext was first written
+// (regression class: IMP-02b added Tofu and it must survive copy).
+func TestContextCopy_PreservesTLSFields(t *testing.T) {
+	src := labContext()
+	src.TLS = config.TLSBlock{
+		Insecure:    true,
+		Fingerprint: "AA:BB:CC",
+		CACert:      "/etc/ssl/certs/ca.pem",
+		Tofu:        true,
+	}
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": src,
+		},
+	}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "copy", "lab", "staging"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	dst := loaded.Contexts["staging"]
+	require.NotNil(t, dst)
+
+	require.Equal(t, src.TLS.Insecure, dst.TLS.Insecure)
+	require.Equal(t, src.TLS.Fingerprint, dst.TLS.Fingerprint)
+	require.Equal(t, src.TLS.CACert, dst.TLS.CACert)
+	require.Equal(t, src.TLS.Tofu, dst.TLS.Tofu)
+}
+
 func TestContextCopy_MissingSrc(t *testing.T) {
 	cfg := &config.Config{
 		Contexts: map[string]*config.Context{
