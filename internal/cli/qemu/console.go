@@ -1,11 +1,12 @@
 package qemu
 
 import (
+	"encoding/json"
 	"fmt"
-	"net/url"
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -39,37 +40,42 @@ func newConsoleCmd() *cobra.Command {
 				return err
 			}
 
-			var endpoint string
-			body := map[string]any{}
+			// The typed CreateQemu*proxyResponse types are json.RawMessage
+			// aliases carrying the full ticket/host/port payload (not empty
+			// structs), so the typed client methods are used directly here
+			// and the raw bytes decoded generically for rendering.
+			var raw *json.RawMessage
 			switch consoleType {
 			case "vnc", "":
-				endpoint = "vncproxy"
+				var params *nodes.CreateQemuVncproxyParams
 				if cmd.Flags().Changed("websocket") {
-					body["websocket"] = websocket
+					params = &nodes.CreateQemuVncproxyParams{Websocket: &websocket}
 				}
+				raw, err = deps.API.Nodes.CreateQemuVncproxy(cmd.Context(), node, vmid, params)
 			case "term":
-				endpoint = "termproxy"
+				var params *nodes.CreateQemuTermproxyParams
 				if cmd.Flags().Changed("serial") {
-					body["serial"] = serial
+					params = &nodes.CreateQemuTermproxyParams{Serial: &serial}
 				}
+				raw, err = deps.API.Nodes.CreateQemuTermproxy(cmd.Context(), node, vmid, params)
 			case "spice":
-				endpoint = "spiceproxy"
+				var params *nodes.CreateQemuSpiceproxyParams
 				if cmd.Flags().Changed("proxy") {
-					body["proxy"] = proxy
+					params = &nodes.CreateQemuSpiceproxyParams{Proxy: &proxy}
 				}
+				raw, err = deps.API.Nodes.CreateQemuSpiceproxy(cmd.Context(), node, vmid, params)
 			default:
 				return fmt.Errorf("invalid console type %q: must be vnc, term, or spice", consoleType)
 			}
-
-			// The typed client methods discard the response payload (the generated
-			// CreateQemu*proxyResponse structs are empty), so the ticket fields
-			// would be lost. POST the raw endpoint instead and render the decoded
-			// connection info generically.
-			path := fmt.Sprintf("/nodes/%s/qemu/%s/%s",
-				url.PathEscape(node), url.PathEscape(vmid), endpoint)
-			data, err := deps.API.Raw.PostCtx(cmd.Context(), path, body)
 			if err != nil {
 				return fmt.Errorf("open %s console for VM %s on node %q: %w", consoleType, vmid, node, err)
+			}
+
+			var data any
+			if raw != nil {
+				if err := json.Unmarshal(*raw, &data); err != nil {
+					return fmt.Errorf("open %s console for VM %s: unexpected response shape: %w", consoleType, vmid, err)
+				}
 			}
 			m, ok := data.(map[string]any)
 			if !ok {

@@ -1,11 +1,12 @@
 package lxc
 
 import (
+	"encoding/json"
 	"fmt"
-	"net/url"
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
@@ -40,40 +41,47 @@ func newConsoleCmd() *cobra.Command {
 				return err
 			}
 
-			var endpoint string
-			body := map[string]any{}
+			// The typed CreateLxc*proxyResponse types are json.RawMessage
+			// aliases carrying the full ticket/host/port payload (not empty
+			// structs), so the typed client methods are used directly here
+			// and the raw bytes decoded generically for rendering.
+			var raw *json.RawMessage
 			switch consoleType {
 			case "vnc", "":
-				endpoint = "vncproxy"
-				if cmd.Flags().Changed("websocket") {
-					body["websocket"] = websocket
+				var params *nodes.CreateLxcVncproxyParams
+				if cmd.Flags().Changed("websocket") || cmd.Flags().Changed("width") || cmd.Flags().Changed("height") {
+					params = &nodes.CreateLxcVncproxyParams{}
+					if cmd.Flags().Changed("websocket") {
+						params.Websocket = &websocket
+					}
+					if cmd.Flags().Changed("width") {
+						params.Width = &width
+					}
+					if cmd.Flags().Changed("height") {
+						params.Height = &height
+					}
 				}
-				if cmd.Flags().Changed("width") {
-					body["width"] = width
-				}
-				if cmd.Flags().Changed("height") {
-					body["height"] = height
-				}
+				raw, err = deps.API.Nodes.CreateLxcVncproxy(cmd.Context(), node, vmid, params)
 			case "term":
-				endpoint = "termproxy"
+				raw, err = deps.API.Nodes.CreateLxcTermproxy(cmd.Context(), node, vmid)
 			case "spice":
-				endpoint = "spiceproxy"
+				var params *nodes.CreateLxcSpiceproxyParams
 				if cmd.Flags().Changed("proxy") {
-					body["proxy"] = proxy
+					params = &nodes.CreateLxcSpiceproxyParams{Proxy: &proxy}
 				}
+				raw, err = deps.API.Nodes.CreateLxcSpiceproxy(cmd.Context(), node, vmid, params)
 			default:
 				return fmt.Errorf("invalid console type %q: must be vnc, term, or spice", consoleType)
 			}
-
-			// The typed client methods discard the response payload (the generated
-			// CreateLxc*proxyResponse structs are empty), so the ticket fields
-			// would be lost. POST the raw endpoint instead and render the decoded
-			// connection info generically.
-			path := fmt.Sprintf("/nodes/%s/lxc/%s/%s",
-				url.PathEscape(node), url.PathEscape(vmid), endpoint)
-			data, err := deps.API.Raw.PostCtx(cmd.Context(), path, body)
 			if err != nil {
 				return fmt.Errorf("open %s console for container %s on node %q: %w", consoleType, vmid, node, err)
+			}
+
+			var data any
+			if raw != nil {
+				if err := json.Unmarshal(*raw, &data); err != nil {
+					return fmt.Errorf("open %s console for container %s: decode response: %w", consoleType, vmid, err)
+				}
 			}
 			single, err := structToStringMap(data)
 			if err != nil {
