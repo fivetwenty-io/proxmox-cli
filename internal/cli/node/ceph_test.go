@@ -41,6 +41,89 @@ func TestNodeCeph_Status(t *testing.T) {
 	require.Contains(t, buf.String(), "abc-123")
 }
 
+func TestNodeCeph_Index(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph", &rec, []any{
+		map[string]any{"subdir": "osd"},
+		map[string]any{"subdir": "mon"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "index"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "GET", rec.method)
+	require.Equal(t, "/api2/json/nodes/pve1/ceph", rec.path)
+	require.Contains(t, buf.String(), "osd")
+	require.Contains(t, buf.String(), "mon")
+}
+
+func TestNodeCeph_Index_APIError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/ceph", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "index"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list Ceph API index on node")
+}
+
+func TestNodeCeph_CmdSafety(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph/cmd-safety", &rec, map[string]any{
+		"safe": true, "status": "no other OSDs would be affected",
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "cmd-safety",
+		"--action", "stop", "--id", "osd.0", "--service", "osd"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "GET", rec.method)
+	require.Contains(t, rec.query, "action=stop")
+	require.Contains(t, rec.query, "id=osd.0")
+	require.Contains(t, rec.query, "service=osd")
+	require.Contains(t, buf.String(), "no other OSDs would be affected")
+}
+
+func TestNodeCeph_CmdSafety_RequiresFlags(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	called := false
+	f.HandleFunc("GET /api2/json/nodes/pve1/ceph/cmd-safety", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "cmd-safety", "--action", "stop"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required flag(s)")
+	require.False(t, called, "no API call must be made when required flags are missing")
+}
+
+func TestNodeCeph_CmdSafety_APIError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/ceph/cmd-safety", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "cmd-safety",
+		"--action", "stop", "--id", "osd.0", "--service", "osd"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "check Ceph command safety on node")
+}
+
 func TestNodeCeph_Cfg(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleJSON("GET /api2/json/nodes/pve1/ceph/cfg", []any{
@@ -80,6 +163,96 @@ func TestNodeCephOsd_Get(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	require.Contains(t, buf.String(), "osd.0")
+}
+
+func TestNodeCephOsd_LvInfo(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph/osd/0/lv-info", &rec, map[string]any{
+		"creation_time": "2024-01-01T00:00:00",
+		"lv_name":       "osd-block-0",
+		"lv_path":       "/dev/ceph-vg/osd-block-0",
+		"lv_size":       10737418240,
+		"lv_uuid":       "abc-uuid",
+		"vg_name":       "ceph-vg",
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "lv-info", "0", "--type", "block"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "GET", rec.method)
+	require.Equal(t, "/api2/json/nodes/pve1/ceph/osd/0/lv-info", rec.path)
+	require.Contains(t, rec.query, "type=block")
+	require.Contains(t, buf.String(), "osd-block-0")
+	require.Contains(t, buf.String(), "ceph-vg")
+}
+
+func TestNodeCephOsd_LvInfo_NoTypeFlag(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph/osd/0/lv-info", &rec, map[string]any{
+		"creation_time": "2024-01-01T00:00:00",
+		"lv_name":       "osd-block-0",
+		"lv_path":       "/dev/ceph-vg/osd-block-0",
+		"lv_size":       10737418240,
+		"lv_uuid":       "abc-uuid",
+		"vg_name":       "ceph-vg",
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "lv-info", "0"))
+
+	require.NoError(t, root.Execute())
+	// --type was not passed, so it must be omitted from the request.
+	require.NotContains(t, rec.query, "type=")
+	require.Contains(t, buf.String(), "osd-block-0")
+}
+
+func TestNodeCephOsd_LvInfo_APIError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/ceph/osd/0/lv-info", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "lv-info", "0"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `get logical volume info for Ceph OSD "0" on node`)
+}
+
+func TestNodeCephOsd_Metadata(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph/osd/0/metadata", &rec, map[string]any{
+		"osd":     map[string]any{"id": 0, "hostname": "pve1"},
+		"devices": []any{map[string]any{"dev": "/dev/sdb"}},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "metadata", "0"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "GET", rec.method)
+	require.Equal(t, "/api2/json/nodes/pve1/ceph/osd/0/metadata", rec.path)
+	require.Contains(t, buf.String(), "pve1")
+	require.Contains(t, buf.String(), "/dev/sdb")
+}
+
+func TestNodeCephOsd_Metadata_APIError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/ceph/osd/0/metadata", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "metadata", "0"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `get metadata for Ceph OSD "0" on node`)
 }
 
 func TestNodeCephPool_List(t *testing.T) {
@@ -834,12 +1007,13 @@ func TestNodeCeph_CommandTree(t *testing.T) {
 	require.NotNil(t, ceph, "node ceph command must be registered")
 
 	for _, verb := range []string{
-		"status", "cfg", "osd", "pool", "mon", "mds", "mgr", "fs", "init", "start", "stop", "restart",
+		"index", "status", "cmd-safety", "cfg", "osd", "pool", "mon", "mds", "mgr", "fs",
+		"init", "start", "stop", "restart",
 	} {
 		require.NotNil(t, find(ceph, verb), "ceph must expose %q", verb)
 	}
 	osd := find(ceph, "osd")
-	for _, verb := range []string{"list", "get", "create", "delete", "in", "out", "scrub"} {
+	for _, verb := range []string{"list", "get", "lv-info", "metadata", "create", "delete", "in", "out", "scrub"} {
 		require.NotNil(t, find(osd, verb), "ceph osd must expose %q", verb)
 	}
 	pool := find(ceph, "pool")

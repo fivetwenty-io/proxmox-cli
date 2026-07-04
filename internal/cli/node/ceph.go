@@ -77,7 +77,9 @@ func newCephCmd() *cobra.Command {
 			"Every create, delete, and service-control verb is destructive and requires --yes.",
 	}
 	cmd.AddCommand(
+		newCephIndexCmd(),
 		newCephStatusCmd(),
+		newCephCmdSafetyCmd(),
 		newCephCfgCmd(),
 		newCephLogCmd(),
 		newCephRulesCmd(),
@@ -114,6 +116,64 @@ func newCephStatusCmd() *cobra.Command {
 			return renderObject(cmd, deps, resp)
 		},
 	}
+}
+
+// newCephIndexCmd builds `pve node ceph index`, the bare Ceph API directory
+// listing (distinct from `status`, which reports cluster health).
+func newCephIndexCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "index",
+		Short: "List the Ceph API directory index",
+		Long: "Show the top-level Ceph API sub-resources (cfg, mon, mgr, mds, osd, pool, fs, " +
+			"and others) available on the resolved node.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCeph(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list Ceph API index on node %q: %w", deps.Node, err)
+			}
+			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+func newCephCmdSafetyCmd() *cobra.Command {
+	var (
+		action  string
+		id      string
+		service string
+	)
+	cmd := &cobra.Command{
+		Use:   "cmd-safety",
+		Short: "Check whether a Ceph action is safe to perform",
+		Long: "Ask Ceph's own heuristics whether the given action on the given service would be " +
+			"safe to perform right now, as seen from the resolved node.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephCmdSafety(cmd.Context(), deps.Node,
+				&nodes.ListCephCmdSafetyParams{Action: action, Id: id, Service: service})
+			if err != nil {
+				return fmt.Errorf("check Ceph command safety on node %q: %w", deps.Node, err)
+			}
+			return renderObject(cmd, deps, resp)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&action, "action", "", "action to check: stop or destroy (required)")
+	f.StringVar(&id, "id", "", "ID of the service to check, for example osd.0 or mon.pve1 (required)")
+	f.StringVar(&service, "service", "", "service type to check: osd, mon, or mds (required)")
+	cli.MustMarkRequired(cmd, "action")
+	cli.MustMarkRequired(cmd, "id")
+	cli.MustMarkRequired(cmd, "service")
+	return cmd
 }
 
 func newCephCfgCmd() *cobra.Command {

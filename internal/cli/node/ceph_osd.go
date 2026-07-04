@@ -20,6 +20,8 @@ func newCephOsdCmd() *cobra.Command {
 	cmd.AddCommand(
 		newCephOsdListCmd(),
 		newCephOsdGetCmd(),
+		newCephOsdLvInfoCmd(),
+		newCephOsdMetadataCmd(),
 		newCephOsdCreateCmd(),
 		newCephOsdDeleteCmd(),
 		newCephOsdInCmd(),
@@ -65,6 +67,55 @@ func newCephOsdGetCmd() *cobra.Command {
 				return fmt.Errorf("get Ceph OSD %q on node %q: %w", args[0], deps.Node, err)
 			}
 			return renderScan(cmd, deps, derefRaws(resp), resp)
+		},
+	}
+}
+
+func newCephOsdLvInfoCmd() *cobra.Command {
+	var devType string
+	cmd := &cobra.Command{
+		Use:   "lv-info <osdid>",
+		Short: "Show the logical volume details for an OSD",
+		Long: "Show the LVM logical-volume name, path, size, UUID, and volume group backing the " +
+			"given OSD on the resolved node.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			params := &nodes.ListCephOsdLvInfoParams{}
+			if cmd.Flags().Changed("type") {
+				params.Type = &devType
+			}
+			resp, err := deps.API.Nodes.ListCephOsdLvInfo(cmd.Context(), deps.Node, args[0], params)
+			if err != nil {
+				return fmt.Errorf("get logical volume info for Ceph OSD %q on node %q: %w", args[0], deps.Node, err)
+			}
+			return renderObject(cmd, deps, resp)
+		},
+	}
+	cmd.Flags().StringVar(&devType, "type", "", "OSD device type: block, db, or wal (default block)")
+	return cmd
+}
+
+func newCephOsdMetadataCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "metadata <osdid>",
+		Short: "Show OSD metadata",
+		Long: "Show detailed runtime metadata for the given OSD, including its backing devices, " +
+			"as seen from the resolved node.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephOsdMetadata(cmd.Context(), deps.Node, args[0])
+			if err != nil {
+				return fmt.Errorf("get metadata for Ceph OSD %q on node %q: %w", args[0], deps.Node, err)
+			}
+			return renderObject(cmd, deps, resp)
 		},
 	}
 }
