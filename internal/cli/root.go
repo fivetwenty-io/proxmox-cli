@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
@@ -348,6 +349,22 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		ctx.TLS.Fingerprint,
 	)
 
+	// Wire Trust-On-First-Use (TOFU) certificate handling, unless --insecure (or
+	// the context's tls.insecure) already disables verification entirely: in
+	// that case the operator has explicitly opted out of certificate trust
+	// decisions, and TOFU pinning must not re-impose one. FingerprintCachePath
+	// persists accepted fingerprints per context so unrelated contexts never
+	// share trust decisions; ManualVerifyCallback prompts on a TTY and fails
+	// closed (no prompt, no read, unconditional reject) on a non-TTY invocation.
+	if !insecure {
+		opts.FingerprintCachePath = apiclient.FingerprintCachePath(pf.config, contextName)
+		opts.ManualVerifyCallback = apiclient.NewManualVerifyCallback(
+			cmd.ErrOrStderr(),
+			cmd.InOrStdin(),
+			func() bool { return isInteractiveInput(cmd.InOrStdin()) },
+		)
+	}
+
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
 		return logCloser, fmt.Errorf("connect to %s: %w", ctx.Host, err)
@@ -360,6 +377,22 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	deps.API = ac
 	setDeps(cmd, deps)
 	return logCloser, nil
+}
+
+// isInteractiveInput reports whether in is an interactive terminal, used to
+// decide whether the TOFU manual-verify callback (see
+// apiclient.NewManualVerifyCallback) may prompt for a trust decision. Only a
+// live *os.File that the terminal package recognises as a TTY counts as
+// interactive; pipes, redirected files, and the in-memory readers/buffers
+// used by tests are always treated as non-interactive, so the callback fails
+// closed for them exactly as it does for a genuinely non-interactive process.
+func isInteractiveInput(in io.Reader) bool {
+	f, ok := in.(*os.File)
+	if !ok {
+		return false
+	}
+
+	return term.IsTerminal(int(f.Fd()))
 }
 
 // WarnInsecureTLS emits a stderr warning whenever TLS verification is disabled,
