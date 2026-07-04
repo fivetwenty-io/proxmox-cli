@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 )
 
@@ -58,7 +60,7 @@ func TestContextOptions_TofuDisabled_OptionsUnchanged(t *testing.T) {
 	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
 	ctx := sampleAuthContext(false, false)
 
-	opts := contextOptions(cmd, ctx, "prod", "admin@pam", "pam", "", "secretpw", "", "")
+	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
 
 	require.Empty(t, opts.FingerprintCachePath,
 		"tls.tofu=false must leave FingerprintCachePath empty")
@@ -73,7 +75,7 @@ func TestContextOptions_TofuEnabled_WiresFingerprintPinning(t *testing.T) {
 	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, false)
 
-	opts := contextOptions(cmd, ctx, "prod", "admin@pam", "pam", "", "secretpw", "", "")
+	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
 
 	require.Equal(t, "/home/user/.config/pve/fingerprints/prod.json", opts.FingerprintCachePath,
 		"tls.tofu=true must set the per-context fingerprint cache path")
@@ -86,7 +88,7 @@ func TestContextOptions_TofuEnabledButInsecure_OptionsUnchanged(t *testing.T) {
 	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, true)
 
-	opts := contextOptions(cmd, ctx, "prod", "admin@pam", "pam", "", "secretpw", "", "")
+	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
 
 	require.Empty(t, opts.FingerprintCachePath,
 		"tls.insecure=true must suppress TOFU wiring even when tls.tofu=true")
@@ -98,8 +100,8 @@ func TestContextOptions_DifferentContexts_DistinctCachePaths(t *testing.T) {
 	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, false)
 
-	prod := contextOptions(cmd, ctx, "prod", "admin@pam", "pam", "", "secretpw", "", "")
-	staging := contextOptions(cmd, ctx, "staging", "admin@pam", "pam", "", "secretpw", "", "")
+	prod := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
+	staging := contextOptions(cmd, ctx, false, "staging", "admin@pam", "pam", "", "secretpw", "", "")
 
 	require.NotEqual(t, prod.FingerprintCachePath, staging.FingerprintCachePath,
 		"each context must persist trust decisions to its own cache file, "+
@@ -118,12 +120,57 @@ func TestContextOptions_TokenCredentialPassedThrough(t *testing.T) {
 	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
 	ctx := sampleAuthContext(false, false)
 
-	opts := contextOptions(cmd, ctx, "prod", "", "",
+	opts := contextOptions(cmd, ctx, false, "prod", "", "",
 		"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", "", "", "")
 
 	require.Equal(t, "!dummy@pam!oidc=00000000-0000-0000-0000-000000000000", opts.APIToken)
 	require.Empty(t, opts.FingerprintCachePath)
 	require.Nil(t, opts.ManualVerifyCallback)
+}
+
+// ---------------------------------------------------------------------------
+// contextOptions — global --insecure flag merge
+// ---------------------------------------------------------------------------
+
+// TestContextOptions_GlobalInsecureFlag_OverridesConfig verifies that a true
+// flagInsecure argument disables certificate verification (via
+// apiclient.BuildOptions' insecure parameter, surfaced here as a non-nil
+// opts.SSLOptions with VerifyMode == pve.SSLVerifyNone) even when the
+// context's own tls.insecure is false, and — since ApplyTOFUOptions treats
+// "insecure" as a hard gate regardless of which input set it — also
+// suppresses TOFU wiring even though tls.tofu is true on the context. This
+// mirrors the precedence internal/cli/root.go applies for every other
+// command: "insecure := pf.insecure || ctx.TLS.Insecure".
+func TestContextOptions_GlobalInsecureFlag_OverridesConfig(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	ctx := sampleAuthContext(true, false) // tls.tofu=true, tls.insecure=false
+
+	opts := contextOptions(cmd, ctx, true, "prod", "admin@pam", "pam", "", "secretpw", "", "")
+
+	require.NotNil(t, opts.SSLOptions, "flagInsecure=true must disable certificate verification")
+	require.Equal(t, pve.SSLVerifyNone, opts.SSLOptions.VerifyMode)
+	require.False(t, opts.SSLOptions.VerifyHostname)
+	require.Empty(t, opts.FingerprintCachePath,
+		"flagInsecure=true must suppress TOFU wiring even when tls.tofu=true")
+	require.Nil(t, opts.ManualVerifyCallback)
+}
+
+// TestContextOptions_GlobalInsecureFlagUnset_ConfigOnlyBehaviorUnchanged
+// verifies that flagInsecure=false leaves contextOptions' existing
+// config-only (ctx.TLS.Insecure / ctx.TLS.Tofu) behavior unchanged — i.e. the
+// merge introduces no regression for the pre-existing call sites that never
+// pass the global flag.
+func TestContextOptions_GlobalInsecureFlagUnset_ConfigOnlyBehaviorUnchanged(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	ctx := sampleAuthContext(true, false) // tls.tofu=true, tls.insecure=false
+
+	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
+
+	require.Nil(t, opts.SSLOptions, "flagInsecure=false, tls.insecure=false must leave SSLOptions nil")
+	require.NotEmpty(t, opts.FingerprintCachePath, "tls.tofu=true must still wire TOFU when flagInsecure is false")
+	require.NotNil(t, opts.ManualVerifyCallback)
 }
 
 // ---------------------------------------------------------------------------

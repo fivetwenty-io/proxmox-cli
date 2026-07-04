@@ -719,10 +719,11 @@ func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName str
 		return clientForContext(cmd, ctx, contextName, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	}
 	// No live session: build with a placeholder API token.
-	if ctx.TLS.Insecure {
-		cli.WarnInsecureTLS(os.Stderr)
+	flagInsecure := cli.GetDeps(cmd).Insecure
+	if flagInsecure || ctx.TLS.Insecure {
+		cli.WarnInsecureTLS(cmd.ErrOrStderr())
 	}
-	opts := contextOptions(cmd, ctx, contextName, "", "",
+	opts := contextOptions(cmd, ctx, flagInsecure, contextName, "", "",
 		"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
 		"", "", "")
 	ac, err := apiclient.NewAPIClient(opts)
@@ -745,14 +746,15 @@ func clientForContext(
 	ctx *config.Context,
 	contextName, user, realm, password, ticket, csrf string,
 ) (*apiclient.APIClient, error) {
-	if ctx.TLS.Insecure {
-		cli.WarnInsecureTLS(os.Stderr)
+	flagInsecure := cli.GetDeps(cmd).Insecure
+	if flagInsecure || ctx.TLS.Insecure {
+		cli.WarnInsecureTLS(cmd.ErrOrStderr())
 	}
 	rlm := realm
 	if rlm == "" {
 		rlm = ctx.Realm
 	}
-	opts := contextOptions(cmd, ctx, contextName, user, rlm,
+	opts := contextOptions(cmd, ctx, flagInsecure, contextName, user, rlm,
 		"", // no token: login/logout use ticket or password
 		password, ticket, csrf)
 	ac, err := apiclient.NewAPIClient(opts)
@@ -767,15 +769,28 @@ func clientForContext(
 // regular commands (see cli.ApplyTOFUOptions): a context with tls.tofu set
 // gets FingerprintCachePath and a manual-verify callback that prompts on a
 // TTY and fails closed (no prompt, no read) otherwise; a context without
-// tls.tofu set, or with tls.insecure set, gets neither — options identical to
-// pre-TOFU behavior. user/realm/token/password/ticket/csrf select which
-// credential BuildOptions embeds; contextName is used only to derive the
-// per-context fingerprint cache path.
+// tls.tofu set, or with tls.insecure set (see below), gets neither — options
+// identical to pre-TOFU behavior. user/realm/token/password/ticket/csrf
+// select which credential BuildOptions embeds; contextName is used only to
+// derive the per-context fingerprint cache path.
+//
+// flagInsecure is the resolved global --insecure flag value (cli.Deps.Insecure,
+// populated by the root command's PersistentPreRunE before its noClient
+// early-return). It is OR'd with ctx.TLS.Insecure — exactly mirroring the
+// "insecure := pf.insecure || ctx.TLS.Insecure" merge PersistentPreRunE
+// performs for every other command (internal/cli/root.go) — so that
+// --insecure on an auth sub-command both disables certificate verification
+// AND suppresses TOFU prompting/pinning, never the reverse: passing
+// --insecure can only turn insecure mode on, it can never force it off when
+// the context config already sets tls.insecure: true.
 func contextOptions(
 	cmd *cobra.Command,
 	ctx *config.Context,
+	flagInsecure bool,
 	contextName, user, realm, token, password, ticket, csrf string,
 ) pve.Options {
+	insecure := flagInsecure || ctx.TLS.Insecure
+
 	opts := apiclient.BuildOptions(
 		ctx.Host,
 		ctx.Port,
@@ -786,14 +801,14 @@ func contextOptions(
 		password,
 		ticket,
 		csrf,
-		ctx.TLS.Insecure,
+		insecure,
 		ctx.TLS.Fingerprint,
 	)
 
 	return cli.ApplyTOFUOptions(
 		opts,
 		ctx.TLS.Tofu,
-		ctx.TLS.Insecure,
+		insecure,
 		configPath(cmd),
 		contextName,
 		cmd.ErrOrStderr(),

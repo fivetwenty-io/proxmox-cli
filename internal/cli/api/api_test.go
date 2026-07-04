@@ -250,6 +250,60 @@ func TestAuthLogin_OTPAndTfaChallenge(t *testing.T) {
 	require.Equal(t, "totp:resp", gotBody["tfa-challenge"])
 }
 
+// TestAuthLogin_GlobalInsecureFlag_WarnsAndSucceeds verifies that the global
+// --insecure flag (normally consumed only by PersistentPreRunE for commands
+// that build their client through the root, see
+// internal/cli/root_test.go:TestPersistentPreRunE_Insecure_WarnsOnStderr) is
+// also honored by `auth login`, which builds its own client outside
+// PersistentPreRunE. The context here deliberately leaves tls.insecure unset
+// so the only source of the insecure behavior is the --insecure flag itself;
+// this both proves the flag is registered/inherited on the auth command tree
+// (cobra would reject an unregistered flag) and that it triggers the same
+// WarnInsecureTLS stderr warning normal commands emit.
+func TestAuthLogin_GlobalInsecureFlag_WarnsAndSucceeds(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/access/ticket", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"username":            "admin@pam",
+			"ticket":              "PVE:admin@pam:DEADBEEF",
+			"CSRFPreventionToken": "csrf-token-xyz",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakeHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "admin@pam",
+					Secret:   "secretpw",
+				},
+				// tls.insecure deliberately unset: --insecure alone must trigger the warning.
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "login", "--context", "lab",
+		"--password", "secretpw", "--insecure")
+	require.NoError(t, err)
+	require.Contains(t, out, "WARN: TLS certificate verification disabled",
+		"--insecure must emit the same stderr warning normal commands emit, "+
+			"even though this context's tls.insecure is unset")
+	require.Contains(t, out, "admin@pam")
+}
+
 // ---------------------------------------------------------------------------
 // auth whoami
 // ---------------------------------------------------------------------------
