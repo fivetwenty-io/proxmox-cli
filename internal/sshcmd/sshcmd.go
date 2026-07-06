@@ -5,6 +5,7 @@ package sshcmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -27,11 +28,10 @@ func RegisterFlags(cmd *cobra.Command, f *Flags) {
 	cmd.Flags().BoolVar(&f.NoStrict, "no-strict", false, "disable strict host key checking")
 }
 
-// BaseArgs builds the leading ssh argv (options + user@host) for the given host
-// using the supplied flags. The remote command, if any, is appended by the
-// caller.
-func BaseArgs(f *Flags, host string) []string {
-	args := make([]string, 0, 12)
+// OptionArgs builds the ssh option argv (everything before the destination)
+// from the supplied flags: -p, and optionally -i, -A, -o StrictHostKeyChecking=no.
+func OptionArgs(f *Flags) []string {
+	args := make([]string, 0, 8)
 	args = append(args, "-p", strconv.Itoa(f.Port))
 	if f.Identity != "" {
 		args = append(args, "-i", f.Identity)
@@ -42,6 +42,48 @@ func BaseArgs(f *Flags, host string) []string {
 	if f.NoStrict {
 		args = append(args, "-o", "StrictHostKeyChecking=no")
 	}
-	args = append(args, fmt.Sprintf("%s@%s", f.User, host))
 	return args
+}
+
+// Dest builds the ssh destination ("user@host") for the given host using the
+// supplied flags.
+func Dest(f *Flags, host string) string {
+	return fmt.Sprintf("%s@%s", f.User, host)
+}
+
+// BaseArgs builds the leading ssh argv (options + user@host) for the given host
+// using the supplied flags. The remote command, if any, is appended by the
+// caller.
+func BaseArgs(f *Flags, host string) []string {
+	return append(OptionArgs(f), Dest(f, host))
+}
+
+// ShellQuote wraps s in single quotes, escaping any embedded single quotes, so
+// it survives rsync's word-splitting of the -e remote-shell string as a single
+// argument.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// needsShellQuote reports whether s contains characters that would be split or
+// misinterpreted by rsync's whitespace-based re-parsing of the -e value.
+func needsShellQuote(s string) bool {
+	return strings.ContainsAny(s, " \t'\"\\$`;&|<>(){}*?[]!#~")
+}
+
+// RemoteShell builds the ssh(1) argument for rsync's -e flag: "ssh" followed by
+// the same connection options OptionArgs would pass to ssh directly, with any
+// option needing quoting passed through ShellQuote so it survives rsync's
+// word-splitting of the -e string.
+func RemoteShell(f *Flags) string {
+	opts := OptionArgs(f)
+	parts := make([]string, 0, len(opts)+1)
+	parts = append(parts, "ssh")
+	for _, a := range opts {
+		if needsShellQuote(a) {
+			a = ShellQuote(a)
+		}
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
 }

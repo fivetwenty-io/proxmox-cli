@@ -2,12 +2,12 @@ package node
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
 )
 
 // rsyncFlags holds the options for the rsync sub-command.
@@ -94,22 +94,9 @@ func buildRsyncArgs(f *rsyncFlags, src, dst string) []string {
 		args = append(args, "--exclude", ex)
 	}
 
-	// rsync re-parses the -e value by word-splitting on whitespace, so any
-	// component containing spaces (notably an identity path) must be shell-quoted
-	// to survive intact.
-	ssh := "ssh -p " + strconv.Itoa(f.port)
-	if f.identity != "" {
-		ssh += " -i " + shellQuote(f.identity)
-	}
-	args = append(args, "-e", ssh)
+	sshFlags := sshcmd.Flags{Port: f.port, Identity: f.identity}
+	args = append(args, "-e", sshcmd.RemoteShell(&sshFlags))
 
 	args = append(args, src, dst)
 	return args
-}
-
-// shellQuote wraps s in single quotes, escaping any embedded single quotes, so
-// it survives rsync's word-splitting of the -e remote-shell string as a single
-// argument.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

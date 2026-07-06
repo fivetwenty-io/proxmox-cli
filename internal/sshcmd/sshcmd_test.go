@@ -140,3 +140,149 @@ func TestBaseArgs(t *testing.T) {
 		})
 	}
 }
+
+// TestBaseArgs_IsOptionArgsPlusDest locks in that BaseArgs stays exactly
+// OptionArgs followed by Dest, so existing callers see no behavior change.
+func TestBaseArgs_IsOptionArgsPlusDest(t *testing.T) {
+	cases := []Flags{
+		{User: "root", Port: 22},
+		{User: "admin", Port: 2222, Identity: "/home/admin/.ssh/id_ed25519", Agent: true, NoStrict: true},
+	}
+
+	for _, f := range cases {
+		want := append(OptionArgs(&f), Dest(&f, "10.0.0.5"))
+		require.Equal(t, want, BaseArgs(&f, "10.0.0.5"))
+	}
+}
+
+func TestOptionArgs(t *testing.T) {
+	cases := []struct {
+		name string
+		f    Flags
+		want []string
+	}{
+		{
+			name: "defaults",
+			f:    Flags{User: "root", Port: 22},
+			want: []string{"-p", "22"},
+		},
+		{
+			name: "custom port",
+			f:    Flags{User: "root", Port: 2222},
+			want: []string{"-p", "2222"},
+		},
+		{
+			name: "identity file",
+			f:    Flags{User: "root", Port: 22, Identity: "/home/root/.ssh/id_rsa"},
+			want: []string{"-p", "22", "-i", "/home/root/.ssh/id_rsa"},
+		},
+		{
+			name: "agent forwarding",
+			f:    Flags{User: "root", Port: 22, Agent: true},
+			want: []string{"-p", "22", "-A"},
+		},
+		{
+			name: "no-strict",
+			f:    Flags{User: "root", Port: 22, NoStrict: true},
+			want: []string{"-p", "22", "-o", "StrictHostKeyChecking=no"},
+		},
+		{
+			name: "all combined",
+			f: Flags{
+				User:     "admin",
+				Port:     2222,
+				Identity: "/home/admin/.ssh/id_ed25519",
+				Agent:    true,
+				NoStrict: true,
+			},
+			want: []string{
+				"-p", "2222",
+				"-i", "/home/admin/.ssh/id_ed25519",
+				"-A",
+				"-o", "StrictHostKeyChecking=no",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, OptionArgs(&tc.f))
+		})
+	}
+}
+
+func TestDest(t *testing.T) {
+	cases := []struct {
+		name string
+		f    Flags
+		host string
+		want string
+	}{
+		{name: "default user", f: Flags{User: "root"}, host: "10.0.0.5", want: "root@10.0.0.5"},
+		{name: "custom user", f: Flags{User: "admin"}, host: "vm.example.com", want: "admin@vm.example.com"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, Dest(&tc.f, tc.host))
+		})
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain", in: "/home/root/.ssh/id_rsa", want: `'/home/root/.ssh/id_rsa'`},
+		{name: "spaces", in: "/Users/jane doe/.ssh/id", want: `'/Users/jane doe/.ssh/id'`},
+		{name: "embedded single quote", in: "it's", want: `'it'\''s'`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, ShellQuote(tc.in))
+		})
+	}
+}
+
+func TestRemoteShell(t *testing.T) {
+	cases := []struct {
+		name string
+		f    Flags
+		want string
+	}{
+		{
+			name: "defaults",
+			f:    Flags{User: "root", Port: 22},
+			want: "ssh -p 22",
+		},
+		{
+			name: "custom port",
+			f:    Flags{User: "root", Port: 2222},
+			want: "ssh -p 2222",
+		},
+		{
+			name: "identity without spaces is not quoted",
+			f:    Flags{User: "root", Port: 22, Identity: "/home/root/.ssh/id_rsa"},
+			want: "ssh -p 22 -i /home/root/.ssh/id_rsa",
+		},
+		{
+			name: "identity with spaces is quoted",
+			f:    Flags{User: "root", Port: 2222, Identity: "/Users/jane doe/.ssh/id"},
+			want: "ssh -p 2222 -i '/Users/jane doe/.ssh/id'",
+		},
+		{
+			name: "agent and no-strict, no quoting needed",
+			f:    Flags{User: "root", Port: 22, Agent: true, NoStrict: true},
+			want: "ssh -p 22 -A -o StrictHostKeyChecking=no",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, RemoteShell(&tc.f))
+		})
+	}
+}
