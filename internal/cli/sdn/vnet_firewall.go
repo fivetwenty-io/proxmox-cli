@@ -9,6 +9,7 @@ import (
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -362,15 +363,37 @@ func newVnetFirewallOptionsCmd() *cobra.Command {
 		Use:   "options",
 		Short: "Manage a vnet's firewall options",
 	}
-	cmd.AddCommand(newVnetFirewallOptionsGetCmd(), newVnetFirewallOptionsSetCmd())
+	cmd.AddCommand(
+		newVnetFirewallOptionsGetCmd(),
+		newVnetFirewallOptionsSetCmd(),
+		newVnetFirewallOptionsDescribeCmd(),
+	)
 	return cmd
 }
 
+// newVnetFirewallOptionsDescribeCmd builds `pve sdn vnet firewall options
+// describe`, an offline catalog of every settable vnet firewall option from
+// the PVE API schema (see vnet_firewall_options_schema_gen.go).
+func newVnetFirewallOptionsDescribeCmd() *cobra.Command {
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: vnetFirewallOptionSchemas,
+		Short:   "Describe all settable vnet firewall options and their defaults",
+		Long: "List every settable vnet firewall option from the PVE API schema: type, " +
+			"built-in default, and allowed values. Runs offline.",
+		CommandHint:         "pve sdn vnet firewall options describe",
+		SubKeyRowsInCatalog: true,
+	})
+}
+
 func newVnetFirewallOptionsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var withDefaults bool
+	cmd := &cobra.Command{
 		Use:   "get <vnet>",
 		Short: "Show a vnet's firewall options",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a vnet's firewall options currently set. The PVE API omits options " +
+			"left at their built-in defaults; pass --defaults to also list those with " +
+			"the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -378,9 +401,20 @@ func newVnetFirewallOptionsGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get firewall options for vnet %q: %w", vnet, err)
 			}
-			return renderObject(cmd, deps, resp)
+			single, raw, err := objectToSingle(resp)
+			if err != nil {
+				return fmt.Errorf("get firewall options for vnet %q: %w", vnet, err)
+			}
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(vnetFirewallOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options with their built-in default values")
+	return cmd
 }
 
 func newVnetFirewallOptionsSetCmd() *cobra.Command {
@@ -432,8 +466,12 @@ func newVnetFirewallOptionsSetCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVar(&enable, "enable", false, "enable or disable firewall rule enforcement on this vnet")
 	f.StringVar(&logLevelForward, "log-level-forward", "", "log level for forwarded traffic")
-	f.StringVar(&policyForward, "policy-forward", "", "forward policy: ACCEPT or DROP")
+	f.StringVar(&policyForward, "policy-forward", "", "forward policy")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to delete")
 	f.StringVar(&digest, "digest", "", "digest guarding against concurrent modification")
+
+	// Append generated schema detail (allowed values, defaults) to each option
+	// flag's help text; see vnet_firewall_options_schema_gen.go.
+	optionschema.EnrichFlags(f, vnetFirewallOptionSchemas)
 	return cmd
 }

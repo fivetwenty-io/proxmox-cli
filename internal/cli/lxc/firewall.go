@@ -11,6 +11,7 @@ import (
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -915,15 +916,36 @@ func newFirewallOptionsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newFirewallOptionsGetCmd(),
 		newFirewallOptionsSetCmd(),
+		newFirewallOptionsDescribeCmd(),
 	)
 	return cmd
 }
 
+// newFirewallOptionsDescribeCmd builds `pve lxc firewall options describe`, an
+// offline catalog of every settable container firewall option from the PVE
+// API schema (see firewall_options_schema_gen.go).
+func newFirewallOptionsDescribeCmd() *cobra.Command {
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: firewallOptionSchemas,
+		Short:   "Describe all settable container firewall options and their defaults",
+		Long: "List every settable container firewall option from the PVE API schema: " +
+			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
+			"options. Runs offline. Pass an option name to show only that option with " +
+			"full descriptions.",
+		CommandHint:         "pve lxc firewall options describe",
+		SubKeyRowsInCatalog: true,
+	})
+}
+
 func newFirewallOptionsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var withDefaults bool
+	cmd := &cobra.Command{
 		Use:   "get <vmid|name>",
 		Short: "Show a container's firewall options",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the firewall options currently set on a container. The PVE API omits " +
+			"options left at their built-in defaults; pass --defaults to also list those " +
+			"with the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -939,10 +961,17 @@ func newFirewallOptionsGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var raw any = resp
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(firewallOptionSchemas, single, resp, optionschema.MergeOpts{})
+			}
 			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Single: single, Raw: resp}, deps.Format)
+				output.Result{Single: single, Raw: raw}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options with their built-in default values")
+	return cmd
 }
 
 func newFirewallOptionsSetCmd() *cobra.Command {
@@ -1026,10 +1055,14 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&ndp, "ndp", false, "enable NDP (Neighbor Discovery Protocol)")
 	cmd.Flags().BoolVar(&radv, "radv", false, "allow sending Router Advertisements")
 	cmd.Flags().BoolVar(&ipfilter, "ipfilter", false, "enable default IP filters")
-	cmd.Flags().StringVar(&policyIn, "policy-in", "", "input policy: ACCEPT, REJECT, or DROP")
-	cmd.Flags().StringVar(&policyOut, "policy-out", "", "output policy: ACCEPT, REJECT, or DROP")
+	cmd.Flags().StringVar(&policyIn, "policy-in", "", "input policy")
+	cmd.Flags().StringVar(&policyOut, "policy-out", "", "output policy")
 	cmd.Flags().StringVar(&logLevelIn, "log-level-in", "", "log level for incoming traffic")
 	cmd.Flags().StringVar(&logLevelOut, "log-level-out", "", "log level for outgoing traffic")
 	cmd.Flags().StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
+
+	// Append generated schema detail (allowed values, defaults) to each option
+	// flag's help text; see firewall_options_schema_gen.go.
+	optionschema.EnrichFlags(cmd.Flags(), firewallOptionSchemas)
 	return cmd
 }

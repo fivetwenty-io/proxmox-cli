@@ -211,5 +211,5 @@ func TestVnetFirewallCommandTree(t *testing.T) {
 	require.Contains(t, sub, "rules")
 	require.Contains(t, sub, "options")
 	require.ElementsMatch(t, []string{"list", "get", "create", "set", "delete"}, *sub["rules"])
-	require.ElementsMatch(t, []string{"get", "set"}, *sub["options"])
+	require.ElementsMatch(t, []string{"get", "set", "describe"}, *sub["options"])
 }

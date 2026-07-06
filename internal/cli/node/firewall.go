@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -459,15 +460,36 @@ func newNodeFirewallOptionsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newNodeFirewallOptionsGetCmd(),
 		newNodeFirewallOptionsSetCmd(),
+		newNodeFirewallOptionsDescribeCmd(),
 	)
 	return cmd
 }
 
+// newNodeFirewallOptionsDescribeCmd builds `pve node firewall options
+// describe`, an offline catalog of every settable host firewall option from
+// the PVE API schema (see firewall_options_schema_gen.go).
+func newNodeFirewallOptionsDescribeCmd() *cobra.Command {
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: firewallOptionSchemas,
+		Short:   "Describe all settable node firewall options and their defaults",
+		Long: "List every settable host firewall option from the PVE API schema: " +
+			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
+			"options. Runs offline. Pass an option name to show only that option with " +
+			"full descriptions.",
+		CommandHint:         "pve node firewall options describe",
+		SubKeyRowsInCatalog: true,
+	})
+}
+
 func newNodeFirewallOptionsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var withDefaults bool
+	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Show the host firewall options",
-		Args:  cobra.NoArgs,
+		Long: "Show the host firewall options currently set on the resolved node. The PVE " +
+			"API omits options left at their built-in defaults; pass --defaults to also " +
+			"list those with the value they effectively have.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -481,10 +503,16 @@ func newNodeFirewallOptionsGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get firewall options on node %q: %w", deps.Node, err)
 			}
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(firewallOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Single: single, Raw: raw}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options with their built-in default values")
+	return cmd
 }
 
 func newNodeFirewallOptionsSetCmd() *cobra.Command {
@@ -629,6 +657,10 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 	fl.StringVar(&digest, "digest", "",
 		"SHA1 digest of the current options to guard against concurrent edits")
 	fl.StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
+
+	// Append generated schema detail (allowed values, defaults, ranges) to
+	// each option flag's help text; see firewall_options_schema_gen.go.
+	optionschema.EnrichFlags(fl, firewallOptionSchemas)
 	return cmd
 }
 

@@ -10,6 +10,7 @@ import (
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -1113,15 +1114,36 @@ func newClusterFirewallOptionsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newClusterFirewallOptionsGetCmd(),
 		newClusterFirewallOptionsSetCmd(),
+		newClusterFirewallOptionsDescribeCmd(),
 	)
 	return cmd
 }
 
+// newClusterFirewallOptionsDescribeCmd builds `pve cluster firewall options
+// describe`, an offline catalog of every settable datacenter firewall option
+// from the PVE API schema (see firewall_options_schema_gen.go).
+func newClusterFirewallOptionsDescribeCmd() *cobra.Command {
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: firewallOptionSchemas,
+		Short:   "Describe all settable datacenter firewall options and their defaults",
+		Long: "List every settable datacenter firewall option from the PVE API schema: " +
+			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
+			"options. Runs offline. Pass an option name to show only that option with " +
+			"full descriptions.",
+		CommandHint:         "pve cluster firewall options describe",
+		SubKeyRowsInCatalog: true,
+	})
+}
+
 func newClusterFirewallOptionsGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var withDefaults bool
+	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Show the datacenter firewall options",
-		Args:  cobra.NoArgs,
+		Long: "Show the datacenter firewall options currently set. The PVE API omits " +
+			"options left at their built-in defaults; pass --defaults to also list " +
+			"those with the value they effectively have.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallOptions(cmd.Context())
@@ -1132,10 +1154,16 @@ func newClusterFirewallOptionsGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get cluster firewall options: %w", err)
 			}
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(firewallOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Single: single, Raw: raw}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options with their built-in default values")
+	return cmd
 }
 
 func newClusterFirewallOptionsSetCmd() *cobra.Command {
@@ -1197,13 +1225,17 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 	}
 	cmd.Flags().Int64Var(&enable, "enable", 1, "1 to enable the cluster firewall, 0 to disable it")
 	cmd.Flags().BoolVar(&ebtables, "ebtables", false, "enable ebtables rules cluster wide")
-	cmd.Flags().StringVar(&policyIn, "policy-in", "", "input policy: ACCEPT, REJECT, or DROP")
-	cmd.Flags().StringVar(&policyOut, "policy-out", "", "output policy: ACCEPT, REJECT, or DROP")
-	cmd.Flags().StringVar(&policyForward, "policy-forward", "", "forward policy: ACCEPT or DROP")
+	cmd.Flags().StringVar(&policyIn, "policy-in", "", "input policy")
+	cmd.Flags().StringVar(&policyOut, "policy-out", "", "output policy")
+	cmd.Flags().StringVar(&policyForward, "policy-forward", "", "forward policy")
 	cmd.Flags().StringVar(&logRatelimit, "log-ratelimit", "", "log rate-limiting settings, for example enable=1,rate=1/second")
 	cmd.Flags().StringVar(&digest, "digest", "",
 		"reject the change unless the current config matches this SHA-1 digest")
 	cmd.Flags().StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
+
+	// Append generated schema detail (allowed values, defaults, sub-keys) to
+	// each option flag's help text; see firewall_options_schema_gen.go.
+	optionschema.EnrichFlags(cmd.Flags(), firewallOptionSchemas)
 	return cmd
 }
 
