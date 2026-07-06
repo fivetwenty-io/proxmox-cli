@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 )
 
 // Runner abstracts os/exec for SSH/rsync shell-outs.
@@ -28,7 +30,10 @@ type Runner interface {
 // ExitError is returned by Run and RunInteractive when the child process exits
 // with a non-zero status. It wraps the underlying error and exposes the code.
 type ExitError struct {
-	// Code is the process exit code (always > 0 when this error is returned).
+	// Code is the process exit code, taken directly from (*exec.ExitError).
+	// ExitCode(): usually > 0, but -1 when the child was terminated by a
+	// signal rather than exiting normally (Go's os/exec cannot recover a
+	// signal-terminated process's "exit code" — there isn't one).
 	Code int
 	// Err is the underlying *exec.ExitError from os/exec.
 	Err error
@@ -74,6 +79,19 @@ func (r *realRunner) Run(name string, args []string, env []string, stdin io.Read
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
+	// The parent must not die from SIGINT/SIGQUIT while the child runs: both
+	// signals are delivered to the whole foreground process group (parent and
+	// child alike), so without this the shell's ^C would kill pve itself
+	// before it can read the child's real exit status and propagate it via
+	// ExitError. signal.Ignore sets SIG_IGN in this process, and SIG_IGN is
+	// inherited across execve by the child — that is fine here because ssh
+	// and rsync each install their own SIGINT/SIGQUIT handlers at startup, so
+	// the child still responds to ^C normally; the point of ignoring here is
+	// only that the PARENT survives ^C long enough to read and report the
+	// child's real exit status.
+	signal.Ignore(os.Interrupt, syscall.SIGQUIT)
+	defer signal.Reset(os.Interrupt, syscall.SIGQUIT)
+
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return &ExitError{
@@ -96,6 +114,16 @@ func (r *realRunner) RunInteractive(name string, args []string, env []string) er
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	// See the matching comment in Run: without this, ^C (SIGINT) or SIGQUIT
+	// delivered to the foreground process group would kill pve itself, not
+	// just the interactive child (ssh, shell), preventing pve from reading
+	// and propagating the child's real exit code. SIG_IGN is inherited by
+	// the child, but ssh installs its own SIGINT/SIGQUIT handlers at
+	// startup, so it still responds to ^C normally (e.g. forwarding it to
+	// the remote session).
+	signal.Ignore(os.Interrupt, syscall.SIGQUIT)
+	defer signal.Reset(os.Interrupt, syscall.SIGQUIT)
 
 	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

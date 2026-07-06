@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	pveerrors "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/errors"
+	"github.com/fivetwenty-io/pve-cli/internal/exec"
 )
 
 // Exit code constants. Values match the A-02 decision in the design document.
@@ -30,6 +31,9 @@ const (
 // FromError maps a pve-apiclient-go error value to the appropriate exit code.
 //
 // Mapping rules (tested in priority order):
+//  0. *exec.ExitError (child process exit, e.g. from `pve ssh`/`pve rsync`) →
+//     the child's own exit code, verbatim, regardless of any other mapping
+//     the error chain might also match
 //  1. TFARequiredError or AuthenticationError with TFA=true → TFARequired (7)
 //  2. AuthenticationError (TFA=false) or PermissionError → Auth (4)
 //  3. ParameterError → BadArgs (2)
@@ -41,6 +45,14 @@ const (
 func FromError(err error) int {
 	if err == nil {
 		return OK
+	}
+
+	// 0. Child process exit code takes precedence over every API-error mapping
+	// below: once a subprocess (ssh, rsync) has run and exited non-zero, its
+	// own exit code IS the semantically correct code to propagate.
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.Code
 	}
 
 	// 1. TFA required — check before generic auth so TFA path is preferred.

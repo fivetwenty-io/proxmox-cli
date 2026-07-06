@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pveerrors "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/errors"
+	"github.com/fivetwenty-io/pve-cli/internal/exec"
 	"github.com/fivetwenty-io/pve-cli/internal/exitcode"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +19,42 @@ func wrap(err error) error {
 func TestFromError_Nil(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, exitcode.OK, exitcode.FromError(nil))
+}
+
+// TestFromError_ExitError_ChildCodeVerbatim verifies that a *exec.ExitError
+// (as returned by pve ssh/pve rsync when the child process exits non-zero)
+// propagates its own Code verbatim, both directly and through one or more
+// layers of fmt.Errorf("...: %w", err) wrapping.
+func TestFromError_ExitError_ChildCodeVerbatim(t *testing.T) {
+	t.Parallel()
+
+	for _, code := range []int{130, 255, 23} {
+		code := code
+		t.Run(fmt.Sprintf("code=%d", code), func(t *testing.T) {
+			t.Parallel()
+			ee := &exec.ExitError{Code: code, Err: fmt.Errorf("child exited")}
+
+			require.Equal(t, code, exitcode.FromError(ee), "direct")
+			require.Equal(t, code, exitcode.FromError(wrap(ee)), "wrapped once")
+			require.Equal(t, code, exitcode.FromError(wrap(wrap(ee))), "wrapped twice")
+		})
+	}
+}
+
+// TestFromError_ExitError_PrecedenceOverAPIErrorMapping verifies that when an
+// *exec.ExitError's underlying error also matches one of the later API-error
+// mapping rules (e.g. ParameterError → BadArgs), the child exit code still
+// wins — the *exec.ExitError check runs first and returns before any of the
+// pveerrors.* checks are reached.
+func TestFromError_ExitError_PrecedenceOverAPIErrorMapping(t *testing.T) {
+	t.Parallel()
+
+	inner := &pveerrors.ParameterError{}
+	ee := &exec.ExitError{Code: 255, Err: inner}
+
+	require.Equal(t, 255, exitcode.FromError(ee), "ExitError.Code must win, not BadArgs")
+	require.Equal(t, 255, exitcode.FromError(wrap(ee)), "precedence holds through wrapping")
+	require.NotEqual(t, exitcode.BadArgs, exitcode.FromError(ee))
 }
 
 func TestFromError_Generic(t *testing.T) {
