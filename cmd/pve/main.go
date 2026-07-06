@@ -15,6 +15,7 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli/node"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/pool"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/qemu"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/remote"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/sdn"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/storage"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/task"
@@ -37,7 +38,9 @@ var factories = []cli.GroupFactory{
 	node.Group,
 	pool.Group,
 	qemu.Group,
+	remote.Rsync,
 	sdn.Group,
+	remote.SSH,
 	storage.Group,
 	task.Group,
 	version.Group,

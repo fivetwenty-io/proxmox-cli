@@ -241,12 +241,16 @@ func TestNodeStatus_APIError(t *testing.T) {
 // node ssh / shell / console / exec (shell-out)
 // ---------------------------------------------------------------------------
 
+// TestNodeSSH_ResolvesHostAndRunsInteractive places --port before <node>,
+// which SetInterspersed(false) requires: pve's own connection flags must
+// precede the node argument, since everything after it is ssh-option/
+// remote-command passthrough (see remote.RunSSH).
 func TestNodeSSH_ResolvesHostAndRunsInteractive(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	// Default cluster status maps pve1 -> 192.168.1.10.
 	runner := exec.Fake()
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, runner)
-	root.SetArgs(append(prefix, "node", "ssh", "pve1", "--port", "2222", "--", "uptime"))
+	root.SetArgs(append(prefix, "node", "ssh", "--port", "2222", "pve1", "--", "uptime"))
 
 	require.NoError(t, root.Execute())
 	require.Len(t, runner.Calls, 1)
@@ -266,11 +270,43 @@ func TestNodeSSH_FallsBackToNodeNameWhenUnresolved(t *testing.T) {
 	})
 	runner := exec.Fake()
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, runner)
-	root.SetArgs(append(prefix, "node", "ssh", "othernode", "--user", "admin"))
+	root.SetArgs(append(prefix, "node", "ssh", "--user", "admin", "othernode"))
 
 	require.NoError(t, root.Execute())
 	require.Len(t, runner.Calls, 1)
 	require.Contains(t, runner.Calls[0].Args, "admin@othernode")
+}
+
+// TestNodeSSH_PassthroughOptionAfterNode verifies the new grammar: a
+// leading-dash token after <node> with no "--" boundary is now reordered
+// ahead of the destination as an ssh option instead of being rejected (the
+// pre-passthrough behaviour treated any argument after <node> as the literal
+// remote command, so "-v" would have been sent to the remote shell verbatim).
+func TestNodeSSH_PassthroughOptionAfterNode(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	runner := exec.Fake()
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, runner)
+	root.SetArgs(append(prefix, "node", "ssh", "pve1", "-v", "uptime"))
+
+	require.NoError(t, root.Execute())
+	require.Len(t, runner.Calls, 1)
+	c := runner.Calls[0]
+	require.Equal(t, []string{"-p", "22", "-v", "root@192.168.1.10", "uptime"}, c.Args)
+}
+
+// TestNodeSSH_DashDashForcesRemoteCommand verifies "--" still forces the
+// remote-command boundary, so a leading-dash token after it is passed to the
+// remote command literally rather than reordered as an ssh option.
+func TestNodeSSH_DashDashForcesRemoteCommand(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	runner := exec.Fake()
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, runner)
+	root.SetArgs(append(prefix, "node", "ssh", "pve1", "--", "-v"))
+
+	require.NoError(t, root.Execute())
+	require.Len(t, runner.Calls, 1)
+	c := runner.Calls[0]
+	require.Equal(t, []string{"-p", "22", "root@192.168.1.10", "-v"}, c.Args)
 }
 
 func TestNodeShell_RunsInteractiveNoRemoteCmd(t *testing.T) {

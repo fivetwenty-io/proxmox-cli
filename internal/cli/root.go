@@ -4,6 +4,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -58,6 +59,13 @@ type Deps struct {
 
 	// Cfg is the loaded config. Never nil after PersistentPreRunE.
 	Cfg *config.Config
+
+	// Ctx is the resolved active *config.Context for this invocation (the
+	// entry selected by --context/-c, $PVE_CONTEXT, or current-context,
+	// after ResolveContext applies its defaults). Nil for commands annotated
+	// with noClient, since the noClient early-return in persistentPreRunE
+	// runs before context resolution; such commands must nil-check before use.
+	Ctx *config.Context
 
 	// ConfigPath is the resolved --config file path. Config-mutating commands
 	// persist to this path via config.Save / config.SaveForce.
@@ -208,13 +216,11 @@ func resolveOutputDefault() string {
 // persistentPreRunE is the implementation of root.PersistentPreRunE.
 // It:
 //  1. Loads config from --config path.
-//  2. Resolves the context (flag > env > config current-context).
+//  2. Initialises the slog logger via logx.Init.
 //  3. Skips client construction for commands annotated with Annotations["noClient"].
-//  4. Resolves the secret via config.ResolveSecret.
-//  5. Constructs the *apiclient.APIClient via BuildOptions + NewAPIClient.
-//  6. Initialises the slog logger via logx.Init.
-//  7. Injects the logger into the client.
-//  8. Builds and stashes *Deps in cmd context.
+//  4. Resolves the context and constructs the *apiclient.APIClient via BuildContextClient.
+//  5. Injects the logger into the client.
+//  6. Builds and stashes *Deps in cmd context.
 //
 // It returns the log file closer alongside any error. The caller (the
 // PersistentPreRunE closure in NewRootCmd) captures the closer so that
@@ -270,24 +276,39 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 
 	// Commands that set Annotations["noClient"]="true" skip API client build.
 	// This applies to: version (build-info only), context group verbs.
-	if cmd.Annotations["noClient"] == "true" {
+	//
+	// cobra's own hidden shell-completion dispatcher command ("__complete",
+	// aliased as "__completeNoDesc") is treated the same way, for a different
+	// reason: that command has DisableFlagParsing set by cobra itself (see
+	// completions.go), so THIS PersistentPreRunE invocation — which cobra
+	// runs for "__complete" itself, as the nearest parent with a
+	// PersistentPreRunE, before "__complete"'s own Run dispatches into the
+	// target command's ValidArgsFunction — never sees the real
+	// --config/--context/--insecure the user actually typed; it would
+	// resolve and build a client for the DEFAULT context instead. Building
+	// that client here is worse than merely wrong: if resolving the default
+	// context's secret errors for any reason (missing keychain entry, no
+	// context configured at all, ...), the error aborts "__complete" before
+	// its Run ever calls the target's ValidArgsFunction, so EVERY completion
+	// request would print an error and exit non-zero — exactly what
+	// ValidArgsFunction implementations (e.g. remote.completeNodeNames) are
+	// designed to never do. Skipping client construction here leaves that
+	// correctness to the target command's OWN flag parsing (which sees the
+	// real flag values) and its own ValidArgsFunction, which builds any
+	// client it needs itself via BuildContextClient.
+	if cmd.Annotations["noClient"] == "true" || cmd.Name() == cobra.ShellCompRequestCmd {
 		setDeps(cmd, deps)
 		return logCloser, nil
 	}
 
-	// Resolve context — flag > env > config.
-	contextName := config.Resolve(pf.context, "PVE_CONTEXT", cfg.CurrentContext, "")
-	if contextName == "" {
-		return logCloser, fmt.Errorf(
-			"no context specified: use --context/-c, set $PVE_CONTEXT, or run 'pve context select' (config: %s)",
-			pf.config,
-		)
-	}
-
-	ctx, _, err := config.ResolveContext(cfg, contextName)
+	// Resolve context — flag > env > config — and build the API client for it.
+	// See BuildContextClient's doc comment for why this is factored out.
+	ac, ctx, err := BuildContextClient(cmd, cfg, pf.config, pf.context, pf.insecure,
+		func() bool { return isInteractiveInput(cmd.InOrStdin()) })
 	if err != nil {
-		return logCloser, fmt.Errorf("resolve context %q: %w", contextName, err)
+		return logCloser, err
 	}
+	deps.Ctx = ctx
 
 	// Apply per-context defaults for --node and --output.
 	// Precedence: explicit flag > context default > existing global default.
@@ -310,71 +331,6 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	// matching the parallel treatment of $PVE_NODE (which is never overridden by context DefaultNode).
 	if !cmd.Flags().Changed("output") && os.Getenv("PVE_OUTPUT") == "" && ctx.DefaultOutput != "" {
 		deps.Format = output.Format(ctx.DefaultOutput)
-	}
-
-	// Resolve the secret (env ref, keychain ref, or literal).
-	secret, err := config.ResolveSecret(ctx.Auth.Secret)
-	if err != nil {
-		return logCloser, fmt.Errorf("resolve secret for context %q: %w", contextName, err)
-	}
-
-	// Determine TLS flag: --insecure flag overrides config.
-	insecure := pf.insecure || ctx.TLS.Insecure
-	if insecure {
-		WarnInsecureTLS(cmd.ErrOrStderr())
-	}
-
-	// Build pve.Options and construct the API client.
-	var ticket, csrf, password string
-	switch ctx.Auth.Type {
-	case "password":
-		if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
-			ticket = ctx.Auth.Session.Ticket
-			csrf = ctx.Auth.Session.CSRF
-		} else {
-			password = secret
-		}
-	}
-
-	var token string
-	if ctx.Auth.Type == "token" {
-		// secret may be just the value; token-id comes from TokenID field.
-		// Format expected by BuildOptions: "tokenid=secret" or just secret.
-		if ctx.Auth.TokenID != "" {
-			token = ctx.Auth.TokenID + "=" + secret
-		} else {
-			token = secret
-		}
-	}
-
-	opts := apiclient.BuildOptions(
-		ctx.Host,
-		ctx.Port,
-		ctx.Protocol,
-		ctx.Auth.Username,
-		ctx.Realm,
-		token,
-		password,
-		ticket,
-		csrf,
-		insecure,
-		ctx.TLS.Fingerprint,
-	)
-
-	opts = ApplyTOFUOptions(
-		opts,
-		ctx.TLS.Tofu,
-		insecure,
-		pf.config,
-		contextName,
-		cmd.ErrOrStderr(),
-		cmd.InOrStdin(),
-		func() bool { return isInteractiveInput(cmd.InOrStdin()) },
-	)
-
-	ac, err := apiclient.NewAPIClient(opts)
-	if err != nil {
-		return logCloser, fmt.Errorf("connect to %s: %w", ctx.Host, err)
 	}
 
 	// Inject the logger so HTTP request/response activity is captured in the
@@ -422,6 +378,107 @@ func ApplyTOFUOptions(
 	opts.ManualVerifyCallback = apiclient.NewManualVerifyCallback(prompt, in, isTTY)
 
 	return opts
+}
+
+// BuildContextClient resolves the active *config.Context from cfg (flag >
+// env > config current-context) and constructs the corresponding
+// *apiclient.APIClient: secret resolution, TLS/TOFU option wiring, and
+// apiclient.NewAPIClient — exactly the tail of persistentPreRunE's
+// context/client construction. It is factored out (and exported) so a
+// caller that needs a client without running the rest of persistentPreRunE
+// (logger init, Deps construction, noClient handling) — e.g. a
+// ValidArgsFunction shell-completion helper — builds one identically instead
+// of duplicating this logic; see internal/cli/remote/ssh.go's
+// completeNodeNames for that use.
+//
+// contextFlag, configPath, and insecureFlag are the raw --context/--config/
+// --insecure flag values. cmd supplies ErrOrStderr/InOrStdin for the
+// WarnInsecureTLS write and TOFU prompting. isTTY decides whether the TOFU
+// manual-verify callback may prompt interactively; callers that must never
+// block (completion) should pass a func that always returns false rather
+// than isInteractiveInput, regardless of the caller's actual stdin.
+func BuildContextClient(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
+) (*apiclient.APIClient, *config.Context, error) {
+	contextName := config.Resolve(contextFlag, "PVE_CONTEXT", cfg.CurrentContext, "")
+	if contextName == "" {
+		return nil, nil, fmt.Errorf(
+			"no context specified: use --context/-c, set $PVE_CONTEXT, or run 'pve context select' (config: %s)",
+			configPath,
+		)
+	}
+
+	ctx, _, err := config.ResolveContext(cfg, contextName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve context %q: %w", contextName, err)
+	}
+
+	// Resolve the secret (env ref, keychain ref, or literal).
+	secret, err := config.ResolveSecret(ctx.Auth.Secret)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve secret for context %q: %w", contextName, err)
+	}
+
+	// Determine TLS flag: --insecure flag overrides config.
+	insecure := insecureFlag || ctx.TLS.Insecure
+	if insecure {
+		WarnInsecureTLS(cmd.ErrOrStderr())
+	}
+
+	// Build pve.Options and construct the API client.
+	var ticket, csrf, password string
+	switch ctx.Auth.Type {
+	case "password":
+		if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
+			ticket = ctx.Auth.Session.Ticket
+			csrf = ctx.Auth.Session.CSRF
+		} else {
+			password = secret
+		}
+	}
+
+	var token string
+	if ctx.Auth.Type == "token" {
+		// secret may be just the value; token-id comes from TokenID field.
+		// Format expected by BuildOptions: "tokenid=secret" or just secret.
+		if ctx.Auth.TokenID != "" {
+			token = ctx.Auth.TokenID + "=" + secret
+		} else {
+			token = secret
+		}
+	}
+
+	opts := apiclient.BuildOptions(
+		ctx.Host,
+		ctx.Port,
+		ctx.Protocol,
+		ctx.Auth.Username,
+		ctx.Realm,
+		token,
+		password,
+		ticket,
+		csrf,
+		insecure,
+		ctx.TLS.Fingerprint,
+	)
+
+	opts = ApplyTOFUOptions(
+		opts,
+		ctx.TLS.Tofu,
+		insecure,
+		configPath,
+		contextName,
+		cmd.ErrOrStderr(),
+		cmd.InOrStdin(),
+		isTTY,
+	)
+
+	ac, err := apiclient.NewAPIClient(opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+
+	return ac, ctx, nil
 }
 
 // isInteractiveInput reports whether in is an interactive terminal, used to
@@ -538,7 +595,14 @@ func Execute(factories []GroupFactory) error {
 	AddGroups(root, &Deps{}, factories)
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		// A child process (ssh, rsync) that exits non-zero has already written
+		// its own diagnostics to stderr; printing the wrapped *exec.ExitError
+		// here too would duplicate that output with a redundant second line.
+		// Every other error still prints exactly as before.
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		return err
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/remote"
 	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
 	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
 )
@@ -35,32 +36,25 @@ func resolveHost(cmd *cobra.Command, deps *cli.Deps, node string) (string, error
 	return host, nil
 }
 
-// newSSHCmd builds `pve node <node> ssh [-- <cmd...>]`.
+// newSSHCmd builds `pve node <node> ssh [ssh-option...] [command...]`. It
+// shares its passthrough splitting and connection logic with the top-level
+// `pve ssh` command via remote.RunSSH; SetInterspersed(false) applies the
+// same "flags before <node>, ssh-option/command passthrough after" grammar
+// (see remote.SSH's Long help for the full contract), so a leading-dash
+// token after <node> is now treated as an ssh option/remote-command token
+// rather than rejected — "pve node ssh <node> -- <cmd>..." still works
+// exactly as before via the explicit "--" boundary.
 func newSSHCmd() *cobra.Command {
 	var f sshFlags
 	cmd := &cobra.Command{
-		Use:   "ssh <node> [-- <cmd>...]",
+		Use:   "ssh <node> [ssh-option...] [command...]",
 		Short: "Open an SSH session to a node (optionally run a remote command)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := cli.GetDeps(cmd)
-			node := args[0]
-			remote := args[1:]
-
-			host, err := resolveHost(cmd, deps, node)
-			if err != nil {
-				return err
-			}
-
-			argv := sshBaseArgs(&f, host)
-			argv = append(argv, remote...)
-
-			if err := deps.Runner.RunInteractive("ssh", argv, nil); err != nil {
-				return fmt.Errorf("ssh to node %q: %w", node, err)
-			}
-			return nil
+			return remote.RunSSH(cmd, cli.GetDeps(cmd), &f, args[0], args[1:])
 		},
 	}
+	cmd.Flags().SetInterspersed(false)
 	registerSSHFlags(cmd, &f)
 	return cmd
 }

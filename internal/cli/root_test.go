@@ -3,6 +3,8 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"
+	"github.com/fivetwenty-io/pve-cli/internal/exec"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -446,6 +449,75 @@ func TestContextFlagPrecedence(t *testing.T) {
 	})
 }
 
+// TestShellCompletionSkipsClientBuild is the regression test for a bug
+// discovered while validating H-2 (dead `pve ssh` node-name completion):
+// cobra's built-in "__complete" hidden command has DisableFlagParsing set,
+// so persistentPreRunE — which cobra runs for "__complete" itself, as the
+// nearest ancestor with a PersistentPreRunE, BEFORE "__complete"'s own Run
+// dispatches into the target command's ValidArgsFunction — never sees the
+// real --config/--context the operator typed; it resolves the DEFAULT
+// context instead. If that default context is broken in any way (bad
+// secret reference, unresolvable), BuildContextClient errors and used to
+// abort "__complete" entirely: every shell-completion request would print
+// an error and exit non-zero, regardless of which command was being
+// completed or whether ITS OWN ValidArgsFunction had nothing to do with the
+// broken default context at all.
+//
+// persistentPreRunE now skips client construction for "__complete" itself
+// (same as a noClient command), so completion always proceeds to the target
+// command's own Run/ValidArgsFunction instead of failing here.
+func TestShellCompletionSkipsClientBuild(t *testing.T) {
+	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PVE_NODE", "")
+	t.Setenv("PVE_OUTPUT", "table")
+
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yml")
+	cfg := &config.Config{
+		CurrentContext: "broken",
+		Contexts: map[string]*config.Context{
+			"broken": {
+				Host: "10.0.0.1", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth: config.AuthBlock{
+					Type: "token", Username: "root@pam", TokenID: "tok",
+					// Unresolvable on every platform (no keychain dependency):
+					// ResolveSecret errors for an explicit but unset env reference.
+					Secret: "${PVE_CLI_TEST_UNSET_SECRET_VAR_XYZ}",
+				},
+			},
+		},
+	}
+	require.NoError(t, config.SaveForce(cfgPath, cfg))
+
+	buildRoot := func(t *testing.T) *cobra.Command {
+		t.Helper()
+		root, cleanup := cli.NewRootCmd()
+		t.Cleanup(cleanup)
+		root.SetContext(context.Background())
+		called := false
+		root.AddCommand(buildNoopCmd(&called))
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&out)
+		return root
+	}
+
+	t.Run("control: normal noop execution fails on the broken default context", func(t *testing.T) {
+		root := buildRoot(t)
+		root.SetArgs([]string{"--config", cfgPath, "noop"})
+		err := root.Execute()
+		require.Error(t, err, "the config's default context must genuinely be broken")
+		require.Contains(t, err.Error(), "resolve secret")
+	})
+
+	t.Run("__complete noop does not error even though the default context is broken", func(t *testing.T) {
+		root := buildRoot(t)
+		root.SetArgs([]string{"--config", cfgPath, "__complete", "noop", ""})
+		err := root.Execute()
+		require.NoError(t, err, "shell completion must never fail due to the default context")
+	})
+}
+
 // TestOutputChangedDetection verifies that cmd.Flags().Changed("output") correctly
 // distinguishes an explicit -o flag from an absent one, even when the explicit
 // value equals the global default ("table"). This is the mechanism used in
@@ -761,6 +833,205 @@ func TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient(t *testing.T) {
 	require.NotNil(t, capturedDeps)
 	require.Equal(t, "json", string(capturedDeps.Format),
 		"$PVE_OUTPUT=json must beat context default-output=yaml in non-noClient path")
+}
+
+// TestPersistentPreRunE_Ctx_PopulatedForNonNoClient verifies that Deps.Ctx is
+// populated with the resolved *config.Context for a normal (non-noClient)
+// command, so top-level commands (e.g. `pve ssh`/`pve rsync`) can read
+// per-context SSH defaults without re-resolving the config themselves.
+func TestPersistentPreRunE_Ctx_PopulatedForNonNoClient(t *testing.T) {
+	t.Setenv("PVE_OUTPUT", "json")
+	t.Setenv("PVE_NODE", "")
+	t.Setenv("PVE_CONTEXT", "")
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yml")
+	cfg := &config.Config{
+		CurrentContext: "test",
+		Contexts: map[string]*config.Context{
+			"test": {
+				Host:     "127.0.0.1",
+				Port:     8006,
+				Protocol: "https",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "token",
+					Username: "root@pam",
+					TokenID:  "tok",
+					Secret:   "literal-secret",
+				},
+				SSH: config.SSHBlock{User: "admin", Port: 2222},
+			},
+		},
+	}
+	require.NoError(t, config.SaveForce(cfgPath, cfg))
+
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	var capturedDeps *cli.Deps
+	probe := &cobra.Command{
+		Use: "probe",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			capturedDeps = cli.GetDeps(cmd)
+			return nil
+		},
+	}
+	root.AddCommand(probe)
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", cfgPath, "probe"})
+
+	err := root.Execute()
+	if err != nil {
+		// NewAPIClient with a non-listening host may fail in a sandboxed
+		// environment; skip rather than false-fail (mirrors the sibling test
+		// TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient).
+		t.Skipf("API client construction failed (lab env absent): %v", err)
+	}
+	require.NotNil(t, capturedDeps)
+	require.NotNil(t, capturedDeps.Ctx, "Ctx must be populated after successful context resolution")
+	require.Equal(t, "127.0.0.1", capturedDeps.Ctx.Host)
+	require.Equal(t, "admin", capturedDeps.Ctx.SSH.User)
+	require.Equal(t, 2222, capturedDeps.Ctx.SSH.Port)
+}
+
+// TestPersistentPreRunE_Ctx_NilForNoClient verifies that Deps.Ctx stays nil for
+// noClient commands, since the noClient early-return in persistentPreRunE
+// returns before context resolution runs. Callers reading deps.Ctx from a
+// noClient command must nil-check.
+func TestPersistentPreRunE_Ctx_NilForNoClient(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("PVE_OUTPUT", "table")
+	t.Setenv("PVE_NODE", "")
+	t.Setenv("PVE_CONTEXT", "")
+
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	var capturedDeps *cli.Deps
+	cmd := buildInspectCmd(&capturedDeps)
+	cmd.Annotations = map[string]string{"noClient": "true"}
+	root.AddCommand(cmd)
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{
+		"--config", filepath.Join(tmpDir, "config.yml"),
+		"inspect",
+	})
+
+	require.NoError(t, root.Execute())
+	require.NotNil(t, capturedDeps)
+	require.Nil(t, capturedDeps.Ctx, "Ctx must stay nil for noClient commands")
+}
+
+// ---------------------------------------------------------------------------
+// Execute() stderr suppression for *exec.ExitError (child-exit passthrough)
+// ---------------------------------------------------------------------------
+
+// captureStderr temporarily redirects the process-wide os.Stderr to a pipe for
+// the duration of fn, and returns everything written to it. It restores
+// os.Stderr unconditionally, even if fn panics.
+//
+// This mutates process-wide state, so it is safe only because no test in this
+// package runs in parallel (no t.Parallel calls) — see CLAUDE.md conventions.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() {
+		os.Stderr = orig
+	}()
+
+	fn()
+
+	require.NoError(t, w.Close())
+	var buf bytes.Buffer
+	_, copyErr := io.Copy(&buf, r)
+	require.NoError(t, copyErr)
+	require.NoError(t, r.Close())
+
+	return buf.String()
+}
+
+// TestExecute_ExitError_SuppressesStderr verifies that Execute does NOT print
+// a redundant second diagnostic line when the returned error chain contains
+// an *exec.ExitError: the child process (ssh, rsync) already wrote its own
+// diagnostics, so pve must not add its own.
+func TestExecute_ExitError_SuppressesStderr(t *testing.T) {
+	t.Setenv("PVE_OUTPUT", "table")
+	t.Setenv("PVE_NODE", "")
+	t.Setenv("PVE_CONTEXT", "")
+
+	factory := func(_ *cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(_ *cobra.Command, _ []string) error {
+				return &exec.ExitError{Code: 42, Err: errors.New("exit status 42")}
+			},
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pve", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	var execErr error
+	stderrOut := captureStderr(t, func() {
+		execErr = cli.Execute([]cli.GroupFactory{factory})
+	})
+
+	require.Error(t, execErr, "the child exit code must still be returned as an error")
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, execErr, &exitErr)
+	require.Equal(t, 42, exitErr.Code)
+	require.Empty(t, stderrOut,
+		"Execute must not print a redundant diagnostic line for an *exec.ExitError: "+
+			"the child process already wrote its own")
+}
+
+// TestExecute_NonExitError_StillPrintsStderr guards the other side of the
+// suppression logic: any error that is NOT an *exec.ExitError must still be
+// printed to stderr exactly as before.
+func TestExecute_NonExitError_StillPrintsStderr(t *testing.T) {
+	t.Setenv("PVE_OUTPUT", "table")
+	t.Setenv("PVE_NODE", "")
+	t.Setenv("PVE_CONTEXT", "")
+
+	const sentinel = "deliberate-non-exit-error-sentinel"
+	factory := func(_ *cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(_ *cobra.Command, _ []string) error {
+				return errors.New(sentinel)
+			},
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pve", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	var execErr error
+	stderrOut := captureStderr(t, func() {
+		execErr = cli.Execute([]cli.GroupFactory{factory})
+	})
+
+	require.Error(t, execErr)
+	require.Contains(t, stderrOut, sentinel,
+		"a non-exec error must still be printed to stderr exactly as before")
 }
 
 // ---------------------------------------------------------------------------
