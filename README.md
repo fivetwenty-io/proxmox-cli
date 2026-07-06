@@ -110,6 +110,10 @@ contexts:
       fingerprint: ""          # pin a hex SHA-256 cert fingerprint
       ca-cert: ""              # path to a PEM CA bundle for custom trust
       tofu: false              # opt-in Trust-On-First-Use cert pinning
+    ssh:
+      user: root                   # default -l/--user for `pve ssh`/`pve rsync`
+      port: 22                     # default -p/--port
+      identity: ~/.ssh/id_ed25519  # default -i/--identity
 ```
 
 Configs written by an earlier version of `pve` use `targets:` and
@@ -206,6 +210,12 @@ Per-context `default-node` and `default-output` fields supply defaults for
 `--node` and `--output`. The full resolution order for both fields is:
 explicit flag > environment variable (`$PVE_NODE` / `$PVE_OUTPUT`) > context default > built-in default (`""` / `table`).
 
+Per-context `ssh.user`, `ssh.port`, and `ssh.identity` fields supply defaults
+for `pve ssh`/`pve rsync` (and `pve node ssh`/`pve node rsync`): explicit flag
+(`-l`/`-p`/`-i` on `pve ssh`, `--ssh-user`/`--ssh-port`/`--ssh-identity` on
+`pve rsync`) > context `ssh.*` > built-in default (`root` / `22` / no identity
+file).
+
 ## Authentication
 
 ```bash
@@ -263,6 +273,8 @@ uses the `pve node` subtree.
 | `access` | Users, tokens, groups, roles, ACLs | `user` (with `user token`), `group`, `role`, `acl`, `permissions`, `password` |
 | `cluster` | Cluster state | `status`, `resources`, `next-id`, `log`, `tasks` |
 | `node` | Node administration and remote access | `list`, `status`, `ssh`, `rsync`, `shell`, `exec`, `console`, `services`, `task` |
+| `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
+| `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
 | `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
 | `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
 | `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete` |
@@ -290,6 +302,13 @@ pve node ssh pve1 -- uptime
 pve node rsync ./bundle/ pve1:/var/tmp/bundle/ --identity ~/.ssh/id_ed25519
 pve node shell pve1
 
+# Top-level ssh/rsync (same node resolver as above, no "node" prefix).
+pve ssh pve1
+pve ssh -c prod pve1 uptime
+pve ssh pve1 -L 8080:localhost:80 -N
+pve ssh pve1 -- ls -la
+pve rsync -c prod -avz --delete ./site/ pve1:/var/www/
+
 # Access control.
 pve access user list
 pve access user token create root@pam ci --privsep 1
@@ -311,6 +330,13 @@ pve --node pve1 task wait UPID:pve1:...
 | 5 | Not found |
 | 6 | Conflict (e.g. resource locked) |
 | 7 | Two-factor authentication required |
+
+Once `pve ssh`/`pve rsync` (or `pve node ssh`/`pve node rsync`) hands off to
+the child process, `pve` exits with that child's own exit code, verbatim,
+instead of one of the codes above — `ssh` uses 255 for a connection/auth
+failure, `rsync` uses 23/24 for a partial transfer, and so on. A child exit
+code of 2 is indistinguishable from this table's `Bad arguments` (2): the
+child's code always wins once it has actually run.
 
 ## Development
 

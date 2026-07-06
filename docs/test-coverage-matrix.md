@@ -75,13 +75,15 @@ swept clean before the next provisions.
 | `node` | 162 | 3 | 73 | 47 | 0 | 38 | 6 | 0 |
 | `pool` | 6 | 1 | 2 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 68 | 6 | 14 | 52 | 1 | 1 | 1 | 0 |
+| `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `sdn` | 85 | 6 | 14 | 62 | 0 | 6 | 0 | 0 |
+| `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `storage` | 26 | 2 | 10 | 12 | 0 | 5 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **633** | **93** | **155** | **357** | **6** | **65** | **8** | **0** |
+| **Total** | **635** | **93** | **155** | **357** | **6** | **67** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **633** leaves, **560** are exercised by at least one live suite, **65** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **635** leaves, **560** are exercised by at least one live suite, **67** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -642,6 +644,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu suspend` | — | ✓ |  |
 | `qemu template` | — | ✓ |  |
 
+## `rsync`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `rsync` | — | — | deferred — transfers files to/from a live node over SSH, so it cannot be driven head-less by the read-only sweep; shares the `pve node rsync` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
+
 ## `sdn`
 
 | Leaf | e2e | mutate | Notes |
@@ -731,6 +739,12 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn zone list` | ✓ | — |  |
 | `sdn zone set` | — | ✓ |  |
 | `sdn zone show` | ◑ | — |  |
+
+## `ssh`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `ssh` | — | — | deferred — opens a live SSH session on the resolved node, so it cannot be driven head-less by the read-only sweep; shares the `pve node ssh` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
 
 ## `storage`
 
