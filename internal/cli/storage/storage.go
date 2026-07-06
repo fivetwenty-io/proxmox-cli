@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/clusterstorage"
@@ -28,6 +29,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newListCmd(),
 		newStorageNodeListCmd(),
 		newGetCmd(),
+		newDescribeCmd(),
 		newContentCmd(),
 		newCreateCmd(),
 		newSetCmd(),
@@ -132,10 +134,14 @@ func newListCmd() *cobra.Command {
 
 // newGetCmd builds `pve storage get <storage>`.
 func newGetCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "get <storage>",
 		Short: "Show a single storage definition",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a single storage definition. The PVE API omits options left at their " +
+			"built-in defaults; pass --defaults to also list those the storage's type " +
+			"accepts, with the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.ClusterStorage.GetStorage(cmd.Context(), args[0])
@@ -160,10 +166,20 @@ func newGetCmd() *cobra.Command {
 				single[k] = scalarString(v)
 			}
 
-			res := output.Result{Single: single, Raw: fields}
+			var raw any = fields
+			if withDefaults {
+				// The valid option set depends on the storage type, so merge
+				// only the defaults of options this type accepts.
+				single, raw = optionschema.MergeDefaults(
+					defaultsForType(single["type"]), single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the type's unset options with their built-in defaults")
 	return cmd
 }
 
@@ -535,6 +551,9 @@ func newSetCmd() *cobra.Command {
 		},
 	}
 	sf.registerSet(cmd)
+	// Only options every storage type accepts get schema enrichment; for the
+	// rest the flat API schema cannot say which types they apply to.
+	optionschema.EnrichFlags(cmd.Flags(), commonOptionSchemas())
 	return cmd
 }
 

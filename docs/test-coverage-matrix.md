@@ -76,12 +76,12 @@ swept clean before the next provisions.
 | `pool` | 6 | 1 | 2 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 68 | 6 | 14 | 52 | 1 | 1 | 1 | 0 |
 | `sdn` | 85 | 6 | 14 | 62 | 0 | 6 | 0 | 0 |
-| `storage` | 25 | 1 | 10 | 12 | 0 | 5 | 0 | 0 |
+| `storage` | 26 | 2 | 10 | 12 | 0 | 5 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **632** | **92** | **155** | **357** | **6** | **65** | **8** | **0** |
+| **Total** | **633** | **93** | **155** | **357** | **6** | **65** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **632** leaves, **559** are exercised by at least one live suite, **65** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **633** leaves, **560** are exercised by at least one live suite, **65** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -741,6 +741,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage content` | ◑ | — |  |
 | `storage create` | — | ✓ |  |
 | `storage delete` | — | ✓ |  |
+| `storage describe` | ✓ | — |  |
 | `storage download-url` | — | ✓ |  |
 | `storage file-restore download` | — | — | deferred — extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
 | `storage file-restore list` | — | — | deferred — browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |

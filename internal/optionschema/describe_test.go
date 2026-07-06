@@ -82,6 +82,66 @@ func TestDescribe_UnknownOption(t *testing.T) {
 	require.ErrorContains(t, err, "pve x describe")
 }
 
+// describeTypeSets is a two-type discriminator mapping over describeSchemas.
+var describeTypeSets = map[string]map[string]TypeUse{
+	"alpha": {
+		"fencing":     {Fixed: true, Required: true},
+		"max_workers": {},
+	},
+	"beta": {
+		"max_workers": {},
+	},
+}
+
+// TestDescribe_TypeSetsCatalog verifies the TYPES column in the unfiltered
+// catalog: per-option accepting types, collapsed to "all" when universal.
+func TestDescribe_TypeSetsCatalog(t *testing.T) {
+	out, err := runDescribe(t, DescribeConfig{
+		Schemas:     describeSchemas,
+		CommandHint: "pve x describe",
+		TypeSets:    describeTypeSets,
+	})
+	require.NoError(t, err)
+	require.Contains(t, out, "TYPES")
+	require.Contains(t, out, "alpha", "single-type option lists its type")
+	require.Contains(t, out, "all", "universally accepted option collapses to all")
+}
+
+// TestDescribe_TypeSetsFilter verifies --type filtering and usage markers.
+func TestDescribe_TypeSetsFilter(t *testing.T) {
+	cfg := DescribeConfig{
+		Schemas:     describeSchemas,
+		CommandHint: "pve x describe",
+		TypeSets:    describeTypeSets,
+	}
+
+	out, err := runDescribe(t, cfg, "--type", "alpha")
+	require.NoError(t, err)
+	require.Contains(t, out, "USE")
+	require.Contains(t, out, "required, create-only")
+	require.NotContains(t, out, "net[n]", "options outside the type set are filtered out")
+
+	out, err = runDescribe(t, cfg, "--type", "beta")
+	require.NoError(t, err)
+	require.NotContains(t, out, "fencing")
+
+	_, err = runDescribe(t, cfg, "--type", "gamma")
+	require.Error(t, err)
+	require.ErrorContains(t, err, `unknown type "gamma"`)
+	require.ErrorContains(t, err, "alpha, beta")
+}
+
+// TestDescribe_NoTypeSetsNoFlag verifies trees without a discriminator get no
+// --type flag and no TYPES column.
+func TestDescribe_NoTypeSetsNoFlag(t *testing.T) {
+	cmd := NewDescribeCmd(DescribeConfig{Schemas: describeSchemas, CommandHint: "pve x describe"})
+	require.Nil(t, cmd.Flags().Lookup("type"))
+
+	out, err := runDescribe(t, DescribeConfig{Schemas: describeSchemas, CommandHint: "pve x describe"})
+	require.NoError(t, err)
+	require.NotContains(t, out, "TYPES")
+}
+
 // TestDescribe_NoClientAnnotation asserts describe skips context resolution
 // and client construction: the catalog must render on a host with no PVE
 // context configured. Every tree's describe comes from this constructor, so

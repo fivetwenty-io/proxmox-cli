@@ -15,6 +15,10 @@ def run(ctx: Ctx) -> None:
 
     lst = ctx.check("list", "storage", "list", validate=is_list)
 
+    # describe: offline schema catalog — no API call.
+    ctx.check("describe", "storage", "describe")
+    ctx.check("describe --type", "storage", "describe", "--type", "zfspool")
+
     sid = None
     if lst.rc == 0:
         try:

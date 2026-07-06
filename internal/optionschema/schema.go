@@ -57,6 +57,15 @@ type Schema struct {
 	Maximum string `json:"maximum,omitempty"`
 }
 
+// TypeUse describes how one discriminated type (e.g. a storage type) uses an
+// option, for schemas whose valid option set depends on a type discriminator.
+type TypeUse struct {
+	// Fixed marks create-only options that cannot be changed after creation.
+	Fixed bool `json:"fixed,omitempty"`
+	// Required marks options that must be supplied at creation.
+	Required bool `json:"required,omitempty"`
+}
+
 // Find returns the schema whose API name or flag spelling matches, or nil
 // when the option is unknown.
 func Find(schemas []Schema, nameOrFlag string) *Schema {
