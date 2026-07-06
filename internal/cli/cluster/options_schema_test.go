@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
@@ -24,20 +25,20 @@ func TestOptionSchemas_GeneratedTable(t *testing.T) {
 		require.NotEqual(t, "delete", s.Name, "delete meta-parameter must be excluded")
 	}
 
-	fencing := findOptionSchema("fencing")
+	fencing := optionschema.Find(optionSchemas, "fencing")
 	require.NotNil(t, fencing)
 	require.Equal(t, "watchdog", fencing.Default)
 	require.Equal(t, []string{"watchdog", "hardware", "both"}, fencing.Enum)
 
-	macPrefix := findOptionSchema("mac_prefix")
+	macPrefix := optionschema.Find(optionSchemas, "mac_prefix")
 	require.NotNil(t, macPrefix)
 	require.Equal(t, "mac-prefix", macPrefix.Flag)
 	require.Equal(t, "BC:24:11", macPrefix.Default)
-	require.Same(t, macPrefix, findOptionSchema("mac-prefix"), "lookup must accept flag spelling too")
+	require.Same(t, macPrefix, optionschema.Find(optionSchemas, "mac-prefix"), "lookup must accept flag spelling too")
 
-	migration := findOptionSchema("migration")
+	migration := optionschema.Find(optionSchemas, "migration")
 	require.NotNil(t, migration)
-	var typ *optionSubKey
+	var typ *optionschema.SubKey
 	for i := range migration.SubKeys {
 		if migration.SubKeys[i].Name == "type" {
 			typ = &migration.SubKeys[i]
@@ -46,9 +47,9 @@ func TestOptionSchemas_GeneratedTable(t *testing.T) {
 	require.NotNil(t, typ, "migration schema must describe the type sub-key")
 	require.Equal(t, "secure", typ.Default)
 	require.Equal(t, []string{"secure", "insecure"}, typ.Enum)
-	require.Equal(t, "type=secure", migration.defaultValue(), "dict default composes from sub-key defaults")
+	require.Equal(t, "type=secure", migration.DefaultValue(), "dict default composes from sub-key defaults")
 
-	require.Nil(t, findOptionSchema("no-such-option"))
+	require.Nil(t, optionschema.Find(optionSchemas, "no-such-option"))
 }
 
 // TestClusterOptions_SetHelpEnriched verifies the generated schema detail is

@@ -2,38 +2,45 @@
 
 package cluster
 
-// optionSchemas describes every settable datacenter option from the PVE API
-// schema, in lexical order by API key.
-var optionSchemas = []optionSchema{
+import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+
+// optionSchemas describes every settable option from the PVE API schema for
+// PUT /cluster/options, in lexical order by API key.
+var optionSchemas = []optionschema.Schema{
 	{
 		Name:        "bwlimit",
 		Flag:        "bwlimit",
 		Type:        "string",
 		Description: "Set I/O bandwidth limit for various operations (in KiB/s).",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "clone",
 				Type:        "number",
+				Minimum:     "0",
 				Description: "bandwidth limit in KiB/s for cloning disks",
 			},
 			{
 				Name:        "default",
 				Type:        "number",
+				Minimum:     "0",
 				Description: "default bandwidth limit in KiB/s",
 			},
 			{
 				Name:        "migration",
 				Type:        "number",
+				Minimum:     "0",
 				Description: "bandwidth limit in KiB/s for migrating guests (including moving local disks)",
 			},
 			{
 				Name:        "move",
 				Type:        "number",
+				Minimum:     "0",
 				Description: "bandwidth limit in KiB/s for moving disks",
 			},
 			{
 				Name:        "restore",
 				Type:        "number",
+				Minimum:     "0",
 				Description: "bandwidth limit in KiB/s for restoring guests from backups",
 			},
 		},
@@ -56,7 +63,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "crs",
 		Type:        "string",
 		Description: "Cluster resource scheduling settings.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "ha",
 				Type:        "string",
@@ -74,12 +81,15 @@ var optionSchemas = []optionSchema{
 				Name:        "ha-auto-rebalance-hold-duration",
 				Type:        "number",
 				Default:     "3",
+				Minimum:     "0",
 				Description: "The number of HA rounds for which the cluster node imbalance threshold must be exceeded before triggering an automatic resource balancing migration.",
 			},
 			{
 				Name:        "ha-auto-rebalance-margin",
 				Type:        "number",
 				Default:     "10",
+				Minimum:     "0",
+				Maximum:     "100",
 				Description: "The minimum relative improvement in cluster node imbalance, in percent, to commit to a resource balancing migration.",
 			},
 			{
@@ -93,6 +103,8 @@ var optionSchemas = []optionSchema{
 				Name:        "ha-auto-rebalance-threshold",
 				Type:        "number",
 				Default:     "30",
+				Minimum:     "0",
+				Maximum:     "100",
 				Description: "The cluster node imbalance, in percent, which will trigger the automatic resource balancing system if exceeded.",
 			},
 			{
@@ -128,7 +140,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "ha",
 		Type:        "string",
 		Description: "Cluster wide HA settings.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "shutdown_policy",
 				Type:        "string",
@@ -164,16 +176,20 @@ var optionSchemas = []optionSchema{
 		Flag:        "location",
 		Type:        "string",
 		Description: "The location of the cluster.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "latitude",
 				Type:        "number",
+				Minimum:     "-90",
+				Maximum:     "90",
 				Description: "The latitude of the nodes location in degrees.",
 				Required:    true,
 			},
 			{
 				Name:        "longitude",
 				Type:        "number",
+				Minimum:     "-180",
+				Maximum:     "180",
 				Description: "The longitude of the nodes location in degrees.",
 				Required:    true,
 			},
@@ -195,6 +211,7 @@ var optionSchemas = []optionSchema{
 		Name:        "max_workers",
 		Flag:        "max-workers",
 		Type:        "integer",
+		Minimum:     "1",
 		Description: "Defines how many workers (per node) are maximal started on actions like 'stopall VMs' or task from the ha-manager.",
 	},
 	{
@@ -202,7 +219,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "migration",
 		Type:        "string",
 		Description: "For cluster wide migration settings.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "network",
 				Type:        "string",
@@ -229,7 +246,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "next-id",
 		Type:        "string",
 		Description: "Control the range for the free VMID auto-selection pool.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "lower",
 				Type:        "integer",
@@ -249,7 +266,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "notify",
 		Type:        "string",
 		Description: "Cluster-wide notification settings.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "fencing",
 				Type:        "string",
@@ -297,7 +314,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "replication",
 		Type:        "string",
 		Description: "For cluster wide replication settings.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "network",
 				Type:        "string",
@@ -318,7 +335,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "tag-style",
 		Type:        "string",
 		Description: "Tag style options.",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "case-sensitive",
 				Type:        "boolean",
@@ -351,7 +368,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "u2f",
 		Type:        "string",
 		Description: "u2f",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "appid",
 				Type:        "string",
@@ -369,7 +386,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "user-tag-access",
 		Type:        "string",
 		Description: "Privilege options for user-settable tags",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "user-allow",
 				Type:        "string",
@@ -389,7 +406,7 @@ var optionSchemas = []optionSchema{
 		Flag:        "webauthn",
 		Type:        "string",
 		Description: "webauthn configuration",
-		SubKeys: []optionSubKey{
+		SubKeys: []optionschema.SubKey{
 			{
 				Name:        "allow-subdomains",
 				Type:        "boolean",

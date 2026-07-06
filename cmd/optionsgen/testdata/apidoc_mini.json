@@ -1,0 +1,97 @@
+[
+  {
+    "path": "/things",
+    "children": [
+      {
+        "path": "/things/{id}/options",
+        "info": {
+          "PUT": {
+            "parameters": {
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The thing identifier.",
+                  "format": "pve-configid"
+                },
+                "plain_opt": {
+                  "type": "string",
+                  "description": "A   plain\n option with   messy whitespace.",
+                  "enum": ["alpha", "beta"],
+                  "default": "alpha",
+                  "optional": 1
+                },
+                "bool_opt": {
+                  "type": "boolean",
+                  "description": "A boolean option.",
+                  "default": 1,
+                  "optional": 1
+                },
+                "big_opt": {
+                  "type": "integer",
+                  "description": "A large integer option.",
+                  "default": 1000000,
+                  "minimum": 100,
+                  "maximum": 2000000,
+                  "optional": 1
+                },
+                "num_opt": {
+                  "type": "number",
+                  "description": "A float-bounded option.",
+                  "minimum": 0.5,
+                  "maximum": 2.5,
+                  "optional": 1
+                },
+                "dict_opt": {
+                  "type": "string",
+                  "description": "A dict-encoded option.",
+                  "optional": 1,
+                  "format": {
+                    "mode": {
+                      "type": "string",
+                      "description": "The mode.",
+                      "enum": ["fast", "safe"],
+                      "default": "safe",
+                      "optional": 1
+                    },
+                    "target": {
+                      "type": "string",
+                      "description": "The target."
+                    }
+                  }
+                },
+                "slot[n]": {
+                  "type": "string",
+                  "description": "An indexed slot option.",
+                  "optional": 1,
+                  "format": {
+                    "size": {
+                      "type": "integer",
+                      "description": "Slot size.",
+                      "minimum": 1,
+                      "optional": 1
+                    }
+                  }
+                },
+                "special[n]": {
+                  "type": "string",
+                  "description": "An indexed slot needing a hand-picked flag.",
+                  "optional": 1
+                },
+                "delete": {
+                  "type": "string",
+                  "description": "A list of settings you want to delete.",
+                  "optional": 1
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "Prevent changes if current configuration file has a different digest.",
+                  "optional": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+]

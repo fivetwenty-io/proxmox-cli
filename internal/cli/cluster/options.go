@@ -2,13 +2,13 @@ package cluster
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -35,60 +35,15 @@ func newOptionsCmd() *cobra.Command {
 // catalog of every settable datacenter option from the PVE API schema (see
 // options_schema_gen.go). Unlike get, it needs no cluster connection.
 func newOptionsDescribeCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "describe [option]",
-		Short: "Describe all settable datacenter options and their defaults",
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: optionSchemas,
+		Short:   "Describe all settable datacenter options and their defaults",
 		Long: "List every settable datacenter option from the PVE API schema: type, " +
 			"built-in default, allowed values, and the sub-keys of dict-encoded options. " +
 			"Runs offline. Pass an option name to show only that option with full descriptions.",
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := cli.GetDeps(cmd)
-			schemas := optionSchemas
-			truncate := true
-			if len(args) == 1 {
-				s := findOptionSchema(args[0])
-				if s == nil {
-					return fmt.Errorf("unknown option %q: run `pve cluster options describe` for the full list", args[0])
-				}
-				schemas = []optionSchema{*s}
-				truncate = false
-			}
-
-			rows := make([][]string, 0, len(schemas))
-			for _, s := range schemas {
-				rows = append(rows, []string{s.Flag, s.Type, s.Default,
-					strings.Join(s.Enum, "|"), describeCell(s.Description, truncate)})
-				for _, sk := range s.SubKeys {
-					desc := sk.Description
-					if sk.Required {
-						desc = strings.TrimSpace("required. " + desc)
-					}
-					rows = append(rows, []string{s.Flag + "." + sk.Name, sk.Type, sk.Default,
-						strings.Join(sk.Enum, "|"), describeCell(desc, truncate)})
-				}
-			}
-			return deps.Out.Render(cmd.OutOrStdout(), output.Result{
-				Headers: []string{"OPTION", "TYPE", "DEFAULT", "VALUES", "DESCRIPTION"},
-				Rows:    rows,
-				Raw:     schemas,
-			}, deps.Format)
-		},
-	}
-}
-
-// describeCell caps schema descriptions for the full-catalog table view;
-// single-option views render them untruncated.
-func describeCell(desc string, truncate bool) string {
-	const max = 72
-	if !truncate {
-		return desc
-	}
-	runes := []rune(desc)
-	if len(runes) <= max {
-		return desc
-	}
-	return string(runes[:max-1]) + "…"
+		CommandHint:         "pve cluster options describe",
+		SubKeyRowsInCatalog: true,
+	})
 }
 
 func newOptionsGetCmd() *cobra.Command {
@@ -111,7 +66,7 @@ func newOptionsGetCmd() *cobra.Command {
 				return fmt.Errorf("get cluster options: %w", err)
 			}
 			if withDefaults {
-				single, raw = mergeOptionDefaults(single, raw)
+				single, raw = optionschema.MergeDefaults(optionSchemas, single, raw, optionschema.MergeOpts{})
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Single: single, Raw: raw}, deps.Format)
@@ -120,27 +75,6 @@ func newOptionsGetCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
 		"also list unset options with their built-in default values")
 	return cmd
-}
-
-// mergeOptionDefaults adds every settable option absent from the API response
-// to the table view, annotated with its built-in default (or "(unset)" when
-// the schema defines none). For JSON/YAML the raw value becomes an object with
-// the server-set options under "set" and the derived defaults under "defaults".
-func mergeOptionDefaults(single map[string]string, raw any) (map[string]string, any) {
-	defaults := make(map[string]string)
-	for i := range optionSchemas {
-		s := &optionSchemas[i]
-		if _, ok := single[s.Name]; ok {
-			continue
-		}
-		if dv := s.defaultValue(); dv != "" {
-			single[s.Name] = dv + " (default)"
-			defaults[s.Name] = dv
-		} else {
-			single[s.Name] = "(unset)"
-		}
-	}
-	return single, map[string]any{"set": raw, "defaults": defaults}
 }
 
 // optionsSetFlags are the names of every flag the set command forwards. The
@@ -306,10 +240,6 @@ func newOptionsSetCmd() *cobra.Command {
 
 	// Append generated schema detail (allowed values, defaults, sub-keys) to
 	// each option flag's hand-written help text; see options_schema_gen.go.
-	for i := range optionSchemas {
-		if fl := f.Lookup(optionSchemas[i].Flag); fl != nil {
-			fl.Usage += optionSchemas[i].schemaSuffix()
-		}
-	}
+	optionschema.EnrichFlags(f, optionSchemas)
 	return cmd
 }
