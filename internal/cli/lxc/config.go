@@ -8,28 +8,49 @@ import (
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newConfigCmd builds `pve lxc config` and its get/set/pending sub-commands.
+// newConfigCmd builds `pve lxc config` and its get/set/pending/describe sub-commands.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Get or set container configuration",
 	}
-	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd())
+	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd(), newConfigDescribeCmd())
 	return cmd
+}
+
+// newConfigDescribeCmd builds `pve lxc config describe`, an offline catalog of
+// every settable container configuration option from the PVE API schema (see
+// config_schema_gen.go).
+func newConfigDescribeCmd() *cobra.Command {
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: configSchemas,
+		Short:   "Describe all settable container configuration options and their defaults",
+		Long: "List every settable container configuration option from the PVE API schema: " +
+			"type, built-in default, allowed values, and the sub-keys of dict-encoded and " +
+			"indexed options. Runs offline. Pass an option name to show only that option " +
+			"with full descriptions and sub-keys.",
+		CommandHint:         "pve lxc config describe",
+		SubKeyRowsInCatalog: false,
+	})
 }
 
 // newConfigGetCmd builds `pve lxc config get <vmid|name>`.
 func newConfigGetCmd() *cobra.Command {
 	var snapshot string
 	var current bool
+	var withDefaults bool
 
 	cmd := &cobra.Command{
 		Use:   "get <vmid|name>",
 		Short: "Show the configuration of a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration currently set on a container. The PVE API omits " +
+			"options left at their built-in defaults; pass --defaults to also list those " +
+			"with the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -55,13 +76,20 @@ func newConfigGetCmd() *cobra.Command {
 				return err
 			}
 
-			res := output.Result{Single: single, Raw: resp}
+			var raw any = resp
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(configSchemas, single, resp, optionschema.MergeOpts{SkipUnset: true})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 
 	cmd.Flags().StringVar(&snapshot, "snapshot", "", "fetch config values from the given snapshot")
 	cmd.Flags().BoolVar(&current, "current", false, "show current (committed) values instead of pending")
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options with their built-in default values")
 	return cmd
 }
 
@@ -320,13 +348,17 @@ func newConfigSetCmd() *cobra.Command {
 	fl.StringVar(&timezone, "timezone", "", "time zone, e.g. host or Europe/Berlin")
 	fl.Int64Var(&tty, "tty", 0, "number of ttys available to the container")
 	fl.BoolVar(&console, "console", false, "attach a console device (/dev/console)")
-	fl.StringVar(&cmode, "cmode", "", "console mode: tty, console, or shell")
+	fl.StringVar(&cmode, "cmode", "", "console mode")
 	fl.BoolVar(&template, "template", false, "mark the container as a template")
 	fl.StringVar(&env, "env", "", "runtime environment as NUL-separated list")
 	fl.StringVar(&entrypoint, "entrypoint", "", "command to run as init")
 	fl.StringVar(&lock, "lock", "", "lock/unlock the container")
 	fl.StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
 	fl.BoolVar(&debug, "debug", false, "enable debug log-level on start")
+
+	// Append generated schema detail (allowed values, defaults, sub-keys) to
+	// each option flag's help text; see config_schema_gen.go.
+	optionschema.EnrichFlags(fl, configSchemas)
 	return cmd
 }
 

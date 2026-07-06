@@ -10,6 +10,7 @@ import (
 
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -19,8 +20,26 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Inspect and modify VM configuration",
 	}
-	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd())
+	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd(), newConfigDescribeCmd())
 	return cmd
+}
+
+// newConfigDescribeCmd builds `pve qemu config describe`, an offline catalog
+// of every settable VM configuration option from the PVE API schema (see
+// config_schema_gen.go). The catalog view omits dict sub-key rows (the
+// ~13 indexed device families would otherwise explode the table); pass an
+// option name to see its sub-keys.
+func newConfigDescribeCmd() *cobra.Command {
+	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
+		Schemas: configSchemas,
+		Short:   "Describe all settable VM configuration options and their defaults",
+		Long: "List every settable VM configuration option from the PVE API schema: " +
+			"type, built-in default, allowed values, and (for a single option) the " +
+			"sub-keys of dict-encoded options. Runs offline. Pass an option name to " +
+			"show only that option with full descriptions and sub-keys.",
+		CommandHint:         "pve qemu config describe",
+		SubKeyRowsInCatalog: false,
+	})
 }
 
 // newConfigGetCmd builds `pve qemu config get <vmid>`.
@@ -36,13 +55,17 @@ func newConfigCmd() *cobra.Command {
 // see TestQemuConfigGet_DynamicKeysPreserved for the regression guard.
 func newConfigGetCmd() *cobra.Command {
 	var (
-		current  bool
-		snapshot string
+		current      bool
+		snapshot     string
+		withDefaults bool
 	)
 	cmd := &cobra.Command{
 		Use:   "get <vmid|name>",
 		Short: "Show the configuration of a VM",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the VM configuration currently set. The PVE API omits options " +
+			"left at their built-in defaults; pass --defaults to also list the options " +
+			"that carry one, with the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -73,13 +96,20 @@ func newConfigGetCmd() *cobra.Command {
 				return err
 			}
 
+			raw := data
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(configSchemas, single, data, optionschema.MergeOpts{SkipUnset: true})
+			}
+
 			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Single: single, Raw: data}, deps.Format)
+				output.Result{Single: single, Raw: raw}, deps.Format)
 		},
 	}
 
 	cmd.Flags().BoolVar(&current, "current", false, "get current values instead of pending values")
 	cmd.Flags().StringVar(&snapshot, "snapshot", "", "fetch config values from the given snapshot")
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options that have a built-in default, with their default value")
 	return cmd
 }
 
@@ -464,6 +494,12 @@ func newConfigSetCmd() *cobra.Command {
 	f.StringVar(&virtio1, "virtio1", "", "VirtIO disk virtio1 (alias for --virtio 1=...)")
 	f.StringVar(&ipconfig0, "ipconfig0", "", "cloud-init IP config for net0 (alias for --ipconfig 0=...)")
 	f.StringVar(&ipconfig1, "ipconfig1", "", "cloud-init IP config for net1 (alias for --ipconfig 1=...)")
+
+	// Append generated schema detail (allowed values, defaults, numeric
+	// ranges, sub-keys) to each option flag's help text; flags with no
+	// matching schema entry (aliases, legacy slots) are left untouched. See
+	// config_schema_gen.go.
+	optionschema.EnrichFlags(f, configSchemas)
 	return cmd
 }
 
