@@ -628,3 +628,102 @@ func TestTLSBlock_ZeroValue_RoundTrip(t *testing.T) {
 	require.Empty(t, ctx.TLS.CACert)
 	require.False(t, ctx.TLS.Tofu)
 }
+
+// ── SSHBlock round-trip ────────────────────────────────────────────────────────
+
+// TestSSHBlock_RoundTrip verifies that a fully populated ssh block survives a
+// save/load cycle unchanged.
+func TestSSHBlock_RoundTrip(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "t",
+		Contexts: map[string]*config.Context{
+			"t": {
+				Host:     "host",
+				Port:     8006,
+				Protocol: "https",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:   "token",
+					Secret: "s",
+				},
+				SSH: config.SSHBlock{
+					User:     "admin",
+					Port:     2222,
+					Identity: "/home/user/.ssh/id_ed25519",
+				},
+			},
+		},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	require.NoError(t, config.Save(path, cfg))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	ctx := loaded.Contexts["t"]
+	require.Equal(t, "admin", ctx.SSH.User)
+	require.Equal(t, 2222, ctx.SSH.Port)
+	require.Equal(t, "/home/user/.ssh/id_ed25519", ctx.SSH.Identity)
+}
+
+// TestSSHBlock_ZeroValue_RoundTrip verifies that an unset ssh block round-trips
+// as all-zero values, so commands can treat zero as "not set" and fall back to
+// their own compiled-in defaults (user "root", port 22).
+func TestSSHBlock_ZeroValue_RoundTrip(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "t",
+		Contexts: map[string]*config.Context{
+			"t": {
+				Host:     "host",
+				Port:     8006,
+				Protocol: "https",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:   "token",
+					Secret: "s",
+				},
+				// SSH left at zero value — no user, no port, no identity.
+			},
+		},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	require.NoError(t, config.Save(path, cfg))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	ctx := loaded.Contexts["t"]
+	require.Empty(t, ctx.SSH.User)
+	require.Zero(t, ctx.SSH.Port)
+	require.Empty(t, ctx.SSH.Identity)
+}
+
+// TestStrictValidateContext_SSHPortOutOfRange_ReturnsError verifies that
+// ssh.port is bounds-checked the same way the top-level port is.
+func TestStrictValidateContext_SSHPortOutOfRange_ReturnsError(t *testing.T) {
+	c := &config.Context{
+		Host:     "host.example.com",
+		Port:     8006,
+		Protocol: "https",
+		Auth:     config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+		TLS:      config.TLSBlock{Fingerprint: strictFingerprint},
+		SSH:      config.SSHBlock{Port: 70000},
+	}
+	errs := config.StrictValidateContext(c)
+	require.NotEmpty(t, errs)
+	require.Contains(t, errs, "ssh.port 70000 is out of range [1, 65535]")
+}
+
+// TestStrictValidateContext_SSHPortZero_NoError verifies that an unset
+// ssh.port (zero value) is not flagged as out of range.
+func TestStrictValidateContext_SSHPortZero_NoError(t *testing.T) {
+	c := &config.Context{
+		Host:     "host.example.com",
+		Port:     8006,
+		Protocol: "https",
+		Auth:     config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+		TLS:      config.TLSBlock{Fingerprint: strictFingerprint},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Empty(t, errs)
+}

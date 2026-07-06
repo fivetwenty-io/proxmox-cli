@@ -42,6 +42,9 @@ type Context struct {
 
 	// TLS holds TLS verification settings.
 	TLS TLSBlock `yaml:"tls,omitempty"`
+
+	// SSH holds per-context defaults for the `pve ssh` and `pve rsync` commands.
+	SSH SSHBlock `yaml:"ssh,omitempty"`
 }
 
 // AuthBlock holds credential configuration for a context.
@@ -84,6 +87,22 @@ type TLSBlock struct {
 	// verification behavior unchanged; Tofu is ignored entirely when Insecure
 	// is true, since that already disables certificate verification.
 	Tofu bool `yaml:"tofu"`
+}
+
+// SSHBlock holds per-context defaults for the `pve ssh` and `pve rsync`
+// commands. A zero value for any field means "not set": the command falls
+// back to its own compiled-in default (user "root", port 22) rather than to
+// an empty/zero override. Precedence at the command level is always
+// explicit flag > SSHBlock value > compiled-in default.
+type SSHBlock struct {
+	// User is the default SSH login user for this context (falls back to "root").
+	User string `yaml:"user,omitempty"`
+
+	// Port is the default SSH port for this context (falls back to 22).
+	Port int `yaml:"port,omitempty"`
+
+	// Identity is the default path to an SSH private key (identity) file for this context.
+	Identity string `yaml:"identity,omitempty"`
 }
 
 // Session holds a live ticket and CSRF token obtained after password login.

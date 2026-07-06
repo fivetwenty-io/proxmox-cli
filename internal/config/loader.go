@@ -129,6 +129,7 @@ func ValidateContext(c *Context) error {
 //   - fingerprint, if set, must match the colon-separated hex SHA-256 pattern.
 //   - port, if non-zero, must be in [1, 65535].
 //   - protocol, if non-empty, must be "https" or "http".
+//   - ssh.port, if non-zero, must be in [1, 65535].
 //
 // Keeping this separate from validateContext preserves load-time leniency:
 // tightening validateContext would break CLI startup for contexts written
@@ -186,6 +187,10 @@ func StrictValidateContext(c *Context) []string {
 			"fingerprint %q must be a colon-separated hex SHA-256 (e.g. AA:BB:..., 32 pairs)",
 			c.TLS.Fingerprint,
 		))
+	}
+
+	if c.SSH.Port != 0 && (c.SSH.Port < 1 || c.SSH.Port > 65535) {
+		errs = append(errs, fmt.Sprintf("ssh.port %d is out of range [1, 65535]", c.SSH.Port))
 	}
 
 	return errs
