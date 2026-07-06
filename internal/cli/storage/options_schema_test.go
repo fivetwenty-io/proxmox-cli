@@ -75,7 +75,8 @@ func TestStorageDescribe_Catalog(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "TYPES")
 	require.Contains(t, out, "iscsi-target")
-	require.Contains(t, out, "all", "options accepted everywhere collapse to \"all\"")
+	require.Regexp(t, `(?m)^│ content\s.*│ all\s+│`, out, "options accepted everywhere collapse to \"all\"")
+	require.Regexp(t, `(?m)^│ authsupported\s.*│ none\s+│`, out, "options no plugin accepts are marked \"none\"")
 
 	out, err = run(t, f, "describe", "thinpool")
 	require.NoError(t, err)
@@ -100,6 +101,11 @@ func TestStorageDescribe_TypeFilter(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `unknown type "floppy"`)
 	require.Contains(t, err.Error(), "zfspool")
+
+	_, err = run(t, f, "describe", "pool", "--type", "dir")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `not accepted by type "dir"`,
+		"a real option outside the type's set must not read as nonexistent")
 }
 
 // TestStorageGet_Defaults verifies `get --defaults` merges only the defaults
@@ -122,6 +128,20 @@ func TestStorageGet_Defaults(t *testing.T) {
 	require.Equal(t, "yes", got.Defaults["create-base-path"], "dir accepts create-base-path")
 	require.NotContains(t, got.Defaults, "pool", "zfspool/rbd-only options must not gain defaults on a dir storage")
 	require.NotContains(t, got.Defaults, "path", "set options must not appear in defaults")
+}
+
+// TestStorageGet_DefaultsSecrets verifies credential options never surface
+// through --defaults: get strips them from the response, so the merge cannot
+// know whether they are set and must not claim they are unset.
+func TestStorageGet_DefaultsSecrets(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "GET /api2/json/storage/smb", &rec,
+		map[string]any{"storage": "smb", "type": "cifs", "server": "10.0.0.1", "share": "backup"})
+
+	out, err := run(t, f, "get", "smb", "--defaults")
+	require.NoError(t, err)
+	require.NotContains(t, out, "password", "a write-only credential must not be reported as unset")
 }
 
 // TestStorageGet_DefaultsUnknownType verifies an out-of-tree storage type

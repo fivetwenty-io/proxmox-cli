@@ -60,6 +60,11 @@ func NewDescribeCmd(cfg DescribeConfig) *cobra.Command {
 			if len(args) == 1 {
 				s := Find(schemas, args[0])
 				if s == nil {
+					// Distinguish "no such option" from "exists, but the
+					// filtered type does not accept it".
+					if typeFilter != "" && Find(cfg.Schemas, args[0]) != nil {
+						return fmt.Errorf("option %q is not accepted by type %q", args[0], typeFilter)
+					}
 					return fmt.Errorf("unknown option %q: run `%s` for the full list", args[0], cfg.CommandHint)
 				}
 				schemas = []Schema{*s}
@@ -158,6 +163,11 @@ func typesCell(sets map[string]map[string]TypeUse, typeFilter, name string) stri
 		if _, ok := set[name]; ok {
 			accepting = append(accepting, t)
 		}
+	}
+	// An explicit marker keeps a schema option no type accepts (e.g. one only
+	// meaningful at create time) distinguishable from a rendering gap.
+	if len(accepting) == 0 {
+		return "none"
 	}
 	if len(accepting) == len(sets) {
 		return "all"

@@ -53,6 +53,12 @@ def parse_plugin(path: str) -> tuple[str, dict[str, dict[str, bool]]] | None:
         sys.exit(f"storage_type_options: {path}: no `sub options` body")
     body = re.sub(r"#.*", "", m.group(1))  # strip comments
 
+    # The extraction assumes the plugin `options` hashes stay flat, one-level
+    # `name => { attrs }` literals with no nested braces and no `#` inside
+    # strings — true of every pve-storage plugin to date. An entry the regex
+    # cannot match is silently dropped, and the apidoc cross-check below only
+    # proves extracted names exist, not that extraction was complete; eyeball
+    # the generated diff against the plugin source when regenerating.
     options: dict[str, dict[str, bool]] = {}
     for name_q, name_b, attrs in re.findall(
         r"(?:'([^']+)'|([A-Za-z0-9_-]+))\s*=>\s*\{([^}]*)\}", body
@@ -146,8 +152,10 @@ def main() -> None:
         "// accepts, extracted from the PVE::Storage::*Plugin `options` tables.",
         "var storageTypeOptions = map[string]map[string]optionschema.TypeUse{",
     ]
+    # Type and option names are [a-z0-9_-] by construction, so plain quoting
+    # yields valid Go string literals without escaping.
     for stype in sorted(mapping):
-        lines.append(f"\t{stype!r}: {{")
+        lines.append(f'\t"{stype}": {{')
         for name in sorted(mapping[stype]):
             use = mapping[stype][name]
             fields = []
@@ -155,10 +163,10 @@ def main() -> None:
                 fields.append("Fixed: true")
             if use["required"]:
                 fields.append("Required: true")
-            lines.append(f"\t\t{name!r}: {{{', '.join(fields)}}},")
+            lines.append(f'\t\t"{name}": {{{", ".join(fields)}}},')
         lines.append("\t},")
     lines += ["}", ""]
-    text = "\n".join(lines).replace("'", "\"")
+    text = "\n".join(lines)
 
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(text)

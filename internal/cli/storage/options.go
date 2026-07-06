@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"slices"
+
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
@@ -29,7 +31,9 @@ func newDescribeCmd() *cobra.Command {
 // defaultsForType returns the option schemas valid for one storage type, so
 // `get --defaults` never lists a default for an option the storage cannot
 // hold. An unknown type (e.g. an out-of-tree plugin) returns nil: no schema
-// knowledge, no defaults claimed.
+// knowledge, no defaults claimed. Credential options are excluded: `get`
+// strips them from the response, so the merge cannot tell a configured
+// secret from an unset one and must not claim either.
 func defaultsForType(storageType string) []optionschema.Schema {
 	set, ok := storageTypeOptions[storageType]
 	if !ok {
@@ -37,9 +41,13 @@ func defaultsForType(storageType string) []optionschema.Schema {
 	}
 	kept := make([]optionschema.Schema, 0, len(set))
 	for _, s := range storageOptionSchemas {
-		if _, ok := set[s.Name]; ok {
-			kept = append(kept, s)
+		if _, ok := set[s.Name]; !ok {
+			continue
 		}
+		if slices.Contains(storageSecretKeys, s.Name) {
+			continue
+		}
+		kept = append(kept, s)
 	}
 	return kept
 }

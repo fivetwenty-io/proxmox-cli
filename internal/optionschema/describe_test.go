@@ -104,7 +104,8 @@ func TestDescribe_TypeSetsCatalog(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "TYPES")
 	require.Contains(t, out, "alpha", "single-type option lists its type")
-	require.Contains(t, out, "all", "universally accepted option collapses to all")
+	require.Regexp(t, `(?m)^max-workers\s.*\ball\b`, out, "universally accepted option collapses to all")
+	require.Regexp(t, `(?m)^net\[n\]\s.*\bnone\b`, out, "option in no type's set is marked none")
 }
 
 // TestDescribe_TypeSetsFilter verifies --type filtering and usage markers.
@@ -129,6 +130,10 @@ func TestDescribe_TypeSetsFilter(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, `unknown type "gamma"`)
 	require.ErrorContains(t, err, "alpha, beta")
+
+	_, err = runDescribe(t, cfg, "fencing", "--type", "beta")
+	require.Error(t, err)
+	require.ErrorContains(t, err, `option "fencing" is not accepted by type "beta"`)
 }
 
 // TestDescribe_NoTypeSetsNoFlag verifies trees without a discriminator get no
