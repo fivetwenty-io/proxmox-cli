@@ -32,10 +32,11 @@ type DescribeConfig struct {
 // cluster.
 func NewDescribeCmd(cfg DescribeConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:   "describe [option]",
-		Short: cfg.Short,
-		Long:  cfg.Long,
-		Args:  cobra.MaximumNArgs(1),
+		Use:         "describe [option]",
+		Short:       cfg.Short,
+		Long:        cfg.Long,
+		Args:        cobra.MaximumNArgs(1),
+		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			schemas := cfg.Schemas

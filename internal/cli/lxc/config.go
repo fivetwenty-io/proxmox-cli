@@ -30,9 +30,9 @@ func newConfigDescribeCmd() *cobra.Command {
 		Schemas: configSchemas,
 		Short:   "Describe all settable container configuration options and their defaults",
 		Long: "List every settable container configuration option from the PVE API schema: " +
-			"type, built-in default, allowed values, and the sub-keys of dict-encoded and " +
-			"indexed options. Runs offline. Pass an option name to show only that option " +
-			"with full descriptions and sub-keys.",
+			"type, built-in default, allowed values, and (for a single option) the " +
+			"sub-keys of dict-encoded options. Runs offline. Pass an option name to " +
+			"show only that option with full descriptions and sub-keys.",
 		CommandHint:         "pve lxc config describe",
 		SubKeyRowsInCatalog: false,
 	})

@@ -82,6 +82,15 @@ func TestDescribe_UnknownOption(t *testing.T) {
 	require.ErrorContains(t, err, "pve x describe")
 }
 
+// TestDescribe_NoClientAnnotation asserts describe skips context resolution
+// and client construction: the catalog must render on a host with no PVE
+// context configured. Every tree's describe comes from this constructor, so
+// this single check covers them all.
+func TestDescribe_NoClientAnnotation(t *testing.T) {
+	cmd := NewDescribeCmd(DescribeConfig{CommandHint: "pve x describe"})
+	require.Equal(t, "true", cmd.Annotations["noClient"])
+}
+
 func TestDescribe_FindsByAPIName(t *testing.T) {
 	out, err := runDescribe(t, DescribeConfig{
 		Schemas:     describeSchemas,

@@ -159,7 +159,9 @@ type MergeOpts struct {
 // schema defines none and opts.SkipUnset is false). Indexed slot options are
 // always skipped — there is no single "net" key a default could attach to.
 // For JSON/YAML the returned raw value is an object with the server-set
-// options under "set" and the derived defaults under "defaults".
+// options under "set" and the derived defaults under "defaults"; "(unset)"
+// rows are a table-only annotation and deliberately never appear there —
+// structured consumers get real default values or nothing.
 func MergeDefaults(schemas []Schema, single map[string]string, raw any, opts MergeOpts) (map[string]string, any) {
 	defaults := make(map[string]string)
 	for i := range schemas {
