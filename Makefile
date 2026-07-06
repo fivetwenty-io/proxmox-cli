@@ -36,6 +36,11 @@ help: ## Show this help message
 build: ## Build ./dist/pve binary with version ldflags
 	$(SCRIPTS)/build
 
+.PHONY: generate
+generate: ## Regenerate generated sources (cluster options schema from apidoc.json)
+	@echo "generate: running go generate ./..."
+	@go generate ./...
+
 .PHONY: install
 install: build ## Install pve binary to $GOPATH/bin (or ~/go/bin)
 	@DEST="$${GOPATH:-$$HOME/go}/bin/pve"; \

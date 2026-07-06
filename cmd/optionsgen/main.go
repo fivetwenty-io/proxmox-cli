@@ -1,0 +1,266 @@
+// Command optionsgen generates the datacenter-option schema table used by the
+// `pve cluster options` command family. It extracts the PUT /cluster/options
+// parameter schema (types, defaults, allowed values, and dict sub-keys) from
+// the pve-apiclient-go module's _data/apidoc.json and emits it as a Go source
+// file so the CLI can describe every settable option — including ones not
+// currently set on the cluster — without a server round-trip.
+//
+// Usage (normally via go:generate in internal/cli/cluster):
+//
+//	go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen -out options_schema_gen.go
+//
+// The apidoc.json location defaults to the pve-apiclient-go module directory
+// reported by `go list -m`; pass -apidoc to point at another copy.
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"go/format"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// clientModule is the module whose _data/apidoc.json carries the PVE API schema.
+const clientModule = "github.com/fivetwenty-io/pve-apiclient-go/v3"
+
+// optionsPath is the apidoc node whose PUT parameters describe datacenter.cfg.
+const optionsPath = "/cluster/options"
+
+// node is the subset of an apidoc tree entry the generator needs.
+type node struct {
+	Path     string          `json:"path"`
+	Children []node          `json:"children"`
+	Info     map[string]verb `json:"info"`
+}
+
+// verb holds one HTTP method's schema inside a node's info map.
+type verb struct {
+	Parameters struct {
+		Properties map[string]property `json:"properties"`
+	} `json:"parameters"`
+}
+
+// property is one parameter schema entry; Format is either a string alias or a
+// map of sub-key properties for dict-encoded options.
+type property struct {
+	Type        string          `json:"type"`
+	Description string          `json:"description"`
+	Enum        []string        `json:"enum"`
+	Default     json.RawMessage `json:"default"`
+	Optional    json.RawMessage `json:"optional"`
+	Format      json.RawMessage `json:"format"`
+}
+
+// subKeys decodes p.Format as a dict of sub-key properties, returning nil when
+// the format is a plain string alias (e.g. "mac-prefix") or absent.
+func (p property) subKeys() map[string]property {
+	if len(p.Format) == 0 || p.Format[0] != '{' {
+		return nil
+	}
+	var m map[string]property
+	if err := json.Unmarshal(p.Format, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
+func main() {
+	apidoc := flag.String("apidoc", "", "path to apidoc.json (default: <"+clientModule+" module dir>/_data/apidoc.json)")
+	out := flag.String("out", "options_schema_gen.go", "output Go source file")
+	flag.Parse()
+	log.SetFlags(0)
+	log.SetPrefix("optionsgen: ")
+
+	path := *apidoc
+	if path == "" {
+		dir, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", clientModule).Output()
+		if err != nil {
+			log.Fatalf("locate %s module dir: %v", clientModule, err)
+		}
+		path = filepath.Join(strings.TrimSpace(string(dir)), "_data", "apidoc.json")
+	}
+
+	props, err := loadOptionsProperties(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	src, err := render(props, filepath.Base(path))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(*out, src, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("optionsgen: wrote %s (%d options)\n", *out, countOptions(props))
+}
+
+// loadOptionsProperties parses apidoc.json and returns the PUT /cluster/options
+// parameter properties.
+func loadOptionsProperties(path string) (map[string]property, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read apidoc: %w", err)
+	}
+	var tree []node
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&tree); err != nil {
+		return nil, fmt.Errorf("parse apidoc: %w", err)
+	}
+	n := findNode(tree, optionsPath)
+	if n == nil {
+		return nil, fmt.Errorf("apidoc node %q not found", optionsPath)
+	}
+	put, ok := n.Info["PUT"]
+	if !ok || len(put.Parameters.Properties) == 0 {
+		return nil, fmt.Errorf("apidoc node %q has no PUT parameter schema", optionsPath)
+	}
+	return put.Parameters.Properties, nil
+}
+
+// findNode depth-first searches the apidoc tree for the node with the given path.
+func findNode(nodes []node, path string) *node {
+	for i := range nodes {
+		if nodes[i].Path == path {
+			return &nodes[i]
+		}
+		if n := findNode(nodes[i].Children, path); n != nil {
+			return n
+		}
+	}
+	return nil
+}
+
+// countOptions returns the number of real options (the delete meta-parameter
+// is excluded from the generated table).
+func countOptions(props map[string]property) int {
+	n := len(props)
+	if _, ok := props["delete"]; ok {
+		n--
+	}
+	return n
+}
+
+// render emits the generated Go source declaring optionSchemas.
+func render(props map[string]property, source string) ([]byte, error) {
+	names := make([]string, 0, len(props))
+	for name := range props {
+		if name == "delete" { // meta-parameter, not a datacenter option
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "// Code generated by cmd/optionsgen from %s (%s PUT %s); DO NOT EDIT.\n\n",
+		source, clientModule, optionsPath)
+	b.WriteString("package cluster\n\n")
+	b.WriteString("// optionSchemas describes every settable datacenter option from the PVE API\n")
+	b.WriteString("// schema, in lexical order by API key.\n")
+	b.WriteString("var optionSchemas = []optionSchema{\n")
+	for _, name := range names {
+		p := props[name]
+		fmt.Fprintf(&b, "\t{\n\t\tName: %q,\n\t\tFlag: %q,\n\t\tType: %q,\n", name, flagName(name), p.Type)
+		if d := defaultString(p); d != "" {
+			fmt.Fprintf(&b, "\t\tDefault: %q,\n", d)
+		}
+		writeEnum(&b, "\t\t", p.Enum)
+		fmt.Fprintf(&b, "\t\tDescription: %q,\n", cleanDescription(p.Description))
+		if sub := p.subKeys(); len(sub) > 0 {
+			subNames := make([]string, 0, len(sub))
+			for sk := range sub {
+				subNames = append(subNames, sk)
+			}
+			sort.Strings(subNames)
+			b.WriteString("\t\tSubKeys: []optionSubKey{\n")
+			for _, sk := range subNames {
+				sp := sub[sk]
+				fmt.Fprintf(&b, "\t\t\t{\n\t\t\t\tName: %q,\n\t\t\t\tType: %q,\n", sk, sp.Type)
+				if d := defaultString(sp); d != "" {
+					fmt.Fprintf(&b, "\t\t\t\tDefault: %q,\n", d)
+				}
+				writeEnum(&b, "\t\t\t\t", sp.Enum)
+				if desc := cleanDescription(sp.Description); desc != "" {
+					fmt.Fprintf(&b, "\t\t\t\tDescription: %q,\n", desc)
+				}
+				if !isOptional(sp) {
+					b.WriteString("\t\t\t\tRequired: true,\n")
+				}
+				b.WriteString("\t\t\t},\n")
+			}
+			b.WriteString("\t\t},\n")
+		}
+		b.WriteString("\t},\n")
+	}
+	b.WriteString("}\n")
+	return format.Source(b.Bytes())
+}
+
+// writeEnum emits an Enum field literal when values are present.
+func writeEnum(b *bytes.Buffer, indent string, enum []string) {
+	if len(enum) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%sEnum: []string{", indent)
+	for i, v := range enum {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(b, "%q", v)
+	}
+	b.WriteString("},\n")
+}
+
+// flagName maps an API parameter name to its CLI flag spelling
+// (email_from → email-from); hyphenated names pass through unchanged.
+func flagName(name string) string {
+	return strings.ReplaceAll(name, "_", "-")
+}
+
+// defaultString renders a schema default as the string shown to users. Boolean
+// defaults arrive as JSON numbers 0/1 and are mapped to false/true.
+func defaultString(p property) string {
+	if len(p.Default) == 0 {
+		return ""
+	}
+	dec := json.NewDecoder(bytes.NewReader(p.Default))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return ""
+	}
+	switch t := v.(type) {
+	case string:
+		return t
+	case bool:
+		return fmt.Sprintf("%t", t)
+	case json.Number:
+		if p.Type == "boolean" {
+			return map[string]string{"0": "false", "1": "true"}[t.String()]
+		}
+		return t.String()
+	default:
+		return ""
+	}
+}
+
+// isOptional reports whether a sub-key is marked optional in the schema
+// (encoded as the number 1 or boolean true).
+func isOptional(p property) bool {
+	s := strings.TrimSpace(string(p.Optional))
+	return s == "1" || s == "true" || s == `"1"`
+}
+
+// cleanDescription collapses runs of whitespace (including newlines) in a
+// schema description into single spaces.
+func cleanDescription(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -25,15 +26,80 @@ func newOptionsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newOptionsGetCmd(),
 		newOptionsSetCmd(),
+		newOptionsDescribeCmd(),
 	)
 	return cmd
 }
 
-func newOptionsGetCmd() *cobra.Command {
+// newOptionsDescribeCmd builds `pve cluster options describe`, an offline
+// catalog of every settable datacenter option from the PVE API schema (see
+// options_schema_gen.go). Unlike get, it needs no cluster connection.
+func newOptionsDescribeCmd() *cobra.Command {
 	return &cobra.Command{
+		Use:   "describe [option]",
+		Short: "Describe all settable datacenter options and their defaults",
+		Long: "List every settable datacenter option from the PVE API schema: type, " +
+			"built-in default, allowed values, and the sub-keys of dict-encoded options. " +
+			"Runs offline. Pass an option name to show only that option with full descriptions.",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			schemas := optionSchemas
+			truncate := true
+			if len(args) == 1 {
+				s := findOptionSchema(args[0])
+				if s == nil {
+					return fmt.Errorf("unknown option %q: run `pve cluster options describe` for the full list", args[0])
+				}
+				schemas = []optionSchema{*s}
+				truncate = false
+			}
+
+			rows := make([][]string, 0, len(schemas))
+			for _, s := range schemas {
+				rows = append(rows, []string{s.Flag, s.Type, s.Default,
+					strings.Join(s.Enum, "|"), describeCell(s.Description, truncate)})
+				for _, sk := range s.SubKeys {
+					desc := sk.Description
+					if sk.Required {
+						desc = strings.TrimSpace("required. " + desc)
+					}
+					rows = append(rows, []string{s.Flag + "." + sk.Name, sk.Type, sk.Default,
+						strings.Join(sk.Enum, "|"), describeCell(desc, truncate)})
+				}
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), output.Result{
+				Headers: []string{"OPTION", "TYPE", "DEFAULT", "VALUES", "DESCRIPTION"},
+				Rows:    rows,
+				Raw:     schemas,
+			}, deps.Format)
+		},
+	}
+}
+
+// describeCell caps schema descriptions for the full-catalog table view;
+// single-option views render them untruncated.
+func describeCell(desc string, truncate bool) string {
+	const max = 72
+	if !truncate {
+		return desc
+	}
+	runes := []rune(desc)
+	if len(runes) <= max {
+		return desc
+	}
+	return string(runes[:max-1]) + "…"
+}
+
+func newOptionsGetCmd() *cobra.Command {
+	var withDefaults bool
+	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Show the cluster-wide datacenter options",
-		Args:  cobra.NoArgs,
+		Long: "Show the datacenter options currently set in datacenter.cfg. The PVE API " +
+			"omits options left at their built-in defaults; pass --defaults to also list " +
+			"those with the value they effectively have.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListOptions(cmd.Context())
@@ -44,10 +110,37 @@ func newOptionsGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get cluster options: %w", err)
 			}
+			if withDefaults {
+				single, raw = mergeOptionDefaults(single, raw)
+			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Single: single, Raw: raw}, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"also list unset options with their built-in default values")
+	return cmd
+}
+
+// mergeOptionDefaults adds every settable option absent from the API response
+// to the table view, annotated with its built-in default (or "(unset)" when
+// the schema defines none). For JSON/YAML the raw value becomes an object with
+// the server-set options under "set" and the derived defaults under "defaults".
+func mergeOptionDefaults(single map[string]string, raw any) (map[string]string, any) {
+	defaults := make(map[string]string)
+	for i := range optionSchemas {
+		s := &optionSchemas[i]
+		if _, ok := single[s.Name]; ok {
+			continue
+		}
+		if dv := s.defaultValue(); dv != "" {
+			single[s.Name] = dv + " (default)"
+			defaults[s.Name] = dv
+		} else {
+			single[s.Name] = "(unset)"
+		}
+	}
+	return single, map[string]any{"set": raw, "defaults": defaults}
 }
 
 // optionsSetFlags are the names of every flag the set command forwards. The
@@ -185,16 +278,16 @@ func newOptionsSetCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&bwlimit, "bwlimit", "", "I/O bandwidth limits per operation type (KiB/s), for example migration=100000")
-	f.StringVar(&console, "console", "", "default console viewer: applet, vv, html5, or xtermjs")
+	f.StringVar(&console, "console", "", "default console viewer")
 	f.StringVar(&consentText, "consent-text", "", "consent text shown before login")
 	f.StringVar(&crs, "crs", "", "cluster resource scheduling settings, for example ha=basic")
 	f.StringVar(&description, "description", "", "datacenter description shown in the web UI notes panel")
 	f.StringVar(&emailFrom, "email-from", "", "sender address for notification email")
-	f.StringVar(&fencing, "fencing", "", "HA fencing mode: watchdog, hardware, or both")
+	f.StringVar(&fencing, "fencing", "", "HA fencing mode")
 	f.StringVar(&ha, "ha", "", "cluster-wide HA settings, for example shutdown_policy=migrate")
 	f.StringVar(&httpProxy, "http-proxy", "", "external HTTP proxy used for downloads")
-	f.StringVar(&keyboard, "keyboard", "", "default VNC keyboard layout, for example en-us")
-	f.StringVar(&language, "language", "", "default web UI language, for example en")
+	f.StringVar(&keyboard, "keyboard", "", "default VNC keyboard layout")
+	f.StringVar(&language, "language", "", "default web UI language")
 	f.StringVar(&location, "location", "", "geographic location of the cluster")
 	f.StringVar(&macPrefix, "mac-prefix", "", "prefix for auto-generated guest MAC addresses")
 	f.Int64Var(&maxWorkers, "max-workers", 0, "maximum workers per node for bulk actions")
@@ -210,5 +303,13 @@ func newOptionsSetCmd() *cobra.Command {
 	f.StringVar(&userTagAccess, "user-tag-access", "", "privilege options for user-settable tags")
 	f.StringVar(&webauthn, "webauthn", "", "WebAuthn authentication settings, for example rp=...,origin=...")
 	f.StringVar(&del, "delete", "", "comma-separated list of options to reset to default")
+
+	// Append generated schema detail (allowed values, defaults, sub-keys) to
+	// each option flag's hand-written help text; see options_schema_gen.go.
+	for i := range optionSchemas {
+		if fl := f.Lookup(optionSchemas[i].Flag); fl != nil {
+			fl.Usage += optionSchemas[i].schemaSuffix()
+		}
+	}
 	return cmd
 }
