@@ -15,6 +15,11 @@ DESCRIPTION = "Manage QEMU virtual machines"
 
 
 def run(ctx: Ctx) -> None:
+    # config/firewall-options describe: offline schema catalogs — no API call,
+    # so they run even before node discovery.
+    ctx.check("config describe", "qemu", "config", "describe")
+    ctx.check("firewall options describe", "qemu", "firewall", "options", "describe")
+
     n = ctx.node
     if not n:
         ctx.skip("list", "no node discovered")

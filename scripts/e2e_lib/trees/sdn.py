@@ -69,6 +69,9 @@ def run(ctx: Ctx) -> None:
 
     ctx.check("vnet firewall rules create --help", "sdn", "vnet", "firewall", "rules",
               "create", "--help", fmt="")
+    # vnet firewall options describe: offline schema catalog — no API call, so
+    # it runs even when no vnet is defined.
+    ctx.check("vnet firewall options describe", "sdn", "vnet", "firewall", "options", "describe")
 
     # Routing controllers, IPAM backends, and DNS providers are cluster-global.
     ctx.check("controller list", "sdn", "controller", "list", validate=is_list)

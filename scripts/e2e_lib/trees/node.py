@@ -21,6 +21,11 @@ def run(ctx: Ctx) -> None:
 
     ctx.check("list", "node", "list", validate=has_node)
 
+    # config/firewall-options describe: offline schema catalogs — no API call,
+    # so they run even before node discovery.
+    ctx.check("config describe", "node", "config", "describe")
+    ctx.check("firewall options describe", "node", "firewall", "options", "describe")
+
     # These subcommands take the node as a positional argument.
     n = ctx.node
     if not n:

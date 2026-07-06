@@ -68,20 +68,20 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `access` | 39 | 9 | 8 | 28 | 0 | 0 | 0 | 0 |
 | `api` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `cluster` | 166 | 44 | 16 | 109 | 5 | 13 | 0 | 0 |
+| `cluster` | 168 | 46 | 16 | 109 | 5 | 13 | 0 | 0 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 52 | 2 | 15 | 39 | 0 | 2 | 0 | 0 |
-| `node` | 160 | 1 | 73 | 47 | 0 | 38 | 6 | 0 |
+| `lxc` | 54 | 4 | 15 | 39 | 0 | 2 | 0 | 0 |
+| `node` | 162 | 3 | 73 | 47 | 0 | 38 | 6 | 0 |
 | `pool` | 6 | 1 | 2 | 3 | 0 | 0 | 0 | 0 |
-| `qemu` | 66 | 4 | 14 | 52 | 1 | 1 | 1 | 0 |
-| `sdn` | 84 | 5 | 14 | 62 | 0 | 6 | 0 | 0 |
+| `qemu` | 68 | 6 | 14 | 52 | 1 | 1 | 1 | 0 |
+| `sdn` | 85 | 6 | 14 | 62 | 0 | 6 | 0 | 0 |
 | `storage` | 25 | 1 | 10 | 12 | 0 | 5 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **623** | **83** | **155** | **357** | **6** | **65** | **8** | **0** |
+| **Total** | **632** | **92** | **155** | **357** | **6** | **65** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **623** leaves, **550** are exercised by at least one live suite, **65** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **632** leaves, **559** are exercised by at least one live suite, **65** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -209,6 +209,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster firewall ipset remove` | — | ✓ |  |
 | `cluster firewall ipset update` | — | ✓ |  |
 | `cluster firewall macros list` | ✓ | — |  |
+| `cluster firewall options describe` | ✓ | — |  |
 | `cluster firewall options get` | ✓ | ✓ |  |
 | `cluster firewall options set` | — | ✓ |  |
 | `cluster firewall refs list` | ✓ | — |  |
@@ -298,6 +299,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster notifications webhook get` | — | ✓ |  |
 | `cluster notifications webhook list` | ✓ | ✓ |  |
 | `cluster notifications webhook set` | — | ✓ |  |
+| `cluster options describe` | ✓ | — |  |
 | `cluster options get` | ✓ | ✓ |  |
 | `cluster options set` | — | ✓ |  |
 | `cluster qemu cpu-flags` | ✓ | — |  |
@@ -335,6 +337,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `lxc clone` | — | ✓ |  |
+| `lxc config describe` | ✓ | — |  |
 | `lxc config get` | ◑ | — |  |
 | `lxc config pending` | ◑ | — |  |
 | `lxc config set` | — | ✓ |  |
@@ -355,6 +358,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc firewall ipset remove` | — | ✓ |  |
 | `lxc firewall ipset update-member` | — | ✓ |  |
 | `lxc firewall log` | ◑ | — |  |
+| `lxc firewall options describe` | ✓ | — |  |
 | `lxc firewall options get` | ◑ | ✓ |  |
 | `lxc firewall options set` | — | ✓ |  |
 | `lxc firewall refs` | ◑ | — |  |
@@ -451,6 +455,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node cert custom delete` | — | — | deferred — removes the node's custom API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert custom upload` | — | — | deferred — replaces the node's API TLS certificate — could break TLS to the node; not exercised live |
 | `node cert list` | ◑ | — |  |
+| `node config describe` | ✓ | — |  |
 | `node config get` | ◑ | — |  |
 | `node config set` | — | — | deferred — mutates node-level configuration (description, ACME, wake-on-LAN, ballooning target, startall delay); not exercised live; covered by unit tests |
 | `node console` | — | — | deferred — opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests |
@@ -476,6 +481,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node exec` | — | ✓ |  |
 | `node execute` | — | — | n/a — runs arbitrary commands on the real host via the PVE API — security-sensitive; out of scope for automated e2e regardless of guarding |
 | `node firewall log` | ◑ | — |  |
+| `node firewall options describe` | ✓ | — |  |
 | `node firewall options get` | ◑ | ✓ |  |
 | `node firewall options set` | — | — | deferred — changes the host firewall policy — could cut the node off the network; not exercised live |
 | `node firewall rules create` | — | ✓ |  |
@@ -577,6 +583,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu cloudinit dump` | — | ✓ |  |
 | `qemu cloudinit pending` | ◑ | ✓ |  |
 | `qemu cloudinit update` | — | ✓ |  |
+| `qemu config describe` | ✓ | — |  |
 | `qemu config get` | ◑ | ✓ |  |
 | `qemu config pending` | — | ✓ |  |
 | `qemu config set` | — | ✓ |  |
@@ -600,6 +607,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu firewall ipset remove` | — | ✓ |  |
 | `qemu firewall ipset update-member` | — | ✓ |  |
 | `qemu firewall log` | ◑ | — |  |
+| `qemu firewall options describe` | ✓ | — |  |
 | `qemu firewall options get` | ◑ | ✓ |  |
 | `qemu firewall options set` | — | ✓ |  |
 | `qemu firewall refs` | ◑ | — |  |
@@ -704,6 +712,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn subnet show` | ◑ | — |  |
 | `sdn vnet create` | — | ✓ |  |
 | `sdn vnet delete` | — | ✓ |  |
+| `sdn vnet firewall options describe` | ✓ | — |  |
 | `sdn vnet firewall options get` | ◑ | ✓ |  |
 | `sdn vnet firewall options set` | — | ✓ |  |
 | `sdn vnet firewall rules create` | — | ✓ |  |

@@ -14,6 +14,11 @@ DESCRIPTION = "Manage LXC containers"
 
 
 def run(ctx: Ctx) -> None:
+    # config/firewall-options describe: offline schema catalogs — no API call,
+    # so they run even before node discovery.
+    ctx.check("config describe", "lxc", "config", "describe")
+    ctx.check("firewall options describe", "lxc", "firewall", "options", "describe")
+
     n = ctx.node
     if not n:
         ctx.skip("list", "no node discovered")

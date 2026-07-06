@@ -151,6 +151,8 @@ def run(ctx: Ctx) -> None:
     ipset_list = ctx.check("firewall ipset list", "cluster", "firewall", "ipset", "list", validate=is_list)
     alias_list = ctx.check("firewall alias list", "cluster", "firewall", "alias", "list", validate=is_list)
     ctx.check("firewall options get", "cluster", "firewall", "options", "get")
+    # firewall options describe: offline schema catalog — no API call.
+    ctx.check("firewall options describe", "cluster", "firewall", "options", "describe")
     ctx.check("firewall rules create --help", "cluster", "firewall", "rules", "create", "--help", fmt="")
 
     # firewall alias get: per-alias detail. Discover a real alias name from the
@@ -239,6 +241,8 @@ def run(ctx: Ctx) -> None:
     # join information is an object and the member list is an array. All are
     # read-only and safe to query directly.
     ctx.check("options get", "cluster", "options", "get")
+    # options describe: offline schema catalog — no API call.
+    ctx.check("options describe", "cluster", "options", "describe")
     ctx.check("options set --help", "cluster", "options", "set", "--help", fmt="")
     # `config join` returns the info a new node needs to join; on a standalone
     # node (not yet part of a corosync cluster) the endpoint reports "node is not
