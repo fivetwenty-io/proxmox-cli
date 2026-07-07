@@ -112,7 +112,7 @@ func newUserGetCmd() *cobra.Command {
 			single := map[string]string{
 				"USERID":    userid,
 				"ENABLE":    pveBoolCell(resp.Enable),
-				"EXPIRE":    intCell(resp.Expire),
+				"EXPIRE":    intCell((*int64)(resp.Expire)),
 				"FIRSTNAME": strVal(resp.Firstname),
 				"LASTNAME":  strVal(resp.Lastname),
 				"EMAIL":     strVal(resp.Email),

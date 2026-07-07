@@ -32,7 +32,7 @@ func newStatusCmd() *cobra.Command {
 			}
 
 			single := map[string]string{
-				"VMID":   strconv.FormatInt(resp.Vmid, 10),
+				"VMID":   strconv.FormatInt(resp.Vmid.Int(), 10),
 				"STATUS": resp.Status,
 				"NODE":   node,
 			}
@@ -46,19 +46,19 @@ func newStatusCmd() *cobra.Command {
 				single["CPU"] = strconv.FormatFloat(resp.Cpu.Float(), 'f', 3, 64)
 			}
 			if resp.Mem != nil {
-				single["MEM"] = strconv.FormatInt(*resp.Mem, 10)
+				single["MEM"] = strconv.FormatInt(resp.Mem.Int(), 10)
 			}
 			if resp.Maxmem != nil {
-				single["MAXMEM"] = strconv.FormatInt(*resp.Maxmem, 10)
+				single["MAXMEM"] = strconv.FormatInt(resp.Maxmem.Int(), 10)
 			}
 			if resp.Maxdisk != nil {
-				single["MAXDISK"] = strconv.FormatInt(*resp.Maxdisk, 10)
+				single["MAXDISK"] = strconv.FormatInt(resp.Maxdisk.Int(), 10)
 			}
 			if resp.Uptime != nil {
-				single["UPTIME"] = strconv.FormatInt(*resp.Uptime, 10)
+				single["UPTIME"] = strconv.FormatInt(resp.Uptime.Int(), 10)
 			}
 			if resp.Pid != nil {
-				single["PID"] = strconv.FormatInt(*resp.Pid, 10)
+				single["PID"] = strconv.FormatInt(resp.Pid.Int(), 10)
 			}
 			if resp.Lock != nil {
 				single["LOCK"] = *resp.Lock

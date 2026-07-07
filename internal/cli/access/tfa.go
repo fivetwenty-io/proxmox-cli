@@ -210,7 +210,7 @@ func newTfaGetEntryCmd() *cobra.Command {
 
 			created := ""
 			if resp.Created != 0 {
-				created = strconv.FormatInt(resp.Created, 10)
+				created = strconv.FormatInt(resp.Created.Int(), 10)
 			}
 
 			single := map[string]string{

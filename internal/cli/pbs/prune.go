@@ -438,31 +438,31 @@ func newPruneJobShowCmd() *cobra.Command {
 			}
 
 			if resp.KeepLast != nil {
-				single["keep-last"] = strconv.FormatInt(*resp.KeepLast, 10)
+				single["keep-last"] = strconv.FormatInt(resp.KeepLast.Int(), 10)
 			}
 
 			if resp.KeepHourly != nil {
-				single["keep-hourly"] = strconv.FormatInt(*resp.KeepHourly, 10)
+				single["keep-hourly"] = strconv.FormatInt(resp.KeepHourly.Int(), 10)
 			}
 
 			if resp.KeepDaily != nil {
-				single["keep-daily"] = strconv.FormatInt(*resp.KeepDaily, 10)
+				single["keep-daily"] = strconv.FormatInt(resp.KeepDaily.Int(), 10)
 			}
 
 			if resp.KeepWeekly != nil {
-				single["keep-weekly"] = strconv.FormatInt(*resp.KeepWeekly, 10)
+				single["keep-weekly"] = strconv.FormatInt(resp.KeepWeekly.Int(), 10)
 			}
 
 			if resp.KeepMonthly != nil {
-				single["keep-monthly"] = strconv.FormatInt(*resp.KeepMonthly, 10)
+				single["keep-monthly"] = strconv.FormatInt(resp.KeepMonthly.Int(), 10)
 			}
 
 			if resp.KeepYearly != nil {
-				single["keep-yearly"] = strconv.FormatInt(*resp.KeepYearly, 10)
+				single["keep-yearly"] = strconv.FormatInt(resp.KeepYearly.Int(), 10)
 			}
 
 			if resp.MaxDepth != nil {
-				single["max-depth"] = strconv.FormatInt(*resp.MaxDepth, 10)
+				single["max-depth"] = strconv.FormatInt(resp.MaxDepth.Int(), 10)
 			}
 
 			if resp.Ns != nil {

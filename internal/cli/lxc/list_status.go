@@ -99,12 +99,12 @@ func newStatusCmd() *cobra.Command {
 				"name":    derefStr(resp.Name),
 				"status":  resp.Status,
 				"cpu":     fmtFloat((*float64)(resp.Cpu)),
-				"mem":     fmtBytes(derefInt(resp.Mem)),
-				"maxmem":  fmtBytes(derefInt(resp.Maxmem)),
-				"maxswap": fmtBytes(derefInt(resp.Maxswap)),
-				"disk":    fmtBytes(derefInt(resp.Disk)),
-				"maxdisk": fmtBytes(derefInt(resp.Maxdisk)),
-				"uptime":  fmtUptime(derefInt(resp.Uptime)),
+				"mem":     fmtBytes(derefInt((*int64)(resp.Mem))),
+				"maxmem":  fmtBytes(derefInt((*int64)(resp.Maxmem))),
+				"maxswap": fmtBytes(derefInt((*int64)(resp.Maxswap))),
+				"disk":    fmtBytes(derefInt((*int64)(resp.Disk))),
+				"maxdisk": fmtBytes(derefInt((*int64)(resp.Maxdisk))),
+				"uptime":  fmtUptime(derefInt((*int64)(resp.Uptime))),
 			}
 			if resp.Lock != nil && *resp.Lock != "" {
 				single["lock"] = *resp.Lock

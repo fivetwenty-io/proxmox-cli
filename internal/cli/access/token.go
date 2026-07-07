@@ -87,7 +87,7 @@ func newTokenGetCmd() *cobra.Command {
 
 			single := map[string]string{
 				"TOKENID": tokenid,
-				"EXPIRE":  intCell(resp.Expire),
+				"EXPIRE":  intCell((*int64)(resp.Expire)),
 				"PRIVSEP": pveBoolCell(resp.Privsep),
 				"COMMENT": strVal(resp.Comment),
 			}

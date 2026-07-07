@@ -227,7 +227,7 @@ func newTaskStatusCmd() *cobra.Command {
 				"TYPE":   resp.Type,
 				"USER":   resp.User,
 				"NODE":   resp.Node,
-				"PID":    strconv.FormatInt(resp.Pid, 10),
+				"PID":    strconv.FormatInt(resp.Pid.Int(), 10),
 				"UPID":   resp.Upid,
 			}
 			if resp.Exitstatus != nil {

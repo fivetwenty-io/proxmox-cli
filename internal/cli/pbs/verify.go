@@ -271,7 +271,7 @@ func newVerifyJobShowCmd() *cobra.Command {
 			}
 
 			if resp.MaxDepth != nil {
-				single["max-depth"] = strconv.FormatInt(*resp.MaxDepth, 10)
+				single["max-depth"] = strconv.FormatInt(resp.MaxDepth.Int(), 10)
 			}
 
 			if resp.Ns != nil {
@@ -279,11 +279,11 @@ func newVerifyJobShowCmd() *cobra.Command {
 			}
 
 			if resp.OutdatedAfter != nil {
-				single["outdated-after"] = strconv.FormatInt(*resp.OutdatedAfter, 10)
+				single["outdated-after"] = strconv.FormatInt(resp.OutdatedAfter.Int(), 10)
 			}
 
 			if resp.ReadThreads != nil {
-				single["read-threads"] = strconv.FormatInt(*resp.ReadThreads, 10)
+				single["read-threads"] = strconv.FormatInt(resp.ReadThreads.Int(), 10)
 			}
 
 			if resp.Schedule != nil {
@@ -291,7 +291,7 @@ func newVerifyJobShowCmd() *cobra.Command {
 			}
 
 			if resp.VerifyThreads != nil {
-				single["verify-threads"] = strconv.FormatInt(*resp.VerifyThreads, 10)
+				single["verify-threads"] = strconv.FormatInt(resp.VerifyThreads.Int(), 10)
 			}
 
 			var raw any = resp

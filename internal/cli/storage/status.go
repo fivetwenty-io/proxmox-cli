@@ -40,13 +40,13 @@ func newStorageStatusCmd() *cobra.Command {
 				"content": resp.Content,
 			}
 			if resp.Total != nil {
-				single["total"] = strconv.FormatInt(*resp.Total, 10)
+				single["total"] = strconv.FormatInt(resp.Total.Int(), 10)
 			}
 			if resp.Used != nil {
-				single["used"] = strconv.FormatInt(*resp.Used, 10)
+				single["used"] = strconv.FormatInt(resp.Used.Int(), 10)
 			}
 			if resp.Avail != nil {
-				single["avail"] = strconv.FormatInt(*resp.Avail, 10)
+				single["avail"] = strconv.FormatInt(resp.Avail.Int(), 10)
 			}
 			if resp.Active != nil {
 				single["active"] = strconv.FormatBool(resp.Active.Bool())

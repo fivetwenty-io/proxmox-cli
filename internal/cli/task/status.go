@@ -56,12 +56,12 @@ func buildStatusSingle(resp *nodes.ListTasksStatusResponse) map[string]string {
 	m := map[string]string{
 		"UPID":      resp.Upid,
 		"STATUS":    resp.Status,
-		"PID":       strconv.FormatInt(resp.Pid, 10),
+		"PID":       strconv.FormatInt(resp.Pid.Int(), 10),
 		"TYPE":      resp.Type,
 		"USER":      resp.User,
 		"NODE":      resp.Node,
 		"ID":        resp.Id,
-		"STARTTIME": formatTimestamp(resp.Starttime),
+		"STARTTIME": formatTimestamp(resp.Starttime.Int()),
 	}
 	if resp.Exitstatus != nil {
 		m["EXITSTATUS"] = *resp.Exitstatus
