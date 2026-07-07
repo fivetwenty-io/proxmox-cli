@@ -9,19 +9,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/initcmd"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/initcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
-// run executes `pve init <args>` through the real root command so the production
+// run executes `pmx init <args>` through the real root command so the production
 // PersistentPreRunE wires Deps and applies the noClient annotation.
 func run(t *testing.T, cfgPath string, args ...string) (string, error) {
 	t.Helper()
 
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -39,7 +39,7 @@ func run(t *testing.T, cfgPath string, args ...string) (string, error) {
 }
 
 func TestInitConfig_WritesParsableTemplate(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "pve", "config.yml")
+	path := filepath.Join(t.TempDir(), "pmx", "config.yml")
 
 	out, err := run(t, path, "config")
 	require.NoError(t, err)
@@ -61,12 +61,12 @@ func TestInitConfig_WritesParsableTemplate(t *testing.T) {
 	require.Equal(t, 8006, ctx.Port)
 	require.Equal(t, "token", ctx.Auth.Type)
 	require.Equal(t, "automation", ctx.Auth.TokenID)
-	require.Equal(t, "${PVE_TOKEN}", ctx.Auth.Secret)
+	require.Equal(t, "${PMX_TOKEN}", ctx.Auth.Secret)
 
 	// The template keeps its guiding comments.
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "# pve CLI configuration.")
+	require.Contains(t, string(raw), "# pmx CLI configuration.")
 }
 
 func TestInitConfig_RefusesOverwriteWithoutForce(t *testing.T) {

@@ -1,8 +1,8 @@
-# Makefile for pve-cli
+# Makefile for pmx-cli
 # Default target: help (categorized, colored)
 
-MODULE  := github.com/fivetwenty-io/pve-cli
-BINARY  := ./dist/pve
+MODULE  := github.com/fivetwenty-io/pmx-cli
+BINARY  := ./dist/pmx
 SCRIPTS := ./scripts
 
 # ANSI color helpers — used in help awk block
@@ -19,7 +19,7 @@ RESET  := \033[0m
 help: ## Show this help message
 	@awk 'BEGIN { \
 		FS = ":.*##"; \
-		printf "\n$(CYAN)pve-cli$(RESET) — Proxmox VE command-line interface\n"; \
+		printf "\n$(CYAN)pmx-cli$(RESET) — Proxmox command-line interface\n"; \
 		printf "\nUsage:\n  make $(GREEN)<target>$(RESET)\n"; \
 	} \
 	/^##@/ { \
@@ -33,7 +33,7 @@ help: ## Show this help message
 ##@ Build
 
 .PHONY: build
-build: ## Build ./dist/pve binary with version ldflags
+build: ## Build ./dist/pmx binary with version ldflags
 	$(SCRIPTS)/build
 
 .PHONY: generate
@@ -42,8 +42,8 @@ generate: ## Regenerate generated sources (cluster options schema from apidoc.js
 	@go generate ./...
 
 .PHONY: install
-install: build ## Install pve binary to $GOPATH/bin (or ~/go/bin)
-	@DEST="$${GOPATH:-$$HOME/go}/bin/pve"; \
+install: build ## Install pmx binary to $GOPATH/bin (or ~/go/bin)
+	@DEST="$${GOPATH:-$$HOME/go}/bin/pmx"; \
 	cp $(BINARY) "$$DEST"; \
 	echo "install: copied $(BINARY) -> $$DEST"
 
@@ -91,7 +91,7 @@ test-unit: ## Run unit tests (explicit)
 	$(SCRIPTS)/test unit
 
 .PHONY: test-integration
-test-integration: ## Run integration tests (requires config/.env.test or PVE_TEST_*)
+test-integration: ## Run integration tests (requires config/.env.test or PMX_TEST_*)
 	$(SCRIPTS)/test integration
 
 .PHONY: test-e2e
@@ -159,16 +159,16 @@ package-deb: ## Print Debian packaging instructions
 ##@ Dev
 
 .PHONY: run
-run: build ## Build and run pve (pass ARGS="..." for arguments)
+run: build ## Build and run pmx (pass ARGS="..." for arguments)
 	@$(BINARY) $(ARGS)
 
 .PHONY: completions
 completions: build ## Generate shell completions into dist/completions/
 	@mkdir -p ./dist/completions
-	@$(BINARY) completion bash  > ./dist/completions/pve.bash
-	@$(BINARY) completion zsh   > ./dist/completions/_pve
-	@$(BINARY) completion fish  > ./dist/completions/pve.fish
-	@$(BINARY) completion powershell > ./dist/completions/pve.ps1
+	@$(BINARY) completion bash  > ./dist/completions/pmx.bash
+	@$(BINARY) completion zsh   > ./dist/completions/_pmx
+	@$(BINARY) completion fish  > ./dist/completions/pmx.fish
+	@$(BINARY) completion powershell > ./dist/completions/pmx.ps1
 	@echo "completions: written to ./dist/completions/"
 
 .PHONY: deps

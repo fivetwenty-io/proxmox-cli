@@ -20,14 +20,14 @@ import (
 // PBSClient holds all 10 PBS service handles plus the raw client shared with
 // the PVE-side APIClient. It is constructed once in the cobra root
 // PersistentPreRunE (for pbs-flavored contexts) and passed via cobra.Command
-// context to every sub-command under "pve pbs ...".
+// context to every sub-command under "pmx pbs ...".
 //
 // Package aliases below are prefixed with "pbs" because the PBS bindings
 // reuse PVE-shaped package names (access, config, nodes, status, version)
 // that would otherwise collide with the PVE-side imports used elsewhere in
 // this package.
 type PBSClient struct {
-	// Raw is the underlying pve-apiclient-go client, configured for a PBS
+	// Raw is the underlying proxmox-apiclient-go client, configured for a PBS
 	// endpoint (port 8007, PBSAPIToken/PBSAuthCookie credential names).
 	Raw pve.Client
 

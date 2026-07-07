@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/propstr"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
 )
 
-// newSecurityConfidentialCmd builds `pve qemu security confidential` and its
+// newSecurityConfidentialCmd builds `pmx qemu security confidential` and its
 // show/set/clear sub-commands.
 func newSecurityConfidentialCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -29,7 +29,7 @@ func newSecurityConfidentialCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityConfidentialShowCmd builds `pve qemu security confidential show <vmid|name>`.
+// newSecurityConfidentialShowCmd builds `pmx qemu security confidential show <vmid|name>`.
 func newSecurityConfidentialShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -62,7 +62,7 @@ func newSecurityConfidentialShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityConfidentialSetCmd builds `pve qemu security confidential set <vmid|name>`.
+// newSecurityConfidentialSetCmd builds `pmx qemu security confidential set <vmid|name>`.
 func newSecurityConfidentialSetCmd() *cobra.Command {
 	var (
 		sevType         string
@@ -88,7 +88,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 			"are passed to PVE unvalidated (upstream SEV types include std, es, and snp; the " +
 			"accepted set depends on the PVE version and host hardware). If the VM currently " +
 			"has the other platform configured, clear it first with 'confidential clear'.\n\n" +
-			"Example: pve qemu security confidential set 100 --sev snp --sev-no-debug",
+			"Example: pmx qemu security confidential set 100 --sev snp --sev-no-debug",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -126,7 +126,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 				}
 				if fl.Changed("sev") && cp.Platform == "intel-tdx" {
 					return fmt.Errorf(
-						"VM %s currently has intel-tdx configured; run 'pve qemu security confidential clear' "+
+						"VM %s currently has intel-tdx configured; run 'pmx qemu security confidential clear' "+
 							"first before switching to amd-sev", vmid)
 				}
 				raw, _ := rawStr(m, "amd-sev")
@@ -155,7 +155,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 				}
 				if fl.Changed("tdx") && cp.Platform == "amd-sev" {
 					return fmt.Errorf(
-						"VM %s currently has amd-sev configured; run 'pve qemu security confidential clear' "+
+						"VM %s currently has amd-sev configured; run 'pmx qemu security confidential clear' "+
 							"first before switching to intel-tdx", vmid)
 				}
 				raw, _ := rawStr(m, "intel-tdx")
@@ -223,7 +223,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityConfidentialClearCmd builds `pve qemu security confidential clear <vmid|name>`.
+// newSecurityConfidentialClearCmd builds `pmx qemu security confidential clear <vmid|name>`.
 func newSecurityConfidentialClearCmd() *cobra.Command {
 	var (
 		digest  string

@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // lxcInterfaceEntry is the subset of a /lxc/{vmid}/interfaces element rendered in
@@ -22,7 +22,7 @@ type lxcInterfaceEntry struct {
 	HardName string `json:"hardware-address"`
 }
 
-// newInterfacesCmd builds `pve lxc interfaces <vmid|name>`. It lists the container's
+// newInterfacesCmd builds `pmx lxc interfaces <vmid|name>`. It lists the container's
 // network interfaces as reported by the host. The call is purely read-only.
 func newInterfacesCmd() *cobra.Command {
 	return &cobra.Command{

@@ -54,7 +54,7 @@ func save(path string, cfg *Config, force bool) error {
 // same directory and file permissions as Save: the parent directory is created
 // 0700 (and tightened if it predates us), and the file is 0600. When force is
 // false it refuses to overwrite an existing group- or world-readable file.
-// It is used to emit hand-authored config templates (`pve init config`) that
+// It is used to emit hand-authored config templates (`pmx init config`) that
 // carry comments a struct marshal cannot preserve.
 func WriteRaw(path string, data []byte, force bool) error {
 	dir := filepath.Dir(path)
@@ -90,7 +90,7 @@ func WriteRaw(path string, data []byte, force bool) error {
 	}
 
 	// Write to a temporary file in the same directory so rename is atomic.
-	tmp, err := os.CreateTemp(dir, ".pve-config-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".pmx-config-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp config file in %s: %w", dir, err)
 	}

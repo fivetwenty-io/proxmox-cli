@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newLockCmd builds `pve sdn lock` and its sub-commands.
+// newLockCmd builds `pmx sdn lock` and its sub-commands.
 func newLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lock",
@@ -23,14 +23,14 @@ func newLockCmd() *cobra.Command {
 	return cmd
 }
 
-// newLockAcquireCmd builds `pve sdn lock acquire`.
+// newLockAcquireCmd builds `pmx sdn lock acquire`.
 func newLockAcquireCmd() *cobra.Command {
 	var allowPending bool
 	cmd := &cobra.Command{
 		Use:   "acquire",
 		Short: "Acquire the global SDN configuration lock",
 		Long: "Acquire the global SDN configuration lock. Returns a lock token that must " +
-			"be passed to `pve sdn lock release` (or via --lock-token on other commands) " +
+			"be passed to `pmx sdn lock release` (or via --lock-token on other commands) " +
 			"to release the lock.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -58,7 +58,7 @@ func newLockAcquireCmd() *cobra.Command {
 	return cmd
 }
 
-// newLockReleaseCmd builds `pve sdn lock release`.
+// newLockReleaseCmd builds `pmx sdn lock release`.
 func newLockReleaseCmd() *cobra.Command {
 	var (
 		force     bool
@@ -69,7 +69,7 @@ func newLockReleaseCmd() *cobra.Command {
 		Use:   "release",
 		Short: "Release the global SDN configuration lock",
 		Long: "Release the global SDN configuration lock. Pass the token returned by " +
-			"`pve sdn lock acquire` via --lock-token, or use --force to release without " +
+			"`pmx sdn lock acquire` via --lock-token, or use --force to release without " +
 			"a token (requires --yes).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

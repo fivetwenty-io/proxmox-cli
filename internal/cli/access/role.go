@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newRoleCmd builds `pve access role` and its sub-commands.
+// newRoleCmd builds `pmx access role` and its sub-commands.
 func newRoleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "role",
@@ -36,7 +36,7 @@ type roleListEntry struct {
 	Privs   string  `json:"privs,omitempty"`
 }
 
-// newRoleListCmd builds `pve access role list`.
+// newRoleListCmd builds `pmx access role list`.
 func newRoleListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -69,7 +69,7 @@ func newRoleListCmd() *cobra.Command {
 	}
 }
 
-// newRoleGetCmd builds `pve access role get <roleid>`. The response is a map of
+// newRoleGetCmd builds `pmx access role get <roleid>`. The response is a map of
 // privilege name to a boolean flag; enabled privileges are listed.
 func newRoleGetCmd() *cobra.Command {
 	return &cobra.Command{
@@ -101,7 +101,7 @@ func newRoleGetCmd() *cobra.Command {
 	}
 }
 
-// newRoleCreateCmd builds `pve access role create <roleid> [--privs <csv>]`.
+// newRoleCreateCmd builds `pmx access role create <roleid> [--privs <csv>]`.
 func newRoleCreateCmd() *cobra.Command {
 	var privs string
 	cmd := &cobra.Command{
@@ -127,7 +127,7 @@ func newRoleCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newRoleSetCmd builds `pve access role set <roleid> --privs <csv> [--append]`.
+// newRoleSetCmd builds `pmx access role set <roleid> --privs <csv> [--append]`.
 // Without --append the privilege list replaces the role's existing privileges.
 func newRoleSetCmd() *cobra.Command {
 	var privs string
@@ -161,7 +161,7 @@ func newRoleSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newRoleDeleteCmd builds `pve access role delete <roleid>`.
+// newRoleDeleteCmd builds `pmx access role delete <roleid>`.
 func newRoleDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

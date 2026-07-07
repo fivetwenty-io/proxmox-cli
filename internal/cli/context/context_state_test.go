@@ -12,9 +12,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // ---------------------------------------------------------------------------
@@ -654,7 +654,7 @@ func TestPrevious_NoContexts_ExitsNonZero(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestAdd_CreateAlias_Works confirms `context create` is an accepted alias for
-// `context add`, so both `pve context add <name>` and `pve context create <name>`
+// `context add`, so both `pmx context add <name>` and `pmx context create <name>`
 // reach the same RunE.
 func TestAdd_CreateAlias_Works(t *testing.T) {
 	cfg := &config.Config{}
@@ -676,7 +676,7 @@ func TestAdd_CreateAlias_Works(t *testing.T) {
 }
 
 // TestAdd_CreateAlias_HelpContainsAlias verifies the command carries the alias
-// declaration so `pve context create --help` resolves.
+// declaration so `pmx context create --help` resolves.
 func TestAdd_CreateAlias_HelpContainsAlias(t *testing.T) {
 	root := Group(nil)
 	var addCmd *cobra.Command

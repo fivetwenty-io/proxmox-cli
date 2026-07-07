@@ -1,9 +1,9 @@
-"""rsync: top-level rsync wrapper (`pve rsync [flags] <rsync-arg>...`).
+"""rsync: top-level rsync wrapper (`pmx rsync [flags] <rsync-arg>...`).
 
-Delegates to the same SSH-transport plumbing as `pve node rsync` (resolves a
+Delegates to the same SSH-transport plumbing as `pmx node rsync` (resolves a
 `node:path` operand to the cluster address and injects `-e "ssh ..."`; see
 `node.py`), so every invocation execs the real `rsync`/`ssh` binaries and
-transfers files against a live node. `pve node rsync` already exercises that
+transfers files against a live node. `pmx node rsync` already exercises that
 shared code path live and SSH-gated in `scripts/lifecycle.py`; this top-level
 alias is not yet wired into the mutate phase itself, so it stays deferred here
 and is covered by unit tests (`internal/cli/remote/rsync_test.go`,
@@ -22,8 +22,8 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "rsync",
         "transfers files to/from a live node over SSH, so it cannot be driven "
-        "head-less by the read-only sweep; shares the `pve node rsync` code "
+        "head-less by the read-only sweep; shares the `pmx node rsync` code "
         "path (SSH-gated live coverage there) but this top-level alias is not "
         "yet wired into the mutate phase; covered by unit tests",
-        "pve rsync <node>:/tmp/pve-cli-e2e-rsync /tmp/pve-cli-e2e-rsync",
+        "pmx rsync <node>:/tmp/pmx-cli-e2e-rsync /tmp/pmx-cli-e2e-rsync",
     )

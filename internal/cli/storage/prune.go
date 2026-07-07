@@ -10,8 +10,8 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // pruneEntry is the subset of a prunebackups element rendered in the table. The
@@ -72,7 +72,7 @@ func (kf *keepFlags) pruneBackupsString(cmd *cobra.Command) string {
 	return strings.Join(parts, ",")
 }
 
-// newPruneCmd builds `pve storage prune <storage>` — prune backup archives on a
+// newPruneCmd builds `pmx storage prune <storage>` — prune backup archives on a
 // storage according to the given retention options. With --dry-run the command
 // previews which archives would be removed without deleting anything.
 func newPruneCmd() *cobra.Command {
@@ -93,7 +93,7 @@ func newPruneCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 			fl := cmd.Flags()

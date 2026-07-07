@@ -8,8 +8,8 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // featureState is the parsed form of the container features= property string.
@@ -118,22 +118,22 @@ func compactFeatures(fs featureState) string {
 	return strings.Join(on, ",")
 }
 
-// newSecurityFeaturesCmd builds `pve lxc security features` and its sub-commands.
+// newSecurityFeaturesCmd builds `pmx lxc security features` and its sub-commands.
 func newSecurityFeaturesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "features",
 		Short: "Inspect and set container feature flags (nesting, keyctl, fuse, mknod, force_rw_sys, mount)",
 		Long: "Inspect and set the features= config option of an LXC container with structured " +
-			"per-feature flags, using the PVE config API (no ssh). This is NOT the 'pve lxc feature' " +
+			"per-feature flags, using the PVE config API (no ssh). This is NOT the 'pmx lxc feature' " +
 			"command, which is an unrelated snapshot/clone/copy support probe.\n\n" +
-			"The raw --features string on 'pve lxc create' and 'pve lxc config set' stays available " +
+			"The raw --features string on 'pmx lxc create' and 'pmx lxc config set' stays available " +
 			"as an escape hatch.",
 	}
 	cmd.AddCommand(newSecurityFeaturesShowCmd(), newSecurityFeaturesSetCmd())
 	return cmd
 }
 
-// newSecurityFeaturesShowCmd builds `pve lxc security features show <vmid|name>`.
+// newSecurityFeaturesShowCmd builds `pmx lxc security features show <vmid|name>`.
 func newSecurityFeaturesShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -172,7 +172,7 @@ func newSecurityFeaturesShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityFeaturesSetCmd builds `pve lxc security features set <vmid|name>`.
+// newSecurityFeaturesSetCmd builds `pmx lxc security features set <vmid|name>`.
 func newSecurityFeaturesSetCmd() *cobra.Command {
 	var (
 		nesting bool
@@ -195,7 +195,7 @@ func newSecurityFeaturesSetCmd() *cobra.Command {
 			"but breaks systemd-networkd; mknod is experimental and needs a recent kernel; mount " +
 			"loop and NFS filesystems widen the attack surface. Feature changes apply on the next " +
 			"container start.\n\n" +
-			"Example: pve lxc security features set web1 --nesting --keyctl",
+			"Example: pmx lxc security features set web1 --nesting --keyctl",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -275,7 +275,7 @@ func newSecurityFeaturesSetCmd() *cobra.Command {
 			}
 
 			res := output.Result{
-				Message: msg + fmt.Sprintf(" Changes apply on next start (restart with 'pve lxc reboot %s').", vmid),
+				Message: msg + fmt.Sprintf(" Changes apply on next start (restart with 'pmx lxc reboot %s').", vmid),
 				Raw:     map[string]any{"vmid": vmid, "node": node},
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

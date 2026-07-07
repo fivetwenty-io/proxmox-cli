@@ -1,2 +1,2 @@
-// Package logx initialises the slog JSONL file logger for pve CLI commands.
+// Package logx initialises the slog JSONL file logger for pmx CLI commands.
 package logx

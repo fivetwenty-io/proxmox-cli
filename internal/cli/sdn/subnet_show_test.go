@@ -6,25 +6,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestSubnetShow verifies `pve sdn subnet show` issues a GET to the
+// TestSubnetShow verifies `pmx sdn subnet show` issues a GET to the
 // single-subnet endpoint and renders the returned fields.
 func TestSubnetShow(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{
-		"subnet": "10.241.0.0/24", "vnet": "pvecli0", "gateway": "10.241.0.1", "zone": "pvecli",
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{
+		"subnet": "10.241.0.0/24", "vnet": "pmxcli0", "gateway": "10.241.0.1", "zone": "pmxcli",
 	}, 200)
 
-	out, err := run(t, f, "", "subnet", "show", "pvecli0", "10.241.0.0-24")
+	out, err := run(t, f, "", "subnet", "show", "pmxcli0", "10.241.0.0-24")
 	require.NoError(t, err)
 	require.Contains(t, out, "10.241.0.0/24")
 	require.Contains(t, out, "10.241.0.1")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", rec[0].path)
 }
 
 // TestSubnetShowPendingRunning verifies the --pending and --running flags are
@@ -32,11 +32,11 @@ func TestSubnetShow(t *testing.T) {
 func TestSubnetShowPendingRunning(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{
-		"subnet": "10.241.0.0/24", "vnet": "pvecli0",
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{
+		"subnet": "10.241.0.0/24", "vnet": "pmxcli0",
 	}, 200)
 
-	_, err := run(t, f, "", "subnet", "show", "pvecli0", "10.241.0.0-24", "--pending", "--running")
+	_, err := run(t, f, "", "subnet", "show", "pmxcli0", "10.241.0.0-24", "--pending", "--running")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "1", rec[0].query.Get("pending"))
@@ -47,9 +47,9 @@ func TestSubnetShowPendingRunning(t *testing.T) {
 func TestSubnetShowNotFound(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/subnets/missing", nil, 404)
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/subnets/missing", nil, 404)
 
-	_, err := run(t, f, "", "subnet", "show", "pvecli0", "missing")
+	_, err := run(t, f, "", "subnet", "show", "pmxcli0", "missing")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "get subnet")
 	require.Len(t, rec, 1)

@@ -7,10 +7,10 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// newRrddataCmd builds `pve node rrddata` — fetches structured time-series
+// newRrddataCmd builds `pmx node rrddata` — fetches structured time-series
 // performance metrics for the resolved node from the PVE RRD database.
 func newRrddataCmd() *cobra.Command {
 	var (

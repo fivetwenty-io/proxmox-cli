@@ -9,10 +9,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // newRunnerDeps builds test deps wired to the fake API server and a fake ssh

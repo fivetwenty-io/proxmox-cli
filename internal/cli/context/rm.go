@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRmCmd builds `pve context rm <name>` (aliases: remove, delete).
+// newRmCmd builds `pmx context rm <name>` (aliases: remove, delete).
 //
 // Guards:
 //   - Name must exist in config.
@@ -66,7 +66,7 @@ func newRmCmd() *cobra.Command {
 			if name == cfg.CurrentContext && !force {
 				return fmt.Errorf(
 					"context %q is the active context; "+
-						"run 'pve context select <other>' first, or pass --force to remove anyway",
+						"run 'pmx context select <other>' first, or pass --force to remove anyway",
 					name,
 				)
 			}

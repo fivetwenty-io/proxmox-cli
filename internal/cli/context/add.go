@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// addFlags holds the raw flag values for `pve context add`.
+// addFlags holds the raw flag values for `pmx context add`.
 type addFlags struct {
 	host          string
 	port          int
@@ -31,7 +31,7 @@ type addFlags struct {
 	force         bool
 }
 
-// newAddCmd builds `pve context add <name>` (alias: create).
+// newAddCmd builds `pmx context add <name>` (alias: create).
 func newAddCmd() *cobra.Command {
 	var f addFlags
 

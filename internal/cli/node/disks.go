@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newDisksCmd builds the `pve node disks` sub-tree: physical-disk inventory,
+// newDisksCmd builds the `pmx node disks` sub-tree: physical-disk inventory,
 // SMART health, the read-only storage-type listing/get verbs, the destructive
 // delete verbs, and the disk-initialization verbs (create, init-gpt, wipe).
 func newDisksCmd() *cobra.Command {
@@ -380,7 +380,7 @@ func newDisksCreateDirectoryCmd() *cobra.Command {
 
 // ---- ls (list storage-type pools) -----------------------------------------
 
-// newDisksLsCmd builds the `pve node disks ls <type>` sub-group that lists
+// newDisksLsCmd builds the `pmx node disks ls <type>` sub-group that lists
 // existing storage pools by type: directory, lvm, lvmthin, or zfs.
 func newDisksLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -479,7 +479,7 @@ func newDisksLsZfsCmd() *cobra.Command {
 
 // ---- get (single ZFS pool detail) ------------------------------------------
 
-// newDisksGetCmd builds `pve node disks get zfs <name>`.
+// newDisksGetCmd builds `pmx node disks get zfs <name>`.
 func newDisksGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get",
@@ -512,7 +512,7 @@ func newDisksGetZfsCmd() *cobra.Command {
 
 // ---- delete (destroy storage pools) ----------------------------------------
 
-// newDisksDeleteCmd builds the `pve node disks delete <type> <name>` sub-group.
+// newDisksDeleteCmd builds the `pmx node disks delete <type> <name>` sub-group.
 // All delete verbs are destructive and require --yes.
 func newDisksDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{

@@ -14,18 +14,18 @@ import (
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/remote"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/lxcconf"
-	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pve-cli/internal/nodefile"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/lxcconf"
+	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/pmx-cli/internal/nodefile"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
-// newSecurityCmd builds `pve lxc security` and its show/list/caps/features
+// newSecurityCmd builds `pmx lxc security` and its show/list/caps/features
 // sub-commands: the umbrella for reading and hardening a container's security
 // posture (privilege level, feature flags, and the raw capability whitelist).
 func newSecurityCmd() *cobra.Command {
@@ -81,7 +81,7 @@ type securityPosture struct {
 	Raw          [][]string     `json:"raw"`
 }
 
-// newSecurityShowCmd builds `pve lxc security show <vmid|name>`.
+// newSecurityShowCmd builds `pmx lxc security show <vmid|name>`.
 func newSecurityShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -92,7 +92,7 @@ func newSecurityShowCmd() *cobra.Command {
 			"Privilege level cannot be safely flipped in place: the API accepts unprivileged on " +
 			"update but does not remap the rootfs UIDs, and PVE documents it as \"should not be " +
 			"modified manually.\" The supported path is to back up and restore with an explicit " +
-			"privilege choice (see 'pve lxc create --restore --force --unprivileged ...').",
+			"privilege choice (see 'pmx lxc create --restore --force --unprivileged ...').",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -196,7 +196,7 @@ type securityRow struct {
 	protection   bool
 }
 
-// newSecurityListCmd builds `pve lxc security list`.
+// newSecurityListCmd builds `pmx lxc security list`.
 func newSecurityListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -448,7 +448,7 @@ func runCapsMutation(
 func restartSuffix(cmd *cobra.Command, deps *cli.Deps, vmid, node string, restart bool) (string, error) {
 	if !restart {
 		return fmt.Sprintf(
-			" Changes apply on next start (restart with 'pve lxc reboot %s' or pass --restart)", vmid), nil
+			" Changes apply on next start (restart with 'pmx lxc reboot %s' or pass --restart)", vmid), nil
 	}
 
 	st, err := deps.API.Nodes.ListLxcStatusCurrent(cmd.Context(), node, vmid)

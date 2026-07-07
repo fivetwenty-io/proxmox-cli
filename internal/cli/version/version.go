@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	selfversion "github.com/fivetwenty-io/pve-cli/internal/version"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	selfversion "github.com/fivetwenty-io/pmx-cli/internal/version"
 )
 
-// Group builds the `pve version` command and its sub-commands.
+// Group builds the `pmx version` command and its sub-commands.
 //
 // The group command itself reports the Proxmox VE cluster API version (it
 // contacts the server). The `client` sub-command reports this CLI's own build
@@ -20,7 +20,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Use:   "version",
 		Short: "Show the Proxmox VE cluster API version",
 		Long: "Show the Proxmox VE cluster API version reported by the target.\n\n" +
-			"Use `pve version client` to show this CLI's own build information.",
+			"Use `pmx version client` to show this CLI's own build information.",
 		Args: cobra.NoArgs,
 		RunE: runClusterVersion,
 	}
@@ -50,7 +50,7 @@ func runClusterVersion(cmd *cobra.Command, _ []string) error {
 	return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
 }
 
-// newClientCmd builds `pve version client`, which reports CLI build info only.
+// newClientCmd builds `pmx version client`, which reports CLI build info only.
 // It is annotated noClient so the root skips API client construction.
 func newClientCmd() *cobra.Command {
 	return &cobra.Command{
@@ -63,7 +63,7 @@ func newClientCmd() *cobra.Command {
 	}
 }
 
-// clientInfo is the structured shape rendered for `pve version client` in JSON
+// clientInfo is the structured shape rendered for `pmx version client` in JSON
 // and YAML output.
 type clientInfo struct {
 	// Version is the human-readable CLI release tag.

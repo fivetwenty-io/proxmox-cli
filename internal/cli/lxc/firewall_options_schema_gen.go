@@ -2,7 +2,7 @@
 
 package lxc
 
-import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // firewallOptionSchemas describes every settable option from the PVE API schema for
 // PUT /nodes/{node}/lxc/{vmid}/firewall/options, in lexical order by API key.

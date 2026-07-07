@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // tapePoolConfigPath is the base /config/media-pool endpoint (`tape pool` CRUD).

@@ -12,8 +12,8 @@ import (
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // validBackupTypes is the set of PBS backup-type values accepted in a
@@ -246,7 +246,7 @@ func epochCellPtr(v *int64) string {
 	return time.Unix(*v, 0).UTC().Format(time.RFC3339)
 }
 
-// newSnapshotCmd builds the `pve pbs snapshot` command and its sub-commands
+// newSnapshotCmd builds the `pmx pbs snapshot` command and its sub-commands
 // for managing individual backup snapshots (a single point-in-time backup,
 // addressed as <type>/<id>/<time>) in a PBS datastore.
 func newSnapshotCmd() *cobra.Command {
@@ -270,7 +270,7 @@ func newSnapshotCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotLsCmd builds `pve pbs snapshot ls [<type>/<id>]` — list backup
+// newSnapshotLsCmd builds `pmx pbs snapshot ls [<type>/<id>]` — list backup
 // snapshots in a datastore, optionally filtered to one backup group (GET
 // /admin/datastore/{store}/snapshots).
 func newSnapshotLsCmd() *cobra.Command {
@@ -328,7 +328,7 @@ func newSnapshotLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotShowCmd builds `pve pbs snapshot show <type>/<id>/<time>` —
+// newSnapshotShowCmd builds `pmx pbs snapshot show <type>/<id>/<time>` —
 // render every populated field of one backup snapshot. PBS has no
 // per-snapshot GET, so this walks the datastore's snapshot list for the
 // matching group (GET /admin/datastore/{store}/snapshots) and time.
@@ -418,7 +418,7 @@ func newSnapshotShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotFilesCmd builds `pve pbs snapshot files <type>/<id>/<time>` —
+// newSnapshotFilesCmd builds `pmx pbs snapshot files <type>/<id>/<time>` —
 // list the archive files stored in a backup snapshot (GET
 // /admin/datastore/{store}/files).
 func newSnapshotFilesCmd() *cobra.Command {
@@ -469,7 +469,7 @@ func newSnapshotFilesCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotDeleteCmd builds `pve pbs snapshot delete <type>/<id>/<time>` —
+// newSnapshotDeleteCmd builds `pmx pbs snapshot delete <type>/<id>/<time>` —
 // permanently remove one backup snapshot (DELETE
 // /admin/datastore/{store}/snapshots).
 func newSnapshotDeleteCmd() *cobra.Command {
@@ -518,7 +518,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotProtectCmd builds `pve pbs snapshot protect <type>/<id>/<time>`
+// newSnapshotProtectCmd builds `pmx pbs snapshot protect <type>/<id>/<time>`
 // — mark a backup snapshot as protected so prune and garbage-collection jobs
 // never remove it (PUT /admin/datastore/{store}/protected).
 func newSnapshotProtectCmd() *cobra.Command {
@@ -539,7 +539,7 @@ func newSnapshotProtectCmd() *cobra.Command {
 }
 
 // newSnapshotUnprotectCmd builds
-// `pve pbs snapshot unprotect <type>/<id>/<time>` — clear the protected flag
+// `pmx pbs snapshot unprotect <type>/<id>/<time>` — clear the protected flag
 // on a backup snapshot so prune and garbage-collection jobs may remove it
 // again (PUT /admin/datastore/{store}/protected).
 func newSnapshotUnprotectCmd() *cobra.Command {
@@ -596,7 +596,7 @@ func setSnapshotProtected(cmd *cobra.Command, df *storeFlags, ref string, protec
 		output.Result{Message: fmt.Sprintf("Snapshot %s %s.", ref, verb)}, deps.Format)
 }
 
-// newSnapshotNotesCmd builds `pve pbs snapshot notes <type>/<id>/<time>` —
+// newSnapshotNotesCmd builds `pmx pbs snapshot notes <type>/<id>/<time>` —
 // without --set, print the snapshot's notes text (GET
 // /admin/datastore/{store}/notes); with --set TEXT, replace it (PUT
 // /admin/datastore/{store}/notes).

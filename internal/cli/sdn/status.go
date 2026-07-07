@@ -6,19 +6,19 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
 // resolveNode returns deps.Node or an error with clear remediation steps.
 func resolveNode(deps *cli.Deps) (string, error) {
 	if deps.Node == "" {
-		return "", fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure default-node")
+		return "", fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure default-node")
 	}
 	return deps.Node, nil
 }
 
-// newStatusCmd builds `pve sdn status` and its sub-commands.
-// All commands are read-only and node-scoped; --node (or PVE_NODE) is required.
+// newStatusCmd builds `pmx sdn status` and its sub-commands.
+// All commands are read-only and node-scoped; --node (or PMX_NODE) is required.
 // The group itself only shows help: GET /nodes/{node}/sdn is a directory index,
 // not a status view.
 func newStatusCmd() *cobra.Command {
@@ -26,7 +26,7 @@ func newStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show live SDN status on a node",
 		Long: "Read live SDN state from a specific cluster node. All commands here are " +
-			"read-only. A node must be provided via --node or PVE_NODE.",
+			"read-only. A node must be provided via --node or PMX_NODE.",
 	}
 	cmd.AddCommand(
 		newStatusZonesCmd(),
@@ -36,7 +36,7 @@ func newStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// newStatusZonesCmd builds `pve sdn status zones` and its sub-commands.
+// newStatusZonesCmd builds `pmx sdn status zones` and its sub-commands.
 func newStatusZonesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zones",
@@ -64,7 +64,7 @@ func newStatusZonesCmd() *cobra.Command {
 	return cmd
 }
 
-// newStatusZonesGetCmd builds `pve sdn status zones get`.
+// newStatusZonesGetCmd builds `pmx sdn status zones get`.
 //
 // GET /nodes/{node}/sdn/zones/{zone} is only a directory index (content,
 // bridges, ip-vrf); the zone's status is its row in the zones status list,
@@ -162,7 +162,7 @@ func newStatusZonesIpVrfCmd() *cobra.Command {
 	}
 }
 
-// newStatusVnetsCmd builds `pve sdn status vnets` and its sub-commands.
+// newStatusVnetsCmd builds `pmx sdn status vnets` and its sub-commands.
 // There is no per-vnet status endpoint (GET /nodes/{node}/sdn/vnets/{vnet} is
 // only a directory index); mac-vrf is the vnet-level live view.
 func newStatusVnetsCmd() *cobra.Command {
@@ -196,7 +196,7 @@ func newStatusVnetsMacVrfCmd() *cobra.Command {
 	}
 }
 
-// newStatusFabricsCmd builds `pve sdn status fabrics` and its sub-commands.
+// newStatusFabricsCmd builds `pmx sdn status fabrics` and its sub-commands.
 // There is no per-fabric status summary endpoint (GET
 // /nodes/{node}/sdn/fabrics/{fabric} is only a directory index); routes,
 // neighbors, and interfaces are the fabric-level live views.

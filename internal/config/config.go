@@ -1,5 +1,5 @@
 // Package config provides types, loader, writer, and secret resolver
-// for the pve CLI configuration file (~/.config/pve/config.yml).
+// for the pmx CLI configuration file (~/.config/pmx/config.yml).
 package config
 
 // Product identifies which Proxmox product a context targets.
@@ -16,7 +16,7 @@ type Config struct {
 	// CurrentContext is the name of the active context used when --context is not specified.
 	CurrentContext string `yaml:"current-context"`
 
-	// PreviousContext is the name of the last active context, used by `pve context previous`.
+	// PreviousContext is the name of the last active context, used by `pmx context previous`.
 	PreviousContext string `yaml:"previous-context,omitempty"`
 
 	// DefaultOutput is the default output format (table|ascii|plain|json|yaml) for all commands.
@@ -52,7 +52,7 @@ type Context struct {
 	// TLS holds TLS verification settings.
 	TLS TLSBlock `yaml:"tls,omitempty"`
 
-	// SSH holds per-context defaults for the `pve ssh` and `pve rsync` commands.
+	// SSH holds per-context defaults for the `pmx ssh` and `pmx rsync` commands.
 	SSH SSHBlock `yaml:"ssh,omitempty"`
 
 	// Product selects which Proxmox product this context targets: "pve" or
@@ -109,7 +109,7 @@ type TLSBlock struct {
 	Tofu bool `yaml:"tofu"`
 }
 
-// SSHBlock holds per-context defaults for the `pve ssh` and `pve rsync`
+// SSHBlock holds per-context defaults for the `pmx ssh` and `pmx rsync`
 // commands. A zero value for any field means "not set": the command falls
 // back to its own compiled-in default (user "root", port 22) rather than to
 // an empty/zero override. Precedence at the command level is always

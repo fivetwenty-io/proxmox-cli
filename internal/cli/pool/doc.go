@@ -1,2 +1,2 @@
-// Package pool implements the pve pool command group.
+// Package pool implements the pmx pool command group.
 package pool

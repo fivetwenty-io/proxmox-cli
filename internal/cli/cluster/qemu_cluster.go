@@ -7,10 +7,10 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// newClusterQemuCmd builds the `pve cluster qemu` sub-tree: cluster-wide QEMU
+// newClusterQemuCmd builds the `pmx cluster qemu` sub-tree: cluster-wide QEMU
 // capability inspection commands.
 func newClusterQemuCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -23,7 +23,7 @@ func newClusterQemuCmd() *cobra.Command {
 	return cmd
 }
 
-// newClusterQemuCpuFlagsCmd builds `pve cluster qemu cpu-flags`. It calls
+// newClusterQemuCpuFlagsCmd builds `pmx cluster qemu cpu-flags`. It calls
 // GET /cluster/qemu/cpu-flags and renders the list of available CPU flags.
 // Both --accel and --arch are optional; omitting them returns all flags.
 func newClusterQemuCpuFlagsCmd() *cobra.Command {

@@ -7,7 +7,7 @@ invalid flag values, and not-found lookups).
 
 Every check here is non-mutating: usage/flag errors are rejected before any API
 call, and the not-found lookups are reads. Names deliberately use the
-`pve-cli-` isolation prefix so even a hypothetical side effect stays identifiable.
+`pmx-cli-` isolation prefix so even a hypothetical side effect stays identifiable.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def run(ctx: Ctx) -> None:
 
     # --- product guard (rejected before any API call) ------------------------
 
-    # The sweep context targets Proxmox VE, so every `pve pbs` command must be
+    # The sweep context targets Proxmox VE, so every `pmx pbs` command must be
     # refused with a pointer to `context add --product pbs`. This runs without
     # any PBS server — the guard reads only the local context config.
     ctx.expect_fail("pbs command against a PVE context",

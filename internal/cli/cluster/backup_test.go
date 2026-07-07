@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestBackupList_Table verifies `pve cluster backup list` queries GET
+// TestBackupList_Table verifies `pmx cluster backup list` queries GET
 // /cluster/backup and renders the curated columns.
 func TestBackupList_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -24,7 +24,7 @@ func TestBackupList_Table(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, []any{
 			map[string]any{
-				"id": "backup-pvecli", "schedule": "02:30", "storage": "local",
+				"id": "backup-pmxcli", "schedule": "02:30", "storage": "local",
 				"mode": "snapshot", "enabled": 1, "vmid": "100,101", "comment": "nightly",
 			},
 			map[string]any{
@@ -44,7 +44,7 @@ func TestBackupList_Table(t *testing.T) {
 
 	out := buf.String()
 	require.Contains(t, out, "SCHEDULE")
-	require.Contains(t, out, "backup-pvecli")
+	require.Contains(t, out, "backup-pmxcli")
 	require.Contains(t, out, "02:30")
 	require.Contains(t, out, "100,101")
 	require.Contains(t, out, "nightly")
@@ -53,31 +53,31 @@ func TestBackupList_Table(t *testing.T) {
 	require.Contains(t, out, "no")
 }
 
-// TestBackupGet_Single verifies `pve cluster backup get <id>` reads the per-job
+// TestBackupGet_Single verifies `pmx cluster backup get <id>` reads the per-job
 // path and surfaces the job fields.
 func TestBackupGet_Single(t *testing.T) {
 	f, ac := newFakeClient(t)
 
 	var gotPath string
-	f.HandleFunc("GET /api2/json/cluster/backup/backup-pvecli", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/backup/backup-pmxcli", func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, map[string]any{
-			"id": "backup-pvecli", "schedule": "02:30", "storage": "local", "mode": "snapshot",
+			"id": "backup-pmxcli", "schedule": "02:30", "storage": "local", "mode": "snapshot",
 		})
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "backup", "get", "backup-pvecli"))
+	require.NoError(t, run(deps, &buf, "backup", "get", "backup-pmxcli"))
 
-	require.Equal(t, "/api2/json/cluster/backup/backup-pvecli", gotPath)
+	require.Equal(t, "/api2/json/cluster/backup/backup-pmxcli", gotPath)
 	out := buf.String()
-	require.Contains(t, out, "backup-pvecli")
+	require.Contains(t, out, "backup-pmxcli")
 	require.Contains(t, out, "02:30")
 }
 
-// TestBackupCreate_PostsFields verifies `pve cluster backup create` POSTs the
+// TestBackupCreate_PostsFields verifies `pmx cluster backup create` POSTs the
 // job attributes, including a caller-supplied id.
 func TestBackupCreate_PostsFields(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -95,26 +95,26 @@ func TestBackupCreate_PostsFields(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "backup", "create",
-		"--id", "backup-pvecli", "--schedule", "02:30", "--storage", "local",
+		"--id", "backup-pmxcli", "--schedule", "02:30", "--storage", "local",
 		"--vmid", "100", "--mode", "snapshot"))
 
 	require.Equal(t, http.MethodPost, gotMethod)
-	require.Equal(t, "backup-pvecli", gotForm.Get("id"))
+	require.Equal(t, "backup-pmxcli", gotForm.Get("id"))
 	require.Equal(t, "02:30", gotForm.Get("schedule"))
 	require.Equal(t, "local", gotForm.Get("storage"))
 	require.Equal(t, "100", gotForm.Get("vmid"))
 	require.Equal(t, "snapshot", gotForm.Get("mode"))
-	require.Contains(t, buf.String(), "backup-pvecli")
+	require.Contains(t, buf.String(), "backup-pmxcli")
 }
 
-// TestBackupSet_PutsChangedFields verifies `pve cluster backup set <id>` issues a
+// TestBackupSet_PutsChangedFields verifies `pmx cluster backup set <id>` issues a
 // PUT carrying only the changed fields plus --delete.
 func TestBackupSet_PutsChangedFields(t *testing.T) {
 	f, ac := newFakeClient(t)
 
 	var gotMethod, gotPath string
 	var gotForm url.Values
-	f.HandleFunc("PUT /api2/json/cluster/backup/backup-pvecli", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("PUT /api2/json/cluster/backup/backup-pmxcli", func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		_ = r.ParseForm()
 		gotForm = r.Form
@@ -124,11 +124,11 @@ func TestBackupSet_PutsChangedFields(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "backup", "set", "backup-pvecli",
+	require.NoError(t, run(deps, &buf, "backup", "set", "backup-pmxcli",
 		"--schedule", "04:00", "--delete", "comment"))
 
 	require.Equal(t, http.MethodPut, gotMethod)
-	require.Equal(t, "/api2/json/cluster/backup/backup-pvecli", gotPath)
+	require.Equal(t, "/api2/json/cluster/backup/backup-pmxcli", gotPath)
 	require.Equal(t, "04:00", gotForm.Get("schedule"))
 	require.Equal(t, "comment", gotForm.Get("delete"))
 	// Unset attributes must not be sent.
@@ -142,7 +142,7 @@ func TestBackupDelete_RequiresYes(t *testing.T) {
 	f, ac := newFakeClient(t)
 
 	var called bool
-	f.HandleFunc("DELETE /api2/json/cluster/backup/backup-pvecli", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("DELETE /api2/json/cluster/backup/backup-pmxcli", func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		testhelper.WriteData(w, nil)
 	})
@@ -150,13 +150,13 @@ func TestBackupDelete_RequiresYes(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, "backup", "delete", "backup-pvecli")
+	err := run(deps, &buf, "backup", "delete", "backup-pmxcli")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not be issued without --yes")
 
 	buf.Reset()
-	require.NoError(t, run(deps, &buf, "backup", "delete", "backup-pvecli", "--yes"))
+	require.NoError(t, run(deps, &buf, "backup", "delete", "backup-pmxcli", "--yes"))
 	require.True(t, called)
 	require.Contains(t, buf.String(), "deleted")
 }

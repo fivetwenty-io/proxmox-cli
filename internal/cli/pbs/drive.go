@@ -9,11 +9,11 @@ import (
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newTapeDriveCmd builds `pve pbs tape drive` and its verbs: manage tape
+// newTapeDriveCmd builds `pmx pbs tape drive` and its verbs: manage tape
 // drive configurations (GET/POST/PUT/DELETE /config/drive) and inspect
 // runtime drive state (GET /tape/drive, /tape/scan-drives, and the
 // /tape/drive/{drive}/* status/inventory endpoints).
@@ -59,7 +59,7 @@ type tapeDriveListEntry struct {
 	Vendor          *string `json:"vendor,omitempty"`
 }
 
-// newTapeDriveLsCmd builds `pve pbs tape drive ls` — list configured tape
+// newTapeDriveLsCmd builds `pmx pbs tape drive ls` — list configured tape
 // drives together with autodetected model/vendor/serial information
 // (GET /tape/drive). Scope with --changer and/or --query-activity.
 func newTapeDriveLsCmd() *cobra.Command {
@@ -119,7 +119,7 @@ func newTapeDriveLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveShowCmd builds `pve pbs tape drive show <name>` — show a
+// newTapeDriveShowCmd builds `pmx pbs tape drive show <name>` — show a
 // single tape drive configuration (GET /config/drive/{name}).
 func newTapeDriveShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -148,7 +148,7 @@ func newTapeDriveShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveAddCmd builds `pve pbs tape drive add <name>` — create a tape
+// newTapeDriveAddCmd builds `pmx pbs tape drive add <name>` — create a tape
 // drive configuration (POST /config/drive). --path is required.
 func newTapeDriveAddCmd() *cobra.Command {
 	var (
@@ -192,7 +192,7 @@ func newTapeDriveAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveUpdateCmd builds `pve pbs tape drive update <name>` — update a
+// newTapeDriveUpdateCmd builds `pmx pbs tape drive update <name>` — update a
 // tape drive configuration (PUT /config/drive/{name}). Only flags explicitly
 // set are sent; use --delete to reset properties to their default.
 func newTapeDriveUpdateCmd() *cobra.Command {
@@ -261,7 +261,7 @@ func newTapeDriveUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveDeleteCmd builds `pve pbs tape drive delete <name>` — remove a
+// newTapeDriveDeleteCmd builds `pmx pbs tape drive delete <name>` — remove a
 // tape drive configuration (DELETE /config/drive/{name}).
 //
 // The generated Config.DeleteDrive binding accepts no parameters (unlike
@@ -311,7 +311,7 @@ type tapeScanDriveEntry struct {
 	Vendor string `json:"vendor"`
 }
 
-// newTapeDriveScanCmd builds `pve pbs tape drive scan` — scan for locally
+// newTapeDriveScanCmd builds `pmx pbs tape drive scan` — scan for locally
 // attached SCSI tape drives (GET /tape/scan-drives).
 func newTapeDriveScanCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -350,7 +350,7 @@ func newTapeDriveScanCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveStatusCmd builds `pve pbs tape drive status <drive>` — read
+// newTapeDriveStatusCmd builds `pmx pbs tape drive status <drive>` — read
 // drive and loaded-media status (GET /tape/drive/{drive}/status).
 func newTapeDriveStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -389,7 +389,7 @@ type tapeCartridgeMemoryEntry struct {
 }
 
 // newTapeDriveCartridgeMemoryCmd builds
-// `pve pbs tape drive cartridge-memory <drive>` — read Cartridge Memory
+// `pmx pbs tape drive cartridge-memory <drive>` — read Cartridge Memory
 // (medium auxiliary memory attributes) from the tape currently loaded in a
 // drive (GET /tape/drive/{drive}/cartridge-memory).
 func newTapeDriveCartridgeMemoryCmd() *cobra.Command {
@@ -428,7 +428,7 @@ func newTapeDriveCartridgeMemoryCmd() *cobra.Command {
 }
 
 // newTapeDriveVolumeStatisticsCmd builds
-// `pve pbs tape drive volume-statistics <drive>` — read Volume Statistics
+// `pmx pbs tape drive volume-statistics <drive>` — read Volume Statistics
 // (SCSI log page 17h) from the tape currently loaded in a drive
 // (GET /tape/drive/{drive}/volume-statistics).
 func newTapeDriveVolumeStatisticsCmd() *cobra.Command {
@@ -459,7 +459,7 @@ func newTapeDriveVolumeStatisticsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveReadLabelCmd builds `pve pbs tape drive read-label <drive>` —
+// newTapeDriveReadLabelCmd builds `pmx pbs tape drive read-label <drive>` —
 // read the media label of the tape currently loaded in a drive
 // (GET /tape/drive/{drive}/read-label). Pass --inventorize to also record
 // the result in the media inventory.
@@ -507,7 +507,7 @@ type tapeInventoryEntry struct {
 	Uuid      *string `json:"uuid,omitempty"`
 }
 
-// newTapeDriveInventoryCmd builds `pve pbs tape drive inventory <drive>` —
+// newTapeDriveInventoryCmd builds `pmx pbs tape drive inventory <drive>` —
 // list known media labels via the drive's associated changer (Changer
 // Inventory; GET /tape/drive/{drive}/inventory). Only useful for drives with
 // an associated changer device; this also updates the media online status.

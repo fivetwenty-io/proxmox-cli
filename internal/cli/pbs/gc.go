@@ -8,13 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 )
 
-// newGcCmd builds `pve pbs gc` — run and inspect Proxmox Backup Server
+// newGcCmd builds `pmx pbs gc` — run and inspect Proxmox Backup Server
 // garbage-collection jobs (POST/GET /admin/datastore/{store}/gc, GET /admin/gc).
 // There is no separate GC job configuration API: the schedule is a property
 // of the datastore itself, so unlike prune and verify there is no `gc job`
@@ -116,7 +116,7 @@ func gcStatusSingle(e gcStatusEntry) map[string]string {
 	return single
 }
 
-// newGcRunCmd builds `pve pbs gc run` — start a garbage-collection run on one
+// newGcRunCmd builds `pmx pbs gc run` — start a garbage-collection run on one
 // datastore (POST /admin/datastore/{store}/gc).
 func newGcRunCmd() *cobra.Command {
 	var store string
@@ -151,7 +151,7 @@ func newGcRunCmd() *cobra.Command {
 	return cmd
 }
 
-// newGcStatusCmd builds `pve pbs gc status` — report the last/next
+// newGcStatusCmd builds `pmx pbs gc status` — report the last/next
 // garbage-collection run and space-reclamation counters for one datastore
 // (GET /admin/datastore/{store}/gc).
 func newGcStatusCmd() *cobra.Command {
@@ -210,7 +210,7 @@ func newGcStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// newGcLsCmd builds `pve pbs gc ls` — list garbage-collection status across
+// newGcLsCmd builds `pmx pbs gc ls` — list garbage-collection status across
 // every datastore, or one when --store is given (GET /admin/gc).
 func newGcLsCmd() *cobra.Command {
 	var store string

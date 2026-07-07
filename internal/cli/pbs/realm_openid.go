@@ -10,12 +10,12 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRealmOpenidCmd builds `pve pbs realm openid` — manage OpenID Connect
+// newRealmOpenidCmd builds `pmx pbs realm openid` — manage OpenID Connect
 // realm configurations (/config/access/openid CRUD).
 //
 // The interactive auth-url/login sub-tree (POST /access/openid/auth-url,
@@ -55,7 +55,7 @@ type realmOpenidListEntry struct {
 	UsernameClaim *string      `json:"username-claim,omitempty"`
 }
 
-// newRealmOpenidLsCmd builds `pve pbs realm openid ls` — list configured
+// newRealmOpenidLsCmd builds `pmx pbs realm openid ls` — list configured
 // OpenID realms (GET /config/access/openid).
 func newRealmOpenidLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -102,7 +102,7 @@ func newRealmOpenidLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmOpenidShowCmd builds `pve pbs realm openid show <realm>` — show a
+// newRealmOpenidShowCmd builds `pmx pbs realm openid show <realm>` — show a
 // single OpenID realm's configuration (GET /config/access/openid/{realm}).
 func newRealmOpenidShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -268,7 +268,7 @@ func (of *realmOpenidFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateA
 	}
 }
 
-// newRealmOpenidAddCmd builds `pve pbs realm openid add <realm>` — create an
+// newRealmOpenidAddCmd builds `pmx pbs realm openid add <realm>` — create an
 // OpenID realm configuration (POST /config/access/openid). --client-id and
 // --issuer-url are required; every other option is optional and only
 // forwarded when explicitly set.
@@ -321,7 +321,7 @@ func newRealmOpenidAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmOpenidUpdateCmd builds `pve pbs realm openid update <realm>` —
+// newRealmOpenidUpdateCmd builds `pmx pbs realm openid update <realm>` —
 // update an OpenID realm configuration (PUT /config/access/openid/{realm}).
 // Only flags explicitly set are sent; use --delete to reset properties to
 // their default. --username-claim has no update flag: PBS does not allow
@@ -368,7 +368,7 @@ func newRealmOpenidUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmOpenidDeleteCmd builds `pve pbs realm openid delete <realm>` —
+// newRealmOpenidDeleteCmd builds `pmx pbs realm openid delete <realm>` —
 // remove an OpenID realm configuration (DELETE /config/access/openid/{realm}).
 func newRealmOpenidDeleteCmd() *cobra.Command {
 	var (

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // --- vnet firewall rules ---
@@ -14,28 +14,28 @@ import (
 func TestVnetFirewallRulesList(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules", []any{
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules", []any{
 		map[string]any{"pos": 0, "type": "forward", "action": "ACCEPT", "proto": "tcp",
 			"dport": "22", "enable": 1, "comment": "ssh"},
 		map[string]any{"pos": 1, "type": "forward", "action": "DROP", "enable": 0},
 	}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "rules", "list", "pvecli0")
+	out, err := run(t, f, "", "vnet", "firewall", "rules", "list", "pmxcli0")
 	require.NoError(t, err)
 	require.Contains(t, out, "ACCEPT")
 	require.Contains(t, out, "ssh")
 	require.Contains(t, out, "DROP")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/firewall/rules", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules", rec[0].path)
 }
 
 func TestVnetFirewallRulesListError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules", nil, 500)
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules", nil, 500)
 
-	_, err := run(t, f, "", "vnet", "firewall", "rules", "list", "pvecli0")
+	_, err := run(t, f, "", "vnet", "firewall", "rules", "list", "pmxcli0")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "list firewall rules for vnet")
 }
@@ -43,19 +43,19 @@ func TestVnetFirewallRulesListError(t *testing.T) {
 func TestVnetFirewallRulesCreate(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules", map[string]any{}, 200)
+	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "rules", "create", "pvecli0",
-		"--type", "forward", "--action", "DROP", "--enable", "0", "--comment", "pve-cli-e2e")
+	out, err := run(t, f, "", "vnet", "firewall", "rules", "create", "pmxcli0",
+		"--type", "forward", "--action", "DROP", "--enable", "0", "--comment", "pmx-cli-e2e")
 	require.NoError(t, err)
 	require.Contains(t, out, "Firewall rule added")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPost, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/firewall/rules", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules", rec[0].path)
 	require.Equal(t, "forward", rec[0].body["type"])
 	require.Equal(t, "DROP", rec[0].body["action"])
 	require.Equal(t, "0", rec[0].body["enable"])
-	require.Equal(t, "pve-cli-e2e", rec[0].body["comment"])
+	require.Equal(t, "pmx-cli-e2e", rec[0].body["comment"])
 	// Unset optional fields must not be forwarded.
 	require.NotContains(t, rec[0].body, "source")
 	require.NotContains(t, rec[0].body, "dport")
@@ -67,9 +67,9 @@ func TestVnetFirewallRulesCreate(t *testing.T) {
 func TestVnetFirewallRulesCreateRequiresTypeAction(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules", map[string]any{}, 200)
+	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "firewall", "rules", "create", "pvecli0", "--type", "forward")
+	_, err := run(t, f, "", "vnet", "firewall", "rules", "create", "pmxcli0", "--type", "forward")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "action")
 	require.Empty(t, rec, "no request must be issued when a required flag is missing")
@@ -80,16 +80,16 @@ func TestVnetFirewallRulesGet(t *testing.T) {
 	var rec []recordedRequest
 	// PVE returns pos as a STRING on the single-rule GET; the command must use
 	// the raw fetch path and render it without a decode error.
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", map[string]any{
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", map[string]any{
 		"pos": "0", "type": "forward", "action": "ACCEPT", "proto": "tcp", "dport": "22",
 	}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "rules", "get", "pvecli0", "0")
+	out, err := run(t, f, "", "vnet", "firewall", "rules", "get", "pmxcli0", "0")
 	require.NoError(t, err)
 	require.Contains(t, out, "ACCEPT")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", rec[0].path)
 }
 
 // TestVnetFirewallRulesSetRequiresChange verifies a set with no field flags is
@@ -97,9 +97,9 @@ func TestVnetFirewallRulesGet(t *testing.T) {
 func TestVnetFirewallRulesSetRequiresChange(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "firewall", "rules", "set", "pvecli0", "0")
+	_, err := run(t, f, "", "vnet", "firewall", "rules", "set", "pmxcli0", "0")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no changes to set")
 	require.Empty(t, rec)
@@ -108,9 +108,9 @@ func TestVnetFirewallRulesSetRequiresChange(t *testing.T) {
 func TestVnetFirewallRulesSetForwardsChanged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "rules", "set", "pvecli0", "0",
+	out, err := run(t, f, "", "vnet", "firewall", "rules", "set", "pmxcli0", "0",
 		"--action", "REJECT", "--comment", "updated")
 	require.NoError(t, err)
 	require.Contains(t, out, "updated")
@@ -127,9 +127,9 @@ func TestVnetFirewallRulesSetForwardsChanged(t *testing.T) {
 func TestVnetFirewallRulesDeleteWithoutConfirmation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "firewall", "rules", "delete", "pvecli0", "0")
+	_, err := run(t, f, "", "vnet", "firewall", "rules", "delete", "pmxcli0", "0")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "without confirmation")
 	require.Empty(t, rec, "no request must be issued without --yes")
@@ -138,14 +138,14 @@ func TestVnetFirewallRulesDeleteWithoutConfirmation(t *testing.T) {
 func TestVnetFirewallRulesDeleteWithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "rules", "delete", "pvecli0", "0", "--yes")
+	out, err := run(t, f, "", "vnet", "firewall", "rules", "delete", "pmxcli0", "0", "--yes")
 	require.NoError(t, err)
 	require.Contains(t, out, "deleted")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodDelete, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/firewall/rules/0", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/firewall/rules/0", rec[0].path)
 }
 
 // --- vnet firewall options ---
@@ -153,25 +153,25 @@ func TestVnetFirewallRulesDeleteWithYes(t *testing.T) {
 func TestVnetFirewallOptionsGet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/options", map[string]any{
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", map[string]any{
 		"enable": 1, "policy_forward": "ACCEPT", "log_level_forward": "info",
 	}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "options", "get", "pvecli0")
+	out, err := run(t, f, "", "vnet", "firewall", "options", "get", "pmxcli0")
 	require.NoError(t, err)
 	require.Contains(t, out, "ACCEPT")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/firewall/options", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", rec[0].path)
 }
 
 // TestVnetFirewallOptionsSetRequiresChange verifies a no-op set is rejected.
 func TestVnetFirewallOptionsSetRequiresChange(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/firewall/options", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "firewall", "options", "set", "pvecli0")
+	_, err := run(t, f, "", "vnet", "firewall", "options", "set", "pmxcli0")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no options to set")
 	require.Empty(t, rec)
@@ -180,9 +180,9 @@ func TestVnetFirewallOptionsSetRequiresChange(t *testing.T) {
 func TestVnetFirewallOptionsSetForwardsChanged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/firewall/options", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "options", "set", "pvecli0",
+	out, err := run(t, f, "", "vnet", "firewall", "options", "set", "pmxcli0",
 		"--enable", "--policy-forward", "DROP")
 	require.NoError(t, err)
 	require.Contains(t, out, "updated")

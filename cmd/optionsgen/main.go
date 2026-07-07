@@ -1,14 +1,14 @@
 // Command optionsgen generates the option-schema tables used by the CLI's
 // options/config command families. It extracts one endpoint's parameter
 // schema (types, defaults, allowed values, numeric bounds, and dict sub-keys)
-// from the pve-apiclient-go module's _data/apidoc.json and emits it as a Go
+// from the proxmox-apiclient-go module's _data/apidoc.json and emits it as a Go
 // source file declaring a []optionschema.Schema, so the CLI can describe
 // every settable option — including ones not currently set — without a
 // server round-trip.
 //
 // Usage (normally via go:generate in the owning package):
 //
-//	go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen \
+//	go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen \
 //	    -path /cluster/options -out options_schema_gen.go
 //
 // Path parameters ({node}, {vmid}, …) leak into apidoc properties and are
@@ -18,7 +18,7 @@
 // handles the rare name that needs a hand-picked flag (numa[n]=numa-node).
 // The package name defaults to $GOPACKAGE, which go generate sets.
 //
-// The apidoc.json location defaults to the pve-apiclient-go module directory
+// The apidoc.json location defaults to the proxmox-apiclient-go module directory
 // reported by `go list -m`; pass -apidoc to point at another copy. -source
 // picks a different file within that module's _data directory without
 // spelling out the whole path — e.g. -source pbs-apidoc.json reads the
@@ -44,7 +44,7 @@ const clientModule = "github.com/fivetwenty-io/proxmox-apiclient-go/v3"
 
 // schemaPackage is the package providing the Schema/SubKey types the
 // generated file references.
-const schemaPackage = "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+const schemaPackage = "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // genConfig carries one generation target.
 type genConfig struct {

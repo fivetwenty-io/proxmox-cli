@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestFirewallOptionSchemas_GeneratedTable sanity-checks the generated
@@ -61,7 +61,7 @@ func TestClusterFirewallOptions_Describe(t *testing.T) {
 	buf.Reset()
 	err := run(deps, &buf, "firewall", "options", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pve cluster firewall options describe")
+	require.Contains(t, err.Error(), "pmx cluster firewall options describe")
 }
 
 // TestClusterFirewallOptions_GetDefaults verifies `get --defaults` merges

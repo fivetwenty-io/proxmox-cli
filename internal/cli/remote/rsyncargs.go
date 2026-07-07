@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// pveFlagValues holds the pve-owned flag values extracted from the front of a
-// `pve rsync` argv by extractPVEFlags, split by where the caller must apply
+// pmxFlagValues holds the pmx-owned flag values extracted from the front of a
+// `pmx rsync` argv by extractPMXFlags, split by where the caller must apply
 // them.
-type pveFlagValues struct {
+type pmxFlagValues struct {
 	// Root holds values destined for cmd.Root().PersistentFlags().Set:
 	// "context", "config", "insecure", "debug".
 	Root map[string]string
@@ -21,14 +21,14 @@ type pveFlagValues struct {
 	Help bool
 }
 
-// pveFlagSpec describes one pve-owned flag recognised by extractPVEFlags.
-type pveFlagSpec struct {
+// pmxFlagSpec describes one pmx-owned flag recognised by extractPMXFlags.
+type pmxFlagSpec struct {
 	// names lists every token that selects this flag, e.g. {"-c", "--context"}.
 	names []string
 	// takesValue is true when the flag consumes a following value (either
 	// "--flag value" or "--flag=value"); false for boolean flags.
 	takesValue bool
-	// target is "root" or "ssh", selecting which map in pveFlagValues the
+	// target is "root" or "ssh", selecting which map in pmxFlagValues the
 	// extracted value is stored under.
 	target string
 	// dest is the flag name used when applying the value (cmd.Root().
@@ -36,11 +36,11 @@ type pveFlagSpec struct {
 	dest string
 }
 
-// pveFlagTable lists every flag extractPVEFlags recognises at the front of a
-// `pve rsync` argv. "-c/--context", "--config", "--insecure", and "--debug"
+// pmxFlagTable lists every flag extractPMXFlags recognises at the front of a
+// `pmx rsync` argv. "-c/--context", "--config", "--insecure", and "--debug"
 // apply to the shared root persistent flag set; the "--ssh-*"/"--no-strict"
 // flags are long-only because rsync itself owns the short forms -l, -p, -i.
-var pveFlagTable = []pveFlagSpec{
+var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"-c", "--context"}, takesValue: true, target: "root", dest: "context"},
 	{names: []string{"--config"}, takesValue: true, target: "root", dest: "config"},
 	{names: []string{"--insecure"}, takesValue: false, target: "root", dest: "insecure"},
@@ -52,19 +52,19 @@ var pveFlagTable = []pveFlagSpec{
 	{names: []string{"--no-strict"}, takesValue: false, target: "ssh", dest: "no-strict"},
 }
 
-// extractPVEFlags scans args from the front for pve-owned flags (context,
+// extractPMXFlags scans args from the front for pmx-owned flags (context,
 // config, insecure, debug, help, and the long-only ssh-* connection flags),
 // stopping at the first token that is not one of them — including a bare
-// "--", which extractPVEFlags leaves untouched in rest for rsync itself to
+// "--", which extractPMXFlags leaves untouched in rest for rsync itself to
 // interpret. Recognised value-taking flags accept both "--flag value" and
 // "--flag=value" forms; "-c" (the only short flag here) only accepts the
-// separate-token form, since pve does not use short flags with "=value".
+// separate-token form, since pmx does not use short flags with "=value".
 // Boolean flags (--insecure, --debug) also accept an inline "=true"/"=false"
 // form, parsed via strconv.ParseBool; any other inline value is a parse
 // error naming the flag. "-h"/"--help" abort extraction immediately: Help is
 // set and no further tokens are consumed or classified.
-func extractPVEFlags(args []string) (pveFlagValues, []string, error) {
-	vals := pveFlagValues{Root: map[string]string{}, SSH: map[string]string{}}
+func extractPMXFlags(args []string) (pmxFlagValues, []string, error) {
+	vals := pmxFlagValues{Root: map[string]string{}, SSH: map[string]string{}}
 
 	i := 0
 	for i < len(args) {
@@ -87,14 +87,14 @@ func extractPVEFlags(args []string) (pveFlagValues, []string, error) {
 			value = inlineValue
 		case spec.takesValue:
 			if i+1 >= len(args) {
-				return pveFlagValues{}, nil, fmt.Errorf("flag %s requires a value", name)
+				return pmxFlagValues{}, nil, fmt.Errorf("flag %s requires a value", name)
 			}
 			i++
 			value = args[i]
 		case hasInline:
 			parsed, perr := strconv.ParseBool(inlineValue)
 			if perr != nil {
-				return pveFlagValues{}, nil, fmt.Errorf("flag %s expects a boolean value (true/false), got %q", name, inlineValue)
+				return pmxFlagValues{}, nil, fmt.Errorf("flag %s expects a boolean value (true/false), got %q", name, inlineValue)
 			}
 			value = strconv.FormatBool(parsed)
 		default:
@@ -102,13 +102,13 @@ func extractPVEFlags(args []string) (pveFlagValues, []string, error) {
 		}
 
 		// A value-taking flag's extracted value starting with '-' is almost
-		// always a misplaced flag meant for rsync itself (e.g. `pve rsync -c
+		// always a misplaced flag meant for rsync itself (e.g. `pmx rsync -c
 		// -av ...` meaning rsync's -a/-v, not a context literally named
 		// "-av"), which would otherwise surface only as a baffling later
 		// error (e.g. `context "-av" not found`). Reject it here with a
 		// message that names the actual mistake.
 		if spec.takesValue && strings.HasPrefix(value, "-") {
-			return pveFlagValues{}, nil, valueLooksLikeFlagError(name, value)
+			return pmxFlagValues{}, nil, valueLooksLikeFlagError(name, value)
 		}
 
 		switch spec.target {
@@ -123,7 +123,7 @@ func extractPVEFlags(args []string) (pveFlagValues, []string, error) {
 	return vals, args[i:], nil
 }
 
-// valueLooksLikeFlagError builds the error extractPVEFlags returns when a
+// valueLooksLikeFlagError builds the error extractPMXFlags returns when a
 // value-taking flag's extracted value itself starts with '-'. "-c"/"--context"
 // gets a targeted message steering the user toward rsync's own equivalent
 // flag (since --checksum/-c is a common source of this exact confusion);
@@ -150,13 +150,13 @@ func splitEquals(tok string) (name, value string, hasValue bool) {
 	return tok, "", false
 }
 
-// lookupFlagSpec returns the pveFlagSpec matching name, or nil if name is not
-// a recognised pve-owned flag.
-func lookupFlagSpec(name string) *pveFlagSpec {
-	for i := range pveFlagTable {
-		for _, n := range pveFlagTable[i].names {
+// lookupFlagSpec returns the pmxFlagSpec matching name, or nil if name is not
+// a recognised pmx-owned flag.
+func lookupFlagSpec(name string) *pmxFlagSpec {
+	for i := range pmxFlagTable {
+		for _, n := range pmxFlagTable[i].names {
 			if n == name {
-				return &pveFlagTable[i]
+				return &pmxFlagTable[i]
 			}
 		}
 	}
@@ -294,7 +294,7 @@ func rsyncOptionValueSkip(tok string) bool {
 }
 
 // isReservedRemoteShellFlag reports whether tok is (or attaches a value to)
-// rsync's own -e/--rsh remote-shell option, which pve reserves for its own
+// rsync's own -e/--rsh remote-shell option, which pmx reserves for its own
 // injected "-e ssh ..." (see sshcmd.RemoteShell). "-e" is rsync's only short
 // option using that letter, so any short-option cluster containing it (e.g.
 // "-ae", attached "-essh") is rejected too, matching rsync's own getopt
@@ -313,14 +313,14 @@ func isReservedRemoteShellFlag(tok string) bool {
 }
 
 // classifyRsyncArgs scans tokens (the rsync argv remainder after
-// extractPVEFlags) for the remote "node:path" operand(s) `pve rsync` expects.
+// extractPMXFlags) for the remote "node:path" operand(s) `pmx rsync` expects.
 // Every non-flag token is classified via classifyOperand. Tokens starting
 // with "-" are assumed to be rsync's own flags; a value-taking flag's
 // SEPARATE-token value (per rsyncOptionValueSkip's arity table, mirroring
 // sshcmd.SplitPassthrough's approach for ssh) is skipped along with it so it
 // is never misclassified as an operand — e.g. "--chown a:b" or "--exclude
 // pve1:secret" no longer have their value mistaken for a node:path operand or
-// rewritten as one. Any reserved -e/--rsh is rejected outright since pve
+// rewritten as one. Any reserved -e/--rsh is rejected outright since pmx
 // always injects its own remote-shell command. A bare "--" (rsync/popt's
 // unconditional end-of-options marker) switches every remaining token to a
 // forced operand, including ones starting with "-": rsync itself treats them
@@ -329,7 +329,7 @@ func isReservedRemoteShellFlag(tok string) bool {
 //
 // All remote operands found must name the SAME node — rsync allows several
 // sources but they must all come from (or go to) one host — and at least one
-// remote operand is required, since `pve rsync` always targets exactly one
+// remote operand is required, since `pmx rsync` always targets exactly one
 // PVE node. Both violations are reported as errors; the caller must not
 // attempt to resolve or exec rsync when classifyRsyncArgs fails.
 func classifyRsyncArgs(tokens []string) (operands []rsyncOperand, node string, err error) {
@@ -346,7 +346,7 @@ func classifyRsyncArgs(tokens []string) (operands []rsyncOperand, node string, e
 
 			if isReservedRemoteShellFlag(tok) {
 				return nil, "", fmt.Errorf(
-					"flag %q is reserved: pve injects its own remote-shell command; "+
+					"flag %q is reserved: pmx injects its own remote-shell command; "+
 						"use --ssh-user/--ssh-port/--ssh-identity/--ssh-agent/--no-strict instead", tok)
 			}
 
@@ -375,7 +375,7 @@ func classifyRsyncArgs(tokens []string) (operands []rsyncOperand, node string, e
 	}
 
 	if node == "" {
-		return nil, "", fmt.Errorf("no remote (node:path) operand found; pve rsync requires exactly one PVE node target")
+		return nil, "", fmt.Errorf("no remote (node:path) operand found; pmx rsync requires exactly one PVE node target")
 	}
 
 	return operands, node, nil

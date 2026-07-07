@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newShowCmd builds `pve context show [<name>]` (alias: info).
+// newShowCmd builds `pmx context show [<name>]` (alias: info).
 // When name is omitted it defaults to the current context; errors if none set.
 func newShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -34,7 +34,7 @@ func newShowCmd() *cobra.Command {
 			if name == "" {
 				return fmt.Errorf(
 					"no context name specified and no current-context is set; " +
-						"use 'pve context show <name>' or 'pve context select <name>' first",
+						"use 'pmx context show <name>' or 'pmx context select <name>' first",
 				)
 			}
 

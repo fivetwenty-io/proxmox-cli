@@ -9,8 +9,8 @@ import (
 
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeCertInfoEntry mirrors one element of the JSON array PBS returns from
@@ -27,7 +27,7 @@ type nodeCertInfoEntry struct {
 	PublicKeyBits *int64  `json:"public-key-bits,omitempty"`
 }
 
-// newNodeCertificatesCmd builds `pve pbs node certificates` and its
+// newNodeCertificatesCmd builds `pmx pbs node certificates` and its
 // info/acme/custom verbs (/nodes/{node}/certificates...).
 //
 // GET /nodes/{node}/certificates itself is only a directory index (returns
@@ -47,7 +47,7 @@ func newNodeCertificatesCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeCertificatesInfoCmd builds `pve pbs node certificates info` — the
+// newNodeCertificatesInfoCmd builds `pmx pbs node certificates info` — the
 // node's certificate chain (GET /nodes/{node}/certificates/info).
 func newNodeCertificatesInfoCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -101,7 +101,7 @@ func newNodeCertificatesAcmeCmd(nf *nodeFlags) *cobra.Command {
 }
 
 // newNodeCertificatesAcmeOrderCmd builds
-// `pve pbs node certificates acme order` — order a new ACME certificate
+// `pmx pbs node certificates acme order` — order a new ACME certificate
 // (POST /nodes/{node}/certificates/acme/certificate).
 //
 // The generated Nodes.CreateCertificatesAcmeCertificate binding discards its
@@ -153,7 +153,7 @@ func newNodeCertificatesAcmeOrderCmd(nf *nodeFlags) *cobra.Command {
 }
 
 // newNodeCertificatesAcmeRenewCmd builds
-// `pve pbs node certificates acme renew` — renew the current ACME
+// `pmx pbs node certificates acme renew` — renew the current ACME
 // certificate (PUT /nodes/{node}/certificates/acme/certificate).
 //
 // Same discarded-body workaround as newNodeCertificatesAcmeOrderCmd (see its
@@ -214,7 +214,7 @@ func newNodeCertificatesCustomCmd(nf *nodeFlags) *cobra.Command {
 }
 
 // newNodeCertificatesCustomUploadCmd builds
-// `pve pbs node certificates custom upload` — install a custom certificate
+// `pmx pbs node certificates custom upload` — install a custom certificate
 // (POST /nodes/{node}/certificates/custom).
 func newNodeCertificatesCustomUploadCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -277,7 +277,7 @@ func newNodeCertificatesCustomUploadCmd(nf *nodeFlags) *cobra.Command {
 }
 
 // newNodeCertificatesCustomDeleteCmd builds
-// `pve pbs node certificates custom delete` — remove the custom certificate
+// `pmx pbs node certificates custom delete` — remove the custom certificate
 // (DELETE /nodes/{node}/certificates/custom).
 func newNodeCertificatesCustomDeleteCmd(nf *nodeFlags) *cobra.Command {
 	var (

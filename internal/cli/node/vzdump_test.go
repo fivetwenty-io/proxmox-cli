@@ -7,13 +7,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestNodeVzdump_BlocksUntilTaskDone verifies `pve node vzdump` POSTs the backup
+// TestNodeVzdump_BlocksUntilTaskDone verifies `pmx node vzdump` POSTs the backup
 // request with the selected guest and storage, then blocks until the task ends.
 func TestNodeVzdump_BlocksUntilTaskDone(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

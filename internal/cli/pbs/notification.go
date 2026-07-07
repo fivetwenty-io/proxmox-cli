@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newNotificationCmd builds `pve pbs notification` — manage Proxmox Backup
+// newNotificationCmd builds `pmx pbs notification` — manage Proxmox Backup
 // Server notification endpoints (gotify, sendmail, smtp, webhook), matchers
 // that route notifications to those endpoints, and the read-only target
 // directory that lists every endpoint usable as a matcher target
@@ -32,7 +32,7 @@ func newNotificationCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointCmd builds `pve pbs notification endpoint` — the parent
+// newNotifEndpointCmd builds `pmx pbs notification endpoint` — the parent
 // grouping for the four notification endpoint types PBS supports.
 //
 // GET /config/notifications/endpoints (Config.ListNotificationsEndpoints) is
@@ -68,7 +68,7 @@ type notifTargetEntry struct {
 	Type    string  `json:"type"`
 }
 
-// newNotifTargetCmd builds `pve pbs notification target` — list every
+// newNotifTargetCmd builds `pmx pbs notification target` — list every
 // notification target across all endpoint types, and send a test
 // notification to one.
 //
@@ -87,7 +87,7 @@ func newNotifTargetCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifTargetLsCmd builds `pve pbs notification target ls` — list every
+// newNotifTargetLsCmd builds `pmx pbs notification target ls` — list every
 // notification target (GET /config/notifications/targets).
 func newNotifTargetLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -135,7 +135,7 @@ func newNotifTargetLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifTargetTestCmd builds `pve pbs notification target test <name>` —
+// newNotifTargetTestCmd builds `pmx pbs notification target test <name>` —
 // send a test notification to a target (POST
 // /config/notifications/targets/{name}/test). The binding is error-only
 // (the API returns null on success), so this is a synchronous verb that

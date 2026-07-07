@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // uploadCapture records the multipart fields the fake server received for an
@@ -63,13 +63,13 @@ func TestStorageUpload_BlocksUntilComplete(t *testing.T) {
 		"status": "stopped", "exitstatus": "OK", "upid": upid,
 	})
 
-	path := writeTempFile(t, "pve-cli-test.iso", "fake-iso-bytes")
+	path := writeTempFile(t, "pmx-cli-test.iso", "fake-iso-bytes")
 	out, err := run(t, f, "--node", "pve1", "upload", "local", "--file", path, "--content", "iso")
 	require.NoError(t, err)
 
 	require.Equal(t, "/api2/json/nodes/pve1/storage/local/upload", capt.path)
 	require.Equal(t, "iso", capt.content)
-	require.Equal(t, "pve-cli-test.iso", capt.file, "destination defaults to the source base name")
+	require.Equal(t, "pmx-cli-test.iso", capt.file, "destination defaults to the source base name")
 	require.False(t, capt.dupName, "filename must not be sent as a duplicate form field")
 	require.Contains(t, out, "Uploaded")
 }
@@ -87,9 +87,9 @@ func TestStorageUpload_FilenameOverride(t *testing.T) {
 
 	path := writeTempFile(t, "local-name.iso", "data")
 	_, err := run(t, f, "--node", "pve1", "upload", "local",
-		"--file", path, "--filename", "pve-cli-renamed.iso")
+		"--file", path, "--filename", "pmx-cli-renamed.iso")
 	require.NoError(t, err)
-	require.Equal(t, "pve-cli-renamed.iso", capt.file)
+	require.Equal(t, "pmx-cli-renamed.iso", capt.file)
 }
 
 // TestStorageUpload_AsyncReturnsUPID verifies --async prints the task UPID
@@ -100,7 +100,7 @@ func TestStorageUpload_AsyncReturnsUPID(t *testing.T) {
 	var capt uploadCapture
 	recordUpload(f, "POST /api2/json/nodes/pve1/storage/local/upload", &capt, upid)
 
-	path := writeTempFile(t, "pve-cli-test.iso", "data")
+	path := writeTempFile(t, "pmx-cli-test.iso", "data")
 	out, err := run(t, f, "--async", "--node", "pve1", "upload", "local", "--file", path)
 	require.NoError(t, err)
 	require.Contains(t, out, upid)
@@ -140,7 +140,7 @@ func TestStorageUpload_OpenError(t *testing.T) {
 		testhelper.WriteData(w, "")
 	})
 
-	_, err := run(t, f, "--node", "pve1", "upload", "local", "--file", "/no/such/pve-cli-file.iso")
+	_, err := run(t, f, "--node", "pve1", "upload", "local", "--file", "/no/such/pmx-cli-file.iso")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "open file")
 	require.False(t, called, "no upload must be attempted when the source file cannot be opened")
@@ -157,7 +157,7 @@ func TestStorageUpload_RequiresNode(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
-			path := writeTempFile(t, "pve-cli-test.iso", "data")
+			path := writeTempFile(t, "pmx-cli-test.iso", "data")
 			_, err := run(t, f, "upload", "local", "--file", path)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no node specified")

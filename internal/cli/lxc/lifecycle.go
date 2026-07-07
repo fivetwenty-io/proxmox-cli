@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // emitTask handles the block-by-default / --async UPID contract shared by every
@@ -37,7 +37,7 @@ func emitTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, successMs
 	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 }
 
-// newStartCmd builds `pve lxc start <vmid|name>`.
+// newStartCmd builds `pmx lxc start <vmid|name>`.
 func newStartCmd() *cobra.Command {
 	var skiplock, debug bool
 	cmd := &cobra.Command{
@@ -72,7 +72,7 @@ func newStartCmd() *cobra.Command {
 	return cmd
 }
 
-// newStopCmd builds `pve lxc stop <vmid|name>`.
+// newStopCmd builds `pmx lxc stop <vmid|name>`.
 func newStopCmd() *cobra.Command {
 	var skiplock, overruleShutdown bool
 	cmd := &cobra.Command{
@@ -107,7 +107,7 @@ func newStopCmd() *cobra.Command {
 	return cmd
 }
 
-// newRebootCmd builds `pve lxc reboot <vmid|name>`.
+// newRebootCmd builds `pmx lxc reboot <vmid|name>`.
 func newRebootCmd() *cobra.Command {
 	var timeout int64
 	cmd := &cobra.Command{
@@ -137,7 +137,7 @@ func newRebootCmd() *cobra.Command {
 	return cmd
 }
 
-// newShutdownCmd builds `pve lxc shutdown <vmid|name>`.
+// newShutdownCmd builds `pmx lxc shutdown <vmid|name>`.
 func newShutdownCmd() *cobra.Command {
 	var timeout int64
 	var forceStop bool
@@ -173,7 +173,7 @@ func newShutdownCmd() *cobra.Command {
 	return cmd
 }
 
-// newSuspendCmd builds `pve lxc suspend <vmid|name>`. The LXC suspend endpoint takes
+// newSuspendCmd builds `pmx lxc suspend <vmid|name>`. The LXC suspend endpoint takes
 // no parameters.
 func newSuspendCmd() *cobra.Command {
 	return &cobra.Command{
@@ -196,7 +196,7 @@ func newSuspendCmd() *cobra.Command {
 	}
 }
 
-// newResumeCmd builds `pve lxc resume <vmid|name>`. The LXC resume endpoint takes no
+// newResumeCmd builds `pmx lxc resume <vmid|name>`. The LXC resume endpoint takes no
 // parameters.
 func newResumeCmd() *cobra.Command {
 	return &cobra.Command{
@@ -219,7 +219,7 @@ func newResumeCmd() *cobra.Command {
 	}
 }
 
-// newDeleteCmd builds `pve lxc delete <vmid|name>`.
+// newDeleteCmd builds `pmx lxc delete <vmid|name>`.
 func newDeleteCmd() *cobra.Command {
 	var yes, purge, force, destroyUnreferenced bool
 	cmd := &cobra.Command{

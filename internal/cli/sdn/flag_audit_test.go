@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestZoneCreateFullSurface verifies every type-specific zone attribute is
@@ -102,9 +102,9 @@ func TestZoneListFilters(t *testing.T) {
 func TestZoneDeleteLockToken(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "zone", "delete", "pvecli", "--yes", "--lock-token", "tok")
+	_, err := run(t, f, "", "zone", "delete", "pmxcli", "--yes", "--lock-token", "tok")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
@@ -115,7 +115,7 @@ func TestVnetCreateNewFlags(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "create", "pvecli0", "--zone", "pvecli",
+	_, err := run(t, f, "", "vnet", "create", "pmxcli0", "--zone", "pmxcli",
 		"--vlanaware", "--isolate-ports", "--type", "vnet", "--lock-token", "tok")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
@@ -140,9 +140,9 @@ func TestVnetListFilters(t *testing.T) {
 func TestVnetDeleteLockToken(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "delete", "pvecli0", "--yes", "--lock-token", "tok")
+	_, err := run(t, f, "", "vnet", "delete", "pmxcli0", "--yes", "--lock-token", "tok")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
@@ -151,9 +151,9 @@ func TestVnetDeleteLockToken(t *testing.T) {
 func TestSubnetCreateNewFlags(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pvecli0/subnets", map[string]any{}, 200)
+	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pmxcli0/subnets", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "create", "pvecli0", "10.241.0.0/24",
+	_, err := run(t, f, "", "subnet", "create", "pmxcli0", "10.241.0.0/24",
 		"--dhcp-dns-server", "10.241.0.2",
 		"--dhcp-range", "start-address=10.241.0.10,end-address=10.241.0.20",
 		"--dnszoneprefix", "adm",
@@ -169,9 +169,9 @@ func TestSubnetCreateNewFlags(t *testing.T) {
 func TestSubnetListFilters(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/subnets", []any{}, 200)
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/subnets", []any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "list", "pvecli0", "--pending", "--running")
+	_, err := run(t, f, "", "subnet", "list", "pmxcli0", "--pending", "--running")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "1", rec[0].query.Get("pending"))
@@ -181,9 +181,9 @@ func TestSubnetListFilters(t *testing.T) {
 func TestSubnetDeleteLockToken(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0/subnets/sub0", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0/subnets/sub0", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "delete", "pvecli0", "sub0", "--yes", "--lock-token", "tok")
+	_, err := run(t, f, "", "subnet", "delete", "pmxcli0", "sub0", "--yes", "--lock-token", "tok")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "tok", rec[0].query.Get("lock-token"))
@@ -279,9 +279,9 @@ func TestDnsDeleteLockToken(t *testing.T) {
 func TestVnetSetLockToken(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "set", "pvecli0", "--alias", "e2e", "--lock-token", "tok")
+	_, err := run(t, f, "", "vnet", "set", "pmxcli0", "--alias", "e2e", "--lock-token", "tok")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "e2e", rec[0].body["alias"])

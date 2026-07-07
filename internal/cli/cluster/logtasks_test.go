@@ -7,12 +7,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestClusterLog_Table verifies that `pve cluster log` queries GET /cluster/log,
+// TestClusterLog_Table verifies that `pmx cluster log` queries GET /cluster/log,
 // sends the default --max, and renders the expected columns.
 func TestClusterLog_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -136,7 +136,7 @@ func TestClusterLog_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "log"))
 }
 
-// TestClusterTasks_Table verifies `pve cluster tasks` queries GET /cluster/tasks
+// TestClusterTasks_Table verifies `pmx cluster tasks` queries GET /cluster/tasks
 // and renders the expected columns.
 func TestClusterTasks_Table(t *testing.T) {
 	f, ac := newFakeClient(t)

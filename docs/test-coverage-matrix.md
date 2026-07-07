@@ -1,7 +1,7 @@
 # Test Coverage Matrix
 
 > **Generated file — do not edit by hand.** Regenerate with
-> `go build -o ./dist/pve ./cmd/pve && python3 scripts/coverage_matrix.py`.
+> `go build -o ./dist/pmx ./cmd/pmx && python3 scripts/coverage_matrix.py`.
 > The classification is derived statically from the built command tree, the
 > read-only sweep definitions in `scripts/e2e_lib/trees/*.py`, and the mutate
 > phase in `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and
@@ -55,11 +55,11 @@ failure path it guards are tagged `error-contract checked` in the Notes column.
 Every resource the lifecycle suite creates is shielded from other lab efforts
 (see `scripts/e2e_lib/model.py`, the single source of truth):
 
-- named or hostnamed with the `pve-cli-` prefix,
+- named or hostnamed with the `pmx-cli-` prefix,
 
-- placed in the `pve-cli` resource pool and tagged `pve-cli`,
+- placed in the `pmx-cli` resource pool and tagged `pmx-cli`,
 
-- attached to a dedicated `pvecli` simple SDN zone and `pvecli0` vnet on the
+- attached to a dedicated `pmxcli` simple SDN zone and `pmxcli0` vnet on the
   `172.30.0.0/24` subnet, deliberately off the host management network.
 
 Teardown runs in a `finally` block and is idempotent: a crashed prior run is
@@ -87,7 +87,7 @@ swept clean before the next provisions.
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **Total** | **968** | **94** | **305** | **356** | **6** | **231** | **27** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **968** leaves, **710** are exercised by at least one live suite, **231** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **27** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **968** leaves, **710** are exercised by at least one live suite, **231** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **27** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -980,7 +980,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `rsync` | — | — | deferred — transfers files to/from a live node over SSH, so it cannot be driven head-less by the read-only sweep; shares the `pve node rsync` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
+| `rsync` | — | — | deferred — transfers files to/from a live node over SSH, so it cannot be driven head-less by the read-only sweep; shares the `pmx node rsync` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
 
 ## `sdn`
 
@@ -1082,7 +1082,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `ssh` | — | — | deferred — opens a live SSH session on the resolved node, so it cannot be driven head-less by the read-only sweep; shares the `pve node ssh` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
+| `ssh` | — | — | deferred — opens a live SSH session on the resolved node, so it cannot be driven head-less by the read-only sweep; shares the `pmx node ssh` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
 
 ## `storage`
 

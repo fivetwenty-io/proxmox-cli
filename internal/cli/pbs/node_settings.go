@@ -7,14 +7,14 @@ import (
 
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // --- dns ----------------------------------------------------------------
 
-// newNodeDNSCmd builds `pve pbs node dns` and its show/update verbs
+// newNodeDNSCmd builds `pmx pbs node dns` and its show/update verbs
 // (GET/PUT /nodes/{node}/dns).
 func newNodeDNSCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -112,7 +112,7 @@ func newNodeDNSUpdateCmd(nf *nodeFlags) *cobra.Command {
 
 // --- time -----------------------------------------------------------------
 
-// newNodeTimeCmd builds `pve pbs node time` and its show/update verbs
+// newNodeTimeCmd builds `pmx pbs node time` and its show/update verbs
 // (GET/PUT /nodes/{node}/time).
 func newNodeTimeCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -179,7 +179,7 @@ func newNodeTimeUpdateCmd(nf *nodeFlags) *cobra.Command {
 
 // --- config -----------------------------------------------------------------
 
-// newNodeConfigCmd builds `pve pbs node config` and its show/update verbs
+// newNodeConfigCmd builds `pmx pbs node config` and its show/update verbs
 // (GET/PUT /nodes/{node}/config).
 func newNodeConfigCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -348,7 +348,7 @@ func newNodeConfigUpdateCmd(nf *nodeFlags) *cobra.Command {
 
 // --- subscription -------------------------------------------------------
 
-// newNodeSubscriptionCmd builds `pve pbs node subscription` and its
+// newNodeSubscriptionCmd builds `pmx pbs node subscription` and its
 // show/set/update/delete verbs (/nodes/{node}/subscription).
 func newNodeSubscriptionCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -475,7 +475,7 @@ func newNodeSubscriptionDeleteCmd(nf *nodeFlags) *cobra.Command {
 
 // --- identity -------------------------------------------------------------
 
-// newNodeIdentityCmd builds `pve pbs node identity` — the unique server
+// newNodeIdentityCmd builds `pmx pbs node identity` — the unique server
 // identity derived from /etc/machine-id (GET /nodes/{node}/identity).
 func newNodeIdentityCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{

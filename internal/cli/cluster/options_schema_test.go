@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestOptionSchemas_GeneratedTable sanity-checks the generated schema table:
@@ -67,7 +67,7 @@ func TestClusterOptions_SetHelpEnriched(t *testing.T) {
 	require.Contains(t, migration.Usage, "keys: network, type")
 }
 
-// TestClusterOptions_Describe verifies `pve cluster options describe` renders
+// TestClusterOptions_Describe verifies `pmx cluster options describe` renders
 // the full offline catalog, including dict sub-key rows, with no API call.
 func TestClusterOptions_Describe(t *testing.T) {
 	deps := &cli.Deps{Out: output.New(), Format: output.FormatPlain}

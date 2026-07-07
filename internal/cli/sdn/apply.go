@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newApplyCmd builds `pve sdn apply` — commit pending SDN configuration by
+// newApplyCmd builds `pmx sdn apply` — commit pending SDN configuration by
 // reloading the network config on all nodes (PUT /cluster/sdn). The reload runs
 // as an asynchronous task; the command blocks until it completes unless --async
 // is set.

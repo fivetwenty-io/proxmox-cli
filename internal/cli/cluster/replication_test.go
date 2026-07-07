@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestClusterReplication_List verifies `pve cluster replication list` reads
+// TestClusterReplication_List verifies `pmx cluster replication list` reads
 // GET /cluster/replication and renders the job columns.
 func TestClusterReplication_List(t *testing.T) {
 	f, ac := newFakeClient(t)

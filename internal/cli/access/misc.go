@@ -11,12 +11,12 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newPermissionsCmd builds `pve access permissions`. The response is a map of
+// newPermissionsCmd builds `pmx access permissions`. The response is a map of
 // path to a map of privilege to a propagate flag.
 func newPermissionsCmd() *cobra.Command {
 	var path, userid string
@@ -72,7 +72,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPasswordCmd builds `pve access password set`.
+// newPasswordCmd builds `pmx access password set`.
 func newPasswordCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "password",
@@ -83,7 +83,7 @@ func newPasswordCmd() *cobra.Command {
 	return cmd
 }
 
-// newPasswordSetCmd builds `pve access password set`.
+// newPasswordSetCmd builds `pmx access password set`.
 func newPasswordSetCmd() *cobra.Command {
 	var userid, password, confirmationPassword string
 	cmd := &cobra.Command{

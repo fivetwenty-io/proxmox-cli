@@ -9,13 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newConfigCmd builds the `pve qemu config` sub-group.
+// newConfigCmd builds the `pmx qemu config` sub-group.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -25,7 +25,7 @@ func newConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigDescribeCmd builds `pve qemu config describe`, an offline catalog
+// newConfigDescribeCmd builds `pmx qemu config describe`, an offline catalog
 // of every settable VM configuration option from the PVE API schema (see
 // config_schema_gen.go). The catalog view omits dict sub-key rows (the
 // ~13 indexed device families would otherwise explode the table); pass an
@@ -38,12 +38,12 @@ func newConfigDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and (for a single option) the " +
 			"sub-keys of dict-encoded options. Runs offline. Pass an option name to " +
 			"show only that option with full descriptions and sub-keys.",
-		CommandHint:         "pve qemu config describe",
+		CommandHint:         "pmx qemu config describe",
 		SubKeyRowsInCatalog: false,
 	})
 }
 
-// newConfigGetCmd builds `pve qemu config get <vmid>`.
+// newConfigGetCmd builds `pmx qemu config get <vmid>`.
 //
 // The raw API response is read directly (deps.API.Raw.GetCtx) instead of
 // through nodes.ListQemuConfig/ListQemuConfigResponse because that generated
@@ -150,7 +150,7 @@ func stringifyValue(v any) string {
 	}
 }
 
-// newConfigSetCmd builds `pve qemu config set <vmid>`.
+// newConfigSetCmd builds `pmx qemu config set <vmid>`.
 func newConfigSetCmd() *cobra.Command {
 	var (
 		cores       int64
@@ -576,7 +576,7 @@ type pendingEntry struct {
 	Pending any    `json:"pending"`
 }
 
-// newConfigPendingCmd builds `pve qemu config pending <vmid>`.
+// newConfigPendingCmd builds `pmx qemu config pending <vmid>`.
 func newConfigPendingCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pending <vmid|name>",

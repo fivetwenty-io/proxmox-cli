@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -20,7 +20,7 @@ import (
 // for a tape backup job.
 var tapeJobNotificationModes = []string{"legacy-sendmail", "notification-system"}
 
-// newTapeJobCmd builds `pve pbs tape job` — create, inspect, update, delete,
+// newTapeJobCmd builds `pmx pbs tape job` — create, inspect, update, delete,
 // manually trigger, and report on the run status of scheduled tape backup
 // job configurations (GET/POST/PUT/DELETE /config/tape-backup-job, POST
 // /tape/backup/{id}, GET /tape/backup).
@@ -89,7 +89,7 @@ func decodeTapeJobConfigEntries(resp *pbsconfig.ListTapeBackupJobResponse) []tap
 	return entries
 }
 
-// newTapeJobLsCmd builds `pve pbs tape job ls` — list every tape backup job
+// newTapeJobLsCmd builds `pmx pbs tape job ls` — list every tape backup job
 // configuration, with no run-status fields (GET /config/tape-backup-job).
 func newTapeJobLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -97,7 +97,7 @@ func newTapeJobLsCmd() *cobra.Command {
 		Short: "List tape backup job configurations",
 		Long: "List every tape backup job configuration visible to the caller (GET " +
 			"/config/tape-backup-job). This is the plain configuration listing; use " +
-			"`pve pbs tape job status` for run-status fields.",
+			"`pmx pbs tape job status` for run-status fields.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -127,7 +127,7 @@ func newTapeJobLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeJobShowCmd builds `pve pbs tape job show <id>` — show one tape
+// newTapeJobShowCmd builds `pmx pbs tape job show <id>` — show one tape
 // backup job's full configuration (GET /config/tape-backup-job/{id}).
 func newTapeJobShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -355,7 +355,7 @@ func (jf *tapeJobFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateTapeB
 	}
 }
 
-// newTapeJobAddCmd builds `pve pbs tape job add <id>` — create a scheduled
+// newTapeJobAddCmd builds `pmx pbs tape job add <id>` — create a scheduled
 // tape backup job configuration (POST /config/tape-backup-job). --drive,
 // --pool, and --store are required; every other option is optional and only
 // forwarded when explicitly set.
@@ -416,7 +416,7 @@ func newTapeJobAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeJobUpdateCmd builds `pve pbs tape job update <id>` — update a
+// newTapeJobUpdateCmd builds `pmx pbs tape job update <id>` — update a
 // scheduled tape backup job configuration (PUT
 // /config/tape-backup-job/{id}). Only flags explicitly set are sent; use
 // --delete to reset properties to their default.
@@ -469,7 +469,7 @@ func newTapeJobUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeJobDeleteCmd builds `pve pbs tape job delete <id>` — remove a tape
+// newTapeJobDeleteCmd builds `pmx pbs tape job delete <id>` — remove a tape
 // backup job configuration (DELETE /config/tape-backup-job/{id}).
 func newTapeJobDeleteCmd() *cobra.Command {
 	var digest string
@@ -509,7 +509,7 @@ func newTapeJobDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeJobRunCmd builds `pve pbs tape job run <id>` — manually trigger a
+// newTapeJobRunCmd builds `pmx pbs tape job run <id>` — manually trigger a
 // scheduled tape backup job (POST /tape/backup/{id}).
 //
 // The generated Tape.CreateBackup2 binding is error-only: it discards the
@@ -626,7 +626,7 @@ func decodeTapeJobStatusEntries(resp *pbstape.ListBackupResponse) []tapeJobStatu
 	return entries
 }
 
-// newTapeJobStatusCmd builds `pve pbs tape job status` — list every
+// newTapeJobStatusCmd builds `pmx pbs tape job status` — list every
 // configured tape backup job together with its most recent run status (GET
 // /tape/backup).
 func newTapeJobStatusCmd() *cobra.Command {
@@ -635,7 +635,7 @@ func newTapeJobStatusCmd() *cobra.Command {
 		Short: "List tape backup jobs and their run status",
 		Long: "List every configured tape backup job visible to the caller together " +
 			"with its most recent run state (GET /tape/backup). This is the " +
-			"status-rich view; use `pve pbs tape job ls` for the plain configuration " +
+			"status-rich view; use `pmx pbs tape job ls` for the plain configuration " +
 			"listing.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

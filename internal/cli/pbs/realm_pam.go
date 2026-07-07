@@ -7,11 +7,11 @@ import (
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRealmPamCmd builds `pve pbs realm pam` — inspect and update the
+// newRealmPamCmd builds `pmx pbs realm pam` — inspect and update the
 // built-in PAM realm configuration (/config/access/pam). GET
 // /config/access/pam returns a single object (there is exactly one
 // system-wide PAM realm), not a list, so this exposes `show`/`update`
@@ -29,7 +29,7 @@ func newRealmPamCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmPamShowCmd builds `pve pbs realm pam show` — show the PAM realm's
+// newRealmPamShowCmd builds `pmx pbs realm pam show` — show the PAM realm's
 // configuration (GET /config/access/pam).
 func newRealmPamShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -57,7 +57,7 @@ func newRealmPamShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmPamUpdateCmd builds `pve pbs realm pam update` — update the PAM
+// newRealmPamUpdateCmd builds `pmx pbs realm pam update` — update the PAM
 // realm's configuration (PUT /config/access/pam). Only flags explicitly set
 // are sent; use --delete to reset properties to their default.
 func newRealmPamUpdateCmd() *cobra.Command {

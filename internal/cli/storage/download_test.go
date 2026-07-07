@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestStorageDownloadURL_BlocksUntilComplete verifies download-url posts the URL,
@@ -22,13 +22,13 @@ func TestStorageDownloadURL_BlocksUntilComplete(t *testing.T) {
 	})
 
 	out, err := run(t, f, "--node", "pve1", "download-url", "local",
-		"--url", "https://example.test/pve-cli.iso", "--filename", "pve-cli.iso", "--content", "iso")
+		"--url", "https://example.test/pmx-cli.iso", "--filename", "pmx-cli.iso", "--content", "iso")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, "/api2/json/nodes/pve1/storage/local/download-url", rec.path)
-	require.Equal(t, "https://example.test/pve-cli.iso", rec.form.Get("url"))
-	require.Equal(t, "pve-cli.iso", rec.form.Get("filename"))
+	require.Equal(t, "https://example.test/pmx-cli.iso", rec.form.Get("url"))
+	require.Equal(t, "pmx-cli.iso", rec.form.Get("filename"))
 	require.Equal(t, "iso", rec.form.Get("content"))
 	require.Contains(t, out, "Downloaded")
 }
@@ -45,7 +45,7 @@ func TestStorageDownloadURL_ForwardsOptionalFlags(t *testing.T) {
 	})
 
 	_, err := run(t, f, "--node", "pve1", "download-url", "local",
-		"--url", "https://example.test/pve-cli.iso", "--filename", "pve-cli.iso",
+		"--url", "https://example.test/pmx-cli.iso", "--filename", "pmx-cli.iso",
 		"--checksum", "deadbeef", "--checksum-algorithm", "sha256",
 		"--compression", "gz", "--verify-certificates=false")
 	require.NoError(t, err)
@@ -68,7 +68,7 @@ func TestStorageDownloadURL_OmitsUnsetOptionalFlags(t *testing.T) {
 	})
 
 	_, err := run(t, f, "--node", "pve1", "download-url", "local",
-		"--url", "https://example.test/pve-cli.iso", "--filename", "pve-cli.iso")
+		"--url", "https://example.test/pmx-cli.iso", "--filename", "pmx-cli.iso")
 	require.NoError(t, err)
 
 	require.Empty(t, rec.form.Get("checksum"))
@@ -86,7 +86,7 @@ func TestStorageDownloadURL_AsyncReturnsUPID(t *testing.T) {
 	recordJSON(f, "POST /api2/json/nodes/pve1/storage/local/download-url", &rec, upid)
 
 	out, err := run(t, f, "--async", "--node", "pve1", "download-url", "local",
-		"--url", "https://example.test/pve-cli.iso", "--filename", "pve-cli.iso")
+		"--url", "https://example.test/pmx-cli.iso", "--filename", "pmx-cli.iso")
 	require.NoError(t, err)
 	require.Contains(t, out, upid)
 }
@@ -101,7 +101,7 @@ func TestStorageDownloadURL_RequiredFlags(t *testing.T) {
 	}{
 		{
 			name:    "missing url",
-			args:    []string{"--node", "pve1", "download-url", "local", "--filename", "pve-cli.iso"},
+			args:    []string{"--node", "pve1", "download-url", "local", "--filename", "pmx-cli.iso"},
 			wantErr: "url",
 		},
 		{
@@ -129,7 +129,7 @@ func TestStorageDownloadURL_RequiresNode(t *testing.T) {
 	}{
 		{
 			name: "download-url",
-			args: []string{"download-url", "local", "--url", "https://example.test/x.iso", "--filename", "pve-cli.iso"},
+			args: []string{"download-url", "local", "--url", "https://example.test/x.iso", "--filename", "pmx-cli.iso"},
 		},
 	}
 	for _, tc := range tests {

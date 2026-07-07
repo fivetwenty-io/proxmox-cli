@@ -7,13 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newTapePoolCmd builds `pve pbs tape pool` — create, inspect, update, and
+// newTapePoolCmd builds `pmx pbs tape pool` — create, inspect, update, and
 // delete tape media pool configurations (GET/POST/PUT/DELETE
 // /config/media-pool).
 func newTapePoolCmd() *cobra.Command {
@@ -66,7 +66,7 @@ func decodeTapePoolEntries(resp *pbsconfig.ListMediaPoolResponse) []tapePoolEntr
 	return entries
 }
 
-// newTapePoolLsCmd builds `pve pbs tape pool ls` — list every tape media pool
+// newTapePoolLsCmd builds `pmx pbs tape pool ls` — list every tape media pool
 // configuration (GET /config/media-pool).
 func newTapePoolLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -103,7 +103,7 @@ func newTapePoolLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapePoolShowCmd builds `pve pbs tape pool show <name>` — show one tape
+// newTapePoolShowCmd builds `pmx pbs tape pool show <name>` — show one tape
 // media pool's full configuration (GET /config/media-pool/{name}).
 func newTapePoolShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -226,7 +226,7 @@ func (pf *tapePoolFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateMedi
 	}
 }
 
-// newTapePoolAddCmd builds `pve pbs tape pool add <name>` — create a new tape
+// newTapePoolAddCmd builds `pmx pbs tape pool add <name>` — create a new tape
 // media pool configuration (POST /config/media-pool). Every attribute is
 // optional and only forwarded when explicitly set.
 func newTapePoolAddCmd() *cobra.Command {
@@ -260,7 +260,7 @@ func newTapePoolAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapePoolUpdateCmd builds `pve pbs tape pool update <name>` — update a
+// newTapePoolUpdateCmd builds `pmx pbs tape pool update <name>` — update a
 // tape media pool configuration (PUT /config/media-pool/{name}). Only flags
 // explicitly set are sent; use --delete to reset properties to their default.
 func newTapePoolUpdateCmd() *cobra.Command {
@@ -307,7 +307,7 @@ func newTapePoolUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapePoolDeleteCmd builds `pve pbs tape pool delete <name>` — remove a
+// newTapePoolDeleteCmd builds `pmx pbs tape pool delete <name>` — remove a
 // tape media pool configuration (DELETE /config/media-pool/{name}). This
 // endpoint accepts no parameters beyond the pool name; there is no digest
 // guard.

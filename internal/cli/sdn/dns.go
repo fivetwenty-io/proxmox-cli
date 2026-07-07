@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // dnsEntry is the subset of a /cluster/sdn/dns element rendered in the list
@@ -24,13 +24,13 @@ type dnsEntry struct {
 // forwarded to the API but never echoed back.
 var dnsSetFlagNames = []string{"url", "key", "fingerprint", "reversemaskv6", "ttl"}
 
-// newDnsCmd builds `pve sdn dns` and its sub-commands.
+// newDnsCmd builds `pmx sdn dns` and its sub-commands.
 func newDnsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dns",
 		Short: "Manage SDN DNS providers",
 		Long: "List, create, inspect, update, and delete SDN DNS providers (e.g. PowerDNS). " +
-			"Changes are staged until committed with `pve sdn apply`.",
+			"Changes are staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newDnsListCmd(),
@@ -89,7 +89,7 @@ func newDnsCreateCmd() *cobra.Command {
 		Use:   "create <dns> --type <type> --url <url> --key <key>",
 		Short: "Create an SDN DNS provider",
 		Long: "Create an SDN DNS provider (e.g. PowerDNS). The change is staged until " +
-			"`pve sdn apply`. The --key value is a provider API key and is never echoed.",
+			"`pmx sdn apply`. The --key value is a provider API key and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -115,7 +115,7 @@ func newDnsCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN DNS provider %q created (run `pve sdn apply` to commit).", dns)}
+				"SDN DNS provider %q created (run `pmx sdn apply` to commit).", dns)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -167,7 +167,7 @@ func newDnsSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <dns>",
 		Short: "Update an SDN DNS provider",
-		Long: "Update an SDN DNS provider. The change is staged until `pve sdn apply`. " +
+		Long: "Update an SDN DNS provider. The change is staged until `pmx sdn apply`. " +
 			"The --key value is a provider API key and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -206,7 +206,7 @@ func newDnsSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN DNS provider %q updated (run `pve sdn apply` to commit).", dns)}
+				"SDN DNS provider %q updated (run `pmx sdn apply` to commit).", dns)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -245,7 +245,7 @@ func newDnsDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN DNS provider %q deleted (run `pve sdn apply` to commit).", dns)}
+				"SDN DNS provider %q deleted (run `pmx sdn apply` to commit).", dns)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

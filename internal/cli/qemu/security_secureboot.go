@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/propstr"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
 )
 
-// newSecuritySecurebootCmd builds `pve qemu security secureboot` and its
+// newSecuritySecurebootCmd builds `pmx qemu security secureboot` and its
 // show/enable sub-commands. There is deliberately no `disable`: the real
 // Secure Boot on/off switch lives in the EFI vars themselves.
 func newSecuritySecurebootCmd() *cobra.Command {
@@ -32,7 +32,7 @@ func newSecuritySecurebootCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecuritySecurebootShowCmd builds `pve qemu security secureboot show <vmid|name>`.
+// newSecuritySecurebootShowCmd builds `pmx qemu security secureboot show <vmid|name>`.
 func newSecuritySecurebootShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -78,7 +78,7 @@ func newSecuritySecurebootShowCmd() *cobra.Command {
 	}
 }
 
-// newSecuritySecurebootEnableCmd builds `pve qemu security secureboot enable <vmid|name>`.
+// newSecuritySecurebootEnableCmd builds `pmx qemu security secureboot enable <vmid|name>`.
 func newSecuritySecurebootEnableCmd() *cobra.Command {
 	var (
 		storage           string
@@ -99,7 +99,7 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 			"until the OS is converted to UEFI booting — do this on new VMs or after preparing " +
 			"the guest. Replacing an existing efidisk0 discards all stored EFI variables " +
 			"(enrolled keys, boot entries) and requires --recreate.\n\n" +
-			"Example: pve qemu security secureboot enable win11 --storage local-lvm --ms-cert 2023",
+			"Example: pmx qemu security secureboot enable win11 --storage local-lvm --ms-cert 2023",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -210,7 +210,7 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 				msg = fmt.Sprintf(
 					"VM %s Secure Boot configured (ovmf, efitype=4m, pre-enrolled keys); "+
 						"the previous EFI vars disk was moved to unused[n] (clean up with "+
-						"'pve qemu config set %s --delete unusedN --force').", vmid, vmid)
+						"'pmx qemu config set %s --delete unusedN --force').", vmid, vmid)
 			} else {
 				keyNote := "pre-enrolled keys"
 				if !preEnrolled {

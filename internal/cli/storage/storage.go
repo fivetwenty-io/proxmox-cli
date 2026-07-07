@@ -9,14 +9,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/clusterstorage"
 )
 
-// Group builds the `pve storage` command and all of its sub-commands.
+// Group builds the `pmx storage` command and all of its sub-commands.
 // The supplied *cli.Deps is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained per-invocation via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {
@@ -78,7 +78,7 @@ func (e storageEntry) pathOrServer() string {
 	return e.Server
 }
 
-// newListCmd builds `pve storage list`.
+// newListCmd builds `pmx storage list`.
 func newListCmd() *cobra.Command {
 	var typeFilter string
 	cmd := &cobra.Command{
@@ -133,7 +133,7 @@ func newListCmd() *cobra.Command {
 	return cmd
 }
 
-// newGetCmd builds `pve storage get <storage>`.
+// newGetCmd builds `pmx storage get <storage>`.
 func newGetCmd() *cobra.Command {
 	var withDefaults bool
 	cmd := &cobra.Command{
@@ -496,7 +496,7 @@ func (sf *storageFlags) applyUpdate(cmd *cobra.Command, p *clusterstorage.Update
 	str("digest", &sf.digest, &p.Digest)
 }
 
-// newCreateCmd builds `pve storage create`.
+// newCreateCmd builds `pmx storage create`.
 func newCreateCmd() *cobra.Command {
 	var (
 		storageID string
@@ -531,7 +531,7 @@ func newCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSetCmd builds `pve storage set <storage>`.
+// newSetCmd builds `pmx storage set <storage>`.
 func newSetCmd() *cobra.Command {
 	var sf storageFlags
 	cmd := &cobra.Command{
@@ -558,7 +558,7 @@ func newSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newDeleteCmd builds `pve storage delete <storage>`.
+// newDeleteCmd builds `pmx storage delete <storage>`.
 func newDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

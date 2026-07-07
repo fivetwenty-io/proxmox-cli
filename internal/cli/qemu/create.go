@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// newCreateCmd builds `pve qemu create <vmid>`. The VM is created as an
+// newCreateCmd builds `pmx qemu create <vmid>`. The VM is created as an
 // asynchronous task; the command blocks until it completes unless --async is
 // set. Disk, network, and CD-ROM devices are passed as repeatable indexed
 // slots (for example --scsi 0=local-lvm:8 or --net 0=virtio,bridge=vmbr0).

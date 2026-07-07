@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // clusterStatusEntry is the decoded shape of one entry from cluster.ListStatus.
@@ -26,7 +26,7 @@ type clusterStatusEntry struct {
 	Quorate int    `json:"quorate"`
 }
 
-// newStatusCmd builds `pve cluster status`.
+// newStatusCmd builds `pmx cluster status`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",

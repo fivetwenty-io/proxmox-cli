@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // describeSchemas is a small table exercising enums, bounds, sub-keys, and
@@ -42,7 +42,7 @@ func runDescribe(t *testing.T, cfg DescribeConfig, args ...string) (string, erro
 func TestDescribe_Catalog(t *testing.T) {
 	out, err := runDescribe(t, DescribeConfig{
 		Schemas:             describeSchemas,
-		CommandHint:         "pve x describe",
+		CommandHint:         "pmx x describe",
 		SubKeyRowsInCatalog: true,
 	})
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestDescribe_Catalog(t *testing.T) {
 func TestDescribe_SubKeySuppression(t *testing.T) {
 	out, err := runDescribe(t, DescribeConfig{
 		Schemas:     describeSchemas,
-		CommandHint: "pve x describe",
+		CommandHint: "pmx x describe",
 	})
 	require.NoError(t, err)
 	require.Contains(t, out, "net[n]")
@@ -65,7 +65,7 @@ func TestDescribe_SubKeySuppression(t *testing.T) {
 
 	out, err = runDescribe(t, DescribeConfig{
 		Schemas:     describeSchemas,
-		CommandHint: "pve x describe",
+		CommandHint: "pmx x describe",
 	}, "net")
 	require.NoError(t, err)
 	require.Contains(t, out, "net[n].bridge", "single view always shows sub-keys")
@@ -75,11 +75,11 @@ func TestDescribe_SubKeySuppression(t *testing.T) {
 func TestDescribe_UnknownOption(t *testing.T) {
 	_, err := runDescribe(t, DescribeConfig{
 		Schemas:     describeSchemas,
-		CommandHint: "pve x describe",
+		CommandHint: "pmx x describe",
 	}, "bogus")
 	require.Error(t, err)
 	require.ErrorContains(t, err, `unknown option "bogus"`)
-	require.ErrorContains(t, err, "pve x describe")
+	require.ErrorContains(t, err, "pmx x describe")
 }
 
 // describeTypeSets is a two-type discriminator mapping over describeSchemas.
@@ -98,7 +98,7 @@ var describeTypeSets = map[string]map[string]TypeUse{
 func TestDescribe_TypeSetsCatalog(t *testing.T) {
 	out, err := runDescribe(t, DescribeConfig{
 		Schemas:     describeSchemas,
-		CommandHint: "pve x describe",
+		CommandHint: "pmx x describe",
 		TypeSets:    describeTypeSets,
 	})
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestDescribe_TypeSetsCatalog(t *testing.T) {
 func TestDescribe_TypeSetsFilter(t *testing.T) {
 	cfg := DescribeConfig{
 		Schemas:     describeSchemas,
-		CommandHint: "pve x describe",
+		CommandHint: "pmx x describe",
 		TypeSets:    describeTypeSets,
 	}
 
@@ -139,10 +139,10 @@ func TestDescribe_TypeSetsFilter(t *testing.T) {
 // TestDescribe_NoTypeSetsNoFlag verifies trees without a discriminator get no
 // --type flag and no TYPES column.
 func TestDescribe_NoTypeSetsNoFlag(t *testing.T) {
-	cmd := NewDescribeCmd(DescribeConfig{Schemas: describeSchemas, CommandHint: "pve x describe"})
+	cmd := NewDescribeCmd(DescribeConfig{Schemas: describeSchemas, CommandHint: "pmx x describe"})
 	require.Nil(t, cmd.Flags().Lookup("type"))
 
-	out, err := runDescribe(t, DescribeConfig{Schemas: describeSchemas, CommandHint: "pve x describe"})
+	out, err := runDescribe(t, DescribeConfig{Schemas: describeSchemas, CommandHint: "pmx x describe"})
 	require.NoError(t, err)
 	require.NotContains(t, out, "TYPES")
 }
@@ -152,14 +152,14 @@ func TestDescribe_NoTypeSetsNoFlag(t *testing.T) {
 // context configured. Every tree's describe comes from this constructor, so
 // this single check covers them all.
 func TestDescribe_NoClientAnnotation(t *testing.T) {
-	cmd := NewDescribeCmd(DescribeConfig{CommandHint: "pve x describe"})
+	cmd := NewDescribeCmd(DescribeConfig{CommandHint: "pmx x describe"})
 	require.Equal(t, "true", cmd.Annotations["noClient"])
 }
 
 func TestDescribe_FindsByAPIName(t *testing.T) {
 	out, err := runDescribe(t, DescribeConfig{
 		Schemas:     describeSchemas,
-		CommandHint: "pve x describe",
+		CommandHint: "pmx x describe",
 	}, "max_workers")
 	require.NoError(t, err)
 	require.Contains(t, out, "max-workers")

@@ -8,12 +8,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newAplinfoCmd builds the `pve storage aplinfo` sub-group with its list and
+// newAplinfoCmd builds the `pmx storage aplinfo` sub-group with its list and
 // download sub-commands.
 func newAplinfoCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -36,7 +36,7 @@ type aplinfoEntry struct {
 	Description string `json:"description"`
 }
 
-// newAplinfoListCmd builds `pve storage aplinfo list` — fetch all available
+// newAplinfoListCmd builds `pmx storage aplinfo list` — fetch all available
 // appliance templates from the Proxmox template index on the resolved node
 // (GET /nodes/{node}/aplinfo).
 func newAplinfoListCmd() *cobra.Command {
@@ -50,7 +50,7 @@ func newAplinfoListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
 			resp, err := deps.API.Nodes.ListAplinfo(cmd.Context(), deps.Node)
@@ -79,7 +79,7 @@ func newAplinfoListCmd() *cobra.Command {
 	return cmd
 }
 
-// newAplinfoDownloadCmd builds `pve storage aplinfo download` — instruct the
+// newAplinfoDownloadCmd builds `pmx storage aplinfo download` — instruct the
 // resolved node to download the named appliance template to a storage
 // (POST /nodes/{node}/aplinfo). The download runs as an asynchronous task;
 // the command blocks until it finishes unless --async is set.
@@ -98,7 +98,7 @@ func newAplinfoDownloadCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
 			params := &nodes.CreateAplinfoParams{

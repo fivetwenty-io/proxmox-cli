@@ -8,7 +8,7 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
 )
 
 // ---------------------------------------------------------------------------

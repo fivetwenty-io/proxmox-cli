@@ -14,9 +14,9 @@ import (
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // validRrdTimeframes are the RRD time-frame enum values accepted by
@@ -27,7 +27,7 @@ var validRrdTimeframes = []string{"hour", "day", "week", "month", "year", "decad
 // accepted by GET /admin/datastore/{store}/rrd, per the PBS API schema.
 var validRrdConsolidations = []string{"MAX", "AVERAGE"}
 
-// newDatastoreCmd builds `pve pbs datastore` and its verbs: manage Proxmox
+// newDatastoreCmd builds `pmx pbs datastore` and its verbs: manage Proxmox
 // Backup Server datastore configuration (config/admin/status namespaces).
 func newDatastoreCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -60,7 +60,7 @@ type datastoreListEntry struct {
 	PruneSchedule string `json:"prune-schedule"`
 }
 
-// newDatastoreLsCmd builds `pve pbs datastore ls` — list configured
+// newDatastoreLsCmd builds `pmx pbs datastore ls` — list configured
 // datastores (GET /config/datastore).
 func newDatastoreLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -103,7 +103,7 @@ func newDatastoreLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newDatastoreShowCmd builds `pve pbs datastore show <name>` — show a single
+// newDatastoreShowCmd builds `pmx pbs datastore show <name>` — show a single
 // datastore configuration (GET /config/datastore/{name}).
 func newDatastoreShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -361,7 +361,7 @@ func (df *datastoreFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateDat
 	}
 }
 
-// newDatastoreCreateCmd builds `pve pbs datastore create <name>` — create a
+// newDatastoreCreateCmd builds `pmx pbs datastore create <name>` — create a
 // datastore configuration (POST /config/datastore).
 func newDatastoreCreateCmd() *cobra.Command {
 	var (
@@ -399,7 +399,7 @@ func newDatastoreCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newDatastoreUpdateCmd builds `pve pbs datastore update <name>` — update a
+// newDatastoreUpdateCmd builds `pmx pbs datastore update <name>` — update a
 // datastore configuration (PUT /config/datastore/{name}).
 func newDatastoreUpdateCmd() *cobra.Command {
 	var df datastoreFlags
@@ -431,7 +431,7 @@ func newDatastoreUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newDatastoreDeleteCmd builds `pve pbs datastore delete <name>` — remove a
+// newDatastoreDeleteCmd builds `pmx pbs datastore delete <name>` — remove a
 // datastore configuration and optionally its underlying contents
 // (DELETE /config/datastore/{name}).
 func newDatastoreDeleteCmd() *cobra.Command {
@@ -489,7 +489,7 @@ func newDatastoreDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newDatastoreStatusCmd builds `pve pbs datastore status <name>` — show
+// newDatastoreStatusCmd builds `pmx pbs datastore status <name>` — show
 // space usage and garbage-collection status (GET /admin/datastore/{store}/status).
 func newDatastoreStatusCmd() *cobra.Command {
 	var verbose bool
@@ -541,7 +541,7 @@ type datastoreUsageEntry struct {
 	EstimatedFullDate *int64  `json:"estimated-full-date,omitempty"`
 }
 
-// newDatastoreUsageCmd builds `pve pbs datastore usage` — list space usage
+// newDatastoreUsageCmd builds `pmx pbs datastore usage` — list space usage
 // and full-date estimates for every datastore (GET /status/datastore-usage).
 func newDatastoreUsageCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -592,7 +592,7 @@ func newDatastoreUsageCmd() *cobra.Command {
 	return cmd
 }
 
-// newDatastoreRrdCmd builds `pve pbs datastore rrd <name>` — read RRD usage
+// newDatastoreRrdCmd builds `pmx pbs datastore rrd <name>` — read RRD usage
 // statistics for a datastore (GET /admin/datastore/{store}/rrd).
 //
 // The generated Admin.ListDatastoreRrd binding discards the response body:

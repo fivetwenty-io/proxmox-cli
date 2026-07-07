@@ -8,12 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestConfigApiversion_Success verifies `pve cluster config apiversion`
+// TestConfigApiversion_Success verifies `pmx cluster config apiversion`
 // queries GET /cluster/config/apiversion and renders the result.
 func TestConfigApiversion_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -46,7 +46,7 @@ func TestConfigApiversion_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "config", "apiversion"))
 }
 
-// TestConfigQdevice_Success verifies `pve cluster config qdevice` queries
+// TestConfigQdevice_Success verifies `pmx cluster config qdevice` queries
 // GET /cluster/config/qdevice and renders the result.
 func TestConfigQdevice_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -83,7 +83,7 @@ func TestConfigQdevice_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "config", "qdevice"))
 }
 
-// TestConfigTotem_Success verifies `pve cluster config totem` queries
+// TestConfigTotem_Success verifies `pmx cluster config totem` queries
 // GET /cluster/config/totem and renders the result.
 func TestConfigTotem_Success(t *testing.T) {
 	f, ac := newFakeClient(t)

@@ -9,11 +9,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newMetricsCmd builds the `pve cluster metrics` sub-tree for managing external
+// newMetricsCmd builds the `pmx cluster metrics` sub-tree for managing external
 // metric servers (Graphite, InfluxDB, OpenTelemetry) that Proxmox VE pushes
 // cluster and node statistics to, and for reading the raw metric export.
 func newMetricsCmd() *cobra.Command {

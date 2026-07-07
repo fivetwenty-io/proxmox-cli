@@ -5,14 +5,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newRrdCmd builds `pve qemu rrd <vmid> --ds DS --timeframe FRAME [--cf CF]`.
+// newRrdCmd builds `pmx qemu rrd <vmid> --ds DS --timeframe FRAME [--cf CF]`.
 // The endpoint returns only a PNG filename on the PVE server; use
-// `pve qemu metrics` to obtain numeric time-series data instead.
+// `pmx qemu metrics` to obtain numeric time-series data instead.
 func newRrdCmd() *cobra.Command {
 	var (
 		ds        string
@@ -24,7 +24,7 @@ func newRrdCmd() *cobra.Command {
 		Short: "Get the RRD PNG filename for a VM metric",
 		Long: "Return the server-side path of the generated RRD graph PNG for one " +
 			"or more data sources. The file is created on the PVE node; the command " +
-			"prints its path. Use `pve qemu metrics` for numeric time-series data.",
+			"prints its path. Use `pmx qemu metrics` for numeric time-series data.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

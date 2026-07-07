@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // jsonTail strips diagnostics printed ahead of the JSON document (e.g. the
@@ -84,7 +84,7 @@ func TestStorageDescribe_Catalog(t *testing.T) {
 
 	_, err = run(t, f, "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pve storage describe")
+	require.Contains(t, err.Error(), "pmx storage describe")
 }
 
 // TestStorageDescribe_TypeFilter verifies --type filtering and usage markers.

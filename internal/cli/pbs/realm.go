@@ -10,11 +10,11 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRealmCmd builds `pve pbs realm` — list authentication realms, trigger
+// newRealmCmd builds `pmx pbs realm` — list authentication realms, trigger
 // realm user-sync, and manage the per-type realm configurations (AD, LDAP,
 // OpenID, PAM, PBS) backing them (/access/domains and
 // /config/access/{ad,ldap,openid,pam,pbs}).
@@ -65,7 +65,7 @@ func realmFormatOptionalPVEBool(b *pve.PVEBool) string {
 	return "false"
 }
 
-// newRealmLsCmd builds `pve pbs realm ls` — list every authentication realm
+// newRealmLsCmd builds `pmx pbs realm ls` — list every authentication realm
 // with its type (GET /access/domains). This endpoint requires no
 // authentication on PBS itself (it backs the login box), but the CLI still
 // requires a configured context to reach it.
@@ -114,7 +114,7 @@ func newRealmLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmSyncCmd builds `pve pbs realm sync <realm>` — synchronize users of
+// newRealmSyncCmd builds `pmx pbs realm sync <realm>` — synchronize users of
 // a realm from its backing directory service (POST
 // /access/domains/{realm}/sync). Runs as an asynchronous task; the command
 // blocks until it finishes unless --async is set.

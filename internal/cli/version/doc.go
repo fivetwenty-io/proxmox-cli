@@ -1,2 +1,2 @@
-// Package version implements the pve version command.
+// Package version implements the pmx version command.
 package version

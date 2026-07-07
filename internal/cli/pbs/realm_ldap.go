@@ -10,12 +10,12 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRealmLdapCmd builds `pve pbs realm ldap` — manage LDAP realm
+// newRealmLdapCmd builds `pmx pbs realm ldap` — manage LDAP realm
 // configurations (/config/access/ldap CRUD).
 func newRealmLdapCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -55,7 +55,7 @@ type realmLdapListEntry struct {
 	Verify              *pve.PVEBool `json:"verify,omitempty"`
 }
 
-// newRealmLdapLsCmd builds `pve pbs realm ldap ls` — list configured LDAP
+// newRealmLdapLsCmd builds `pmx pbs realm ldap ls` — list configured LDAP
 // realms (GET /config/access/ldap).
 func newRealmLdapLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -103,7 +103,7 @@ func newRealmLdapLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmLdapShowCmd builds `pve pbs realm ldap show <realm>` — show a
+// newRealmLdapShowCmd builds `pmx pbs realm ldap show <realm>` — show a
 // single LDAP realm's configuration (GET /config/access/ldap/{realm}).
 func newRealmLdapShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -308,7 +308,7 @@ func (lf *realmLdapFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateAcc
 	}
 }
 
-// newRealmLdapAddCmd builds `pve pbs realm ldap add <realm>` — create an LDAP
+// newRealmLdapAddCmd builds `pmx pbs realm ldap add <realm>` — create an LDAP
 // realm configuration (POST /config/access/ldap). --base-dn, --server1, and
 // --user-attr are required; every other option is optional and only
 // forwarded when explicitly set.
@@ -366,7 +366,7 @@ func newRealmLdapAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmLdapUpdateCmd builds `pve pbs realm ldap update <realm>` — update
+// newRealmLdapUpdateCmd builds `pmx pbs realm ldap update <realm>` — update
 // an LDAP realm configuration (PUT /config/access/ldap/{realm}). Only flags
 // explicitly set are sent; use --delete to reset properties to their default.
 func newRealmLdapUpdateCmd() *cobra.Command {
@@ -410,7 +410,7 @@ func newRealmLdapUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmLdapDeleteCmd builds `pve pbs realm ldap delete <realm>` — remove
+// newRealmLdapDeleteCmd builds `pmx pbs realm ldap delete <realm>` — remove
 // an LDAP realm configuration (DELETE /config/access/ldap/{realm}).
 func newRealmLdapDeleteCmd() *cobra.Command {
 	var (

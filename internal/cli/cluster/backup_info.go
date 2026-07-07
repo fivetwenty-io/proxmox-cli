@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newClusterBackupInfoCmd builds the `pve cluster backup-info` sub-tree for backup
+// newClusterBackupInfoCmd builds the `pmx cluster backup-info` sub-tree for backup
 // coverage queries that span the whole cluster rather than a single job.
 func newClusterBackupInfoCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -23,7 +23,7 @@ func newClusterBackupInfoCmd() *cobra.Command {
 	return cmd
 }
 
-// newBackupInfoNotBackedUpCmd builds `pve cluster backup-info not-backed-up`.
+// newBackupInfoNotBackedUpCmd builds `pmx cluster backup-info not-backed-up`.
 // It calls GET /cluster/backup-info/not-backed-up and lists every guest that
 // has no scheduled backup job covering it — essential for coverage audits.
 func newBackupInfoNotBackedUpCmd() *cobra.Command {

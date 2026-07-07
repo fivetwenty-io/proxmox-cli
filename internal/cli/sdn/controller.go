@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // controllerEntry is the subset of a /cluster/sdn/controllers element rendered
@@ -173,13 +173,13 @@ func (cf *controllerFlags) applyUpdate(fl interface{ Changed(string) bool }, p *
 	}
 }
 
-// newControllerCmd builds `pve sdn controller` and its sub-commands.
+// newControllerCmd builds `pmx sdn controller` and its sub-commands.
 func newControllerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "controller",
 		Short: "Manage SDN routing controllers (BGP, EVPN, IS-IS)",
 		Long: "List, create, inspect, update, and delete SDN controllers. Changes are " +
-			"staged until committed with `pve sdn apply`.",
+			"staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newControllerListCmd(),
@@ -246,7 +246,7 @@ func newControllerCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <controller> --type <type>",
 		Short: "Create an SDN controller",
-		Long:  "Create an SDN controller. The change is staged until `pve sdn apply`.",
+		Long:  "Create an SDN controller. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -261,7 +261,7 @@ func newControllerCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN controller %q: %w", controller, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN controller %q created (run `pve sdn apply` to commit).", controller)}
+				"SDN controller %q created (run `pmx sdn apply` to commit).", controller)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -315,7 +315,7 @@ func newControllerSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <controller>",
 		Short: "Update an SDN controller",
-		Long:  "Update an SDN controller. The change is staged until `pve sdn apply`.",
+		Long:  "Update an SDN controller. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -339,7 +339,7 @@ func newControllerSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN controller %q: %w", controller, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN controller %q updated (run `pve sdn apply` to commit).", controller)}
+				"SDN controller %q updated (run `pmx sdn apply` to commit).", controller)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -374,7 +374,7 @@ func newControllerDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN controller %q: %w", controller, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN controller %q deleted (run `pve sdn apply` to commit).", controller)}
+				"SDN controller %q deleted (run `pmx sdn apply` to commit).", controller)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

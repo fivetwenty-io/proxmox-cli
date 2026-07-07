@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newNotifEndpointGotifyCmd builds `pve pbs notification endpoint gotify` —
+// newNotifEndpointGotifyCmd builds `pmx pbs notification endpoint gotify` —
 // manage gotify notification endpoints (/config/notifications/endpoints/gotify CRUD).
 func newNotifEndpointGotifyCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -43,7 +43,7 @@ type notifGotifyEntry struct {
 	Server  string  `json:"server"`
 }
 
-// newNotifEndpointGotifyLsCmd builds `pve pbs notification endpoint gotify
+// newNotifEndpointGotifyLsCmd builds `pmx pbs notification endpoint gotify
 // ls` — list every configured gotify endpoint
 // (GET /config/notifications/endpoints/gotify).
 func newNotifEndpointGotifyLsCmd() *cobra.Command {
@@ -92,7 +92,7 @@ func newNotifEndpointGotifyLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointGotifyShowCmd builds `pve pbs notification endpoint
+// newNotifEndpointGotifyShowCmd builds `pmx pbs notification endpoint
 // gotify show <name>` — show a single gotify endpoint's configuration
 // (GET /config/notifications/endpoints/gotify/{name}). The API never
 // returns the token back, so it is never rendered.
@@ -180,7 +180,7 @@ func registerNotifGotifyUpdateFlags(cmd *cobra.Command, gf *notifGotifyFlags) {
 	f.StringVar(&gf.digest, "digest", "", "only update if the current config digest matches")
 }
 
-// newNotifEndpointGotifyAddCmd builds `pve pbs notification endpoint gotify
+// newNotifEndpointGotifyAddCmd builds `pmx pbs notification endpoint gotify
 // add <name>` — create a gotify endpoint (POST
 // /config/notifications/endpoints/gotify). --server and --token are
 // required; every other option is optional and only forwarded when
@@ -249,7 +249,7 @@ func newNotifEndpointGotifyAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointGotifyUpdateCmd builds `pve pbs notification endpoint
+// newNotifEndpointGotifyUpdateCmd builds `pmx pbs notification endpoint
 // gotify update <name>` — update a gotify endpoint (PUT
 // /config/notifications/endpoints/gotify/{name}). Only flags explicitly set
 // are sent; use --delete to reset properties to their default.
@@ -321,7 +321,7 @@ func newNotifEndpointGotifyUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointGotifyDeleteCmd builds `pve pbs notification endpoint
+// newNotifEndpointGotifyDeleteCmd builds `pmx pbs notification endpoint
 // gotify delete <name>` — remove a gotify endpoint (DELETE
 // /config/notifications/endpoints/gotify/{name}). The binding takes no
 // digest parameter — PBS does not support conditional deletes for

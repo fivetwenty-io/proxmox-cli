@@ -7,8 +7,8 @@ import (
 
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeLogLine is one entry of a syslog-shaped response: a line number and its
@@ -26,7 +26,7 @@ func nodeLogLineText(l nodeLogLine) string {
 	return *l.T
 }
 
-// newNodeSyslogCmd builds `pve pbs node syslog` — read syslog entries
+// newNodeSyslogCmd builds `pmx pbs node syslog` — read syslog entries
 // (GET /nodes/{node}/syslog).
 func newNodeSyslogCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -91,7 +91,7 @@ func newNodeSyslogCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeJournalCmd builds `pve pbs node journal` — read raw systemd journal
+// newNodeJournalCmd builds `pmx pbs node journal` — read raw systemd journal
 // lines (GET /nodes/{node}/journal).
 func newNodeJournalCmd(nf *nodeFlags) *cobra.Command {
 	var (

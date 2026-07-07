@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// newMonitorCmd builds `pve qemu monitor <vmid> --command CMD`.
+// newMonitorCmd builds `pmx qemu monitor <vmid> --command CMD`.
 // The QEMU monitor can execute arbitrary low-level commands against the
 // hypervisor, some of which are destructive (e.g. device_del, drive_del).
 // The command therefore requires --yes confirmation.

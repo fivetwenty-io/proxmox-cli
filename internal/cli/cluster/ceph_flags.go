@@ -8,11 +8,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newCephCmd builds the `pve cluster ceph` sub-tree. Today it exposes the
+// newCephCmd builds the `pmx cluster ceph` sub-tree. Today it exposes the
 // cluster-wide Ceph OSD flags (noout, noscrub, pause, and so on). These
 // commands require a configured Ceph cluster; on nodes without Ceph the API
 // returns an error which is surfaced verbatim.
@@ -30,7 +30,7 @@ func newCephCmd() *cobra.Command {
 	return cmd
 }
 
-// newCephStatusCmd builds `pve cluster ceph status` (GET /cluster/ceph/status),
+// newCephStatusCmd builds `pmx cluster ceph status` (GET /cluster/ceph/status),
 // a cluster-wide Ceph health and capacity summary. Requires a configured Ceph
 // cluster; on nodes without Ceph the API returns an error, surfaced verbatim.
 func newCephStatusCmd() *cobra.Command {
@@ -95,7 +95,7 @@ var cephFlagSpecs = []cephFlagSpec{
 	{"pause", "pause reads and writes", func(p *pvecluster.UpdateCephFlagsParams, v bool) { p.Pause = &v }},
 }
 
-// newCephFlagsSetAllCmd builds `pve cluster ceph flags set-all`, which sets
+// newCephFlagsSetAllCmd builds `pmx cluster ceph flags set-all`, which sets
 // several cluster-wide Ceph OSD flags in a single atomic request. Only the
 // flags passed are changed.
 func newCephFlagsSetAllCmd() *cobra.Command {
@@ -204,7 +204,7 @@ func newCephFlagsSetCmd() *cobra.Command {
 	}
 }
 
-// newCephMetadataCmd builds `pve cluster ceph metadata`.
+// newCephMetadataCmd builds `pmx cluster ceph metadata`.
 // It calls GET /cluster/ceph/metadata and returns per-node Ceph daemon metadata
 // (monitors, OSD, MDS, managers). The optional --scope flag filters to a specific
 // daemon type. On a node without a configured Ceph cluster the API returns an

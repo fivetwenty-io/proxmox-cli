@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newPreviousCmd builds `pve context previous` (alias: prev).
+// newPreviousCmd builds `pmx context previous` (alias: prev).
 //
 // Swaps CurrentContext ↔ PreviousContext. Errors if PreviousContext is empty or
 // if either name no longer exists in cfg.Contexts (stale reference). On a stale
@@ -39,7 +39,7 @@ func newPreviousCmd() *cobra.Command {
 // `select -` shorthand in select.go. Both callers are in the same package.
 func runPrevious(cmd *cobra.Command, cfg *config.Config, deps *cli.Deps) error {
 	if cfg.PreviousContext == "" {
-		return fmt.Errorf("no previous context recorded; run 'pve context select <name>' first")
+		return fmt.Errorf("no previous context recorded; run 'pmx context select <name>' first")
 	}
 
 	prev := cfg.PreviousContext
@@ -84,7 +84,7 @@ func checkContextRef(cfg *config.Config, field, name string) error {
 	}
 	return fmt.Errorf(
 		"%s references context %q which no longer exists; "+
-			"the stale reference has been cleared — use 'pve context select <name>'",
+			"the stale reference has been cleared — use 'pmx context select <name>'",
 		field, name,
 	)
 }

@@ -8,13 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newConfigCmd builds `pve lxc config` and its get/set/pending/describe sub-commands.
+// newConfigCmd builds `pmx lxc config` and its get/set/pending/describe sub-commands.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -24,7 +24,7 @@ func newConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigDescribeCmd builds `pve lxc config describe`, an offline catalog of
+// newConfigDescribeCmd builds `pmx lxc config describe`, an offline catalog of
 // every settable container configuration option from the PVE API schema (see
 // config_schema_gen.go).
 func newConfigDescribeCmd() *cobra.Command {
@@ -35,12 +35,12 @@ func newConfigDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and (for a single option) the " +
 			"sub-keys of dict-encoded options. Runs offline. Pass an option name to " +
 			"show only that option with full descriptions and sub-keys.",
-		CommandHint:         "pve lxc config describe",
+		CommandHint:         "pmx lxc config describe",
 		SubKeyRowsInCatalog: false,
 	})
 }
 
-// newConfigGetCmd builds `pve lxc config get <vmid|name>`.
+// newConfigGetCmd builds `pmx lxc config get <vmid|name>`.
 func newConfigGetCmd() *cobra.Command {
 	var snapshot string
 	var current bool
@@ -95,7 +95,7 @@ func newConfigGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigSetCmd builds `pve lxc config set <vmid|name>`.
+// newConfigSetCmd builds `pmx lxc config set <vmid|name>`.
 func newConfigSetCmd() *cobra.Command {
 	var (
 		hostname    string
@@ -436,7 +436,7 @@ type lxcPendingEntry struct {
 	Delete  int    `json:"delete"`
 }
 
-// newConfigPendingCmd builds `pve lxc config pending <vmid|name>`.
+// newConfigPendingCmd builds `pmx lxc config pending <vmid|name>`.
 //
 // Returns the diff between the currently committed configuration and any
 // changes that take effect after the next container restart.

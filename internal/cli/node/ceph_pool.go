@@ -7,7 +7,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
 func newCephPoolCmd() *cobra.Command {
@@ -47,7 +47,7 @@ func newCephPoolListCmd() *cobra.Command {
 	}
 }
 
-// newCephPoolGetCmd builds `pve node ceph pool get <name>`.
+// newCephPoolGetCmd builds `pmx node ceph pool get <name>`.
 //
 // GET /nodes/{node}/ceph/pool/{name} is only a directory index (status); the
 // pool parameters live at the status child endpoint.

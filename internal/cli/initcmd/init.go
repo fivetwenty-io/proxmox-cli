@@ -6,36 +6,36 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// Group is the factory for the `pve init` command group. Deps are unused
+// Group is the factory for the `pmx init` command group. Deps are unused
 // because the sub-commands resolve everything from flags and the local
 // filesystem at run time.
 func Group(_ *cli.Deps) *cobra.Command {
 	return NewCommand()
 }
 
-// NewCommand builds `pve init` and its sub-commands. Everything here operates on
+// NewCommand builds `pmx init` and its sub-commands. Everything here operates on
 // the local config file only, so the group carries the noClient annotation to
 // skip API-client construction.
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Scaffold local CLI configuration",
-		Long:  "Scaffold local Proxmox VE CLI configuration files.",
+		Long:  "Scaffold local Proxmox CLI configuration files.",
 	}
 	cmd.AddCommand(newConfigCmd())
 	return cmd
 }
 
-// configTemplate is the commented config.yml emitted by `pve init config`. It
+// configTemplate is the commented config.yml emitted by `pmx init config`. It
 // documents every supported field so the user can fill it in by hand. The
 // rendered file still parses as valid YAML once a context's placeholders are set.
-const configTemplate = `# pve CLI configuration.
-# Location: ~/.config/pve/config.yml (override with --config or $XDG_CONFIG_HOME).
+const configTemplate = `# pmx CLI configuration.
+# Location: ~/.config/pmx/config.yml (override with --config or $XDG_CONFIG_HOME).
 # This file is written 0600; keep it that way — it may hold credentials.
 
 # Name of the context used when --context/-c is not given. Set this to one of
@@ -70,7 +70,7 @@ contexts:
       #   ${VAR} or $VAR  read from the environment ( ${VAR} errors if unset )
       #   keychain:path   read from the system keychain
       #   any other value used verbatim (plaintext; emits a one-time warning)
-      secret: ${PVE_TOKEN}
+      secret: ${PMX_TOKEN}
 
     tls:
       insecure: false        # true disables certificate verification (lab only)
@@ -78,7 +78,7 @@ contexts:
       ca-cert: ""            # path to a PEM CA bundle for custom trust
 `
 
-// newConfigCmd builds `pve init config`, which writes the commented template to
+// newConfigCmd builds `pmx init config`, which writes the commented template to
 // the resolved config path. It refuses to clobber an existing file without
 // --force so a populated config is never silently overwritten.
 func newConfigCmd() *cobra.Command {
@@ -88,7 +88,7 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Write a config.yml template to fill in",
 		Long: "Write a commented config.yml template to the config path " +
-			"(default ~/.config/pve/config.yml) for you to fill in.\n\n" +
+			"(default ~/.config/pmx/config.yml) for you to fill in.\n\n" +
 			"Refuses to overwrite an existing file unless --force is given.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -109,7 +109,7 @@ func newConfigCmd() *cobra.Command {
 			}
 
 			msg := fmt.Sprintf(
-				"Wrote config template to %s. Edit it, then run `pve cluster status` to test.",
+				"Wrote config template to %s. Edit it, then run `pmx cluster status` to test.",
 				path)
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: msg}, deps.Format)

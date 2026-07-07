@@ -8,4 +8,4 @@ package pbs
 // values, per notifWebhookEntry's comment) and is excluded from the schema
 // table for the same reason as the other write-only fields.
 
-//go:generate go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/notifications/endpoints/webhook -verb POST -symbol notifWebhookOptionSchemas -exclude "name,secret" -out notification_endpoint_webhook_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/notifications/endpoints/webhook -verb POST -symbol notifWebhookOptionSchemas -exclude "name,secret" -out notification_endpoint_webhook_options_schema_gen.go

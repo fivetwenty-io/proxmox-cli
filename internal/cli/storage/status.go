@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newStorageStatusCmd builds `pve storage status <storage>` — report used/total/avail
+// newStorageStatusCmd builds `pmx storage status <storage>` — report used/total/avail
 // space and current active/enabled flags for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/status).
 func newStorageStatusCmd() *cobra.Command {
@@ -24,7 +24,7 @@ func newStorageStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 
@@ -65,7 +65,7 @@ func newStorageStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// newStorageIdentityCmd builds `pve storage identity <storage>` — return the
+// newStorageIdentityCmd builds `pmx storage identity <storage>` — return the
 // low-level backend identity descriptor for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/identity).
 func newStorageIdentityCmd() *cobra.Command {
@@ -79,7 +79,7 @@ func newStorageIdentityCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 

@@ -8,12 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newDomainCmd builds `pve access domain` and its sub-commands for managing
+// newDomainCmd builds `pmx access domain` and its sub-commands for managing
 // authentication realms (domains): the built-in pam/pve realms plus configured
 // ldap, ad, and openid realms, including user/group synchronization.
 func newDomainCmd() *cobra.Command {
@@ -45,7 +45,7 @@ type domainListEntry struct {
 	Default pveBool `json:"default,omitempty"`
 }
 
-// newDomainListCmd builds `pve access domain list`.
+// newDomainListCmd builds `pmx access domain list`.
 func newDomainListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -78,7 +78,7 @@ func newDomainListCmd() *cobra.Command {
 	}
 }
 
-// newDomainGetCmd builds `pve access domain get <realm>`. The realm config is an
+// newDomainGetCmd builds `pmx access domain get <realm>`. The realm config is an
 // open-ended set of keys that varies by realm type, so the raw object is
 // rendered generically as a sorted key/value table.
 func newDomainGetCmd() *cobra.Command {
@@ -287,7 +287,7 @@ func applyDomainFlagsToUpdate(cmd *cobra.Command, df *domainFlags, p *access.Upd
 	setIfChanged(cmd, "user-classes", &p.UserClasses, df.userClasses)
 }
 
-// newDomainCreateCmd builds `pve access domain create <realm> --type <type>`.
+// newDomainCreateCmd builds `pmx access domain create <realm> --type <type>`.
 func newDomainCreateCmd() *cobra.Command {
 	var df domainFlags
 	var realmType, usernameClaim string
@@ -321,7 +321,7 @@ func newDomainCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newDomainSetCmd builds `pve access domain set <realm>`.
+// newDomainSetCmd builds `pmx access domain set <realm>`.
 func newDomainSetCmd() *cobra.Command {
 	var df domainFlags
 	var deleteKeys, digest string
@@ -352,7 +352,7 @@ func newDomainSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newDomainDeleteCmd builds `pve access domain delete <realm>`.
+// newDomainDeleteCmd builds `pmx access domain delete <realm>`.
 func newDomainDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
@@ -379,7 +379,7 @@ func newDomainDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newDomainSyncCmd builds `pve access domain sync <realm>`. Synchronization is
+// newDomainSyncCmd builds `pmx access domain sync <realm>`. Synchronization is
 // only meaningful for ldap and ad realms; the server rejects it for other
 // types. The response is a worker task identifier, rendered verbatim.
 func newDomainSyncCmd() *cobra.Command {

@@ -9,4 +9,4 @@ package storage
 // the pve-storage plugin sources by scripts/storage_type_options.py.
 // "storage" and "type" are the create call's own parameters, not options.
 
-//go:generate go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen -path /storage -verb POST -symbol storageOptionSchemas -exclude "storage,type" -flag-override "target=iscsi-target" -out options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -path /storage -verb POST -symbol storageOptionSchemas -exclude "storage,type" -flag-override "target=iscsi-target" -out options_schema_gen.go

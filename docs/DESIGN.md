@@ -1,31 +1,31 @@
-# pve-cli Architecture
+# pmx-cli Architecture
 
 ## Overview
 
-`pve` is a Cobra-based CLI that wraps the generated
-[`pve-apiclient-go`](https://github.com/fivetwenty-io/pve-apiclient-go) v3
-client. The binary entry point is `cmd/pve/main.go`; all logic lives under
+`pmx` is a Cobra-based CLI that wraps the generated
+[`proxmox-apiclient-go`](https://github.com/fivetwenty-io/proxmox-apiclient-go) v3
+client. The binary entry point is `cmd/pmx/main.go`; all logic lives under
 `internal/`.
 
 ## Package layout
 
 ```
-cmd/pve/           — binary entry point; calls cli.Execute()
+cmd/pmx/           — binary entry point; calls cli.Execute()
 internal/
   cli/             — Cobra root, persistent flags, dependency wiring
-    context/       — pve context / pve ctx command group
-    api/           — pve api command group (authentication only)
-    access/        — pve access subtree
-    cluster/       — pve cluster subtree
-    node/          — pve node subtree
-    qemu/          — pve qemu subtree
-    lxc/           — pve lxc subtree
-    sdn/           — pve sdn subtree
-    storage/       — pve storage subtree
-    pool/          — pve pool subtree
-    task/          — pve task subtree
-    version/       — pve version subtree
-    initcmd/       — pve init subtree
+    context/       — pmx context / pmx ctx command group
+    api/           — pmx api command group (authentication only)
+    access/        — pmx access subtree
+    cluster/       — pmx cluster subtree
+    node/          — pmx node subtree
+    qemu/          — pmx qemu subtree
+    lxc/           — pmx lxc subtree
+    sdn/           — pmx sdn subtree
+    storage/       — pmx storage subtree
+    pool/          — pmx pool subtree
+    task/          — pmx task subtree
+    version/       — pmx version subtree
+    initcmd/       — pmx init subtree
   apiclient/       — thin wrapper: service handles, UPID extraction, task-wait
   config/          — Config types, loader, atomic writer, secret resolver
   output/          — table/plain/json/yaml renderer
@@ -37,7 +37,7 @@ internal/
 ## Contexts
 
 A **context** is a named bundle of connection and authentication settings for
-one Proxmox VE endpoint. The config file at `~/.config/pve/config.yml` stores
+one Proxmox VE endpoint. The config file at `~/.config/pmx/config.yml` stores
 all contexts under the `contexts:` key.
 
 ```yaml
@@ -55,7 +55,7 @@ contexts:
       type: token
       username: root@pam
       token-id: automation
-      secret: ${PVE_TOKEN}
+      secret: ${PMX_TOKEN}
     tls:
       insecure: false
       fingerprint: ""
@@ -71,23 +71,23 @@ contexts:
 The active context is resolved in this order on every command invocation:
 
 1. `--context/-c` flag (highest priority).
-2. `$PVE_CONTEXT` environment variable.
+2. `$PMX_CONTEXT` environment variable.
 3. `current-context:` in the config file.
 
 If none of these resolves to a configured context, the command exits with
-"no context specified" and suggests `pve context select`.
+"no context specified" and suggests `pmx context select`.
 
 ### previous-context mechanism
 
-`pve context select <name>` writes the outgoing `current-context` into
+`pmx context select <name>` writes the outgoing `current-context` into
 `previous-context` before updating `current-context`. This allows:
 
-- `pve context previous` — swap back in one step.
-- `pve context select -` — the same swap via the `-` shorthand.
+- `pmx context previous` — swap back in one step.
+- `pmx context select -` — the same swap via the `-` shorthand.
 
 `previous-context` is cleared when a stale reference is detected (the named
 context was removed); the error message guides the operator to run
-`pve context select <name>` again.
+`pmx context select <name>` again.
 
 ### Per-context defaults
 
@@ -96,16 +96,16 @@ supply the defaults for `--node` and `--output` on every command run under
 that context. The resolution order for both fields is:
 
 1. Explicit flag (`--node` / `--output`).
-2. Environment variable (`$PVE_NODE` / `$PVE_OUTPUT`).
+2. Environment variable (`$PMX_NODE` / `$PMX_OUTPUT`).
 3. Context `default-node` / `default-output`.
 4. Built-in global default (`""` for node, `table` for output).
 
-A value at a higher tier always wins. In particular, `$PVE_NODE` and
-`$PVE_OUTPUT` outrank per-context defaults.
+A value at a higher tier always wins. In particular, `$PMX_NODE` and
+`$PMX_OUTPUT` outrank per-context defaults.
 
 ### Context validation
 
-`pve context validate [<name>] [--all]` runs structural checks against one or
+`pmx context validate [<name>] [--all]` runs structural checks against one or
 all contexts without contacting the Proxmox VE API:
 
 - `host` is present.
@@ -127,7 +127,7 @@ release). Exit status is 0 when all validated contexts pass, 1 when any fail.
 - Literal — used verbatim, with a one-time stderr warning.
 
 Password login persists a live session (ticket + CSRF + expiry) back into the
-context entry; `pve api auth logout` invalidates and removes it.
+context entry; `pmx api auth logout` invalidates and removes it.
 
 ## Dependency wiring
 
@@ -139,19 +139,19 @@ context entry; `pve api auth logout` invalidates and removes it.
 4. Stores it in the command's annotation map via `cli.SetDeps`.
 
 Sub-commands retrieve deps with `cli.GetDeps(cmd)`. Commands annotated
-`noClient: true` (all `pve context` and `pve api` verbs) skip API-client
+`noClient: true` (all `pmx context` and `pmx api` verbs) skip API-client
 construction; they operate only on the local config file.
 
 ## Output rendering
 
 Every command returns an `output.Result` value (headers + rows for tables,
 `Raw` for JSON/YAML, `Message` for plain text). The renderer selected by
-`--output/-o` (or `$PVE_OUTPUT`, or the context's `default-output`) formats
+`--output/-o` (or `$PMX_OUTPUT`, or the context's `default-output`) formats
 the result to stdout. JSON and YAML preserve native API types.
 
 ## Audit logging
 
-All commands write a JSONL log to `~/.pve/logs/`. Authorization, cookie, CSRF,
+All commands write a JSONL log to `~/.pmx/logs/`. Authorization, cookie, CSRF,
 `password`, `token`, and `secret` fields are redacted before writing. Pass
 `--no-log` to suppress the log file; `--verbose`, `--debug`, or `--trace` raise
 the slog level.

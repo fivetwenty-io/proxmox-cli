@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newNotifEndpointSmtpCmd builds `pve pbs notification endpoint smtp` —
+// newNotifEndpointSmtpCmd builds `pmx pbs notification endpoint smtp` —
 // manage smtp notification endpoints
 // (/config/notifications/endpoints/smtp CRUD).
 func newNotifEndpointSmtpCmd() *cobra.Command {
@@ -50,7 +50,7 @@ type notifSmtpEntry struct {
 	Username    *string  `json:"username,omitempty"`
 }
 
-// newNotifEndpointSmtpLsCmd builds `pve pbs notification endpoint smtp ls`
+// newNotifEndpointSmtpLsCmd builds `pmx pbs notification endpoint smtp ls`
 // — list every configured smtp endpoint
 // (GET /config/notifications/endpoints/smtp).
 func newNotifEndpointSmtpLsCmd() *cobra.Command {
@@ -100,7 +100,7 @@ func newNotifEndpointSmtpLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointSmtpShowCmd builds `pve pbs notification endpoint smtp
+// newNotifEndpointSmtpShowCmd builds `pmx pbs notification endpoint smtp
 // show <name>` — show a single smtp endpoint's configuration
 // (GET /config/notifications/endpoints/smtp/{name}). The password is
 // write-only and is never returned by the API.
@@ -207,7 +207,7 @@ func registerNotifSmtpUpdateFlags(cmd *cobra.Command, sf *notifSmtpFlags) {
 	f.StringVar(&sf.digest, "digest", "", "only update if the current config digest matches")
 }
 
-// newNotifEndpointSmtpAddCmd builds `pve pbs notification endpoint smtp add
+// newNotifEndpointSmtpAddCmd builds `pmx pbs notification endpoint smtp add
 // <name>` — create an smtp endpoint (POST
 // /config/notifications/endpoints/smtp). --server and --from-address are
 // required; every other option is optional and only forwarded when
@@ -300,7 +300,7 @@ func newNotifEndpointSmtpAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointSmtpUpdateCmd builds `pve pbs notification endpoint smtp
+// newNotifEndpointSmtpUpdateCmd builds `pmx pbs notification endpoint smtp
 // update <name>` — update an smtp endpoint (PUT
 // /config/notifications/endpoints/smtp/{name}). Only flags explicitly set
 // are sent; use --delete to reset properties to their default.
@@ -400,7 +400,7 @@ func newNotifEndpointSmtpUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointSmtpDeleteCmd builds `pve pbs notification endpoint smtp
+// newNotifEndpointSmtpDeleteCmd builds `pmx pbs notification endpoint smtp
 // delete <name>` — remove an smtp endpoint (DELETE
 // /config/notifications/endpoints/smtp/{name}). The binding takes no digest
 // parameter — PBS does not support conditional deletes for notification

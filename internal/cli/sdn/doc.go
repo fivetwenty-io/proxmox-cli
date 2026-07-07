@@ -1,2 +1,2 @@
-// Package sdn implements the pve sdn command group.
+// Package sdn implements the pmx sdn command group.
 package sdn

@@ -1,4 +1,4 @@
-# GoReleaser configuration for the pve CLI.
+# GoReleaser configuration for the pmx CLI.
 # Docs: https://goreleaser.com
 #
 # Release targets (per project requirements):
@@ -14,7 +14,7 @@
 # Published by:    .github/workflows/release.yml on a v* tag.
 version: 2
 
-project_name: pve
+project_name: pmx
 
 before:
   hooks:
@@ -22,9 +22,9 @@ before:
     - go mod download
 
 builds:
-  - id: pve
-    main: ./cmd/pve
-    binary: pve
+  - id: pmx
+    main: ./cmd/pmx
+    binary: pmx
     env:
       - CGO_ENABLED=0
     flags:
@@ -33,9 +33,9 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
-      - -X github.com/fivetwenty-io/pve-cli/internal/version.Version={{ .Version }}
-      - -X github.com/fivetwenty-io/pve-cli/internal/version.Commit={{ .ShortCommit }}
-      - -X github.com/fivetwenty-io/pve-cli/internal/version.Date={{ .CommitDate }}
+      - -X github.com/fivetwenty-io/pmx-cli/internal/version.Version={{ .Version }}
+      - -X github.com/fivetwenty-io/pmx-cli/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/fivetwenty-io/pmx-cli/internal/version.Date={{ .CommitDate }}
     goos:
       - linux
       - darwin
@@ -52,9 +52,9 @@ builds:
         goarch: arm64
 
 archives:
-  - id: pve
+  - id: pmx
     ids:
-      - pve
+      - pmx
     # tar.gz everywhere except Windows, which gets a .zip.
     formats:
       - tar.gz
@@ -62,7 +62,7 @@ archives:
       - goos: windows
         formats:
           - zip
-    # e.g. pve_1.0.0_darwin_arm64.tar.gz
+    # e.g. pmx_1.0.0_darwin_arm64.tar.gz
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     files:
@@ -91,16 +91,16 @@ changelog:
 release:
   github:
     owner: fivetwenty-io
-    name: pve-cli
+    name: pmx-cli
   draft: false
   prerelease: auto
-  name_template: "pve {{ .Version }}"
+  name_template: "pmx {{ .Version }}"
   header: |
-    ## pve {{ .Version }}
+    ## pmx {{ .Version }}
 
-    Proxmox VE command-line interface.
+    Proxmox command-line interface.
 
     ### Install
 
     Download the archive for your platform from the assets below, verify it
-    against `pve_{{ .Version }}_SHA256SUMS`, extract, and place `pve` on your `PATH`.
+    against `pmx_{{ .Version }}_SHA256SUMS`, extract, and place `pmx` on your `PATH`.

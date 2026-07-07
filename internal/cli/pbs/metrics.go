@@ -8,14 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newMetricsCmd builds `pve pbs metrics` — manage external metric-server
+// newMetricsCmd builds `pmx pbs metrics` — manage external metric-server
 // targets (InfluxDB over HTTP(s) and InfluxDB over UDP) that Proxmox Backup
 // Server pushes host and datastore statistics to (/config/metrics CRUD), and
 // read the raw metric data points the server currently holds
@@ -64,7 +64,7 @@ func stripMetricsSecrets(fields map[string]any) {
 // influxdb-http
 // ===========================================================================
 
-// newMetricsInfluxdbHTTPCmd builds `pve pbs metrics influxdb-http` — manage
+// newMetricsInfluxdbHTTPCmd builds `pmx pbs metrics influxdb-http` — manage
 // InfluxDB HTTP(s) metric-server targets (/config/metrics/influxdb-http CRUD).
 func newMetricsInfluxdbHTTPCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -97,7 +97,7 @@ type metricsInfluxdbHTTPEntry struct {
 	VerifyTls    *bool   `json:"verify-tls,omitempty"`
 }
 
-// newMetricsInfluxdbHTTPLsCmd builds `pve pbs metrics influxdb-http ls` —
+// newMetricsInfluxdbHTTPLsCmd builds `pmx pbs metrics influxdb-http ls` —
 // list every configured InfluxDB HTTP(s) metric server
 // (GET /config/metrics/influxdb-http).
 func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
@@ -159,7 +159,7 @@ func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newMetricsInfluxdbHTTPShowCmd builds `pve pbs metrics influxdb-http show
+// newMetricsInfluxdbHTTPShowCmd builds `pmx pbs metrics influxdb-http show
 // <name>` — show one InfluxDB HTTP(s) metric server's full configuration
 // (GET /config/metrics/influxdb-http/{name}).
 func newMetricsInfluxdbHTTPShowCmd() *cobra.Command {
@@ -235,7 +235,7 @@ func registerMetricsInfluxdbHTTPArgs(cmd *cobra.Command, a *metricsInfluxdbHTTPA
 	f.StringVar(&a.comment, "comment", "", "comment")
 }
 
-// newMetricsInfluxdbHTTPAddCmd builds `pve pbs metrics influxdb-http add
+// newMetricsInfluxdbHTTPAddCmd builds `pmx pbs metrics influxdb-http add
 // <name>` — create an InfluxDB HTTP(s) metric server
 // (POST /config/metrics/influxdb-http).
 func newMetricsInfluxdbHTTPAddCmd() *cobra.Command {
@@ -307,7 +307,7 @@ func newMetricsInfluxdbHTTPAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newMetricsInfluxdbHTTPUpdateCmd builds `pve pbs metrics influxdb-http
+// newMetricsInfluxdbHTTPUpdateCmd builds `pmx pbs metrics influxdb-http
 // update <name>` — update an InfluxDB HTTP(s) metric server
 // (PUT /config/metrics/influxdb-http/{name}).
 func newMetricsInfluxdbHTTPUpdateCmd() *cobra.Command {
@@ -401,7 +401,7 @@ func newMetricsInfluxdbHTTPUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newMetricsInfluxdbHTTPDeleteCmd builds `pve pbs metrics influxdb-http
+// newMetricsInfluxdbHTTPDeleteCmd builds `pmx pbs metrics influxdb-http
 // delete <name>` — remove an InfluxDB HTTP(s) metric server
 // (DELETE /config/metrics/influxdb-http/{name}).
 func newMetricsInfluxdbHTTPDeleteCmd() *cobra.Command {
@@ -447,7 +447,7 @@ func newMetricsInfluxdbHTTPDeleteCmd() *cobra.Command {
 // influxdb-udp
 // ===========================================================================
 
-// newMetricsInfluxdbUDPCmd builds `pve pbs metrics influxdb-udp` — manage
+// newMetricsInfluxdbUDPCmd builds `pmx pbs metrics influxdb-udp` — manage
 // InfluxDB UDP metric-server targets (/config/metrics/influxdb-udp CRUD).
 func newMetricsInfluxdbUDPCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -476,7 +476,7 @@ type metricsInfluxdbUDPEntry struct {
 	Name    string  `json:"name"`
 }
 
-// newMetricsInfluxdbUDPLsCmd builds `pve pbs metrics influxdb-udp ls` —
+// newMetricsInfluxdbUDPLsCmd builds `pmx pbs metrics influxdb-udp ls` —
 // list every configured InfluxDB UDP metric server
 // (GET /config/metrics/influxdb-udp).
 func newMetricsInfluxdbUDPLsCmd() *cobra.Command {
@@ -528,7 +528,7 @@ func newMetricsInfluxdbUDPLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newMetricsInfluxdbUDPShowCmd builds `pve pbs metrics influxdb-udp show
+// newMetricsInfluxdbUDPShowCmd builds `pmx pbs metrics influxdb-udp show
 // <name>` — show one InfluxDB UDP metric server's full configuration
 // (GET /config/metrics/influxdb-udp/{name}).
 func newMetricsInfluxdbUDPShowCmd() *cobra.Command {
@@ -594,7 +594,7 @@ func registerMetricsInfluxdbUDPArgs(cmd *cobra.Command, a *metricsInfluxdbUDPArg
 	f.StringVar(&a.comment, "comment", "", "comment")
 }
 
-// newMetricsInfluxdbUDPAddCmd builds `pve pbs metrics influxdb-udp add
+// newMetricsInfluxdbUDPAddCmd builds `pmx pbs metrics influxdb-udp add
 // <name>` — create an InfluxDB UDP metric server
 // (POST /config/metrics/influxdb-udp).
 func newMetricsInfluxdbUDPAddCmd() *cobra.Command {
@@ -650,7 +650,7 @@ func newMetricsInfluxdbUDPAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newMetricsInfluxdbUDPUpdateCmd builds `pve pbs metrics influxdb-udp
+// newMetricsInfluxdbUDPUpdateCmd builds `pmx pbs metrics influxdb-udp
 // update <name>` — update an InfluxDB UDP metric server
 // (PUT /config/metrics/influxdb-udp/{name}).
 func newMetricsInfluxdbUDPUpdateCmd() *cobra.Command {
@@ -728,7 +728,7 @@ func newMetricsInfluxdbUDPUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newMetricsInfluxdbUDPDeleteCmd builds `pve pbs metrics influxdb-udp
+// newMetricsInfluxdbUDPDeleteCmd builds `pmx pbs metrics influxdb-udp
 // delete <name>` — remove an InfluxDB UDP metric server
 // (DELETE /config/metrics/influxdb-udp/{name}).
 func newMetricsInfluxdbUDPDeleteCmd() *cobra.Command {
@@ -789,7 +789,7 @@ type metricsDataPoint struct {
 	Value     float64 `json:"value"`
 }
 
-// newMetricsDataCmd builds `pve pbs metrics data` — read the raw metric data
+// newMetricsDataCmd builds `pmx pbs metrics data` — read the raw metric data
 // points Proxmox Backup Server currently holds for itself and its datastores
 // (GET /status/metrics).
 //

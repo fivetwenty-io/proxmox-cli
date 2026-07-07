@@ -1,2 +1,2 @@
-// Package node implements the pve node command group.
+// Package node implements the pmx node command group.
 package node

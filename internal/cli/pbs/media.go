@@ -10,11 +10,11 @@ import (
 
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newTapeMediaCmd builds `pve pbs tape media` — inspect the tape media
+// newTapeMediaCmd builds `pmx pbs tape media` — inspect the tape media
 // database (registered media, their backed-up content, and media sets), and
 // move, destroy, or set the status of individual media (/tape/media/*).
 //
@@ -61,7 +61,7 @@ type tapeMediaListEntry struct {
 	Uuid          string  `json:"uuid"`
 }
 
-// newTapeMediaLsCmd builds `pve pbs tape media ls` — list registered backup
+// newTapeMediaLsCmd builds `pmx pbs tape media ls` — list registered backup
 // media (GET /tape/media/list).
 func newTapeMediaLsCmd() *cobra.Command {
 	var (
@@ -157,7 +157,7 @@ type tapeMediaContentEntry struct {
 	Uuid          string `json:"uuid"`
 }
 
-// newTapeMediaContentCmd builds `pve pbs tape media content` — list the
+// newTapeMediaContentCmd builds `pmx pbs tape media content` — list the
 // backup snapshots recorded on tape media (GET /tape/media/content),
 // optionally filtered by backup ID/type, media, media set, or pool.
 func newTapeMediaContentCmd() *cobra.Command {
@@ -267,7 +267,7 @@ type tapeMediaSetEntry struct {
 	Pool          string `json:"pool"`
 }
 
-// newTapeMediaSetsCmd builds `pve pbs tape media sets` — list tape media
+// newTapeMediaSetsCmd builds `pmx pbs tape media sets` — list tape media
 // sets (GET /tape/media/media-sets).
 func newTapeMediaSetsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -314,7 +314,7 @@ func newTapeMediaSetsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeMediaMoveCmd builds `pve pbs tape media move` — move a tape medium
+// newTapeMediaMoveCmd builds `pmx pbs tape media move` — move a tape medium
 // to a vault or mark it offline (POST /tape/media/move). This endpoint's
 // PBS API schema declares a "null" return type: it carries no UPID, so this
 // command reports success directly instead of going through
@@ -376,7 +376,7 @@ func newTapeMediaMoveCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeMediaDestroyCmd builds `pve pbs tape media destroy` — completely
+// newTapeMediaDestroyCmd builds `pmx pbs tape media destroy` — completely
 // remove a tape medium's record from the media database (GET
 // /tape/media/destroy — a destructive read per the PBS API schema). Its
 // PBS API schema declares a "null" return type: it carries no UPID, so this
@@ -443,7 +443,7 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeMediaSetStatusCmd builds `pve pbs tape media set-status <uuid>` —
+// newTapeMediaSetStatusCmd builds `pmx pbs tape media set-status <uuid>` —
 // set a tape medium's status (POST /tape/media/list/{uuid}/status). Its PBS
 // API schema declares a "null" return type: it carries no UPID, so this
 // command reports success directly instead of going through

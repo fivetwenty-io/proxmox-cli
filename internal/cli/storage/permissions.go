@@ -8,9 +8,9 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/permshared"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // storageACLPath derives the ACL/permission path for a storage definition.
@@ -22,7 +22,7 @@ func storageACLPath(storageID string) string {
 	return fmt.Sprintf("/storage/%s", storageID)
 }
 
-// newPermissionsCmd builds `pve storage permissions` and its sub-commands.
+// newPermissionsCmd builds `pmx storage permissions` and its sub-commands.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
@@ -41,7 +41,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pve storage permissions list <storage>`.
+// newPermissionsListCmd builds `pmx storage permissions list <storage>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -82,7 +82,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pve storage permissions effective <storage>`.
+// newPermissionsEffectiveCmd builds `pmx storage permissions effective <storage>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -119,8 +119,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantRevokeCmd builds `pve storage permissions grant <storage>`
-// when revoke is false, and `pve storage permissions revoke <storage>` when true.
+// newPermissionsGrantRevokeCmd builds `pmx storage permissions grant <storage>`
+// when revoke is false, and `pmx storage permissions revoke <storage>` when true.
 // The two verbs share identical mechanics: both call Access.UpdateAcl with the
 // derived storage path, differing only in the Delete flag.
 func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {

@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newNetworkCmd builds the `pve node network` sub-tree: the host network
+// newNetworkCmd builds the `pmx node network` sub-tree: the host network
 // interfaces and bridges of the resolved node, plus the apply/revert verbs that
 // commit or discard the pending /etc/network/interfaces.new changes. Edits to a
 // host interface only become live once `network apply` reloads the networking
@@ -39,7 +39,7 @@ func newNetworkCmd() *cobra.Command {
 	return cmd
 }
 
-// newNetstatCmd builds `pve node netstat` — reads per-interface traffic counters
+// newNetstatCmd builds `pmx node netstat` — reads per-interface traffic counters
 // from the resolved node.
 func newNetstatCmd() *cobra.Command {
 	return &cobra.Command{
@@ -243,7 +243,7 @@ func newNetworkCreateCmd() *cobra.Command {
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf(
-					"Network interface %q staged on node %q. Run `pve node network apply` to make it live.",
+					"Network interface %q staged on node %q. Run `pmx node network apply` to make it live.",
 					iface, deps.Node)}, deps.Format)
 		},
 	}
@@ -366,7 +366,7 @@ func newNetworkUpdateCmd() *cobra.Command {
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf(
-					"Network interface %q updated on node %q. Run `pve node network apply` to make it live.",
+					"Network interface %q updated on node %q. Run `pmx node network apply` to make it live.",
 					iface, deps.Node)}, deps.Format)
 		},
 	}
@@ -484,7 +484,7 @@ func newNetworkDeleteCmd() *cobra.Command {
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf(
-					"Network interface %q deleted on node %q. Run `pve node network apply` to make it live.",
+					"Network interface %q deleted on node %q. Run `pmx node network apply` to make it live.",
 					iface, deps.Node)}, deps.Format)
 		},
 	}

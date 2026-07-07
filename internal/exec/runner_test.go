@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	execpkg "github.com/fivetwenty-io/pve-cli/internal/exec"
+	execpkg "github.com/fivetwenty-io/pmx-cli/internal/exec"
 )
 
 // ---------------------------------------------------------------------------
@@ -31,14 +31,14 @@ func TestReal_Echo(t *testing.T) {
 }
 
 // TestReal_EchoEnv verifies that extra env entries are available to the child
-// process by running sh -c 'echo $PVE_TEST_VAR'.
+// process by running sh -c 'echo $PMX_TEST_VAR'.
 func TestReal_EchoEnv(t *testing.T) {
 	t.Parallel()
 
 	r := execpkg.Real()
 	var stdout bytes.Buffer
 
-	err := r.Run("/bin/sh", []string{"-c", "echo $PVE_TEST_VAR"}, []string{"PVE_TEST_VAR=fivetwenty"}, nil, &stdout, nil)
+	err := r.Run("/bin/sh", []string{"-c", "echo $PMX_TEST_VAR"}, []string{"PMX_TEST_VAR=fivetwenty"}, nil, &stdout, nil)
 	require.NoError(t, err)
 	require.Equal(t, "fivetwenty\n", stdout.String())
 }

@@ -5,13 +5,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newRemoteMigrateCmd builds `pve lxc remote-migrate <vmid> --target-endpoint EP
+// newRemoteMigrateCmd builds `pmx lxc remote-migrate <vmid> --target-endpoint EP
 // --target-storage ST --target-bridge BR [flags]`.
 //
 // Cross-cluster container migration. This operation is irreversible: the

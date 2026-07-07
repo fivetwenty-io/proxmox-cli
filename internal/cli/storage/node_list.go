@@ -10,8 +10,8 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeStorageEntry is the subset of a /nodes/{node}/storage element rendered in
@@ -29,7 +29,7 @@ type nodeStorageEntry struct {
 	Avail   int64  `json:"avail"`
 }
 
-// newStorageNodeListCmd builds `pve storage node-list` — the storages available
+// newStorageNodeListCmd builds `pmx storage node-list` — the storages available
 // on the resolved node with their runtime status and usage
 // (GET /nodes/{node}/storage).
 func newStorageNodeListCmd() *cobra.Command {
@@ -50,7 +50,7 @@ func newStorageNodeListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
 			params := &nodes.ListStorageParams{}

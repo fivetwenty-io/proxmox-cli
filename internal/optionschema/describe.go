@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // DescribeConfig configures a NewDescribeCmd instance for one command tree.
@@ -20,7 +20,7 @@ type DescribeConfig struct {
 	// Long is the cobra Long text.
 	Long string
 	// CommandHint is the full command the unknown-option error points at,
-	// e.g. "pve cluster options describe".
+	// e.g. "pmx cluster options describe".
 	CommandHint string
 	// SubKeyRowsInCatalog includes one row per dict sub-key in the no-argument
 	// catalog view. Disable for large tables (guest config); the single-option

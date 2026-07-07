@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // ---------------------------------------------------------------------------
@@ -19,7 +19,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // TestNodeConsoleProxy_CommandTree verifies that termproxy, vncshell, and
-// spiceshell are all registered under `pve node`.
+// spiceshell are all registered under `pmx node`.
 func TestNodeConsoleProxy_CommandTree(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())

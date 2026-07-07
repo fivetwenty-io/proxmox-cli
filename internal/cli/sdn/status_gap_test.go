@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestStatusCommandTree verifies the sdn status sub-group and all 12 endpoint
@@ -125,12 +125,12 @@ func TestStatusZonesList(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones", []any{
-		map[string]any{"zone": "pvecli", "type": "simple"},
+		map[string]any{"zone": "pmxcli", "type": "simple"},
 	}, 200)
 
 	out, err := run(t, f, "", "--node", "pve1", "status", "zones")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli")
+	require.Contains(t, out, "pmxcli")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
 	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones", rec[0].path)
@@ -143,13 +143,13 @@ func TestStatusZonesGet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones", []any{
-		map[string]any{"zone": "pvecli", "status": "ok"},
+		map[string]any{"zone": "pmxcli", "status": "ok"},
 		map[string]any{"zone": "other", "status": "error"},
 	}, 200)
 
-	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "get", "pvecli")
+	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "get", "pmxcli")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli")
+	require.Contains(t, out, "pmxcli")
 	require.NotContains(t, out, "other", "only the requested zone must be shown")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
@@ -165,7 +165,7 @@ func TestStatusZonesGetNotFound(t *testing.T) {
 		map[string]any{"zone": "other", "status": "ok"},
 	}, 200)
 
-	_, err := run(t, f, "", "--node", "pve1", "status", "zones", "get", "pvecli")
+	_, err := run(t, f, "", "--node", "pve1", "status", "zones", "get", "pmxcli")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "not found")
 }
@@ -175,16 +175,16 @@ func TestStatusZonesGetNotFound(t *testing.T) {
 func TestStatusZonesBridges(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pvecli/bridges", []any{
+	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pmxcli/bridges", []any{
 		map[string]any{"iface": "vmbr0"},
 	}, 200)
 
-	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "bridges", "pvecli")
+	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "bridges", "pmxcli")
 	require.NoError(t, err)
 	require.Contains(t, out, "vmbr0")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pvecli/bridges", rec[0].path)
+	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pmxcli/bridges", rec[0].path)
 }
 
 // TestStatusZonesContent verifies `sdn status zones content <zone>` calls
@@ -192,16 +192,16 @@ func TestStatusZonesBridges(t *testing.T) {
 func TestStatusZonesContent(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pvecli/content", []any{
-		map[string]any{"vnet": "pvecli0"},
+	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pmxcli/content", []any{
+		map[string]any{"vnet": "pmxcli0"},
 	}, 200)
 
-	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "content", "pvecli")
+	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "content", "pmxcli")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli0")
+	require.Contains(t, out, "pmxcli0")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pvecli/content", rec[0].path)
+	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pmxcli/content", rec[0].path)
 }
 
 // TestStatusZonesIpVrf verifies `sdn status zones ip-vrf <zone>` calls
@@ -209,16 +209,16 @@ func TestStatusZonesContent(t *testing.T) {
 func TestStatusZonesIpVrf(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pvecli/ip-vrf", []any{
+	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pmxcli/ip-vrf", []any{
 		map[string]any{"name": "vrf1"},
 	}, 200)
 
-	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "ip-vrf", "pvecli")
+	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "ip-vrf", "pmxcli")
 	require.NoError(t, err)
 	require.Contains(t, out, "vrf1")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pvecli/ip-vrf", rec[0].path)
+	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pmxcli/ip-vrf", rec[0].path)
 }
 
 // TestStatusVnetsMacVrf verifies `sdn status vnets mac-vrf <vnet>` calls
@@ -226,16 +226,16 @@ func TestStatusZonesIpVrf(t *testing.T) {
 func TestStatusVnetsMacVrf(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/vnets/pvecli0/mac-vrf", []any{
+	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/vnets/pmxcli0/mac-vrf", []any{
 		map[string]any{"mac": "aa:bb:cc:dd:ee:ff"},
 	}, 200)
 
-	out, err := run(t, f, "", "--node", "pve1", "status", "vnets", "mac-vrf", "pvecli0")
+	out, err := run(t, f, "", "--node", "pve1", "status", "vnets", "mac-vrf", "pmxcli0")
 	require.NoError(t, err)
 	require.Contains(t, out, "aa:bb:cc:dd:ee:ff")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/vnets/pvecli0/mac-vrf", rec[0].path)
+	require.Equal(t, "/api2/json/nodes/pve1/sdn/vnets/pmxcli0/mac-vrf", rec[0].path)
 }
 
 // TestStatusFabricsInterfaces verifies `sdn status fabrics interfaces <fabric>` calls

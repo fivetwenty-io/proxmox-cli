@@ -1,4 +1,4 @@
-module github.com/fivetwenty-io/pve-cli
+module github.com/fivetwenty-io/pmx-cli
 
 go 1.26.4
 

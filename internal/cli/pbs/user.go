@@ -10,11 +10,11 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newUserCmd builds `pve pbs user` and its sub-commands: list, inspect,
+// newUserCmd builds `pmx pbs user` and its sub-commands: list, inspect,
 // create, update, and delete Proxmox Backup Server users; unlock a user's
 // two-factor authentication; change a user's password; and manage a user's
 // API tokens (GET/POST/PUT/DELETE /access/users and PUT /access/password).
@@ -65,7 +65,7 @@ type userListEntry struct {
 	Userid    string       `json:"userid"`
 }
 
-// newUserLsCmd builds `pve pbs user ls` — list configured users
+// newUserLsCmd builds `pmx pbs user ls` — list configured users
 // (GET /access/users).
 func newUserLsCmd() *cobra.Command {
 	var includeTokens bool
@@ -123,7 +123,7 @@ func newUserLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserShowCmd builds `pve pbs user show <userid>` — show a single user's
+// newUserShowCmd builds `pmx pbs user show <userid>` — show a single user's
 // configuration (GET /access/users/{userid}).
 func newUserShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -152,7 +152,7 @@ func newUserShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserAddCmd builds `pve pbs user add <userid>` — create a user
+// newUserAddCmd builds `pmx pbs user add <userid>` — create a user
 // (POST /access/users).
 func newUserAddCmd() *cobra.Command {
 	var (
@@ -221,7 +221,7 @@ func newUserAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserUpdateCmd builds `pve pbs user update <userid>` — update a user's
+// newUserUpdateCmd builds `pmx pbs user update <userid>` — update a user's
 // configuration (PUT /access/users/{userid}).
 func newUserUpdateCmd() *cobra.Command {
 	var (
@@ -236,7 +236,7 @@ func newUserUpdateCmd() *cobra.Command {
 		Long: "Update an existing Proxmox Backup Server user (PUT /access/users/{userid}). " +
 			"Only flags explicitly set are sent; use --delete to reset properties to their " +
 			"default instead. --password is accepted by the API but ignored server-side; " +
-			"use 'pve pbs user passwd' to change a password.",
+			"use 'pmx pbs user passwd' to change a password.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -309,11 +309,11 @@ func newUserUpdateCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&expire, "expire", 0, "expiration (epoch seconds; 0 = never)")
 	cmd.Flags().StringVar(&firstname, "firstname", "", "first name")
 	cmd.Flags().StringVar(&lastname, "lastname", "", "last name")
-	cmd.Flags().StringVar(&password, "password", "", "ignored by the server; use 'pve pbs user passwd' instead")
+	cmd.Flags().StringVar(&password, "password", "", "ignored by the server; use 'pmx pbs user passwd' instead")
 	return cmd
 }
 
-// newUserDeleteCmd builds `pve pbs user delete <userid>` — remove a user
+// newUserDeleteCmd builds `pmx pbs user delete <userid>` — remove a user
 // (DELETE /access/users/{userid}).
 func newUserDeleteCmd() *cobra.Command {
 	var (
@@ -353,7 +353,7 @@ func newUserDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserUnlockTfaCmd builds `pve pbs user unlock-tfa <userid>` — clear a
+// newUserUnlockTfaCmd builds `pmx pbs user unlock-tfa <userid>` — clear a
 // user's TFA lockout after too many failed attempts
 // (PUT /access/users/{userid}/unlock-tfa).
 func newUserUnlockTfaCmd() *cobra.Command {
@@ -395,7 +395,7 @@ func newUserUnlockTfaCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserPasswdCmd builds `pve pbs user passwd <userid> --password <pw>` —
+// newUserPasswdCmd builds `pmx pbs user passwd <userid> --password <pw>` —
 // change a user's password (PUT /access/password).
 func newUserPasswdCmd() *cobra.Command {
 	var password, confirmationPassword string

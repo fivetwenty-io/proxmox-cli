@@ -6,7 +6,7 @@ test coverage across the two suites (read-only `e2e` sweep and the destructive
 `lifecycle` / `--mutate` phase). Hand-maintaining ~550 rows drifts immediately,
 so this script derives the matrix mechanically:
 
-  1. the leaf set, from a walk of `./dist/pve ... --help` (the actual command
+  1. the leaf set, from a walk of `./dist/pmx ... --help` (the actual command
      tree), plus the handful of runnable parent commands that carry a `RunE`
      alongside their sub-commands;
   2. the read-only coverage, by statically parsing every
@@ -19,7 +19,7 @@ so this script derives the matrix mechanically:
 
 Run from the repo root after building the binary:
 
-    go build -o ./dist/pve ./cmd/pve && python3 scripts/coverage_matrix.py
+    go build -o ./dist/pmx ./cmd/pmx && python3 scripts/coverage_matrix.py
 
 It rewrites docs/test-coverage-matrix.md in place. No live target is required;
 the classification is purely static so the result is reproducible in CI.
@@ -34,7 +34,7 @@ import sys
 from collections import Counter, defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, "dist", "pve")
+BIN = os.path.join(ROOT, "dist", "pmx")
 TREES_DIR = os.path.join(ROOT, "scripts", "e2e_lib", "trees")
 LIFECYCLE = os.path.join(ROOT, "scripts", "e2e_lib", "lifecycle.py")
 OUT = os.path.join(ROOT, "docs", "test-coverage-matrix.md")
@@ -78,7 +78,7 @@ def _subcommands(path: list[str]) -> list[str]:
 def discover_leaves() -> set[str]:
     if not os.path.isfile(BIN):
         sys.exit(f"coverage_matrix: binary not found at {BIN} "
-                 f"(run: go build -o ./dist/pve ./cmd/pve)")
+                 f"(run: go build -o ./dist/pmx ./cmd/pmx)")
     leaves: set[str] = set()
 
     def walk(path: list[str]) -> None:
@@ -222,7 +222,7 @@ def parse_e2e(leaves, map_leaf):
                     for k in n.keywords:
                         if k.arg == "live_covered" and isinstance(k.value, ast.Constant):
                             live = bool(k.value.value)
-                    leaf = map_leaf(cmd.split()[1:]) if cmd and cmd.startswith("pve ") else None
+                    leaf = map_leaf(cmd.split()[1:]) if cmd and cmd.startswith("pmx ") else None
                     if leaf:
                         na = any(m in (reason or "").lower() for m in NA_REASON_MARKERS)
                         # keep the strongest signal if a leaf is deferred twice
@@ -395,7 +395,7 @@ def render(leaves, e2e, mut, defers, errpath) -> str:
     covered = tot['both'] + tot['e2e'] + tot['mutate']
     out.append("")
     out.append(f"Leaf commands are counted from a walk of the built command tree "
-               f"(`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its "
+               f"(`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its "
                f"own leaf. Of **{tot['total']}** leaves, **{covered}** are exercised by at least "
                f"one live suite, **{tot['deferred']}** are deferred from the live suites "
                f"(irreversible, interactive, or environment-bound — covered by unit tests), "
@@ -438,7 +438,7 @@ def render(leaves, e2e, mut, defers, errpath) -> str:
 HEADER = """# Test Coverage Matrix
 
 > **Generated file — do not edit by hand.** Regenerate with
-> `go build -o ./dist/pve ./cmd/pve && python3 scripts/coverage_matrix.py`.
+> `go build -o ./dist/pmx ./cmd/pmx && python3 scripts/coverage_matrix.py`.
 > The classification is derived statically from the built command tree, the
 > read-only sweep definitions in `scripts/e2e_lib/trees/*.py`, and the mutate
 > phase in `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and
@@ -492,11 +492,11 @@ failure path it guards are tagged `error-contract checked` in the Notes column.
 Every resource the lifecycle suite creates is shielded from other lab efforts
 (see `scripts/e2e_lib/model.py`, the single source of truth):
 
-- named or hostnamed with the `pve-cli-` prefix,
+- named or hostnamed with the `pmx-cli-` prefix,
 
-- placed in the `pve-cli` resource pool and tagged `pve-cli`,
+- placed in the `pmx-cli` resource pool and tagged `pmx-cli`,
 
-- attached to a dedicated `pvecli` simple SDN zone and `pvecli0` vnet on the
+- attached to a dedicated `pmxcli` simple SDN zone and `pmxcli0` vnet on the
   `172.30.0.0/24` subnet, deliberately off the host management network.
 
 Teardown runs in a `finally` block and is idempotent: a crashed prior run is

@@ -13,12 +13,12 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeFlags carries the --node persistent flag shared by every sub-command
-// under `pve pbs node`. Proxmox Backup Server is single-node: every
+// under `pmx pbs node`. Proxmox Backup Server is single-node: every
 // /nodes/{node}/... path segment is populated from this value, which
 // defaults to "localhost" (the name a PBS host uses for its own API) and
 // rarely needs to be overridden.
@@ -26,7 +26,7 @@ type nodeFlags struct {
 	node string
 }
 
-// newNodeCmd builds `pve pbs node` and its full sub-command tree: host
+// newNodeCmd builds `pmx pbs node` and its full sub-command tree: host
 // status and power control, tasks, services, APT packages, disks, network,
 // certificates, DNS, time, subscription, and node configuration.
 func newNodeCmd() *cobra.Command {
@@ -67,7 +67,7 @@ func newNodeCmd() *cobra.Command {
 	return cmd
 }
 
-// newNodeLsCmd builds `pve pbs node ls` — list the node entries visible at
+// newNodeLsCmd builds `pmx pbs node ls` — list the node entries visible at
 // the compatibility cluster-node listing (GET /nodes).
 //
 // The generated Nodes.ListNodes binding discards its response body: the PBS
@@ -116,7 +116,7 @@ func newNodeLsCmd() *cobra.Command {
 	}
 }
 
-// newNodeStatusCmd builds `pve pbs node status` — read node memory, CPU, and
+// newNodeStatusCmd builds `pmx pbs node status` — read node memory, CPU, and
 // root-disk usage (GET /nodes/{node}/status).
 func newNodeStatusCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -178,7 +178,7 @@ func newNodePowerCmd(nf *nodeFlags, verb, short string) *cobra.Command {
 	return cmd
 }
 
-// newNodeRrdCmd builds `pve pbs node rrd` — read node RRD usage statistics
+// newNodeRrdCmd builds `pmx pbs node rrd` — read node RRD usage statistics
 // (GET /nodes/{node}/rrd).
 //
 // The generated Nodes.ListRrd binding discards its response body for the
@@ -237,7 +237,7 @@ func newNodeRrdCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeReportCmd builds `pve pbs node report` — generate a full system
+// newNodeReportCmd builds `pmx pbs node report` — generate a full system
 // report for the node (GET /nodes/{node}/report), rendered as plain text.
 func newNodeReportCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{

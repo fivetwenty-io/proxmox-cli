@@ -5,11 +5,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
-// newSSHCmd builds `pve qemu ssh <vmid|name> [-- <cmd>...]`, which opens an SSH
+// newSSHCmd builds `pmx qemu ssh <vmid|name> [-- <cmd>...]`, which opens an SSH
 // session straight into a guest VM. The target is resolved to its VMID and node
 // via the cluster inventory; the guest's IP is then discovered through the QEMU
 // guest agent unless --host is supplied to bypass it.

@@ -11,11 +11,11 @@ import (
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newTapeChangerCmd builds `pve pbs tape changer` — manage tape changer
+// newTapeChangerCmd builds `pmx pbs tape changer` — manage tape changer
 // (autoloader/library) device configuration (/config/changer CRUD), and
 // inspect the runtime device: attached-device scan, per-drive/slot status,
 // and slot-to-slot media transfer (/tape/changer, /tape/scan-changers).
@@ -53,7 +53,7 @@ type tapeChangerListEntry struct {
 	Vendor            *string `json:"vendor,omitempty"`
 }
 
-// newTapeChangerLsCmd builds `pve pbs tape changer ls` — list configured
+// newTapeChangerLsCmd builds `pmx pbs tape changer ls` — list configured
 // changers with runtime model information (GET /tape/changer).
 func newTapeChangerLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -103,7 +103,7 @@ func newTapeChangerLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeChangerShowCmd builds `pve pbs tape changer show <name>` — show a
+// newTapeChangerShowCmd builds `pmx pbs tape changer show <name>` — show a
 // single changer's configuration (GET /config/changer/{name}).
 func newTapeChangerShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -184,7 +184,7 @@ func (cf *tapeChangerFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateC
 	}
 }
 
-// newTapeChangerAddCmd builds `pve pbs tape changer add <name>` — create a
+// newTapeChangerAddCmd builds `pmx pbs tape changer add <name>` — create a
 // tape changer configuration (POST /config/changer). --path is required;
 // every other option is optional.
 func newTapeChangerAddCmd() *cobra.Command {
@@ -229,7 +229,7 @@ func newTapeChangerAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeChangerUpdateCmd builds `pve pbs tape changer update <name>` —
+// newTapeChangerUpdateCmd builds `pmx pbs tape changer update <name>` —
 // update a tape changer configuration (PUT /config/changer/{name}). Only
 // flags explicitly set are sent; use --delete to reset properties to their
 // default instead.
@@ -274,7 +274,7 @@ func newTapeChangerUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeChangerDeleteCmd builds `pve pbs tape changer delete <name>` —
+// newTapeChangerDeleteCmd builds `pmx pbs tape changer delete <name>` —
 // remove a tape changer configuration (DELETE /config/changer/{name}). The
 // generated binding takes no parameters (unlike most delete endpoints in
 // this API, this one has no --digest guard): the PBS API schema declares no
@@ -322,7 +322,7 @@ type tapeChangerScanEntry struct {
 	Vendor string `json:"vendor"`
 }
 
-// newTapeChangerScanCmd builds `pve pbs tape changer scan` — scan for
+// newTapeChangerScanCmd builds `pmx pbs tape changer scan` — scan for
 // attached SCSI tape changer devices (GET /tape/scan-changers).
 func newTapeChangerScanCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -380,7 +380,7 @@ type tapeChangerStatusEntry struct {
 	State      *string `json:"state,omitempty"`
 }
 
-// newTapeChangerStatusCmd builds `pve pbs tape changer status <name>` —
+// newTapeChangerStatusCmd builds `pmx pbs tape changer status <name>` —
 // show a changer's per-drive/slot status (GET /tape/changer/{name}/status).
 func newTapeChangerStatusCmd() *cobra.Command {
 	var cache bool
@@ -438,7 +438,7 @@ func newTapeChangerStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeChangerTransferCmd builds `pve pbs tape changer transfer <name>` —
+// newTapeChangerTransferCmd builds `pmx pbs tape changer transfer <name>` —
 // move media from one changer slot to another (POST
 // /tape/changer/{name}/transfer). This endpoint's PBS API schema declares a
 // "null" return type: it carries no UPID, so this command reports success

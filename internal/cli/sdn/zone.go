@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // zoneEntry is the subset of a /cluster/sdn/zones element rendered in the list.
@@ -30,7 +30,7 @@ var zoneSetFlagNames = []string{
 	"vxlan-port",
 }
 
-// newZoneCmd builds `pve sdn zone` and its sub-commands.
+// newZoneCmd builds `pmx sdn zone` and its sub-commands.
 func newZoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zone",
@@ -43,7 +43,7 @@ func newZoneCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneShowCmd builds `pve sdn zone show <zone>`.
+// newZoneShowCmd builds `pmx sdn zone show <zone>`.
 func newZoneShowCmd() *cobra.Command {
 	var (
 		pending bool
@@ -77,7 +77,7 @@ func newZoneShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneSetCmd builds `pve sdn zone set <zone>`.
+// newZoneSetCmd builds `pmx sdn zone set <zone>`.
 func newZoneSetCmd() *cobra.Command {
 	var (
 		advertiseSubnets         bool
@@ -112,7 +112,7 @@ func newZoneSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <zone>",
 		Short: "Update an SDN zone",
-		Long:  "Update an SDN zone. The change is staged until `pve sdn apply`.",
+		Long:  "Update an SDN zone. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -209,7 +209,7 @@ func newZoneSetCmd() *cobra.Command {
 			if err := deps.API.Cluster.UpdateSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("update SDN zone %q: %w", zone, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN zone %q updated (run `pve sdn apply` to commit).", zone)}
+			res := output.Result{Message: fmt.Sprintf("SDN zone %q updated (run `pmx sdn apply` to commit).", zone)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -245,7 +245,7 @@ func newZoneSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneListCmd builds `pve sdn zone list`.
+// newZoneListCmd builds `pmx sdn zone list`.
 func newZoneListCmd() *cobra.Command {
 	var (
 		pending  bool
@@ -298,7 +298,7 @@ func newZoneListCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneCreateCmd builds `pve sdn zone create <zone>`.
+// newZoneCreateCmd builds `pmx sdn zone create <zone>`.
 func newZoneCreateCmd() *cobra.Command {
 	var (
 		zoneType                 string
@@ -332,7 +332,7 @@ func newZoneCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <zone>",
 		Short: "Create an SDN zone",
-		Long: "Create an SDN zone. The change is staged until `pve sdn apply`. " +
+		Long: "Create an SDN zone. The change is staged until `pmx sdn apply`. " +
 			"A simple zone needs no bridge or uplink and provides an isolated L2 segment. " +
 			"VLAN/QinQ zones need a --bridge; VXLAN zones need --peers (or a --fabric); " +
 			"EVPN zones need a --controller and --vrf-vxlan.",
@@ -425,7 +425,7 @@ func newZoneCreateCmd() *cobra.Command {
 			if err := deps.API.Cluster.CreateSdnZones(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN zone %q: %w", zone, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN zone %q created (run `pve sdn apply` to commit).", zone)}
+			res := output.Result{Message: fmt.Sprintf("SDN zone %q created (run `pmx sdn apply` to commit).", zone)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -460,7 +460,7 @@ func newZoneCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneDeleteCmd builds `pve sdn zone delete <zone>`.
+// newZoneDeleteCmd builds `pmx sdn zone delete <zone>`.
 func newZoneDeleteCmd() *cobra.Command {
 	var (
 		yes       bool
@@ -483,7 +483,7 @@ func newZoneDeleteCmd() *cobra.Command {
 			if err := deps.API.Cluster.DeleteSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("delete SDN zone %q: %w", zone, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN zone %q deleted (run `pve sdn apply` to commit).", zone)}
+			res := output.Result{Message: fmt.Sprintf("SDN zone %q deleted (run `pmx sdn apply` to commit).", zone)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

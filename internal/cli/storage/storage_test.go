@@ -13,8 +13,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // recordedRequest captures the method, path, and form-encoded body of a request
@@ -28,7 +28,7 @@ type recordedRequest struct {
 
 // run constructs the real root command, registers only the storage group, writes
 // a temporary config that points the default target at the fake HTTP server, and
-// executes `pve storage <args...>`. It returns the captured stdout/stderr buffer
+// executes `pmx storage <args...>`. It returns the captured stdout/stderr buffer
 // and the execution error. Driving through the root command wires live Deps the
 // same way the binary does, so each sub-command resolves its dependencies through
 // cli.GetDeps exactly as in production.
@@ -62,9 +62,9 @@ func run(t *testing.T, f *testhelper.FakePVE, args ...string) (string, error) {
 	cfgPath := filepath.Join(dir, "config.yml")
 	require.NoError(t, os.WriteFile(cfgPath, []byte(cfg), 0o600))
 
-	t.Setenv("PVE_CONTEXT", "")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -110,7 +110,7 @@ func recordJSON(f *testhelper.FakePVE, pattern string, rec *recordedRequest, pay
 	})
 }
 
-// TestStorageList_Table verifies that `pve storage list` queries GET /storage and
+// TestStorageList_Table verifies that `pmx storage list` queries GET /storage and
 // renders the configured storage definitions in table form.
 func TestStorageList_Table(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -170,7 +170,7 @@ func TestStorageList_ServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestStorageGet_Single verifies that `pve storage get` queries the per-storage
+// TestStorageGet_Single verifies that `pmx storage get` queries the per-storage
 // path and renders the returned fields as a key/value detail.
 func TestStorageGet_Single(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -219,7 +219,7 @@ func TestStorageGet_ServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestStorageCreate_PostsParams verifies that `pve storage create` issues a POST
+// TestStorageCreate_PostsParams verifies that `pmx storage create` issues a POST
 // to /storage with the storage id, type, and supplied attributes in the body.
 func TestStorageCreate_PostsParams(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -284,7 +284,7 @@ func TestStorageCreate_MissingRequired(t *testing.T) {
 	require.False(t, called, "no request must be made when a required flag is missing")
 }
 
-// TestStorageSet_PutsParams verifies that `pve storage set` issues a PUT to the
+// TestStorageSet_PutsParams verifies that `pmx storage set` issues a PUT to the
 // per-storage path with the changed attributes.
 func TestStorageSet_PutsParams(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -335,7 +335,7 @@ func TestStorageDelete_RequiresYes(t *testing.T) {
 	require.False(t, called, "delete must not contact the server without --yes")
 }
 
-// TestStorageDelete_WithYes verifies that `pve storage delete --yes` issues a
+// TestStorageDelete_WithYes verifies that `pmx storage delete --yes` issues a
 // DELETE to the per-storage path and reports success.
 func TestStorageDelete_WithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

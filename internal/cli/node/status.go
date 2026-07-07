@@ -9,8 +9,8 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeMemUsage decodes the memory/rootfs sub-objects of a node status response.
@@ -33,7 +33,7 @@ type nodeKernel struct {
 	Machine string `json:"machine"`
 }
 
-// newStatusCmd builds `pve node <node> status`.
+// newStatusCmd builds `pmx node <node> status`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <node>",
@@ -108,12 +108,12 @@ func newNodePowerCmd(verb, short string) *cobra.Command {
 	return cmd
 }
 
-// newRebootCmd builds `pve node reboot`.
+// newRebootCmd builds `pmx node reboot`.
 func newRebootCmd() *cobra.Command {
 	return newNodePowerCmd("reboot", "Reboot the node")
 }
 
-// newShutdownCmd builds `pve node shutdown`.
+// newShutdownCmd builds `pmx node shutdown`.
 func newShutdownCmd() *cobra.Command {
 	return newNodePowerCmd("shutdown", "Shut down the node")
 }

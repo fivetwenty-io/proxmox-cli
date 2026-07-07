@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestStorageCreate_AuditCommonFlags verifies the create+set common field flags
@@ -127,7 +127,7 @@ func TestStorageCreate_OmitsUnsetAuditFlags(t *testing.T) {
 	}
 }
 
-// TestStorageNodeList_Table verifies `pve storage node-list` queries
+// TestStorageNodeList_Table verifies `pmx storage node-list` queries
 // GET /nodes/{node}/storage and renders the per-node storage status.
 func TestStorageNodeList_Table(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -196,7 +196,7 @@ func TestStorageUpload_AuditChecksumFlags(t *testing.T) {
 		"status": "stopped", "exitstatus": "OK", "upid": upid,
 	})
 
-	path := writeTempFile(t, "pve-cli-test.iso", "fake-iso-bytes")
+	path := writeTempFile(t, "pmx-cli-test.iso", "fake-iso-bytes")
 	_, err := run(t, f, "--node", "pve1", "upload", "local",
 		"--file", path,
 		"--checksum", "abcdef1234567890abcdef1234567890",
@@ -226,7 +226,7 @@ func TestStorageUpload_OmitsChecksumWhenAbsent(t *testing.T) {
 		"status": "stopped", "exitstatus": "OK", "upid": upid,
 	})
 
-	path := writeTempFile(t, "pve-cli-no-checksum.iso", "fake-iso-bytes")
+	path := writeTempFile(t, "pmx-cli-no-checksum.iso", "fake-iso-bytes")
 	_, err := run(t, f, "--node", "pve1", "upload", "local", "--file", path)
 	require.NoError(t, err)
 	require.Empty(t, gotChecksum, "checksum must not be sent when --checksum is absent")

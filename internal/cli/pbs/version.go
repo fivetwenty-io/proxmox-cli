@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newVersionCmd builds `pve pbs version` — report the Proxmox Backup Server
+// newVersionCmd builds `pmx pbs version` — report the Proxmox Backup Server
 // API version, release, and repository id (GET /version).
 func newVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -43,7 +43,7 @@ func newVersionCmd() *cobra.Command {
 	return cmd
 }
 
-// newPingCmd builds `pve pbs ping` — a cheap, unauthenticated connectivity
+// newPingCmd builds `pmx pbs ping` — a cheap, unauthenticated connectivity
 // check against the PBS API daemon (GET /ping).
 func newPingCmd() *cobra.Command {
 	cmd := &cobra.Command{

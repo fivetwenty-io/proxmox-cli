@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -21,7 +21,7 @@ import (
 // filters only, all).
 var syncSyncDirections = []string{"push", "pull", "all"}
 
-// newSyncCmd builds `pve pbs sync` — run one-shot pull/push syncs, inspect
+// newSyncCmd builds `pmx pbs sync` — run one-shot pull/push syncs, inspect
 // the runtime status of configured sync jobs, and manage scheduled sync job
 // configurations (POST /pull, /push, GET /admin/sync, /config/sync CRUD,
 // POST /admin/sync/{id}/run).
@@ -77,7 +77,7 @@ func decodeSyncStatusEntries(resp *pbsadmin.ListSyncResponse) []syncStatusEntry 
 	return entries
 }
 
-// newSyncLsCmd builds `pve pbs sync ls` — list every sync job's runtime
+// newSyncLsCmd builds `pmx pbs sync ls` — list every sync job's runtime
 // status across all datastores, or scoped by --store and/or --sync-direction
 // (GET /admin/sync).
 func newSyncLsCmd() *cobra.Command {
@@ -140,7 +140,7 @@ func newSyncLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncJobCmd builds `pve pbs sync job` — create, inspect, update, delete,
+// newSyncJobCmd builds `pmx pbs sync job` — create, inspect, update, delete,
 // and manually trigger scheduled sync job configurations.
 func newSyncJobCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -196,7 +196,7 @@ func decodeSyncConfigEntries(resp *pbsconfig.ListSyncResponse) []syncConfigEntry
 	return entries
 }
 
-// newSyncJobLsCmd builds `pve pbs sync job ls` — list every sync job
+// newSyncJobLsCmd builds `pmx pbs sync job ls` — list every sync job
 // configuration, with no run-status fields (GET /config/sync). Scope with
 // --sync-direction; unlike `sync ls`, this endpoint has no --store filter.
 func newSyncJobLsCmd() *cobra.Command {
@@ -206,7 +206,7 @@ func newSyncJobLsCmd() *cobra.Command {
 		Short: "List sync job configurations",
 		Long: "List every sync job configuration visible to the caller (GET " +
 			"/config/sync), scoped with --sync-direction. This is the plain " +
-			"configuration listing; use `pve pbs sync ls` for run-status fields.",
+			"configuration listing; use `pmx pbs sync ls` for run-status fields.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -248,7 +248,7 @@ func newSyncJobLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncJobShowCmd builds `pve pbs sync job show <id>` — show one sync
+// newSyncJobShowCmd builds `pmx pbs sync job show <id>` — show one sync
 // job's full configuration (GET /config/sync/{id}).
 func newSyncJobShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -540,7 +540,7 @@ func (sf *syncJobFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateSyncP
 	}
 }
 
-// newSyncJobAddCmd builds `pve pbs sync job add <id>` — create a scheduled
+// newSyncJobAddCmd builds `pmx pbs sync job add <id>` — create a scheduled
 // sync job configuration (POST /config/sync). --store and --remote-store are
 // required; every other option is optional and only forwarded when set.
 func newSyncJobAddCmd() *cobra.Command {
@@ -589,7 +589,7 @@ func newSyncJobAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncJobUpdateCmd builds `pve pbs sync job update <id>` — update a
+// newSyncJobUpdateCmd builds `pmx pbs sync job update <id>` — update a
 // scheduled sync job configuration (PUT /config/sync/{id}). Only flags
 // explicitly set are sent; use --delete to reset properties to their default.
 func newSyncJobUpdateCmd() *cobra.Command {
@@ -636,7 +636,7 @@ func newSyncJobUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncJobDeleteCmd builds `pve pbs sync job delete <id>` — remove a sync
+// newSyncJobDeleteCmd builds `pmx pbs sync job delete <id>` — remove a sync
 // job configuration (DELETE /config/sync/{id}).
 func newSyncJobDeleteCmd() *cobra.Command {
 	var digest string
@@ -676,7 +676,7 @@ func newSyncJobDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncJobRunCmd builds `pve pbs sync job run <id>` — manually trigger a
+// newSyncJobRunCmd builds `pmx pbs sync job run <id>` — manually trigger a
 // scheduled sync job (POST /admin/sync/{id}/run).
 //
 // The generated Admin.CreateSyncRun binding is error-only: it discards the
@@ -723,7 +723,7 @@ func newSyncJobRunCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncPullCmd builds `pve pbs sync pull` — run a one-shot pull sync from
+// newSyncPullCmd builds `pmx pbs sync pull` — run a one-shot pull sync from
 // a remote datastore into a local datastore (POST /pull).
 //
 // The generated Pull.Pull binding is error-only: it discards the UPID the
@@ -872,7 +872,7 @@ func newSyncPullCmd() *cobra.Command {
 	return cmd
 }
 
-// newSyncPushCmd builds `pve pbs sync push` — run a one-shot push sync from
+// newSyncPushCmd builds `pmx pbs sync push` — run a one-shot push sync from
 // a local datastore to a remote datastore (POST /push).
 //
 // The generated Push.Push binding is error-only: it discards the UPID the

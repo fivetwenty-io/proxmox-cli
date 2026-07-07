@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/exitcode"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +22,7 @@ func TestFromError_Nil(t *testing.T) {
 }
 
 // TestFromError_ExitError_ChildCodeVerbatim verifies that a *exec.ExitError
-// (as returned by pve ssh/pve rsync when the child process exits non-zero)
+// (as returned by pmx ssh/pmx rsync when the child process exits non-zero)
 // propagates its own Code verbatim, both directly and through one or more
 // layers of fmt.Errorf("...: %w", err) wrapping.
 func TestFromError_ExitError_ChildCodeVerbatim(t *testing.T) {

@@ -1,8 +1,8 @@
 # Compiled binaries
 bin/
-# The built `pve` binary at the repo root only — anchored so it does not match
-# the cmd/pve/ source directory.
-/pve
+# The built `pmx` binary at the repo root only — anchored so it does not match
+# the cmd/pmx/ source directory.
+/pmx
 *.test
 
 # Distribution

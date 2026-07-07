@@ -7,13 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newTaskCmd builds the `pve node task` sub-group.
+// newTaskCmd builds the `pmx node task` sub-group.
 func newTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
@@ -41,7 +41,7 @@ type taskListEntry struct {
 	User      string `json:"user"`
 }
 
-// newTaskListCmd builds `pve node task list <node>`.
+// newTaskListCmd builds `pmx node task list <node>`.
 func newTaskListCmd() *cobra.Command {
 	var (
 		vmid         int64
@@ -128,7 +128,7 @@ type taskLogLine struct {
 	T string `json:"t"`
 }
 
-// newTaskLogCmd builds `pve node task log <node> <upid>`.
+// newTaskLogCmd builds `pmx node task log <node> <upid>`.
 func newTaskLogCmd() *cobra.Command {
 	var (
 		limit int64
@@ -181,7 +181,7 @@ func newTaskLogCmd() *cobra.Command {
 	return cmd
 }
 
-// newTaskStopCmd builds `pve node task stop <node> <upid>`.
+// newTaskStopCmd builds `pmx node task stop <node> <upid>`.
 func newTaskStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop <node> <upid>",
@@ -202,8 +202,8 @@ func newTaskStopCmd() *cobra.Command {
 	}
 }
 
-// newTaskStatusCmd builds `pve node task status <upid>`. The node is resolved
-// from deps.Node (--node flag, PVE_NODE env, or configured default).
+// newTaskStatusCmd builds `pmx node task status <upid>`. The node is resolved
+// from deps.Node (--node flag, PMX_NODE env, or configured default).
 func newTaskStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <upid>",
@@ -239,7 +239,7 @@ func newTaskStatusCmd() *cobra.Command {
 	}
 }
 
-// newTaskWaitCmd builds `pve node task wait <upid>`. The node is parsed from the
+// newTaskWaitCmd builds `pmx node task wait <upid>`. The node is parsed from the
 // UPID by the wait helper, so no positional node is required.
 func newTaskWaitCmd() *cobra.Command {
 	var (

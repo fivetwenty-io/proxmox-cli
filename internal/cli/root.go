@@ -16,13 +16,13 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/exitcode"
-	"github.com/fivetwenty-io/pve-cli/internal/logx"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/version"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
+	"github.com/fivetwenty-io/pmx-cli/internal/logx"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/version"
 )
 
 // noopLogCloser satisfies io.Closer for the log-init fallback path where no
@@ -32,7 +32,7 @@ type noopLogCloser struct{}
 func (noopLogCloser) Close() error { return nil }
 
 // contextKey is an unexported type used as a key in cobra.Command Context values
-// so that pve CLI data does not collide with keys from other packages.
+// so that pmx CLI data does not collide with keys from other packages.
 type contextKey int
 
 const ctxKey contextKey = 0
@@ -61,14 +61,14 @@ type Deps struct {
 	// Log is the slog.Logger for this invocation.
 	Log *slog.Logger
 
-	// Node is the resolved --node flag value (flag > PVE_NODE > context DefaultNode).
+	// Node is the resolved --node flag value (flag > PMX_NODE > context DefaultNode).
 	Node string
 
 	// Cfg is the loaded config. Never nil after PersistentPreRunE.
 	Cfg *config.Config
 
 	// Ctx is the resolved active *config.Context for this invocation (the
-	// entry selected by --context/-c, $PVE_CONTEXT, or current-context,
+	// entry selected by --context/-c, $PMX_CONTEXT, or current-context,
 	// after ResolveContext applies its defaults). Nil for commands annotated
 	// with noClient, since the noClient early-return in persistentPreRunE
 	// runs before context resolution; such commands must nil-check before use.
@@ -142,7 +142,7 @@ func requiredProduct(cmd *cobra.Command) string {
 
 // GroupFactory is a function that constructs a cobra sub-command group given
 // the placeholder Deps passed by Execute during command-tree assembly. Each
-// group package exports one or more GroupFactory values; cmd/pve/main.go
+// group package exports one or more GroupFactory values; cmd/pmx/main.go
 // passes them as an explicit slice to Execute so there is no package-level
 // mutable state.
 type GroupFactory = func(*Deps) *cobra.Command
@@ -161,7 +161,7 @@ type persistentFlags struct {
 	insecure bool
 }
 
-// NewRootCmd constructs the top-level 'pve' cobra.Command.
+// NewRootCmd constructs the top-level 'pmx' cobra.Command.
 // It registers all persistent flags and the PersistentPreRunE hook that wires
 // config, auth, API client, logger, and output renderer.
 // AddGroups must be called after NewRootCmd to attach group sub-commands from
@@ -187,9 +187,9 @@ func NewRootCmd() (*cobra.Command, func()) {
 	}
 
 	root := &cobra.Command{
-		Use:   "pve",
-		Short: "pve — Proxmox VE CLI",
-		Long: `pve is a command-line interface for the Proxmox VE API.
+		Use:   "pmx",
+		Short: "pmx — Proxmox CLI",
+		Long: `pmx is a command-line interface for the Proxmox VE and Proxmox Backup Server APIs.
 
 It supports multiple named contexts, token and password authentication, and
 structured output in table, ascii, plain, JSON, and YAML formats.`,
@@ -203,25 +203,25 @@ structured output in table, ascii, plain, JSON, and YAML formats.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
-	// version.String() already includes the "pve version ..." prefix; the
-	// default template would prepend "pve version" a second time.
+	// version.String() already includes the "pmx version ..." prefix; the
+	// default template would prepend "pmx version" a second time.
 	root.SetVersionTemplate("{{.Version}}\n")
 
 	// --- persistent flags ---
 	root.PersistentFlags().StringVar(&pf.config, "config",
 		config.DefaultPath(),
-		"path to pve config file")
+		"path to pmx config file")
 
 	root.PersistentFlags().StringVarP(&pf.context, "context", "c", "",
-		"context name override (overrides $PVE_CONTEXT and current-context in config)")
+		"context name override (overrides $PMX_CONTEXT and current-context in config)")
 
 	root.PersistentFlags().StringVar(&pf.node, "node",
-		os.Getenv("PVE_NODE"),
-		"Proxmox node name ($PVE_NODE)")
+		os.Getenv("PMX_NODE"),
+		"Proxmox node name ($PMX_NODE)")
 
 	root.PersistentFlags().StringVarP(&pf.output, "output", "o",
 		resolveOutputDefault(),
-		"output format: table|ascii|plain|json|yaml ($PVE_OUTPUT)")
+		"output format: table|ascii|plain|json|yaml ($PMX_OUTPUT)")
 
 	root.PersistentFlags().BoolVar(&pf.debug, "debug", false, "enable debug logging")
 	root.PersistentFlags().BoolVar(&pf.verbose, "verbose", false, "enable verbose (debug-level) logging")
@@ -243,10 +243,10 @@ structured output in table, ascii, plain, JSON, and YAML formats.`,
 	return root, cleanup
 }
 
-// resolveOutputDefault returns the --output/-o default: PVE_OUTPUT env if set,
+// resolveOutputDefault returns the --output/-o default: PMX_OUTPUT env if set,
 // otherwise "table".
 func resolveOutputDefault() string {
-	if v := os.Getenv("PVE_OUTPUT"); v != "" {
+	if v := os.Getenv("PMX_OUTPUT"); v != "" {
 		return v
 	}
 	return string(output.FormatTable)
@@ -342,7 +342,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 
 	// Resolve context — flag > env > config — and build the client for the
 	// product this command requires (see ProductAnnotation): PVE commands
-	// get Deps.API, 'pve pbs' commands get Deps.PBS, and the builders
+	// get Deps.API, 'pmx pbs' commands get Deps.PBS, and the builders
 	// reject a context whose product does not match. See
 	// BuildContextClient's doc comment for why this is factored out.
 	isTTY := func() bool { return isInteractiveInput(cmd.InOrStdin()) }
@@ -366,24 +366,24 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 
 	// Apply per-context defaults for --node and --output.
 	// Precedence: explicit flag > context default > existing global default.
-	// pf.node is empty only when PVE_NODE is unset and --node was not passed.
+	// pf.node is empty only when PMX_NODE is unset and --node was not passed.
 	// Apply per-context DefaultNode when --node was not explicitly set.
-	// pf.node is empty only when neither PVE_NODE nor --node was provided;
+	// pf.node is empty only when neither PMX_NODE nor --node was provided;
 	// the node flag has no non-empty global default, so the empty-string check is safe.
 	if deps.Node == "" && ctx.DefaultNode != "" {
 		deps.Node = ctx.DefaultNode
 	}
 
 	// Apply per-context DefaultOutput only when --output/-o was NOT explicitly
-	// set by the user AND $PVE_OUTPUT is unset.
+	// set by the user AND $PMX_OUTPUT is unset.
 	//
-	// Precedence (high → low): explicit flag > $PVE_OUTPUT > context default-output > global default.
+	// Precedence (high → low): explicit flag > $PMX_OUTPUT > context default-output > global default.
 	//
-	// $PVE_OUTPUT is baked into the flag's default value by resolveOutputDefault,
-	// so cmd.Flags().Changed("output") stays false even when $PVE_OUTPUT is set.
-	// The additional os.Getenv guard preserves $PVE_OUTPUT over context default-output,
-	// matching the parallel treatment of $PVE_NODE (which is never overridden by context DefaultNode).
-	if !cmd.Flags().Changed("output") && os.Getenv("PVE_OUTPUT") == "" && ctx.DefaultOutput != "" {
+	// $PMX_OUTPUT is baked into the flag's default value by resolveOutputDefault,
+	// so cmd.Flags().Changed("output") stays false even when $PMX_OUTPUT is set.
+	// The additional os.Getenv guard preserves $PMX_OUTPUT over context default-output,
+	// matching the parallel treatment of $PMX_NODE (which is never overridden by context DefaultNode).
+	if !cmd.Flags().Changed("output") && os.Getenv("PMX_OUTPUT") == "" && ctx.DefaultOutput != "" {
 		deps.Format = output.Format(ctx.DefaultOutput)
 	}
 
@@ -472,7 +472,7 @@ func BuildContextClient(
 
 	if ctx.IsPBS() {
 		return nil, nil, fmt.Errorf(
-			"context %q targets Proxmox Backup Server (product: %s); this command requires a PVE context — use 'pve pbs' commands or select a PVE context",
+			"context %q targets Proxmox Backup Server (product: %s); this command requires a PVE context — use 'pmx pbs' commands or select a PVE context",
 			contextName, config.ProductPBS,
 		)
 	}
@@ -501,7 +501,7 @@ func BuildContextPBSClient(
 
 	if !ctx.IsPBS() {
 		return nil, nil, fmt.Errorf(
-			"context %q targets Proxmox VE (product: %s); this command requires a PBS context — create one with 'pve context add --product %s'",
+			"context %q targets Proxmox VE (product: %s); this command requires a PBS context — create one with 'pmx context add --product %s'",
 			contextName, config.ProductPVE, config.ProductPBS,
 		)
 	}
@@ -524,10 +524,10 @@ func BuildContextPBSClient(
 func buildContextOptions(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
 ) (pve.Options, *config.Context, string, error) {
-	contextName := config.Resolve(contextFlag, "PVE_CONTEXT", cfg.CurrentContext, "")
+	contextName := config.Resolve(contextFlag, "PMX_CONTEXT", cfg.CurrentContext, "")
 	if contextName == "" {
 		return pve.Options{}, nil, "", fmt.Errorf(
-			"no context specified: use --context/-c, set $PVE_CONTEXT, or run 'pve context select' (config: %s)",
+			"no context specified: use --context/-c, set $PMX_CONTEXT, or run 'pmx context select' (config: %s)",
 			configPath,
 		)
 	}
@@ -627,12 +627,12 @@ func WarnInsecureTLS(w io.Writer) {
 // commandLabels extracts the command and subcommand names from the full cobra
 // chain for use as log attributes.
 //
-// Given a command chain like "pve qemu start", it returns ("qemu", "start").
-// For a top-level command like "pve version" it returns ("version", "").
+// Given a command chain like "pmx qemu start", it returns ("qemu", "start").
+// For a top-level command like "pmx version" it returns ("version", "").
 func commandLabels(cmd *cobra.Command) (cmdName, subName string) {
 	// Build the full name chain.
 	chain := commandChain(cmd)
-	// chain[0] is always "pve" (root); skip it.
+	// chain[0] is always "pmx" (root); skip it.
 	switch len(chain) {
 	case 0, 1:
 		return "", ""
@@ -657,7 +657,7 @@ func commandChain(cmd *cobra.Command) []string {
 
 // AddGroups calls each factory with deps and adds the returned sub-command to
 // root. It is called by Execute with the explicit factory slice provided by
-// cmd/pve/main.go; there is no package-level registry.
+// cmd/pmx/main.go; there is no package-level registry.
 func AddGroups(root *cobra.Command, deps *Deps, factories []GroupFactory) {
 	for _, factory := range factories {
 		root.AddCommand(factory(deps))
@@ -670,8 +670,8 @@ func AddGroups(root *cobra.Command, deps *Deps, factories []GroupFactory) {
 // rejects stray positional arguments.
 //
 // Without it cobra treats an unknown or extra positional on a non-runnable
-// grouping command (for example `pve qemu config 100`, `pve access token list`,
-// or a mistyped `pve qemu bogus`) as arguments to the parent, prints help, and
+// grouping command (for example `pmx qemu config 100`, `pmx access token list`,
+// or a mistyped `pmx qemu bogus`) as arguments to the parent, prints help, and
 // exits 0 — a silent success that is unsafe in scripts. cobra.NoArgs alone does
 // not help here: a non-runnable command short-circuits to help before argument
 // validation runs. Installing a RunE makes the command runnable, so the same
@@ -695,7 +695,7 @@ func RequireSubcommands(cmd *cobra.Command) {
 // executes cobra. It returns the first error encountered, or nil on success.
 //
 // factories is the ordered list of GroupFactory values supplied by
-// cmd/pve/main.go. The order determines the help-output listing order.
+// cmd/pmx/main.go. The order determines the help-output listing order.
 //
 // The log file closer captured by PersistentPreRunE is deferred here, after
 // root.Execute() returns, so that all log records written during RunE are
@@ -730,7 +730,7 @@ func Execute(factories []GroupFactory) error {
 	return nil
 }
 
-// Main is the entry point for cmd/pve/main.go.
+// Main is the entry point for cmd/pmx/main.go.
 // It accepts the ordered factory slice and maps the returned error to a
 // semantic exit code.
 func Main(factories []GroupFactory) int {

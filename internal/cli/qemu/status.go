@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newStatusCmd builds `pve qemu status <vmid>`.
+// newStatusCmd builds `pmx qemu status <vmid>`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <vmid|name>",

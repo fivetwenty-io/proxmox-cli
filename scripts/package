@@ -51,13 +51,13 @@ TARGETS = [
 
 
 def make_tarball(binary_path: str, version: str, out_dir: str) -> str:
-    """Pack a single binary into a .tar.gz with the canonical pve name inside."""
+    """Pack a single binary into a .tar.gz with the canonical pmx name inside."""
     name = os.path.basename(binary_path)
-    # e.g. pve-linux-amd64 -> pve-linux-amd64-<version>.tar.gz
+    # e.g. pmx-linux-amd64 -> pmx-linux-amd64-<version>.tar.gz
     tarball_name = f"{name}-{version}.tar.gz"
     tarball_path = os.path.join(out_dir, tarball_name)
     with tarfile.open(tarball_path, "w:gz") as tar:
-        tar.add(binary_path, arcname="pve")
+        tar.add(binary_path, arcname="pmx")
     print(f"package: created {tarball_path}")
     return tarball_path
 
@@ -65,7 +65,7 @@ def make_tarball(binary_path: str, version: str, out_dir: str) -> str:
 def make_deb_stub(version: str, out_dir: str) -> None:
     """Print instructions for Debian packaging; actual deb generation is out of scope."""
     print(
-        f"\npackage/deb: Debian package generation for pve-cli {version} is not yet automated.\n"
+        f"\npackage/deb: Debian package generation for pmx-cli {version} is not yet automated.\n"
         "  To build a .deb manually:\n"
         "    1. Install devscripts, debhelper, and dh-golang.\n"
         "    2. Populate debian/ directory with control, rules, changelog.\n"
@@ -80,8 +80,8 @@ def main() -> None:
         description="Produce release tarballs from dist/ binaries.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Expects dist/pve-<os>-<arch> binaries produced by 'scripts/release'.\n"
-            "Outputs dist/pve-<os>-<arch>-<version>.tar.gz per target.\n"
+            "Expects dist/pmx-<os>-<arch> binaries produced by 'scripts/release'.\n"
+            "Outputs dist/pmx-<os>-<arch>-<version>.tar.gz per target.\n"
             "Use --deb to print Debian packaging instructions.\n"
         ),
     )
@@ -118,7 +118,7 @@ def main() -> None:
 
     found = 0
     for goos, goarch in TARGETS:
-        binary_name = f"pve-{goos}-{goarch}"
+        binary_name = f"pmx-{goos}-{goarch}"
         binary_path = os.path.join(args.dist_dir, binary_name)
         if not os.path.isfile(binary_path):
             print(f"package: skipping {binary_name} (not found in {args.dist_dir})")

@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// Group builds the `pve lxc` command and all of its sub-commands.
+// Group builds the `pmx lxc` command and all of its sub-commands.
 func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lxc",
@@ -52,7 +52,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 // node could be determined for an operation that targets a specific node.
 func resolveNode(deps *cli.Deps) (string, error) {
 	if deps.Node == "" {
-		return "", fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+		return "", fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 	}
 	return deps.Node, nil
 }

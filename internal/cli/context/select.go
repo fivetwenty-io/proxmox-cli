@@ -9,15 +9,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newSelectCmd builds `pve context select [<name>]` (aliases: use, switch).
+// newSelectCmd builds `pmx context select [<name>]` (aliases: use, switch).
 //
 // Behaviour:
-//   - Arg "-"         → delegate to previous-context swap (same as `pve context previous`).
+//   - Arg "-"         → delegate to previous-context swap (same as `pmx context previous`).
 //   - Arg <name>      → validate exists, set CurrentContext, save PreviousContext.
 //   - No arg (TTY or piped stdin) → numbered-list picker: read from cmd.InOrStdin().
 func newSelectCmd() *cobra.Command {
@@ -35,7 +35,7 @@ func newSelectCmd() *cobra.Command {
 				deps = &cli.Deps{Cfg: cfg, ConfigPath: deps.ConfigPath, Out: deps.Out, Format: deps.Format}
 			}
 
-			// Arg "-" → behave as `pve context previous`.
+			// Arg "-" → behave as `pmx context previous`.
 			if len(args) == 1 && args[0] == "-" {
 				return runPrevious(cmd, cfg, deps)
 			}
@@ -82,7 +82,7 @@ func newSelectCmd() *cobra.Command {
 // (number or name) from cmd.InOrStdin(). Returns the selected context name.
 func pickContext(cmd *cobra.Command, cfg *config.Config) (string, error) {
 	if len(cfg.Contexts) == 0 {
-		return "", fmt.Errorf("no contexts defined in config; use 'pve context add' first")
+		return "", fmt.Errorf("no contexts defined in config; use 'pmx context add' first")
 	}
 
 	names := make([]string, 0, len(cfg.Contexts))

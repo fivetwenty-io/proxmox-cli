@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // subnetEntry is the subset of a /cluster/sdn/vnets/{vnet}/subnets element
@@ -26,7 +26,7 @@ var subnetSetFlagNames = []string{
 	"dhcp-dns-server", "dhcp-range", "dnszoneprefix", "gateway", "lock-token", "snat",
 }
 
-// newSubnetCmd builds `pve sdn subnet` and its sub-commands.
+// newSubnetCmd builds `pmx sdn subnet` and its sub-commands.
 func newSubnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subnet",
@@ -38,7 +38,7 @@ func newSubnetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetShowCmd builds `pve sdn subnet show <vnet> <subnet>`.
+// newSubnetShowCmd builds `pmx sdn subnet show <vnet> <subnet>`.
 func newSubnetShowCmd() *cobra.Command {
 	var (
 		pending bool
@@ -72,7 +72,7 @@ func newSubnetShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetSetCmd builds `pve sdn subnet set <vnet> <subnet>`.
+// newSubnetSetCmd builds `pmx sdn subnet set <vnet> <subnet>`.
 func newSubnetSetCmd() *cobra.Command {
 	var (
 		del           string
@@ -87,7 +87,7 @@ func newSubnetSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet> <subnet>",
 		Short: "Update a subnet on a vnet",
-		Long:  "Update a subnet on a vnet. The change is staged until `pve sdn apply`.",
+		Long:  "Update a subnet on a vnet. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -125,7 +125,7 @@ func newSubnetSetCmd() *cobra.Command {
 				return fmt.Errorf("update subnet %q on vnet %q: %w", subnet, vnet, err)
 			}
 			res := output.Result{
-				Message: fmt.Sprintf("Subnet %q on vnet %q updated (run `pve sdn apply` to commit).", subnet, vnet),
+				Message: fmt.Sprintf("Subnet %q on vnet %q updated (run `pmx sdn apply` to commit).", subnet, vnet),
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
@@ -142,7 +142,7 @@ func newSubnetSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetListCmd builds `pve sdn subnet list <vnet>`.
+// newSubnetListCmd builds `pmx sdn subnet list <vnet>`.
 func newSubnetListCmd() *cobra.Command {
 	var (
 		pending bool
@@ -191,7 +191,7 @@ func newSubnetListCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetCreateCmd builds `pve sdn subnet create <vnet> <cidr>`.
+// newSubnetCreateCmd builds `pmx sdn subnet create <vnet> <cidr>`.
 func newSubnetCreateCmd() *cobra.Command {
 	var (
 		gateway       string
@@ -205,7 +205,7 @@ func newSubnetCreateCmd() *cobra.Command {
 		Use:   "create <vnet> <cidr>",
 		Short: "Create a subnet on a vnet",
 		Long: "Create a subnet (given as a CIDR, e.g. 10.241.0.0/24) on a vnet. " +
-			"The change is staged until `pve sdn apply`.",
+			"The change is staged until `pmx sdn apply`.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -235,7 +235,7 @@ func newSubnetCreateCmd() *cobra.Command {
 			if err := deps.API.Cluster.CreateSdnVnetsSubnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("create subnet %q on vnet %q: %w", cidr, vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("Subnet %q created on vnet %q (run `pve sdn apply` to commit).", cidr, vnet)}
+			res := output.Result{Message: fmt.Sprintf("Subnet %q created on vnet %q (run `pmx sdn apply` to commit).", cidr, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -249,7 +249,7 @@ func newSubnetCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetDeleteCmd builds `pve sdn subnet delete <vnet> <subnet>`.
+// newSubnetDeleteCmd builds `pmx sdn subnet delete <vnet> <subnet>`.
 func newSubnetDeleteCmd() *cobra.Command {
 	var (
 		yes       bool
@@ -273,7 +273,7 @@ func newSubnetDeleteCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("delete subnet %q on vnet %q: %w", subnet, vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("Subnet %q deleted from vnet %q (run `pve sdn apply` to commit).", subnet, vnet)}
+			res := output.Result{Message: fmt.Sprintf("Subnet %q deleted from vnet %q (run `pmx sdn apply` to commit).", subnet, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

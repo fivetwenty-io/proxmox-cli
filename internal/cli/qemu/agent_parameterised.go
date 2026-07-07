@@ -9,12 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newAgentExecCmd builds `pve qemu agent exec <vmid> [-- <cmd>...]`.
+// newAgentExecCmd builds `pmx qemu agent exec <vmid> [-- <cmd>...]`.
 // Prefer the positional `-- program arg...` form: each token is forwarded
 // verbatim, so arguments may contain spaces. The legacy --command flag is kept
 // for backward compatibility; it splits on whitespace and therefore cannot
@@ -31,7 +31,7 @@ func newAgentExecCmd() *cobra.Command {
 			"PID of the spawned process. Pass the program and its arguments after\n" +
 			"`--` so each argument is preserved exactly (spaces included); the\n" +
 			"legacy --command flag splits on whitespace. Use\n" +
-			"`pve qemu agent exec-status` to poll for completion and output.",
+			"`pmx qemu agent exec-status` to poll for completion and output.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -78,13 +78,13 @@ func newAgentExecCmd() *cobra.Command {
 	return cmd
 }
 
-// newAgentExecStatusCmd builds `pve qemu agent exec-status <vmid> --pid PID`.
+// newAgentExecStatusCmd builds `pmx qemu agent exec-status <vmid> --pid PID`.
 func newAgentExecStatusCmd() *cobra.Command {
 	var pid int64
 	cmd := &cobra.Command{
 		Use:   "exec-status <vmid|name>",
 		Short: "Poll exit status and output of a guest-agent exec process",
-		Long: "Query the status of a process started with `pve qemu agent exec`. " +
+		Long: "Query the status of a process started with `pmx qemu agent exec`. " +
 			"Returns stdout/stderr and exit code once the process has exited.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -135,7 +135,7 @@ func newAgentExecStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// newAgentFileReadCmd builds `pve qemu agent file-read <vmid> --file PATH [--offset N] [--count N]`.
+// newAgentFileReadCmd builds `pmx qemu agent file-read <vmid> --file PATH [--offset N] [--count N]`.
 func newAgentFileReadCmd() *cobra.Command {
 	var (
 		file   string
@@ -189,7 +189,7 @@ func newAgentFileReadCmd() *cobra.Command {
 	return cmd
 }
 
-// newAgentFileWriteCmd builds `pve qemu agent file-write <vmid> --file PATH --content CONTENT`.
+// newAgentFileWriteCmd builds `pmx qemu agent file-write <vmid> --file PATH --content CONTENT`.
 func newAgentFileWriteCmd() *cobra.Command {
 	var (
 		file    string
@@ -229,7 +229,7 @@ func newAgentFileWriteCmd() *cobra.Command {
 	return cmd
 }
 
-// newAgentSetUserPasswordCmd builds `pve qemu agent set-user-password <vmid> --username USER`.
+// newAgentSetUserPasswordCmd builds `pmx qemu agent set-user-password <vmid> --username USER`.
 // The password is read from stdin and never echoed or logged.
 func newAgentSetUserPasswordCmd() *cobra.Command {
 	var (

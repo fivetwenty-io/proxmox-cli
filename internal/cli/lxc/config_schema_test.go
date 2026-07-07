@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestConfigSchemas_GeneratedTable sanity-checks the generated container
@@ -85,7 +85,7 @@ func TestLxcConfig_Describe(t *testing.T) {
 	run = newTestCmd(t, deps, &buf, "config", "describe", "bogus")
 	err := run()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pve lxc config describe")
+	require.Contains(t, err.Error(), "pmx lxc config describe")
 }
 
 // TestLxcConfig_GetDefaults verifies `get --defaults` merges built-in

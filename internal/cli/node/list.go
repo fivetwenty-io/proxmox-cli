@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeListEntry is the minimal decoded shape of one entry from nodes.ListNodes.
@@ -23,7 +23,7 @@ type nodeListEntry struct {
 	SSLFingerprint string  `json:"ssl_fingerprint"`
 }
 
-// newListCmd builds `pve node list`.
+// newListCmd builds `pmx node list`.
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",

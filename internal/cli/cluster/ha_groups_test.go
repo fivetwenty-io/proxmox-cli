@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestHaGroupList_Table verifies `pve cluster ha group list` queries
+// TestHaGroupList_Table verifies `pmx cluster ha group list` queries
 // GET /cluster/ha/groups and renders the curated columns.
 func TestHaGroupList_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -45,7 +45,7 @@ func TestHaGroupList_Table(t *testing.T) {
 	require.Contains(t, out, "ha2")
 }
 
-// TestHaGroupGet_Single verifies `pve cluster ha group get <group>` reads the
+// TestHaGroupGet_Single verifies `pmx cluster ha group get <group>` reads the
 // per-group path and surfaces its fields.
 func TestHaGroupGet_Single(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -194,7 +194,7 @@ func TestHaGroupDelete_RequiresYes(t *testing.T) {
 	require.Contains(t, buf.String(), "deleted")
 }
 
-// TestHaRuleList_Table verifies `pve cluster ha rule list` queries
+// TestHaRuleList_Table verifies `pmx cluster ha rule list` queries
 // GET /cluster/ha/rules and renders the curated columns.
 func TestHaRuleList_Table(t *testing.T) {
 	f, ac := newFakeClient(t)

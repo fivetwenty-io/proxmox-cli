@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRoleCmd builds `pve pbs role` — list the built-in Proxmox Backup
+// newRoleCmd builds `pmx pbs role` — list the built-in Proxmox Backup
 // Server roles and the privileges each one grants (GET /access/roles).
 // Unlike Proxmox VE, PBS roles are a fixed enum: the API exposes no
 // create/update/delete operations for them, so this group only has `ls`.
@@ -35,7 +35,7 @@ type roleListEntry struct {
 	Roleid  string   `json:"roleid"`
 }
 
-// newRoleLsCmd builds `pve pbs role ls` — list roles (GET /access/roles).
+// newRoleLsCmd builds `pmx pbs role ls` — list roles (GET /access/roles).
 func newRoleLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls",

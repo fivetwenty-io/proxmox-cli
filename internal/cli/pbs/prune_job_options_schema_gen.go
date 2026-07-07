@@ -2,7 +2,7 @@
 
 package pbs
 
-import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // pruneJobOptionSchemas describes every settable option from the Proxmox Backup Server API schema for
 // POST /config/prune, in lexical order by API key.

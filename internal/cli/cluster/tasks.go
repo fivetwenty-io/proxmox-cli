@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // clusterTaskEntry is the decoded shape of one entry from cluster.ListTasks.
@@ -23,7 +23,7 @@ type clusterTaskEntry struct {
 	User      string `json:"user"`
 }
 
-// newTasksCmd builds `pve cluster tasks`.
+// newTasksCmd builds `pmx cluster tasks`.
 func newTasksCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "tasks",

@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // vnetEntry is the subset of a /cluster/sdn/vnets element rendered in the list.
@@ -20,7 +20,7 @@ type vnetEntry struct {
 	Alias string `json:"alias"`
 }
 
-// newVnetCmd builds `pve sdn vnet` and its sub-commands.
+// newVnetCmd builds `pmx sdn vnet` and its sub-commands.
 func newVnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnet",
@@ -39,7 +39,7 @@ func newVnetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetShowCmd builds `pve sdn vnet show <vnet>`.
+// newVnetShowCmd builds `pmx sdn vnet show <vnet>`.
 func newVnetShowCmd() *cobra.Command {
 	var (
 		pending bool
@@ -73,7 +73,7 @@ func newVnetShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetIpsCmd builds `pve sdn vnet ips` and its sub-commands.
+// newVnetIpsCmd builds `pmx sdn vnet ips` and its sub-commands.
 func newVnetIpsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ips",
@@ -83,7 +83,7 @@ func newVnetIpsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetIpsCreateCmd builds `pve sdn vnet ips create <vnet> --ip <ip> --zone <zone>`.
+// newVnetIpsCreateCmd builds `pmx sdn vnet ips create <vnet> --ip <ip> --zone <zone>`.
 func newVnetIpsCreateCmd() *cobra.Command {
 	var (
 		ip   string
@@ -122,7 +122,7 @@ func newVnetIpsCreateCmd() *cobra.Command {
 // vnetIpsSetFlagNames lists the optional editable vnet-ips flags.
 var vnetIpsSetFlagNames = []string{"mac", "vmid"}
 
-// newVnetIpsSetCmd builds `pve sdn vnet ips set <vnet> --ip <ip> --zone <zone>`.
+// newVnetIpsSetCmd builds `pmx sdn vnet ips set <vnet> --ip <ip> --zone <zone>`.
 func newVnetIpsSetCmd() *cobra.Command {
 	var (
 		ip   string
@@ -166,7 +166,7 @@ func newVnetIpsSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetIpsDeleteCmd builds `pve sdn vnet ips delete <vnet> --ip <ip> --zone <zone>`.
+// newVnetIpsDeleteCmd builds `pmx sdn vnet ips delete <vnet> --ip <ip> --zone <zone>`.
 func newVnetIpsDeleteCmd() *cobra.Command {
 	var (
 		ip   string
@@ -210,7 +210,7 @@ func newVnetIpsDeleteCmd() *cobra.Command {
 // detect a no-op update.
 var vnetSetFlagNames = []string{"zone", "tag", "alias", "vlanaware", "isolate-ports"}
 
-// newVnetSetCmd builds `pve sdn vnet set <vnet>`.
+// newVnetSetCmd builds `pmx sdn vnet set <vnet>`.
 func newVnetSetCmd() *cobra.Command {
 	var (
 		zone         string
@@ -225,7 +225,7 @@ func newVnetSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet>",
 		Short: "Update an SDN vnet",
-		Long:  "Update an SDN vnet. The change is staged until `pve sdn apply`.",
+		Long:  "Update an SDN vnet. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -262,7 +262,7 @@ func newVnetSetCmd() *cobra.Command {
 			if err := deps.API.Cluster.UpdateSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("update SDN vnet %q: %w", vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN vnet %q updated (run `pve sdn apply` to commit).", vnet)}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q updated (run `pmx sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -278,7 +278,7 @@ func newVnetSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetListCmd builds `pve sdn vnet list`.
+// newVnetListCmd builds `pmx sdn vnet list`.
 func newVnetListCmd() *cobra.Command {
 	var (
 		pending bool
@@ -330,7 +330,7 @@ func newVnetListCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetCreateCmd builds `pve sdn vnet create <vnet> --zone <zone>`.
+// newVnetCreateCmd builds `pmx sdn vnet create <vnet> --zone <zone>`.
 func newVnetCreateCmd() *cobra.Command {
 	var (
 		zone         string
@@ -344,7 +344,7 @@ func newVnetCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <vnet>",
 		Short: "Create an SDN vnet",
-		Long:  "Create an SDN vnet in a zone. The change is staged until `pve sdn apply`.",
+		Long:  "Create an SDN vnet in a zone. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -374,7 +374,7 @@ func newVnetCreateCmd() *cobra.Command {
 			if err := deps.API.Cluster.CreateSdnVnets(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN vnet %q: %w", vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN vnet %q created (run `pve sdn apply` to commit).", vnet)}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q created (run `pmx sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -390,7 +390,7 @@ func newVnetCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetDeleteCmd builds `pve sdn vnet delete <vnet>`.
+// newVnetDeleteCmd builds `pmx sdn vnet delete <vnet>`.
 func newVnetDeleteCmd() *cobra.Command {
 	var (
 		yes       bool
@@ -413,7 +413,7 @@ func newVnetDeleteCmd() *cobra.Command {
 			if err := deps.API.Cluster.DeleteSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("delete SDN vnet %q: %w", vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN vnet %q deleted (run `pve sdn apply` to commit).", vnet)}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q deleted (run `pmx sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

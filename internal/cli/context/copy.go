@@ -5,18 +5,18 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// copyFlags holds the raw flag values for `pve context copy`.
+// copyFlags holds the raw flag values for `pmx context copy`.
 type copyFlags struct {
 	force     bool
 	selectCtx bool
 }
 
-// newCopyCmd builds `pve context copy <src> <dst>` (alias: cp).
+// newCopyCmd builds `pmx context copy <src> <dst>` (alias: cp).
 func newCopyCmd() *cobra.Command {
 	var f copyFlags
 

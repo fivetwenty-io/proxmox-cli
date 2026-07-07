@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // rawStringList converts plain string values into a list of JSON-encoded raw
@@ -117,13 +117,13 @@ func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabric
 	}
 }
 
-// newFabricCmd builds `pve sdn fabric` and its sub-commands.
+// newFabricCmd builds `pmx sdn fabric` and its sub-commands.
 func newFabricCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fabric",
 		Short: "Manage SDN fabrics (BGP/OpenFabric/OSPF routing underlays)",
 		Long: "List, create, inspect, update, and delete SDN fabrics and their member " +
-			"nodes. Changes are staged until committed with `pve sdn apply`.",
+			"nodes. Changes are staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newFabricListCmd(),
@@ -137,7 +137,7 @@ func newFabricCmd() *cobra.Command {
 	return cmd
 }
 
-// newFabricListAllCmd builds `pve sdn fabric list-all`.
+// newFabricListAllCmd builds `pmx sdn fabric list-all`.
 func newFabricListAllCmd() *cobra.Command {
 	var (
 		pending bool
@@ -218,7 +218,7 @@ func newFabricCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <id> --protocol <protocol>",
 		Short: "Create an SDN fabric",
-		Long:  "Create an SDN fabric. The change is staged until `pve sdn apply`.",
+		Long:  "Create an SDN fabric. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -229,7 +229,7 @@ func newFabricCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN fabric %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN fabric %q created (run `pve sdn apply` to commit).", id)}
+				"SDN fabric %q created (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -267,7 +267,7 @@ func newFabricSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id> --protocol <protocol>",
 		Short: "Update an SDN fabric",
-		Long:  "Update an SDN fabric. The change is staged until `pve sdn apply`.",
+		Long:  "Update an SDN fabric. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -285,7 +285,7 @@ func newFabricSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN fabric %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN fabric %q updated (run `pve sdn apply` to commit).", id)}
+				"SDN fabric %q updated (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -313,7 +313,7 @@ func newFabricDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN fabric %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN fabric %q deleted (run `pve sdn apply` to commit).", id)}
+				"SDN fabric %q deleted (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -411,13 +411,13 @@ func (nf *nodeFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsN
 	}
 }
 
-// newFabricNodeCmd builds `pve sdn fabric node` and its sub-commands.
+// newFabricNodeCmd builds `pmx sdn fabric node` and its sub-commands.
 func newFabricNodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Manage member nodes of SDN fabrics",
 		Long: "List, create, inspect, update, and delete the nodes that participate in " +
-			"SDN fabrics. Changes are staged until committed with `pve sdn apply`.",
+			"SDN fabrics. Changes are staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newFabricNodeListCmd(),
@@ -506,7 +506,7 @@ func newFabricNodeCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <fabric> <node> --protocol <protocol>",
 		Short: "Add a node to an SDN fabric",
-		Long:  "Add a node to an SDN fabric. The change is staged until `pve sdn apply`.",
+		Long:  "Add a node to an SDN fabric. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -517,7 +517,7 @@ func newFabricNodeCreateCmd() *cobra.Command {
 				return fmt.Errorf("add node %q to SDN fabric %q: %w", node, fabric, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Node %q added to SDN fabric %q (run `pve sdn apply` to commit).", node, fabric)}
+				"Node %q added to SDN fabric %q (run `pmx sdn apply` to commit).", node, fabric)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -537,7 +537,7 @@ func newFabricNodeSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <fabric> <node> --protocol <protocol>",
 		Short: "Update a node in an SDN fabric",
-		Long:  "Update a node in an SDN fabric. The change is staged until `pve sdn apply`.",
+		Long:  "Update a node in an SDN fabric. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -555,7 +555,7 @@ func newFabricNodeSetCmd() *cobra.Command {
 				return fmt.Errorf("update node %q of SDN fabric %q: %w", node, fabric, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Node %q of SDN fabric %q updated (run `pve sdn apply` to commit).", node, fabric)}
+				"Node %q of SDN fabric %q updated (run `pmx sdn apply` to commit).", node, fabric)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -584,7 +584,7 @@ func newFabricNodeDeleteCmd() *cobra.Command {
 				return fmt.Errorf("remove node %q from SDN fabric %q: %w", node, fabric, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Node %q removed from SDN fabric %q (run `pve sdn apply` to commit).", node, fabric)}
+				"Node %q removed from SDN fabric %q (run `pmx sdn apply` to commit).", node, fabric)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

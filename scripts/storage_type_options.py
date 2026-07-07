@@ -7,7 +7,7 @@ which options. The authoritative mapping lives in the Perl storage plugins —
 each `PVE::Storage::<X>Plugin` returns its accepted options (and whether each
 is create-only "fixed" or required) from `sub options`. This script parses a
 pve-storage checkout and emits that mapping as Go data for
-`internal/cli/storage`, so `pve storage describe --type <t>` and the
+`internal/cli/storage`, so `pmx storage describe --type <t>` and the
 type-aware `get --defaults` can filter the flat schema honestly.
 
 Every extracted option name is cross-checked against the vendored apidoc's
@@ -112,14 +112,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pve-storage", required=True, help="path to a pve-storage checkout")
     ap.add_argument("--apidoc", default=None,
-                    help="path to apidoc.json (default: resolve the pve-apiclient-go module copy)")
+                    help="path to apidoc.json (default: resolve the proxmox-apiclient-go module copy)")
     ap.add_argument("--out", default=DEFAULT_OUT)
     args = ap.parse_args()
 
     apidoc = args.apidoc
     if apidoc is None:
         mod = subprocess.run(
-            ["go", "list", "-m", "-f", "{{.Dir}}", "github.com/fivetwenty-io/pve-apiclient-go/v3"],
+            ["go", "list", "-m", "-f", "{{.Dir}}", "github.com/fivetwenty-io/proxmox-apiclient-go/v3"],
             capture_output=True, text=True, check=True, cwd=ROOT,
         ).stdout.strip()
         apidoc = os.path.join(mod, "_data", "apidoc.json")
@@ -146,7 +146,7 @@ def main() -> None:
         "",
         "package storage",
         "",
-        'import "github.com/fivetwenty-io/pve-cli/internal/optionschema"',
+        'import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"',
         "",
         "// storageTypeOptions maps each storage type to the options its plugin",
         "// accepts, extracted from the PVE::Storage::*Plugin `options` tables.",

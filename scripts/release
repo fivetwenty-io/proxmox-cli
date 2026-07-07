@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Cross-compile pve CLI for linux/darwin × amd64/arm64 and produce checksums."""
+"""Cross-compile pmx CLI for linux/darwin × amd64/arm64 and produce checksums."""
 
 import argparse
 import hashlib
@@ -71,7 +71,7 @@ def build_target(
     out_dir: str,
 ) -> str:
     """Build one target; return path to produced binary."""
-    binary_name = f"pve-{goos}-{goarch}"
+    binary_name = f"pmx-{goos}-{goarch}"
     out_path = os.path.join(out_dir, binary_name)
     ver_pkg = f"{module}/internal/version"
     ldflags = (
@@ -88,7 +88,7 @@ def build_target(
         "-trimpath",
         f"-ldflags={ldflags}",
         "-o", out_path,
-        f"{module}/cmd/pve",
+        f"{module}/cmd/pmx",
     ]
     print(f"release: building {goos}/{goarch} -> {out_path}")
     result = subprocess.run(cmd, env=env)
@@ -119,11 +119,11 @@ def write_checksums(binaries: list[str], out_dir: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Cross-compile pve CLI for all release targets and generate checksums.",
+        description="Cross-compile pmx CLI for all release targets and generate checksums.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Targets: linux/amd64, linux/arm64, darwin/amd64, darwin/arm64\n"
-            "Output:  dist/pve-<os>-<arch> + dist/checksums.sha256\n"
+            "Output:  dist/pmx-<os>-<arch> + dist/checksums.sha256\n"
         ),
     )
     parser.add_argument(
@@ -138,7 +138,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--module",
-        default="github.com/fivetwenty-io/pve-cli",
+        default="github.com/fivetwenty-io/pmx-cli",
         help="Go module path",
     )
     args = parser.parse_args()

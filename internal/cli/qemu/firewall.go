@@ -8,13 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newFirewallCmd builds the `pve qemu firewall` sub-tree: per-VM rules, IP sets,
+// newFirewallCmd builds the `pmx qemu firewall` sub-tree: per-VM rules, IP sets,
 // aliases, and options. Every operation is synchronous (no task UPID).
 func newFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -41,7 +41,7 @@ type fwLogEntry struct {
 	T string `json:"t"`
 }
 
-// newFirewallLogCmd builds `pve qemu firewall log <vmid|name>` — the per-VM
+// newFirewallLogCmd builds `pmx qemu firewall log <vmid|name>` — the per-VM
 // firewall log (GET /nodes/{node}/qemu/{vmid}/firewall/log).
 func newFirewallLogCmd() *cobra.Command {
 	var (
@@ -112,7 +112,7 @@ type fwRefEntry struct {
 	Comment string `json:"comment"`
 }
 
-// newFirewallRefsCmd builds `pve qemu firewall refs <vmid|name>` — the IP sets
+// newFirewallRefsCmd builds `pmx qemu firewall refs <vmid|name>` — the IP sets
 // and aliases a rule may reference (GET /nodes/{node}/qemu/{vmid}/firewall/refs).
 func newFirewallRefsCmd() *cobra.Command {
 	var refType string
@@ -534,7 +534,7 @@ func newFirewallIpsetCmd() *cobra.Command {
 }
 
 // newFirewallIpsetGetMemberCmd builds
-// `pve qemu firewall ipset get-member <vmid|name> <name> <cidr>` — show a
+// `pmx qemu firewall ipset get-member <vmid|name> <name> <cidr>` — show a
 // single CIDR entry of an IP set (GET .../firewall/ipset/{name}/{cidr}).
 // Named get-member (not get) because `ipset list <vmid> [name]` already
 // overloads the name-scoped read, and update-member set the member-verb
@@ -574,7 +574,7 @@ func newFirewallIpsetGetMemberCmd() *cobra.Command {
 }
 
 // newFirewallIpsetUpdateMemberCmd builds
-// `pve qemu firewall ipset update-member <vmid|name> <name> <cidr>` — update an
+// `pmx qemu firewall ipset update-member <vmid|name> <name> <cidr>` — update an
 // existing IP set entry (PUT .../firewall/ipset/{name}/{cidr}).
 func newFirewallIpsetUpdateMemberCmd() *cobra.Command {
 	var (
@@ -825,7 +825,7 @@ func newFirewallAliasCmd() *cobra.Command {
 	return cmd
 }
 
-// newFirewallAliasGetCmd builds `pve qemu firewall alias get <vmid|name>
+// newFirewallAliasGetCmd builds `pmx qemu firewall alias get <vmid|name>
 // <name>` — show a single firewall alias by name
 // (GET .../firewall/aliases/{name}).
 func newFirewallAliasGetCmd() *cobra.Command {
@@ -1006,7 +1006,7 @@ func newFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newFirewallOptionsDescribeCmd builds `pve qemu firewall options describe`,
+// newFirewallOptionsDescribeCmd builds `pmx qemu firewall options describe`,
 // an offline catalog of every settable per-VM firewall option from the PVE
 // API schema (see firewall_options_schema_gen.go).
 func newFirewallOptionsDescribeCmd() *cobra.Command {
@@ -1017,7 +1017,7 @@ func newFirewallOptionsDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
 			"options. Runs offline. Pass an option name to show only that option with " +
 			"full descriptions.",
-		CommandHint:         "pve qemu firewall options describe",
+		CommandHint:         "pmx qemu firewall options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }

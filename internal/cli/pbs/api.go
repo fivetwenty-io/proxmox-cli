@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newAPIRawCmd builds `pve pbs api` — issue raw HTTP requests directly
+// newAPIRawCmd builds `pmx pbs api` — issue raw HTTP requests directly
 // against the Proxmox Backup Server REST API for endpoints this CLI does not
 // (yet) wrap with a typed command. It is the PBS-side counterpart of the raw
 // escape hatch other command groups reach for internally via deps.PBS.Raw
@@ -76,7 +76,7 @@ func apiRawParamsFromData(data []string) (map[string]interface{}, error) {
 	return params, nil
 }
 
-// newAPIRawGetCmd builds `pve pbs api get <path>`.
+// newAPIRawGetCmd builds `pmx pbs api get <path>`.
 func newAPIRawGetCmd() *cobra.Command {
 	var data []string
 	cmd := &cobra.Command{
@@ -110,7 +110,7 @@ func newAPIRawGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newAPIRawPostCmd builds `pve pbs api post <path>`.
+// newAPIRawPostCmd builds `pmx pbs api post <path>`.
 func newAPIRawPostCmd() *cobra.Command {
 	var data []string
 	cmd := &cobra.Command{
@@ -144,7 +144,7 @@ func newAPIRawPostCmd() *cobra.Command {
 	return cmd
 }
 
-// newAPIRawPutCmd builds `pve pbs api put <path>`.
+// newAPIRawPutCmd builds `pmx pbs api put <path>`.
 func newAPIRawPutCmd() *cobra.Command {
 	var data []string
 	cmd := &cobra.Command{
@@ -178,7 +178,7 @@ func newAPIRawPutCmd() *cobra.Command {
 	return cmd
 }
 
-// newAPIRawDeleteCmd builds `pve pbs api delete <path>`.
+// newAPIRawDeleteCmd builds `pmx pbs api delete <path>`.
 func newAPIRawDeleteCmd() *cobra.Command {
 	var data []string
 	cmd := &cobra.Command{

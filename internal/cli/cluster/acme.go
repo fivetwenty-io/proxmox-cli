@@ -8,12 +8,12 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newAcmeCmd builds the `pve cluster acme` sub-tree for managing ACME (e.g.
+// newAcmeCmd builds the `pmx cluster acme` sub-tree for managing ACME (e.g.
 // Let's Encrypt) accounts and DNS-challenge plugins. Account registration,
 // update, and deregistration contact the configured ACME certificate authority
 // and run as asynchronous tasks; plugin definitions are stored locally.

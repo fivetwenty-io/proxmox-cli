@@ -8,11 +8,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/node"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	_ "github.com/fivetwenty-io/pmx-cli/internal/cli/node"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // ---------------------------------------------------------------------------
@@ -304,7 +304,7 @@ func TestNodeNetwork_RequiresNode(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestNodeNetwork_CommandTree asserts the network sub-tree exposes the expected
-// verb set under `pve node network`.
+// verb set under `pmx node network`.
 func TestNodeNetwork_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()

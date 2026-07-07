@@ -8,12 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestCephMetadata_Success verifies `pve cluster ceph metadata` queries
+// TestCephMetadata_Success verifies `pmx cluster ceph metadata` queries
 // GET /cluster/ceph/metadata without a scope param by default.
 func TestCephMetadata_Success(t *testing.T) {
 	f, ac := newFakeClient(t)

@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestStorage_AplinfoCommandTree verifies the aplinfo sub-group and its
@@ -34,7 +34,7 @@ func TestStorage_AplinfoCommandTree(t *testing.T) {
 	require.True(t, names["download"], "aplinfo must expose the download sub-command")
 }
 
-// TestAplinfoList_Success verifies `pve storage aplinfo list` issues a GET to
+// TestAplinfoList_Success verifies `pmx storage aplinfo list` issues a GET to
 // the correct path and renders the package name in the table output.
 func TestAplinfoList_Success(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -75,7 +75,7 @@ func TestAplinfoList_RequiresNode(t *testing.T) {
 	require.False(t, called, "no request must be made without a node")
 }
 
-// TestAplinfoDownload_Success verifies `pve storage aplinfo download` issues a
+// TestAplinfoDownload_Success verifies `pmx storage aplinfo download` issues a
 // POST to the correct path with the required form fields, waits on the task, and
 // reports success.
 func TestAplinfoDownload_Success(t *testing.T) {

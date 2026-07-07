@@ -10,11 +10,11 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newUserTokenCmd builds `pve pbs user token` and its sub-commands: manage
+// newUserTokenCmd builds `pmx pbs user token` and its sub-commands: manage
 // the API tokens belonging to a user (GET/POST/PUT/DELETE
 // /access/users/{userid}/token...).
 func newUserTokenCmd() *cobra.Command {
@@ -42,7 +42,7 @@ type userTokenListEntry struct {
 	Tokenid string       `json:"tokenid"`
 }
 
-// newUserTokenLsCmd builds `pve pbs user token ls <userid>` — list a user's
+// newUserTokenLsCmd builds `pmx pbs user token ls <userid>` — list a user's
 // API tokens (GET /access/users/{userid}/token).
 func newUserTokenLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -90,7 +90,7 @@ func newUserTokenLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserTokenShowCmd builds `pve pbs user token show <userid> <token-name>`
+// newUserTokenShowCmd builds `pmx pbs user token show <userid> <token-name>`
 // — show an API token's metadata (GET /access/users/{userid}/token/{token-name}).
 // The token secret is never returned by this endpoint; it is only available
 // once, at creation or regeneration time.
@@ -123,7 +123,7 @@ func newUserTokenShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserTokenAddCmd builds `pve pbs user token add <userid> <token-name>`
+// newUserTokenAddCmd builds `pmx pbs user token add <userid> <token-name>`
 // — create an API token (POST /access/users/{userid}/token/{token-name}).
 func newUserTokenAddCmd() *cobra.Command {
 	var (
@@ -185,7 +185,7 @@ func newUserTokenAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserTokenUpdateCmd builds `pve pbs user token update <userid>
+// newUserTokenUpdateCmd builds `pmx pbs user token update <userid>
 // <token-name>` — update an API token's metadata (PUT
 // /access/users/{userid}/token/{token-name}).
 func newUserTokenUpdateCmd() *cobra.Command {
@@ -273,7 +273,7 @@ func newUserTokenUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserTokenDeleteCmd builds `pve pbs user token delete <userid>
+// newUserTokenDeleteCmd builds `pmx pbs user token delete <userid>
 // <token-name>` — remove an API token (DELETE
 // /access/users/{userid}/token/{token-name}).
 func newUserTokenDeleteCmd() *cobra.Command {

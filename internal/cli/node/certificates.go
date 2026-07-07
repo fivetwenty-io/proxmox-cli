@@ -8,9 +8,9 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // renderCertTask renders the asynchronous task started by an ACME certificate
@@ -84,7 +84,7 @@ func newCertAcmeCmd() *cobra.Command {
 // installed on a PVE node; pve-ssl.pem is the self-signed fallback.
 const acmeManagedCertFilename = "pveproxy-ssl.pem"
 
-// newCertAcmeListCmd builds `pve node cert acme list`.
+// newCertAcmeListCmd builds `pmx node cert acme list`.
 //
 // GET /nodes/{node}/certificates/acme is only a directory index (certificate);
 // the certificate details live in /nodes/{node}/certificates/info, filtered

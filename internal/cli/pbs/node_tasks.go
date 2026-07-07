@@ -9,8 +9,8 @@ import (
 
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeTaskEntry mirrors one element of the JSON array PBS returns from
@@ -33,7 +33,7 @@ type nodeTaskEntry struct {
 	User       string  `json:"user"`
 }
 
-// newNodeTasksCmd builds `pve pbs node tasks` and its ls/show/log/delete
+// newNodeTasksCmd builds `pmx pbs node tasks` and its ls/show/log/delete
 // verbs (/nodes/{node}/tasks...).
 func newNodeTasksCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -49,7 +49,7 @@ func newNodeTasksCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeTasksLsCmd builds `pve pbs node tasks ls` — list tasks, with every
+// newNodeTasksLsCmd builds `pmx pbs node tasks ls` — list tasks, with every
 // ListTasksParams filter exposed as a flag (GET /nodes/{node}/tasks).
 func newNodeTasksLsCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -157,7 +157,7 @@ func nodeTaskStatusCell(e nodeTaskEntry) string {
 	return e.Status
 }
 
-// newNodeTasksShowCmd builds `pve pbs node tasks show <upid>` — get task
+// newNodeTasksShowCmd builds `pmx pbs node tasks show <upid>` — get task
 // status (GET /nodes/{node}/tasks/{upid}/status).
 func newNodeTasksShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -187,7 +187,7 @@ func newNodeTasksShowCmd(nf *nodeFlags) *cobra.Command {
 	}
 }
 
-// newNodeTasksLogCmd builds `pve pbs node tasks log <upid>` — read a task's
+// newNodeTasksLogCmd builds `pmx pbs node tasks log <upid>` — read a task's
 // log (GET /nodes/{node}/tasks/{upid}/log).
 //
 // The generated Nodes.ListTasksLog binding discards its response body (the
@@ -261,7 +261,7 @@ func newNodeTasksLogCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeTasksDeleteCmd builds `pve pbs node tasks delete <upid>` — try to
+// newNodeTasksDeleteCmd builds `pmx pbs node tasks delete <upid>` — try to
 // stop a running task (DELETE /nodes/{node}/tasks/{upid}).
 func newNodeTasksDeleteCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{

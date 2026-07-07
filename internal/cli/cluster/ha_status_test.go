@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestHaStatusList_Table verifies `pve cluster ha status list` is an alias of
+// TestHaStatusList_Table verifies `pmx cluster ha status list` is an alias of
 // current: GET /cluster/ha/status is only a directory index, so list serves
 // the current view (GET /cluster/ha/status/current).
 func TestHaStatusList_Table(t *testing.T) {
@@ -40,7 +40,7 @@ func TestHaStatusList_Table(t *testing.T) {
 	require.Contains(t, out, "active")
 }
 
-// TestHaStatusCurrent_Table verifies `pve cluster ha status current` queries
+// TestHaStatusCurrent_Table verifies `pmx cluster ha status current` queries
 // GET /cluster/ha/status/current.
 func TestHaStatusCurrent_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -62,7 +62,7 @@ func TestHaStatusCurrent_Table(t *testing.T) {
 	require.Contains(t, buf.String(), "vm:100")
 }
 
-// TestHaStatusManager_Single verifies `pve cluster ha status manager` reads the
+// TestHaStatusManager_Single verifies `pmx cluster ha status manager` reads the
 // raw manager status object.
 func TestHaStatusManager_Single(t *testing.T) {
 	f, ac := newFakeClient(t)

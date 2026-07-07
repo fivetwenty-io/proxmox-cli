@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 )
@@ -17,7 +17,7 @@ import (
 // unload, eject, rewind, clean, format, label, catalog, export, inventory,
 // and restore-key) onto cmd. Called by newTapeDriveCmd (drive.go) so drive
 // listing/CRUD and drive media operations stay in separate files while
-// sharing one `pve pbs tape drive` sub-tree.
+// sharing one `pmx pbs tape drive` sub-tree.
 //
 // Every verb below takes the drive name as its sole positional argument
 // (mirroring the /tape/drive/{drive}/... REST path shape) and resolves
@@ -52,7 +52,7 @@ func tapeDriveOpArg(args []string) (string, error) {
 	return drive, nil
 }
 
-// newTapeDriveOpLoadMediaCmd builds `pve pbs tape drive load-media <drive>` —
+// newTapeDriveOpLoadMediaCmd builds `pmx pbs tape drive load-media <drive>` —
 // load a specific piece of media (by label/barcode) into the drive from
 // whichever slot currently holds it (POST /tape/drive/{drive}/load-media).
 // Asynchronous; blocks until the task finishes unless --async is set.
@@ -93,7 +93,7 @@ func newTapeDriveOpLoadMediaCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpLoadSlotCmd builds `pve pbs tape drive load-slot <drive>` —
+// newTapeDriveOpLoadSlotCmd builds `pmx pbs tape drive load-slot <drive>` —
 // load media from a specific changer slot into the drive (POST
 // /tape/drive/{drive}/load-slot). Synchronous: the endpoint returns no data
 // on success, so this reports plain success once the request completes.
@@ -129,7 +129,7 @@ func newTapeDriveOpLoadSlotCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpUnloadCmd builds `pve pbs tape drive unload <drive>` — unload
+// newTapeDriveOpUnloadCmd builds `pmx pbs tape drive unload <drive>` — unload
 // the drive's current media back into the media changer (POST
 // /tape/drive/{drive}/unload). --slot is optional; when omitted the media
 // returns to the slot it was loaded from. Asynchronous; blocks until the
@@ -175,7 +175,7 @@ func newTapeDriveOpUnloadCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpEjectCmd builds `pve pbs tape drive eject <drive>` — eject
+// newTapeDriveOpEjectCmd builds `pmx pbs tape drive eject <drive>` — eject
 // the drive's current media (POST /tape/drive/{drive}/eject-media).
 // Asynchronous; blocks until the task finishes unless --async is set.
 func newTapeDriveOpEjectCmd() *cobra.Command {
@@ -209,7 +209,7 @@ func newTapeDriveOpEjectCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpRewindCmd builds `pve pbs tape drive rewind <drive>` —
+// newTapeDriveOpRewindCmd builds `pmx pbs tape drive rewind <drive>` —
 // rewind the drive's current media to the start (POST
 // /tape/drive/{drive}/rewind). Asynchronous; blocks until the task finishes
 // unless --async is set.
@@ -244,7 +244,7 @@ func newTapeDriveOpRewindCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpCleanCmd builds `pve pbs tape drive clean <drive>` — run the
+// newTapeDriveOpCleanCmd builds `pmx pbs tape drive clean <drive>` — run the
 // drive's cleaning cycle using a loaded cleaning cartridge (PUT
 // /tape/drive/{drive}/clean). Asynchronous; blocks until the task finishes
 // unless --async is set.
@@ -279,7 +279,7 @@ func newTapeDriveOpCleanCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpFormatCmd builds `pve pbs tape drive format <drive>` — format
+// newTapeDriveOpFormatCmd builds `pmx pbs tape drive format <drive>` — format
 // (erase) the drive's current media (POST /tape/drive/{drive}/format-media).
 // Every CreateDriveFormatMediaParams field is optional and forwarded only
 // when explicitly set. Asynchronous; blocks until the task finishes unless
@@ -347,7 +347,7 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpLabelCmd builds `pve pbs tape drive label <drive>` — write a
+// newTapeDriveOpLabelCmd builds `pmx pbs tape drive label <drive>` — write a
 // new label onto the drive's current media (POST
 // /tape/drive/{drive}/label-media). --label-text is required; --pool is
 // optional. Asynchronous; blocks until the task finishes unless --async is
@@ -398,7 +398,7 @@ func newTapeDriveOpLabelCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpBarcodeLabelCmd builds `pve pbs tape drive barcode-label
+// newTapeDriveOpBarcodeLabelCmd builds `pmx pbs tape drive barcode-label
 // <drive>` — read the media's barcode via the changer's barcode reader and
 // use it as the label (POST /tape/drive/{drive}/barcode-label-media). --pool
 // is optional. Asynchronous; blocks until the task finishes unless --async
@@ -443,7 +443,7 @@ func newTapeDriveOpBarcodeLabelCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpCatalogCmd builds `pve pbs tape drive catalog <drive>` —
+// newTapeDriveOpCatalogCmd builds `pmx pbs tape drive catalog <drive>` —
 // (re)build the catalog for the drive's current media (POST
 // /tape/drive/{drive}/catalog). Every CreateDriveCatalogParams field is
 // optional and forwarded only when explicitly set. Asynchronous; blocks
@@ -512,7 +512,7 @@ func newTapeDriveOpCatalogCmd() *cobra.Command {
 // instead of going through finishAsync.
 type tapeDriveOpExportSlot int64
 
-// newTapeDriveOpExportCmd builds `pve pbs tape drive export <drive>` — move
+// newTapeDriveOpExportCmd builds `pmx pbs tape drive export <drive>` — move
 // the drive's current media to the media changer's import-export slot (PUT
 // /tape/drive/{drive}/export-media). --label-text is required. The response
 // is the destination slot number, not a UPID; this command decodes and
@@ -567,7 +567,7 @@ func newTapeDriveOpExportCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpUpdateInventoryCmd builds `pve pbs tape drive
+// newTapeDriveOpUpdateInventoryCmd builds `pmx pbs tape drive
 // update-inventory <drive>` — update the media online status by scanning the
 // changer's slots via the drive (PUT /tape/drive/{drive}/inventory). Every
 // UpdateDriveInventoryParams field is optional and forwarded only when
@@ -623,7 +623,7 @@ func newTapeDriveOpUpdateInventoryCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeDriveOpRestoreKeyCmd builds `pve pbs tape drive restore-key
+// newTapeDriveOpRestoreKeyCmd builds `pmx pbs tape drive restore-key
 // <drive>` — restore an encryption key from the drive's current media (POST
 // /tape/drive/{drive}/restore-key). --password is required. Synchronous:
 // the endpoint returns no data on success, so this reports plain success

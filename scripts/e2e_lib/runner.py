@@ -52,18 +52,18 @@ def find_binary(explicit: str | None, build: bool) -> str:
             die(f"binary not found: {explicit}")
         return explicit
     root = repo_root()
-    cand = os.path.join(root, "dist", "pve")
+    cand = os.path.join(root, "dist", "pmx")
     if os.path.isfile(cand):
         return cand
     if build:
-        print("e2e: building ./dist/pve ...", flush=True)
+        print("e2e: building ./dist/pmx ...", flush=True)
         rc = subprocess.run(
-            ["go", "build", "-o", cand, "./cmd/pve"], cwd=root
+            ["go", "build", "-o", cand, "./cmd/pmx"], cwd=root
         ).returncode
         if rc != 0 or not os.path.isfile(cand):
             die("go build failed; build the binary or pass --binary", code=3)
         return cand
-    die("no ./dist/pve; run `make build` or pass --binary (or drop --no-build)")
+    die("no ./dist/pmx; run `make build` or pass --binary (or drop --no-build)")
     raise SystemExit  # unreachable, satisfies type checkers
 
 

@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // ---- rules -----------------------------------------------------------------
@@ -84,8 +84,8 @@ func TestClusterFirewallCommands_RequiredFlags(t *testing.T) {
 		},
 		{
 			name:        "FirewallGroupRuleAdd_RequiresType",
-			handlerPath: "POST /api2/json/cluster/firewall/groups/pvecli-grp",
-			args:        []string{"firewall", "group", "rule-add", "pvecli-grp", "--action", "ACCEPT"},
+			handlerPath: "POST /api2/json/cluster/firewall/groups/pmxcli-grp",
+			args:        []string{"firewall", "group", "rule-add", "pmxcli-grp", "--action", "ACCEPT"},
 			wantErr:     "--type is required",
 		},
 	}
@@ -125,13 +125,13 @@ func TestClusterFirewallRules_CreateForwardsFields(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "firewall", "rules", "create",
 		"--type", "in", "--action", "ACCEPT", "--proto", "tcp",
-		"--dport", "22", "--source", "+pvecli-ips", "--enable", "0", "--comment", "ssh"))
+		"--dport", "22", "--source", "+pmxcli-ips", "--enable", "0", "--comment", "ssh"))
 
 	require.Equal(t, "in", gotForm.Get("type"))
 	require.Equal(t, "ACCEPT", gotForm.Get("action"))
 	require.Equal(t, "tcp", gotForm.Get("proto"))
 	require.Equal(t, "22", gotForm.Get("dport"))
-	require.Equal(t, "+pvecli-ips", gotForm.Get("source"))
+	require.Equal(t, "+pmxcli-ips", gotForm.Get("source"))
 	require.Equal(t, "0", gotForm.Get("enable"))
 	require.Equal(t, "ssh", gotForm.Get("comment"))
 }
@@ -215,8 +215,8 @@ func TestClusterFirewallGroup_CreateForwardsFields(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "group", "create", "pvecli-grp", "--comment", "isolated"))
-	require.Equal(t, "pvecli-grp", gotForm.Get("group"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "create", "pmxcli-grp", "--comment", "isolated"))
+	require.Equal(t, "pmxcli-grp", gotForm.Get("group"))
 	require.Equal(t, "isolated", gotForm.Get("comment"))
 }
 
@@ -225,14 +225,14 @@ func TestClusterFirewallGroup_DeleteRequiresYes(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "group", "delete", "pvecli-grp")
+	err := run(deps, &buf, "firewall", "group", "delete", "pmxcli-grp")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }
 
 func TestClusterFirewallGroup_Rules(t *testing.T) {
 	f, ac := newFakeClient(t)
-	f.HandleFunc("GET /api2/json/cluster/firewall/groups/pvecli-grp", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/firewall/groups/pmxcli-grp", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, []any{
 			map[string]any{"pos": 0, "type": "in", "action": "ACCEPT", "dport": "80"},
 		})
@@ -241,7 +241,7 @@ func TestClusterFirewallGroup_Rules(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "group", "rules", "pvecli-grp"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "rules", "pmxcli-grp"))
 	out := buf.String()
 	require.Contains(t, out, "POS")
 	require.Contains(t, out, "ACCEPT")
@@ -251,7 +251,7 @@ func TestClusterFirewallGroup_Rules(t *testing.T) {
 func TestClusterFirewallGroup_RuleAddForwardsFields(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotForm url.Values
-	f.HandleFunc("POST /api2/json/cluster/firewall/groups/pvecli-grp", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("POST /api2/json/cluster/firewall/groups/pmxcli-grp", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		gotForm = r.Form
 		testhelper.WriteData(w, nil)
@@ -260,7 +260,7 @@ func TestClusterFirewallGroup_RuleAddForwardsFields(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "group", "rule-add", "pvecli-grp",
+	require.NoError(t, run(deps, &buf, "firewall", "group", "rule-add", "pmxcli-grp",
 		"--type", "in", "--action", "ACCEPT", "--dport", "80"))
 	require.Equal(t, "in", gotForm.Get("type"))
 	require.Equal(t, "ACCEPT", gotForm.Get("action"))
@@ -270,7 +270,7 @@ func TestClusterFirewallGroup_RuleAddForwardsFields(t *testing.T) {
 func TestClusterFirewallGroup_RuleDeleteWithYes(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotMethod, gotPath string
-	f.HandleFunc("DELETE /api2/json/cluster/firewall/groups/pvecli-grp/0", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("DELETE /api2/json/cluster/firewall/groups/pmxcli-grp/0", func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
@@ -278,9 +278,9 @@ func TestClusterFirewallGroup_RuleDeleteWithYes(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "group", "rule-delete", "pvecli-grp", "0", "--yes"))
+	require.NoError(t, run(deps, &buf, "firewall", "group", "rule-delete", "pmxcli-grp", "0", "--yes"))
 	require.Equal(t, http.MethodDelete, gotMethod)
-	require.Equal(t, "/api2/json/cluster/firewall/groups/pvecli-grp/0", gotPath)
+	require.Equal(t, "/api2/json/cluster/firewall/groups/pmxcli-grp/0", gotPath)
 }
 
 // ---- ipset -----------------------------------------------------------------
@@ -289,7 +289,7 @@ func TestClusterFirewallIpset_List(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleFunc("GET /api2/json/cluster/firewall/ipset", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, []any{
-			map[string]any{"name": "pvecli-ips", "comment": "isolated"},
+			map[string]any{"name": "pmxcli-ips", "comment": "isolated"},
 		})
 	})
 
@@ -299,12 +299,12 @@ func TestClusterFirewallIpset_List(t *testing.T) {
 	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
-	require.Contains(t, out, "pvecli-ips")
+	require.Contains(t, out, "pmxcli-ips")
 }
 
 func TestClusterFirewallIpset_ListMembers(t *testing.T) {
 	f, ac := newFakeClient(t)
-	f.HandleFunc("GET /api2/json/cluster/firewall/ipset/pvecli-ips", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/firewall/ipset/pmxcli-ips", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, []any{
 			map[string]any{"cidr": "172.30.0.0/24", "nomatch": false, "comment": "lab"},
 		})
@@ -313,7 +313,7 @@ func TestClusterFirewallIpset_ListMembers(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list", "pvecli-ips"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "list", "pmxcli-ips"))
 	out := buf.String()
 	require.Contains(t, out, "CIDR")
 	require.Contains(t, out, "172.30.0.0/24")
@@ -331,15 +331,15 @@ func TestClusterFirewallIpset_Create(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "ipset", "create", "pvecli-ips", "--comment", "isolated"))
-	require.Equal(t, "pvecli-ips", gotForm.Get("name"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "create", "pmxcli-ips", "--comment", "isolated"))
+	require.Equal(t, "pmxcli-ips", gotForm.Get("name"))
 	require.Equal(t, "isolated", gotForm.Get("comment"))
 }
 
 func TestClusterFirewallIpset_Add(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotForm url.Values
-	f.HandleFunc("POST /api2/json/cluster/firewall/ipset/pvecli-ips", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("POST /api2/json/cluster/firewall/ipset/pmxcli-ips", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		gotForm = r.Form
 		testhelper.WriteData(w, nil)
@@ -348,7 +348,7 @@ func TestClusterFirewallIpset_Add(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "ipset", "add", "pvecli-ips", "172.30.0.5", "--nomatch"))
+	require.NoError(t, run(deps, &buf, "firewall", "ipset", "add", "pmxcli-ips", "172.30.0.5", "--nomatch"))
 	require.Equal(t, "172.30.0.5", gotForm.Get("cidr"))
 	require.Equal(t, "1", gotForm.Get("nomatch"))
 }
@@ -358,7 +358,7 @@ func TestClusterFirewallIpset_RemoveRequiresYes(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "ipset", "remove", "pvecli-ips", "172.30.0.5")
+	err := run(deps, &buf, "firewall", "ipset", "remove", "pmxcli-ips", "172.30.0.5")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }
@@ -369,7 +369,7 @@ func TestClusterFirewallAlias_List(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleFunc("GET /api2/json/cluster/firewall/aliases", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, []any{
-			map[string]any{"name": "pvecli-alias", "cidr": "172.30.0.0/24", "comment": "lab"},
+			map[string]any{"name": "pmxcli-alias", "cidr": "172.30.0.0/24", "comment": "lab"},
 		})
 	})
 
@@ -379,7 +379,7 @@ func TestClusterFirewallAlias_List(t *testing.T) {
 	require.NoError(t, run(deps, &buf, "firewall", "alias", "list"))
 	out := buf.String()
 	require.Contains(t, out, "NAME")
-	require.Contains(t, out, "pvecli-alias")
+	require.Contains(t, out, "pmxcli-alias")
 	require.Contains(t, out, "172.30.0.0/24")
 }
 
@@ -395,8 +395,8 @@ func TestClusterFirewallAlias_Create(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "alias", "create", "pvecli-alias", "172.30.0.0/24", "--comment", "lab"))
-	require.Equal(t, "pvecli-alias", gotForm.Get("name"))
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "create", "pmxcli-alias", "172.30.0.0/24", "--comment", "lab"))
+	require.Equal(t, "pmxcli-alias", gotForm.Get("name"))
 	require.Equal(t, "172.30.0.0/24", gotForm.Get("cidr"))
 	require.Equal(t, "lab", gotForm.Get("comment"))
 }
@@ -405,7 +405,7 @@ func TestClusterFirewallAlias_Update(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotForm url.Values
 	var gotPath string
-	f.HandleFunc("PUT /api2/json/cluster/firewall/aliases/pvecli-alias", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("PUT /api2/json/cluster/firewall/aliases/pmxcli-alias", func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		_ = r.ParseForm()
 		gotForm = r.Form
@@ -415,10 +415,10 @@ func TestClusterFirewallAlias_Update(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "firewall", "alias", "update", "pvecli-alias", "172.30.1.0/24", "--rename", "pvecli-alias2"))
-	require.Equal(t, "/api2/json/cluster/firewall/aliases/pvecli-alias", gotPath)
+	require.NoError(t, run(deps, &buf, "firewall", "alias", "update", "pmxcli-alias", "172.30.1.0/24", "--rename", "pmxcli-alias2"))
+	require.Equal(t, "/api2/json/cluster/firewall/aliases/pmxcli-alias", gotPath)
 	require.Equal(t, "172.30.1.0/24", gotForm.Get("cidr"))
-	require.Equal(t, "pvecli-alias2", gotForm.Get("rename"))
+	require.Equal(t, "pmxcli-alias2", gotForm.Get("rename"))
 }
 
 func TestClusterFirewallAlias_DeleteRequiresYes(t *testing.T) {
@@ -426,7 +426,7 @@ func TestClusterFirewallAlias_DeleteRequiresYes(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, "firewall", "alias", "delete", "pvecli-alias")
+	err := run(deps, &buf, "firewall", "alias", "delete", "pmxcli-alias")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 }

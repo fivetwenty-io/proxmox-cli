@@ -8,9 +8,9 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/permshared"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // poolACLPath derives the ACL/permission path for a resource pool.
@@ -21,7 +21,7 @@ func poolACLPath(poolid string) string {
 	return fmt.Sprintf("/pool/%s", poolid)
 }
 
-// newPermissionsCmd builds `pve pool permissions` and its sub-commands.
+// newPermissionsCmd builds `pmx pool permissions` and its sub-commands.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
@@ -29,7 +29,7 @@ func newPermissionsCmd() *cobra.Command {
 		Long: "List, grant, and revoke ACL entries on a pool's ACL path (/pool/{poolid}), and " +
 			"inspect the resulting effective permissions. This manages who may administer the " +
 			"pool object itself (ACL entries granting roles such as PVEPoolAdmin), which is " +
-			"distinct from pool membership: use `pve pool set --vms/--storage` to add or remove " +
+			"distinct from pool membership: use `pmx pool set --vms/--storage` to add or remove " +
 			"the guests and storage that belong to the pool.",
 	}
 	cmd.AddCommand(
@@ -41,7 +41,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pve pool permissions list <poolid>`.
+// newPermissionsListCmd builds `pmx pool permissions list <poolid>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -82,7 +82,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pve pool permissions effective <poolid>`.
+// newPermissionsEffectiveCmd builds `pmx pool permissions effective <poolid>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -119,8 +119,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantRevokeCmd builds `pve pool permissions grant <poolid>`
-// when revoke is false, and `pve pool permissions revoke <poolid>` when true.
+// newPermissionsGrantRevokeCmd builds `pmx pool permissions grant <poolid>`
+// when revoke is false, and `pmx pool permissions revoke <poolid>` when true.
 // The two verbs share identical mechanics: both call Access.UpdateAcl with the
 // derived (singular) pool path, differing only in the Delete flag.
 func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
@@ -138,7 +138,7 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 		Use:   verb + " <poolid>",
 		Short: short,
 		Long: short + " (/pool/{poolid}). This grants administrative access to the pool object " +
-			"itself, not pool membership; use `pve pool set --vms/--storage` to change which " +
+			"itself, not pool membership; use `pmx pool set --vms/--storage` to change which " +
 			"guests and storage belong to the pool. Mutating ACL entries requires " +
 			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
 			"silently, matching PVE server behavior. This command does not block self-lockout; " +

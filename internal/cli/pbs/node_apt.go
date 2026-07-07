@@ -7,8 +7,8 @@ import (
 
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeAptPackageEntry mirrors one element of the JSON array PBS returns from
@@ -32,7 +32,7 @@ type nodeAptVersionEntry struct {
 	RunningKernel string `json:"runningkernel,omitempty"`
 }
 
-// newNodeAptCmd builds `pve pbs node apt` and its
+// newNodeAptCmd builds `pmx pbs node apt` and its
 // ls/update/repositories/repo-add/repo-update/versions/changelog verbs
 // (/nodes/{node}/apt...).
 func newNodeAptCmd(nf *nodeFlags) *cobra.Command {
@@ -52,7 +52,7 @@ func newNodeAptCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeAptLsCmd builds `pve pbs node apt ls` — list available package
+// newNodeAptLsCmd builds `pmx pbs node apt ls` — list available package
 // updates (GET /nodes/{node}/apt/update).
 func newNodeAptLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -84,7 +84,7 @@ func newNodeAptLsCmd(nf *nodeFlags) *cobra.Command {
 	}
 }
 
-// newNodeAptUpdateCmd builds `pve pbs node apt update` — refresh the local
+// newNodeAptUpdateCmd builds `pmx pbs node apt update` — refresh the local
 // APT package index (POST /nodes/{node}/apt/update).
 func newNodeAptUpdateCmd(nf *nodeFlags) *cobra.Command {
 	var notify, quiet bool
@@ -126,7 +126,7 @@ func newNodeAptUpdateCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeAptRepositoriesCmd builds `pve pbs node apt repositories` — get
+// newNodeAptRepositoriesCmd builds `pmx pbs node apt repositories` — get
 // parsed APT repository information (GET /nodes/{node}/apt/repositories).
 func newNodeAptRepositoriesCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -158,7 +158,7 @@ func newNodeAptRepositoriesCmd(nf *nodeFlags) *cobra.Command {
 	}
 }
 
-// newNodeAptRepoAddCmd builds `pve pbs node apt repo-add` — add a standard
+// newNodeAptRepoAddCmd builds `pmx pbs node apt repo-add` — add a standard
 // repository identified by handle (PUT /nodes/{node}/apt/repositories).
 func newNodeAptRepoAddCmd(nf *nodeFlags) *cobra.Command {
 	var handle, digest string
@@ -194,7 +194,7 @@ func newNodeAptRepoAddCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeAptRepoUpdateCmd builds `pve pbs node apt repo-update` — change the
+// newNodeAptRepoUpdateCmd builds `pmx pbs node apt repo-update` — change the
 // properties of an existing repository entry, identified by file path and
 // index (POST /nodes/{node}/apt/repositories).
 func newNodeAptRepoUpdateCmd(nf *nodeFlags) *cobra.Command {
@@ -245,7 +245,7 @@ func newNodeAptRepoUpdateCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeAptVersionsCmd builds `pve pbs node apt versions` — get package
+// newNodeAptVersionsCmd builds `pmx pbs node apt versions` — get package
 // information for important PBS packages (GET /nodes/{node}/apt/versions).
 func newNodeAptVersionsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -277,7 +277,7 @@ func newNodeAptVersionsCmd(nf *nodeFlags) *cobra.Command {
 	}
 }
 
-// newNodeAptChangelogCmd builds `pve pbs node apt changelog --name X` —
+// newNodeAptChangelogCmd builds `pmx pbs node apt changelog --name X` —
 // retrieve the changelog of a package (GET /nodes/{node}/apt/changelog).
 func newNodeAptChangelogCmd(nf *nodeFlags) *cobra.Command {
 	var name, version string

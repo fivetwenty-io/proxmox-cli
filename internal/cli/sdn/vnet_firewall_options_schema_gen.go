@@ -2,7 +2,7 @@
 
 package sdn
 
-import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // vnetFirewallOptionSchemas describes every settable option from the PVE API schema for
 // PUT /cluster/sdn/vnets/{vnet}/firewall/options, in lexical order by API key.

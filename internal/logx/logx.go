@@ -1,4 +1,4 @@
-// Package logx initialises the slog JSONL file logger for pve CLI commands.
+// Package logx initialises the slog JSONL file logger for pmx CLI commands.
 package logx
 
 import (
@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Config mirrors the OCFP logger config adapted for pve (R3).
+// Config mirrors the OCFP logger config adapted for pmx (R3).
 // All fields are optional; zero values produce sensible defaults.
 type Config struct {
 	// Level is the log level string: "trace", "verbose", "debug", "info", "warn", "error".
@@ -26,7 +26,7 @@ type Config struct {
 	// NoLog suppresses all file I/O; returns a discard logger when true.
 	NoLog bool
 
-	// LogDir overrides the default log directory (~/.pve/logs).
+	// LogDir overrides the default log directory (~/.pmx/logs).
 	// Ignored when NoLog is true.
 	LogDir string
 
@@ -88,7 +88,7 @@ func Init(cfg Config) (*slog.Logger, io.Closer, error) {
 	filename := buildFilename(cfg.Command, cfg.Subcommand, time.Now())
 	path := filepath.Join(logDir, filename)
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // G304: path is logDir+timestamped-filename under ~/.pve/logs, not untrusted input
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // G304: path is logDir+timestamped-filename under ~/.pmx/logs, not untrusted input
 	if err != nil {
 		return nil, nil, fmt.Errorf("logx: open log file %s: %w", path, err)
 	}
@@ -120,7 +120,7 @@ func levelFromCfg(cfg Config) slog.Level {
 }
 
 // resolveLogDir returns the effective log directory.
-// An empty override means the default ~/.pve/logs.
+// An empty override means the default ~/.pmx/logs.
 func resolveLogDir(override string) (string, error) {
 	if override != "" {
 		return override, nil
@@ -129,7 +129,7 @@ func resolveLogDir(override string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	return filepath.Join(home, ".pve", "logs"), nil
+	return filepath.Join(home, ".pmx", "logs"), nil
 }
 
 // buildFilename returns the log filename for the given command, optional
@@ -137,11 +137,11 @@ func resolveLogDir(override string) (string, error) {
 //
 // Format: {Command}[-{Subcommand}]-{YYYYMMDD-HHMMSS}.jsonl
 //
-// If Command is empty the prefix "pve" is used as a fallback.
+// If Command is empty the prefix "pmx" is used as a fallback.
 func buildFilename(command, subcommand string, ts time.Time) string {
 	prefix := command
 	if prefix == "" {
-		prefix = "pve"
+		prefix = "pmx"
 	}
 	if subcommand != "" {
 		prefix = prefix + "-" + subcommand

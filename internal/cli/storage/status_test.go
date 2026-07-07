@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 const testStorage = "local"
@@ -17,7 +17,7 @@ const statusPath = "/api2/json/nodes/pve1/storage/local/status"
 // identityPath is the node-scoped identity endpoint for testStorage.
 const identityPath = "/api2/json/nodes/pve1/storage/local/identity"
 
-// TestStorageStatus_RendersFields verifies `pve storage status` queries the
+// TestStorageStatus_RendersFields verifies `pmx storage status` queries the
 // correct endpoint and renders used/total/avail in the output.
 func TestStorageStatus_RendersFields(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -74,7 +74,7 @@ func TestStorageStatus_ServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestStorageIdentity_RendersIdAndType verifies `pve storage identity` renders
+// TestStorageIdentity_RendersIdAndType verifies `pmx storage identity` renders
 // the backend id and type fields.
 func TestStorageIdentity_RendersIdAndType(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

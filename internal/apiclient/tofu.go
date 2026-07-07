@@ -28,7 +28,7 @@ import (
 // when the trimmed, case-insensitive answer is "y" or "yes" and rejecting
 // every other answer, including an empty line or an immediate EOF (e.g. a
 // closed or already-exhausted input). Accepted fingerprints are persisted by
-// the underlying pve-apiclient-go client when Options.FingerprintCachePath is
+// the underlying proxmox-apiclient-go client when Options.FingerprintCachePath is
 // set; this callback does not write the cache file itself.
 func NewManualVerifyCallback(
 	prompt io.Writer,
@@ -110,12 +110,12 @@ func fingerprintCacheFileName(contextName string) string {
 
 // FingerprintCachePath returns the per-context TLS fingerprint cache file
 // path used for TOFU persistence (see pve.Options.FingerprintCachePath),
-// derived from configPath (the active pve config file) and contextName (the
+// derived from configPath (the active pmx config file) and contextName (the
 // resolved context name). The cache file lives in a "fingerprints"
 // subdirectory alongside the config file, e.g.
-// ~/.config/pve/fingerprints/<context>.json, so that trust decisions for one
+// ~/.config/pmx/fingerprints/<context>.json, so that trust decisions for one
 // context never leak into another and the file is created (with its parent
-// directory) automatically by pve-apiclient-go on first accepted fingerprint.
+// directory) automatically by proxmox-apiclient-go on first accepted fingerprint.
 //
 // contextName must be non-empty; an empty contextName collapses to the
 // literal file name "_.json" via fingerprintCacheFileName rather than

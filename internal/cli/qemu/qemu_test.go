@@ -15,10 +15,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // validUPID is a well-formed Proxmox UPID string whose node is "pve1". The
@@ -915,7 +915,7 @@ func TestQemuCreate_CloudInit(t *testing.T) {
 		"--ciupgrade",
 		"--cicustom", "user=local:snippets/user.yml",
 		"--nameserver", "10.241.0.1",
-		"--searchdomain", "pve-cli.local",
+		"--searchdomain", "pmx-cli.local",
 		"--sshkeys", "ssh-ed25519 AAAA test@host",
 		"--ipconfig0", "ip=dhcp"))
 
@@ -928,7 +928,7 @@ func TestQemuCreate_CloudInit(t *testing.T) {
 	require.Equal(t, "1", form.Get("ciupgrade"))
 	require.Equal(t, "user=local:snippets/user.yml", form.Get("cicustom"))
 	require.Equal(t, "10.241.0.1", form.Get("nameserver"))
-	require.Equal(t, "pve-cli.local", form.Get("searchdomain"))
+	require.Equal(t, "pmx-cli.local", form.Get("searchdomain"))
 	// sshkeys are percent-encoded for PVE (spaces as %20), matching config set.
 	require.Equal(t, "ssh-ed25519%20AAAA%20test%40host", form.Get("sshkeys"))
 	require.Equal(t, "ip=dhcp", form.Get("ipconfig0"))

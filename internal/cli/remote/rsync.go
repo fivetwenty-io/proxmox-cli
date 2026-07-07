@@ -6,20 +6,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
-// Rsync builds the top-level `pve rsync` command: a thin wrapper over the
+// Rsync builds the top-level `pmx rsync` command: a thin wrapper over the
 // system rsync(1) binary that rewrites scp-like "[user@]node:path" operands
 // to the resolved cluster address of a PVE node and injects "-e ssh ..." so
-// the transfer authenticates the same way `pve ssh` does.
+// the transfer authenticates the same way `pmx ssh` does.
 //
-// DisableFlagParsing is set because rsync owns most of the short flags pve
+// DisableFlagParsing is set because rsync owns most of the short flags pmx
 // would otherwise want (-l, -p, -i, ...), so cobra must never attempt to
 // parse this command's own argv. Instead the command installs its own
-// PersistentPreRunE, which front-extracts pve-owned flags (long-only
+// PersistentPreRunE, which front-extracts pmx-owned flags (long-only
 // --ssh-*/--no-strict, plus -c/--context, --config, --insecure, --debug,
 // -h/--help), applies them to the appropriate flag set, and then manually
 // delegates to the root command's PersistentPreRunE to build *cli.Deps —
@@ -36,18 +36,18 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rsync [flags] <rsync-arg>...",
 		Short: "Synchronise files to or from a PVE node over SSH (node:path operands)",
-		Long: `pve rsync execs the system rsync(1) binary, rewriting any "node:path"
+		Long: `pmx rsync execs the system rsync(1) binary, rewriting any "node:path"
 operand (optionally "user@node:path") to the resolved cluster address of a
 PVE node, and injects "-e ssh ..." so the transfer authenticates the same
-way "pve ssh" does. At least one operand must reference a PVE node; every
+way "pmx ssh" does. At least one operand must reference a PVE node; every
 remote operand must reference the SAME node.
 
-Because rsync owns most short flags, pve's own connection flags are
+Because rsync owns most short flags, pmx's own connection flags are
 long-only and must precede the rsync arguments: --ssh-user, --ssh-port,
 --ssh-identity, --ssh-agent, --no-strict. -c/--context, --config,
 --insecure, and --debug are also recognised in that same leading position.
 
-Supplying your own -e/--rsh is rejected: pve always injects its own.`,
+Supplying your own -e/--rsh is rejected: pmx always injects its own.`,
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if showHelp {
@@ -64,15 +64,15 @@ Supplying your own -e/--rsh is rejected: pve always injects its own.`,
 	cmd.Flags().BoolVar(&f.NoStrict, "no-strict", false, "disable strict host key checking")
 
 	cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		vals, rest, err := extractPVEFlags(args)
+		vals, rest, err := extractPMXFlags(args)
 		if err != nil {
 			return err
 		}
 
 		// A bare "-h"/"--help" or an argv that carries no rsync arguments at
-		// all (once pve's own flags are stripped) both just show help; skip
+		// all (once pmx's own flags are stripped) both just show help; skip
 		// building *cli.Deps entirely so a context-less invocation of
-		// "pve rsync" (or "pve rsync -h") never fails on context resolution.
+		// "pmx rsync" (or "pmx rsync -h") never fails on context resolution.
 		if vals.Help || len(rest) == 0 {
 			showHelp = true
 			return nil

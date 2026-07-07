@@ -8,12 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newSnapshotCmd builds the `pve qemu snapshot` sub-group.
+// newSnapshotCmd builds the `pmx qemu snapshot` sub-group.
 func newSnapshotCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
@@ -39,7 +39,7 @@ type snapshotEntry struct {
 	Parent      string `json:"parent"`
 }
 
-// newSnapshotListCmd builds `pve qemu snapshot list <vmid>`.
+// newSnapshotListCmd builds `pmx qemu snapshot list <vmid>`.
 func newSnapshotListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name>",
@@ -87,7 +87,7 @@ func newSnapshotListCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotCreateCmd builds `pve qemu snapshot create <vmid> <snapname>`.
+// newSnapshotCreateCmd builds `pmx qemu snapshot create <vmid> <snapname>`.
 func newSnapshotCreateCmd() *cobra.Command {
 	var (
 		async       bool
@@ -132,7 +132,7 @@ func newSnapshotCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotDeleteCmd builds `pve qemu snapshot delete <vmid> <snapname>`.
+// newSnapshotDeleteCmd builds `pmx qemu snapshot delete <vmid> <snapname>`.
 func newSnapshotDeleteCmd() *cobra.Command {
 	var (
 		async bool
@@ -177,7 +177,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotShowCmd builds `pve qemu snapshot show <vmid> <snapname>`.
+// newSnapshotShowCmd builds `pmx qemu snapshot show <vmid> <snapname>`.
 func newSnapshotShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name> <snapname>",
@@ -225,7 +225,7 @@ func newSnapshotShowCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotUpdateCmd builds `pve qemu snapshot update <vmid> <snapname> --description DESC`.
+// newSnapshotUpdateCmd builds `pmx qemu snapshot update <vmid> <snapname> --description DESC`.
 func newSnapshotUpdateCmd() *cobra.Command {
 	var description string
 	cmd := &cobra.Command{
@@ -262,7 +262,7 @@ func newSnapshotUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotRollbackCmd builds `pve qemu snapshot rollback <vmid> <snapname>`.
+// newSnapshotRollbackCmd builds `pmx qemu snapshot rollback <vmid> <snapname>`.
 func newSnapshotRollbackCmd() *cobra.Command {
 	var (
 		async bool

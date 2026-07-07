@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // --- clone ------------------------------------------------------------------
@@ -81,11 +81,11 @@ func TestQemuClone_FlagParams(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "clone", "100",
-		"--newid", "200", "--name", "pve-cli-clone", "--target-node", "pve2", "--full"))
+		"--newid", "200", "--name", "pmx-cli-clone", "--target-node", "pve2", "--full"))
 
 	form := parseForm(t, gotQuery+"&"+body)
 	require.Equal(t, "200", form.Get("newid"))
-	require.Equal(t, "pve-cli-clone", form.Get("name"))
+	require.Equal(t, "pmx-cli-clone", form.Get("name"))
 	require.Equal(t, "pve2", form.Get("target"))
 	require.Equal(t, "1", form.Get("full"))
 }
@@ -148,7 +148,7 @@ func TestQemuMigrate_FlagParams(t *testing.T) {
 // TestQemuCloneMigrate_NoLocalTargetFlag guards against a regression where
 // clone/migrate defined a local --target flag. The root command owns a
 // persistent -t/--target flag that selects the configured target; a local
-// --target on a subcommand shadows it, so `pve --target lab qemu clone ...`
+// --target on a subcommand shadows it, so `pmx --target lab qemu clone ...`
 // would route the target name into the destination-node parameter. The
 // destination-node flag must therefore be named --target-node.
 func TestQemuCloneMigrate_NoLocalTargetFlag(t *testing.T) {

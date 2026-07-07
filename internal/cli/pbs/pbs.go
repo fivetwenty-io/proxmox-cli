@@ -5,13 +5,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// Group builds the `pve pbs` command and all of its sub-commands.
+// Group builds the `pmx pbs` command and all of its sub-commands.
 // The supplied *cli.Deps is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained per-invocation via cli.GetDeps.
 //
@@ -25,7 +25,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Long: "Manage a Proxmox Backup Server (PBS): datastores, backup snapshots and " +
 			"groups, and prune, garbage-collection, and verification jobs. " +
 			"These commands require a context with product: pbs " +
-			"(create one with 'pve context add <name> --product pbs ...').",
+			"(create one with 'pmx context add <name> --product pbs ...').",
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPBS},
 	}
 

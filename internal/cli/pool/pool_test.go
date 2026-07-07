@@ -16,8 +16,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // recordedRequest captures a single HTTP request a command issued to the fake
@@ -64,9 +64,9 @@ contexts:
 func run(t *testing.T, f *testhelper.FakePVE, in string, args ...string) (string, error) {
 	t.Helper()
 
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	cfgPath := writeConfig(t, f)
 
@@ -97,9 +97,9 @@ func runSplit(t *testing.T, f *testhelper.FakePVE, in, format string, args ...st
 ) {
 	t.Helper()
 
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	cfgPath := writeConfig(t, f)
 

@@ -3,10 +3,10 @@ package cluster
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// Group builds the `pve cluster` command and its sub-commands.
+// Group builds the `pmx cluster` command and its sub-commands.
 // The *cli.Deps argument is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained inside each RunE via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {

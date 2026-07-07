@@ -1,5 +1,5 @@
 """init: config scaffold. Exercised against a throwaway path so the user's
-real ~/.config/pve/config.yml is never touched."""
+real ~/.config/pmx/config.yml is never touched."""
 
 from __future__ import annotations
 

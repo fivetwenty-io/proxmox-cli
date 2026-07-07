@@ -7,12 +7,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newNodeConfigCmd builds the `pve node config` sub-tree for the node-level
+// newNodeConfigCmd builds the `pmx node config` sub-tree for the node-level
 // configuration: description, ACME settings, the wake-on-LAN MAC, the
 // ballooning target, and the startall on-boot delay.
 func newNodeConfigCmd() *cobra.Command {
@@ -30,7 +30,7 @@ func newNodeConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newNodeConfigDescribeCmd builds `pve node config describe`, an offline
+// newNodeConfigDescribeCmd builds `pmx node config describe`, an offline
 // catalog of every settable node configuration option from the PVE API
 // schema (see config_schema_gen.go).
 func newNodeConfigDescribeCmd() *cobra.Command {
@@ -41,7 +41,7 @@ func newNodeConfigDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
 			"options. Runs offline. Pass an option name to show only that option with " +
 			"full descriptions.",
-		CommandHint:         "pve node config describe",
+		CommandHint:         "pmx node config describe",
 		SubKeyRowsInCatalog: true,
 	})
 }

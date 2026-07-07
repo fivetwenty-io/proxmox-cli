@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newMigrateCheckCmd builds `pve qemu migrate check <vmid> [--target-node NODE]`.
+// newMigrateCheckCmd builds `pmx qemu migrate check <vmid> [--target-node NODE]`.
 // It calls the GET /nodes/{n}/qemu/{v}/migrate pre-flight endpoint and returns
 // feasibility information: allowed nodes, local resources, and local disks.
 func newMigrateCheckCmd() *cobra.Command {
@@ -63,7 +63,7 @@ func newMigrateCheckCmd() *cobra.Command {
 	return cmd
 }
 
-// newMigrateCmd builds `pve qemu migrate <vmid> --target NODE [flags]`.
+// newMigrateCmd builds `pmx qemu migrate <vmid> --target NODE [flags]`.
 //
 // The migration is submitted as an asynchronous PVE task (UPID). The command
 // blocks until the task reaches a terminal state unless --async is given. Only
@@ -159,14 +159,14 @@ func newMigrateCmd() *cobra.Command {
 			"or '1' maps each source storage to itself")
 
 	// Add the pre-flight check and capabilities leaf as sub-commands so both
-	// `pve qemu migrate 100 --target-node pve2` and `pve qemu migrate check
-	// 100` / `pve qemu migrate capabilities` are valid.
+	// `pmx qemu migrate 100 --target-node pve2` and `pmx qemu migrate check
+	// 100` / `pmx qemu migrate capabilities` are valid.
 	cmd.AddCommand(newMigrateCheckCmd(), newMigrateCapabilitiesCmd())
 	return cmd
 }
 
-// newMigrateCapabilitiesCmd builds `pve qemu migrate capabilities`. It
-// mirrors `pve node capabilities qemu migration` exactly (same headers/Raw
+// newMigrateCapabilitiesCmd builds `pmx qemu migrate capabilities`. It
+// mirrors `pmx node capabilities qemu migration` exactly (same headers/Raw
 // shape) so the two spellings are interchangeable; `migrate check` already
 // reads this data internally, this leaf just surfaces it directly.
 func newMigrateCapabilitiesCmd() *cobra.Command {
@@ -175,7 +175,7 @@ func newMigrateCapabilitiesCmd() *cobra.Command {
 		Short: "List QEMU migration capabilities of a node",
 		Long: "Show which migration features the node's QEMU build supports (e.g. " +
 			"dbus-vmstate for switchover of attached daemons). Node-scoped: uses --node. " +
-			"Same data as 'pve node capabilities qemu migration'.",
+			"Same data as 'pmx node capabilities qemu migration'.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

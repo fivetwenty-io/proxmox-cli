@@ -7,10 +7,10 @@ import (
 
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// newTapeBackupCmd builds `pve pbs tape backup` — run a one-shot tape
+// newTapeBackupCmd builds `pmx pbs tape backup` — run a one-shot tape
 // backup of a datastore to a media pool via a tape drive (POST /tape/backup).
 // --drive, --pool, and --store are required. Runs as an asynchronous task;
 // the command blocks until it finishes unless --async is set.

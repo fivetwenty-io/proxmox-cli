@@ -7,17 +7,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// validateFlags holds the raw flag values for `pve context validate`.
+// validateFlags holds the raw flag values for `pmx context validate`.
 type validateFlags struct {
 	all bool
 }
 
-// newValidateCmd builds `pve context validate [<name>] [--all]`.
+// newValidateCmd builds `pmx context validate [<name>] [--all]`.
 // With no argument it validates the current context; with a name it validates
 // that specific context; with --all it validates every context in the config.
 // Renders a table of context → OK / error-list; exits non-zero if any invalid.
@@ -74,7 +74,7 @@ Exit status: 0 if all validated contexts are valid; 1 if any are invalid.`,
 				if name == "" {
 					return fmt.Errorf(
 						"no context name specified and no current-context is set; " +
-							"use 'pve context validate <name>' or 'pve context select <name>' first",
+							"use 'pmx context validate <name>' or 'pmx context select <name>' first",
 					)
 				}
 				names = []string{name}

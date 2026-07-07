@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ func sampleConfig() *config.Config {
 					Type:     "token",
 					Username: "root@pam",
 					TokenID:  "deploy",
-					Secret:   "${PVE_TOKEN_SECRET}",
+					Secret:   "${PMX_TOKEN_SECRET}",
 				},
 				TLS: config.TLSBlock{
 					Insecure:    false,
@@ -46,7 +46,7 @@ func sampleConfig() *config.Config {
 				Auth: config.AuthBlock{
 					Type:     "password",
 					Username: "admin@pam",
-					Secret:   "$PVE_STAGING_PASS",
+					Secret:   "$PMX_STAGING_PASS",
 					Session: &config.Session{
 						Ticket:    "PVE:admin@pam:abc123",
 						CSRF:      "csrf-token",
@@ -66,7 +66,7 @@ func sampleConfig() *config.Config {
 func TestDefaultPath_XDGSet(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/custom/xdg")
 	got := config.DefaultPath()
-	require.Equal(t, filepath.Join("/custom/xdg", "pve", "config.yml"), got)
+	require.Equal(t, filepath.Join("/custom/xdg", "pmx", "config.yml"), got)
 }
 
 func TestDefaultPath_XDGUnset(t *testing.T) {
@@ -74,7 +74,7 @@ func TestDefaultPath_XDGUnset(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 	got := config.DefaultPath()
-	require.Equal(t, filepath.Join(home, ".config", "pve", "config.yml"), got)
+	require.Equal(t, filepath.Join(home, ".config", "pmx", "config.yml"), got)
 }
 
 // ── Load ──────────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ func TestLoad_ValidFile(t *testing.T) {
 	require.NotNil(t, prod)
 	require.Equal(t, "pve.example.com", prod.Host)
 	require.Equal(t, "token", prod.Auth.Type)
-	require.Equal(t, "${PVE_TOKEN_SECRET}", prod.Auth.Secret)
+	require.Equal(t, "${PMX_TOKEN_SECRET}", prod.Auth.Secret)
 	require.Equal(t, "AA:BB:CC", prod.TLS.Fingerprint)
 	require.Equal(t, "/etc/ssl/certs/ca.pem", prod.TLS.CACert)
 	require.True(t, prod.TLS.Tofu)
@@ -450,7 +450,7 @@ func TestResolveSecret_KeychainMissingEntry_ReturnsError(t *testing.T) {
 	// A reference to an entry that does not exist must error rather than return a
 	// value. On macOS this exercises the real security(1) lookup (item not found);
 	// off macOS it exercises the unsupported-platform stub.
-	ref := "keychain:pve-cli-test-nonexistent-" + t.Name()
+	ref := "keychain:pmx-cli-test-nonexistent-" + t.Name()
 	_, err := config.ResolveSecret(ref)
 	require.Error(t, err)
 	if runtime.GOOS == "darwin" {
@@ -506,7 +506,7 @@ func TestResolveSecret_BraceNameUnset_StillErrors(t *testing.T) {
 
 func TestSave_Atomic_ThenLoad_Equality(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "pve", "config.yml")
+	path := filepath.Join(dir, "pmx", "config.yml")
 
 	original := sampleConfig()
 	require.NoError(t, config.Save(path, original))
@@ -600,26 +600,26 @@ func TestSaveForce_OverridesPermissionCheck(t *testing.T) {
 // ── Resolve (precedence) ──────────────────────────────────────────────────────
 
 func TestResolve_FlagWinsOverAll(t *testing.T) {
-	t.Setenv("PVE_TEST_KEY", "envval")
-	got := config.Resolve("flagval", "PVE_TEST_KEY", "cfgval", "default")
+	t.Setenv("PMX_TEST_KEY", "envval")
+	got := config.Resolve("flagval", "PMX_TEST_KEY", "cfgval", "default")
 	require.Equal(t, "flagval", got)
 }
 
 func TestResolve_EnvWinsOverCfgAndDefault(t *testing.T) {
-	t.Setenv("PVE_TEST_KEY2", "envval2")
-	got := config.Resolve("", "PVE_TEST_KEY2", "cfgval", "default")
+	t.Setenv("PMX_TEST_KEY2", "envval2")
+	got := config.Resolve("", "PMX_TEST_KEY2", "cfgval", "default")
 	require.Equal(t, "envval2", got)
 }
 
 func TestResolve_CfgWinsOverDefault(t *testing.T) {
-	t.Setenv("PVE_TEST_KEY3", "")
-	got := config.Resolve("", "PVE_TEST_KEY3", "cfgval", "default")
+	t.Setenv("PMX_TEST_KEY3", "")
+	got := config.Resolve("", "PMX_TEST_KEY3", "cfgval", "default")
 	require.Equal(t, "cfgval", got)
 }
 
 func TestResolve_DefaultWhenAllEmpty(t *testing.T) {
-	require.NoError(t, os.Unsetenv("PVE_TEST_KEY4"))
-	got := config.Resolve("", "PVE_TEST_KEY4", "", "default")
+	require.NoError(t, os.Unsetenv("PMX_TEST_KEY4"))
+	got := config.Resolve("", "PMX_TEST_KEY4", "", "default")
 	require.Equal(t, "default", got)
 }
 

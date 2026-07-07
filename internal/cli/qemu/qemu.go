@@ -9,12 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// Group builds the `pve qemu` command and all of its sub-commands.
+// Group builds the `pmx qemu` command and all of its sub-commands.
 // The *cli.Deps argument is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained inside each RunE via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {
@@ -67,7 +67,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 // node could be determined for an operation that targets a specific node.
 func resolveNode(deps *cli.Deps) (string, error) {
 	if deps.Node == "" {
-		return "", fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+		return "", fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 	}
 	return deps.Node, nil
 }

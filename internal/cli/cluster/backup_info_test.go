@@ -8,12 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestBackupInfoNotBackedUp_Table verifies `pve cluster backup-info not-backed-up`
+// TestBackupInfoNotBackedUp_Table verifies `pmx cluster backup-info not-backed-up`
 // queries GET /cluster/backup-info/not-backed-up and renders a dynamic table.
 func TestBackupInfoNotBackedUp_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -73,13 +73,13 @@ func TestBackupInfoCommandTree(t *testing.T) {
 	require.True(t, names["not-backed-up"], "backup-info must expose not-backed-up sub-command")
 }
 
-// TestBackupIncludedVolumes_Table verifies `pve cluster backup included-volumes <id>`
+// TestBackupIncludedVolumes_Table verifies `pmx cluster backup included-volumes <id>`
 // queries GET /cluster/backup/{id}/included_volumes and renders the children.
 func TestBackupIncludedVolumes_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
 
 	var gotPath string
-	f.HandleFunc("GET /api2/json/cluster/backup/backup-pvecli/included_volumes", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/backup/backup-pmxcli/included_volumes", func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, map[string]any{
 			"children": []any{
@@ -92,9 +92,9 @@ func TestBackupIncludedVolumes_Table(t *testing.T) {
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "backup", "included-volumes", "backup-pvecli"))
+	require.NoError(t, run(deps, &buf, "backup", "included-volumes", "backup-pmxcli"))
 
-	require.Equal(t, "/api2/json/cluster/backup/backup-pvecli/included_volumes", gotPath)
+	require.Equal(t, "/api2/json/cluster/backup/backup-pmxcli/included_volumes", gotPath)
 	out := buf.String()
 	require.Contains(t, out, "web")
 	require.Contains(t, out, "db")
@@ -103,14 +103,14 @@ func TestBackupIncludedVolumes_Table(t *testing.T) {
 // TestBackupIncludedVolumes_ServerError verifies a server error surfaces correctly.
 func TestBackupIncludedVolumes_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
-	f.HandleFunc("GET /api2/json/cluster/backup/backup-pvecli/included_volumes", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/backup/backup-pmxcli/included_volumes", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusNotFound, "not found")
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
 
 	var buf bytes.Buffer
-	require.Error(t, run(deps, &buf, "backup", "included-volumes", "backup-pvecli"))
+	require.Error(t, run(deps, &buf, "backup", "included-volumes", "backup-pmxcli"))
 }
 
 // TestBackupCommandTree_IncludedVolumes verifies included-volumes is registered.

@@ -5,4 +5,4 @@ package pbs
 // API schema for POST /config/notifications/matchers. "name" is the create
 // call's own identity parameter, not an option.
 
-//go:generate go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/notifications/matchers -verb POST -symbol notifMatcherOptionSchemas -exclude "name" -out notification_matcher_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/notifications/matchers -verb POST -symbol notifMatcherOptionSchemas -exclude "name" -out notification_matcher_options_schema_gen.go

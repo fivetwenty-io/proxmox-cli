@@ -8,11 +8,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newReplicationCmd builds the `pve cluster replication` sub-tree for managing
+// newReplicationCmd builds the `pmx cluster replication` sub-tree for managing
 // storage replication jobs, which periodically replicate a guest's local-storage
 // volumes to another node so the guest can be recovered or migrated quickly.
 func newReplicationCmd() *cobra.Command {

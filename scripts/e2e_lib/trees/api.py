@@ -44,7 +44,7 @@ def run(ctx: Ctx) -> None:
     # pve-realm user + scratch `--config`, so the real session is never touched).
     ctx.defer("auth login/logout/refresh",
               "mutates stored session/credentials — covered live by `e2e --mutate`",
-              "pve api auth login --context <scratch>", live_covered=True)
+              "pmx api auth login --context <scratch>", live_covered=True)
 
 
 def _scratch_config_checks(ctx: Ctx) -> None:
@@ -54,9 +54,9 @@ def _scratch_config_checks(ctx: Ctx) -> None:
     commands operate solely on the scratch file — never the real config or the
     configured context. The scratch dir is removed in `finally`.
     """
-    scratch_dir = tempfile.mkdtemp(prefix="pve-cli-e2e-api-")
+    scratch_dir = tempfile.mkdtemp(prefix="pmx-cli-e2e-api-")
     cfg = os.path.join(scratch_dir, "config.yml")
-    probe = "pve-cli-probe"
+    probe = "pmx-cli-probe"
     try:
         # Seed a context into the scratch config via `context add` so that
         # `auth set-token` / `auth set-password` have a named context to mutate.

@@ -24,11 +24,11 @@ func DefaultPath() string {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			// Fallback: relative path if home is unavailable.
-			return filepath.Join(".config", "pve", "config.yml")
+			return filepath.Join(".config", "pmx", "config.yml")
 		}
 		base = filepath.Join(home, ".config")
 	}
-	return filepath.Join(base, "pve", "config.yml")
+	return filepath.Join(base, "pmx", "config.yml")
 }
 
 // Load reads and parses the YAML config file at path.

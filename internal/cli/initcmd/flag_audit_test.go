@@ -7,12 +7,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
 // This file audits the sole command-specific flag in the initcmd package,
 // following the flag_audit_test.go convention established in
-// internal/cli/access. initcmd has exactly one sub-command (`pve init
+// internal/cli/access. initcmd has exactly one sub-command (`pmx init
 // config`) and one flag on it (--force, bool) — there is no PVE request wire
 // to inspect (init only writes a local template file), so the audit instead
 // asserts --force is the sole gate on overwrite behavior against the local
@@ -52,7 +52,7 @@ func TestInitCmdAudit_Config_ForceFlag(t *testing.T) {
 // path with no existing file — the flag only gates the overwrite-existing-
 // file case, not a fresh write.
 func TestInitCmdAudit_Config_ForceFlag_DefaultFalseAllowsFreshWrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "pve", "config.yml") // does not exist yet
+	path := filepath.Join(t.TempDir(), "pmx", "config.yml") // does not exist yet
 
 	_, err := run(t, path, "config")
 	require.NoError(t, err, "config without --force must still write a fresh (non-existing) file")

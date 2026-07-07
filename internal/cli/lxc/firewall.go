@@ -10,12 +10,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newFirewallCmd builds the `pve lxc firewall` sub-tree: per-container rules, IP
+// newFirewallCmd builds the `pmx lxc firewall` sub-tree: per-container rules, IP
 // sets, aliases, and options. Every operation is synchronous (no task UPID).
 func newFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -42,7 +42,7 @@ type fwLogEntry struct {
 	T string `json:"t"`
 }
 
-// newFirewallLogCmd builds `pve lxc firewall log <vmid|name>` — the per-container
+// newFirewallLogCmd builds `pmx lxc firewall log <vmid|name>` — the per-container
 // firewall log (GET /nodes/{node}/lxc/{vmid}/firewall/log).
 func newFirewallLogCmd() *cobra.Command {
 	var (
@@ -113,7 +113,7 @@ type fwRefEntry struct {
 	Comment string `json:"comment"`
 }
 
-// newFirewallRefsCmd builds `pve lxc firewall refs <vmid|name>` — the IP sets and
+// newFirewallRefsCmd builds `pmx lxc firewall refs <vmid|name>` — the IP sets and
 // aliases a rule may reference (GET /nodes/{node}/lxc/{vmid}/firewall/refs).
 func newFirewallRefsCmd() *cobra.Command {
 	var refType string
@@ -528,7 +528,7 @@ func newFirewallIpsetCmd() *cobra.Command {
 }
 
 // newFirewallIpsetGetMemberCmd builds
-// `pve lxc firewall ipset get-member <vmid|name> <name> <cidr>` — show a
+// `pmx lxc firewall ipset get-member <vmid|name> <name> <cidr>` — show a
 // single CIDR entry of an IP set (GET .../firewall/ipset/{name}/{cidr}).
 // Named get-member (not get) because `ipset list <vmid> [name]` already
 // overloads the name-scoped read, and update-member set the member-verb
@@ -564,7 +564,7 @@ func newFirewallIpsetGetMemberCmd() *cobra.Command {
 }
 
 // newFirewallIpsetUpdateMemberCmd builds
-// `pve lxc firewall ipset update-member <vmid|name> <name> <cidr>` — update an
+// `pmx lxc firewall ipset update-member <vmid|name> <name> <cidr>` — update an
 // existing IP set entry (PUT .../firewall/ipset/{name}/{cidr}).
 func newFirewallIpsetUpdateMemberCmd() *cobra.Command {
 	var (
@@ -815,7 +815,7 @@ func newFirewallAliasCmd() *cobra.Command {
 	return cmd
 }
 
-// newFirewallAliasGetCmd builds `pve lxc firewall alias get <vmid|name>
+// newFirewallAliasGetCmd builds `pmx lxc firewall alias get <vmid|name>
 // <name>` — show a single firewall alias by name
 // (GET .../firewall/aliases/{name}).
 func newFirewallAliasGetCmd() *cobra.Command {
@@ -992,7 +992,7 @@ func newFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newFirewallOptionsDescribeCmd builds `pve lxc firewall options describe`, an
+// newFirewallOptionsDescribeCmd builds `pmx lxc firewall options describe`, an
 // offline catalog of every settable container firewall option from the PVE
 // API schema (see firewall_options_schema_gen.go).
 func newFirewallOptionsDescribeCmd() *cobra.Command {
@@ -1003,7 +1003,7 @@ func newFirewallOptionsDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
 			"options. Runs offline. Pass an option name to show only that option with " +
 			"full descriptions.",
-		CommandHint:         "pve lxc firewall options describe",
+		CommandHint:         "pmx lxc firewall options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }

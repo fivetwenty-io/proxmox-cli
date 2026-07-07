@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // tapeDriveOpsDrive is the sample drive name reused across every test below.
@@ -24,7 +24,7 @@ func tapeDriveOpsPath(op string) string {
 
 // newTapeDriveOpsRoot builds a scratch "drive" parent command with every
 // tape-drive media-operation verb registered, mirroring the real
-// `pve pbs tape drive` sub-tree that drive.go (owned by a different task)
+// `pmx pbs tape drive` sub-tree that drive.go (owned by a different task)
 // assembles by calling addTapeDriveOpCmds itself. Building the parent here
 // keeps this file independently testable without depending on drive.go's
 // existence.

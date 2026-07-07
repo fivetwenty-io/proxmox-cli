@@ -9,15 +9,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newTrafficCmd builds `pve pbs traffic` — manage traffic-control rules that
+// newTrafficCmd builds `pmx pbs traffic` — manage traffic-control rules that
 // rate-limit Proxmox Backup Server API traffic by source network or user
 // (GET/POST/PUT/DELETE /config/traffic-control), and inspect the current
 // measured rate for each rule (GET /admin/traffic-control).
@@ -127,7 +127,7 @@ func decodeTrafficRuleEntries(resp *pbsconfig.ListTrafficControlResponse) []traf
 	return entries
 }
 
-// newTrafficLsCmd builds `pve pbs traffic ls` — list every configured
+// newTrafficLsCmd builds `pmx pbs traffic ls` — list every configured
 // traffic-control rule (GET /config/traffic-control).
 func newTrafficLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -172,7 +172,7 @@ func newTrafficLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTrafficShowCmd builds `pve pbs traffic show <name>` — show one
+// newTrafficShowCmd builds `pmx pbs traffic show <name>` — show one
 // traffic-control rule's full configuration (GET /config/traffic-control/{name}).
 func newTrafficShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -252,7 +252,7 @@ func registerTrafficRuleArgs(cmd *cobra.Command, a *trafficRuleArgs) {
 	f.StringVar(&a.comment, "comment", "", "rule comment")
 }
 
-// newTrafficAddCmd builds `pve pbs traffic add <name>` — create a
+// newTrafficAddCmd builds `pmx pbs traffic add <name>` — create a
 // traffic-control rule (POST /config/traffic-control).
 func newTrafficAddCmd() *cobra.Command {
 	var a trafficRuleArgs
@@ -323,7 +323,7 @@ func newTrafficAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newTrafficUpdateCmd builds `pve pbs traffic update <name>` — update a
+// newTrafficUpdateCmd builds `pmx pbs traffic update <name>` — update a
 // traffic-control rule (PUT /config/traffic-control/{name}).
 func newTrafficUpdateCmd() *cobra.Command {
 	var (
@@ -410,7 +410,7 @@ func newTrafficUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTrafficDeleteCmd builds `pve pbs traffic delete <name>` — remove a
+// newTrafficDeleteCmd builds `pmx pbs traffic delete <name>` — remove a
 // traffic-control rule (DELETE /config/traffic-control/{name}).
 func newTrafficDeleteCmd() *cobra.Command {
 	var digest string
@@ -489,7 +489,7 @@ func decodeTrafficCurrentEntries(resp *pbsadmin.ListTrafficControlResponse) []tr
 	return entries
 }
 
-// newTrafficCurrentCmd builds `pve pbs traffic current` — show every
+// newTrafficCurrentCmd builds `pmx pbs traffic current` — show every
 // traffic-control rule alongside its currently measured rate
 // (GET /admin/traffic-control).
 func newTrafficCurrentCmd() *cobra.Command {

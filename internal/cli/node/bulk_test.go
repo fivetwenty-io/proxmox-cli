@@ -8,13 +8,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestNodeStartall_ForwardsFields verifies `pve node startall` posts the VMID
+// TestNodeStartall_ForwardsFields verifies `pmx node startall` posts the VMID
 // list and --force to the startall endpoint and omits unset flags.
 func TestNodeStartall_ForwardsFields(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

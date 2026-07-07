@@ -23,8 +23,8 @@ def check_go() -> None:
 
 
 def env_test_available() -> bool:
-    """Return True if PVE_TEST_HOST is set or config/.env.test exists."""
-    if os.environ.get("PVE_TEST_HOST"):
+    """Return True if PMX_TEST_HOST is set or config/.env.test exists."""
+    if os.environ.get("PMX_TEST_HOST"):
         return True
     env_file = os.path.join(os.getcwd(), "config", ".env.test")
     return os.path.isfile(env_file)
@@ -60,11 +60,11 @@ def run_unit(race: bool, verbose: bool) -> int:
 def run_integration(verbose: bool) -> int:
     if not env_test_available():
         print(
-            "test/integration: skipping — no PVE_TEST_HOST env var and no config/.env.test",
+            "test/integration: skipping — no PMX_TEST_HOST env var and no config/.env.test",
             flush=True,
         )
         print(
-            "  Set PVE_TEST_HOST, PVE_TEST_USER, PVE_TEST_PASSWORD (or populate config/.env.test) to enable."
+            "  Set PMX_TEST_HOST, PMX_TEST_USER, PMX_TEST_PASSWORD (or populate config/.env.test) to enable."
         )
         return 0
     load_env_test()
@@ -105,12 +105,12 @@ TIERS = ("unit", "integration", "e2e", "lifecycle")
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run pve CLI tests by tier.",
+        description="Run pmx CLI tests by tier.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Tiers:\n"
             "  unit         Go unit tests for all packages (default)\n"
-            "  integration  Integration tests gated on config/.env.test or PVE_TEST_* env\n"
+            "  integration  Integration tests gated on config/.env.test or PMX_TEST_* env\n"
             "  e2e          Live happy-path sweep of every command tree (scripts/e2e)\n"
             "  lifecycle    Destructive resource lifecycle (deferred)\n"
             "\n"

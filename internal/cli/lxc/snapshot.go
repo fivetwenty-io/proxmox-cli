@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // lxcSnapshotEntry is the subset of a /nodes/{node}/lxc/{vmid}/snapshot element
@@ -21,7 +21,7 @@ type lxcSnapshotEntry struct {
 	Parent      string `json:"parent"`
 }
 
-// newSnapshotCmd builds `pve lxc snapshot` and its sub-commands.
+// newSnapshotCmd builds `pmx lxc snapshot` and its sub-commands.
 func newSnapshotCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
@@ -38,7 +38,7 @@ func newSnapshotCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotCreateCmd builds `pve lxc snapshot create <vmid|name> <snapname>`.
+// newSnapshotCreateCmd builds `pmx lxc snapshot create <vmid|name> <snapname>`.
 func newSnapshotCreateCmd() *cobra.Command {
 	var (
 		async       bool
@@ -77,7 +77,7 @@ func newSnapshotCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotDeleteCmd builds `pve lxc snapshot delete <vmid|name> <snapname>`.
+// newSnapshotDeleteCmd builds `pmx lxc snapshot delete <vmid|name> <snapname>`.
 func newSnapshotDeleteCmd() *cobra.Command {
 	var (
 		async bool
@@ -116,7 +116,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotRollbackCmd builds `pve lxc snapshot rollback <vmid|name> <snapname>`.
+// newSnapshotRollbackCmd builds `pmx lxc snapshot rollback <vmid|name> <snapname>`.
 func newSnapshotRollbackCmd() *cobra.Command {
 	var (
 		async bool
@@ -155,7 +155,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotListCmd builds `pve lxc snapshot list <vmid|name>`.
+// newSnapshotListCmd builds `pmx lxc snapshot list <vmid|name>`.
 func newSnapshotListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name>",
@@ -196,7 +196,7 @@ func newSnapshotListCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotShowCmd builds `pve lxc snapshot show <vmid|name> <snapname>`.
+// newSnapshotShowCmd builds `pmx lxc snapshot show <vmid|name> <snapname>`.
 //
 // Returns the configuration stored with a named snapshot.
 func newSnapshotShowCmd() *cobra.Command {
@@ -241,7 +241,7 @@ func newSnapshotShowCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotUpdateCmd builds `pve lxc snapshot update <vmid|name> <snapname> --description DESC`.
+// newSnapshotUpdateCmd builds `pmx lxc snapshot update <vmid|name> <snapname> --description DESC`.
 //
 // Updates metadata (description) stored with an existing snapshot.
 func newSnapshotUpdateCmd() *cobra.Command {

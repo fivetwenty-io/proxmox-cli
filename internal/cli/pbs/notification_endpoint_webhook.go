@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newNotifEndpointWebhookCmd builds `pve pbs notification endpoint
+// newNotifEndpointWebhookCmd builds `pmx pbs notification endpoint
 // webhook` — manage webhook notification endpoints
 // (/config/notifications/endpoints/webhook CRUD).
 func newNotifEndpointWebhookCmd() *cobra.Command {
@@ -47,7 +47,7 @@ type notifWebhookEntry struct {
 	Url     string   `json:"url"`
 }
 
-// newNotifEndpointWebhookLsCmd builds `pve pbs notification endpoint
+// newNotifEndpointWebhookLsCmd builds `pmx pbs notification endpoint
 // webhook ls` — list every configured webhook endpoint
 // (GET /config/notifications/endpoints/webhook).
 func newNotifEndpointWebhookLsCmd() *cobra.Command {
@@ -95,7 +95,7 @@ func newNotifEndpointWebhookLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointWebhookShowCmd builds `pve pbs notification endpoint
+// newNotifEndpointWebhookShowCmd builds `pmx pbs notification endpoint
 // webhook show <name>` — show a single webhook endpoint's configuration
 // (GET /config/notifications/endpoints/webhook/{name}). Secret values are
 // write-only; only secret names are ever returned by the API.
@@ -196,7 +196,7 @@ func registerNotifWebhookUpdateFlags(cmd *cobra.Command, wf *notifWebhookFlags) 
 	f.StringVar(&wf.digest, "digest", "", "only update if the current config digest matches")
 }
 
-// newNotifEndpointWebhookAddCmd builds `pve pbs notification endpoint
+// newNotifEndpointWebhookAddCmd builds `pmx pbs notification endpoint
 // webhook add <name>` — create a webhook endpoint (POST
 // /config/notifications/endpoints/webhook). --method and --url are
 // required; every other option is optional and only forwarded when
@@ -273,7 +273,7 @@ func newNotifEndpointWebhookAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointWebhookUpdateCmd builds `pve pbs notification endpoint
+// newNotifEndpointWebhookUpdateCmd builds `pmx pbs notification endpoint
 // webhook update <name>` — update a webhook endpoint (PUT
 // /config/notifications/endpoints/webhook/{name}). Only flags explicitly
 // set are sent; use --delete to reset properties to their default.
@@ -357,7 +357,7 @@ func newNotifEndpointWebhookUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifEndpointWebhookDeleteCmd builds `pve pbs notification endpoint
+// newNotifEndpointWebhookDeleteCmd builds `pmx pbs notification endpoint
 // webhook delete <name>` — remove a webhook endpoint (DELETE
 // /config/notifications/endpoints/webhook/{name}). The binding takes no
 // digest parameter — PBS does not support conditional deletes for

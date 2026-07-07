@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // TestConfigSchemas_GeneratedTable sanity-checks the generated VM
@@ -81,7 +81,7 @@ func TestQemuConfig_Describe(t *testing.T) {
 	buf.Reset()
 	err := run(deps, &buf, "config", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pve qemu config describe")
+	require.Contains(t, err.Error(), "pmx qemu config describe")
 }
 
 // TestQemuConfig_DescribeOffline verifies describe never contacts the

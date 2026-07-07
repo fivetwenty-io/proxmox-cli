@@ -9,7 +9,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // fixture builds a standard 3-row Result used across multiple tests.

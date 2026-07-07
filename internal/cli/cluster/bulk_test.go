@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestClusterBulk_StartForwardsFields verifies `pve cluster bulk start` posts the
+// TestClusterBulk_StartForwardsFields verifies `pmx cluster bulk start` posts the
 // VMID list and changed optional flags and omits unset ones.
 func TestClusterBulk_StartForwardsFields(t *testing.T) {
 	f, ac := newFakeClient(t)

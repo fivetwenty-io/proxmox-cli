@@ -6,25 +6,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestZoneShow verifies `pve sdn zone show` issues a GET to the single-zone
+// TestZoneShow verifies `pmx sdn zone show` issues a GET to the single-zone
 // endpoint and renders the returned fields.
 func TestZoneShow(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/zones/pvecli", map[string]any{
-		"zone": "pvecli", "type": "simple", "nodes": "pve1", "ipam": "pve",
+	record(f, &rec, "GET /api2/json/cluster/sdn/zones/pmxcli", map[string]any{
+		"zone": "pmxcli", "type": "simple", "nodes": "pve1", "ipam": "pve",
 	}, 200)
 
-	out, err := run(t, f, "", "zone", "show", "pvecli")
+	out, err := run(t, f, "", "zone", "show", "pmxcli")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli")
+	require.Contains(t, out, "pmxcli")
 	require.Contains(t, out, "simple")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/zones/pvecli", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/zones/pmxcli", rec[0].path)
 }
 
 // TestZoneShowPendingRunning verifies the --pending and --running flags are
@@ -32,11 +32,11 @@ func TestZoneShow(t *testing.T) {
 func TestZoneShowPendingRunning(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/zones/pvecli", map[string]any{
-		"zone": "pvecli", "type": "simple",
+	record(f, &rec, "GET /api2/json/cluster/sdn/zones/pmxcli", map[string]any{
+		"zone": "pmxcli", "type": "simple",
 	}, 200)
 
-	_, err := run(t, f, "", "zone", "show", "pvecli", "--pending", "--running")
+	_, err := run(t, f, "", "zone", "show", "pmxcli", "--pending", "--running")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "1", rec[0].query.Get("pending"))

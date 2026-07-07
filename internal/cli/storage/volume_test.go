@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 const testVolume = "local:backup/vzdump-qemu-100-2026_01_01-00_00_00.vma.zst"
@@ -25,7 +25,7 @@ func TestVolumeGet_RendersAttributes(t *testing.T) {
 		"format":    "vma.zst",
 		"size":      1048576,
 		"used":      524288,
-		"notes":     "pve-cli-e2e marker",
+		"notes":     "pmx-cli-e2e marker",
 		"protected": 1,
 		"path":      "/var/lib/vz/dump/vzdump-qemu-100.vma.zst",
 	})
@@ -34,7 +34,7 @@ func TestVolumeGet_RendersAttributes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Equal(t, volumeContentPath, rec.path)
-	require.Contains(t, out, "pve-cli-e2e marker")
+	require.Contains(t, out, "pmx-cli-e2e marker")
 	require.Contains(t, out, "1048576")
 }
 
@@ -83,11 +83,11 @@ func TestVolumeSet_ForwardsNotesAndProtected(t *testing.T) {
 	recordJSON(f, "PUT "+volumeContentPath, &rec, nil)
 
 	out, err := run(t, f, "--node", "pve1", "volume", "set", testVolume,
-		"--notes", "pve-cli-e2e marker", "--protected")
+		"--notes", "pmx-cli-e2e marker", "--protected")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, volumeContentPath, rec.path)
-	require.Equal(t, "pve-cli-e2e marker", rec.form.Get("notes"))
+	require.Equal(t, "pmx-cli-e2e marker", rec.form.Get("notes"))
 	require.Equal(t, "1", rec.form.Get("protected"))
 	require.Contains(t, out, "updated")
 }

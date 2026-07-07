@@ -13,11 +13,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // newFakeClient returns a FakePVE and a constructed APIClient pointing at it.
@@ -44,7 +44,7 @@ func newFakeClient(t *testing.T) (*testhelper.FakePVE, *apiclient.APIClient) {
 	return f, ac
 }
 
-// runSSH builds `pve ssh` via SSH, injects deps directly into cmd's context
+// runSSH builds `pmx ssh` via SSH, injects deps directly into cmd's context
 // (bypassing PersistentPreRunE, mirroring the qemu/node package test seams
 // since SSH has no PersistentPreRunE of its own), and executes it with args.
 func runSSH(deps *cli.Deps, args ...string) (*cobra.Command, error) {
@@ -215,7 +215,7 @@ func TestSSH_ValidArgsFunction_NoCompletionsOnceNodeGiven(t *testing.T) {
 
 // TestSSH_ValidArgsFunction_DegradesSilentlyNoConfig covers the no-config,
 // no-context case (e.g. a fresh operator running completion before ever
-// running `pve context select`): completeNodeNames must return no
+// running `pmx context select`): completeNodeNames must return no
 // completions rather than surface the "no context specified" error.
 func TestSSH_ValidArgsFunction_DegradesSilentlyNoConfig(t *testing.T) {
 	sshCmd := findSSH(t, filepath.Join(t.TempDir(), "missing.yml"))
@@ -241,7 +241,7 @@ func TestSSH_ValidArgsFunction_DegradesSilentlyOnAPIError(t *testing.T) {
 // TestSSH_Complete_ThroughRootMachineryReturnsNodeNames is the H-2
 // regression test that exercises the ACTUAL `__complete` machinery cobra
 // wires up (not just a direct ValidArgsFunction call), matching how a real
-// shell invokes completion: `pve --config <path> __complete ssh ”`. A
+// shell invokes completion: `pmx --config <path> __complete ssh ”`. A
 // pre-fix build only ever printed the bare ":4" directive here since
 // completeNodeNames's closed-over deps.API was always nil.
 func TestSSH_Complete_ThroughRootMachineryReturnsNodeNames(t *testing.T) {

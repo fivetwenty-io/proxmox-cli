@@ -189,23 +189,23 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "prune (delete archives)",
         "deletes backup archives by retention policy — covered live by `e2e --mutate`",
-        f"pve storage prune {Isolation.NAME_PREFIX}... --vmid <id> --keep-last 0 --yes",
+        f"pmx storage prune {Isolation.NAME_PREFIX}... --vmid <id> --keep-last 0 --yes",
         isolation=True, live_covered=True,
     )
 
-    # The mutate phase creates an isolated `pve-cli-store` dir storage,
+    # The mutate phase creates an isolated `pmx-cli-store` dir storage,
     # node-restricted, exercises set, and deletes it — covered live by it.
     ctx.defer(
         "create",
         "adds a cluster storage definition — covered live by `e2e --mutate`",
-        f"pve storage create --storage {Isolation.NAME_PREFIX}store --type dir ...",
+        f"pmx storage create --storage {Isolation.NAME_PREFIX}store --type dir ...",
         isolation=True, live_covered=True,
     )
     ctx.defer("set", "modifies a storage definition — covered live by `e2e --mutate`",
-              f"pve storage set {Isolation.NAME_PREFIX}store --content iso,vztmpl",
+              f"pmx storage set {Isolation.NAME_PREFIX}store --content iso,vztmpl",
               isolation=True, live_covered=True)
     ctx.defer("delete", "removes a storage definition — covered live by `e2e --mutate`",
-              f"pve storage delete {Isolation.NAME_PREFIX}store", isolation=True, live_covered=True)
+              f"pmx storage delete {Isolation.NAME_PREFIX}store", isolation=True, live_covered=True)
 
     # The mutate phase allocates a raw volume, uploads a small file, and pulls a
     # file by URL onto `local`, then removes each artifact with
@@ -214,19 +214,19 @@ def run(ctx: Ctx) -> None:
         "volume alloc/delete",
         "allocates a raw volume then deletes it — covered live by `e2e --mutate` "
         "(storage_volume_lifecycle: alloc on `local`, capture returned volid, delete in finally)",
-        "pve storage volume alloc local --vmid 9999 --filename local:vm-9999-pve-cli-test --size 1G",
+        "pmx storage volume alloc local --vmid 9999 --filename local:vm-9999-pmx-cli-test --size 1G",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "upload",
         "pushes a local file onto a storage then deletes the volume — covered live by `e2e --mutate`",
-        f"pve storage upload local --file ./{Isolation.NAME_PREFIX}upload.iso --content iso",
+        f"pmx storage upload local --file ./{Isolation.NAME_PREFIX}upload.iso --content iso",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "download-url",
         "has the node pull a small Proxmox-hosted file then deletes the volume — covered live by `e2e --mutate`",
-        f"pve storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}download.iso --content iso",
+        f"pmx storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}download.iso --content iso",
         isolation=True, live_covered=True,
     )
 
@@ -235,7 +235,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "volume set",
         "updates a volume's notes/protected flag — covered live (reversibly) by `e2e --mutate`",
-        "pve storage volume set local:backup/vzdump-...-<id>.vma.zst --notes <m>",
+        "pmx storage volume set local:backup/vzdump-...-<id>.vma.zst --notes <m>",
         isolation=True, live_covered=True,
     )
     # Volume copy hits POST .../content/{volume}, which the PVE API restricts to
@@ -246,7 +246,7 @@ def run(ctx: Ctx) -> None:
         "volume copy",
         "copies a volume to a new target — the copy endpoint is restricted to root@pam "
         "and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests",
-        "pve storage volume copy local:backup/... --target-volume <storage>:<vol>",
+        "pmx storage volume copy local:backup/... --target-volume <storage>:<vol>",
         isolation=True, live_covered=False,
     )
     # file-restore browses files inside a backup snapshot, but the backing
@@ -255,13 +255,13 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "file-restore list",
         "browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
-        "pve storage file-restore list <pbs> --volume <snapshot>",
+        "pmx storage file-restore list <pbs> --volume <snapshot>",
         isolation=True, live_covered=False,
     )
     ctx.defer(
         "file-restore download",
         "extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
-        "pve storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
+        "pmx storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
         isolation=True, live_covered=False,
     )
     # import-metadata inspects a foreign guest archive (OVA/ESXi). The API cannot
@@ -272,7 +272,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "import-metadata",
         "inspects an importable guest archive — covered live by `e2e --mutate`, which stages a crafted OVF on the node's import dir and reads its metadata",
-        "pve storage import-metadata <import-storage> --volume <archive>",
+        "pmx storage import-metadata <import-storage> --volume <archive>",
         isolation=True, live_covered=True,
     )
     # Downloading a real appliance template consumes bandwidth and storage; not
@@ -280,7 +280,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "aplinfo download",
         "downloads a real appliance template tarball to a storage — bandwidth/storage-consuming; not exercised live; covered by unit tests",
-        "pve storage aplinfo download --node <node> --storage local --template pve-cli-template",
+        "pmx storage aplinfo download --node <node> --storage local --template pmx-cli-template",
         isolation=False, live_covered=False,
     )
     # Pulling an OCI image needs registry egress and consumes storage; not
@@ -289,7 +289,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "oci-pull",
         "pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests",
-        "pve storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
+        "pmx storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
         isolation=False, live_covered=False,
     )
     # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
@@ -299,11 +299,11 @@ def run(ctx: Ctx) -> None:
         "permissions grant",
         "grants ACL roles on the storage's /storage/{storage} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve storage permissions grant local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+        "pmx storage permissions grant local-lvm --roles PVEDatastoreAdmin --users alice@pve",
     )
     ctx.defer(
         "permissions revoke",
         "revokes ACL roles on the storage's /storage/{storage} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve storage permissions revoke local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+        "pmx storage permissions revoke local-lvm --roles PVEDatastoreAdmin --users alice@pve",
     )

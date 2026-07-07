@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // vnetFwRuleEntry is the minimal decoded shape of one vnet firewall rule list
@@ -182,15 +182,15 @@ func (f *vnetRuleFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnVnets
 	}
 }
 
-// newVnetFirewallCmd builds `pve sdn vnet firewall` and its sub-commands: the
+// newVnetFirewallCmd builds `pmx sdn vnet firewall` and its sub-commands: the
 // per-vnet firewall rules and forward-policy options. Like all SDN edits, rule
-// changes are staged until `pve sdn apply`.
+// changes are staged until `pmx sdn apply`.
 func newVnetFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "firewall",
 		Short: "Manage a vnet's firewall (rules and forward options)",
 		Long: "Inspect and edit the firewall attached to an SDN vnet: its rule set " +
-			"and the forward-policy options. Rule changes are staged until `pve sdn apply`.",
+			"and the forward-policy options. Rule changes are staged until `pmx sdn apply`.",
 	}
 	cmd.AddCommand(newVnetFirewallRulesCmd(), newVnetFirewallOptionsCmd())
 	return cmd
@@ -282,7 +282,7 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 		Short: "Append a rule to a vnet's firewall",
 		Long: "Create a new vnet firewall rule. --type (in|out|forward) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required. The change " +
-			"is staged until `pve sdn apply`.",
+			"is staged until `pmx sdn apply`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -293,7 +293,7 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 				return fmt.Errorf("create firewall rule for vnet %q: %w", vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall rule added to vnet %q (run `pve sdn apply` to commit).", vnet)}
+				"Firewall rule added to vnet %q (run `pmx sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -308,7 +308,7 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet> <pos>",
 		Short: "Modify a vnet firewall rule by position",
-		Long:  "Update a vnet firewall rule. Only the flags you pass are changed. The change is staged until `pve sdn apply`.",
+		Long:  "Update a vnet firewall rule. Only the flags you pass are changed. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -322,7 +322,7 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 				return fmt.Errorf("update firewall rule %s for vnet %q: %w", pos, vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall rule %s in vnet %q updated (run `pve sdn apply` to commit).", pos, vnet)}
+				"Firewall rule %s in vnet %q updated (run `pmx sdn apply` to commit).", pos, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -348,7 +348,7 @@ func newVnetFirewallRulesDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete firewall rule %s for vnet %q: %w", pos, vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall rule %s in vnet %q deleted (run `pve sdn apply` to commit).", pos, vnet)}
+				"Firewall rule %s in vnet %q deleted (run `pmx sdn apply` to commit).", pos, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -371,7 +371,7 @@ func newVnetFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetFirewallOptionsDescribeCmd builds `pve sdn vnet firewall options
+// newVnetFirewallOptionsDescribeCmd builds `pmx sdn vnet firewall options
 // describe`, an offline catalog of every settable vnet firewall option from
 // the PVE API schema (see vnet_firewall_options_schema_gen.go).
 func newVnetFirewallOptionsDescribeCmd() *cobra.Command {
@@ -380,7 +380,7 @@ func newVnetFirewallOptionsDescribeCmd() *cobra.Command {
 		Short:   "Describe all settable vnet firewall options and their defaults",
 		Long: "List every settable vnet firewall option from the PVE API schema: type, " +
 			"built-in default, and allowed values. Runs offline.",
-		CommandHint:         "pve sdn vnet firewall options describe",
+		CommandHint:         "pmx sdn vnet firewall options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }
@@ -430,7 +430,7 @@ func newVnetFirewallOptionsSetCmd() *cobra.Command {
 		Short: "Set a vnet's firewall options",
 		Long: "Update a vnet's firewall options: enable/disable rule enforcement and " +
 			"the forward policy. Only the flags you pass are changed. The change is " +
-			"staged until `pve sdn apply`.",
+			"staged until `pmx sdn apply`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -459,7 +459,7 @@ func newVnetFirewallOptionsSetCmd() *cobra.Command {
 				return fmt.Errorf("set firewall options for vnet %q: %w", vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall options for vnet %q updated (run `pve sdn apply` to commit).", vnet)}
+				"Firewall options for vnet %q updated (run `pmx sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

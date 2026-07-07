@@ -1,4 +1,4 @@
-// Package remote implements the top-level `pve ssh` and `pve rsync` commands:
+// Package remote implements the top-level `pmx ssh` and `pmx rsync` commands:
 // thin wrappers over the system ssh(1)/rsync(1) binaries that resolve a PVE
 // node name to its cluster management address before connecting.
 package remote
@@ -11,12 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
+	pmx "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
 // completeNodeNamesTimeout bounds how long completeNodeNames waits for the
@@ -24,7 +24,7 @@ import (
 // noticeably, or hang, on a slow or unreachable node.
 const completeNodeNamesTimeout = 3 * time.Second
 
-// SSH builds the top-level `pve ssh` command: a passthrough wrapper over the
+// SSH builds the top-level `pmx ssh` command: a passthrough wrapper over the
 // system ssh(1) binary that resolves <node> to its cluster management
 // address before connecting.
 func SSH(deps *cli.Deps) *cobra.Command {
@@ -33,7 +33,7 @@ func SSH(deps *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ssh <node> [ssh-option...] [command...]",
 		Short: "Open an SSH session to a PVE node (optionally run a remote command)",
-		Long: `pve ssh resolves <node> to its cluster management address and execs the
+		Long: `pmx ssh resolves <node> to its cluster management address and execs the
 system ssh(1) binary against it.
 
 The connection flags below (-l, -i, -p, -A, --no-strict) must precede
@@ -61,7 +61,7 @@ and the first token that is not an option starts the remote command. Use
 // context SSH default the caller did not explicitly set on f, splits rest
 // into leading ssh options and a trailing remote command via
 // sshcmd.SplitPassthrough, and execs ssh interactively. It is shared by
-// `pve ssh` and `pve node <node> ssh` so both commands connect identically.
+// `pmx ssh` and `pmx node <node> ssh` so both commands connect identically.
 func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, rest []string) error {
 	ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
 
@@ -116,7 +116,7 @@ type clusterStatusEntry struct {
 }
 
 // completeNodeNames completes PVE node names for the first positional
-// argument of `pve ssh` only, querying /cluster/status via a client built at
+// argument of `pmx ssh` only, querying /cluster/status via a client built at
 // completion time from cmd's already-parsed --config/--context/--insecure
 // flag values.
 //
@@ -177,7 +177,7 @@ func completeNodeNames(cmd *cobra.Command, _ *cli.Deps, args []string) ([]string
 	// ignores ctx entirely, so a slow or unreachable node's completion request
 	// would otherwise run for tens of seconds regardless of the context
 	// timeout above — completion must never wait that long.
-	ctx = pve.WithRetries(ctx, 0)
+	ctx = pmx.WithRetries(ctx, 0)
 
 	resp, err := ac.Cluster.ListStatus(ctx)
 	if err != nil || resp == nil {

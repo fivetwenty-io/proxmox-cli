@@ -8,11 +8,11 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// newDownloadURLCmd builds `pve storage download-url <storage>` — instruct the
+// newDownloadURLCmd builds `pmx storage download-url <storage>` — instruct the
 // resolved node to fetch a file from a URL directly onto a storage
 // (POST /nodes/{node}/storage/{storage}/download-url). The download runs as an
 // asynchronous task; by default the command blocks until it completes, or with
@@ -38,7 +38,7 @@ func newDownloadURLCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 			fl := cmd.Flags()

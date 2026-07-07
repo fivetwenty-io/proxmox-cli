@@ -7,15 +7,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // ---------------------------------------------------------------------------
 // openid list
 // ---------------------------------------------------------------------------
 
-// TestAccess_OpenidList_Table verifies `pve access openid list` reads the
+// TestAccess_OpenidList_Table verifies `pmx access openid list` reads the
 // realm list from GET /access/domains (GET /access/openid is only a directory
 // index) and keeps only openid realms.
 func TestAccess_OpenidList_Table(t *testing.T) {

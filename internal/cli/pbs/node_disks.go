@@ -10,8 +10,8 @@ import (
 
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeDiskEntry mirrors one element of the JSON array PBS returns from
@@ -58,7 +58,7 @@ type nodeZfsEntry struct {
 	Fragmen *int64  `json:"frag,omitempty"`
 }
 
-// newNodeDisksCmd builds `pve pbs node disks` and its
+// newNodeDisksCmd builds `pmx pbs node disks` and its
 // ls/smart/initgpt/wipe/directory/zfs verbs (/nodes/{node}/disks...).
 func newNodeDisksCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -76,7 +76,7 @@ func newNodeDisksCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeDisksLsCmd builds `pve pbs node disks ls` — list local disks
+// newNodeDisksLsCmd builds `pmx pbs node disks ls` — list local disks
 // (GET /nodes/{node}/disks/list).
 func newNodeDisksLsCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -137,7 +137,7 @@ func newNodeDisksLsCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeDisksSmartCmd builds `pve pbs node disks smart --disk X` — get
+// newNodeDisksSmartCmd builds `pmx pbs node disks smart --disk X` — get
 // SMART attributes and health for a disk (GET /nodes/{node}/disks/smart).
 func newNodeDisksSmartCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -183,7 +183,7 @@ func newNodeDisksSmartCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeDisksInitgptCmd builds `pve pbs node disks initgpt --disk X` —
+// newNodeDisksInitgptCmd builds `pmx pbs node disks initgpt --disk X` —
 // initialize an empty disk with a GPT table (POST /nodes/{node}/disks/initgpt).
 func newNodeDisksInitgptCmd(nf *nodeFlags) *cobra.Command {
 	var disk, uuid string
@@ -222,7 +222,7 @@ func newNodeDisksInitgptCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeDisksWipeCmd builds `pve pbs node disks wipe --disk X` — wipe a
+// newNodeDisksWipeCmd builds `pmx pbs node disks wipe --disk X` — wipe a
 // disk (PUT /nodes/{node}/disks/wipedisk).
 func newNodeDisksWipeCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -267,7 +267,7 @@ func newNodeDisksWipeCmd(nf *nodeFlags) *cobra.Command {
 
 // --- directory --------------------------------------------------------------
 
-// newNodeDisksDirectoryCmd builds `pve pbs node disks directory` and its
+// newNodeDisksDirectoryCmd builds `pmx pbs node disks directory` and its
 // ls/create/delete verbs (/nodes/{node}/disks/directory...).
 func newNodeDisksDirectoryCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -368,7 +368,7 @@ func newNodeDisksDirectoryCreateCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeDisksDirectoryDeleteCmd builds `pve pbs node disks directory delete
+// newNodeDisksDirectoryDeleteCmd builds `pmx pbs node disks directory delete
 // <name>` — remove a directory mount unit (DELETE
 // /nodes/{node}/disks/directory/{name}).
 //
@@ -412,7 +412,7 @@ func newNodeDisksDirectoryDeleteCmd(nf *nodeFlags) *cobra.Command {
 
 // --- zfs ----------------------------------------------------------------
 
-// newNodeDisksZfsCmd builds `pve pbs node disks zfs` and its
+// newNodeDisksZfsCmd builds `pmx pbs node disks zfs` and its
 // ls/show/create verbs (/nodes/{node}/disks/zfs...).
 func newNodeDisksZfsCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{

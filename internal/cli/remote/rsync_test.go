@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // contextFor builds a token-auth *config.Context pointing at f's fake server.
@@ -54,7 +54,7 @@ func writeFakeConfig(t *testing.T, f *testhelper.FakePVE, sshBlock config.SSHBlo
 
 // writeFakeConfigMulti writes a config file with one context per entry in
 // servers, current-context set to current, and returns its path. Used to
-// prove `pve rsync -c <name> ...` actually selects the named context, since
+// prove `pmx rsync -c <name> ...` actually selects the named context, since
 // each server is independently distinguishable by its resolved node address.
 func writeFakeConfigMulti(t *testing.T, current string, servers map[string]*testhelper.FakePVE) string {
 	t.Helper()
@@ -72,7 +72,7 @@ func writeFakeConfigMulti(t *testing.T, current string, servers map[string]*test
 // runner installed via a PersistentPreRunE wrapper that runs after the
 // standard one (mirrors node_test.go's newNodeRoot). The returned prefix
 // carries only --config: rsync never renders through deps.Out, so --output
-// is deliberately absent from extractPVEFlags' recognised front table, and
+// is deliberately absent from extractPMXFlags' recognised front table, and
 // including it here would leak into rsync's own argv instead of being
 // applied. The caller appends the command-specific args (including any
 // "-c <context>" it wants to place among rsync's own argv, to exercise
@@ -81,9 +81,9 @@ func newRemoteRoot(t *testing.T, cfgPath string, runner exec.Runner) (
 	*cobra.Command, *bytes.Buffer, []string,
 ) {
 	t.Helper()
-	t.Setenv("PVE_CONTEXT", "")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	t.Cleanup(cleanup)

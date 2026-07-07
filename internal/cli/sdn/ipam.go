@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // ipamEntry is the subset of a /cluster/sdn/ipams element rendered in the list
@@ -23,13 +23,13 @@ type ipamEntry struct {
 // forwarded to the API but never echoed back.
 var ipamFlagNames = []string{"section", "token", "url", "fingerprint"}
 
-// newIpamCmd builds `pve sdn ipam` and its sub-commands.
+// newIpamCmd builds `pmx sdn ipam` and its sub-commands.
 func newIpamCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ipam",
 		Short: "Manage SDN IP address management (IPAM) backends",
 		Long: "List, create, inspect, update, and delete SDN IPAM backends, and show " +
-			"their address allocations. Changes are staged until committed with `pve sdn apply`.",
+			"their address allocations. Changes are staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newIpamListCmd(),
@@ -87,7 +87,7 @@ func newIpamCreateCmd() *cobra.Command {
 		Use:   "create <ipam> --type <type>",
 		Short: "Create an SDN IPAM backend",
 		Long: "Create an SDN IPAM backend (pve, netbox, or phpipam). The change is staged " +
-			"until `pve sdn apply`. The --token value is a provider API token and is never echoed.",
+			"until `pmx sdn apply`. The --token value is a provider API token and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -113,7 +113,7 @@ func newIpamCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN IPAM %q created (run `pve sdn apply` to commit).", ipam)}
+				"SDN IPAM %q created (run `pmx sdn apply` to commit).", ipam)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -160,7 +160,7 @@ func newIpamSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <ipam>",
 		Short: "Update an SDN IPAM backend",
-		Long: "Update an SDN IPAM backend. The change is staged until `pve sdn apply`. " +
+		Long: "Update an SDN IPAM backend. The change is staged until `pmx sdn apply`. " +
 			"The --token value is a provider API token and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -196,7 +196,7 @@ func newIpamSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN IPAM %q updated (run `pve sdn apply` to commit).", ipam)}
+				"SDN IPAM %q updated (run `pmx sdn apply` to commit).", ipam)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -234,7 +234,7 @@ func newIpamDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN IPAM %q deleted (run `pve sdn apply` to commit).", ipam)}
+				"SDN IPAM %q deleted (run `pmx sdn apply` to commit).", ipam)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

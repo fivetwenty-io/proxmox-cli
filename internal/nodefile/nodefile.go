@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
 // MaxFileSize bounds the bytes Read will return and Write will send. It sits

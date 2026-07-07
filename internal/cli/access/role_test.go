@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 func TestAccess_RoleCreate_ForwardsPrivs(t *testing.T) {
@@ -22,11 +22,11 @@ func TestAccess_RoleCreate_ForwardsPrivs(t *testing.T) {
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "role", "create", "pve-cli-role", "--privs", "VM.Audit,Datastore.Audit"))
+	require.NoError(t, run(deps, &buf, "role", "create", "pmx-cli-role", "--privs", "VM.Audit,Datastore.Audit"))
 
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, "/api2/json/access/roles", rec.path)
-	require.Equal(t, "pve-cli-role", rec.body["roleid"])
+	require.Equal(t, "pmx-cli-role", rec.body["roleid"])
 	require.Equal(t, "VM.Audit,Datastore.Audit", rec.body["privs"])
 	require.Contains(t, buf.String(), "created")
 }
@@ -41,9 +41,9 @@ func TestAccess_RoleCreate_OmitsPrivsWhenUnset(t *testing.T) {
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "role", "create", "pve-cli-role"))
+	require.NoError(t, run(deps, &buf, "role", "create", "pmx-cli-role"))
 
-	require.Equal(t, "pve-cli-role", rec.body["roleid"])
+	require.Equal(t, "pmx-cli-role", rec.body["roleid"])
 	_, hasPrivs := rec.body["privs"]
 	require.False(t, hasPrivs, "unset --privs must not be forwarded")
 }
@@ -51,14 +51,14 @@ func TestAccess_RoleCreate_OmitsPrivsWhenUnset(t *testing.T) {
 func TestAccess_RoleSet_RequiresPrivs(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var called bool
-	f.HandleFunc("PUT /api2/json/access/roles/pve-cli-role", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("PUT /api2/json/access/roles/pmx-cli-role", func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		testhelper.WriteData(w, nil)
 	})
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(deps, &buf, "role", "set", "pve-cli-role")
+	err := run(deps, &buf, "role", "set", "pmx-cli-role")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--privs is required")
 	require.False(t, called, "set must not PUT without --privs")
@@ -67,7 +67,7 @@ func TestAccess_RoleSet_RequiresPrivs(t *testing.T) {
 func TestAccess_RoleSet_ForwardsPrivsAndAppend(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordReq
-	f.HandleFunc("PUT /api2/json/access/roles/pve-cli-role", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("PUT /api2/json/access/roles/pmx-cli-role", func(w http.ResponseWriter, r *http.Request) {
 		rec.method, rec.path = r.Method, r.URL.Path
 		rec.body = captureBody(r)
 		testhelper.WriteData(w, nil)
@@ -75,7 +75,7 @@ func TestAccess_RoleSet_ForwardsPrivsAndAppend(t *testing.T) {
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "role", "set", "pve-cli-role", "--privs", "VM.Audit", "--append"))
+	require.NoError(t, run(deps, &buf, "role", "set", "pmx-cli-role", "--privs", "VM.Audit", "--append"))
 
 	require.Equal(t, http.MethodPut, rec.method)
 	require.Equal(t, "VM.Audit", rec.body["privs"])
@@ -86,14 +86,14 @@ func TestAccess_RoleSet_ForwardsPrivsAndAppend(t *testing.T) {
 func TestAccess_RoleDelete_RequiresYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var called bool
-	f.HandleFunc("DELETE /api2/json/access/roles/pve-cli-role", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("DELETE /api2/json/access/roles/pmx-cli-role", func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		testhelper.WriteData(w, nil)
 	})
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(deps, &buf, "role", "delete", "pve-cli-role")
+	err := run(deps, &buf, "role", "delete", "pmx-cli-role")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--yes")
 	require.False(t, called, "delete must not issue a DELETE without --yes")
@@ -102,17 +102,17 @@ func TestAccess_RoleDelete_RequiresYes(t *testing.T) {
 func TestAccess_RoleDelete_WithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordReq
-	f.HandleFunc("DELETE /api2/json/access/roles/pve-cli-role", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("DELETE /api2/json/access/roles/pmx-cli-role", func(w http.ResponseWriter, r *http.Request) {
 		rec.method, rec.path = r.Method, r.URL.Path
 		testhelper.WriteData(w, nil)
 	})
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "role", "delete", "pve-cli-role", "--yes"))
+	require.NoError(t, run(deps, &buf, "role", "delete", "pmx-cli-role", "--yes"))
 
 	require.Equal(t, http.MethodDelete, rec.method)
-	require.Equal(t, "/api2/json/access/roles/pve-cli-role", rec.path)
+	require.Equal(t, "/api2/json/access/roles/pmx-cli-role", rec.path)
 	require.Contains(t, buf.String(), "deleted")
 }
 
@@ -124,7 +124,7 @@ func TestAccess_RoleCreate_ServerError(t *testing.T) {
 
 	deps := newDeps(t, f, output.FormatTable)
 	var buf bytes.Buffer
-	err := run(deps, &buf, "role", "create", "pve-cli-role")
+	err := run(deps, &buf, "role", "create", "pmx-cli-role")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "create role")
 }

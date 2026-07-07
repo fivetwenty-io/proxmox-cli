@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newTemplateCmd builds `pve qemu template <vmid>`, converting a VM into a
+// newTemplateCmd builds `pmx qemu template <vmid>`, converting a VM into a
 // template (POST /nodes/{node}/qemu/{vmid}/template). This is irreversible: a
 // template cannot be started or converted back into a regular VM, so the
 // command refuses to run without --yes. With --disk only the named disk is

@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// newRemoteMigrateCmd builds `pve qemu remote-migrate <vmid> --target-endpoint EP
+// newRemoteMigrateCmd builds `pmx qemu remote-migrate <vmid> --target-endpoint EP
 // --target-storage ST --target-bridge BR [flags]`.
 //
 // Remote migration crosses cluster boundaries; it is irreversible in the sense

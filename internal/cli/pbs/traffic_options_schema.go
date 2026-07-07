@@ -5,4 +5,4 @@ package pbs
 // POST /config/traffic-control. "name" is the create call's own identity
 // parameter, not an option.
 
-//go:generate go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/traffic-control -verb POST -symbol trafficOptionSchemas -exclude "name" -out traffic_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/traffic-control -verb POST -symbol trafficOptionSchemas -exclude "name" -out traffic_options_schema_gen.go

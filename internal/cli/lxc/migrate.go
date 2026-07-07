@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newMigrateCmd builds the `pve lxc migrate` group.
+// newMigrateCmd builds the `pmx lxc migrate` group.
 //
 // Subcommands:
 //   - (no subcommand) migrate <vmid> --target-node NODE: live/restart migration (POST)
@@ -35,7 +35,7 @@ func newMigrateCmd() *cobra.Command {
 			"--target-node is required. A running container cannot be live-migrated; " +
 			"pass --restart to migrate it by briefly restarting it on the target node. " +
 			"The command blocks until the migration task completes unless --async is set. " +
-			"Use `pve lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
+			"Use `pmx lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -90,7 +90,7 @@ func newMigrateCmd() *cobra.Command {
 	return cmd
 }
 
-// newMigrateCheckCmd builds `pve lxc migrate check <vmid> [--target-node NODE]`.
+// newMigrateCheckCmd builds `pmx lxc migrate check <vmid> [--target-node NODE]`.
 //
 // Performs the GET pre-flight check against the PVE migration endpoint. Returns
 // feasibility information, allowed nodes, and local resource dependencies.

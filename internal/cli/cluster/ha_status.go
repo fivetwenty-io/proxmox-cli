@@ -8,11 +8,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newHaStatusCmd builds the `pve cluster ha status` sub-tree: HA manager state.
+// newHaStatusCmd builds the `pmx cluster ha status` sub-tree: HA manager state.
 // It reads the HA status views and exposes the cluster-wide arm/disarm controls.
 func newHaStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -47,7 +47,7 @@ func renderHaStatusList(cmd *cobra.Command, raws []json.RawMessage, what string)
 		output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
 }
 
-// newHaStatusCurrentCmd builds `pve cluster ha status current`. It answers to
+// newHaStatusCurrentCmd builds `pmx cluster ha status current`. It answers to
 // list/ls as well: GET /cluster/ha/status is only a directory index of the
 // status views, so the current view is the overview.
 func newHaStatusCurrentCmd() *cobra.Command {
@@ -71,7 +71,7 @@ func newHaStatusCurrentCmd() *cobra.Command {
 	}
 }
 
-// newHaStatusManagerCmd builds `pve cluster ha status manager`.
+// newHaStatusManagerCmd builds `pmx cluster ha status manager`.
 func newHaStatusManagerCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "manager",
@@ -101,7 +101,7 @@ func newHaStatusManagerCmd() *cobra.Command {
 	}
 }
 
-// newHaStatusArmCmd builds `pve cluster ha status arm`.
+// newHaStatusArmCmd builds `pmx cluster ha status arm`.
 func newHaStatusArmCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
@@ -126,7 +126,7 @@ func newHaStatusArmCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaStatusDisarmCmd builds `pve cluster ha status disarm`.
+// newHaStatusDisarmCmd builds `pmx cluster ha status disarm`.
 func newHaStatusDisarmCmd() *cobra.Command {
 	var (
 		yes          bool

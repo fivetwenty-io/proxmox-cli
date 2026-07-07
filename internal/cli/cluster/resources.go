@@ -9,8 +9,8 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // clusterResourceEntry is the decoded shape of one entry from
@@ -28,7 +28,7 @@ type clusterResourceEntry struct {
 	Uptime *int64   `json:"uptime"`
 }
 
-// newResourcesCmd builds `pve cluster resources`.
+// newResourcesCmd builds `pmx cluster resources`.
 func newResourcesCmd() *cobra.Command {
 	var typeFilter string
 

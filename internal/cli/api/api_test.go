@@ -12,12 +12,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/api"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/api"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // run executes an api sub-command through the real root command so that the
@@ -29,9 +29,9 @@ func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, err
 	t.Helper()
 
 	// Keep env-derived flag defaults out of the way.
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -80,7 +80,7 @@ func seedCfg() *config.Config {
 					Type:     "token",
 					Username: "root@pam",
 					TokenID:  "cli",
-					Secret:   "${PVE_TOKEN}",
+					Secret:   "${PMX_TOKEN}",
 				},
 			},
 			"lab": {
@@ -433,7 +433,7 @@ func TestAuthLogout_NoSession(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAuthStatus_Token(t *testing.T) {
-	t.Setenv("PVE_TOKEN", "resolvedsecret")
+	t.Setenv("PMX_TOKEN", "resolvedsecret")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 	writeConfig(t, path, seedCfg())
@@ -445,16 +445,16 @@ func TestAuthStatus_Token(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "token")
 	require.Contains(t, out, "cli")
-	require.Contains(t, out, "${PVE_TOKEN}")
+	require.Contains(t, out, "${PMX_TOKEN}")
 	// The resolved secret VALUE must never appear in auth status output.
 	require.NotContains(t, out, "resolvedsecret",
 		"auth status must report the secret source, never the resolved value")
 }
 
 func TestAuthStatus_UnresolvedSecret(t *testing.T) {
-	// PVE_TOKEN intentionally unset — status should report it as unresolved
+	// PMX_TOKEN intentionally unset — status should report it as unresolved
 	// rather than failing.
-	t.Setenv("PVE_TOKEN", "")
+	t.Setenv("PMX_TOKEN", "")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 	writeConfig(t, path, seedCfg())

@@ -54,7 +54,7 @@ const DefaultConnectTimeoutSec = 10
 // without a terminal. BatchMode=yes makes ssh fail instead of prompting for a
 // password, passphrase, or host-key confirmation, and ConnectTimeout bounds
 // how long connection establishment may hang. It never mutates the OptionArgs
-// result: interactive callers (pve ssh, node shell, qemu ssh) keep their
+// result: interactive callers (pmx ssh, node shell, qemu ssh) keep their
 // prompting behavior.
 func BatchOptionArgs(f *Flags) []string {
 	return append(OptionArgs(f),

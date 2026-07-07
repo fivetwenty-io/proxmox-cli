@@ -12,15 +12,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/remote"
-	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
+	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
-// newUploadCmd builds `pve storage upload <storage>` — push a local file to a
+// newUploadCmd builds `pmx storage upload <storage>` — push a local file to a
 // storage on the resolved node (POST /nodes/{node}/storage/{storage}/upload).
 // The file is streamed as a multipart part; the operation is asynchronous, so by
 // default the command blocks until the import task completes, or with --async it
@@ -58,7 +58,7 @@ func newUploadCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 			fl := cmd.Flags()
@@ -169,7 +169,7 @@ func uploadSnippetSSH(
 	}
 	if !contentListHas(scfg.Content, "snippets") {
 		return fmt.Errorf("snippets content is not enabled on storage %q: enable it first, e.g. "+
-			"`pve storage set %s --content %s`", storage, storage,
+			"`pmx storage set %s --content %s`", storage, storage,
 			strings.Join(append(splitContentList(scfg.Content), "snippets"), ","))
 	}
 

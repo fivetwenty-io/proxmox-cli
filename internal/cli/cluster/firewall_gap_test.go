@@ -8,12 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestClusterFirewallMacros_List verifies `pve cluster firewall macros list`
+// TestClusterFirewallMacros_List verifies `pmx cluster firewall macros list`
 // queries GET /cluster/firewall/macros and renders a dynamic table.
 func TestClusterFirewallMacros_List(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -54,7 +54,7 @@ func TestClusterFirewallMacros_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "firewall", "macros", "list"))
 }
 
-// TestClusterFirewallRefs_List verifies `pve cluster firewall refs list`
+// TestClusterFirewallRefs_List verifies `pmx cluster firewall refs list`
 // queries GET /cluster/firewall/refs without a type param when unset.
 func TestClusterFirewallRefs_List(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -63,8 +63,8 @@ func TestClusterFirewallRefs_List(t *testing.T) {
 	f.HandleFunc("GET /api2/json/cluster/firewall/refs", func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
 		testhelper.WriteData(w, []any{
-			map[string]any{"name": "+pvecli-ips", "type": "ipset", "comment": "lab IP set"},
-			map[string]any{"name": "pvecli-alias", "type": "alias"},
+			map[string]any{"name": "+pmxcli-ips", "type": "ipset", "comment": "lab IP set"},
+			map[string]any{"name": "pmxcli-alias", "type": "alias"},
 		})
 	})
 
@@ -77,8 +77,8 @@ func TestClusterFirewallRefs_List(t *testing.T) {
 
 	out := buf.String()
 	require.Contains(t, out, "NAME")
-	require.Contains(t, out, "+pvecli-ips")
-	require.Contains(t, out, "pvecli-alias")
+	require.Contains(t, out, "+pmxcli-ips")
+	require.Contains(t, out, "pmxcli-alias")
 }
 
 // TestClusterFirewallRefs_TypeFilter verifies --type is forwarded when supplied.
@@ -89,7 +89,7 @@ func TestClusterFirewallRefs_TypeFilter(t *testing.T) {
 	f.HandleFunc("GET /api2/json/cluster/firewall/refs", func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
 		testhelper.WriteData(w, []any{
-			map[string]any{"name": "+pvecli-ips", "type": "ipset"},
+			map[string]any{"name": "+pmxcli-ips", "type": "ipset"},
 		})
 	})
 

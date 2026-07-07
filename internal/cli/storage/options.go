@@ -5,10 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 )
 
-// newDescribeCmd builds `pve storage describe`, an offline catalog of every
+// newDescribeCmd builds `pmx storage describe`, an offline catalog of every
 // storage option from the PVE API schema (see options_schema_gen.go). The
 // schema is type-polymorphic — which options a storage accepts depends on its
 // type — so the catalog carries a TYPES column and a --type filter backed by
@@ -22,7 +22,7 @@ func newDescribeCmd() *cobra.Command {
 			"type-polymorphic; pass --type to see exactly what one storage type accepts, " +
 			"including its required and create-only options. Runs offline. Pass an option " +
 			"name to show only that option with full descriptions and sub-keys.",
-		CommandHint:         "pve storage describe",
+		CommandHint:         "pmx storage describe",
 		SubKeyRowsInCatalog: false,
 		TypeSets:            storageTypeOptions,
 	})

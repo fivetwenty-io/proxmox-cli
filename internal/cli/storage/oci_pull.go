@@ -8,11 +8,11 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// newOciPullCmd builds `pve storage oci-pull <storage>` — instruct the resolved
+// newOciPullCmd builds `pmx storage oci-pull <storage>` — instruct the resolved
 // node to pull an OCI image from a registry and store it on the given storage
 // (POST /nodes/{node}/storage/{storage}/oci-registry-pull). The pull runs as an
 // asynchronous task; the command blocks until it finishes unless --async is set.
@@ -33,7 +33,7 @@ func newOciPullCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 			fl := cmd.Flags()

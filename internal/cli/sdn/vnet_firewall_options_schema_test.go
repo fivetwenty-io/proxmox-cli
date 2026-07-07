@@ -11,11 +11,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // newFakeClient returns a FakePVE and a constructed APIClient pointing at it.
@@ -91,7 +91,7 @@ func TestVnetFirewallOptionsSet_HelpEnriched(t *testing.T) {
 func TestVnetFirewallOptionsDescribe(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/options", map[string]any{}, 200)
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", map[string]any{}, 200)
 
 	out, err := run(t, f, "", "vnet", "firewall", "options", "describe")
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestVnetFirewallOptionsDescribe(t *testing.T) {
 
 	_, err = run(t, f, "", "vnet", "firewall", "options", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pve sdn vnet firewall options describe")
+	require.Contains(t, err.Error(), "pmx sdn vnet firewall options describe")
 	require.Empty(t, rec, "describe runs offline even for an unknown option")
 }
 
@@ -110,11 +110,11 @@ func TestVnetFirewallOptionsDescribe(t *testing.T) {
 func TestVnetFirewallOptionsGetPlainUnchanged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/options", map[string]any{
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", map[string]any{
 		"policy_forward": "DROP",
 	}, 200)
 
-	out, err := run(t, f, "", "vnet", "firewall", "options", "get", "pvecli0")
+	out, err := run(t, f, "", "vnet", "firewall", "options", "get", "pmxcli0")
 	require.NoError(t, err)
 	require.Contains(t, out, "DROP")
 	require.NotContains(t, out, "log_level_forward")
@@ -127,14 +127,14 @@ func TestVnetFirewallOptionsGetPlainUnchanged(t *testing.T) {
 // defaults map.
 func TestVnetFirewallOptionsGetDefaults(t *testing.T) {
 	f, ac := newFakeClient(t)
-	f.HandleFunc("GET /api2/json/cluster/sdn/vnets/pvecli0/firewall/options", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/sdn/vnets/pmxcli0/firewall/options", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, map[string]any{"policy_forward": "DROP"})
 	})
 
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
 
 	var buf bytes.Buffer
-	require.NoError(t, runDeps(deps, &buf, "vnet", "firewall", "options", "get", "pvecli0", "--defaults"))
+	require.NoError(t, runDeps(deps, &buf, "vnet", "firewall", "options", "get", "pmxcli0", "--defaults"))
 
 	var got struct {
 		Set      map[string]any    `json:"set"`

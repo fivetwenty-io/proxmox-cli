@@ -7,11 +7,11 @@ import (
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRealmPbsCmd builds `pve pbs realm pbs` — inspect and update the
+// newRealmPbsCmd builds `pmx pbs realm pbs` — inspect and update the
 // built-in Proxmox Backup Server realm configuration
 // (/config/access/pbs). GET /config/access/pbs returns a single object
 // (there is exactly one system-wide PBS realm), not a list, so this exposes
@@ -30,7 +30,7 @@ func newRealmPbsCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmPbsShowCmd builds `pve pbs realm pbs show` — show the built-in PBS
+// newRealmPbsShowCmd builds `pmx pbs realm pbs show` — show the built-in PBS
 // realm's configuration (GET /config/access/pbs).
 func newRealmPbsShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -58,7 +58,7 @@ func newRealmPbsShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmPbsUpdateCmd builds `pve pbs realm pbs update` — update the
+// newRealmPbsUpdateCmd builds `pmx pbs realm pbs update` — update the
 // built-in PBS realm's configuration (PUT /config/access/pbs). Only flags
 // explicitly set are sent; use --delete to reset properties to their
 // default.

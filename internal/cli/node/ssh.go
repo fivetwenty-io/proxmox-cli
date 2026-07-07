@@ -5,10 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/remote"
-	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
+	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
 // sshFlags holds the connection options shared by ssh, shell, console, and exec.
@@ -36,13 +36,13 @@ func resolveHost(cmd *cobra.Command, deps *cli.Deps, node string) (string, error
 	return host, nil
 }
 
-// newSSHCmd builds `pve node <node> ssh [ssh-option...] [command...]`. It
+// newSSHCmd builds `pmx node <node> ssh [ssh-option...] [command...]`. It
 // shares its passthrough splitting and connection logic with the top-level
-// `pve ssh` command via remote.RunSSH; SetInterspersed(false) applies the
+// `pmx ssh` command via remote.RunSSH; SetInterspersed(false) applies the
 // same "flags before <node>, ssh-option/command passthrough after" grammar
 // (see remote.SSH's Long help for the full contract), so a leading-dash
 // token after <node> is now treated as an ssh option/remote-command token
-// rather than rejected — "pve node ssh <node> -- <cmd>..." still works
+// rather than rejected — "pmx node ssh <node> -- <cmd>..." still works
 // exactly as before via the explicit "--" boundary.
 func newSSHCmd() *cobra.Command {
 	var f sshFlags
@@ -59,7 +59,7 @@ func newSSHCmd() *cobra.Command {
 	return cmd
 }
 
-// newShellCmd builds `pve node <node> shell`.
+// newShellCmd builds `pmx node <node> shell`.
 func newShellCmd() *cobra.Command {
 	var f sshFlags
 	cmd := &cobra.Command{
@@ -74,7 +74,7 @@ func newShellCmd() *cobra.Command {
 	return cmd
 }
 
-// newConsoleCmd builds `pve node <node> console`. In v1 this is an alias for
+// newConsoleCmd builds `pmx node <node> console`. In v1 this is an alias for
 // shell (an interactive SSH session).
 func newConsoleCmd() *cobra.Command {
 	var f sshFlags
@@ -107,7 +107,7 @@ func runShell(cmd *cobra.Command, f *sshFlags, node string) error {
 	return nil
 }
 
-// newExecCmd builds `pve node <node> exec -- <cmd...>`. It runs a remote command
+// newExecCmd builds `pmx node <node> exec -- <cmd...>`. It runs a remote command
 // over SSH and passes through its output.
 func newExecCmd() *cobra.Command {
 	var f sshFlags

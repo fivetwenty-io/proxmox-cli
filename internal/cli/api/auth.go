@@ -13,10 +13,10 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
@@ -26,7 +26,7 @@ import (
 // expiry timestamp; PVE tickets are valid for two hours.
 const ticketLifetime = 2 * time.Hour
 
-// newAuthCmd builds `pve api auth` and its sub-commands.
+// newAuthCmd builds `pmx api auth` and its sub-commands.
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
@@ -75,14 +75,14 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 func rejectPBSContext(ctx *config.Context, contextName string) error {
 	if ctx.IsPBS() {
 		return fmt.Errorf(
-			"context %q targets Proxmox Backup Server (product: pbs); 'pve api auth' supports only PVE contexts",
+			"context %q targets Proxmox Backup Server (product: pbs); 'pmx api auth' supports only PVE contexts",
 			contextName,
 		)
 	}
 	return nil
 }
 
-// newAuthLoginCmd builds `pve api auth login`.
+// newAuthLoginCmd builds `pmx api auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
 		contextName  string
@@ -214,7 +214,7 @@ func performOIDCLogin(
 	// public (PVE marks them noauthentication), so any credential satisfies the
 	// HTTP transport — the server does not validate credentials on these paths.
 	// Prefer an existing session ticket; fall back to a placeholder token that
-	// passes the pve-apiclient-go options validator without real credentials.
+	// passes the proxmox-apiclient-go options validator without real credentials.
 	ac, err := buildClientForOIDC(cmd, ctx, contextName)
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func parseOIDCRedirect(rawURL string) (code, state string, err error) {
 	return code, state, nil
 }
 
-// newAuthRefreshCmd builds `pve api auth refresh`, re-obtaining a session ticket
+// newAuthRefreshCmd builds `pmx api auth refresh`, re-obtaining a session ticket
 // for a password context.
 func newAuthRefreshCmd() *cobra.Command {
 	var (
@@ -394,7 +394,7 @@ func newAuthRefreshCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthLogoutCmd builds `pve api auth logout`.
+// newAuthLogoutCmd builds `pmx api auth logout`.
 func newAuthLogoutCmd() *cobra.Command {
 	var contextName string
 
@@ -437,7 +437,7 @@ func newAuthLogoutCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthStatusCmd builds `pve api auth status`.
+// newAuthStatusCmd builds `pmx api auth status`.
 func newAuthStatusCmd() *cobra.Command {
 	var contextName string
 
@@ -482,7 +482,7 @@ func newAuthStatusCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthWhoamiCmd builds `pve api auth whoami`. Unlike the other auth
+// newAuthWhoamiCmd builds `pmx api auth whoami`. Unlike the other auth
 // sub-commands it requires a live API client (built by the root from the
 // resolved context), so it is NOT annotated noClient: it calls
 // GET /access/permissions to confirm the stored credentials authenticate and
@@ -496,12 +496,12 @@ func newAuthWhoamiCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 
 			// The root resolved and built the client for this context name using
-			// the same precedence (--context/-c > $PVE_CONTEXT > current-context).
+			// the same precedence (--context/-c > $PMX_CONTEXT > current-context).
 			flagContext := ""
 			if f := cmd.Flags().Lookup("context"); f != nil {
 				flagContext = f.Value.String()
 			}
-			name := config.Resolve(flagContext, "PVE_CONTEXT", deps.Cfg.CurrentContext, "")
+			name := config.Resolve(flagContext, "PMX_CONTEXT", deps.Cfg.CurrentContext, "")
 			ctx, _, err := config.ResolveContext(deps.Cfg, name)
 			if err != nil {
 				return err
@@ -538,7 +538,7 @@ func authIdentity(ctx *config.Context) string {
 	return ctx.Auth.Username
 }
 
-// newAuthSetTokenCmd builds `pve api auth set-token`.
+// newAuthSetTokenCmd builds `pmx api auth set-token`.
 func newAuthSetTokenCmd() *cobra.Command {
 	var (
 		contextName string
@@ -596,7 +596,7 @@ func newAuthSetTokenCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthSetPasswordCmd builds `pve api auth set-password`.
+// newAuthSetPasswordCmd builds `pmx api auth set-password`.
 func newAuthSetPasswordCmd() *cobra.Command {
 	var (
 		contextName string
@@ -722,7 +722,7 @@ func serverLogout(cmd *cobra.Command, ctx *config.Context, contextName string) e
 // buildClientForOIDC constructs an API client suitable for calling the two public
 // OIDC endpoints (POST /access/openid/auth-url and POST /access/openid/login).
 // Both endpoints are marked noauthentication by PVE, meaning the server does not
-// validate credentials on those paths. However, the pve-apiclient-go options
+// validate credentials on those paths. However, the proxmox-apiclient-go options
 // validator requires at least one credential to be set, so:
 //   - If the context carries a live session ticket, that ticket is used.
 //   - Otherwise a placeholder API token is constructed to pass validation; the

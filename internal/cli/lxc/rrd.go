@@ -5,15 +5,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newRrdCmd builds `pve lxc rrd <vmid> --ds DS --timeframe FRAME [--cf CF]`.
+// newRrdCmd builds `pmx lxc rrd <vmid> --ds DS --timeframe FRAME [--cf CF]`.
 //
 // The endpoint returns a PNG filename on the PVE server. This command is a
-// low-level helper; for time-series data points prefer `pve lxc metrics`.
+// low-level helper; for time-series data points prefer `pmx lxc metrics`.
 func newRrdCmd() *cobra.Command {
 	var ds, timeframe, cf string
 
@@ -21,7 +21,7 @@ func newRrdCmd() *cobra.Command {
 		Use:   "rrd <vmid|name>",
 		Short: "Get the RRD PNG filename for a container",
 		Long: "Return the path to a server-side RRD graph PNG for a container. " +
-			"--ds and --timeframe are required. For time-series data points use `pve lxc metrics` instead.",
+			"--ds and --timeframe are required. For time-series data points use `pmx lxc metrics` instead.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

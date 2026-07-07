@@ -8,8 +8,8 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeNetworkListEntry mirrors one element of the JSON array PBS returns
@@ -215,7 +215,7 @@ func (nf *networkFlags) applyUpdate(cmd *cobra.Command, p *pbsnodes.UpdateNetwor
 	}
 }
 
-// newNodeNetworkCmd builds `pve pbs node network` and its
+// newNodeNetworkCmd builds `pmx pbs node network` and its
 // ls/show/create/update/delete/revert/apply verbs (/nodes/{node}/network...).
 func newNodeNetworkCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -234,7 +234,7 @@ func newNodeNetworkCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeNetworkLsCmd builds `pve pbs node network ls` — list network
+// newNodeNetworkLsCmd builds `pmx pbs node network ls` — list network
 // interfaces (GET /nodes/{node}/network).
 func newNodeNetworkLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -277,7 +277,7 @@ func boolCellPVE(b pve.PVEBool) string {
 	return "false"
 }
 
-// newNodeNetworkShowCmd builds `pve pbs node network show <iface>` — read
+// newNodeNetworkShowCmd builds `pmx pbs node network show <iface>` — read
 // one interface's configuration (GET /nodes/{node}/network/{iface}).
 func newNodeNetworkShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -307,7 +307,7 @@ func newNodeNetworkShowCmd(nf *nodeFlags) *cobra.Command {
 	}
 }
 
-// newNodeNetworkCreateCmd builds `pve pbs node network create <iface>` —
+// newNodeNetworkCreateCmd builds `pmx pbs node network create <iface>` —
 // create a network interface configuration (POST /nodes/{node}/network).
 func newNodeNetworkCreateCmd(nf *nodeFlags) *cobra.Command {
 	var nwf networkFlags
@@ -339,7 +339,7 @@ func newNodeNetworkCreateCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeNetworkUpdateCmd builds `pve pbs node network update <iface>` —
+// newNodeNetworkUpdateCmd builds `pmx pbs node network update <iface>` —
 // update a network interface configuration (PUT /nodes/{node}/network/{iface}).
 func newNodeNetworkUpdateCmd(nf *nodeFlags) *cobra.Command {
 	var nwf networkFlags
@@ -377,7 +377,7 @@ func newNodeNetworkUpdateCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeNetworkDeleteCmd builds `pve pbs node network delete <iface>` —
+// newNodeNetworkDeleteCmd builds `pmx pbs node network delete <iface>` —
 // remove a single interface's configuration (DELETE /nodes/{node}/network/{iface}).
 func newNodeNetworkDeleteCmd(nf *nodeFlags) *cobra.Command {
 	var (
@@ -420,7 +420,7 @@ func newNodeNetworkDeleteCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeNetworkRevertCmd builds `pve pbs node network revert` — discard
+// newNodeNetworkRevertCmd builds `pmx pbs node network revert` — discard
 // staged network changes (DELETE /nodes/{node}/network, removing
 // /etc/network/interfaces.new).
 func newNodeNetworkRevertCmd(nf *nodeFlags) *cobra.Command {
@@ -451,7 +451,7 @@ func newNodeNetworkRevertCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeNetworkApplyCmd builds `pve pbs node network apply` — activate
+// newNodeNetworkApplyCmd builds `pmx pbs node network apply` — activate
 // staged network changes (PUT /nodes/{node}/network, requires ifupdown2).
 func newNodeNetworkApplyCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{

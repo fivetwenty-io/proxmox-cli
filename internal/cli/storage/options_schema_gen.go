@@ -2,7 +2,7 @@
 
 package storage
 
-import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // storageOptionSchemas describes every settable option from the PVE API schema for
 // POST /storage, in lexical order by API key.

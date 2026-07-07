@@ -1,2 +1,2 @@
-// Package api implements the pve api command group (auth).
+// Package api implements the pmx api command group (auth).
 package api

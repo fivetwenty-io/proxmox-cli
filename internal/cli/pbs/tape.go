@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newTapeCmd builds `pve pbs tape` and its sub-groups: tape drives and
+// newTapeCmd builds `pmx pbs tape` and its sub-groups: tape drives and
 // changers (configuration plus runtime operations), media and media pools,
 // tape encryption keys, tape backup jobs, and one-shot backup/restore runs
 // (the /config/{drive,changer,media-pool,tape-encryption-keys,tape-backup-job}

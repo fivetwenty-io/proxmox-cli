@@ -16,7 +16,7 @@ import (
 // It is constructed once in the cobra root PersistentPreRunE and passed via
 // cobra.Command context to every sub-command.
 type APIClient struct {
-	// Raw is the underlying pve-apiclient-go client.
+	// Raw is the underlying proxmox-apiclient-go client.
 	Raw pve.Client
 
 	// Access is the /access namespace service.

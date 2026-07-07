@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestJobsRealmSync_List verifies `pve cluster jobs realm-sync list` reads
+// TestJobsRealmSync_List verifies `pmx cluster jobs realm-sync list` reads
 // GET /cluster/jobs/realm-sync and renders the focused columns.
 func TestJobsRealmSync_List(t *testing.T) {
 	f, ac := newFakeClient(t)

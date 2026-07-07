@@ -8,11 +8,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/node"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	_ "github.com/fivetwenty-io/pmx-cli/internal/cli/node"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // ---------------------------------------------------------------------------
@@ -93,14 +93,14 @@ func TestNodeFirewallRules_CreateForwardsFields(t *testing.T) {
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
 	root.SetArgs(append(prefix, "--node", "pve1", "node", "firewall", "rules", "create",
 		"--type", "in", "--action", "ACCEPT", "--proto", "tcp",
-		"--dport", "22", "--source", "+pvecli-ips", "--enable", "0", "--comment", "ssh"))
+		"--dport", "22", "--source", "+pmxcli-ips", "--enable", "0", "--comment", "ssh"))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "in", gotForm.Get("type"))
 	require.Equal(t, "ACCEPT", gotForm.Get("action"))
 	require.Equal(t, "tcp", gotForm.Get("proto"))
 	require.Equal(t, "22", gotForm.Get("dport"))
-	require.Equal(t, "+pvecli-ips", gotForm.Get("source"))
+	require.Equal(t, "+pmxcli-ips", gotForm.Get("source"))
 	require.Equal(t, "0", gotForm.Get("enable"))
 	require.Equal(t, "ssh", gotForm.Get("comment"))
 }
@@ -242,7 +242,7 @@ func TestNodeFirewallOptions_SetForwardsFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestNodeFirewall_CommandTree asserts the firewall sub-tree exposes the
-// expected rules and options verb sets under `pve node firewall`.
+// expected rules and options verb sets under `pmx node firewall`.
 func TestNodeFirewall_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()

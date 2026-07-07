@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // agentCall invokes one no-parameter QEMU guest-agent endpoint. All such
@@ -89,7 +89,7 @@ type agentNodes interface {
 	CreateQemuAgentSuspendRam(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 }
 
-// newAgentCmd builds `pve qemu agent <vmid> <command>`, a dispatcher over the
+// newAgentCmd builds `pmx qemu agent <vmid> <command>`, a dispatcher over the
 // QEMU guest-agent endpoints. The command is named positionally (mirroring
 // `qm agent`) so that the full set of guest-agent verbs is reachable without a
 // sub-command per verb. All verbs require the guest agent to be installed and

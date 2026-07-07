@@ -13,12 +13,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	_ "github.com/fivetwenty-io/pve-cli/internal/cli/node"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	_ "github.com/fivetwenty-io/pmx-cli/internal/cli/node"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // recordedRequest captures the method, path, and body of a fake-server request.
@@ -70,9 +70,9 @@ func newNodeRoot(t *testing.T, f *testhelper.FakePVE, format output.Format, runn
 	*cobra.Command, *bytes.Buffer, []string,
 ) {
 	t.Helper()
-	t.Setenv("PVE_CONTEXT", "")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
 
 	cfgPath := writeFakeConfig(t, f)
 

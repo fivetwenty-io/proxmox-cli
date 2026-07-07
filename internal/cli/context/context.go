@@ -3,10 +3,10 @@ package context
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// Group builds `pve context` and attaches all sub-commands.
+// Group builds `pmx context` and attaches all sub-commands.
 // The passed *cli.Deps is a placeholder for command-tree assembly; live deps
 // are resolved per-invocation via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {
@@ -25,11 +25,11 @@ Proxmox VE API.`,
 	return cmd
 }
 
-// CtxAlias builds the hidden `pve ctx` alias for the context group.
+// CtxAlias builds the hidden `pmx ctx` alias for the context group.
 func CtxAlias(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "ctx",
-		Short:  "Alias for 'pve context'",
+		Short:  "Alias for 'pmx context'",
 		Hidden: true,
 	}
 	addSubcommands(cmd)

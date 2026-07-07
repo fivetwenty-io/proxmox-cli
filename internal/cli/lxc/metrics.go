@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newMetricsCmd builds `pve lxc metrics <vmid> --timeframe FRAME [--cf CF]`.
+// newMetricsCmd builds `pmx lxc metrics <vmid> --timeframe FRAME [--cf CF]`.
 //
 // The endpoint returns a time-series array of RRD data points (cpu, mem, disk,
 // net). Each data point is a free-form JSON object; the command renders the

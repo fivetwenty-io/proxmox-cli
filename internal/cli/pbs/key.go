@@ -7,13 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newTapeKeyCmd builds `pve pbs tape key` — create, inspect, update, and
+// newTapeKeyCmd builds `pmx pbs tape key` — create, inspect, update, and
 // delete tape encryption key configurations (GET/POST/PUT/DELETE
 // /config/tape-encryption-keys).
 func newTapeKeyCmd() *cobra.Command {
@@ -66,7 +66,7 @@ func decodeTapeKeyEntries(resp *pbsconfig.ListTapeEncryptionKeysResponse) []tape
 	return entries
 }
 
-// newTapeKeyLsCmd builds `pve pbs tape key ls` — list every tape encryption
+// newTapeKeyLsCmd builds `pmx pbs tape key ls` — list every tape encryption
 // key (GET /config/tape-encryption-keys).
 func newTapeKeyLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -104,7 +104,7 @@ func newTapeKeyLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeKeyShowCmd builds `pve pbs tape key show <fingerprint>` — show one
+// newTapeKeyShowCmd builds `pmx pbs tape key show <fingerprint>` — show one
 // tape encryption key's metadata (GET
 // /config/tape-encryption-keys/{fingerprint}). The key material and password
 // are never returned by this endpoint.
@@ -144,7 +144,7 @@ func newTapeKeyShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeKeyAddCmd builds `pve pbs tape key add` — create a new tape
+// newTapeKeyAddCmd builds `pmx pbs tape key add` — create a new tape
 // encryption key, or restore one from an exported key file (POST
 // /config/tape-encryption-keys). --password is required.
 //
@@ -237,7 +237,7 @@ func newTapeKeyAddCmd() *cobra.Command {
 // key's key-derivation function.
 var tapeKeyKdfValues = []string{"none", "scrypt", "pbkdf2"}
 
-// newTapeKeyUpdateCmd builds `pve pbs tape key update <fingerprint>` —
+// newTapeKeyUpdateCmd builds `pmx pbs tape key update <fingerprint>` —
 // change a tape encryption key's password (PUT
 // /config/tape-encryption-keys/{fingerprint}). --hint and --new-password are
 // always required by the API, regardless of whether other flags are set.
@@ -321,7 +321,7 @@ func newTapeKeyUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTapeKeyDeleteCmd builds `pve pbs tape key delete <fingerprint>` —
+// newTapeKeyDeleteCmd builds `pmx pbs tape key delete <fingerprint>` —
 // remove a tape encryption key (DELETE
 // /config/tape-encryption-keys/{fingerprint}).
 func newTapeKeyDeleteCmd() *cobra.Command {

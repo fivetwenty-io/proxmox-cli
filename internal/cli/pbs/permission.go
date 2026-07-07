@@ -10,11 +10,11 @@ import (
 
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newPermissionCmd builds `pve pbs permission` — show effective permissions
+// newPermissionCmd builds `pmx pbs permission` — show effective permissions
 // for a user or API token (GET /access/permissions).
 func newPermissionCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -28,7 +28,7 @@ func newPermissionCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionLsCmd builds `pve pbs permission ls` — list effective
+// newPermissionLsCmd builds `pmx pbs permission ls` — list effective
 // permissions (GET /access/permissions).
 func newPermissionLsCmd() *cobra.Command {
 	var authId, path string

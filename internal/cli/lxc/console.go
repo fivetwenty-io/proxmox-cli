@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newConsoleCmd builds `pve lxc console <vmid>`, which opens a console proxy to a
+// newConsoleCmd builds `pmx lxc console <vmid>`, which opens a console proxy to a
 // container and returns the connection ticket. Three console types are supported
 // via --type: vnc (default), term (xterm.js terminal), and spice. Each maps to a
 // distinct proxy endpoint and returns a short-lived ticket a viewer uses to

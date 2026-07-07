@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newCloudinitCmd builds the `pve qemu cloudinit` sub-group: inspect the pending
+// newCloudinitCmd builds the `pmx qemu cloudinit` sub-group: inspect the pending
 // cloud-init configuration, dump the generated config of a given type, and
 // regenerate the cloud-init drive from the VM configuration.
 func newCloudinitCmd() *cobra.Command {
@@ -32,7 +32,7 @@ type cloudinitPendingEntry struct {
 	Delete  any    `json:"delete"`
 }
 
-// newCloudinitPendingCmd builds `pve qemu cloudinit pending <vmid>`, listing the
+// newCloudinitPendingCmd builds `pmx qemu cloudinit pending <vmid>`, listing the
 // current and pending cloud-init configuration values
 // (GET /nodes/{node}/qemu/{vmid}/cloudinit).
 func newCloudinitPendingCmd() *cobra.Command {
@@ -78,7 +78,7 @@ func newCloudinitPendingCmd() *cobra.Command {
 	return cmd
 }
 
-// newCloudinitDumpCmd builds `pve qemu cloudinit dump <vmid> --type <type>`,
+// newCloudinitDumpCmd builds `pmx qemu cloudinit dump <vmid> --type <type>`,
 // returning the generated cloud-init configuration of the requested type
 // (GET /nodes/{node}/qemu/{vmid}/cloudinit/dump).
 func newCloudinitDumpCmd() *cobra.Command {
@@ -117,7 +117,7 @@ func newCloudinitDumpCmd() *cobra.Command {
 	return cmd
 }
 
-// newCloudinitUpdateCmd builds `pve qemu cloudinit update <vmid>`, regenerating
+// newCloudinitUpdateCmd builds `pmx qemu cloudinit update <vmid>`, regenerating
 // the cloud-init drive from the current VM configuration
 // (PUT /nodes/{node}/qemu/{vmid}/cloudinit). Only changed configuration is
 // applied to the running guest's drive.

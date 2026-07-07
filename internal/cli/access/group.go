@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newGroupResourceCmd builds `pve access group` and its sub-commands.
+// newGroupResourceCmd builds `pmx access group` and its sub-commands.
 func newGroupResourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "group",
@@ -35,7 +35,7 @@ type groupListEntry struct {
 	Users   string `json:"users,omitempty"`
 }
 
-// newGroupListCmd builds `pve access group list`.
+// newGroupListCmd builds `pmx access group list`.
 func newGroupListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -68,7 +68,7 @@ func newGroupListCmd() *cobra.Command {
 	}
 }
 
-// newGroupGetCmd builds `pve access group get <groupid>`.
+// newGroupGetCmd builds `pmx access group get <groupid>`.
 func newGroupGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <groupid>",
@@ -94,7 +94,7 @@ func newGroupGetCmd() *cobra.Command {
 	}
 }
 
-// newGroupCreateCmd builds `pve access group create <groupid>`.
+// newGroupCreateCmd builds `pmx access group create <groupid>`.
 func newGroupCreateCmd() *cobra.Command {
 	var comment string
 	cmd := &cobra.Command{
@@ -120,7 +120,7 @@ func newGroupCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newGroupSetCmd builds `pve access group set <groupid>`.
+// newGroupSetCmd builds `pmx access group set <groupid>`.
 func newGroupSetCmd() *cobra.Command {
 	var comment string
 	cmd := &cobra.Command{
@@ -146,7 +146,7 @@ func newGroupSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newGroupDeleteCmd builds `pve access group delete <groupid>`.
+// newGroupDeleteCmd builds `pmx access group delete <groupid>`.
 func newGroupDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

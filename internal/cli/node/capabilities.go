@@ -7,10 +7,10 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 )
 
-// newCapabilitiesCmd builds the `pve node capabilities` sub-tree: read-only
+// newCapabilitiesCmd builds the `pmx node capabilities` sub-tree: read-only
 // queries for the virtualization capabilities the resolved node can offer to
 // guests.
 func newCapabilitiesCmd() *cobra.Command {

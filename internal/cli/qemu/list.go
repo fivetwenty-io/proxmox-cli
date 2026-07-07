@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // qemuListEntry is the minimal decoded shape of one entry from nodes.ListQemu
@@ -27,10 +27,10 @@ type qemuListEntry struct {
 	Type     string `json:"type"`
 }
 
-// newListCmd builds `pve qemu list`.
+// newListCmd builds `pmx qemu list`.
 //
 // Without --cluster the command lists VMs on the node resolved from --node /
-// PVE_NODE / config. With --cluster it calls the cluster-wide endpoint and
+// PMX_NODE / config. With --cluster it calls the cluster-wide endpoint and
 // shows all VMs across every cluster node; --node is not required in that mode.
 func newListCmd() *cobra.Command {
 	var (

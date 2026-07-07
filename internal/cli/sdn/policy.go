@@ -6,21 +6,21 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // --- prefix-list ---
 
-// newPrefixListCmd builds `pve sdn prefix-list` and its sub-commands.
+// newPrefixListCmd builds `pmx sdn prefix-list` and its sub-commands.
 func newPrefixListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "prefix-list",
 		Aliases: []string{"prefix-lists"},
 		Short:   "Manage SDN prefix lists (route-filtering rule sets)",
 		Long: "List, create, inspect, update, and delete SDN prefix lists and their " +
-			"entries. Changes are staged until committed with `pve sdn apply`.",
+			"entries. Changes are staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newPrefixListListCmd(),
@@ -78,7 +78,7 @@ func newPrefixListCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <id>",
 		Short: "Create an SDN prefix list",
-		Long:  "Create an SDN prefix list. The change is staged until `pve sdn apply`.",
+		Long:  "Create an SDN prefix list. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -95,7 +95,7 @@ func newPrefixListCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN prefix list %q created (run `pve sdn apply` to commit).", id)}
+				"SDN prefix list %q created (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -133,7 +133,7 @@ func newPrefixListSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id>",
 		Short: "Update an SDN prefix list",
-		Long:  "Update an SDN prefix list. The change is staged until `pve sdn apply`.",
+		Long:  "Update an SDN prefix list. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -159,7 +159,7 @@ func newPrefixListSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN prefix list %q updated (run `pve sdn apply` to commit).", id)}
+				"SDN prefix list %q updated (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -195,7 +195,7 @@ func newPrefixListDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN prefix list %q deleted (run `pve sdn apply` to commit).", id)}
+				"SDN prefix list %q deleted (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -204,7 +204,7 @@ func newPrefixListDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newPrefixListEntryCmd builds `pve sdn prefix-list entry` and its sub-commands.
+// newPrefixListEntryCmd builds `pmx sdn prefix-list entry` and its sub-commands.
 func newPrefixListEntryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "entry",
@@ -250,7 +250,7 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <id> --action <permit|deny> --prefix <cidr>",
 		Short: "Add an entry to an SDN prefix list",
-		Long:  "Add an entry to an SDN prefix list. The change is staged until `pve sdn apply`.",
+		Long:  "Add an entry to an SDN prefix list. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -273,7 +273,7 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 				return fmt.Errorf("add entry to SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry added to SDN prefix list %q (run `pve sdn apply` to commit).", id)}
+				"Entry added to SDN prefix list %q (run `pmx sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -321,7 +321,7 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id> <seq>",
 		Short: "Update a single entry of an SDN prefix list",
-		Long:  "Update a single entry of an SDN prefix list. The change is staged until `pve sdn apply`.",
+		Long:  "Update a single entry of an SDN prefix list. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -359,7 +359,7 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 				return fmt.Errorf("update entry %q of SDN prefix list %q: %w", urlSeq, id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN prefix list %q updated (run `pve sdn apply` to commit).", urlSeq, id)}
+				"Entry %q of SDN prefix list %q updated (run `pmx sdn apply` to commit).", urlSeq, id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -400,7 +400,7 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete entry %q of SDN prefix list %q: %w", seq, id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN prefix list %q deleted (run `pve sdn apply` to commit).", seq, id)}
+				"Entry %q of SDN prefix list %q deleted (run `pmx sdn apply` to commit).", seq, id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -411,7 +411,7 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 
 // --- route-map ---
 
-// newRouteMapCmd builds `pve sdn route-map` and its sub-commands. A route map is
+// newRouteMapCmd builds `pmx sdn route-map` and its sub-commands. A route map is
 // an ordered list of entries; there is no standalone route-map object, so a
 // route map comes into existence when its first entry is added.
 func newRouteMapCmd() *cobra.Command {
@@ -420,7 +420,7 @@ func newRouteMapCmd() *cobra.Command {
 		Aliases: []string{"route-maps"},
 		Short:   "Manage SDN route maps (BGP route policy)",
 		Long: "List route maps, show their entries, and manage individual entries. " +
-			"Changes are staged until committed with `pve sdn apply`.",
+			"Changes are staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newRouteMapListCmd(),
@@ -486,7 +486,7 @@ func newRouteMapGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newRouteMapEntryCmd builds `pve sdn route-map entry` and its sub-commands.
+// newRouteMapEntryCmd builds `pmx sdn route-map entry` and its sub-commands.
 func newRouteMapEntryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "entry",
@@ -547,7 +547,7 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <route-map> --order <n> --action <permit|deny>",
 		Short: "Add an entry to an SDN route map",
-		Long:  "Add an entry to an SDN route map. The change is staged until `pve sdn apply`.",
+		Long:  "Add an entry to an SDN route map. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -577,7 +577,7 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 				return fmt.Errorf("add entry to SDN route map %q: %w", routeMap, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry added to SDN route map %q (run `pve sdn apply` to commit).", routeMap)}
+				"Entry added to SDN route map %q (run `pmx sdn apply` to commit).", routeMap)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -626,7 +626,7 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <route-map> <order>",
 		Short: "Update a single entry of an SDN route map",
-		Long:  "Update a single entry of an SDN route map. The change is staged until `pve sdn apply`.",
+		Long:  "Update a single entry of an SDN route map. The change is staged until `pmx sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -664,7 +664,7 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 				return fmt.Errorf("update entry %q of SDN route map %q: %w", order, routeMap, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN route map %q updated (run `pve sdn apply` to commit).", order, routeMap)}
+				"Entry %q of SDN route map %q updated (run `pmx sdn apply` to commit).", order, routeMap)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -705,7 +705,7 @@ func newRouteMapEntryDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete entry %q of SDN route map %q: %w", order, routeMap, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN route map %q deleted (run `pve sdn apply` to commit).", order, routeMap)}
+				"Entry %q of SDN route map %q deleted (run `pmx sdn apply` to commit).", order, routeMap)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

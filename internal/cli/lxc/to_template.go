@@ -5,11 +5,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newToTemplateCmd builds `pve lxc to-template <vmid|name>`.
+// newToTemplateCmd builds `pmx lxc to-template <vmid|name>`.
 //
 // Converts an existing, stopped container into a template via
 // POST /nodes/{node}/lxc/{vmid}/template. The operation is synchronous —

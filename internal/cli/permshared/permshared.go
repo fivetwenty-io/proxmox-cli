@@ -21,7 +21,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // PVEBool is an optional boolean that tolerates the several JSON encodings
@@ -135,7 +135,7 @@ func DecodeAclList(resp *access.ListAclResponse) ([]AclEntry, error) {
 // FilterByPath returns the subset of entries matching path. An empty path
 // matches every entry. When exact is true the entry's path must equal path;
 // otherwise a prefix match is used (a plain byte-wise prefix, not
-// path-boundary aware, mirroring the existing `pve access acl list
+// path-boundary aware, mirroring the existing `pmx access acl list
 // --path/--exact` matcher in internal/cli/access/acl.go so behaviour stays
 // consistent across both surfaces).
 func FilterByPath(entries []AclEntry, path string, exact bool) []AclEntry {
@@ -289,7 +289,7 @@ func RenderAclList(entries []AclEntry, inherited bool) output.Result {
 }
 
 // RenderEffective builds an output.Result for a decoded effective-permissions
-// tree, mirroring the PATH/PRIVS table shape of `pve access permissions`
+// tree, mirroring the PATH/PRIVS table shape of `pmx access permissions`
 // (internal/cli/access/misc.go): one row per path, privileges comma-joined
 // and sorted. Like that command, the per-privilege propagate flag is decoded
 // (via DecodePermissions) but not shown in this table; every privilege

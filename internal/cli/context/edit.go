@@ -9,12 +9,12 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newEditCmd builds `pve context edit [<name>]`.
+// newEditCmd builds `pmx context edit [<name>]`.
 // When name is omitted the current context is used; errors if none is set.
 // The verb marshals the context YAML to a 0600 tempfile, launches $EDITOR
 // (fallback $VISUAL), reads the result back, validates it, and merges it into
@@ -52,7 +52,7 @@ Note: config.Save rewrites the config file and does not preserve comments.`,
 			if name == "" {
 				return fmt.Errorf(
 					"no context name specified and no current-context is set; " +
-						"use 'pve context edit <name>' or 'pve context select <name>' first",
+						"use 'pmx context edit <name>' or 'pmx context select <name>' first",
 				)
 			}
 
@@ -71,7 +71,7 @@ Note: config.Save rewrites the config file and does not preserve comments.`,
 			}
 			if editorBin == "" {
 				return fmt.Errorf(
-					"$EDITOR is not set; use 'pve context add' to modify fields directly",
+					"$EDITOR is not set; use 'pmx context add' to modify fields directly",
 				)
 			}
 

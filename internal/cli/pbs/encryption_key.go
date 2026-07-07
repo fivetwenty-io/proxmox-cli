@@ -10,11 +10,11 @@ import (
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newEncryptionKeyCmd builds `pve pbs encryption-key` — manage datastore
+// newEncryptionKeyCmd builds `pmx pbs encryption-key` — manage datastore
 // encryption keys (/config/encryption-keys), used to encrypt/decrypt backup
 // content client-side. Not to be confused with tape encryption keys
 // (/config/tape-encryption-keys), which are a separate key store managed by
@@ -49,7 +49,7 @@ type encKeyEntry struct {
 	Path        *string `json:"path,omitempty"`
 }
 
-// newEncKeyLsCmd builds `pve pbs encryption-key ls` — list configured
+// newEncKeyLsCmd builds `pmx pbs encryption-key ls` — list configured
 // datastore encryption keys (GET /config/encryption-keys).
 func newEncKeyLsCmd() *cobra.Command {
 	var includeArchived bool
@@ -107,7 +107,7 @@ func newEncKeyLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newEncKeyAddCmd builds `pve pbs encryption-key add <id>` — create a
+// newEncKeyAddCmd builds `pmx pbs encryption-key add <id>` — create a
 // datastore encryption key (POST /config/encryption-keys).
 func newEncKeyAddCmd() *cobra.Command {
 	var key string
@@ -141,7 +141,7 @@ func newEncKeyAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newEncKeyDeleteCmd builds `pve pbs encryption-key delete <id>` — remove a
+// newEncKeyDeleteCmd builds `pmx pbs encryption-key delete <id>` — remove a
 // datastore encryption key (DELETE /config/encryption-keys/{id}).
 func newEncKeyDeleteCmd() *cobra.Command {
 	var (
@@ -182,7 +182,7 @@ func newEncKeyDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newEncKeyToggleArchiveCmd builds `pve pbs encryption-key toggle-archive
+// newEncKeyToggleArchiveCmd builds `pmx pbs encryption-key toggle-archive
 // <id>` — flip a key's archived state (POST /config/encryption-keys/{id}).
 //
 // This command's name and behavior follow the binding's generated method,

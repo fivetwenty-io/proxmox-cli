@@ -8,12 +8,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestJobsScheduleAnalyze_Success verifies `pve cluster jobs schedule-analyze --schedule daily`
+// TestJobsScheduleAnalyze_Success verifies `pmx cluster jobs schedule-analyze --schedule daily`
 // queries GET /cluster/jobs/schedule-analyze with the schedule parameter and renders results.
 func TestJobsScheduleAnalyze_Success(t *testing.T) {
 	f, ac := newFakeClient(t)

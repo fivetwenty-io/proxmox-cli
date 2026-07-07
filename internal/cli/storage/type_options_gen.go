@@ -2,7 +2,7 @@
 
 package storage
 
-import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // storageTypeOptions maps each storage type to the options its plugin
 // accepts, extracted from the PVE::Storage::*Plugin `options` tables.

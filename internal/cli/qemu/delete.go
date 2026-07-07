@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// newDeleteCmd builds `pve qemu delete <vmid>`.
+// newDeleteCmd builds `pmx qemu delete <vmid>`.
 func newDeleteCmd() *cobra.Command {
 	var (
 		async                    bool

@@ -9,11 +9,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newNextIDCmd builds `pve cluster next-id`.
+// newNextIDCmd builds `pmx cluster next-id`.
 func newNextIDCmd() *cobra.Command {
 	var vmidHint int64
 

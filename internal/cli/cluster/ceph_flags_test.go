@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestCephFlags_List verifies `pve cluster ceph flags list` reads
+// TestCephFlags_List verifies `pmx cluster ceph flags list` reads
 // GET /cluster/ceph/flags and renders the returned flags.
 func TestCephFlags_List(t *testing.T) {
 	f, ac := newFakeClient(t)

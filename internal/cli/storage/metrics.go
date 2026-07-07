@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newStorageRrddataCmd builds `pve storage rrddata <storage>` — structured
+// newStorageRrddataCmd builds `pmx storage rrddata <storage>` — structured
 // time-series metric data for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/rrddata).
 func newStorageRrddataCmd() *cobra.Command {
@@ -29,7 +29,7 @@ func newStorageRrddataCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 
@@ -77,7 +77,7 @@ func newStorageRrddataCmd() *cobra.Command {
 	return cmd
 }
 
-// newStorageRrdCmd builds `pve storage rrd <storage>` — returns the URL of a
+// newStorageRrdCmd builds `pmx storage rrd <storage>` — returns the URL of a
 // legacy PNG RRD graph for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/rrd).
 func newStorageRrdCmd() *cobra.Command {
@@ -96,7 +96,7 @@ func newStorageRrdCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			storage := args[0]
 

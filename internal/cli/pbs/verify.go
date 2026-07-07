@@ -8,15 +8,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newVerifyCmd builds `pve pbs verify` — run backup-chunk verification on a
+// newVerifyCmd builds `pmx pbs verify` — run backup-chunk verification on a
 // datastore and manage scheduled verification job configurations
 // (POST /admin/datastore/{store}/verify, /config/verify, /admin/verify).
 func newVerifyCmd() *cobra.Command {
@@ -30,7 +30,7 @@ func newVerifyCmd() *cobra.Command {
 	return cmd
 }
 
-// newVerifyRunCmd builds `pve pbs verify run` — verify backups on a
+// newVerifyRunCmd builds `pmx pbs verify run` — verify backups on a
 // datastore, optionally scoped to a namespace or a single snapshot (POST
 // /admin/datastore/{store}/verify).
 func newVerifyRunCmd() *cobra.Command {
@@ -150,7 +150,7 @@ type verifyJobEntry struct {
 	VerifyThreads  *int64  `json:"verify-threads,omitempty"`
 }
 
-// newVerifyJobCmd builds `pve pbs verify job` — create, inspect, update,
+// newVerifyJobCmd builds `pmx pbs verify job` — create, inspect, update,
 // delete, and manually trigger scheduled verification job configurations.
 func newVerifyJobCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -193,7 +193,7 @@ func decodeVerifyJobEntries(resp *pbsadmin.ListVerifyResponse) []verifyJobEntry 
 	return entries
 }
 
-// newVerifyJobLsCmd builds `pve pbs verify job ls` — list every verification
+// newVerifyJobLsCmd builds `pmx pbs verify job ls` — list every verification
 // job configuration with its most recent run status (GET /admin/verify).
 func newVerifyJobLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -230,7 +230,7 @@ func newVerifyJobLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVerifyJobShowCmd builds `pve pbs verify job show <id>` — show one
+// newVerifyJobShowCmd builds `pmx pbs verify job show <id>` — show one
 // verification job's full configuration (GET /config/verify/{id}).
 func newVerifyJobShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -308,7 +308,7 @@ func newVerifyJobShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newVerifyJobAddCmd builds `pve pbs verify job add <id>` — create a
+// newVerifyJobAddCmd builds `pmx pbs verify job add <id>` — create a
 // scheduled verification job configuration (POST /config/verify).
 func newVerifyJobAddCmd() *cobra.Command {
 	var (
@@ -403,7 +403,7 @@ func newVerifyJobAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newVerifyJobUpdateCmd builds `pve pbs verify job update <id>` — update a
+// newVerifyJobUpdateCmd builds `pmx pbs verify job update <id>` — update a
 // scheduled verification job configuration (PUT /config/verify/{id}).
 func newVerifyJobUpdateCmd() *cobra.Command {
 	var (
@@ -512,7 +512,7 @@ func newVerifyJobUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newVerifyJobDeleteCmd builds `pve pbs verify job delete <id>` — remove a
+// newVerifyJobDeleteCmd builds `pmx pbs verify job delete <id>` — remove a
 // verification job configuration (DELETE /config/verify/{id}).
 func newVerifyJobDeleteCmd() *cobra.Command {
 	var digest string
@@ -552,7 +552,7 @@ func newVerifyJobDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newVerifyJobRunCmd builds `pve pbs verify job run <id>` — manually trigger
+// newVerifyJobRunCmd builds `pmx pbs verify job run <id>` — manually trigger
 // a scheduled verification job (POST /admin/verify/{id}/run).
 func newVerifyJobRunCmd() *cobra.Command {
 	cmd := &cobra.Command{

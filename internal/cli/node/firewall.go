@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newFirewallCmd builds the `pve node firewall` sub-tree: the host firewall
+// newFirewallCmd builds the `pmx node firewall` sub-tree: the host firewall
 // rules and the per-node firewall options. Unlike the cluster and per-guest
 // firewalls, a node firewall has no IP sets, aliases, or security groups — only
 // rules and options. Every operation is synchronous (no task UPID).
@@ -100,10 +100,10 @@ func newNodeFirewallLogCmd() *cobra.Command {
 }
 
 // requireNode returns a clear error when no node could be resolved from the
-// --node flag, PVE_NODE, or the configured default.
+// --node flag, PMX_NODE, or the configured default.
 func requireNode(deps *cli.Deps) error {
 	if deps.Node == "" {
-		return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+		return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 	}
 	return nil
 }
@@ -465,7 +465,7 @@ func newNodeFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNodeFirewallOptionsDescribeCmd builds `pve node firewall options
+// newNodeFirewallOptionsDescribeCmd builds `pmx node firewall options
 // describe`, an offline catalog of every settable host firewall option from
 // the PVE API schema (see firewall_options_schema_gen.go).
 func newNodeFirewallOptionsDescribeCmd() *cobra.Command {
@@ -476,7 +476,7 @@ func newNodeFirewallOptionsDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
 			"options. Runs offline. Pass an option name to show only that option with " +
 			"full descriptions.",
-		CommandHint:         "pve node firewall options describe",
+		CommandHint:         "pmx node firewall options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }

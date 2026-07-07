@@ -10,7 +10,7 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pve-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
 // This file is a white-box companion to api_test.go (package api_test): it
@@ -57,7 +57,7 @@ func sampleAuthContext(tofu, insecure bool) *config.Context {
 
 func TestContextOptions_TofuDisabled_OptionsUnchanged(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(false, false)
 
 	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
@@ -72,12 +72,12 @@ func TestContextOptions_TofuDisabled_OptionsUnchanged(t *testing.T) {
 
 func TestContextOptions_TofuEnabled_WiresFingerprintPinning(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, false)
 
 	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
 
-	require.Equal(t, "/home/user/.config/pve/fingerprints/prod.json", opts.FingerprintCachePath,
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/prod.json", opts.FingerprintCachePath,
 		"tls.tofu=true must set the per-context fingerprint cache path")
 	require.NotNil(t, opts.ManualVerifyCallback,
 		"tls.tofu=true must install the manual-verify callback")
@@ -85,7 +85,7 @@ func TestContextOptions_TofuEnabled_WiresFingerprintPinning(t *testing.T) {
 
 func TestContextOptions_TofuEnabledButInsecure_OptionsUnchanged(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, true)
 
 	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
@@ -97,7 +97,7 @@ func TestContextOptions_TofuEnabledButInsecure_OptionsUnchanged(t *testing.T) {
 
 func TestContextOptions_DifferentContexts_DistinctCachePaths(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, false)
 
 	prod := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
@@ -117,7 +117,7 @@ func TestContextOptions_TokenCredentialPassedThrough(t *testing.T) {
 	// "user!token" regardless of whether user is empty, hence the leading "!"
 	// — this is pre-existing BuildOptions behavior, unchanged by IMP-02c.
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(false, false)
 
 	opts := contextOptions(cmd, ctx, false, "prod", "", "",
@@ -143,7 +143,7 @@ func TestContextOptions_TokenCredentialPassedThrough(t *testing.T) {
 // command: "insecure := pf.insecure || ctx.TLS.Insecure".
 func TestContextOptions_GlobalInsecureFlag_OverridesConfig(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, false) // tls.tofu=true, tls.insecure=false
 
 	opts := contextOptions(cmd, ctx, true, "prod", "admin@pam", "pam", "", "secretpw", "", "")
@@ -163,7 +163,7 @@ func TestContextOptions_GlobalInsecureFlag_OverridesConfig(t *testing.T) {
 // pass the global flag.
 func TestContextOptions_GlobalInsecureFlagUnset_ConfigOnlyBehaviorUnchanged(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(true, false) // tls.tofu=true, tls.insecure=false
 
 	opts := contextOptions(cmd, ctx, false, "prod", "admin@pam", "pam", "", "secretpw", "", "")
@@ -208,7 +208,7 @@ func TestRejectPBSContext_PVEAndEmptyProduct_Allowed(t *testing.T) {
 
 func TestClientForContext_RejectsPBSContext(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(false, false)
 	ctx.Product = config.ProductPBS
 
@@ -221,7 +221,7 @@ func TestClientForContext_RejectsPBSContext(t *testing.T) {
 
 func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
 	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
 	ctx := sampleAuthContext(false, false)
 	ctx.Product = config.ProductPBS
 

@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newAptCmd builds the `pve node apt` sub-tree: package update inspection,
+// newAptCmd builds the `pmx node apt` sub-tree: package update inspection,
 // installed-version reporting, changelogs, the apt database refresh, and APT
 // repository management for the resolved node.
 func newAptCmd() *cobra.Command {

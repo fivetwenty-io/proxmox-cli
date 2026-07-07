@@ -1,2 +1,2 @@
-// Package storage implements the pve storage command group.
+// Package storage implements the pmx storage command group.
 package storage

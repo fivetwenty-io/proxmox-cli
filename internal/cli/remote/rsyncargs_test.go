@@ -6,10 +6,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- extractPVEFlags --------------------------------------------------------
+// --- extractPMXFlags --------------------------------------------------------
 
-func TestExtractPVEFlags_Empty(t *testing.T) {
-	vals, rest, err := extractPVEFlags(nil)
+func TestExtractPMXFlags_Empty(t *testing.T) {
+	vals, rest, err := extractPMXFlags(nil)
 	require.NoError(t, err)
 	require.Empty(t, rest)
 	require.False(t, vals.Help)
@@ -17,29 +17,29 @@ func TestExtractPVEFlags_Empty(t *testing.T) {
 	require.Empty(t, vals.SSH)
 }
 
-func TestExtractPVEFlags_ShortContextSeparateToken(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"-c", "prod", "-avz", "src", "dst"})
+func TestExtractPMXFlags_ShortContextSeparateToken(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"-c", "prod", "-avz", "src", "dst"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"context": "prod"}, vals.Root)
 	require.Equal(t, []string{"-avz", "src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_LongContextEquals(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"--context=prod", "src", "dst"})
+func TestExtractPMXFlags_LongContextEquals(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"--context=prod", "src", "dst"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"context": "prod"}, vals.Root)
 	require.Equal(t, []string{"src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_LongContextSeparateToken(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"--context", "prod", "src", "dst"})
+func TestExtractPMXFlags_LongContextSeparateToken(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"--context", "prod", "src", "dst"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"context": "prod"}, vals.Root)
 	require.Equal(t, []string{"src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_ConfigInsecureDebugAllForms(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{
+func TestExtractPMXFlags_ConfigInsecureDebugAllForms(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{
 		"--config", "/tmp/c.yml", "--insecure", "--debug", "src", "dst",
 	})
 	require.NoError(t, err)
@@ -51,8 +51,8 @@ func TestExtractPVEFlags_ConfigInsecureDebugAllForms(t *testing.T) {
 	require.Equal(t, []string{"src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_SSHFlagsLongOnly(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{
+func TestExtractPMXFlags_SSHFlagsLongOnly(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{
 		"--ssh-user", "admin", "--ssh-port=2222", "--ssh-identity", "/k",
 		"--ssh-agent", "--no-strict", "-avz", "src", "dst",
 	})
@@ -67,56 +67,56 @@ func TestExtractPVEFlags_SSHFlagsLongOnly(t *testing.T) {
 	require.Equal(t, []string{"-avz", "src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_StopsAtFirstUnrecognizedToken(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"-avz", "--context", "prod", "src", "dst"})
+func TestExtractPMXFlags_StopsAtFirstUnrecognizedToken(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"-avz", "--context", "prod", "src", "dst"})
 	require.NoError(t, err)
 	require.Empty(t, vals.Root, "extraction is front-only; -avz ends it before --context is seen")
 	require.Equal(t, []string{"-avz", "--context", "prod", "src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_StopsAtBareDoubleDash(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"--context", "prod", "--", "src", "dst"})
+func TestExtractPMXFlags_StopsAtBareDoubleDash(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"--context", "prod", "--", "src", "dst"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"context": "prod"}, vals.Root)
 	require.Equal(t, []string{"--", "src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_HelpShortAbortsImmediately(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"-h", "src", "dst"})
+func TestExtractPMXFlags_HelpShortAbortsImmediately(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"-h", "src", "dst"})
 	require.NoError(t, err)
 	require.True(t, vals.Help)
 	require.Equal(t, []string{"-h", "src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_HelpLongAfterOtherFlags(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"-c", "prod", "--help"})
+func TestExtractPMXFlags_HelpLongAfterOtherFlags(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"-c", "prod", "--help"})
 	require.NoError(t, err)
 	require.True(t, vals.Help)
 	require.Equal(t, []string{"--help"}, rest)
 }
 
-func TestExtractPVEFlags_MissingValueErrors(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"--ssh-port"})
+func TestExtractPMXFlags_MissingValueErrors(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"--ssh-port"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--ssh-port")
 }
 
-func TestExtractPVEFlags_BoolFlagAcceptsInlineTrue(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"--insecure=true", "src", "dst"})
+func TestExtractPMXFlags_BoolFlagAcceptsInlineTrue(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"--insecure=true", "src", "dst"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"insecure": "true"}, vals.Root)
 	require.Equal(t, []string{"src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_BoolFlagAcceptsInlineFalse(t *testing.T) {
-	vals, rest, err := extractPVEFlags([]string{"--debug=false", "src", "dst"})
+func TestExtractPMXFlags_BoolFlagAcceptsInlineFalse(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"--debug=false", "src", "dst"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"debug": "false"}, vals.Root)
 	require.Equal(t, []string{"src", "dst"}, rest)
 }
 
-func TestExtractPVEFlags_BoolFlagRejectsInlineGarbage(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"--insecure=garbage"})
+func TestExtractPMXFlags_BoolFlagRejectsInlineGarbage(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"--insecure=garbage"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--insecure")
 	require.Contains(t, err.Error(), "garbage")
@@ -124,36 +124,36 @@ func TestExtractPVEFlags_BoolFlagRejectsInlineGarbage(t *testing.T) {
 
 // --- M-1: value-taking flag whose extracted value looks like another flag --
 
-func TestExtractPVEFlags_ContextValueLooksLikeFlagGetsTargetedError(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"-c", "-av", "src", "dst"})
+func TestExtractPMXFlags_ContextValueLooksLikeFlagGetsTargetedError(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"-c", "-av", "src", "dst"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `"-av"`)
 	require.Contains(t, err.Error(), "--checksum")
 }
 
-func TestExtractPVEFlags_LongContextValueLooksLikeFlagGetsTargetedError(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"--context", "-av"})
+func TestExtractPMXFlags_LongContextValueLooksLikeFlagGetsTargetedError(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"--context", "-av"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `"-av"`)
 	require.Contains(t, err.Error(), "--checksum")
 }
 
-func TestExtractPVEFlags_ContextEqualsValueLooksLikeFlagGetsTargetedError(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"--context=-av"})
+func TestExtractPMXFlags_ContextEqualsValueLooksLikeFlagGetsTargetedError(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"--context=-av"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `"-av"`)
 }
 
-func TestExtractPVEFlags_NonContextValueLooksLikeFlagGetsGenericError(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"--ssh-user", "-x"})
+func TestExtractPMXFlags_NonContextValueLooksLikeFlagGetsGenericError(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"--ssh-user", "-x"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--ssh-user")
 	require.Contains(t, err.Error(), `"-x"`)
 	require.NotContains(t, err.Error(), "--checksum")
 }
 
-func TestExtractPVEFlags_ConfigValueLooksLikeFlagGetsGenericError(t *testing.T) {
-	_, _, err := extractPVEFlags([]string{"--config", "--insecure"})
+func TestExtractPMXFlags_ConfigValueLooksLikeFlagGetsGenericError(t *testing.T) {
+	_, _, err := extractPMXFlags([]string{"--config", "--insecure"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--config")
 	require.Contains(t, err.Error(), `"--insecure"`)

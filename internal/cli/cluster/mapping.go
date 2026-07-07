@@ -9,11 +9,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newMappingCmd builds the `pve cluster mapping` sub-tree for managing
+// newMappingCmd builds the `pmx cluster mapping` sub-tree for managing
 // hardware-mapping definitions. A mapping gives a logical name to one or more
 // physical devices (PCI, USB) or host directories so guests can reference the
 // name and Proxmox resolves it to the right device on whichever node runs the

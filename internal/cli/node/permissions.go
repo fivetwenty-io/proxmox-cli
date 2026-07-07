@@ -8,9 +8,9 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/permshared"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeACLPath derives the ACL/permission path for a node.
@@ -18,7 +18,7 @@ func nodeACLPath(node string) string {
 	return fmt.Sprintf("/nodes/%s", node)
 }
 
-// newPermissionsCmd builds `pve node permissions` and its sub-commands.
+// newPermissionsCmd builds `pmx node permissions` and its sub-commands.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
@@ -27,7 +27,7 @@ func newPermissionsCmd() *cobra.Command {
 			"inspect the resulting effective permissions. Some node-scoped privileges " +
 			"(Sys.Incoming, PCI mdev operations) are checked at the root path \"/\" rather than " +
 			"at /nodes/{node}; this command only shows /nodes/{node}. Use " +
-			"`pve access permissions --path /` (or `pve access acl list --path /`) to inspect or " +
+			"`pmx access permissions --path /` (or `pmx access acl list --path /`) to inspect or " +
 			"grant those root-scoped privileges.",
 	}
 	cmd.AddCommand(
@@ -39,7 +39,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pve node permissions list <node>`.
+// newPermissionsListCmd builds `pmx node permissions list <node>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -49,7 +49,7 @@ func newPermissionsListCmd() *cobra.Command {
 			"also include entries from every ancestor path (/, /nodes), each row showing which " +
 			"path it came from. Some node privileges (Sys.Incoming, PCI mdev) are checked at " +
 			"root \"/\" and are not shown here even with --inherited beyond the normal chain; use " +
-			"`pve access acl list --path /` to inspect root grants directly.",
+			"`pmx access acl list --path /` to inspect root grants directly.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -82,7 +82,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pve node permissions effective <node>`.
+// newPermissionsEffectiveCmd builds `pmx node permissions effective <node>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -92,7 +92,7 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 			"caller, or for --userid when passed. Querying another user's or token's permissions " +
 			"requires Sys.Audit on /access. Some node privileges (Sys.Incoming, PCI mdev) are " +
 			"checked at root \"/\" instead and will not appear here; use " +
-			"`pve access permissions --path /` to inspect those.",
+			"`pmx access permissions --path /` to inspect those.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -121,8 +121,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantRevokeCmd builds `pve node permissions grant <node>` when
-// revoke is false, and `pve node permissions revoke <node>` when true. The two
+// newPermissionsGrantRevokeCmd builds `pmx node permissions grant <node>` when
+// revoke is false, and `pmx node permissions revoke <node>` when true. The two
 // verbs share identical mechanics: both call Access.UpdateAcl with the derived
 // node path, differing only in the Delete flag.
 func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
@@ -141,7 +141,7 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 		Short: short,
 		Long: short + " (/nodes/{node}). Some node privileges (Sys.Incoming, PCI mdev) are " +
 			"checked at root \"/\" instead and are unaffected by this command; use " +
-			"`pve access acl set --path /` for those. Mutating ACL entries requires " +
+			"`pmx access acl set --path /` for those. Mutating ACL entries requires " +
 			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
 			"silently, matching PVE server behavior. This command does not block self-lockout; " +
 			"check `permissions effective` first if unsure.",

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fivetwenty-io/pve-cli/internal/version"
+	"github.com/fivetwenty-io/pmx-cli/internal/version"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,7 +33,7 @@ func TestString_ContainsVersion(t *testing.T) {
 	s := version.String()
 
 	require.Contains(t, s, version.Version)
-	require.Contains(t, s, "pve version")
+	require.Contains(t, s, "pmx version")
 }
 
 func TestString_ContainsAllFields(t *testing.T) {

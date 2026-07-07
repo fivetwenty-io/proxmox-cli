@@ -9,11 +9,11 @@ import (
 
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newACLCmd builds `pve pbs acl` and its sub-commands: list Access Control
+// newACLCmd builds `pmx pbs acl` and its sub-commands: list Access Control
 // List entries and grant or revoke a role on a path for a user, group, or
 // API token (GET/PUT /access/acl).
 func newACLCmd() *cobra.Command {
@@ -35,7 +35,7 @@ type aclListEntry struct {
 	UgidType  string `json:"ugid_type"`
 }
 
-// newACLLsCmd builds `pve pbs acl ls` — list ACL entries (GET /access/acl).
+// newACLLsCmd builds `pmx pbs acl ls` — list ACL entries (GET /access/acl).
 func newACLLsCmd() *cobra.Command {
 	var path string
 	var exact bool
@@ -104,7 +104,7 @@ func newACLLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newACLUpdateCmd builds `pve pbs acl update` — grant or revoke a role on a
+// newACLUpdateCmd builds `pmx pbs acl update` — grant or revoke a role on a
 // path for a user, group, or API token (PUT /access/acl).
 func newACLUpdateCmd() *cobra.Command {
 	var (

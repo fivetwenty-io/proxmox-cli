@@ -5,19 +5,19 @@ import (
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
-	"github.com/fivetwenty-io/pve-cli/internal/exitcode"
+	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
 )
 
 // unauthorizedHint is printed after a 401 so the operator knows the request
 // reached Proxmox but the credentials were rejected, and how to inspect them.
 const unauthorizedHint = `hint: authentication failed (HTTP 401) — Proxmox rejected the credentials.
-  Inspect the active context:   pve context show
+  Inspect the active context:   pmx context show
   For token auth the API header is USER@REALM!TOKENID=SECRET, split across three fields:
     - auth.username : the user and realm, e.g. root@pam
     - auth.token-id : the token NAME only, e.g. backup  (no "@" or "!")
     - auth.secret   : the token's secret UUID value
   Confirm the token exists and is enabled: Datacenter → Permissions → API Tokens.
-  Run 'pve context validate' to catch a malformed context before it hits the API.`
+  Run 'pmx context validate' to catch a malformed context before it hits the API.`
 
 // forbiddenHint is printed after a 403 so the operator knows the credentials
 // authenticated but lack the privilege for the requested path — most often the

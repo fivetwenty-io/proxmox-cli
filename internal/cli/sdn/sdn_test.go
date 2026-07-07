@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // recordedRequest captures a single HTTP request a command issued to the fake
@@ -66,9 +66,9 @@ contexts:
 func run(t *testing.T, f *testhelper.FakePVE, in string, args ...string) (string, error) {
 	t.Helper()
 
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	cfgPath := writeConfig(t, f)
 
@@ -125,13 +125,13 @@ func TestZoneList(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/cluster/sdn/zones", []any{
-		map[string]any{"zone": "pvecli", "type": "simple", "nodes": "pve1", "ipam": "pve"},
+		map[string]any{"zone": "pmxcli", "type": "simple", "nodes": "pve1", "ipam": "pve"},
 		map[string]any{"zone": "vlanz", "type": "vlan", "nodes": "", "ipam": ""},
 	}, 200)
 
 	out, err := run(t, f, "", "zone", "list")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli")
+	require.Contains(t, out, "pmxcli")
 	require.Contains(t, out, "simple")
 	require.Contains(t, out, "vlanz")
 	require.Len(t, rec, 1)
@@ -153,15 +153,15 @@ func TestZoneCreate(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/zones", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "zone", "create", "pvecli",
+	out, err := run(t, f, "", "zone", "create", "pmxcli",
 		"--type", "vlan", "--nodes", "pve1", "--bridge", "vmbr0", "--ipam", "pve")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli")
+	require.Contains(t, out, "pmxcli")
 	require.Contains(t, out, "created")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPost, rec[0].method)
 	require.Equal(t, "/api2/json/cluster/sdn/zones", rec[0].path)
-	require.Equal(t, "pvecli", rec[0].body["zone"])
+	require.Equal(t, "pmxcli", rec[0].body["zone"])
 	require.Equal(t, "vlan", rec[0].body["type"])
 	require.Equal(t, "pve1", rec[0].body["nodes"])
 	require.Equal(t, "vmbr0", rec[0].body["bridge"])
@@ -175,10 +175,10 @@ func TestZoneCreateOmitsUnsetFlags(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/zones", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "zone", "create", "pvecli")
+	_, err := run(t, f, "", "zone", "create", "pmxcli")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
-	require.Equal(t, "pvecli", rec[0].body["zone"])
+	require.Equal(t, "pmxcli", rec[0].body["zone"])
 	require.Equal(t, "simple", rec[0].body["type"], "type defaults to simple")
 	require.NotContains(t, rec[0].body, "nodes")
 	require.NotContains(t, rec[0].body, "bridge")
@@ -190,7 +190,7 @@ func TestZoneCreateError(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/zones", nil, 400)
 
-	_, err := run(t, f, "", "zone", "create", "pvecli")
+	_, err := run(t, f, "", "zone", "create", "pmxcli")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "create SDN zone")
 }
@@ -198,9 +198,9 @@ func TestZoneCreateError(t *testing.T) {
 func TestZoneDeleteWithoutConfirmation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "zone", "delete", "pvecli")
+	_, err := run(t, f, "", "zone", "delete", "pmxcli")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "without confirmation")
 	require.Empty(t, rec, "no request must be issued without --yes")
@@ -209,22 +209,22 @@ func TestZoneDeleteWithoutConfirmation(t *testing.T) {
 func TestZoneDeleteWithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "zone", "delete", "pvecli", "--yes")
+	out, err := run(t, f, "", "zone", "delete", "pmxcli", "--yes")
 	require.NoError(t, err)
 	require.Contains(t, out, "deleted")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodDelete, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/zones/pvecli", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/zones/pmxcli", rec[0].path)
 }
 
 func TestZoneDeleteError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pvecli", nil, 500)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/zones/pmxcli", nil, 500)
 
-	_, err := run(t, f, "", "zone", "delete", "pvecli", "--yes")
+	_, err := run(t, f, "", "zone", "delete", "pmxcli", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "delete SDN zone")
 	require.Len(t, rec, 1)
@@ -236,13 +236,13 @@ func TestVnetList(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/cluster/sdn/vnets", []any{
-		map[string]any{"vnet": "pvecli0", "zone": "pvecli", "tag": 100, "alias": "lab"},
-		map[string]any{"vnet": "pvecli1", "zone": "pvecli", "tag": 0, "alias": ""},
+		map[string]any{"vnet": "pmxcli0", "zone": "pmxcli", "tag": 100, "alias": "lab"},
+		map[string]any{"vnet": "pmxcli1", "zone": "pmxcli", "tag": 0, "alias": ""},
 	}, 200)
 
 	out, err := run(t, f, "", "vnet", "list")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli0")
+	require.Contains(t, out, "pmxcli0")
 	require.Contains(t, out, "100")
 	require.Contains(t, out, "lab")
 	require.Len(t, rec, 1)
@@ -254,14 +254,14 @@ func TestVnetCreate(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "vnet", "create", "pvecli0", "--zone", "pvecli", "--tag", "100", "--alias", "lab")
+	out, err := run(t, f, "", "vnet", "create", "pmxcli0", "--zone", "pmxcli", "--tag", "100", "--alias", "lab")
 	require.NoError(t, err)
-	require.Contains(t, out, "pvecli0")
+	require.Contains(t, out, "pmxcli0")
 	require.Contains(t, out, "created")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPost, rec[0].method)
-	require.Equal(t, "pvecli0", rec[0].body["vnet"])
-	require.Equal(t, "pvecli", rec[0].body["zone"])
+	require.Equal(t, "pmxcli0", rec[0].body["vnet"])
+	require.Equal(t, "pmxcli", rec[0].body["zone"])
 	require.Equal(t, "100", rec[0].body["tag"])
 	require.Equal(t, "lab", rec[0].body["alias"])
 }
@@ -273,7 +273,7 @@ func TestVnetCreateRequiresZone(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "create", "pvecli0")
+	_, err := run(t, f, "", "vnet", "create", "pmxcli0")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "zone")
 	require.Empty(t, rec, "no request must be issued when a required flag is missing")
@@ -284,7 +284,7 @@ func TestVnetCreateError(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "POST /api2/json/cluster/sdn/vnets", nil, 400)
 
-	_, err := run(t, f, "", "vnet", "create", "pvecli0", "--zone", "pvecli")
+	_, err := run(t, f, "", "vnet", "create", "pmxcli0", "--zone", "pmxcli")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "create SDN vnet")
 }
@@ -292,9 +292,9 @@ func TestVnetCreateError(t *testing.T) {
 func TestVnetDeleteWithoutConfirmation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "vnet", "delete", "pvecli0")
+	_, err := run(t, f, "", "vnet", "delete", "pmxcli0")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "without confirmation")
 	require.Empty(t, rec)
@@ -303,14 +303,14 @@ func TestVnetDeleteWithoutConfirmation(t *testing.T) {
 func TestVnetDeleteWithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "vnet", "delete", "pvecli0", "--yes")
+	out, err := run(t, f, "", "vnet", "delete", "pmxcli0", "--yes")
 	require.NoError(t, err)
 	require.Contains(t, out, "deleted")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodDelete, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0", rec[0].path)
 }
 
 // --- subnets ---
@@ -318,30 +318,30 @@ func TestVnetDeleteWithYes(t *testing.T) {
 func TestSubnetList(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pvecli0/subnets", []any{
-		map[string]any{"subnet": "pvecli-10.241.0.0-24", "cidr": "10.241.0.0/24", "gateway": "10.241.0.1", "zone": "pvecli"},
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets/pmxcli0/subnets", []any{
+		map[string]any{"subnet": "pmxcli-10.241.0.0-24", "cidr": "10.241.0.0/24", "gateway": "10.241.0.1", "zone": "pmxcli"},
 	}, 200)
 
-	out, err := run(t, f, "", "subnet", "list", "pvecli0")
+	out, err := run(t, f, "", "subnet", "list", "pmxcli0")
 	require.NoError(t, err)
 	require.Contains(t, out, "10.241.0.0/24")
 	require.Contains(t, out, "10.241.0.1")
 	require.Len(t, rec, 1)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/subnets", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/subnets", rec[0].path)
 }
 
 func TestSubnetCreate(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pvecli0/subnets", map[string]any{}, 200)
+	record(f, &rec, "POST /api2/json/cluster/sdn/vnets/pmxcli0/subnets", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "subnet", "create", "pvecli0", "10.241.0.0/24", "--gateway", "10.241.0.1", "--snat")
+	out, err := run(t, f, "", "subnet", "create", "pmxcli0", "10.241.0.0/24", "--gateway", "10.241.0.1", "--snat")
 	require.NoError(t, err)
 	require.Contains(t, out, "10.241.0.0/24")
 	require.Contains(t, out, "created")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPost, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/subnets", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/subnets", rec[0].path)
 	require.Equal(t, "10.241.0.0/24", rec[0].body["subnet"])
 	require.Equal(t, "subnet", rec[0].body["type"])
 	require.Equal(t, "10.241.0.1", rec[0].body["gateway"])
@@ -351,9 +351,9 @@ func TestSubnetCreate(t *testing.T) {
 func TestSubnetDeleteWithoutConfirmation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "delete", "pvecli0", "10.241.0.0-24")
+	_, err := run(t, f, "", "subnet", "delete", "pmxcli0", "10.241.0.0-24")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "without confirmation")
 	require.Empty(t, rec)
@@ -362,9 +362,9 @@ func TestSubnetDeleteWithoutConfirmation(t *testing.T) {
 func TestSubnetDeleteWithYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "DELETE /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "subnet", "delete", "pvecli0", "10.241.0.0-24", "--yes")
+	out, err := run(t, f, "", "subnet", "delete", "pmxcli0", "10.241.0.0-24", "--yes")
 	require.NoError(t, err)
 	require.Contains(t, out, "deleted")
 	require.Len(t, rec, 1)

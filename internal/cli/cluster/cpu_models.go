@@ -7,11 +7,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newCpuModelCmd builds the `pve cluster cpu-model` sub-tree for managing
+// newCpuModelCmd builds the `pmx cluster cpu-model` sub-tree for managing
 // datacenter-wide custom QEMU CPU models. A custom model lets guests use a
 // tailored CPU definition: a reported model plus extra CPU flags and CPUID
 // tuning.

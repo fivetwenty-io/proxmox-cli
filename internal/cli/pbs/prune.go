@@ -10,15 +10,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newPruneCmd builds `pve pbs prune` — remove or preview removal of backup
+// newPruneCmd builds `pmx pbs prune` — remove or preview removal of backup
 // snapshots on a datastore by retention policy, and manage scheduled prune
 // job configurations (POST /admin/datastore/{store}/prune-datastore,
 // /admin/datastore/{store}/prune, /config/prune, /admin/prune).
@@ -117,7 +117,7 @@ func pruneKeepPtrs(cmd *cobra.Command, a pruneKeepArgs) (last, hourly, daily, we
 	return last, hourly, daily, weekly, monthly, yearly
 }
 
-// newPruneRunCmd builds `pve pbs prune run` — prune an entire datastore by
+// newPruneRunCmd builds `pmx pbs prune run` — prune an entire datastore by
 // retention policy (POST /admin/datastore/{store}/prune-datastore).
 func newPruneRunCmd() *cobra.Command {
 	var (
@@ -192,7 +192,7 @@ type prunePlanEntry struct {
 	Keep       bool   `json:"keep"`
 }
 
-// newPruneSimulateCmd builds `pve pbs prune simulate <type>/<id>` — preview
+// newPruneSimulateCmd builds `pmx pbs prune simulate <type>/<id>` — preview
 // prune decisions for one backup group without deleting anything (POST
 // /admin/datastore/{store}/prune with dry-run forced true).
 func newPruneSimulateCmd() *cobra.Command {
@@ -316,7 +316,7 @@ type pruneJobEntry struct {
 	Store          string  `json:"store"`
 }
 
-// newPruneJobCmd builds `pve pbs prune job` — create, inspect, update,
+// newPruneJobCmd builds `pmx pbs prune job` — create, inspect, update,
 // delete, and manually trigger scheduled prune job configurations.
 func newPruneJobCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -359,7 +359,7 @@ func decodePruneJobEntries(resp *pbsadmin.ListPruneResponse) []pruneJobEntry {
 	return entries
 }
 
-// newPruneJobLsCmd builds `pve pbs prune job ls` — list every prune job
+// newPruneJobLsCmd builds `pmx pbs prune job ls` — list every prune job
 // configuration with its most recent run status (GET /admin/prune).
 func newPruneJobLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -397,7 +397,7 @@ func newPruneJobLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPruneJobShowCmd builds `pve pbs prune job show <id>` — show one prune
+// newPruneJobShowCmd builds `pmx pbs prune job show <id>` — show one prune
 // job's full configuration (GET /config/prune/{id}).
 func newPruneJobShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -483,7 +483,7 @@ func newPruneJobShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newPruneJobAddCmd builds `pve pbs prune job add <id>` — create a scheduled
+// newPruneJobAddCmd builds `pmx pbs prune job add <id>` — create a scheduled
 // prune job configuration (POST /config/prune).
 func newPruneJobAddCmd() *cobra.Command {
 	var (
@@ -566,7 +566,7 @@ func newPruneJobAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newPruneJobUpdateCmd builds `pve pbs prune job update <id>` — update a
+// newPruneJobUpdateCmd builds `pmx pbs prune job update <id>` — update a
 // scheduled prune job configuration (PUT /config/prune/{id}).
 func newPruneJobUpdateCmd() *cobra.Command {
 	var (
@@ -661,7 +661,7 @@ func newPruneJobUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newPruneJobDeleteCmd builds `pve pbs prune job delete <id>` — remove a
+// newPruneJobDeleteCmd builds `pmx pbs prune job delete <id>` — remove a
 // prune job configuration (DELETE /config/prune/{id}).
 func newPruneJobDeleteCmd() *cobra.Command {
 	var digest string
@@ -701,7 +701,7 @@ func newPruneJobDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newPruneJobRunCmd builds `pve pbs prune job run <id>` — manually trigger a
+// newPruneJobRunCmd builds `pmx pbs prune job run <id>` — manually trigger a
 // scheduled prune job (POST /admin/prune/{id}/run).
 func newPruneJobRunCmd() *cobra.Command {
 	cmd := &cobra.Command{

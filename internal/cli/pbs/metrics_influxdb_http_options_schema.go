@@ -7,4 +7,4 @@ package pbs
 // credential the API never echoes back (see stripMetricsSecrets in
 // metrics.go) and must not appear in the schema table either.
 
-//go:generate go run github.com/fivetwenty-io/pve-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/metrics/influxdb-http -verb POST -symbol metricsInfluxdbHTTPOptionSchemas -exclude "name,token" -out metrics_influxdb_http_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/metrics/influxdb-http -verb POST -symbol metricsInfluxdbHTTPOptionSchemas -exclude "name,token" -out metrics_influxdb_http_options_schema_gen.go

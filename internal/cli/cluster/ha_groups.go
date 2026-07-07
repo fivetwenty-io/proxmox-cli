@@ -8,11 +8,11 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newHaGroupCmd builds the `pve cluster ha group` sub-tree: HA group management.
+// newHaGroupCmd builds the `pmx cluster ha group` sub-tree: HA group management.
 // A group pins HA resources to a preferred set of nodes with optional priorities.
 func newHaGroupCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -32,7 +32,7 @@ func newHaGroupCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaGroupListCmd builds `pve cluster ha group list`.
+// newHaGroupListCmd builds `pmx cluster ha group list`.
 func newHaGroupListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -73,7 +73,7 @@ func newHaGroupListCmd() *cobra.Command {
 	}
 }
 
-// newHaGroupGetCmd builds `pve cluster ha group get <group>`.
+// newHaGroupGetCmd builds `pmx cluster ha group get <group>`.
 func newHaGroupGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <group>",
@@ -118,7 +118,7 @@ func (gf *haGroupFlags) register(cmd *cobra.Command) {
 		"resources may only run on the nodes defined by this group")
 }
 
-// newHaGroupCreateCmd builds `pve cluster ha group create <group>`.
+// newHaGroupCreateCmd builds `pmx cluster ha group create <group>`.
 func newHaGroupCreateCmd() *cobra.Command {
 	var (
 		gf  haGroupFlags
@@ -164,7 +164,7 @@ func newHaGroupCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaGroupSetCmd builds `pve cluster ha group set <group>`.
+// newHaGroupSetCmd builds `pmx cluster ha group set <group>`.
 func newHaGroupSetCmd() *cobra.Command {
 	var (
 		gf     haGroupFlags
@@ -213,7 +213,7 @@ func newHaGroupSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaGroupDeleteCmd builds `pve cluster ha group delete <group>`.
+// newHaGroupDeleteCmd builds `pmx cluster ha group delete <group>`.
 func newHaGroupDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
@@ -238,7 +238,7 @@ func newHaGroupDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaRuleCmd builds the `pve cluster ha rule` sub-tree: HA rule management.
+// newHaRuleCmd builds the `pmx cluster ha rule` sub-tree: HA rule management.
 // Rules express node- or resource-affinity constraints over HA resources.
 func newHaRuleCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -259,7 +259,7 @@ func newHaRuleCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaRuleListCmd builds `pve cluster ha rule list`.
+// newHaRuleListCmd builds `pmx cluster ha rule list`.
 func newHaRuleListCmd() *cobra.Command {
 	var (
 		resource string
@@ -319,7 +319,7 @@ func newHaRuleListCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaRuleGetCmd builds `pve cluster ha rule get <rule>`.
+// newHaRuleGetCmd builds `pmx cluster ha rule get <rule>`.
 func newHaRuleGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <rule>",
@@ -371,7 +371,7 @@ func (rf *haRuleFlags) register(cmd *cobra.Command) {
 	fl.BoolVar(&rf.strict, "strict", false, "enforce the rule strictly rather than as a preference")
 }
 
-// newHaRuleCreateCmd builds `pve cluster ha rule create <rule>`.
+// newHaRuleCreateCmd builds `pmx cluster ha rule create <rule>`.
 func newHaRuleCreateCmd() *cobra.Command {
 	var (
 		rf  haRuleFlags
@@ -424,7 +424,7 @@ func newHaRuleCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaRuleSetCmd builds `pve cluster ha rule set <rule>`.
+// newHaRuleSetCmd builds `pmx cluster ha rule set <rule>`.
 func newHaRuleSetCmd() *cobra.Command {
 	var (
 		rf     haRuleFlags
@@ -486,7 +486,7 @@ func newHaRuleSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaRuleDeleteCmd builds `pve cluster ha rule delete <rule>`.
+// newHaRuleDeleteCmd builds `pmx cluster ha rule delete <rule>`.
 func newHaRuleDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

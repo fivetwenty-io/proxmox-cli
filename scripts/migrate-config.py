@@ -21,7 +21,7 @@ the task directory.
 
 Default config path resolves via $XDG_CONFIG_HOME (same logic as loader.go):
   $XDG_CONFIG_HOME/pve/config.yml
-  or ~/.config/pve/config.yml
+  or ~/.config/pmx/config.yml
 
 Usage:
   scripts/migrate-config.py               # migrate default config in-place
@@ -54,7 +54,7 @@ def _default_config_path() -> str:
     if not base:
         home = os.path.expanduser("~")
         base = os.path.join(home, ".config")
-    return os.path.join(base, "pve", "config.yml")
+    return os.path.join(base, "pmx", "config.yml")
 
 
 def _detect_state(text: str) -> str:
@@ -207,7 +207,7 @@ def main() -> None:
         default=None,
         help=(
             "path to pve config file "
-            "(default: $XDG_CONFIG_HOME/pve/config.yml or ~/.config/pve/config.yml)"
+            "(default: $XDG_CONFIG_HOME/pve/config.yml or ~/.config/pmx/config.yml)"
         ),
     )
     parser.add_argument(

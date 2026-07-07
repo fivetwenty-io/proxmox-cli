@@ -29,7 +29,7 @@ def run(ctx: Ctx) -> None:
         "context edit",
         "requires $EDITOR / interactive TTY — not safe to drive in headless e2e; "
         "covered in unit tests via EDITOR=true trick (test-strategy §4.2)",
-        "pve context edit <name>",
+        "pmx context edit <name>",
     )
 
 
@@ -39,8 +39,8 @@ def _scratch_context_checks(ctx: Ctx) -> None:
     Uses `--config <scratch>` and `with_context=False` so the configured lab
     context is never involved. Scratch dir removed in `finally`.
     """
-    probe = "pve-cli-ctx-probe"
-    probe2 = "pve-cli-ctx-probe2"
+    probe = "pmx-cli-ctx-probe"
+    probe2 = "pmx-cli-ctx-probe2"
 
     def has_probe(res: CmdResult) -> str | None:
         data = res.json()
@@ -101,7 +101,7 @@ def _scratch_context_checks(ctx: Ctx) -> None:
             return None
         return f"context {probe!r} still listed after rm"
 
-    scratch_dir = tempfile.mkdtemp(prefix="pve-cli-e2e-ctx-")
+    scratch_dir = tempfile.mkdtemp(prefix="pmx-cli-e2e-ctx-")
     cfg = os.path.join(scratch_dir, "config.yml")
     try:
         # -- add two contexts --------------------------------------------------

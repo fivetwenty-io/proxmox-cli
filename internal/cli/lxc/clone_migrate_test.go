@@ -8,9 +8,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 func TestClone_BlockByDefault(t *testing.T) {
@@ -88,7 +88,7 @@ func TestClone_FlagParams(t *testing.T) {
 	deps := newDeps(t, f, output.FormatTable, "pve1", true)
 	var buf bytes.Buffer
 	run := newTestCmd(t, deps, &buf, "clone", "101", "--newid", "999",
-		"--hostname", "ct-clone", "--full", "--pool", "pve-cli",
+		"--hostname", "ct-clone", "--full", "--pool", "pmx-cli",
 		"--storage", "local-lvm", "--description", "d", "--snapname", "snap1",
 		"--target-node", "pve2", "--bwlimit", "10240")
 	require.NoError(t, run())
@@ -96,7 +96,7 @@ func TestClone_FlagParams(t *testing.T) {
 	require.EqualValues(t, 999, body["newid"])
 	require.Equal(t, "ct-clone", body["hostname"])
 	require.Equal(t, true, body["full"])
-	require.Equal(t, "pve-cli", body["pool"])
+	require.Equal(t, "pmx-cli", body["pool"])
 	require.Equal(t, "local-lvm", body["storage"])
 	require.Equal(t, "d", body["description"])
 	require.Equal(t, "snap1", body["snapname"])

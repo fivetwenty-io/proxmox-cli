@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
 )
 
 // newIntegrationClient constructs an *apiclient.APIClient from integration test
@@ -19,42 +19,42 @@ import (
 // automatically skipped in environments without a live PVE instance.
 //
 // Environment variables:
-//   - PVE_TEST_HOST (required) — Proxmox VE host name or IP address.
-//   - PVE_TEST_INSECURE — set to "true" to skip TLS certificate verification.
+//   - PMX_TEST_HOST (required) — Proxmox VE host name or IP address.
+//   - PMX_TEST_INSECURE — set to "true" to skip TLS certificate verification.
 //
 // Authentication (first usable option wins):
-//  1. Token — PVE_TEST_TOKEN_ID and PVE_TEST_TOKEN_SECRET both set.
-//     PVE_TEST_USER (default "root") and PVE_TEST_REALM (default "pam") identify
+//  1. Token — PMX_TEST_TOKEN_ID and PMX_TEST_TOKEN_SECRET both set.
+//     PMX_TEST_USER (default "root") and PMX_TEST_REALM (default "pam") identify
 //     the token owner.
-//  2. Password — PVE_TEST_USER (default "root"), PVE_TEST_REALM (default "pam"),
-//     and PVE_TEST_PASSWORD all set.
+//  2. Password — PMX_TEST_USER (default "root"), PMX_TEST_REALM (default "pam"),
+//     and PMX_TEST_PASSWORD all set.
 //
-// If PVE_TEST_HOST is set but neither credential option is usable the test is
+// If PMX_TEST_HOST is set but neither credential option is usable the test is
 // skipped with a descriptive message rather than failing, because the test
 // environment may legitimately omit secrets.
 func newIntegrationClient(t *testing.T) *apiclient.APIClient {
 	t.Helper()
 
-	host := os.Getenv("PVE_TEST_HOST")
+	host := os.Getenv("PMX_TEST_HOST")
 	if host == "" {
-		t.Skip("integration tests require PVE_TEST_HOST to be set; skipping")
+		t.Skip("integration tests require PMX_TEST_HOST to be set; skipping")
 	}
 
-	insecure := os.Getenv("PVE_TEST_INSECURE") == "true"
+	insecure := os.Getenv("PMX_TEST_INSECURE") == "true"
 
-	user := os.Getenv("PVE_TEST_USER")
+	user := os.Getenv("PMX_TEST_USER")
 	if user == "" {
 		user = "root"
 	}
 
-	realm := os.Getenv("PVE_TEST_REALM")
+	realm := os.Getenv("PMX_TEST_REALM")
 	if realm == "" {
 		realm = "pam"
 	}
 
-	tokenID := os.Getenv("PVE_TEST_TOKEN_ID")
-	tokenSecret := os.Getenv("PVE_TEST_TOKEN_SECRET")
-	password := os.Getenv("PVE_TEST_PASSWORD")
+	tokenID := os.Getenv("PMX_TEST_TOKEN_ID")
+	tokenSecret := os.Getenv("PMX_TEST_TOKEN_SECRET")
+	password := os.Getenv("PMX_TEST_PASSWORD")
 
 	// Determine which auth mechanism is available.
 	var token string
@@ -67,8 +67,8 @@ func newIntegrationClient(t *testing.T) *apiclient.APIClient {
 		// password auth — BuildOptions maps username+realm+password.
 	default:
 		t.Skipf(
-			"integration tests require credentials: set PVE_TEST_TOKEN_ID+PVE_TEST_TOKEN_SECRET "+
-				"or PVE_TEST_PASSWORD (user=%q, realm=%q, host=%q); skipping",
+			"integration tests require credentials: set PMX_TEST_TOKEN_ID+PMX_TEST_TOKEN_SECRET "+
+				"or PMX_TEST_PASSWORD (user=%q, realm=%q, host=%q); skipping",
 			user, realm, host,
 		)
 	}

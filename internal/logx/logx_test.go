@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/logx"
+	"github.com/fivetwenty-io/pmx-cli/internal/logx"
 )
 
 // TestInit_NoLog verifies that NoLog=true produces no file on disk and that
@@ -277,7 +277,7 @@ func TestLogPath(t *testing.T) {
 	}{
 		{command: "qemu", subcommand: "start", wantPrefix: "qemu-start-"},
 		{command: "node", subcommand: "", wantPrefix: "node-"},
-		{command: "", subcommand: "", wantPrefix: "pve-"},
+		{command: "", subcommand: "", wantPrefix: "pmx-"},
 		{command: "lxc", subcommand: "stop", wantPrefix: "lxc-stop-"},
 	}
 

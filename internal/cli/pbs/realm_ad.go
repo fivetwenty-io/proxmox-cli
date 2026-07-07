@@ -10,12 +10,12 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newRealmAdCmd builds `pve pbs realm ad` — manage Active Directory realm
+// newRealmAdCmd builds `pmx pbs realm ad` — manage Active Directory realm
 // configurations (/config/access/ad CRUD).
 func newRealmAdCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -54,7 +54,7 @@ type realmAdListEntry struct {
 	Verify              *pve.PVEBool `json:"verify,omitempty"`
 }
 
-// newRealmAdLsCmd builds `pve pbs realm ad ls` — list configured AD realms
+// newRealmAdLsCmd builds `pmx pbs realm ad ls` — list configured AD realms
 // (GET /config/access/ad).
 func newRealmAdLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -102,7 +102,7 @@ func newRealmAdLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmAdShowCmd builds `pve pbs realm ad show <realm>` — show a single AD
+// newRealmAdShowCmd builds `pmx pbs realm ad show <realm>` — show a single AD
 // realm's configuration (GET /config/access/ad/{realm}).
 func newRealmAdShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -304,7 +304,7 @@ func (af *realmAdFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateAcces
 	}
 }
 
-// newRealmAdAddCmd builds `pve pbs realm ad add <realm>` — create an AD realm
+// newRealmAdAddCmd builds `pmx pbs realm ad add <realm>` — create an AD realm
 // configuration (POST /config/access/ad). --server1 is required; every other
 // option is optional and only forwarded when explicitly set.
 func newRealmAdAddCmd() *cobra.Command {
@@ -345,7 +345,7 @@ func newRealmAdAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmAdUpdateCmd builds `pve pbs realm ad update <realm>` — update an AD
+// newRealmAdUpdateCmd builds `pmx pbs realm ad update <realm>` — update an AD
 // realm configuration (PUT /config/access/ad/{realm}). Only flags explicitly
 // set are sent; use --delete to reset properties to their default.
 func newRealmAdUpdateCmd() *cobra.Command {
@@ -389,7 +389,7 @@ func newRealmAdUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newRealmAdDeleteCmd builds `pve pbs realm ad delete <realm>` — remove an AD
+// newRealmAdDeleteCmd builds `pmx pbs realm ad delete <realm>` — remove an AD
 // realm configuration (DELETE /config/access/ad/{realm}).
 func newRealmAdDeleteCmd() *cobra.Command {
 	var (

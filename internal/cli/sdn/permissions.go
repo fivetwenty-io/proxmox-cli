@@ -11,9 +11,9 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/permshared"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // ---- zone permissions -------------------------------------------------------
@@ -23,7 +23,7 @@ func zonePermPath(zone string) string {
 	return fmt.Sprintf("/sdn/zones/%s", zone)
 }
 
-// newZonePermissionsCmd builds `pve sdn zone permissions` and its sub-commands:
+// newZonePermissionsCmd builds `pmx sdn zone permissions` and its sub-commands:
 // list/effective/grant/revoke against a zone's own ACL path (/sdn/zones/{zone}).
 func newZonePermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -31,8 +31,8 @@ func newZonePermissionsCmd() *cobra.Command {
 		Short: "Manage ACL entries and view effective permissions on an SDN zone",
 		Long: "List, grant, and revoke ACL entries on an SDN zone's own access-control path " +
 			"(/sdn/zones/{zone}), and view the effective permission set a user or token holds " +
-			"there. This is a thin, path-deriving wrapper over `pve access acl` and " +
-			"`pve access permissions`; use those directly for any path outside a single zone.",
+			"there. This is a thin, path-deriving wrapper over `pmx access acl` and " +
+			"`pmx access permissions`; use those directly for any path outside a single zone.",
 	}
 	cmd.AddCommand(
 		newZonePermListCmd(),
@@ -43,7 +43,7 @@ func newZonePermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newZonePermListCmd builds `pve sdn zone permissions list <zone>`.
+// newZonePermListCmd builds `pmx sdn zone permissions list <zone>`.
 func newZonePermListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -52,7 +52,7 @@ func newZonePermListCmd() *cobra.Command {
 		Long: "List ACL entries whose path exactly matches the zone's own ACL path " +
 			"(/sdn/zones/{zone}). Pass --inherited to also include entries inherited from the " +
 			"zone's ancestor paths (/, /sdn, /sdn/zones); this walks the path client-side and " +
-			"issues no extra API calls. Needs the same privilege as `pve access acl list`.",
+			"issues no extra API calls. Needs the same privilege as `pmx access acl list`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -64,7 +64,7 @@ func newZonePermListCmd() *cobra.Command {
 	return cmd
 }
 
-// newZonePermEffectiveCmd builds `pve sdn zone permissions effective <zone>`.
+// newZonePermEffectiveCmd builds `pmx sdn zone permissions effective <zone>`.
 func newZonePermEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -85,7 +85,7 @@ func newZonePermEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newZonePermGrantRevokeCmd builds `pve sdn zone permissions grant <zone>` when
+// newZonePermGrantRevokeCmd builds `pmx sdn zone permissions grant <zone>` when
 // revoke is false, or `... revoke <zone>` when revoke is true.
 func newZonePermGrantRevokeCmd(revoke bool) *cobra.Command {
 	var (
@@ -174,7 +174,7 @@ func resolveVnetZone(ctx context.Context, deps *cli.Deps, vnet, zoneFlag string)
 	return v.Zone, nil
 }
 
-// newVnetPermissionsCmd builds `pve sdn vnet permissions` and its sub-commands:
+// newVnetPermissionsCmd builds `pmx sdn vnet permissions` and its sub-commands:
 // list/effective/grant/revoke against a vnet's derived ACL path
 // (/sdn/zones/{zone}/{vnet}).
 func newVnetPermissionsCmd() *cobra.Command {
@@ -186,7 +186,7 @@ func newVnetPermissionsCmd() *cobra.Command {
 			"holds there. Vnets have no independent ACL identity: their path nests under their " +
 			"zone. Pass --zone to skip the extra GET /cluster/sdn/vnets/{vnet} lookup this command " +
 			"otherwise performs to resolve the vnet's zone automatically. This is a thin, " +
-			"path-deriving wrapper over `pve access acl` and `pve access permissions`; use those " +
+			"path-deriving wrapper over `pmx access acl` and `pmx access permissions`; use those " +
 			"directly for any path outside a single vnet.",
 	}
 	cmd.AddCommand(
@@ -198,7 +198,7 @@ func newVnetPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetPermListCmd builds `pve sdn vnet permissions list <vnet>`.
+// newVnetPermListCmd builds `pmx sdn vnet permissions list <vnet>`.
 func newVnetPermListCmd() *cobra.Command {
 	var (
 		inherited bool
@@ -212,7 +212,7 @@ func newVnetPermListCmd() *cobra.Command {
 			"the vnet's ancestor paths (/, /sdn, /sdn/zones, /sdn/zones/{zone}); this walks the " +
 			"path client-side and issues no extra API calls beyond the zone lookup below. Pass " +
 			"--zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves " +
-			"the vnet's zone. Needs the same privilege as `pve access acl list`.",
+			"the vnet's zone. Needs the same privilege as `pmx access acl list`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -231,7 +231,7 @@ func newVnetPermListCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetPermEffectiveCmd builds `pve sdn vnet permissions effective <vnet>`.
+// newVnetPermEffectiveCmd builds `pmx sdn vnet permissions effective <vnet>`.
 func newVnetPermEffectiveCmd() *cobra.Command {
 	var (
 		userid   string
@@ -264,7 +264,7 @@ func newVnetPermEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetPermGrantRevokeCmd builds `pve sdn vnet permissions grant <vnet>` when
+// newVnetPermGrantRevokeCmd builds `pmx sdn vnet permissions grant <vnet>` when
 // revoke is false, or `... revoke <vnet>` when revoke is true.
 func newVnetPermGrantRevokeCmd(revoke bool) *cobra.Command {
 	var (

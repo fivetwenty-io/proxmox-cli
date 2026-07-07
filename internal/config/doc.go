@@ -1,2 +1,2 @@
-// Package config provides types, loader, writer, and secret resolver for the pve CLI configuration file.
+// Package config provides types, loader, writer, and secret resolver for the pmx CLI configuration file.
 package config

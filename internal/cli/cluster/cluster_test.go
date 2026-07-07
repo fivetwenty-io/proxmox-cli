@@ -12,10 +12,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // run builds the cluster group command, injects deps via context, captures
@@ -52,7 +52,7 @@ func newFakeClient(t *testing.T) (*testhelper.FakePVE, *apiclient.APIClient) {
 	return f, ac
 }
 
-// TestClusterStatus_Table verifies that `pve cluster status` queries
+// TestClusterStatus_Table verifies that `pmx cluster status` queries
 // GET /cluster/status and renders the expected columns.
 func TestClusterStatus_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -137,7 +137,7 @@ func TestClusterStatus_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "status"))
 }
 
-// TestClusterResources_TypeFilter verifies that `pve cluster resources --type vm`
+// TestClusterResources_TypeFilter verifies that `pmx cluster resources --type vm`
 // sends the type query parameter and renders resource rows.
 func TestClusterResources_TypeFilter(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -213,7 +213,7 @@ func TestClusterResources_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "resources"))
 }
 
-// TestClusterNextID_Plain verifies `pve cluster next-id` returns the next VMID.
+// TestClusterNextID_Plain verifies `pmx cluster next-id` returns the next VMID.
 func TestClusterNextID_Plain(t *testing.T) {
 	f, ac := newFakeClient(t)
 

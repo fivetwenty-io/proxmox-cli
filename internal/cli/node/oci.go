@@ -8,12 +8,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newOciCmd builds the `pve node oci` sub-tree for working with OCI container
+// newOciCmd builds the `pmx node oci` sub-tree for working with OCI container
 // images: querying the tags published for a repository and pulling an image
 // into a node storage.
 func newOciCmd() *cobra.Command {

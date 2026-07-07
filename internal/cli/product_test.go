@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
 // makeProductConfig writes a config file with one PVE context ("pve1", the
@@ -61,7 +61,7 @@ func neverTTY() bool { return false }
 // ---------------------------------------------------------------------------
 
 func TestBuildContextClient_RejectsPBSContext(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_CONTEXT", "")
 	cfgPath := makeProductConfig(t)
 	cfg, err := config.Load(cfgPath)
 	require.NoError(t, err)
@@ -71,13 +71,13 @@ func TestBuildContextClient_RejectsPBSContext(t *testing.T) {
 	require.Error(t, err, "a PVE command must reject a PBS context")
 	require.Contains(t, err.Error(), "pbs1", "error must name the offending context")
 	require.Contains(t, err.Error(), "Proxmox Backup Server")
-	require.Contains(t, err.Error(), "pve pbs", "error must point at the pbs command group")
+	require.Contains(t, err.Error(), "pmx pbs", "error must point at the pbs command group")
 	require.Nil(t, ac)
 	require.Nil(t, ctx)
 }
 
 func TestBuildContextClient_AcceptsPVEContext(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_CONTEXT", "")
 	cfgPath := makeProductConfig(t)
 	cfg, err := config.Load(cfgPath)
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestBuildContextClient_AcceptsPVEContext(t *testing.T) {
 }
 
 func TestBuildContextPBSClient_RejectsPVEContext(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_CONTEXT", "")
 	cfgPath := makeProductConfig(t)
 	cfg, err := config.Load(cfgPath)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestBuildContextPBSClient_RejectsPVEContext(t *testing.T) {
 }
 
 func TestBuildContextPBSClient_AcceptsPBSContext(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_CONTEXT", "")
 	cfgPath := makeProductConfig(t)
 	cfg, err := config.Load(cfgPath)
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestBuildContextPBSClient_AcceptsPBSContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // buildPBSInspectCmd is buildInspectCmd with the PBS product annotation, as a
-// 'pve pbs' group verb would carry (via its group parent).
+// 'pmx pbs' group verb would carry (via its group parent).
 func buildPBSInspectCmd(deps **cli.Deps) *cobra.Command {
 	cmd := buildInspectCmd(deps)
 	cmd.Use = "pbsinspect"
@@ -136,9 +136,9 @@ func buildPBSInspectCmd(deps **cli.Deps) *cobra.Command {
 }
 
 func TestPersistentPreRunE_ProductDispatch(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "table")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "table")
 	cfgPath := makeProductConfig(t)
 
 	newRoot := func(t *testing.T) *cobra.Command {
@@ -169,7 +169,7 @@ func TestPersistentPreRunE_ProductDispatch(t *testing.T) {
 		require.True(t, deps.Ctx.IsPBS())
 	})
 
-	t.Run("pbs-annotated command with pve context fails the product guard", func(t *testing.T) {
+	t.Run("pbs-annotated command with pmx context fails the product guard", func(t *testing.T) {
 		root := newRoot(t)
 
 		var deps *cli.Deps
@@ -195,7 +195,7 @@ func TestPersistentPreRunE_ProductDispatch(t *testing.T) {
 		require.Nil(t, deps, "the command must not run against the wrong product")
 	})
 
-	t.Run("unannotated command with pve context populates Deps.API not Deps.PBS", func(t *testing.T) {
+	t.Run("unannotated command with pmx context populates Deps.API not Deps.PBS", func(t *testing.T) {
 		root := newRoot(t)
 
 		var deps *cli.Deps

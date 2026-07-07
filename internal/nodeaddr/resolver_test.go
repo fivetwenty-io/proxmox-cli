@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/nodeaddr"
 	"github.com/stretchr/testify/require"
 )
 

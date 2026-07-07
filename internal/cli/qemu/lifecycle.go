@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
 // lifecycleCall describes a single lifecycle sub-command: how it invokes the API
@@ -46,7 +46,7 @@ func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags fu
 	return cmd
 }
 
-// newStartCmd builds `pve qemu start <vmid>`.
+// newStartCmd builds `pmx qemu start <vmid>`.
 func newStartCmd() *cobra.Command {
 	var (
 		timeout            int64
@@ -124,7 +124,7 @@ func newStartCmd() *cobra.Command {
 	return cmd
 }
 
-// newStopCmd builds `pve qemu stop <vmid>`.
+// newStopCmd builds `pmx qemu stop <vmid>`.
 func newStopCmd() *cobra.Command {
 	var (
 		timeout          int64
@@ -169,7 +169,7 @@ func newStopCmd() *cobra.Command {
 	return cmd
 }
 
-// newRebootCmd builds `pve qemu reboot <vmid>`.
+// newRebootCmd builds `pmx qemu reboot <vmid>`.
 func newRebootCmd() *cobra.Command {
 	var timeout int64
 	cmd := newLifecycleCmd("reboot", "Reboot a VM (graceful)", "VM %s rebooted.",
@@ -190,7 +190,7 @@ func newRebootCmd() *cobra.Command {
 	return cmd
 }
 
-// newShutdownCmd builds `pve qemu shutdown <vmid>`.
+// newShutdownCmd builds `pmx qemu shutdown <vmid>`.
 func newShutdownCmd() *cobra.Command {
 	var (
 		timeout    int64
@@ -228,7 +228,7 @@ func newShutdownCmd() *cobra.Command {
 	return cmd
 }
 
-// newResetCmd builds `pve qemu reset <vmid>`.
+// newResetCmd builds `pmx qemu reset <vmid>`.
 func newResetCmd() *cobra.Command {
 	var skiplock bool
 	cmd := newLifecycleCmd("reset", "Reset a VM (hard reset)", "VM %s reset.",
@@ -249,7 +249,7 @@ func newResetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSuspendCmd builds `pve qemu suspend <vmid>`.
+// newSuspendCmd builds `pmx qemu suspend <vmid>`.
 func newSuspendCmd() *cobra.Command {
 	var (
 		skiplock     bool
@@ -283,7 +283,7 @@ func newSuspendCmd() *cobra.Command {
 	return cmd
 }
 
-// newResumeCmd builds `pve qemu resume <vmid>`.
+// newResumeCmd builds `pmx qemu resume <vmid>`.
 func newResumeCmd() *cobra.Command {
 	var (
 		skiplock bool

@@ -7,13 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsstatus "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/status"
 )
 
-// newStatusCmd builds `pve pbs status` — datastore-level usage and capacity
+// newStatusCmd builds `pmx pbs status` — datastore-level usage and capacity
 // reporting (GET /status/datastore-usage).
 func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -68,7 +68,7 @@ func decodePbsStatusDatastoreUsageEntries(resp *pbsstatus.ListDatastoreUsageResp
 	return entries
 }
 
-// newPbsStatusDatastoreUsageCmd builds `pve pbs status datastore-usage` —
+// newPbsStatusDatastoreUsageCmd builds `pmx pbs status datastore-usage` —
 // list disk usage, mount status, and capacity estimates for every datastore
 // visible to the caller (GET /status/datastore-usage).
 func newPbsStatusDatastoreUsageCmd() *cobra.Command {

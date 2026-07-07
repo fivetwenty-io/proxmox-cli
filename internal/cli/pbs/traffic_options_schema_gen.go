@@ -2,7 +2,7 @@
 
 package pbs
 
-import "github.com/fivetwenty-io/pve-cli/internal/optionschema"
+import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
 // trafficOptionSchemas describes every settable option from the Proxmox Backup Server API schema for
 // POST /config/traffic-control, in lexical order by API key.

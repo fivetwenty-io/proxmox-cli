@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // validTfaTypes is the exhaustive set of PVE TFA entry types accepted by
@@ -22,7 +22,7 @@ var validTfaTypes = map[string]bool{
 	"yubico":   true,
 }
 
-// newTfaCmd builds `pve access tfa` and its sub-commands for administering the
+// newTfaCmd builds `pmx access tfa` and its sub-commands for administering the
 // two-factor authentication entries registered for users.
 func newTfaCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -52,7 +52,7 @@ type tfaUserEntry struct {
 	Entries []json.RawMessage `json:"entries"`
 }
 
-// newTfaListCmd builds `pve access tfa list`.
+// newTfaListCmd builds `pmx access tfa list`.
 func newTfaListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -94,7 +94,7 @@ type tfaEntry struct {
 	Enable      pveBool `json:"enable,omitempty"`
 }
 
-// newTfaGetCmd builds `pve access tfa get <userid>`, listing one user's entries.
+// newTfaGetCmd builds `pmx access tfa get <userid>`, listing one user's entries.
 func newTfaGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <userid>",
@@ -132,7 +132,7 @@ func newTfaGetCmd() *cobra.Command {
 	}
 }
 
-// newTfaDeleteCmd builds `pve access tfa delete <userid> <id>`.
+// newTfaDeleteCmd builds `pmx access tfa delete <userid> <id>`.
 func newTfaDeleteCmd() *cobra.Command {
 	var yes bool
 	var password string
@@ -164,7 +164,7 @@ func newTfaDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newTfaUnlockCmd builds `pve access tfa unlock <userid>`, clearing the
+// newTfaUnlockCmd builds `pmx access tfa unlock <userid>`, clearing the
 // second-factor lockout a user incurs after repeated failed attempts.
 func newTfaUnlockCmd() *cobra.Command {
 	var yes bool
@@ -192,7 +192,7 @@ func newTfaUnlockCmd() *cobra.Command {
 	return cmd
 }
 
-// newTfaGetEntryCmd builds `pve access tfa get-entry <userid> <id>`, retrieving
+// newTfaGetEntryCmd builds `pmx access tfa get-entry <userid> <id>`, retrieving
 // a single TFA entry by its entry ID (GET /access/tfa/{userid}/{id}).
 func newTfaGetEntryCmd() *cobra.Command {
 	return &cobra.Command{
@@ -226,7 +226,7 @@ func newTfaGetEntryCmd() *cobra.Command {
 	}
 }
 
-// newTfaCreateCmd builds `pve access tfa create <userid>`, enrolling a new TFA
+// newTfaCreateCmd builds `pmx access tfa create <userid>`, enrolling a new TFA
 // entry (POST /access/tfa/{userid}).
 //
 // Security note: --value and --totp accept credential material. The operator's
@@ -315,7 +315,7 @@ func newTfaCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTfaSetCmd builds `pve access tfa set <userid> <id>`, updating a TFA entry
+// newTfaSetCmd builds `pmx access tfa set <userid> <id>`, updating a TFA entry
 // (PUT /access/tfa/{userid}/{id}). Only flags explicitly passed are forwarded;
 // unset optional flags are omitted so partial updates work correctly.
 //
@@ -379,7 +379,7 @@ func newTfaSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newTfaTypesCmd builds `pve access tfa types <userid>`, returning the TFA type
+// newTfaTypesCmd builds `pmx access tfa types <userid>`, returning the TFA type
 // summary for a user via GET /access/users/{userid}/tfa.
 func newTfaTypesCmd() *cobra.Command {
 	var multiple bool

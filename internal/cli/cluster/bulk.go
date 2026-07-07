@@ -10,12 +10,12 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newBulkCmd builds the `pve cluster bulk` sub-tree: cluster-wide guest power
+// newBulkCmd builds the `pmx cluster bulk` sub-tree: cluster-wide guest power
 // and migration actions. Each verb acts on every guest in the cluster unless
 // narrowed with --vmids, so all of them require --yes and run as asynchronous
 // tasks. By default the command blocks until the task completes; with --async
@@ -28,7 +28,7 @@ func newBulkCmd() *cobra.Command {
 		Long: "Start, shut down, suspend, or migrate guests across the whole cluster. " +
 			"Without --vmids every guest is affected, so each action requires --yes. " +
 			"Actions run as asynchronous tasks; pass --async to return the UPID immediately. " +
-			"Use `pve cluster resources --type vm` to preview which guests exist.",
+			"Use `pmx cluster resources --type vm` to preview which guests exist.",
 	}
 	cmd.AddCommand(
 		newBulkStartCmd(),

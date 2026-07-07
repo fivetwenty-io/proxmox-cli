@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // aplinfoEntry is the subset of a /nodes/{node}/aplinfo element rendered in the
@@ -22,7 +22,7 @@ type aplinfoEntry struct {
 	Headline string `json:"headline"`
 }
 
-// newTemplateCmd builds `pve lxc template` and its sub-commands.
+// newTemplateCmd builds `pmx lxc template` and its sub-commands.
 func newTemplateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "template",
@@ -32,7 +32,7 @@ func newTemplateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTemplateListCmd builds `pve lxc template list` — the appliance templates
+// newTemplateListCmd builds `pmx lxc template list` — the appliance templates
 // available to download (GET /nodes/{node}/aplinfo).
 func newTemplateListCmd() *cobra.Command {
 	var filter string
@@ -78,7 +78,7 @@ func newTemplateListCmd() *cobra.Command {
 	return cmd
 }
 
-// newTemplateDownloadCmd builds `pve lxc template download <storage> <template>`
+// newTemplateDownloadCmd builds `pmx lxc template download <storage> <template>`
 // (POST /nodes/{node}/aplinfo). The download runs as an asynchronous task.
 func newTemplateDownloadCmd() *cobra.Command {
 	var async bool

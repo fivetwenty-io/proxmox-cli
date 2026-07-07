@@ -7,10 +7,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // nodeFirewallOptionsSetAllowlist lists schema flags the hand-written `node
@@ -142,7 +142,7 @@ func TestNodeFirewallOptions_Describe(t *testing.T) {
 	root2.SetArgs(append(prefix2, "node", "firewall", "options", "describe", "bogus"))
 	err := root2.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pve node firewall options describe")
+	require.Contains(t, err.Error(), "pmx node firewall options describe")
 }
 
 // TestNodeFirewallOptions_GetDefaults verifies `get --defaults` merges

@@ -8,14 +8,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 const acmeUPID = "UPID:pve:00001234:00005678:65000000:acme-register::root@pam:"
 
-// TestAcmeAccount_List verifies `pve cluster acme account list` reads
+// TestAcmeAccount_List verifies `pmx cluster acme account list` reads
 // GET /cluster/acme/account and renders the account names.
 func TestAcmeAccount_List(t *testing.T) {
 	f, ac := newFakeClient(t)

@@ -8,12 +8,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newAptTemplatesCmd builds `pve node apt templates`: list the available
+// newAptTemplatesCmd builds `pmx node apt templates`: list the available
 // appliance/container templates (aplinfo) and download one to a storage.
 func newAptTemplatesCmd() *cobra.Command {
 	cmd := &cobra.Command{

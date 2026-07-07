@@ -270,6 +270,6 @@ func WriteError(w http.ResponseWriter, statusCode int, message string) {
 func (f *FakePVE) MustNewClient(t *testing.T) pve.Client {
 	t.Helper()
 	c, err := pve.NewClient(f.Options)
-	require.NoError(t, err, "testhelper: construct fake pve client")
+	require.NoError(t, err, "testhelper: construct fake pve API client")
 	return c
 }

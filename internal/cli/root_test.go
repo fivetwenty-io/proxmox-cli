@@ -15,19 +15,19 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/config"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/version"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/version"
 )
 
 // TestRootFlags_Defaults verifies that NewRootCmd sets the expected flag
 // defaults for all persistent flags.
 func TestRootFlags_Defaults(t *testing.T) {
 	// Clear env vars that influence flag defaults.
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	root, cleanup := cli.NewRootCmd()
@@ -36,10 +36,10 @@ func TestRootFlags_Defaults(t *testing.T) {
 
 	require.True(t, flags.HasFlags(), "root must have persistent flags")
 
-	// --config default contains "pve/config.yml".
+	// --config default contains "pmx/config.yml".
 	cfgFlag := flags.Lookup("config")
 	require.NotNil(t, cfgFlag)
-	require.Contains(t, cfgFlag.DefValue, "pve")
+	require.Contains(t, cfgFlag.DefValue, "pmx")
 	require.Contains(t, cfgFlag.DefValue, "config.yml")
 
 	// --context default is empty string; short flag is -c.
@@ -51,12 +51,12 @@ func TestRootFlags_Defaults(t *testing.T) {
 	// --target must not exist after the context rename.
 	require.Nil(t, flags.Lookup("target"), "--target flag must not exist after rename")
 
-	// --node default is empty (PVE_NODE unset).
+	// --node default is empty (PMX_NODE unset).
 	nodeFlag := flags.Lookup("node")
 	require.NotNil(t, nodeFlag)
 	require.Equal(t, "", nodeFlag.DefValue)
 
-	// --output default is "table" (PVE_OUTPUT unset).
+	// --output default is "table" (PMX_OUTPUT unset).
 	outFlag := flags.Lookup("output")
 	require.NotNil(t, outFlag)
 	require.Equal(t, "table", outFlag.DefValue)
@@ -74,9 +74,9 @@ func TestRootFlags_Defaults(t *testing.T) {
 func TestPersistentPreRunE_Insecure_WarnsOnStderr(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yml")
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	cfg := &config.Config{
 		CurrentContext: "prod",
@@ -122,9 +122,9 @@ func TestPersistentPreRunE_Insecure_WarnsOnStderr(t *testing.T) {
 func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yml")
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -154,9 +154,9 @@ func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 	require.NotContains(t, rb.String(), "─", "ascii mode must not use Unicode box-drawing")
 }
 
-// TestRootFlags_PVEOutput verifies --output default picks up PVE_OUTPUT.
+// TestRootFlags_PVEOutput verifies --output default picks up PMX_OUTPUT.
 func TestRootFlags_PVEOutput(t *testing.T) {
-	t.Setenv("PVE_OUTPUT", "json")
+	t.Setenv("PMX_OUTPUT", "json")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -165,9 +165,9 @@ func TestRootFlags_PVEOutput(t *testing.T) {
 	require.Equal(t, "json", outFlag.DefValue)
 }
 
-// TestRootFlags_PVENode verifies --node default picks up PVE_NODE.
+// TestRootFlags_PVENode verifies --node default picks up PMX_NODE.
 func TestRootFlags_PVENode(t *testing.T) {
-	t.Setenv("PVE_NODE", "pve-host-01")
+	t.Setenv("PMX_NODE", "pve-host-01")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -181,9 +181,9 @@ func TestRootFlags_PVENode(t *testing.T) {
 func TestPersistentPreRunE_NoConfig_NoContext(t *testing.T) {
 	// Point config at a temp dir that contains no config file.
 	tmpDir := t.TempDir()
-	t.Setenv("PVE_OUTPUT", "json")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "json")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -214,9 +214,9 @@ func TestPersistentPreRunE_NoConfig_NoContext(t *testing.T) {
 // there is no usable config/context.
 func TestPersistentPreRunE_NoClient_AnnotationSkipsClientBuild(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("PVE_OUTPUT", "json")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "json")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -245,9 +245,9 @@ func TestPersistentPreRunE_NoClient_AnnotationSkipsClientBuild(t *testing.T) {
 // a populated Deps (Out, Format, Log, Runner) even for noClient commands.
 func TestPersistentPreRunE_NoClient_DepsAreInjected(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -304,7 +304,7 @@ func TestAddGroups_GroupAppearsInHelp(t *testing.T) {
 func TestMain_HelpExitsZero(t *testing.T) {
 	// Re-assign args so cobra prints help; os.Exit is NOT called — Main() returns.
 	old := os.Args
-	os.Args = []string{"pve", "--help"}
+	os.Args = []string{"pmx", "--help"}
 	defer func() { os.Args = old }()
 
 	code := cli.Main(nil)
@@ -313,7 +313,7 @@ func TestMain_HelpExitsZero(t *testing.T) {
 }
 
 // TestContextFlagPrecedence verifies the three-tier resolution chain:
-// --context flag > $PVE_CONTEXT env > cfg.CurrentContext.
+// --context flag > $PMX_CONTEXT env > cfg.CurrentContext.
 //
 // Strategy: each sub-test passes a context name that does NOT exist in the
 // config. ResolveContext returns a "not found" error whose message contains
@@ -341,9 +341,9 @@ func TestContextFlagPrecedence(t *testing.T) {
 	}
 
 	t.Run("flag wins over current-context", func(t *testing.T) {
-		t.Setenv("PVE_CONTEXT", "")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_OUTPUT", "table")
+		t.Setenv("PMX_CONTEXT", "")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
 		root, cleanup := cli.NewRootCmd()
@@ -367,9 +367,9 @@ func TestContextFlagPrecedence(t *testing.T) {
 	})
 
 	t.Run("env var wins over current-context", func(t *testing.T) {
-		t.Setenv("PVE_CONTEXT", "from-env")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_OUTPUT", "table")
+		t.Setenv("PMX_CONTEXT", "from-env")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
 		root, cleanup := cli.NewRootCmd()
@@ -387,14 +387,14 @@ func TestContextFlagPrecedence(t *testing.T) {
 		err := root.Execute()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "from-env",
-			"$PVE_CONTEXT env value must appear in the resolution error")
+			"$PMX_CONTEXT env value must appear in the resolution error")
 		require.False(t, called)
 	})
 
 	t.Run("current-context used when no flag or env", func(t *testing.T) {
-		t.Setenv("PVE_CONTEXT", "")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_OUTPUT", "table")
+		t.Setenv("PMX_CONTEXT", "")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
 		root, cleanup := cli.NewRootCmd()
@@ -407,7 +407,7 @@ func TestContextFlagPrecedence(t *testing.T) {
 		var out bytes.Buffer
 		root.SetOut(&out)
 		root.SetErr(&out)
-		// No --context, no PVE_CONTEXT. "current" exists in config so no error —
+		// No --context, no PMX_CONTEXT. "current" exists in config so no error —
 		// but it cannot connect (NewAPIClient returns an error on connect).
 		// Verify no "no context specified" error (resolution succeeded).
 		root.SetArgs([]string{"--config", cfgPath, "noop"})
@@ -424,9 +424,9 @@ func TestContextFlagPrecedence(t *testing.T) {
 
 	t.Run("unknown-target-flag", func(t *testing.T) {
 		// --target must not exist; cobra must return unknown flag error.
-		t.Setenv("PVE_CONTEXT", "")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_OUTPUT", "table")
+		t.Setenv("PMX_CONTEXT", "")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
 		root, cleanup := cli.NewRootCmd()
@@ -451,7 +451,7 @@ func TestContextFlagPrecedence(t *testing.T) {
 }
 
 // TestShellCompletionSkipsClientBuild is the regression test for a bug
-// discovered while validating H-2 (dead `pve ssh` node-name completion):
+// discovered while validating H-2 (dead `pmx ssh` node-name completion):
 // cobra's built-in "__complete" hidden command has DisableFlagParsing set,
 // so persistentPreRunE — which cobra runs for "__complete" itself, as the
 // nearest ancestor with a PersistentPreRunE, BEFORE "__complete"'s own Run
@@ -468,9 +468,9 @@ func TestContextFlagPrecedence(t *testing.T) {
 // (same as a noClient command), so completion always proceeds to the target
 // command's own Run/ValidArgsFunction instead of failing here.
 func TestShellCompletionSkipsClientBuild(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "table")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "table")
 
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yml")
@@ -483,7 +483,7 @@ func TestShellCompletionSkipsClientBuild(t *testing.T) {
 					Type: "token", Username: "root@pam", TokenID: "tok",
 					// Unresolvable on every platform (no keychain dependency):
 					// ResolveSecret errors for an explicit but unset env reference.
-					Secret: "${PVE_CLI_TEST_UNSET_SECRET_VAR_XYZ}",
+					Secret: "${PMX_CLI_TEST_UNSET_SECRET_VAR_XYZ}",
 				},
 			},
 		},
@@ -525,9 +525,9 @@ func TestShellCompletionSkipsClientBuild(t *testing.T) {
 // persistentPreRunE to guard per-context DefaultOutput application (F-01 fix).
 func TestOutputChangedDetection(t *testing.T) {
 	t.Run("explicit -o table marks flag as Changed", func(t *testing.T) {
-		t.Setenv("PVE_OUTPUT", "")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_CONTEXT", "")
+		t.Setenv("PMX_OUTPUT", "")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_CONTEXT", "")
 
 		root, cleanup := cli.NewRootCmd()
 		defer cleanup()
@@ -555,9 +555,9 @@ func TestOutputChangedDetection(t *testing.T) {
 	})
 
 	t.Run("absent -o flag does NOT mark flag as Changed", func(t *testing.T) {
-		t.Setenv("PVE_OUTPUT", "")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_CONTEXT", "")
+		t.Setenv("PMX_OUTPUT", "")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_CONTEXT", "")
 
 		root, cleanup := cli.NewRootCmd()
 		defer cleanup()
@@ -594,9 +594,9 @@ func TestOutputChangedDetection(t *testing.T) {
 // that confirms the resolution chain ran. A separate sub-test for the noClient
 // path verifies no context error when annotation bypasses resolution.
 func TestContextDefaultsResolution(t *testing.T) {
-	t.Setenv("PVE_CONTEXT", "")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_OUTPUT", "") // no global env override
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "") // no global env override
 
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yml")
@@ -644,7 +644,7 @@ func TestContextDefaultsResolution(t *testing.T) {
 		emptyCfgPath := filepath.Join(t.TempDir(), "empty.yml")
 		require.NoError(t, config.SaveForce(emptyCfgPath, &config.Config{}))
 
-		t.Setenv("PVE_OUTPUT", "table")
+		t.Setenv("PMX_OUTPUT", "table")
 		root, cleanup := cli.NewRootCmd()
 		defer cleanup()
 		root.SetContext(context.Background())
@@ -666,7 +666,7 @@ func TestContextDefaultsResolution(t *testing.T) {
 }
 
 // TestOutputPrecedence_FourTiers pins the full 4-tier resolution order for
-// --output: explicit flag > $PVE_OUTPUT > context default-output > built-in default.
+// --output: explicit flag > $PMX_OUTPUT > context default-output > built-in default.
 //
 // Each sub-test uses a noClient inspect command so no API connection is needed.
 // Context default-output is NOT applied in the noClient branch (it runs before
@@ -697,9 +697,9 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 	}
 
 	t.Run("tier1 explicit flag beats env and context default", func(t *testing.T) {
-		t.Setenv("PVE_OUTPUT", "json")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_CONTEXT", "")
+		t.Setenv("PMX_OUTPUT", "json")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_CONTEXT", "")
 		// context default-output = yaml; flag = plain → plain must win.
 		cfgPath := makeCtxConfig(t, "yaml")
 
@@ -719,14 +719,14 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		require.NoError(t, root.Execute())
 		require.NotNil(t, deps)
 		require.Equal(t, "plain", string(deps.Format),
-			"explicit --output flag must win over $PVE_OUTPUT and context default-output")
+			"explicit --output flag must win over $PMX_OUTPUT and context default-output")
 	})
 
-	t.Run("tier2 PVE_OUTPUT beats context default-output", func(t *testing.T) {
-		t.Setenv("PVE_OUTPUT", "yaml")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_CONTEXT", "")
-		// context default-output = json; $PVE_OUTPUT = yaml → yaml must win.
+	t.Run("tier2 PMX_OUTPUT beats context default-output", func(t *testing.T) {
+		t.Setenv("PMX_OUTPUT", "yaml")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_CONTEXT", "")
+		// context default-output = json; $PMX_OUTPUT = yaml → yaml must win.
 		// noClient branch: format = pf.output = yaml (baked from env); no context resolution.
 		cfgPath := makeCtxConfig(t, "json")
 
@@ -746,13 +746,13 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		require.NoError(t, root.Execute())
 		require.NotNil(t, deps)
 		require.Equal(t, "yaml", string(deps.Format),
-			"$PVE_OUTPUT must win over context default-output")
+			"$PMX_OUTPUT must win over context default-output")
 	})
 
 	t.Run("tier4 built-in default table when no flag env or context default", func(t *testing.T) {
-		t.Setenv("PVE_OUTPUT", "")
-		t.Setenv("PVE_NODE", "")
-		t.Setenv("PVE_CONTEXT", "")
+		t.Setenv("PMX_OUTPUT", "")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_CONTEXT", "")
 		cfgPath := makeCtxConfig(t, "") // no context default-output
 
 		root, cleanup := cli.NewRootCmd()
@@ -776,13 +776,13 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 }
 
 // TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient verifies F-W6-03:
-// $PVE_OUTPUT outranks context default-output even in the full (non-noClient)
+// $PMX_OUTPUT outranks context default-output even in the full (non-noClient)
 // resolution path. Uses a token-auth context against a non-listening host;
 // NewAPIClient succeeds lazily so the inspect probe captures deps.Format.
 func TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient(t *testing.T) {
-	t.Setenv("PVE_OUTPUT", "json")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "json")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")
@@ -833,17 +833,17 @@ func TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient(t *testing.T) {
 	}
 	require.NotNil(t, capturedDeps)
 	require.Equal(t, "json", string(capturedDeps.Format),
-		"$PVE_OUTPUT=json must beat context default-output=yaml in non-noClient path")
+		"$PMX_OUTPUT=json must beat context default-output=yaml in non-noClient path")
 }
 
 // TestPersistentPreRunE_Ctx_PopulatedForNonNoClient verifies that Deps.Ctx is
 // populated with the resolved *config.Context for a normal (non-noClient)
-// command, so top-level commands (e.g. `pve ssh`/`pve rsync`) can read
+// command, so top-level commands (e.g. `pmx ssh`/`pmx rsync`) can read
 // per-context SSH defaults without re-resolving the config themselves.
 func TestPersistentPreRunE_Ctx_PopulatedForNonNoClient(t *testing.T) {
-	t.Setenv("PVE_OUTPUT", "json")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "json")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")
@@ -906,9 +906,9 @@ func TestPersistentPreRunE_Ctx_PopulatedForNonNoClient(t *testing.T) {
 // noClient command must nil-check.
 func TestPersistentPreRunE_Ctx_NilForNoClient(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	root, cleanup := cli.NewRootCmd()
 	defer cleanup()
@@ -968,11 +968,11 @@ func captureStderr(t *testing.T, fn func()) string {
 // TestExecute_ExitError_SuppressesStderr verifies that Execute does NOT print
 // a redundant second diagnostic line when the returned error chain contains
 // an *exec.ExitError: the child process (ssh, rsync) already wrote its own
-// diagnostics, so pve must not add its own.
+// diagnostics, so pmx must not add its own.
 func TestExecute_ExitError_SuppressesStderr(t *testing.T) {
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	factory := func(_ *cli.Deps) *cobra.Command {
 		return &cobra.Command{
@@ -985,7 +985,7 @@ func TestExecute_ExitError_SuppressesStderr(t *testing.T) {
 	}
 
 	oldArgs := os.Args
-	os.Args = []string{"pve", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
+	os.Args = []string{"pmx", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
 	defer func() { os.Args = oldArgs }()
 
 	var execErr error
@@ -1006,9 +1006,9 @@ func TestExecute_ExitError_SuppressesStderr(t *testing.T) {
 // suppression logic: any error that is NOT an *exec.ExitError must still be
 // printed to stderr exactly as before.
 func TestExecute_NonExitError_StillPrintsStderr(t *testing.T) {
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	const sentinel = "deliberate-non-exit-error-sentinel"
 	factory := func(_ *cli.Deps) *cobra.Command {
@@ -1022,7 +1022,7 @@ func TestExecute_NonExitError_StillPrintsStderr(t *testing.T) {
 	}
 
 	oldArgs := os.Args
-	os.Args = []string{"pve", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
+	os.Args = []string{"pmx", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
 	defer func() { os.Args = oldArgs }()
 
 	var execErr error
@@ -1076,11 +1076,11 @@ func buildInspectCmd(deps **cli.Deps) *cobra.Command {
 //   - Assert the distinctive message appears in at least one record.
 func TestLogCloser_RunERecordsSurvive_F01(t *testing.T) {
 	tmpDir := t.TempDir()
-	// Redirect HOME so logx writes ~/.pve/logs under tmpDir.
+	// Redirect HOME so logx writes ~/.pmx/logs under tmpDir.
 	t.Setenv("HOME", tmpDir)
-	t.Setenv("PVE_OUTPUT", "table")
-	t.Setenv("PVE_NODE", "")
-	t.Setenv("PVE_CONTEXT", "")
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
 
 	// Empty config is fine; noClient command bypasses context resolution.
 	cfgPath := filepath.Join(tmpDir, "config.yml")
@@ -1123,7 +1123,7 @@ func TestLogCloser_RunERecordsSurvive_F01(t *testing.T) {
 	// *os.File returns error; the nolint:errcheck suppresses it in production code).
 	// The defer above is still safe: noopLogCloser.Close() is idempotent.
 
-	logDir := filepath.Join(tmpDir, ".pve", "logs")
+	logDir := filepath.Join(tmpDir, ".pmx", "logs")
 	entries, err := os.ReadDir(logDir)
 	require.NoError(t, err, "log directory must exist after Execute")
 	require.NotEmpty(t, entries, "at least one log file must be created")
@@ -1159,7 +1159,7 @@ func TestApplyTOFUOptions_TofuDisabled_OptionsUnchanged(t *testing.T) {
 	base := pve.Options{Host: "pve.example.com"}
 	var promptOut bytes.Buffer
 
-	got := cli.ApplyTOFUOptions(base, false, false, "/home/user/.config/pve/config.yml", "prod",
+	got := cli.ApplyTOFUOptions(base, false, false, "/home/user/.config/pmx/config.yml", "prod",
 		&promptOut, strings.NewReader(""), alwaysTTY)
 
 	require.Empty(t, got.FingerprintCachePath,
@@ -1173,10 +1173,10 @@ func TestApplyTOFUOptions_TofuEnabled_WiresFingerprintPinning(t *testing.T) {
 	base := pve.Options{Host: "pve.example.com"}
 	var promptOut bytes.Buffer
 
-	got := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pve/config.yml", "prod",
+	got := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pmx/config.yml", "prod",
 		&promptOut, strings.NewReader(""), alwaysTTY)
 
-	require.Equal(t, "/home/user/.config/pve/fingerprints/prod.json", got.FingerprintCachePath,
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/prod.json", got.FingerprintCachePath,
 		"tofu=true must set the per-context fingerprint cache path")
 	require.NotNil(t, got.ManualVerifyCallback,
 		"tofu=true must install the manual-verify callback")
@@ -1186,7 +1186,7 @@ func TestApplyTOFUOptions_TofuEnabledButInsecure_OptionsUnchanged(t *testing.T) 
 	base := pve.Options{Host: "pve.example.com"}
 	var promptOut bytes.Buffer
 
-	got := cli.ApplyTOFUOptions(base, true, true, "/home/user/.config/pve/config.yml", "prod",
+	got := cli.ApplyTOFUOptions(base, true, true, "/home/user/.config/pmx/config.yml", "prod",
 		&promptOut, strings.NewReader(""), alwaysTTY)
 
 	require.Empty(t, got.FingerprintCachePath,
@@ -1199,16 +1199,16 @@ func TestApplyTOFUOptions_DifferentContexts_DistinctCachePaths(t *testing.T) {
 	base := pve.Options{Host: "pve.example.com"}
 	var promptOut bytes.Buffer
 
-	prod := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pve/config.yml", "prod",
+	prod := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pmx/config.yml", "prod",
 		&promptOut, strings.NewReader(""), alwaysTTY)
-	staging := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pve/config.yml", "staging",
+	staging := cli.ApplyTOFUOptions(base, true, false, "/home/user/.config/pmx/config.yml", "staging",
 		&promptOut, strings.NewReader(""), alwaysTTY)
 
 	require.NotEqual(t, prod.FingerprintCachePath, staging.FingerprintCachePath,
 		"each context must persist trust decisions to its own cache file")
 }
 
-// TestVersionFlag_PrintsBuildInfo verifies that `pve --version` prints the
+// TestVersionFlag_PrintsBuildInfo verifies that `pmx --version` prints the
 // full build-info line from internal/version and exits without running
 // PersistentPreRunE (no config load, no API client construction).
 func TestVersionFlag_PrintsBuildInfo(t *testing.T) {
@@ -1241,7 +1241,7 @@ func TestVersionFlag_ShortV(t *testing.T) {
 	root.SetArgs([]string{"-v"})
 
 	require.NoError(t, root.Execute())
-	require.Contains(t, out.String(), "pve version")
+	require.Contains(t, out.String(), "pmx version")
 
 	vFlag := root.Flags().Lookup("version")
 	require.NotNil(t, vFlag, "--version flag must exist")

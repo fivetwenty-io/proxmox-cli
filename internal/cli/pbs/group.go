@@ -10,8 +10,8 @@ import (
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // groupEntry mirrors one element of the JSON array PBS returns from
@@ -52,7 +52,7 @@ func decodeGroupEntries(resp *pbsadmin.ListDatastoreGroupsResponse) ([]groupEntr
 	return entries, nil
 }
 
-// newGroupCmd builds the `pve pbs group` command and its sub-commands for
+// newGroupCmd builds the `pmx pbs group` command and its sub-commands for
 // managing backup groups (the collection of every snapshot sharing a
 // backup-type/backup-id pair) in a PBS datastore.
 func newGroupCmd() *cobra.Command {
@@ -72,7 +72,7 @@ func newGroupCmd() *cobra.Command {
 	return cmd
 }
 
-// newGroupLsCmd builds `pve pbs group ls` — list backup groups in a
+// newGroupLsCmd builds `pmx pbs group ls` — list backup groups in a
 // datastore (GET /admin/datastore/{store}/groups).
 func newGroupLsCmd() *cobra.Command {
 	var df storeFlags
@@ -118,7 +118,7 @@ func newGroupLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newGroupDeleteCmd builds `pve pbs group delete <type>/<id>` —
+// newGroupDeleteCmd builds `pmx pbs group delete <type>/<id>` —
 // permanently remove a backup group and every snapshot it contains (DELETE
 // /admin/datastore/{store}/groups).
 func newGroupDeleteCmd() *cobra.Command {
@@ -178,7 +178,7 @@ func newGroupDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newGroupNotesCmd builds `pve pbs group notes <type>/<id>` — without
+// newGroupNotesCmd builds `pmx pbs group notes <type>/<id>` — without
 // --set, print the backup group's notes text (GET
 // /admin/datastore/{store}/group-notes); with --set TEXT, replace it (PUT
 // /admin/datastore/{store}/group-notes).

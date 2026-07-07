@@ -10,8 +10,8 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // renderProxyResponse decodes a json.RawMessage proxy response (ticket/port
@@ -33,7 +33,7 @@ func renderProxyResponse(cmd *cobra.Command, deps *cli.Deps, raw *json.RawMessag
 		output.Result{Single: single, Raw: rawMap}, deps.Format)
 }
 
-// newTermproxyCmd builds `pve node termproxy`. It requests a terminal proxy
+// newTermproxyCmd builds `pmx node termproxy`. It requests a terminal proxy
 // ticket from the Proxmox API and prints the connection info (ticket, port,
 // user). The ticket can be used with a websocket-capable terminal client to
 // open an interactive session on the node.
@@ -82,7 +82,7 @@ func newTermproxyCmd() *cobra.Command {
 	return cmd
 }
 
-// newVncshellCmd builds `pve node vncshell`. It requests a VNC shell proxy
+// newVncshellCmd builds `pmx node vncshell`. It requests a VNC shell proxy
 // ticket and prints the host/port/ticket fields needed by a VNC viewer.
 // VNC is a GUI protocol; this command does not open a viewer — use the
 // printed connection info with TigerVNC, RealVNC, or the Proxmox web UI.
@@ -192,7 +192,7 @@ func writeSpiceVV(obj map[string]any) (string, error) {
 	return f.Name(), nil
 }
 
-// newSpiceshellCmd builds `pve node spiceshell`. It requests a SPICE shell
+// newSpiceshellCmd builds `pmx node spiceshell`. It requests a SPICE shell
 // proxy ticket, writes a SPICE .vv connection file to the system temp
 // directory, and prints the file path alongside the connection details.
 // SPICE is a GUI protocol; open the .vv file with virt-viewer or a

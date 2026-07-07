@@ -6,15 +6,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 func TestSubnetSetRequiresChange(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "set", "pvecli0", "10.241.0.0-24")
+	_, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no changes to set")
 	require.Empty(t, rec)
@@ -23,15 +23,15 @@ func TestSubnetSetRequiresChange(t *testing.T) {
 func TestSubnetSetForwardsChanged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "subnet", "set", "pvecli0", "10.241.0.0-24",
+	out, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24",
 		"--gateway", "10.241.0.1", "--snat")
 	require.NoError(t, err)
 	require.Contains(t, out, "updated")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPut, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", rec[0].path)
 	require.Equal(t, "10.241.0.1", rec[0].body["gateway"])
 	require.Equal(t, "1", rec[0].body["snat"])
 }
@@ -41,9 +41,9 @@ func TestSubnetSetForwardsChanged(t *testing.T) {
 func TestSubnetSetOmitsUnsetFlags(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "set", "pvecli0", "10.241.0.0-24", "--gateway", "10.241.0.1")
+	_, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24", "--gateway", "10.241.0.1")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "10.241.0.1", rec[0].body["gateway"])
@@ -54,9 +54,9 @@ func TestSubnetSetOmitsUnsetFlags(t *testing.T) {
 func TestSubnetSetDeleteOnly(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "subnet", "set", "pvecli0", "10.241.0.0-24", "--delete", "gateway")
+	out, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24", "--delete", "gateway")
 	require.NoError(t, err)
 	require.Contains(t, out, "updated")
 	require.Len(t, rec, 1)
@@ -66,9 +66,9 @@ func TestSubnetSetDeleteOnly(t *testing.T) {
 func TestSubnetSetDhcpDnsServer(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "subnet", "set", "pvecli0", "10.241.0.0-24",
+	_, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24",
 		"--dhcp-dns-server", "8.8.8.8")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
@@ -78,9 +78,9 @@ func TestSubnetSetDhcpDnsServer(t *testing.T) {
 func TestSubnetSetError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pvecli0/subnets/10.241.0.0-24", nil, 500)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/vnets/pmxcli0/subnets/10.241.0.0-24", nil, 500)
 
-	_, err := run(t, f, "", "subnet", "set", "pvecli0", "10.241.0.0-24", "--gateway", "10.241.0.1")
+	_, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24", "--gateway", "10.241.0.1")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "update subnet")
 }

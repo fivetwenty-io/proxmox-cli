@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""Build pve CLI binary into ./dist/pve with version ldflags injected."""
+"""Build pmx CLI binary into ./dist/pmx with version ldflags injected."""
 
 import argparse
 import os
@@ -56,13 +56,13 @@ def git_version() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build pve CLI binary with version ldflags injected.",
+        description="Build pmx CLI binary with version ldflags injected.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--output", "-o",
-        default="./dist/pve",
-        help="Output binary path (default: ./dist/pve)",
+        default="./dist/pmx",
+        help="Output binary path (default: ./dist/pmx)",
     )
     parser.add_argument(
         "--version",
@@ -71,8 +71,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--module",
-        default="github.com/fivetwenty-io/pve-cli",
-        help="Go module path (default: github.com/fivetwenty-io/pve-cli)",
+        default="github.com/fivetwenty-io/pmx-cli",
+        help="Go module path (default: github.com/fivetwenty-io/pmx-cli)",
     )
     args = parser.parse_args()
 
@@ -98,7 +98,7 @@ def main() -> None:
         "-trimpath",
         f"-ldflags={ldflags}",
         "-o", args.output,
-        f"{args.module}/cmd/pve",
+        f"{args.module}/cmd/pmx",
     ]
 
     print(f"build: version={version} commit={commit} date={date}")

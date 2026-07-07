@@ -2,7 +2,7 @@
 
 Zone/vnet/subnet creation, apply, and deletion are deferred — they mutate
 cluster networking. The full provision→teardown cycle is exercised by the
-lifecycle suite (`scripts/lifecycle`) on an isolated `pvecli` zone.
+lifecycle suite (`scripts/lifecycle`) on an isolated `pmxcli` zone.
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ def run(ctx: Ctx) -> None:
     ctx.check("rollback --help", "sdn", "rollback", "--help", fmt="")
     ctx.defer("rollback",
               "discards ALL pending SDN changes cluster-wide; not exercised live; covered by unit tests",
-              "pve sdn rollback --yes", isolation=False, live_covered=False)
+              "pmx sdn rollback --yes", isolation=False, live_covered=False)
 
     # SDN fabrics, prefix lists, and route maps are PVE 9.2 net-new (BGP/OSPF/
     # OpenFabric routing underlays and route policy). The list endpoints are
@@ -187,19 +187,19 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "status fabrics interfaces",
         "requires applied FRR fabric backend not present in lab",
-        "pve sdn status fabrics interfaces <fabric> --node <node>",
+        "pmx sdn status fabrics interfaces <fabric> --node <node>",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "status fabrics neighbors",
         "requires applied FRR fabric backend not present in lab",
-        "pve sdn status fabrics neighbors <fabric> --node <node>",
+        "pmx sdn status fabrics neighbors <fabric> --node <node>",
         isolation=False, live_covered=False,
     )
     ctx.defer(
         "status fabrics routes",
         "requires applied FRR fabric backend not present in lab",
-        "pve sdn status fabrics routes <fabric> --node <node>",
+        "pmx sdn status fabrics routes <fabric> --node <node>",
         isolation=False, live_covered=False,
     )
 
@@ -211,58 +211,58 @@ def run(ctx: Ctx) -> None:
     ctx.defer("fabric create/get/set/delete + node create/get/set/delete",
               "staged openfabric routing config — covered live by `e2e --mutate` "
               "(never applied, so no FRR backend needed)",
-              "pve sdn fabric create pveclifb --protocol openfabric --ip-prefix 172.30.0.0/24",
+              "pmx sdn fabric create pmxclifb --protocol openfabric --ip-prefix 172.30.0.0/24",
               isolation=True, live_covered=True)
     ctx.defer("prefix-list create/get/set/delete + entry add/get/set/delete/list",
               "staged route-filter config — covered live by `e2e --mutate` (never applied)",
-              "pve sdn prefix-list create pveclipl",
+              "pmx sdn prefix-list create pmxclipl",
               isolation=True, live_covered=True)
     ctx.defer("route-map get + entry add/get/set/delete",
               "staged BGP route policy — covered live by `e2e --mutate` (never applied)",
-              "pve sdn route-map entry add pveclirm --order 10 --action permit",
+              "pmx sdn route-map entry add pmxclirm --order 10 --action permit",
               isolation=True, live_covered=True)
 
     # The mutate phase provisions and tears down this exact isolated SDN, so
     # zone/vnet/subnet create+delete and apply are all exercised live by it.
     ctx.defer("zone create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
-              f"pve sdn zone create {Isolation.SDN_ZONE} --type simple",
+              f"pmx sdn zone create {Isolation.SDN_ZONE} --type simple",
               isolation=True, live_covered=True)
     ctx.defer("zone set",
               "updates a zone's properties — covered live by `e2e --mutate` "
-              "(set --nodes on the isolated pvecli zone)",
-              f"pve sdn zone set {Isolation.SDN_ZONE} --nodes <node>",
+              "(set --nodes on the isolated pmxcli zone)",
+              f"pmx sdn zone set {Isolation.SDN_ZONE} --nodes <node>",
               isolation=True, live_covered=True)
     ctx.defer("vnet create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
-              f"pve sdn vnet create {Isolation.SDN_VNET} --zone {Isolation.SDN_ZONE}",
+              f"pmx sdn vnet create {Isolation.SDN_VNET} --zone {Isolation.SDN_ZONE}",
               isolation=True, live_covered=True)
     ctx.defer("subnet create/delete", "mutates cluster networking — covered live by `e2e --mutate`",
-              f"pve sdn subnet create {Isolation.SDN_VNET} {Isolation.SDN_SUBNET}",
+              f"pmx sdn subnet create {Isolation.SDN_VNET} {Isolation.SDN_SUBNET}",
               isolation=True, live_covered=True)
     ctx.defer("subnet set",
               "updates a subnet's gateway or other properties — covered live by `e2e --mutate`",
-              f"pve sdn subnet set {Isolation.SDN_VNET} <subnet-id> "
+              f"pmx sdn subnet set {Isolation.SDN_VNET} <subnet-id> "
               f"--gateway {Isolation.SDN_GATEWAY}",
               isolation=True, live_covered=True)
     ctx.defer("vnet ips create/set/delete",
               "manages IPAM IP allocations within a vnet — requires pve IPAM enabled on "
-              "the zone; covered live by `e2e --mutate` on the isolated pvecli vnet",
-              f"pve sdn vnet ips create {Isolation.SDN_VNET} --ip 10.241.0.10 "
+              "the zone; covered live by `e2e --mutate` on the isolated pmxcli vnet",
+              f"pmx sdn vnet ips create {Isolation.SDN_VNET} --ip 10.241.0.10 "
               f"--zone {Isolation.SDN_ZONE}",
               isolation=True, live_covered=True)
     ctx.defer("apply", "reloads network config on all nodes — covered live by `e2e --mutate`",
-              "pve sdn apply", isolation=True, live_covered=True)
+              "pmx sdn apply", isolation=True, live_covered=True)
     # The mutate phase runs a tight acquire→release pair on the global SDN lock
     # (the token `acquire` returns releases it immediately), when the SDN config
     # is freshly applied and no other write is in flight — covered live by it.
     ctx.defer("lock acquire",
               "acquires the global SDN config lock — covered live by `e2e --mutate` "
               "(tight acquire→release pair)",
-              "pve sdn lock acquire",
+              "pmx sdn lock acquire",
               isolation=True, live_covered=True)
     ctx.defer("lock release",
               "releases the global SDN config lock with its token — covered live by "
               "`e2e --mutate`",
-              "pve sdn lock release --lock-token <token> --yes",
+              "pmx sdn lock release --lock-token <token> --yes",
               isolation=True, live_covered=True)
 
     # Controller/IPAM/DNS write verbs are staged config edits; the help surface
@@ -275,7 +275,7 @@ def run(ctx: Ctx) -> None:
     # applying, so the full CRUD cycle is exercised live with no FRR backend.
     ctx.defer("controller create/get/set/delete",
               "staged EVPN controller config — covered live by `e2e --mutate` (never applied, so no FRR backend needed)",
-              "pve sdn controller create pveclictrl --type evpn --asn 65000 --peers 172.30.0.2",
+              "pmx sdn controller create pmxclictrl --type evpn --asn 65000 --peers 172.30.0.2",
               isolation=True, live_covered=True)
     # A DNS provider (PowerDNS et al.) validates connectivity to its backend when
     # created or updated (the plugin issues a GET to the provider URL). The lab
@@ -287,68 +287,68 @@ def run(ctx: Ctx) -> None:
     # them individually).
     ctx.defer("dns create",
               "registers a DNS provider — covered live by `e2e --mutate`, which points it at a host-local API stub and stages it (never applied)",
-              "pve sdn dns create pveclidns --type powerdns --url URL --key KEY",
+              "pmx sdn dns create pmxclidns --type powerdns --url URL --key KEY",
               isolation=True, live_covered=True)
     ctx.defer("dns get",
               "reads a staged DNS provider — covered live by `e2e --mutate`",
-              "pve sdn dns get pveclidns",
+              "pmx sdn dns get pmxclidns",
               isolation=True, live_covered=True)
     ctx.defer("dns set",
               "edits a staged DNS provider — covered live by `e2e --mutate` (re-runs the connectivity probe against the host-local stub)",
-              "pve sdn dns set pveclidns --ttl 600",
+              "pmx sdn dns set pmxclidns --ttl 600",
               isolation=True, live_covered=True)
     ctx.defer("dns delete",
               "removes a staged DNS provider — covered live by `e2e --mutate`",
-              "pve sdn dns delete pveclidns --yes",
+              "pmx sdn dns delete pmxclidns --yes",
               isolation=True, live_covered=True)
     ctx.defer("ipam create/get/delete",
               "pve-type IPAM CRUD — covered live by `e2e --mutate`",
-              "pve sdn ipam create pvecliipam --type pve",
+              "pmx sdn ipam create pmxcliipam --type pve",
               isolation=True, live_covered=True)
     ctx.defer("ipam set",
               "the pve IPAM exposes no settable properties; the netbox/phpipam types "
               "validate a reachable external backend on create — covered by unit tests",
-              "pve sdn ipam set pvecliipam --url URL",
+              "pmx sdn ipam set pmxcliipam --url URL",
               isolation=True, live_covered=False)
     ctx.defer("vnet set",
               "stages a vnet edit — covered live by `e2e --mutate`",
-              f"pve sdn vnet set {Isolation.SDN_VNET} --alias pve-cli-e2e",
+              f"pmx sdn vnet set {Isolation.SDN_VNET} --alias pmx-cli-e2e",
               isolation=True, live_covered=True)
     ctx.defer("vnet firewall rules create/get/set/delete",
               "stages a vnet firewall rule — covered live by `e2e --mutate`",
-              f"pve sdn vnet firewall rules create {Isolation.SDN_VNET} --type forward --action ACCEPT",
+              f"pmx sdn vnet firewall rules create {Isolation.SDN_VNET} --type forward --action ACCEPT",
               isolation=True, live_covered=True)
     ctx.defer("vnet firewall options set",
               "stages a vnet forward policy (never --enable, never applied) on the "
-              "isolated guest-free pvecli0 vnet — covered live by `e2e --mutate`",
-              f"pve sdn vnet firewall options set {Isolation.SDN_VNET} --policy-forward ACCEPT",
+              "isolated guest-free pmxcli0 vnet — covered live by `e2e --mutate`",
+              f"pmx sdn vnet firewall options set {Isolation.SDN_VNET} --policy-forward ACCEPT",
               isolation=True, live_covered=True)
 
     # `zone`/`vnet permissions grant`/`revoke` mutate cluster-wide ACLs (not
-    # scoped to the isolated pvecli zone/vnet's own SDN config), so neither is
+    # scoped to the isolated pmxcli zone/vnet's own SDN config), so neither is
     # wired into the mutate phase. The `list`/`effective` reads above are
     # exercised live.
     ctx.defer(
         "zone permissions grant",
         "grants ACL roles on the zone's /sdn/zones/{zone} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve sdn zone permissions grant <zone> --roles PVEAuditor --users alice@pve",
+        "pmx sdn zone permissions grant <zone> --roles PVEAuditor --users alice@pve",
     )
     ctx.defer(
         "zone permissions revoke",
         "revokes ACL roles on the zone's /sdn/zones/{zone} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve sdn zone permissions revoke <zone> --roles PVEAuditor --users alice@pve",
+        "pmx sdn zone permissions revoke <zone> --roles PVEAuditor --users alice@pve",
     )
     ctx.defer(
         "vnet permissions grant",
         "grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; "
         "mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve sdn vnet permissions grant <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
+        "pmx sdn vnet permissions grant <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
     )
     ctx.defer(
         "vnet permissions revoke",
         "revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; "
         "mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve sdn vnet permissions revoke <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
+        "pmx sdn vnet permissions revoke <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
     )

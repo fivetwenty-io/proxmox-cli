@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // nodeServiceEntry mirrors one element of the JSON array PBS returns from
@@ -43,7 +43,7 @@ type nodeServiceStateEntry struct {
 	UnitState   string `json:"unit-state"`
 }
 
-// newNodeServicesCmd builds `pve pbs node services` and its
+// newNodeServicesCmd builds `pmx pbs node services` and its
 // ls/show/state/start/stop/restart/reload verbs (/nodes/{node}/services...).
 func newNodeServicesCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
@@ -62,7 +62,7 @@ func newNodeServicesCmd(nf *nodeFlags) *cobra.Command {
 	return cmd
 }
 
-// newNodeServicesLsCmd builds `pve pbs node services ls` — list system
+// newNodeServicesLsCmd builds `pmx pbs node services ls` — list system
 // services (GET /nodes/{node}/services).
 func newNodeServicesLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -118,7 +118,7 @@ func fetchNodeServiceState(cmd *cobra.Command, deps *cli.Deps, node, svc string)
 	return entry, nil
 }
 
-// newNodeServicesShowCmd builds `pve pbs node services show <svc>` — a
+// newNodeServicesShowCmd builds `pmx pbs node services show <svc>` — a
 // friendly key/value rendering of a service's state.
 func newNodeServicesShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -165,7 +165,7 @@ func nodeServiceStateName(entry nodeServiceStateEntry) string {
 	return entry.Name
 }
 
-// newNodeServicesStateCmd builds `pve pbs node services state <svc>` — the
+// newNodeServicesStateCmd builds `pmx pbs node services state <svc>` — the
 // full raw systemd state details for a single service.
 func newNodeServicesStateCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
@@ -192,7 +192,7 @@ func newNodeServicesStateCmd(nf *nodeFlags) *cobra.Command {
 	}
 }
 
-// newNodeServiceActionCmd builds a `pve pbs node services <verb> <svc>`
+// newNodeServiceActionCmd builds a `pmx pbs node services <verb> <svc>`
 // command (POST /nodes/{node}/services/{service}/<verb>).
 //
 // The generated Nodes.CreateServices{Start,Stop,Restart,Reload} bindings

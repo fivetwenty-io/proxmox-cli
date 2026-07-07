@@ -13,9 +13,9 @@ the host is unreachable it records SKIP rather than failing.
 
 Isolation — every resource is shielded from other lab efforts:
 
-  * named/hostnamed with the `pve-cli-` prefix,
-  * placed in the `pve-cli` resource pool and tagged `pve-cli`,
-  * attached to a dedicated `pvecli` simple SDN zone / `pvecli0` vnet on the
+  * named/hostnamed with the `pmx-cli-` prefix,
+  * placed in the `pmx-cli` resource pool and tagged `pmx-cli`,
+  * attached to a dedicated `pmxcli` simple SDN zone / `pmxcli0` vnet on the
     172.30.0.0/24 subnet — off the host management network.
 
 Teardown runs in a `finally` block and is idempotent, so a crashed prior run is
@@ -58,35 +58,35 @@ from .runner import (
 # Fixed resource names (all carry the isolation prefix/tag/pool).
 VM_NAME = Isolation.NAME_PREFIX + "vm"
 CT_HOST = Isolation.NAME_PREFIX + "ct"
-SNAP_NAME = "pvecli-snap"
-FW_IPSET = "pvecli-ips"
-FW_ALIAS = "pvecli-alias"
-CL_FW_GROUP = "pvecli-grp"      # isolated cluster security group
-CL_FW_IPSET = "pvecli-clips"    # cluster-level IP set (distinct from per-guest FW_IPSET)
-CL_FW_ALIAS = "pvecli-clalias"  # cluster-level address alias
-CL_FW_COMMENT = "pve-cli-e2e"   # marks the throwaway top-level cluster rule
+SNAP_NAME = "pmxcli-snap"
+FW_IPSET = "pmxcli-ips"
+FW_ALIAS = "pmxcli-alias"
+CL_FW_GROUP = "pmxcli-grp"      # isolated cluster security group
+CL_FW_IPSET = "pmxcli-clips"    # cluster-level IP set (distinct from per-guest FW_IPSET)
+CL_FW_ALIAS = "pmxcli-clalias"  # cluster-level address alias
+CL_FW_COMMENT = "pmx-cli-e2e"   # marks the throwaway top-level cluster rule
 ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
 TMPL_STORAGE = "local"          # holds vztmpl content
 BACKUP_STORAGE = "local"        # dir storage that holds backup content
-BACKUP_JOB = "pvecli-backup"    # isolated, disabled vzdump schedule id
-METRICS_SERVER = "pve-cli-graphite"  # isolated, disabled external metric server
-GOTIFY_ENDPOINT = "pve-cli-gotify"   # isolated, disabled gotify notification endpoint
-SENDMAIL_ENDPOINT = "pve-cli-sendmail"  # isolated, disabled sendmail endpoint (local mail only)
-SMTP_ENDPOINT = "pve-cli-smtp"       # isolated, disabled smtp endpoint (dummy server, never contacted)
-WEBHOOK_ENDPOINT = "pve-cli-webhook"  # isolated, disabled webhook endpoint (dummy url, never contacted)
-NOTIFY_MATCHER = "pve-cli-matcher"   # isolated, disabled notification matcher
-DIR_MAPPING = "pve-cli-dir"          # isolated host-directory mapping
-PCI_MAPPING = "pve-cli-pci"          # isolated PCI mapping (synthetic address)
-USB_MAPPING = "pve-cli-usb"          # isolated USB mapping (synthetic address)
-REALMSYNC_REALM = "pve-cli-syncrealm"  # isolated ldap realm the sync job points at
-REALMSYNC_JOB = "pve-cli-syncjob"    # isolated, disabled realm-sync job
-ACME_PLUGIN = "pve-cli-acme"         # isolated dns-01 ACME challenge plugin
-CPU_MODEL = "pve-cli-cpu"            # isolated custom QEMU CPU model
-SDN_IPAM = "pvecliipam"              # isolated SDN IPAM backend (pve-type, no external backend)
-SDN_CTRL = "pveclictrl"              # isolated EVPN controller (staged config only, never applied)
-SDN_FABRIC = "pveclifb"              # isolated openfabric SDN fabric (staged config only, never applied)
-SDN_PREFIX = "pveclipl"              # isolated SDN prefix list (staged config only, never applied)
-SDN_RTMAP = "pveclirm"               # isolated SDN route map (staged config only, never applied)
+BACKUP_JOB = "pmxcli-backup"    # isolated, disabled vzdump schedule id
+METRICS_SERVER = "pmx-cli-graphite"  # isolated, disabled external metric server
+GOTIFY_ENDPOINT = "pmx-cli-gotify"   # isolated, disabled gotify notification endpoint
+SENDMAIL_ENDPOINT = "pmx-cli-sendmail"  # isolated, disabled sendmail endpoint (local mail only)
+SMTP_ENDPOINT = "pmx-cli-smtp"       # isolated, disabled smtp endpoint (dummy server, never contacted)
+WEBHOOK_ENDPOINT = "pmx-cli-webhook"  # isolated, disabled webhook endpoint (dummy url, never contacted)
+NOTIFY_MATCHER = "pmx-cli-matcher"   # isolated, disabled notification matcher
+DIR_MAPPING = "pmx-cli-dir"          # isolated host-directory mapping
+PCI_MAPPING = "pmx-cli-pci"          # isolated PCI mapping (synthetic address)
+USB_MAPPING = "pmx-cli-usb"          # isolated USB mapping (synthetic address)
+REALMSYNC_REALM = "pmx-cli-syncrealm"  # isolated ldap realm the sync job points at
+REALMSYNC_JOB = "pmx-cli-syncjob"    # isolated, disabled realm-sync job
+ACME_PLUGIN = "pmx-cli-acme"         # isolated dns-01 ACME challenge plugin
+CPU_MODEL = "pmx-cli-cpu"            # isolated custom QEMU CPU model
+SDN_IPAM = "pmxcliipam"              # isolated SDN IPAM backend (pve-type, no external backend)
+SDN_CTRL = "pmxclictrl"              # isolated EVPN controller (staged config only, never applied)
+SDN_FABRIC = "pmxclifb"              # isolated openfabric SDN fabric (staged config only, never applied)
+SDN_PREFIX = "pmxclipl"              # isolated SDN prefix list (staged config only, never applied)
+SDN_RTMAP = "pmxclirm"               # isolated SDN route map (staged config only, never applied)
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
@@ -128,7 +128,7 @@ class Runner:
         self.timeout = timeout
         self.cov: list[Step] = []
 
-    def pve(self, *args: str, json_out: bool = False, node: bool = True,
+    def pmx(self, *args: str, json_out: bool = False, node: bool = True,
             stdin: str | None = None) -> Cmd:
         argv = [self.binary, "--context", self.context, "--no-log"]
         if json_out:
@@ -145,7 +145,7 @@ class Runner:
 
     # Run the binary with an explicit argv (no --context/--node injection), used
     # by steps that drive a scratch `--config` file or a non-default --context.
-    def pve_raw(self, *args: str, json_out: bool = False) -> Cmd:
+    def pmx_raw(self, *args: str, json_out: bool = False) -> Cmd:
         argv = [self.binary, "--no-log"]
         if json_out:
             argv += ["-o", "json"]
@@ -176,13 +176,13 @@ class Runner:
              json_out: bool = False, node: bool = True,
              stdin: str | None = None) -> Cmd:
         return self._record(guest, verb, label,
-                            self.pve(*args, json_out=json_out, node=node, stdin=stdin))
+                            self.pmx(*args, json_out=json_out, node=node, stdin=stdin))
 
     # Like step(), but runs the binary verbatim (no --context/--node), for verbs
     # driven against a scratch `--config` file or an explicit --context.
     def step_raw(self, guest: str, verb: str, label: str, *args: str,
                  json_out: bool = False) -> Cmd:
-        return self._record(guest, verb, label, self.pve_raw(*args, json_out=json_out))
+        return self._record(guest, verb, label, self.pmx_raw(*args, json_out=json_out))
 
     # A soft, coverage-recorded step for verbs whose completion depends on the
     # host (e.g. LXC suspend needs CRIU). PASS on success; on a recognised
@@ -190,7 +190,7 @@ class Runner:
     # failure is a real bug — record FAIL and raise.
     def soft_step(self, guest: str, verb: str, label: str, *args: str,
                   skip_markers: tuple[str, ...] = (), skip_reason: str = "") -> bool:
-        res = self.pve(*args)
+        res = self.pmx(*args)
         if res.rc == 0:
             print(f"  {GREEN('✓')} {label}")
             self.cov.append(Step(guest, verb, PASS))
@@ -215,7 +215,7 @@ class Runner:
 
     # A teardown step: print result, never raise, not coverage-recorded.
     def undo(self, name: str, *args: str) -> None:
-        res = self.pve(*args)
+        res = self.pmx(*args)
         if res.rc == 0:
             print(f"  {GREEN('✓')} {name}")
         else:
@@ -231,7 +231,7 @@ class Runner:
     # SKIP with the detail rather than failing the whole suite.
     def del_step(self, guest: str, verb: str, label: str, *args: str,
                  node: bool = True) -> None:
-        res = self.pve(*args, node=node)
+        res = self.pmx(*args, node=node)
         if res.rc == 0:
             print(f"  {GREEN('✓')} {label}")
             self.cov.append(Step(guest, verb, PASS))
@@ -242,12 +242,12 @@ class Runner:
         self.cov.append(Step(guest, verb, SKIP, "cleanup: " + tail[:120]))
 
 
-VOLUME_NOTE = "pve-cli-e2e marker"
+VOLUME_NOTE = "pmx-cli-e2e marker"
 
 
 def _backup_volid(r: Runner, vmid: str) -> str:
     """Return the volid of a backup archive for vmid on BACKUP_STORAGE, or ""."""
-    res = r.pve("storage", "content", BACKUP_STORAGE, "--content", "backup",
+    res = r.pmx("storage", "content", BACKUP_STORAGE, "--content", "backup",
                 "--vmid", vmid, json_out=True)
     if res.rc != 0:
         return ""
@@ -277,7 +277,7 @@ def _volume_set_roundtrip(r: Runner, vmid: str) -> str | None:
                      "no backup archive found")
         return None
 
-    g0 = r.pve("storage", "volume", "get", volid, json_out=True)
+    g0 = r.pmx("storage", "volume", "get", volid, json_out=True)
     try:
         orig = str(g0.json().get("notes", "") or "")
     except (ValueError, AttributeError):
@@ -298,7 +298,7 @@ def _volume_set_roundtrip(r: Runner, vmid: str) -> str | None:
 
 def _node_count(r: Runner) -> int:
     """Return number of cluster nodes, or 1 on error (single-node assumption)."""
-    res = r.pve("node", "list", json_out=True, node=False)
+    res = r.pmx("node", "list", json_out=True, node=False)
     if res.rc != 0:
         return 1
     try:
@@ -316,7 +316,7 @@ def _alt_image_storage(r: Runner, exclude: str) -> str:
     """Return the id of an enabled storage that supports `images` content other
     than `exclude`, or "" if none exists (single-storage lab). Used so the disk
     `move` verb relocates to a genuinely different storage."""
-    res = r.pve("storage", "list", json_out=True, node=False)
+    res = r.pmx("storage", "list", json_out=True, node=False)
     if res.rc != 0:
         return ""
     try:
@@ -342,7 +342,7 @@ def _alt_rootdir_storage(r: Runner, exclude: str) -> str:
     """Return the id of an enabled storage that supports `rootdir` content other
     than `exclude`, or "" if none exists. Used so the CT volume `move` verb
     relocates a container rootfs to a genuinely different storage."""
-    res = r.pve("storage", "list", json_out=True, node=False)
+    res = r.pmx("storage", "list", json_out=True, node=False)
     if res.rc != 0:
         return ""
     try:
@@ -362,7 +362,7 @@ def _alt_rootdir_storage(r: Runner, exclude: str) -> str:
 
 
 def _next_id(r: Runner) -> str:
-    res = r.pve("cluster", "next-id", json_out=True, node=False)
+    res = r.pmx("cluster", "next-id", json_out=True, node=False)
     if res.rc != 0:
         raise LifecycleError("cluster next-id")
     data = res.json()
@@ -398,7 +398,7 @@ def _upid_from(res: Cmd) -> str:
 
 def _ensure_template(r: Runner) -> str:
     """Return a vztmpl volid on TMPL_STORAGE, downloading Alpine if needed."""
-    have = r.pve("storage", "content", TMPL_STORAGE, "--content", "vztmpl", json_out=True)
+    have = r.pmx("storage", "content", TMPL_STORAGE, "--content", "vztmpl", json_out=True)
     if have.rc == 0:
         for vol in have.json():
             volid = vol.get("volid", "")
@@ -406,7 +406,7 @@ def _ensure_template(r: Runner) -> str:
                 print(f"  {GREEN('✓')} template present: {volid}")
                 return volid
 
-    avail = r.pve("lxc", "template", "list", "--filter", "alpine", json_out=True)
+    avail = r.pmx("lxc", "template", "list", "--filter", "alpine", json_out=True)
     if avail.rc != 0 or not avail.json():
         raise LifecycleError("no Alpine template available to download")
     template = sorted(avail.json(), key=lambda t: t.get("template", ""))[-1]["template"]
@@ -420,7 +420,7 @@ def _sweep_stale(r: Runner) -> list[str]:
     """Best-effort: find leftover VMs/CTs named with our prefix from a crash."""
     stale = []
     for kind in ("qemu", "lxc"):
-        res = r.pve(kind, "list", json_out=True)
+        res = r.pmx(kind, "list", json_out=True)
         if res.rc != 0:
             continue
         for guest in res.json():
@@ -460,9 +460,9 @@ def provision_network(r: Runner) -> None:
     except LifecycleError:
         print(YELLOW("      the cluster has uncommitted SDN changes or another operator"))
         print(YELLOW("      holds the SDN lock; refusing to provision (an unlocked apply"))
-        print(YELLOW("      would commit their staged edits). Review `pve sdn dry-run`;"))
+        print(YELLOW("      would commit their staged edits). Review `pmx sdn dry-run`;"))
         print(YELLOW("      if this is leftover state from a crashed run, recover with"))
-        print(YELLOW("      `pve sdn rollback --yes` / `pve sdn lock release --force --yes`."))
+        print(YELLOW("      `pmx sdn rollback --yes` / `pmx sdn lock release --force --yes`."))
         raise
     token = _sdn_lock_token(acq)
     if not token:
@@ -491,10 +491,10 @@ def provision_network(r: Runner) -> None:
         r.undo("sdn rollback (discard partial staging, release lock)",
                "sdn", "rollback", "--yes", "--lock-token", token, "--release-lock")
         raise
-    # Live status reads against the just-applied pvecli zone/vnet, while they
+    # Live status reads against the just-applied pmxcli zone/vnet, while they
     # are genuinely running. ip-vrf/mac-vrf only carry data for EVPN zones
     # (per the API's own description — "Get the IP VRF of an EVPN zone" /
-    # "Get the MAC VRF for a VNet in an EVPN zone"); pvecli is a plain simple
+    # "Get the MAC VRF for a VNet in an EVPN zone"); pmxcli is a plain simple
     # zone, so those two are soft-stepped and record SKIP rather than FAIL if
     # the node rejects/empties the query for a non-EVPN zone.
     r.step("infra", "sdn status zones get", f"sdn status zones get {Isolation.SDN_ZONE}",
@@ -510,7 +510,7 @@ def provision_network(r: Runner) -> None:
                 "sdn", "status", "zones", "ip-vrf", Isolation.SDN_ZONE,
                 skip_markers=("evpn", "not supported", "not implemented", "no such",
                               "not found"),
-                skip_reason="IP-VRF data only applies to EVPN zones; pvecli is a simple zone")
+                skip_reason="IP-VRF data only applies to EVPN zones; pmxcli is a simple zone")
     # `sdn status vnets get` was removed: GET /nodes/{node}/sdn/vnets/{vnet}
     # is a directory index with no per-vnet data endpoint behind it.
     r.soft_step("infra", "sdn status vnets mac-vrf",
@@ -518,11 +518,11 @@ def provision_network(r: Runner) -> None:
                 "sdn", "status", "vnets", "mac-vrf", Isolation.SDN_VNET,
                 skip_markers=("evpn", "not supported", "not implemented", "no such",
                               "not found"),
-                skip_reason="MAC-VRF data only applies to EVPN zones; pvecli is a simple vnet")
+                skip_reason="MAC-VRF data only applies to EVPN zones; pmxcli is a simple vnet")
     r.step("infra", "pool create", f"pool create {Isolation.POOL}",
            "pool", "create", "--poolid", Isolation.POOL)
     r.step("infra", "pool set", f"pool set {Isolation.POOL}",
-           "pool", "set", Isolation.POOL, "--comment", "pve-cli e2e")
+           "pool", "set", Isolation.POOL, "--comment", "pmx-cli e2e")
 
 
 def vm_lifecycle(r: Runner) -> None:
@@ -541,7 +541,7 @@ def vm_lifecycle(r: Runner) -> None:
            "--net0", f"virtio,bridge={Isolation.SDN_VNET}", "--boot", "order=scsi0",
            "--ostype", "l26", "--pool", Isolation.POOL, "--tags", Isolation.TAG,
            "--ciuser", "pveadmin", "--citype", "nocloud", "--ipconfig0", "ip=dhcp",
-           "--searchdomain", "pve-cli.local", "--nameserver", "172.30.0.1")
+           "--searchdomain", "pmx-cli.local", "--nameserver", "172.30.0.1")
     try:
         # Round-trip the cloud-init flags through `config get`: PVE stores each
         # set key verbatim (cipassword is hashed and sshkeys re-encoded, so
@@ -549,7 +549,7 @@ def vm_lifecycle(r: Runner) -> None:
         cfg = r.step("qemu", "config get", f"config get VM {vmid}",
                      "qemu", "config", "get", vmid, json_out=True)
         want = {"ciuser": "pveadmin", "citype": "nocloud",
-                "ipconfig0": "ip=dhcp", "searchdomain": "pve-cli.local"}
+                "ipconfig0": "ip=dhcp", "searchdomain": "pmx-cli.local"}
         cfg_data = cfg.json() if cfg.rc == 0 else {}
         got = {k: cfg_data.get(k) for k in want}
         missing = [k for k, v in want.items() if str(cfg_data.get(k, "")) != v]
@@ -584,7 +584,7 @@ def vm_lifecycle(r: Runner) -> None:
                "--timeout", "30", "--yes", node=False)
         # Edit config on the running VM, then read back the pending diff.
         r.step("qemu", "config set", f"config set VM {vmid}",
-               "qemu", "config", "set", vmid, "--description", "pve-cli-e2e")
+               "qemu", "config", "set", vmid, "--description", "pmx-cli-e2e")
         r.step("qemu", "config pending", f"config pending VM {vmid}",
                "qemu", "config", "pending", vmid, json_out=True)
         # cloud-init exposure: the VM carries cloud-init config keys (set at
@@ -648,7 +648,7 @@ def vm_lifecycle(r: Runner) -> None:
         # power-off the diskless VM can never deliver, and returns its UPID
         # immediately. Aborting that task leaves the VM running (reversible), so
         # the power matrix below is unaffected.
-        res = r.pve("qemu", "shutdown", vmid, "--timeout", "30", "--async", json_out=True)
+        res = r.pmx("qemu", "shutdown", vmid, "--timeout", "30", "--async", json_out=True)
         upid = _upid_from(res)
         if upid:
             # Top-level `task stop` reads the node from the auto-injected
@@ -659,7 +659,7 @@ def vm_lifecycle(r: Runner) -> None:
             r.cover_skip("infra", "task stop", "task stop",
                          "async shutdown returned no UPID")
         # Second async shutdown for the positional-node `node task stop` form.
-        res = r.pve("qemu", "shutdown", vmid, "--timeout", "30", "--async", json_out=True)
+        res = r.pmx("qemu", "shutdown", vmid, "--timeout", "30", "--async", json_out=True)
         upid = _upid_from(res)
         if upid:
             r.step("node", "task stop", "node task stop <node> <upid>",
@@ -675,7 +675,7 @@ def vm_lifecycle(r: Runner) -> None:
         # deleted; touches only this VM's own snapshot metadata.
         r.step("qemu", "snapshot update", f"snapshot update {SNAP_NAME}",
                "qemu", "snapshot", "update", vmid, SNAP_NAME,
-               "--description", "pve-cli-e2e-updated")
+               "--description", "pmx-cli-e2e-updated")
         # Graceful shutdown with a short timeout + force-stop is deterministic
         # even without a responsive guest, and leaves the VM stopped.
         r.step("qemu", "shutdown", f"shutdown VM {vmid}",
@@ -687,7 +687,7 @@ def vm_lifecycle(r: Runner) -> None:
                "qemu", "snapshot", "delete", vmid, SNAP_NAME, "--yes")
         # Drive `task wait` against a real UPID: start the (stopped) VM with
         # --async so the verb returns a task id instead of blocking, then wait.
-        res = r.pve("qemu", "start", vmid, "--async", json_out=True)
+        res = r.pmx("qemu", "start", vmid, "--async", json_out=True)
         upid = _upid_from(res)
         if upid:
             r.step("infra", "task wait", "task wait <upid>", "task", "wait", upid)
@@ -721,7 +721,7 @@ def vm_lifecycle(r: Runner) -> None:
                              "single-node cluster — migrate requires a second node")
             else:
                 # Pick a target node that is not the current node.
-                node_res = r.pve("node", "list", json_out=True, node=False)
+                node_res = r.pmx("node", "list", json_out=True, node=False)
                 other = ""
                 if node_res.rc == 0:
                     try:
@@ -752,7 +752,7 @@ def vm_lifecycle(r: Runner) -> None:
 
         # Disk ops on the (stopped) base VM: grow scsi0, relocate it to another
         # storage when one exists, then detach it. All operate on the isolated
-        # pve-cli VM and its own disk, so nothing else in the lab is touched.
+        # pmx-cli VM and its own disk, so nothing else in the lab is touched.
         r.step("qemu", "disk resize", f"disk resize scsi0 on {vmid} (+1G)",
                "qemu", "disk", "resize", vmid, "--disk", "scsi0", "--size", "+1G")
         alt = _alt_image_storage(r, ROOTDIR_STORAGE)
@@ -773,7 +773,7 @@ def vm_lifecycle(r: Runner) -> None:
 
         # Firewall ops on the isolated VM's own config: enable the firewall,
         # add/inspect/remove a rule, an IP set with one member, and an address
-        # alias. Every object is scoped to this throwaway VM and uses pve-cli
+        # alias. Every object is scoped to this throwaway VM and uses pmx-cli
         # names plus the e2e subnet, so no other workload's policy is touched.
         r.step("qemu", "firewall options set", f"firewall options set on {vmid}",
                "qemu", "firewall", "options", "set", vmid, "--enable", "--policy-in", "ACCEPT")
@@ -782,24 +782,24 @@ def vm_lifecycle(r: Runner) -> None:
         r.step("qemu", "firewall rules create", f"firewall rule add on {vmid}",
                "qemu", "firewall", "rules", "create", vmid,
                "--type", "in", "--action", "ACCEPT", "--proto", "tcp",
-               "--dport", "22", "--comment", "pve-cli-e2e")
+               "--dport", "22", "--comment", "pmx-cli-e2e")
         r.step("qemu", "firewall rules list", "firewall rules list",
                "qemu", "firewall", "rules", "list", vmid, json_out=True)
         r.step("qemu", "firewall rules get", "firewall rule get pos 0",
                "qemu", "firewall", "rules", "get", vmid, "0", json_out=True)
         r.step("qemu", "firewall rules update", "firewall rule update pos 0",
                "qemu", "firewall", "rules", "update", vmid, "0",
-               "--comment", "pve-cli-e2e-updated")
+               "--comment", "pmx-cli-e2e-updated")
         r.del_step("qemu", "firewall rules delete", "firewall rule delete pos 0",
                    "qemu", "firewall", "rules", "delete", vmid, "0", "--yes")
         r.step("qemu", "firewall ipset create", f"firewall ipset create {FW_IPSET}",
-               "qemu", "firewall", "ipset", "create", vmid, FW_IPSET, "--comment", "pve-cli-e2e")
+               "qemu", "firewall", "ipset", "create", vmid, FW_IPSET, "--comment", "pmx-cli-e2e")
         r.step("qemu", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
                "qemu", "firewall", "ipset", "add", vmid, FW_IPSET, Isolation.SDN_SUBNET)
         r.step("qemu", "firewall ipset update-member",
                f"firewall ipset update-member {Isolation.SDN_SUBNET}",
                "qemu", "firewall", "ipset", "update-member", vmid, FW_IPSET,
-               Isolation.SDN_SUBNET, "--comment", "pve-cli-e2e-updated")
+               Isolation.SDN_SUBNET, "--comment", "pmx-cli-e2e-updated")
         r.step("qemu", "firewall ipset list", "firewall ipset member list",
                "qemu", "firewall", "ipset", "list", vmid, FW_IPSET, json_out=True)
         r.del_step("qemu", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
@@ -808,12 +808,12 @@ def vm_lifecycle(r: Runner) -> None:
                    "qemu", "firewall", "ipset", "delete", vmid, FW_IPSET, "--yes", "--force")
         r.step("qemu", "firewall alias create", f"firewall alias create {FW_ALIAS}",
                "qemu", "firewall", "alias", "create", vmid, FW_ALIAS, "172.30.0.99",
-               "--comment", "pve-cli-e2e")
+               "--comment", "pmx-cli-e2e")
         r.step("qemu", "firewall alias list", "firewall alias list",
                "qemu", "firewall", "alias", "list", vmid, json_out=True)
         r.step("qemu", "firewall alias update", f"firewall alias update {FW_ALIAS}",
                "qemu", "firewall", "alias", "update", vmid, FW_ALIAS, "172.30.0.99",
-               "--comment", "pve-cli-e2e-updated")
+               "--comment", "pmx-cli-e2e-updated")
         r.del_step("qemu", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "qemu", "firewall", "alias", "delete", vmid, FW_ALIAS, "--yes")
         # Console proxy: request a VNC ticket on the isolated VM. The ticket
@@ -855,7 +855,7 @@ def qemu_template_lifecycle(r: Runner) -> None:
     `qemu template` is irreversible — it permanently converts the VM's disks to
     base images — so it cannot run against the reusable VM that vm_lifecycle
     drives. A second, single-purpose VM is created under the isolation contract
-    (pve-cli name, pool, and tag, on the e2e vnet), templated, verified via
+    (pmx-cli name, pool, and tag, on the e2e vnet), templated, verified via
     `config get` (template=1), and deleted, so nothing else in the lab is
     touched and no template is left behind.
     """
@@ -874,7 +874,7 @@ def qemu_template_lifecycle(r: Runner) -> None:
         created = True
         r.step("qemu", "template", f"template VM {vmid}",
                "qemu", "template", vmid, "--yes")
-        cfg = r.pve("qemu", "config", "get", vmid, json_out=True)
+        cfg = r.pmx("qemu", "config", "get", vmid, json_out=True)
         ok = False
         try:
             cd = cfg.json()
@@ -918,7 +918,7 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                     skip_markers=("not running", "timeout", "no such", "unable to open"),
                     skip_reason="container network not ready for interface enumeration")
         r.step("lxc", "config set", f"config set CT {ctid}",
-               "lxc", "config", "set", ctid, "--description", "pve-cli-e2e")
+               "lxc", "config", "set", ctid, "--description", "pmx-cli-e2e")
         # Suspend/resume go through CRIU (`lxc-checkpoint`); on hosts without
         # working CRIU support this can't complete. Treat that as a SKIP rather
         # than a CLI failure, and only resume if the suspend took.
@@ -944,7 +944,7 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
         # touches only this CT's own snapshot metadata.
         r.step("lxc", "snapshot update", f"snapshot update {SNAP_NAME}",
                "lxc", "snapshot", "update", ctid, SNAP_NAME,
-               "--description", "pve-cli-e2e-updated")
+               "--description", "pmx-cli-e2e-updated")
         # Graceful shutdown, then rollback (rollback needs the CT stopped).
         r.step("lxc", "shutdown", f"shutdown CT {ctid}",
                "lxc", "shutdown", ctid, "--timeout", "30", "--force-stop")
@@ -955,7 +955,7 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
 
         # Clone the (stopped) container, verify it exists, then migrate it on a
         # multi-node cluster. Mirrors the qemu clone/migrate path; everything
-        # stays inside the pve-cli pool so no other workload is touched.
+        # stays inside the pmx-cli pool so no other workload is touched.
         clone_id = _next_id(r)
         clone_host = Isolation.NAME_PREFIX + "ctclone"
         print(DIM(f"  clone_id={clone_id}"))
@@ -977,7 +977,7 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                 r.cover_skip("lxc", "migrate", f"migrate clone {clone_id}",
                              "single-node cluster — migrate requires a second node")
             else:
-                node_res = r.pve("node", "list", json_out=True, node=False)
+                node_res = r.pmx("node", "list", json_out=True, node=False)
                 other = ""
                 if node_res.rc == 0:
                     try:
@@ -1007,7 +1007,7 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
 
         # Volume ops on the (stopped) base CT: grow rootfs, then relocate it to
         # another rootdir-capable storage when one exists. Both operate on the
-        # isolated pve-cli container and its own volume, so nothing else is touched.
+        # isolated pmx-cli container and its own volume, so nothing else is touched.
         r.step("lxc", "disk resize", f"disk resize rootfs on {ctid} (+1G)",
                "lxc", "disk", "resize", ctid, "--disk", "rootfs", "--size", "+1G")
         alt = _alt_rootdir_storage(r, ROOTDIR_STORAGE)
@@ -1027,7 +1027,7 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
         # Firewall ops on the isolated CT's own config: enable the firewall,
         # add/inspect/remove a rule, an IP set with one member, and an address
         # alias. Every object is scoped to this throwaway container and uses
-        # pve-cli names plus the e2e subnet, so no other workload's policy is touched.
+        # pmx-cli names plus the e2e subnet, so no other workload's policy is touched.
         r.step("lxc", "firewall options set", f"firewall options set on {ctid}",
                "lxc", "firewall", "options", "set", ctid, "--enable", "--policy-in", "ACCEPT")
         r.step("lxc", "firewall options get", f"firewall options get on {ctid}",
@@ -1035,24 +1035,24 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
         r.step("lxc", "firewall rules create", f"firewall rule add on {ctid}",
                "lxc", "firewall", "rules", "create", ctid,
                "--type", "in", "--action", "ACCEPT", "--proto", "tcp",
-               "--dport", "22", "--comment", "pve-cli-e2e")
+               "--dport", "22", "--comment", "pmx-cli-e2e")
         r.step("lxc", "firewall rules list", "firewall rules list",
                "lxc", "firewall", "rules", "list", ctid, json_out=True)
         r.step("lxc", "firewall rules get", "firewall rule get pos 0",
                "lxc", "firewall", "rules", "get", ctid, "0", json_out=True)
         r.step("lxc", "firewall rules update", "firewall rule update pos 0",
                "lxc", "firewall", "rules", "update", ctid, "0",
-               "--comment", "pve-cli-e2e-updated")
+               "--comment", "pmx-cli-e2e-updated")
         r.del_step("lxc", "firewall rules delete", "firewall rule delete pos 0",
                    "lxc", "firewall", "rules", "delete", ctid, "0", "--yes")
         r.step("lxc", "firewall ipset create", f"firewall ipset create {FW_IPSET}",
-               "lxc", "firewall", "ipset", "create", ctid, FW_IPSET, "--comment", "pve-cli-e2e")
+               "lxc", "firewall", "ipset", "create", ctid, FW_IPSET, "--comment", "pmx-cli-e2e")
         r.step("lxc", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
                "lxc", "firewall", "ipset", "add", ctid, FW_IPSET, Isolation.SDN_SUBNET)
         r.step("lxc", "firewall ipset update-member",
                f"firewall ipset update-member {Isolation.SDN_SUBNET}",
                "lxc", "firewall", "ipset", "update-member", ctid, FW_IPSET,
-               Isolation.SDN_SUBNET, "--comment", "pve-cli-e2e-updated")
+               Isolation.SDN_SUBNET, "--comment", "pmx-cli-e2e-updated")
         r.step("lxc", "firewall ipset list", "firewall ipset member list",
                "lxc", "firewall", "ipset", "list", ctid, FW_IPSET, json_out=True)
         r.del_step("lxc", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
@@ -1061,12 +1061,12 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                    "lxc", "firewall", "ipset", "delete", ctid, FW_IPSET, "--yes", "--force")
         r.step("lxc", "firewall alias create", f"firewall alias create {FW_ALIAS}",
                "lxc", "firewall", "alias", "create", ctid, FW_ALIAS, "172.30.0.99",
-               "--comment", "pve-cli-e2e")
+               "--comment", "pmx-cli-e2e")
         r.step("lxc", "firewall alias list", "firewall alias list",
                "lxc", "firewall", "alias", "list", ctid, json_out=True)
         r.step("lxc", "firewall alias update", f"firewall alias update {FW_ALIAS}",
                "lxc", "firewall", "alias", "update", ctid, FW_ALIAS, "172.30.0.99",
-               "--comment", "pve-cli-e2e-updated")
+               "--comment", "pmx-cli-e2e-updated")
         r.del_step("lxc", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "lxc", "firewall", "alias", "delete", ctid, FW_ALIAS, "--yes")
         # Console proxy: request a VNC ticket on the isolated CT. The ticket
@@ -1112,16 +1112,16 @@ def teardown_network(r: Runner) -> None:
     # staged when it runs. Teardown is best-effort (it also runs as a
     # pre-clean), so a failed acquire skips the SDN portion with a warning
     # instead of applying foreign pending edits.
-    acq = r.pve("sdn", "lock", "acquire", json_out=True, node=False)
+    acq = r.pmx("sdn", "lock", "acquire", json_out=True, node=False)
     token = _sdn_lock_token(acq) if acq.rc == 0 else ""
     if acq.rc != 0:
         lines = (acq.err.strip() or acq.out.strip()).splitlines()
         why = lines[-1][:160] if lines else "acquire failed"
         print(f"  {YELLOW('·')} sdn teardown skipped {DIM('(lock not acquired: ' + why + ')')}")
         print(DIM("      foreign pending SDN changes or a held lock; resolve them, then"))
-        print(DIM("      delete the pvecli zone/vnet/subnet and run `pve sdn apply` manually"))
-        print(DIM("      (crashed-run leftovers: `pve sdn rollback --yes` / "
-                  "`pve sdn lock release --force --yes`)"))
+        print(DIM("      delete the pmxcli zone/vnet/subnet and run `pmx sdn apply` manually"))
+        print(DIM("      (crashed-run leftovers: `pmx sdn rollback --yes` / "
+                  "`pmx sdn lock release --force --yes`)"))
     elif not token:
         r.undo("force-release SDN lock (token not captured)",
                "sdn", "lock", "release", "--force", "--yes")
@@ -1130,7 +1130,7 @@ def teardown_network(r: Runner) -> None:
         released = False
         try:
             # Subnet must be deleted by its id (zone-prefixed), not the CIDR.
-            sub = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
+            sub = r.pmx("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
             if sub.rc == 0:
                 for s in sub.json():
                     sid = s.get("subnet")
@@ -1144,7 +1144,7 @@ def teardown_network(r: Runner) -> None:
             r.del_step("infra", "sdn zone delete", f"sdn zone delete {Isolation.SDN_ZONE}",
                        "sdn", "zone", "delete", Isolation.SDN_ZONE, "--yes",
                        "--lock-token", token)
-            app = r.pve("sdn", "apply", "--lock-token", token, "--release-lock")
+            app = r.pmx("sdn", "apply", "--lock-token", token, "--release-lock")
             if app.rc == 0:
                 print(f"  {GREEN('✓')} sdn apply")
                 released = True
@@ -1159,7 +1159,7 @@ def teardown_network(r: Runner) -> None:
                 # pending for the operator to review).
                 r.undo("sdn lock release", "sdn", "lock", "release",
                        "--lock-token", token, "--yes")
-    # Deleting the isolated pve-cli pool is the live coverage for `pool delete`:
+    # Deleting the isolated pmx-cli pool is the live coverage for `pool delete`:
     # it removes the exact pool this suite provisioned, recorded as a del_step
     # (PASS on a normal teardown, SKIP when a prior run already cleaned it up).
     r.del_step("infra", "pool delete", f"pool delete {Isolation.POOL}",
@@ -1198,13 +1198,13 @@ def access_lifecycle(r: Runner) -> None:
     token = "e2e"
     acl_path = "/pool/" + Isolation.POOL
     # Throwaway password for the probe user (NEVER root); not a real secret.
-    probe_pw = "pve-cli-e2e-pw"
+    probe_pw = "pmx-cli-e2e-pw"
     try:
         r.step("access", "group create", f"group create {group}",
-               "access", "group", "create", group, "--comment", "pve-cli e2e")
+               "access", "group", "create", group, "--comment", "pmx-cli e2e")
         r.step("access", "user create", f"user create {user}",
                "access", "user", "create", user, "--groups", group,
-               "--comment", "pve-cli e2e")
+               "--comment", "pmx-cli e2e")
         r.step("access", "user get", f"user get {user}",
                "access", "user", "get", user, json_out=True)
         # Changing a password is forbidden when the target authenticates with an
@@ -1217,12 +1217,12 @@ def access_lifecycle(r: Runner) -> None:
         # Token create prints the secret in plaintext — do NOT request json or
         # echo it; step() prints only the label on success.
         r.step("access", "token create", f"token create {user}!{token}",
-               "access", "user", "token", "create", user, token, "--comment", "pve-cli e2e")
+               "access", "user", "token", "create", user, token, "--comment", "pmx-cli e2e")
         r.step("access", "token list", f"token list {user}",
                "access", "user", "token", "list", user, json_out=True)
         # Update verbs: set a fresh comment on the probe group/user/token, then
         # read it back to prove the mutation took (round-trip, not just rc==0).
-        updated = "pve-cli-e2e-updated"
+        updated = "pmx-cli-e2e-updated"
         r.step("access", "group set", f"group set {group}",
                "access", "group", "set", group, "--comment", updated)
         got = r.step("access", "group get", f"group get {group}",
@@ -1269,7 +1269,7 @@ def access_lifecycle(r: Runner) -> None:
 def domain_lifecycle(r: Runner) -> None:
     """Create an isolated ldap realm, exercise get/set/sync, then delete it.
 
-    Isolation: the realm id is `pve-cli-realm` (NAME_PREFIX + "realm"), fully
+    Isolation: the realm id is `pmx-cli-realm` (NAME_PREFIX + "realm"), fully
     namespaced and distinct from the built-in pam/pve realms. It points at a
     dummy LDAP server that is never contacted on create or set — PVE only probes
     connectivity when `--check-connection` is given, which it is not. Sync DOES
@@ -1278,8 +1278,8 @@ def domain_lifecycle(r: Runner) -> None:
     failure is a real bug. The realm is removed in the finally block.
     """
     print(BOLD("access: domain (realm) create / get / set / sync / delete"))
-    realm = Isolation.NAME_PREFIX + "realm"   # pve-cli-realm
-    updated = "pve-cli e2e updated"
+    realm = Isolation.NAME_PREFIX + "realm"   # pmx-cli-realm
+    updated = "pmx-cli e2e updated"
 
     # Best-effort clean of a realm left by a crashed prior run so create is
     # idempotent (never raises, not coverage-recorded).
@@ -1287,9 +1287,9 @@ def domain_lifecycle(r: Runner) -> None:
     try:
         r.step("access", "domain create", f"domain create {realm}",
                "access", "domain", "create", realm, "--type", "ldap",
-               "--server1", "ldap.invalid.pve-cli.local", "--port", "389",
-               "--base-dn", "dc=pve-cli,dc=local", "--user-attr", "uid",
-               "--comment", "pve-cli e2e")
+               "--server1", "ldap.invalid.pmx-cli.local", "--port", "389",
+               "--base-dn", "dc=pmx-cli,dc=local", "--user-attr", "uid",
+               "--comment", "pmx-cli e2e")
         got = r.step("access", "domain get", f"domain get {realm}",
                      "access", "domain", "get", realm, json_out=True)
         if "ldap" not in got.out:
@@ -1316,16 +1316,16 @@ def domain_lifecycle(r: Runner) -> None:
 def role_lifecycle(r: Runner) -> None:
     """Create an isolated custom role, change its privileges, then delete it.
 
-    Isolation: the role id is `pve-cli-role` (NAME_PREFIX + "role"), namespaced
+    Isolation: the role id is `pmx-cli-role` (NAME_PREFIX + "role"), namespaced
     and distinct from the built-in roles. Privileges are read-only audit privs so
     the role grants nothing harmful even if it lingered. The round-trip asserts a
     `role set` is reflected by `role get`. The role is removed in the finally block.
     """
     print(BOLD("access: role create / get / set / delete"))
     # PVE reserves the (case-insensitive) 'PVE' role-ID namespace, so the usual
-    # `pve-cli-` prefix is rejected here; prefix with `e2e-` instead. Still
-    # uniquely namespaced (`e2e-pve-cli-role`) and safe to leave behind.
-    role = "e2e-" + Isolation.NAME_PREFIX + "role"   # e2e-pve-cli-role
+    # `pmx-cli-` prefix is rejected here; prefix with `e2e-` instead. Still
+    # uniquely namespaced (`e2e-pmx-cli-role`) and safe to leave behind.
+    role = "e2e-" + Isolation.NAME_PREFIX + "role"   # e2e-pmx-cli-role
 
     # Best-effort clean of a role left by a crashed prior run (never raises).
     r.undo(f"pre-clean {role}", "access", "role", "delete", role, "--yes")
@@ -1355,23 +1355,23 @@ def auth_lifecycle(r: Runner) -> None:
     """Exercise `api auth login`/`refresh`/`logout` against the live server using
     a throwaway pve-realm user and a scratch `--config` file.
 
-    Isolation: the session is obtained for a fresh `pve-cli-authprobe@pve` user
+    Isolation: the session is obtained for a fresh `pmx-cli-authprobe@pve` user
     (NEVER root) and stored only in a temp config; the real config, the configured
     target, and its session are never touched, so the suite returns to the
     original identity automatically. The user is created with an initial password
     (accepted by `POST /access/users` even under API-token auth) and deleted in
     the finally block.
 
-    The scratch target carries the bare user id (`pve-cli-authprobe`) with the
+    The scratch target carries the bare user id (`pmx-cli-authprobe`) with the
     realm passed separately as `pve`: PVE's `/access/ticket` rejects a combined
     `user@realm` username when a realm field is also present.
     """
     print(BOLD("api: auth login / refresh / logout (scratch session)"))
     user = Isolation.NAME_PREFIX + "authprobe@pve"     # created on the pve realm
     login_user = Isolation.NAME_PREFIX + "authprobe"   # bare id; realm sent separately
-    probe_pw = "pve-cli-e2e-pw"                          # throwaway, never a real secret
+    probe_pw = "pmx-cli-e2e-pw"                          # throwaway, never a real secret
 
-    show = r.pve("context", "show", r.context, json_out=True, node=False)
+    show = r.pmx("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
@@ -1382,12 +1382,12 @@ def auth_lifecycle(r: Runner) -> None:
             r.cover_skip("api", verb, verb, "could not resolve target host")
         return
 
-    scratch = tempfile.mkdtemp(prefix="pve-cli-e2e-auth-")
+    scratch = tempfile.mkdtemp(prefix="pmx-cli-e2e-auth-")
     cfg = os.path.join(scratch, "config.yml")
     created = False
     try:
-        create = r.pve("access", "user", "create", user, "--password", probe_pw,
-                       "--comment", "pve-cli auth probe")
+        create = r.pmx("access", "user", "create", user, "--password", probe_pw,
+                       "--comment", "pmx-cli auth probe")
         if create.rc != 0:
             detail = (create.err.strip() or create.out.strip())[:200]
             raise LifecycleError(f"auth probe user create: {detail}")
@@ -1398,16 +1398,16 @@ def auth_lifecycle(r: Runner) -> None:
         # disabled for the throwaway context). context add + set-password mutate
         # local config only and are already covered read-only, so they are setup
         # here, not recorded again.
-        r.pve_raw("--config", cfg, "context", "add", "authprobe",
+        r.pmx_raw("--config", cfg, "context", "add", "authprobe",
                   "--host", host, "--username", login_user, "--realm", "pve",
                   "--auth-type", "password", "--secret", "placeholder", "--insecure")
-        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--context", "authprobe",
+        r.pmx_raw("--config", cfg, "api", "auth", "set-password", "--context", "authprobe",
                   "--username", login_user, "--secret", probe_pw)
 
         # login → real session ticket, stored only in the scratch config.
         r.step_raw("api", "auth login", f"auth login as {user}",
                    "--config", cfg, "api", "auth", "login", "--context", "authprobe")
-        st = r.pve_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
+        st = r.pmx_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
                        json_out=True)
         sess = ""
         if st.rc == 0:
@@ -1424,7 +1424,7 @@ def auth_lifecycle(r: Runner) -> None:
         # logout → invalidate the ticket server-side and clear it locally.
         r.step_raw("api", "auth logout", "auth logout",
                    "--config", cfg, "api", "auth", "logout", "--context", "authprobe")
-        st = r.pve_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
+        st = r.pmx_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
                        json_out=True)
         if st.rc == 0:
             sd = st.json()
@@ -1456,7 +1456,7 @@ def tfa_lifecycle(r: Runner) -> None:
 
     The /access/tfa write endpoints reject API-token auth ("not available with
     API token, need proper ticket"), so this opens a real password-login session
-    for a fresh `pve-cli-tfaprobe@pve` user (NEVER root) in a scratch config and
+    for a fresh `pmx-cli-tfaprobe@pve` user (NEVER root) in a scratch config and
     drives the tfa verbs as that user self-administering their own second factor.
     A throwaway TOTP secret is minted locally and the current code is computed
     offline (RFC 6238) to satisfy the API's possession check on enroll. The user
@@ -1467,10 +1467,10 @@ def tfa_lifecycle(r: Runner) -> None:
     print(BOLD("access: tfa enroll / set / delete (ticket session, throwaway user)"))
     user = Isolation.NAME_PREFIX + "tfaprobe@pve"      # created on the pve realm
     login_user = Isolation.NAME_PREFIX + "tfaprobe"    # bare id; realm sent separately
-    probe_pw = "pve-cli-e2e-pw"                          # throwaway, never a real secret
+    probe_pw = "pmx-cli-e2e-pw"                          # throwaway, never a real secret
     secret = "JBSWY3DPEHPK3PXP"                          # throwaway TOTP secret (test value)
 
-    show = r.pve("context", "show", r.context, json_out=True, node=False)
+    show = r.pmx("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
@@ -1481,12 +1481,12 @@ def tfa_lifecycle(r: Runner) -> None:
             r.cover_skip("access", verb, verb, "could not resolve target host")
         return
 
-    scratch = tempfile.mkdtemp(prefix="pve-cli-e2e-tfa-")
+    scratch = tempfile.mkdtemp(prefix="pmx-cli-e2e-tfa-")
     cfg = os.path.join(scratch, "config.yml")
     created = False
     try:
-        create_user = r.pve("access", "user", "create", user, "--password", probe_pw,
-                            "--comment", "pve-cli tfa probe")
+        create_user = r.pmx("access", "user", "create", user, "--password", probe_pw,
+                            "--comment", "pmx-cli tfa probe")
         if create_user.rc != 0:
             detail = (create_user.err.strip() or create_user.out.strip())[:200]
             raise LifecycleError(f"tfa probe user create: {detail}")
@@ -1495,12 +1495,12 @@ def tfa_lifecycle(r: Runner) -> None:
 
         # Scratch password-auth context + login → real session ticket for the
         # throwaway user (setup only; context/auth verbs are covered elsewhere).
-        r.pve_raw("--config", cfg, "context", "add", "tfaprobe",
+        r.pmx_raw("--config", cfg, "context", "add", "tfaprobe",
                   "--host", host, "--username", login_user, "--realm", "pve",
                   "--auth-type", "password", "--secret", "placeholder", "--insecure")
-        r.pve_raw("--config", cfg, "api", "auth", "set-password", "--context", "tfaprobe",
+        r.pmx_raw("--config", cfg, "api", "auth", "set-password", "--context", "tfaprobe",
                   "--username", login_user, "--secret", probe_pw)
-        login = r.pve_raw("--config", cfg, "api", "auth", "login", "--context", "tfaprobe")
+        login = r.pmx_raw("--config", cfg, "api", "auth", "login", "--context", "tfaprobe")
         if login.rc != 0:
             detail = (login.err.strip() or login.out.strip())[:200]
             raise LifecycleError(f"tfa probe login: {detail}")
@@ -1508,11 +1508,11 @@ def tfa_lifecycle(r: Runner) -> None:
         # Enroll a TOTP factor: the API verifies --value against the secret in the
         # otpauth URI, so compute the current code locally. The entry id comes back
         # in the create response and drives the set/delete verbs.
-        totp_uri = f"otpauth://totp/pvecli:{login_user}?secret={secret}&issuer=pvecli"
+        totp_uri = f"otpauth://totp/pmxcli:{login_user}?secret={secret}&issuer=pmxcli"
         create = r.step_raw("access", "tfa create", "tfa create (totp, self-enroll)",
                             "--config", cfg, "--context", "tfaprobe",
                             "access", "tfa", "create", user, "--type", "totp",
-                            "--description", "pve-cli-e2e", "--totp", totp_uri,
+                            "--description", "pmx-cli-e2e", "--totp", totp_uri,
                             "--value", _totp_now(secret), "--password", probe_pw,
                             json_out=True)
         entry_id = ""
@@ -1530,7 +1530,7 @@ def tfa_lifecycle(r: Runner) -> None:
         r.step_raw("access", "tfa set", "tfa set (edit description)",
                    "--config", cfg, "--context", "tfaprobe",
                    "access", "tfa", "set", user, entry_id,
-                   "--description", "pve-cli-e2e (edited)", "--password", probe_pw)
+                   "--description", "pmx-cli-e2e (edited)", "--password", probe_pw)
         r.step_raw("access", "tfa delete", "tfa delete (remove factor)",
                    "--config", cfg, "--context", "tfaprobe",
                    "access", "tfa", "delete", user, entry_id,
@@ -1543,7 +1543,7 @@ def tfa_lifecycle(r: Runner) -> None:
 
 def storage_lifecycle(r: Runner) -> None:
     """Create / set / delete an isolated `dir` storage config object, restricted
-    to the test node. Points at `/var/lib/vz/pve-cli-e2e`: the CLI has no
+    to the test node. Points at `/var/lib/vz/pmx-cli-e2e`: the CLI has no
     `--mkdir`, but a dir storage config is created regardless of whether the
     path exists yet — enough to exercise the create/set/delete verbs.
 
@@ -1583,8 +1583,8 @@ def storage_lifecycle(r: Runner) -> None:
 def storage_volume_lifecycle(r: Runner) -> None:
     """Alloc a throwaway raw volume on `local` storage, then delete it.
 
-    Isolation: vmid 9999 is reserved for pve-cli integration test volumes;
-    the filename prefix `pve-cli-test` distinguishes test volumes from
+    Isolation: vmid 9999 is reserved for pmx-cli integration test volumes;
+    the filename prefix `pmx-cli-test` distinguishes test volumes from
     production data. The alloc captures the server-returned volid (which may
     differ from the requested name on some backends) and deletes it in the
     finally block, so no artifact is left behind.
@@ -1597,10 +1597,10 @@ def storage_volume_lifecycle(r: Runner) -> None:
     print(BOLD("storage: volume alloc / delete (isolated, teardown-safe)"))
     test_sid = "local"
     test_vmid = "9999"
-    test_name = f"{test_sid}:vm-{test_vmid}-pve-cli-test"
+    test_name = f"{test_sid}:vm-{test_vmid}-pmx-cli-test"
     allocated_volid: str | None = None
     try:
-        alloc = r.pve("storage", "volume", "alloc",
+        alloc = r.pmx("storage", "volume", "alloc",
                       "--vmid", test_vmid,
                       "--filename", test_name,
                       "--size", "1G",
@@ -1608,8 +1608,8 @@ def storage_volume_lifecycle(r: Runner) -> None:
         if alloc.rc != 0:
             detail = (alloc.err.strip() or alloc.out.strip())[:200]
             reason = f"volume alloc rejected by server: {detail}"
-            r.cover_skip("storage", "volume alloc", "volume alloc (pve-cli-test)", reason)
-            r.cover_skip("storage", "volume delete", "volume delete (pve-cli-test)", reason)
+            r.cover_skip("storage", "volume alloc", "volume alloc (pmx-cli-test)", reason)
+            r.cover_skip("storage", "volume delete", "volume delete (pmx-cli-test)", reason)
             return
         # Extract the returned volid; the server may normalise the filename.
         try:
@@ -1632,22 +1632,22 @@ def storage_volume_lifecycle(r: Runner) -> None:
 
 def backup_lifecycle(r: Runner) -> None:
     """Create / inspect / update / delete an isolated, DISABLED vzdump backup
-    schedule. The job is scoped to the pve-cli pool and never enabled, so it can
-    never run and disrupt other workloads; it carries the pvecli- id prefix and is
+    schedule. The job is scoped to the pmx-cli pool and never enabled, so it can
+    never run and disrupt other workloads; it carries the pmxcli- id prefix and is
     deleted in the finally block."""
     print(BOLD("cluster: backup schedule create / get / set / delete"))
     r.step("cluster", "backup create", f"backup job create {BACKUP_JOB}",
            "cluster", "backup", "create", "--id", BACKUP_JOB,
            "--schedule", "sun 03:30", "--storage", BACKUP_STORAGE,
            "--pool", Isolation.POOL, "--mode", "snapshot",
-           "--enabled=false", "--comment", "pve-cli-e2e")
+           "--enabled=false", "--comment", "pmx-cli-e2e")
     try:
         r.step("cluster", "backup list", "backup job list",
                "cluster", "backup", "list", json_out=True)
         r.step("cluster", "backup get", f"backup job get {BACKUP_JOB}",
                "cluster", "backup", "get", BACKUP_JOB, json_out=True)
         r.step("cluster", "backup set", f"backup job set {BACKUP_JOB}",
-               "cluster", "backup", "set", BACKUP_JOB, "--comment", "pve-cli-e2e-upd")
+               "cluster", "backup", "set", BACKUP_JOB, "--comment", "pmx-cli-e2e-upd")
     finally:
         r.del_step("cluster", "backup delete", f"backup job delete {BACKUP_JOB}",
                    "cluster", "backup", "delete", BACKUP_JOB, "--yes")
@@ -1681,8 +1681,8 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
     CLI wiring itself is covered by unit tests. migrate/relocate need a second node
     to accept the guest, so they are SKIPped on a single-node lab. The resource is
     always removed before the guest is destroyed, so HA never blocks teardown."""
-    create = r.pve("cluster", "ha", "resource", "create", sid,
-                   "--state", "started", "--comment", "pve-cli-e2e")
+    create = r.pmx("cluster", "ha", "resource", "create", sid,
+                   "--state", "started", "--comment", "pmx-cli-e2e")
     if create.rc != 0:
         reason = _err_reason(create, "HA stack unavailable")
         for verb in ("ha resource create", "ha resource get",
@@ -1698,7 +1698,7 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
         r.step(guest, "ha resource get", f"ha resource get {sid}",
                "cluster", "ha", "resource", "get", sid, json_out=True)
         r.step(guest, "ha resource set", f"ha resource set {sid}",
-               "cluster", "ha", "resource", "set", sid, "--comment", "pve-cli-e2e-upd")
+               "cluster", "ha", "resource", "set", sid, "--comment", "pmx-cli-e2e-upd")
         _ha_config_lifecycle(r, guest, sid)
         if _node_count(r) < 2:
             r.cover_skip(guest, "ha resource migrate", f"ha resource migrate {sid}",
@@ -1711,7 +1711,7 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
 def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
     """Exercise HA group and rule CRUD against the quorate lab, referencing the
     live HA resource `sid`. A node-affinity rule constrains where `sid` may run; a
-    group (pre-PVE-9) pins resources to a node set. Both are namespaced (pve-cli-*)
+    group (pre-PVE-9) pins resources to a node set. Both are namespaced (pmx-cli-*)
     and torn down before the parent resource the rule references. HA groups were
     migrated to rules in PVE 9, so `ha group create` is recorded as a SKIP there —
     which must NOT suppress the rule lifecycle, since rules are the replacement and
@@ -1719,7 +1719,7 @@ def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
     skipped), so a group failure is an environment limitation, not a bug."""
     group = Isolation.NAME_PREFIX + "ha"
     rule = Isolation.NAME_PREFIX + "rule"
-    grp_create = r.pve("cluster", "ha", "group", "create", group, "--nodes", r.node)
+    grp_create = r.pmx("cluster", "ha", "group", "create", group, "--nodes", r.node)
     grp_created = grp_create.rc == 0
     if not grp_created:
         reason = _err_reason(grp_create, "HA group create rejected")
@@ -1735,7 +1735,7 @@ def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
             r.step(guest, "ha group get", f"ha group get {group}",
                    "cluster", "ha", "group", "get", group, json_out=True)
             r.step(guest, "ha group set", f"ha group set {group}",
-                   "cluster", "ha", "group", "set", group, "--comment", "pve-cli-e2e")
+                   "cluster", "ha", "group", "set", group, "--comment", "pmx-cli-e2e")
         _ha_rule_lifecycle(r, guest, sid, rule)
     finally:
         if grp_created:
@@ -1747,7 +1747,7 @@ def _ha_rule_lifecycle(r: Runner, guest: str, sid: str, rule: str) -> None:
     """Create a node-affinity rule constraining `sid`, read/update it, then remove
     it. Driven inside the group lifecycle so the rule is torn down before both the
     group and the parent HA resource it references."""
-    rule_create = r.pve("cluster", "ha", "rule", "create", rule,
+    rule_create = r.pmx("cluster", "ha", "rule", "create", rule,
                         "--type", "node-affinity", "--resources", sid, "--nodes", r.node)
     if rule_create.rc != 0:
         reason = _err_reason(rule_create, "HA rule create rejected")
@@ -1763,7 +1763,7 @@ def _ha_rule_lifecycle(r: Runner, guest: str, sid: str, rule: str) -> None:
                "cluster", "ha", "rule", "get", rule, json_out=True)
         r.step(guest, "ha rule set", f"ha rule set {rule}",
                "cluster", "ha", "rule", "set", rule, "--type", "node-affinity",
-               "--comment", "pve-cli-e2e")
+               "--comment", "pmx-cli-e2e")
     finally:
         r.del_step(guest, "ha rule delete", f"ha rule delete {rule}",
                    "cluster", "ha", "rule", "delete", rule, "--yes")
@@ -1774,7 +1774,7 @@ def node_ops(r: Runner) -> None:
     with `node exec -- true`; if SSH to the host is unavailable, record all
     three as SKIP rather than failing the suite."""
     print(BOLD("node: exec / ssh / rsync (SSH-gated)"))
-    probe = r.pve("node", "exec", r.node, "--", "true")
+    probe = r.pmx("node", "exec", r.node, "--", "true")
     if probe.rc != 0:
         reason = "SSH to host unavailable"
         detail = (probe.err.strip() or probe.out.strip()).splitlines()
@@ -1789,7 +1789,7 @@ def node_ops(r: Runner) -> None:
     # rsync round-trip: seed a scratch file on the host, pull it back to /tmp.
     scratch = "/tmp/" + Isolation.NAME_PREFIX + "rsync"
     r.step("node", "exec", f"seed {scratch} on host",
-           "node", "exec", r.node, "--", "sh", "-c", f"echo pve-cli-e2e > {scratch}")
+           "node", "exec", r.node, "--", "sh", "-c", f"echo pmx-cli-e2e > {scratch}")
     r.step("node", "rsync", f"rsync {r.node}:{scratch} -> local",
            "node", "rsync", r.node, f"{r.node}:{scratch}", scratch)
     r.undo(f"rm host {scratch}", "node", "exec", r.node, "--", "rm", "-f", scratch)
@@ -1813,9 +1813,9 @@ _IMPORT_OVF = """<?xml version="1.0" encoding="UTF-8"?>
     <Info>Virtual disks</Info>
     <Disk ovf:capacity="1" ovf:capacityAllocationUnits="byte * 2^30" ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
   </DiskSection>
-  <VirtualSystem ovf:id="pve-cli-e2e">
-    <Info>pve-cli e2e import probe</Info>
-    <Name>pve-cli-e2e</Name>
+  <VirtualSystem ovf:id="pmx-cli-e2e">
+    <Info>pmx-cli e2e import probe</Info>
+    <Name>pmx-cli-e2e</Name>
     <VirtualHardwareSection>
       <Info>Virtual hardware requirements</Info>
       <System>
@@ -1909,7 +1909,7 @@ def storage_import_metadata_lifecycle(r: Runner) -> None:
     """
     print(BOLD("storage: import-metadata (crafted OVF on node import dir)"))
 
-    show = r.pve("context", "show", r.context, json_out=True, node=False)
+    show = r.pmx("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
@@ -1928,7 +1928,7 @@ def storage_import_metadata_lifecycle(r: Runner) -> None:
 
     # Find an import-capable dir storage and resolve its on-disk path.
     sid = ""
-    sl = r.pve("storage", "list", json_out=True)
+    sl = r.pmx("storage", "list", json_out=True)
     try:
         rows = sl.json()
         rows = rows.get("data", rows) if isinstance(rows, dict) else rows
@@ -2019,13 +2019,13 @@ def sdn_dns_lifecycle(r: Runner) -> None:
     as skips rather than failing.
     """
     print(BOLD("sdn: dns create/get/set/delete (host-local API stub, staged only)"))
-    dns_id = "pveclidns"  # within the pvecli SDN isolation namespace
+    dns_id = "pmxclidns"  # within the pmxcli SDN isolation namespace
 
     def skip_all(why: str) -> None:
         for v in ("dns create", "dns get", "dns set", "dns delete"):
             r.cover_skip("sdn", v, v, why)
 
-    show = r.pve("context", "show", r.context, json_out=True, node=False)
+    show = r.pmx("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
@@ -2038,8 +2038,8 @@ def sdn_dns_lifecycle(r: Runner) -> None:
         skip_all("SSH to host unavailable")
         return
 
-    remote_py = "/tmp/pve-cli-e2e-dnsstub.py"
-    remote_log = "/tmp/pve-cli-e2e-dnsstub.log"
+    remote_py = "/tmp/pmx-cli-e2e-dnsstub.py"
+    remote_log = "/tmp/pmx-cli-e2e-dnsstub.log"
     url = f"http://127.0.0.1:{_DNS_STUB_PORT}/"
     pid = ""
     try:
@@ -2072,7 +2072,7 @@ def sdn_dns_lifecycle(r: Runner) -> None:
         # staged window runs under the global SDN lock so no foreign `sdn apply`
         # can commit the throwaway provider; a mid-cycle failure is rolled back
         # rather than left staged.
-        acq = r.pve("sdn", "lock", "acquire", json_out=True, node=False)
+        acq = r.pmx("sdn", "lock", "acquire", json_out=True, node=False)
         if acq.rc != 0:
             why = (acq.err.strip() or acq.out.strip()).splitlines()
             skip_all("SDN lock unavailable: " + (why[-1][:80] if why else "failed"))
@@ -2087,7 +2087,7 @@ def sdn_dns_lifecycle(r: Runner) -> None:
         try:
             r.step("sdn", "dns create", "dns create (powerdns -> host stub)",
                    "sdn", "dns", "create", dns_id,
-                   "--type", "powerdns", "--url", url, "--key", "pve-cli-e2e",
+                   "--type", "powerdns", "--url", url, "--key", "pmx-cli-e2e",
                    "--lock-token", token, json_out=True)
             r.step("sdn", "dns get", "dns get (read staged provider)",
                    "sdn", "dns", "get", dns_id, json_out=True)
@@ -2121,7 +2121,7 @@ def sdn_dns_lifecycle(r: Runner) -> None:
 
 
 # Candidate base cloud images to bake the guest agent into, newest-Ubuntu first.
-# The chosen image is copied to a pve-cli-named qcow2, has qemu-guest-agent
+# The chosen image is copied to a pmx-cli-named qcow2, has qemu-guest-agent
 # installed and enabled offline via virt-customize, and is imported as the boot
 # disk. Any image that boots a systemd Linux works; the list is just where lab
 # nodes commonly cache cloud images.
@@ -2133,7 +2133,7 @@ _AGENT_BASE_IMAGES = (
 # A throwaway password set on the guest's root user via `agent set-user-password`.
 # It is piped over stdin (never an argv) and is only ever applied to a disposable
 # VM that is destroyed at the end of the run, so it is a test value, not a secret.
-_AGENT_TEST_PASSWORD = "pve-cli-e2e-throwaway"
+_AGENT_TEST_PASSWORD = "pmx-cli-e2e-throwaway"
 
 
 def qemu_agent_lifecycle(r: Runner) -> None:
@@ -2159,7 +2159,7 @@ def qemu_agent_lifecycle(r: Runner) -> None:
         for v in verbs:
             r.cover_skip("qemu", v, v, why)
 
-    show = r.pve("context", "show", r.context, json_out=True, node=False)
+    show = r.pmx("context", "show", r.context, json_out=True, node=False)
     host = ""
     if show.rc == 0:
         data = show.json()
@@ -2241,7 +2241,7 @@ def qemu_agent_lifecycle(r: Runner) -> None:
         print(DIM("  waiting for guest agent to come up (up to 180s)..."))
         up = False
         for _ in range(60):
-            if r.pve("qemu", "agent", vmid, "ping").rc == 0:
+            if r.pmx("qemu", "agent", vmid, "ping").rc == 0:
                 up = True
                 break
             time.sleep(3)
@@ -2266,8 +2266,8 @@ def qemu_agent_lifecycle(r: Runner) -> None:
             r.cover_skip("qemu", "agent exec-status", "agent exec-status",
                          "agent exec returned no pid to poll")
         # file-write then file-read the same path: a round-trip through the guest fs.
-        marker = "pve-cli-e2e"
-        guest_file = "/tmp/pve-cli-e2e-probe"
+        marker = "pmx-cli-e2e"
+        guest_file = "/tmp/pmx-cli-e2e-probe"
         r.step("qemu", "agent file-write", f"agent file-write {guest_file} on {vmid}",
                "qemu", "agent", "file-write", vmid, "--file", guest_file,
                "--content", marker)
@@ -2302,7 +2302,7 @@ def qemu_agent_lifecycle(r: Runner) -> None:
 
 def _resolve_host(r: Runner) -> str:
     """Resolve the node host address for passwordless root SSH, or "" if unknown."""
-    show = r.pve("context", "show", r.context, json_out=True, node=False)
+    show = r.pmx("context", "show", r.context, json_out=True, node=False)
     if show.rc != 0:
         return ""
     data = show.json()
@@ -2332,7 +2332,7 @@ class H(http.server.BaseHTTPRequestHandler):
         self._send({"data": {"ticket": "PBS:stub", "CSRFPreventionToken": "x",
                              "username": "stub@pbs"}})
     def do_GET(self):
-        self._send({"data": [{"store": "pve-cli-stub", "comment": "e2e"}]})
+        self._send({"data": [{"store": "pmx-cli-stub", "comment": "e2e"}]})
     def log_message(self, *a):
         pass
 srv = http.server.HTTPServer(("127.0.0.1", __PORT__), H)
@@ -2425,7 +2425,7 @@ def node_scan_lifecycle(r: Runner) -> None:
                     r.soft_step("node", "scan pbs", "scan pbs (host-local stub)",
                                 "node", "scan", "pbs", "--server", "127.0.0.1",
                                 "--port", str(_PBS_STUB_PORT), "--username", "stub@pbs",
-                                "--password", "pve-cli-e2e-stub", "--fingerprint", fp,
+                                "--password", "pmx-cli-e2e-stub", "--fingerprint", fp,
                                 skip_markers=net_markers,
                                 skip_reason="PBS stub probe failed")
         finally:
@@ -2437,7 +2437,7 @@ def node_scan_lifecycle(r: Runner) -> None:
     q = _ssh_node(host, "dpkg-query", "-W", "-f=${Status}", "nfs-kernel-server")
     pre_installed = q[0] == 0 and "installed" in q[1]
     we_installed = False
-    expfile = "/etc/exports.d/pve-cli-e2e.exports"
+    expfile = "/etc/exports.d/pmx-cli-e2e.exports"
     expdir = f"/tmp/{Isolation.NAME_PREFIX}nfsexport"
     try:
         if not pre_installed:
@@ -2490,7 +2490,7 @@ def node_recover_lifecycle(r: Runner) -> None:
 
     # subscription delete: only safe when no real key is configured — never remove
     # a live licence key.
-    sub = r.pve("node", "subscription", "get", json_out=True)
+    sub = r.pmx("node", "subscription", "get", json_out=True)
     status = ""
     try:
         sd = sub.json()
@@ -2548,7 +2548,7 @@ def node_services_lifecycle(r: Runner) -> None:
         for v in verbs:
             r.cover_skip("node", v, v, why)
 
-    lst = r.pve("node", "services", "list", r.node, json_out=True, node=False)
+    lst = r.pmx("node", "services", "list", r.node, json_out=True, node=False)
     svc = ""
     try:
         data = lst.json()
@@ -2583,10 +2583,10 @@ def node_services_lifecycle(r: Runner) -> None:
 # use this disk — the runner hard-asserts it is unused before writing to it.
 _DISKS_SPARE_SERIAL = "PHAX405409TE1P9BGN"
 # Isolation-prefixed storage IDs / pool names created and torn down on the spare.
-_DISKS_LVM = "pvecli-lvm"
-_DISKS_LVMTHIN = "pvecli-lvmthin"
-_DISKS_ZFS = "pvecli-zfs"
-_DISKS_DIR = "pvecli-dir"
+_DISKS_LVM = "pmxcli-lvm"
+_DISKS_LVMTHIN = "pmxcli-lvmthin"
+_DISKS_ZFS = "pmxcli-zfs"
+_DISKS_DIR = "pmxcli-dir"
 
 
 def _disks_resolve_spare(r: Runner) -> str:
@@ -2597,7 +2597,7 @@ def _disks_resolve_spare(r: Runner) -> str:
     is absent or the disk reports any use (ZFS/LVM/partition/etc.), so the runner
     never touches storage that is in service.
     """
-    lst = r.pve("node", "disks", "list", json_out=True)
+    lst = r.pmx("node", "disks", "list", json_out=True)
     if lst.rc != 0:
         return ""
     try:
@@ -2780,7 +2780,7 @@ def _cluster_rule_pos_by_comment(r: Runner, comment: str) -> str | None:
     """Return the position of the cluster firewall rule whose comment matches,
     or None. Used to locate the throwaway top-level rule for deletion without
     assuming a fixed position (PVE inserts new rules at position 0)."""
-    res = r.pve("cluster", "firewall", "rules", "list", json_out=True, node=False)
+    res = r.pmx("cluster", "firewall", "rules", "list", json_out=True, node=False)
     if res.rc != 0:
         return None
     try:
@@ -2801,7 +2801,7 @@ def _node_rule_pos_by_comment(r: Runner, comment: str) -> str | None:
     """Return the position of the host firewall rule whose comment matches, or
     None. Mirrors the cluster helper: PVE inserts new rules at position 0, so
     the throwaway rule is located by its comment rather than a fixed index."""
-    res = r.pve("node", "firewall", "rules", "list", json_out=True)
+    res = r.pmx("node", "firewall", "rules", "list", json_out=True)
     if res.rc != 0:
         return None
     try:
@@ -2822,7 +2822,7 @@ def _vnet_fw_rule_pos_by_comment(r: Runner, vnet: str, comment: str) -> str | No
     """Return the position of the vnet firewall rule whose comment matches, or
     None. Mirrors the cluster/node helpers: PVE inserts new rules at position 0,
     so the throwaway rule is located by its comment rather than a fixed index."""
-    res = r.pve("sdn", "vnet", "firewall", "rules", "list", vnet, json_out=True, node=False)
+    res = r.pmx("sdn", "vnet", "firewall", "rules", "list", vnet, json_out=True, node=False)
     if res.rc != 0:
         return None
     try:
@@ -2841,9 +2841,9 @@ def _vnet_fw_rule_pos_by_comment(r: Runner, vnet: str, comment: str) -> str | No
 
 def node_firewall_lifecycle(r: Runner) -> None:
     """Exercise the host firewall of the resolved node: append a disabled rule
-    tagged with the pve-cli comment, read it back, then delete it.
+    tagged with the pmx-cli comment, read it back, then delete it.
 
-    Isolation: the rule is created DISABLED (--enable 0) with a `pve-cli-e2e`
+    Isolation: the rule is created DISABLED (--enable 0) with a `pmx-cli-e2e`
     comment and removed in the same run, so the node's active firewall policy is
     never changed. Host firewall *options* are read only — never set — because
     enabling the host firewall could cut the node off the network. The rule is
@@ -2875,7 +2875,7 @@ def node_firewall_lifecycle(r: Runner) -> None:
         if created_pos is not None:
             r.step("node", "firewall rules get", f"firewall rules get {created_pos}",
                    "node", "firewall", "rules", "get", created_pos, json_out=True)
-            # Rule stays disabled (--enable 0) and keeps its pve-cli comment so
+            # Rule stays disabled (--enable 0) and keeps its pmx-cli comment so
             # pre-clean can still find it; only the dport is edited, so the host's
             # active firewall policy is never changed.
             r.step("node", "firewall rules update", f"firewall rules update {created_pos}",
@@ -2928,7 +2928,7 @@ def node_system_lifecycle(r: Runner) -> None:
         if original_tz:
             r.step("node", "time set", f"time set (self: {original_tz})",
                    "node", "time", "set", "--timezone", original_tz)
-            verify = r.pve("node", "time", "get", json_out=True)
+            verify = r.pmx("node", "time", "get", json_out=True)
             ok = False
             try:
                 vd = verify.json()
@@ -2967,7 +2967,7 @@ def node_system_lifecycle(r: Runner) -> None:
         content, digest = hd["data"], hd["digest"]
         r.step("node", "hosts set", "hosts set (self, digest-guarded)",
                "node", "hosts", "set", "--data", content, "--digest", digest, "--yes")
-        verify = r.pve("node", "hosts", "get", json_out=True)
+        verify = r.pmx("node", "hosts", "get", json_out=True)
         ok = False
         try:
             vd = verify.json()
@@ -2994,10 +2994,10 @@ def node_system_lifecycle(r: Runner) -> None:
     netif = "vmbr987"
     r.step("node", "network create", f"network create {netif} (staged)",
            "node", "network", "create", "--iface", netif, "--type", "bridge",
-           "--autostart", "--comments", "pve-cli-e2e staged probe")
+           "--autostart", "--comments", "pmx-cli-e2e staged probe")
     r.step("node", "network set", f"network set {netif} (staged)",
            "node", "network", "set", netif, "--type", "bridge",
-           "--comments", "pve-cli-e2e staged probe (edited)")
+           "--comments", "pmx-cli-e2e staged probe (edited)")
     r.del_step("node", "network delete", f"network delete {netif} (staged)",
                "node", "network", "delete", netif, "--yes")
     r.step("node", "network revert", "network revert (discard staged)",
@@ -3058,7 +3058,7 @@ def node_system_lifecycle(r: Runner) -> None:
     for key, val in servers:
         set_args += [f"--{key}", val]
     r.step("node", "dns set", f"dns set (self: {search})", *set_args)
-    verify = r.pve("node", "dns", "get", json_out=True)
+    verify = r.pmx("node", "dns", "get", json_out=True)
     ok = False
     try:
         vd = verify.json()
@@ -3083,7 +3083,7 @@ def cluster_options_lifecycle(r: Runner) -> None:
     """
     print(BOLD("cluster: datacenter options (description marker, reversible)"))
 
-    marker = "pve-cli-e2e options marker"
+    marker = "pmx-cli-e2e options marker"
     original: str | None = None
     try:
         get_res = r.step("cluster", "options get", "options get",
@@ -3099,7 +3099,7 @@ def cluster_options_lifecycle(r: Runner) -> None:
         r.step("cluster", "options set", "options set (description marker)",
                "cluster", "options", "set", "--description", marker)
 
-        verify = r.pve("cluster", "options", "get", json_out=True)
+        verify = r.pmx("cluster", "options", "get", json_out=True)
         ok = False
         try:
             vd = verify.json()
@@ -3164,10 +3164,10 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
     """Exercise the cluster-wide firewall: a security group with one rule, a
     disabled top-level rule, an IP set with a member, and an address alias.
 
-    Isolation: every object is pve-cli-namespaced (group `pvecli-grp`, ipset
-    `pvecli-clips`, alias `pvecli-clalias`) and the IP set and alias use the e2e
+    Isolation: every object is pmx-cli-namespaced (group `pmxcli-grp`, ipset
+    `pmxcli-clips`, alias `pmxcli-clalias`) and the IP set and alias use the e2e
     subnet (172.30.0.0/24). The top-level rule is created DISABLED (--enable 0)
-    with a `pve-cli-e2e` comment and removed in the same run, so the active
+    with a `pmx-cli-e2e` comment and removed in the same run, so the active
     datacenter policy is never changed. Datacenter firewall *options* are read
     only — never set — because enabling the cluster firewall would affect every
     node. All objects are removed in the finally block.
@@ -3211,7 +3211,7 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
 
         # Security group + a rule inside it (inert until referenced by --action).
         r.step("cluster", "firewall group create", f"firewall group create {CL_FW_GROUP}",
-               "cluster", "firewall", "group", "create", CL_FW_GROUP, "--comment", "pve-cli-e2e")
+               "cluster", "firewall", "group", "create", CL_FW_GROUP, "--comment", "pmx-cli-e2e")
         r.step("cluster", "firewall group list", "firewall group list",
                "cluster", "firewall", "group", "list", json_out=True)
         r.step("cluster", "firewall group rule-add", f"firewall group rule-add {CL_FW_GROUP}",
@@ -3221,7 +3221,7 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
                "cluster", "firewall", "group", "rules", CL_FW_GROUP, json_out=True)
         r.step("cluster", "firewall group rule-update", f"firewall group rule-update {CL_FW_GROUP} pos 0",
                "cluster", "firewall", "group", "rule-update", CL_FW_GROUP, "0",
-               "--comment", "pve-cli-e2e-updated")
+               "--comment", "pmx-cli-e2e-updated")
         r.del_step("cluster", "firewall group rule-delete", "firewall group rule-delete pos 0",
                    "cluster", "firewall", "group", "rule-delete", CL_FW_GROUP, "0", "--yes")
 
@@ -3237,7 +3237,7 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
             raise LifecycleError("created cluster firewall rule not found in list")
         r.step("cluster", "firewall rules get", f"firewall rule get pos {created_rule_pos}",
                "cluster", "firewall", "rules", "get", created_rule_pos, json_out=True)
-        # Rule stays disabled (--enable 0) and keeps its pve-cli comment so it is
+        # Rule stays disabled (--enable 0) and keeps its pmx-cli comment so it is
         # still found by comment for cleanup; only the dport is edited, so the
         # datacenter firewall policy is never changed.
         r.step("cluster", "firewall rules update", f"firewall rule update pos {created_rule_pos}",
@@ -3246,13 +3246,13 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
 
         # IP set with one member drawn from the e2e subnet.
         r.step("cluster", "firewall ipset create", f"firewall ipset create {CL_FW_IPSET}",
-               "cluster", "firewall", "ipset", "create", CL_FW_IPSET, "--comment", "pve-cli-e2e")
+               "cluster", "firewall", "ipset", "create", CL_FW_IPSET, "--comment", "pmx-cli-e2e")
         r.step("cluster", "firewall ipset add", f"firewall ipset add {Isolation.SDN_SUBNET}",
                "cluster", "firewall", "ipset", "add", CL_FW_IPSET, Isolation.SDN_SUBNET)
         r.step("cluster", "firewall ipset update",
                f"firewall ipset update {Isolation.SDN_SUBNET}",
                "cluster", "firewall", "ipset", "update", CL_FW_IPSET,
-               Isolation.SDN_SUBNET, "--comment", "pve-cli-e2e-updated")
+               Isolation.SDN_SUBNET, "--comment", "pmx-cli-e2e-updated")
         r.step("cluster", "firewall ipset list", "firewall ipset member list",
                "cluster", "firewall", "ipset", "list", CL_FW_IPSET, json_out=True)
         r.del_step("cluster", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
@@ -3261,12 +3261,12 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
         # Address alias.
         r.step("cluster", "firewall alias create", f"firewall alias create {CL_FW_ALIAS}",
                "cluster", "firewall", "alias", "create", CL_FW_ALIAS, "172.30.0.99",
-               "--comment", "pve-cli-e2e")
+               "--comment", "pmx-cli-e2e")
         r.step("cluster", "firewall alias list", "firewall alias list",
                "cluster", "firewall", "alias", "list", json_out=True)
         r.step("cluster", "firewall alias update", f"firewall alias update {CL_FW_ALIAS}",
                "cluster", "firewall", "alias", "update", CL_FW_ALIAS, "172.30.0.99",
-               "--comment", "pve-cli-e2e-updated")
+               "--comment", "pmx-cli-e2e-updated")
     finally:
         # Delete the top-level rule by its discovered (or re-discovered) position.
         pos = created_rule_pos if created_rule_pos is not None else _cluster_rule_pos_by_comment(r, CL_FW_COMMENT)
@@ -3287,7 +3287,7 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
 def cluster_metrics_lifecycle(r: Runner) -> None:
     """Exercise `cluster metrics server create/get/set/delete` reversibly.
 
-    Isolation: a single Graphite metric server `pve-cli-graphite` is created
+    Isolation: a single Graphite metric server `pmx-cli-graphite` is created
     DISABLED (--disable) pointing at an unused address on the e2e subnet
     (172.30.0.250) that is never contacted — Proxmox stores the plugin config
     without probing the target on create. The Graphite type carries no secret
@@ -3321,7 +3321,7 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
     """Exercise the notification endpoint and matcher CRUD cycle reversibly.
 
     Isolation: one endpoint of each type (Gotify, Sendmail, SMTP, Webhook) plus a
-    matcher are created, all named `pve-cli-*` and all created DISABLED, then read
+    matcher are created, all named `pmx-cli-*` and all created DISABLED, then read
     back, edited, and deleted. Every endpoint points at an unused address on the
     e2e subnet (172.30.0.250) or sends only to the local root mailbox. Proxmox
     does not contact any server on create or update — only an explicit `test` verb
@@ -3352,44 +3352,44 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
         # --- gotify ----------------------------------------------------------
         r.step("cluster", "notifications gotify create", f"notifications gotify create {GOTIFY_ENDPOINT}",
                "cluster", "notifications", "gotify", "create", GOTIFY_ENDPOINT,
-               "--server", f"https://{DUMMY_HOST}", "--token", "pve-cli-e2e-dummy-token",
-               "--comment", "pve-cli-e2e", "--disable")
+               "--server", f"https://{DUMMY_HOST}", "--token", "pmx-cli-e2e-dummy-token",
+               "--comment", "pmx-cli-e2e", "--disable")
         r.step("cluster", "notifications gotify list", "notifications gotify list",
                "cluster", "notifications", "gotify", "list", json_out=True)
         r.step("cluster", "notifications gotify get", f"notifications gotify get {GOTIFY_ENDPOINT}",
                "cluster", "notifications", "gotify", "get", GOTIFY_ENDPOINT, json_out=True)
         r.step("cluster", "notifications gotify set", "notifications gotify set (comment)",
                "cluster", "notifications", "gotify", "set", GOTIFY_ENDPOINT,
-               "--comment", "pve-cli-e2e updated")
+               "--comment", "pmx-cli-e2e updated")
 
         # --- sendmail (local mail to root, no network) -----------------------
         r.step("cluster", "notifications sendmail create", f"notifications sendmail create {SENDMAIL_ENDPOINT}",
                "cluster", "notifications", "sendmail", "create", SENDMAIL_ENDPOINT,
-               "--mailto-user", "root@pam", "--comment", "pve-cli-e2e", "--disable")
+               "--mailto-user", "root@pam", "--comment", "pmx-cli-e2e", "--disable")
         r.step("cluster", "notifications sendmail list", "notifications sendmail list",
                "cluster", "notifications", "sendmail", "list", json_out=True)
         r.step("cluster", "notifications sendmail get", f"notifications sendmail get {SENDMAIL_ENDPOINT}",
                "cluster", "notifications", "sendmail", "get", SENDMAIL_ENDPOINT, json_out=True)
         r.step("cluster", "notifications sendmail set", "notifications sendmail set (comment)",
                "cluster", "notifications", "sendmail", "set", SENDMAIL_ENDPOINT,
-               "--comment", "pve-cli-e2e updated")
+               "--comment", "pmx-cli-e2e updated")
 
         # --- smtp (dummy server, dummy credentials, never contacted) ---------
         # The password is a throwaway dummy; it is passed to exercise the secret
         # path and is deliberately NOT interpolated into any step label.
         r.step("cluster", "notifications smtp create", f"notifications smtp create {SMTP_ENDPOINT}",
                "cluster", "notifications", "smtp", "create", SMTP_ENDPOINT,
-               "--server", DUMMY_HOST, "--from-address", "pve-cli-e2e@example.invalid",
+               "--server", DUMMY_HOST, "--from-address", "pmx-cli-e2e@example.invalid",
                "--mailto-user", "root@pam", "--mode", "tls", "--port", "465",
-               "--username", "pve-cli-e2e", "--password", "pve-cli-e2e-dummy",
-               "--comment", "pve-cli-e2e", "--disable")
+               "--username", "pmx-cli-e2e", "--password", "pmx-cli-e2e-dummy",
+               "--comment", "pmx-cli-e2e", "--disable")
         r.step("cluster", "notifications smtp list", "notifications smtp list",
                "cluster", "notifications", "smtp", "list", json_out=True)
         r.step("cluster", "notifications smtp get", f"notifications smtp get {SMTP_ENDPOINT}",
                "cluster", "notifications", "smtp", "get", SMTP_ENDPOINT, json_out=True)
         r.step("cluster", "notifications smtp set", "notifications smtp set (comment)",
                "cluster", "notifications", "smtp", "set", SMTP_ENDPOINT,
-               "--comment", "pve-cli-e2e updated")
+               "--comment", "pmx-cli-e2e updated")
 
         # --- webhook (dummy url + dummy secret, never contacted) -------------
         # --header/--secret take name=<name>,value=<base64>. The secret value is a
@@ -3398,25 +3398,25 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
                "cluster", "notifications", "webhook", "create", WEBHOOK_ENDPOINT,
                "--url", f"https://{DUMMY_HOST}/hook", "--method", "post",
                "--header", "name=X-Pve-Cli,value=ZTJl", "--secret", "name=token,value=c2VjcmV0",
-               "--comment", "pve-cli-e2e", "--disable")
+               "--comment", "pmx-cli-e2e", "--disable")
         r.step("cluster", "notifications webhook list", "notifications webhook list",
                "cluster", "notifications", "webhook", "list", json_out=True)
         r.step("cluster", "notifications webhook get", f"notifications webhook get {WEBHOOK_ENDPOINT}",
                "cluster", "notifications", "webhook", "get", WEBHOOK_ENDPOINT, json_out=True)
         r.step("cluster", "notifications webhook set", "notifications webhook set (comment)",
                "cluster", "notifications", "webhook", "set", WEBHOOK_ENDPOINT,
-               "--comment", "pve-cli-e2e updated")
+               "--comment", "pmx-cli-e2e updated")
 
         # --- matcher (disabled, no routing target) ---------------------------
         r.step("cluster", "notifications matcher create", f"notifications matcher create {NOTIFY_MATCHER}",
                "cluster", "notifications", "matcher", "create", NOTIFY_MATCHER,
                "--match-severity", "warning", "--mode", "all",
-               "--comment", "pve-cli-e2e", "--disable")
+               "--comment", "pmx-cli-e2e", "--disable")
         r.step("cluster", "notifications matcher get", f"notifications matcher get {NOTIFY_MATCHER}",
                "cluster", "notifications", "matcher", "get", NOTIFY_MATCHER, json_out=True)
         r.step("cluster", "notifications matcher set", "notifications matcher set (comment)",
                "cluster", "notifications", "matcher", "set", NOTIFY_MATCHER,
-               "--comment", "pve-cli-e2e updated")
+               "--comment", "pmx-cli-e2e updated")
 
         # --- targets-test (local sendmail only; soft so it never fails) ------
         # Sends a test notification through the local Sendmail target, which writes
@@ -3441,12 +3441,12 @@ def cluster_notifications_lifecycle(r: Runner) -> None:
 def cluster_mapping_lifecycle(r: Runner) -> None:
     """Exercise `cluster mapping dir/pci/usb create/get/set/delete` reversibly.
 
-    Isolation: one mapping of each kind, all `pve-cli-` prefixed and removed in a
+    Isolation: one mapping of each kind, all `pmx-cli-` prefixed and removed in a
     finally block, leaving the cluster mapping config as found.
 
-    - A directory mapping (`pve-cli-dir`) points one per-node entry at /var/lib/vz
+    - A directory mapping (`pmx-cli-dir`) points one per-node entry at /var/lib/vz
       (always present on a PVE node) — no real hardware needed.
-    - PCI (`pve-cli-pci`) and USB (`pve-cli-usb`) mappings store the device address
+    - PCI (`pmx-cli-pci`) and USB (`pmx-cli-usb`) mappings store the device address
       as a drift-detection hint, not a create-time hardware gate, so an isolated
       mapping with a host-present address creates and removes cleanly. They are
       driven via soft_step so a stricter PVE build that does validate the address
@@ -3463,7 +3463,7 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
     try:
         r.step("cluster", "mapping dir create", f"mapping dir create {DIR_MAPPING}",
                "cluster", "mapping", "dir", "create", DIR_MAPPING,
-               "--map", entry, "--description", "pve-cli-e2e")
+               "--map", entry, "--description", "pmx-cli-e2e")
         r.step("cluster", "mapping dir list", "mapping dir list",
                "cluster", "mapping", "dir", "list", json_out=True)
         got = r.step("cluster", "mapping dir get", f"mapping dir get {DIR_MAPPING}",
@@ -3473,7 +3473,7 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
         # set re-sends the full --map (the API rewrites the per-node map on update).
         r.step("cluster", "mapping dir set", "mapping dir set (description)",
                "cluster", "mapping", "dir", "set", DIR_MAPPING,
-               "--map", entry, "--description", "pve-cli-e2e updated")
+               "--map", entry, "--description", "pmx-cli-e2e updated")
     finally:
         r.del_step("cluster", "mapping dir delete", f"mapping dir delete {DIR_MAPPING}",
                    "cluster", "mapping", "dir", "delete", DIR_MAPPING, "--yes")
@@ -3492,7 +3492,7 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
         created = r.soft_step(
             "cluster", "mapping pci create", f"mapping pci create {PCI_MAPPING}",
             "cluster", "mapping", "pci", "create", PCI_MAPPING,
-            "--map", pci_entry, "--description", "pve-cli-e2e",
+            "--map", pci_entry, "--description", "pmx-cli-e2e",
             skip_markers=("does not exist", "no such", "not found", "invalid",
                           "could not", "unable to", "no pci"),
             skip_reason="node rejected the synthetic PCI mapping address")
@@ -3501,7 +3501,7 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
                    "cluster", "mapping", "pci", "get", PCI_MAPPING, json_out=True)
             r.step("cluster", "mapping pci set", "mapping pci set (description)",
                    "cluster", "mapping", "pci", "set", PCI_MAPPING,
-                   "--map", pci_entry, "--description", "pve-cli-e2e updated")
+                   "--map", pci_entry, "--description", "pmx-cli-e2e updated")
         else:
             r.cover_skip("cluster", "mapping pci get", "mapping pci get",
                          "pci mapping create was skipped")
@@ -3519,7 +3519,7 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
         created = r.soft_step(
             "cluster", "mapping usb create", f"mapping usb create {USB_MAPPING}",
             "cluster", "mapping", "usb", "create", USB_MAPPING,
-            "--map", usb_entry, "--description", "pve-cli-e2e",
+            "--map", usb_entry, "--description", "pmx-cli-e2e",
             skip_markers=("does not exist", "no such", "not found", "invalid",
                           "could not", "unable to", "no usb"),
             skip_reason="node rejected the synthetic USB mapping address")
@@ -3528,7 +3528,7 @@ def cluster_mapping_lifecycle(r: Runner) -> None:
                    "cluster", "mapping", "usb", "get", USB_MAPPING, json_out=True)
             r.step("cluster", "mapping usb set", "mapping usb set (description)",
                    "cluster", "mapping", "usb", "set", USB_MAPPING,
-                   "--map", usb_entry, "--description", "pve-cli-e2e updated")
+                   "--map", usb_entry, "--description", "pmx-cli-e2e updated")
         else:
             r.cover_skip("cluster", "mapping usb get", "mapping usb get",
                          "usb mapping create was skipped")
@@ -3543,9 +3543,9 @@ def cluster_realmsync_lifecycle(r: Runner) -> None:
     """Exercise `cluster jobs realm-sync create/get/set/delete` reversibly.
 
     Isolation: a realm-sync job needs an authentication realm to point at, so
-    this creates its own isolated ldap realm `pve-cli-syncrealm` (pointing at a
+    this creates its own isolated ldap realm `pmx-cli-syncrealm` (pointing at a
     dummy server that is never contacted — job creation only registers a schedule
-    and never syncs) and a DISABLED job `pve-cli-syncjob` against it. The job is
+    and never syncs) and a DISABLED job `pmx-cli-syncjob` against it. The job is
     created with --enabled=false so it never fires on the schedule. Both the job
     and the realm are removed in the finally block, leaving auth + job config as
     found.
@@ -3562,14 +3562,14 @@ def cluster_realmsync_lifecycle(r: Runner) -> None:
     try:
         r.step("access", "domain create", f"domain create {REALMSYNC_REALM} (for realm-sync)",
                "access", "domain", "create", REALMSYNC_REALM, "--type", "ldap",
-               "--server1", "ldap.invalid.pve-cli.local", "--port", "389",
-               "--base-dn", "dc=pve-cli,dc=local", "--user-attr", "uid",
-               "--comment", "pve-cli e2e realm-sync")
+               "--server1", "ldap.invalid.pmx-cli.local", "--port", "389",
+               "--base-dn", "dc=pmx-cli,dc=local", "--user-attr", "uid",
+               "--comment", "pmx-cli e2e realm-sync")
         realm_created = True
         r.step("cluster", "jobs realm-sync create", f"jobs realm-sync create {REALMSYNC_JOB}",
                "cluster", "jobs", "realm-sync", "create", REALMSYNC_JOB,
                "--schedule", "daily", "--realm", REALMSYNC_REALM, "--scope", "both",
-               "--comment", "pve-cli-e2e", "--enabled=false")
+               "--comment", "pmx-cli-e2e", "--enabled=false")
         r.step("cluster", "jobs realm-sync list", "jobs realm-sync list",
                "cluster", "jobs", "realm-sync", "list", json_out=True)
         got = r.step("cluster", "jobs realm-sync get", f"jobs realm-sync get {REALMSYNC_JOB}",
@@ -3579,7 +3579,7 @@ def cluster_realmsync_lifecycle(r: Runner) -> None:
         # set must re-send the required schedule; change the comment.
         r.step("cluster", "jobs realm-sync set", "jobs realm-sync set (comment)",
                "cluster", "jobs", "realm-sync", "set", REALMSYNC_JOB,
-               "--schedule", "weekly", "--comment", "pve-cli-e2e updated")
+               "--schedule", "weekly", "--comment", "pmx-cli-e2e updated")
     finally:
         r.del_step("cluster", "jobs realm-sync delete", f"jobs realm-sync delete {REALMSYNC_JOB}",
                    "cluster", "jobs", "realm-sync", "delete", REALMSYNC_JOB, "--yes")
@@ -3591,7 +3591,7 @@ def cluster_realmsync_lifecycle(r: Runner) -> None:
 def cluster_acme_plugin_lifecycle(r: Runner) -> None:
     """Exercise `cluster acme plugin create/get/set/delete` reversibly.
 
-    Isolation: a single dns-01 ACME challenge plugin `pve-cli-acme` is created
+    Isolation: a single dns-01 ACME challenge plugin `pmx-cli-acme` is created
     with a throwaway Cloudflare-style credential block. The plugin is a local
     cluster-config entry only; it is never attached to a node certificate and no
     certificate is ever ordered, so the ACME CA is never contacted and the dummy
@@ -3604,7 +3604,7 @@ def cluster_acme_plugin_lifecycle(r: Runner) -> None:
     print(BOLD("cluster: ACME dns-01 plugin (reversible)"))
 
     # Dummy base64 credential block (never used to issue a certificate).
-    data = base64.b64encode(b"CF_Token=pve-cli-e2e-dummy\n").decode("ascii")
+    data = base64.b64encode(b"CF_Token=pmx-cli-e2e-dummy\n").decode("ascii")
 
     # Best-effort clean of a plugin left by a crashed prior run (never raises).
     r.undo(f"pre-clean {ACME_PLUGIN}",
@@ -3632,7 +3632,7 @@ def cluster_acme_plugin_lifecycle(r: Runner) -> None:
 def cluster_cpumodel_lifecycle(r: Runner) -> None:
     """Exercise `cluster cpu-model create/get/set/delete` reversibly.
 
-    Isolation: a single custom QEMU CPU model `pve-cli-cpu` is created with a
+    Isolation: a single custom QEMU CPU model `pmx-cli-cpu` is created with a
     reported model of `qemu64` (a model every QEMU/KVM host supports, so the
     definition is infra-independent — it is pure datacenter configuration stored
     in cpu-models.conf and is never attached to a guest). The model is removed in
@@ -3646,7 +3646,7 @@ def cluster_cpumodel_lifecycle(r: Runner) -> None:
     r.undo(f"pre-clean {CPU_MODEL}",
            "cluster", "cpu-model", "delete", CPU_MODEL, "--yes")
 
-    create = r.pve("cluster", "cpu-model", "create", CPU_MODEL,
+    create = r.pmx("cluster", "cpu-model", "create", CPU_MODEL,
                    "--reported-model", "qemu64", "--flags", "+pdpe1gb")
     if create.rc != 0:
         reason = _err_reason(create, "custom CPU model create rejected")
@@ -3673,13 +3673,13 @@ def cluster_cpumodel_lifecycle(r: Runner) -> None:
 def sdn_objects_lifecycle(r: Runner) -> None:
     """Exercise `sdn ipam` CRUD and `sdn vnet set` reversibly.
 
-    Isolation: a built-in `pve`-type IPAM backend (`pvecliipam`) is created. The
+    Isolation: a built-in `pve`-type IPAM backend (`pmxcliipam`) is created. The
     `pve` IPAM stores its allocations in the cluster config itself, so — unlike
     the netbox/phpipam/powerdns plugins, which validate connectivity to an
     external backend on create — it needs no reachable endpoint and is a pure,
     reversible config edit. It is a staged config entry only: it is never
     committed with `sdn apply` and no subnet references it, so live networking is
-    untouched. The vnet edit targets the isolated `pvecli0` vnet provisioned by
+    untouched. The vnet edit targets the isolated `pmxcli0` vnet provisioned by
     this suite (no guest depends on its alias) and exercises the shared update
     path live. Every created object is removed in a finally block, leaving the
     SDN config as found. Backend-validated IPAM/DNS providers and routing
@@ -3704,7 +3704,7 @@ def sdn_objects_lifecycle(r: Runner) -> None:
     r.undo(f"pre-clean {SDN_PREFIX}", "sdn", "prefix-list", "delete", SDN_PREFIX, "--yes")
     r.undo(f"pre-clean {SDN_RTMAP}", "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes")
 
-    acq = r.pve("sdn", "lock", "acquire", json_out=True, node=False)
+    acq = r.pmx("sdn", "lock", "acquire", json_out=True, node=False)
     if acq.rc != 0:
         why = (acq.err.strip() or acq.out.strip()).splitlines()
         tail = why[-1][:120] if why else "failed"
@@ -3827,11 +3827,11 @@ def sdn_objects_lifecycle(r: Runner) -> None:
                        "sdn", "route-map", "entry", "delete", SDN_RTMAP, "10", "--yes",
                        "--lock-token", token)
 
-        # ---- zone set on the isolated pvecli zone (staged-only) ------------------
+        # ---- zone set on the isolated pmxcli zone (staged-only) ------------------
         # Stage an MTU change on the zone, then clear it in the same run. MTU is a
         # generic, reversible attribute. Soft: if a simple zone rejects the field on
         # this PVE version, record SKIP rather than aborting the suite.
-        zset = r.pve("sdn", "zone", "set", Isolation.SDN_ZONE, "--mtu", "1400",
+        zset = r.pmx("sdn", "zone", "set", Isolation.SDN_ZONE, "--mtu", "1400",
                      "--lock-token", token)
         if zset.rc != 0:
             reason_z = (zset.err.strip() or zset.out.strip())[:120]
@@ -3843,11 +3843,11 @@ def sdn_objects_lifecycle(r: Runner) -> None:
                        "sdn", "zone", "set", Isolation.SDN_ZONE, "--delete", "mtu",
                        "--lock-token", token)
 
-        # ---- subnet set on the isolated pvecli0/10.241.0.0-24 subnet (staged-only)
+        # ---- subnet set on the isolated pmxcli0/10.241.0.0-24 subnet (staged-only)
         # The subnet id uses the API's dash notation; discover it from the list so
         # the test is robust to subnet id format changes. Stage a DNS zone prefix,
         # then clear it. Soft: SKIP on rejection rather than aborting.
-        sub_res = r.pve("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
+        sub_res = r.pmx("sdn", "subnet", "list", Isolation.SDN_VNET, json_out=True)
         subnet_id: str | None = None
         if sub_res.rc == 0:
             try:
@@ -3858,8 +3858,8 @@ def sdn_objects_lifecycle(r: Runner) -> None:
             except (ValueError, KeyError):
                 subnet_id = None
         if subnet_id:
-            sset = r.pve("sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
-                         "--dnszoneprefix", "pvecli", "--lock-token", token)
+            sset = r.pmx("sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
+                         "--dnszoneprefix", "pmxcli", "--lock-token", token)
             if sset.rc != 0:
                 reason_s = (sset.err.strip() or sset.out.strip())[:120]
                 r.cover_skip("sdn", "subnet set", "subnet set", f"subnet set rejected: {reason_s}")
@@ -3873,10 +3873,10 @@ def sdn_objects_lifecycle(r: Runner) -> None:
             r.cover_skip("sdn", "subnet set", "subnet set",
                          "could not discover the isolated subnet id")
 
-        # ---- vnet edit on the isolated pvecli0 vnet (staged-only) ---------------
+        # ---- vnet edit on the isolated pmxcli0 vnet (staged-only) ---------------
         # Covers the shared set/update path; restored via --delete in the same run.
         r.step("sdn", "vnet set", f"vnet set {Isolation.SDN_VNET} (alias)",
-               "sdn", "vnet", "set", Isolation.SDN_VNET, "--alias", "pve-cli-e2e",
+               "sdn", "vnet", "set", Isolation.SDN_VNET, "--alias", "pmx-cli-e2e",
                "--lock-token", token)
         r.step("sdn", "vnet set delete", f"vnet set {Isolation.SDN_VNET} (--delete alias)",
                "sdn", "vnet", "set", Isolation.SDN_VNET, "--delete", "alias",
@@ -3937,14 +3937,14 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         r.del_step("sdn", "fabric delete", f"fabric delete {SDN_FABRIC}",
                    "sdn", "fabric", "delete", SDN_FABRIC, "--yes")
 
-    # ---- vnet ips create/set/delete (pve IPAM, isolated pvecli zone/vnet) ----
+    # ---- vnet ips create/set/delete (pve IPAM, isolated pmxcli zone/vnet) ----
     # Create an IP allocation in the isolated zone's IPAM, update its vmid, then
     # delete it. Requires the pve IPAM to be enabled on the zone; if the create
     # is rejected (no IPAM configured), record as SKIP rather than failing.
     # Runs unlocked: IPAM allocations are live data written immediately, not
     # staged SDN config, so the ips endpoints accept no lock-token.
     TEST_IP = "10.241.0.10"
-    ips_create = r.pve("sdn", "vnet", "ips", "create", Isolation.SDN_VNET,
+    ips_create = r.pmx("sdn", "vnet", "ips", "create", Isolation.SDN_VNET,
                        "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE)
     if ips_create.rc != 0:
         reason_ips = (ips_create.err.strip() or ips_create.out.strip())[:120]
@@ -3964,7 +3964,7 @@ def sdn_objects_lifecycle(r: Runner) -> None:
                        "sdn", "vnet", "ips", "delete", Isolation.SDN_VNET,
                        "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE, "--yes")
 
-    # ---- vnet firewall on the isolated pvecli0 vnet (staged-only) -----------
+    # ---- vnet firewall on the isolated pmxcli0 vnet (staged-only) -----------
     # A disabled rule (--enable 0) is appended, read back, edited, then deleted,
     # and a forward policy is staged then reverted. The vnet firewall is never
     # enabled (--enable is never set) and nothing is applied, so no guest traffic
@@ -4000,7 +4000,7 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         r.step("sdn", "vnet fw options get", f"vnet firewall options get {vnet}",
                "sdn", "vnet", "firewall", "options", "get", vnet, json_out=True)
         # Stage a forward policy WITHOUT enabling the firewall (--enable is never
-        # passed) on the isolated, guest-free pvecli0 vnet; the edit is staged
+        # passed) on the isolated, guest-free pmxcli0 vnet; the edit is staged
         # only (never applied) and reverted below, so no guest traffic is touched.
         try:
             r.step("sdn", "vnet fw options set", f"vnet firewall options set {vnet}",
@@ -4047,7 +4047,7 @@ def storage_transfer_lifecycle(r: Runner) -> None:
     Both transfer verbs create a real volume on shared lab storage; now that a
     `storage volume delete` verb exists, each artifact is removed in a finally
     block, so nothing is left behind. The payloads are inert and namespaced with
-    the pve-cli prefix: a short marker string for the upload, and Proxmox's own
+    the pmx-cli prefix: a short marker string for the upload, and Proxmox's own
     small aplinfo.dat for the URL download (the same download.proxmox.com host
     the container-template fetch already depends on). download-url reaches an
     external host, so a network failure records SKIP rather than failing.
@@ -4057,7 +4057,7 @@ def storage_transfer_lifecycle(r: Runner) -> None:
     dl_name = Isolation.NAME_PREFIX + "download.iso"
     up_volid = f"{TMPL_STORAGE}:iso/{up_name}"
     dl_volid = f"{TMPL_STORAGE}:iso/{dl_name}"
-    tmp = tempfile.mkdtemp(prefix="pve-cli-e2e-")
+    tmp = tempfile.mkdtemp(prefix="pmx-cli-e2e-")
     iso_path = os.path.join(tmp, up_name)
     try:
         with open(iso_path, "w", encoding="ascii") as fh:
@@ -4121,7 +4121,7 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
         print()
 
         # Access + storage verb blocks run regardless of --vm-only/--ct-only:
-        # they are independent of the guests and isolated by the pve-cli prefix.
+        # they are independent of the guests and isolated by the pmx-cli prefix.
         access_lifecycle(r)
         print()
         domain_lifecycle(r)

@@ -14,11 +14,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
-	selfversion "github.com/fivetwenty-io/pve-cli/internal/version"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	selfversion "github.com/fivetwenty-io/pmx-cli/internal/version"
 )
 
 // fakeClient builds an APIClient pointed at the fake server. It splits the
@@ -57,7 +57,7 @@ func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 	return cmd.Execute()
 }
 
-// TestVersion_ClusterAPI_Table verifies that `pve version` queries GET /version
+// TestVersion_ClusterAPI_Table verifies that `pmx version` queries GET /version
 // and renders the cluster API version columns in table form.
 func TestVersion_ClusterAPI_Table(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -159,7 +159,7 @@ func TestVersion_ClusterAPI_ServerError(t *testing.T) {
 	require.ErrorContains(t, err, "get cluster version")
 }
 
-// TestVersion_Client_BuildInfo verifies that `pve version client` reports CLI
+// TestVersion_Client_BuildInfo verifies that `pmx version client` reports CLI
 // build information without contacting the server (API may be nil).
 func TestVersion_Client_BuildInfo(t *testing.T) {
 	deps := &cli.Deps{API: nil, Out: output.New(), Format: output.FormatTable}

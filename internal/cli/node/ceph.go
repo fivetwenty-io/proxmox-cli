@@ -9,9 +9,9 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // renderRawMessage renders a *json.RawMessage response by inspecting the JSON
@@ -268,7 +268,7 @@ func newCephCfgValueCmd() *cobra.Command {
 	return cmd
 }
 
-// newCephLogCmd builds `pve node ceph log`.
+// newCephLogCmd builds `pmx node ceph log`.
 func newCephLogCmd() *cobra.Command {
 	var (
 		limit int64
@@ -305,7 +305,7 @@ func newCephLogCmd() *cobra.Command {
 	return cmd
 }
 
-// newCephRulesCmd builds `pve node ceph rules`.
+// newCephRulesCmd builds `pmx node ceph rules`.
 func newCephRulesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rules",
@@ -326,7 +326,7 @@ func newCephRulesCmd() *cobra.Command {
 	}
 }
 
-// newCephCrushCmd builds `pve node ceph crush`.
+// newCephCrushCmd builds `pmx node ceph crush`.
 func newCephCrushCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "crush",

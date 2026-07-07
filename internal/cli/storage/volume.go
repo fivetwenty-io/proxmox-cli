@@ -9,12 +9,12 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newVolumeCmd builds `pve storage volume` — inspect and manage individual
+// newVolumeCmd builds `pmx storage volume` — inspect and manage individual
 // volumes (a backup, disk image, ISO, or template) stored on a storage.
 func newVolumeCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -45,7 +45,7 @@ func storageOfVolume(volume string) (string, error) {
 	return storage, nil
 }
 
-// newVolumeGetCmd builds `pve storage volume get <volume>`.
+// newVolumeGetCmd builds `pmx storage volume get <volume>`.
 func newVolumeGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <volume>",
@@ -54,7 +54,7 @@ func newVolumeGetCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			volume := args[0]
 			storage, err := storageOfVolume(volume)
@@ -83,7 +83,7 @@ func newVolumeGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeSetCmd builds `pve storage volume set <volume>`.
+// newVolumeSetCmd builds `pmx storage volume set <volume>`.
 func newVolumeSetCmd() *cobra.Command {
 	var (
 		notes     string
@@ -99,7 +99,7 @@ func newVolumeSetCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			volume := args[0]
 			storage, err := storageOfVolume(volume)
@@ -132,7 +132,7 @@ func newVolumeSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeDeleteCmd builds `pve storage volume delete <volume>`.
+// newVolumeDeleteCmd builds `pmx storage volume delete <volume>`.
 func newVolumeDeleteCmd() *cobra.Command {
 	var (
 		yes   bool
@@ -149,7 +149,7 @@ func newVolumeDeleteCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			volume := args[0]
 			if !yes {
@@ -194,7 +194,7 @@ func newVolumeDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeAllocCmd builds `pve storage volume alloc`.
+// newVolumeAllocCmd builds `pmx storage volume alloc`.
 func newVolumeAllocCmd() *cobra.Command {
 	var (
 		vmid     int64
@@ -214,7 +214,7 @@ func newVolumeAllocCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
 			// Extract <storage> from the filename prefix (e.g. "local-lvm:vm-100-disk-0").
@@ -268,7 +268,7 @@ func newVolumeAllocCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeCopyCmd builds `pve storage volume copy <volume>`.
+// newVolumeCopyCmd builds `pmx storage volume copy <volume>`.
 func newVolumeCopyCmd() *cobra.Command {
 	var (
 		target     string
@@ -284,7 +284,7 @@ func newVolumeCopyCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 			volume := args[0]
 			storage, err := storageOfVolume(volume)

@@ -130,36 +130,36 @@ def run(ctx: Ctx) -> None:
     else:
         ctx.skip("group get", "no group returned")
 
-    # The mutate phase provisions an isolated `pve-cli-probe` user/group/token
-    # and an ACL on the `pve-cli` pool path, exercises every mutating verb, and
+    # The mutate phase provisions an isolated `pmx-cli-probe` user/group/token
+    # and an ACL on the `pmx-cli` pool path, exercises every mutating verb, and
     # tears them down — so these are covered live by it. (Role create/delete is
     # read-only in the CLI, so there is no such verb to exercise: not a gap.)
     ctx.defer("user create/delete", "mutates access control — covered live by `e2e --mutate`",
-              f"pve access user create {Isolation.NAME_PREFIX}probe@pve",
+              f"pmx access user create {Isolation.NAME_PREFIX}probe@pve",
               isolation=True, live_covered=True)
     ctx.defer("group create/delete", "mutates access control — covered live by `e2e --mutate`",
-              f"pve access group create {Isolation.NAME_PREFIX}probe",
+              f"pmx access group create {Isolation.NAME_PREFIX}probe",
               isolation=True, live_covered=True)
     ctx.defer("user token create/delete", "issues/revokes credentials — covered live by `e2e --mutate`",
-              f"pve access user token create {Isolation.NAME_PREFIX}probe@pve e2e",
+              f"pmx access user token create {Isolation.NAME_PREFIX}probe@pve e2e",
               isolation=True, live_covered=True)
     ctx.defer("acl set", "grants/revokes permissions — covered live by `e2e --mutate`",
-              f"pve access acl set --path /pool/{Isolation.POOL} --roles PVEAuditor --users <user>",
+              f"pmx access acl set --path /pool/{Isolation.POOL} --roles PVEAuditor --users <user>",
               isolation=True, live_covered=True)
     ctx.defer("password set", "changes a user password — covered live by `e2e --mutate`",
-              f"pve access password set --userid {Isolation.NAME_PREFIX}probe@pve",
+              f"pmx access password set --userid {Isolation.NAME_PREFIX}probe@pve",
               isolation=True, live_covered=True)
     ctx.defer("domain create/set/delete", "creates an auth realm — covered live by `e2e --mutate`",
-              f"pve access domain create {Isolation.NAME_PREFIX}realm --type ldap",
+              f"pmx access domain create {Isolation.NAME_PREFIX}realm --type ldap",
               isolation=True, live_covered=True)
     ctx.defer("domain sync", "syncs users from an ldap/ad realm — covered live by `e2e --mutate`",
-              f"pve access domain sync {Isolation.NAME_PREFIX}realm --dry-run",
+              f"pmx access domain sync {Isolation.NAME_PREFIX}realm --dry-run",
               isolation=True, live_covered=True)
     ctx.defer("role create/set/delete", "mutates a role definition — covered live by `e2e --mutate`",
-              f"pve access role create e2e-{Isolation.NAME_PREFIX}role --privs VM.Audit",
+              f"pmx access role create e2e-{Isolation.NAME_PREFIX}role --privs VM.Audit",
               isolation=True, live_covered=True)
     ctx.defer("tfa unlock", "clears a user's tfa lockout — covered live by `e2e --mutate`",
-              f"pve access tfa unlock {Isolation.NAME_PREFIX}probe@pve --yes",
+              f"pmx access tfa unlock {Isolation.NAME_PREFIX}probe@pmx --yes",
               isolation=True, live_covered=True)
     # Second-factor enrollment/edits hit /access/tfa/{userid}, which the PVE API
     # makes unavailable to API-token auth ("URI not available with API token, need
@@ -171,15 +171,15 @@ def run(ctx: Ctx) -> None:
     ctx.defer("tfa create",
               "enrolls a second factor — covered live by `e2e --mutate`, which opens a "
               "ticket session for a throwaway user and self-enrolls a TOTP factor",
-              "pve access tfa create <user> --type totp",
+              "pmx access tfa create <user> --type totp",
               isolation=True, live_covered=True)
     ctx.defer("tfa set",
               "updates a tfa entry — covered live by `e2e --mutate`, which edits the "
               "throwaway user's own TOTP entry over a ticket session",
-              "pve access tfa set <user> <id> --enable",
+              "pmx access tfa set <user> <id> --enable",
               isolation=True, live_covered=True)
     ctx.defer("tfa delete",
               "removes a user's second factor — covered live by `e2e --mutate`, which "
               "removes the throwaway user's own TOTP entry over a ticket session",
-              "pve access tfa delete <user> <id> --yes",
+              "pmx access tfa delete <user> <id> --yes",
               isolation=True, live_covered=True)

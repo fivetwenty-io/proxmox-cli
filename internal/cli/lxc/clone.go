@@ -5,11 +5,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
 )
 
-// newCloneCmd builds `pve lxc clone <vmid> --newid N [flags]`.
+// newCloneCmd builds `pmx lxc clone <vmid> --newid N [flags]`.
 //
 // The clone is created as an asynchronous PVE task (UPID). The command blocks
 // until the task reaches a terminal state unless --async is given. Only flags

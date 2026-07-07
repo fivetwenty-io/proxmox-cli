@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/version"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 func TestNewFakePBS_DefaultVersionEndpoint(t *testing.T) {

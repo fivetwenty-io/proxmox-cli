@@ -9,15 +9,15 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newStatusCmd builds `pve task status <upid>`.
+// newStatusCmd builds `pmx task status <upid>`.
 //
 // The node is parsed directly from the UPID (field 1 of the colon-separated
-// string), so neither --node nor PVE_NODE is required.  This mirrors the
-// approach used by `pve task wait`, which also derives the node from the UPID
+// string), so neither --node nor PMX_NODE is required.  This mirrors the
+// approach used by `pmx task wait`, which also derives the node from the UPID
 // rather than requiring it via deps.Node.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{

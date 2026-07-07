@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the human-readable release string. Override at build time via
-// -ldflags "-X github.com/fivetwenty-io/pve-cli/internal/version.Version=<ver>".
+// -ldflags "-X github.com/fivetwenty-io/pmx-cli/internal/version.Version=<ver>".
 // It is a var (not a const) so the linker's -X flag can inject the release tag.
 var Version = "0.1.0-dev"
 
@@ -50,11 +50,11 @@ func GetInfo() Info {
 }
 
 // String returns a single human-readable line summarising the build info.
-// Format: "pve version <Version> (commit: <Commit>, built: <Date>, go: <GoVersion>, os/arch: <OS>/<Arch>)"
+// Format: "pmx version <Version> (commit: <Commit>, built: <Date>, go: <GoVersion>, os/arch: <OS>/<Arch>)"
 func String() string {
 	i := GetInfo()
 	return fmt.Sprintf(
-		"pve version %s (commit: %s, built: %s, go: %s, os/arch: %s/%s)",
+		"pmx version %s (commit: %s, built: %s, go: %s, os/arch: %s/%s)",
 		i.Version, i.Commit, i.Date, i.GoVersion, i.OS, i.Arch,
 	)
 }

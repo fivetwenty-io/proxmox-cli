@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newNotifMatcherCmd builds `pve pbs notification matcher` — manage
+// newNotifMatcherCmd builds `pmx pbs notification matcher` — manage
 // notification matchers that route notifications to endpoints
 // (/config/notifications/matchers CRUD), and inspect the read-only
 // metadata-field directories matchers can filter on.
@@ -52,7 +52,7 @@ type notifMatcherEntry struct {
 	Target        []string `json:"target,omitempty"`
 }
 
-// newNotifMatcherLsCmd builds `pve pbs notification matcher ls` — list
+// newNotifMatcherLsCmd builds `pmx pbs notification matcher ls` — list
 // every configured matcher (GET /config/notifications/matchers).
 func newNotifMatcherLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -101,7 +101,7 @@ func newNotifMatcherLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifMatcherShowCmd builds `pve pbs notification matcher show <name>`
+// newNotifMatcherShowCmd builds `pmx pbs notification matcher show <name>`
 // — show a single matcher's configuration
 // (GET /config/notifications/matchers/{name}).
 func newNotifMatcherShowCmd() *cobra.Command {
@@ -196,7 +196,7 @@ func registerNotifMatcherUpdateFlags(cmd *cobra.Command, mf *notifMatcherFlags) 
 	f.StringVar(&mf.digest, "digest", "", "only update if the current config digest matches")
 }
 
-// newNotifMatcherAddCmd builds `pve pbs notification matcher add <name>` —
+// newNotifMatcherAddCmd builds `pmx pbs notification matcher add <name>` —
 // create a notification matcher (POST /config/notifications/matchers).
 // Every option is optional and only forwarded when explicitly set. The
 // binding is error-only (the API returns null on success), so this is a
@@ -268,7 +268,7 @@ func newNotifMatcherAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifMatcherUpdateCmd builds `pve pbs notification matcher update
+// newNotifMatcherUpdateCmd builds `pmx pbs notification matcher update
 // <name>` — update a notification matcher (PUT
 // /config/notifications/matchers/{name}). Only flags explicitly set are
 // sent; use --delete to reset properties to their default.
@@ -356,7 +356,7 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifMatcherDeleteCmd builds `pve pbs notification matcher delete
+// newNotifMatcherDeleteCmd builds `pmx pbs notification matcher delete
 // <name>` — remove a notification matcher (DELETE
 // /config/notifications/matchers/{name}). The binding takes no digest
 // parameter — PBS does not support conditional deletes for notification
@@ -399,7 +399,7 @@ type notifMatcherFieldEntry struct {
 	Name string `json:"name"`
 }
 
-// newNotifMatcherFieldsCmd builds `pve pbs notification matcher fields` —
+// newNotifMatcherFieldsCmd builds `pmx pbs notification matcher fields` —
 // inspect the read-only directory of matchable metadata field names.
 func newNotifMatcherFieldsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -411,7 +411,7 @@ func newNotifMatcherFieldsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifMatcherFieldsLsCmd builds `pve pbs notification matcher fields
+// newNotifMatcherFieldsLsCmd builds `pmx pbs notification matcher fields
 // ls` — list every known matchable metadata field name
 // (GET /config/notifications/matcher-fields).
 func newNotifMatcherFieldsLsCmd() *cobra.Command {
@@ -466,7 +466,7 @@ type notifMatcherFieldValueEntry struct {
 	Value   string  `json:"value"`
 }
 
-// newNotifMatcherFieldValuesCmd builds `pve pbs notification matcher
+// newNotifMatcherFieldValuesCmd builds `pmx pbs notification matcher
 // field-values` — inspect the read-only directory of known metadata field
 // values.
 func newNotifMatcherFieldValuesCmd() *cobra.Command {
@@ -479,7 +479,7 @@ func newNotifMatcherFieldValuesCmd() *cobra.Command {
 	return cmd
 }
 
-// newNotifMatcherFieldValuesLsCmd builds `pve pbs notification matcher
+// newNotifMatcherFieldValuesLsCmd builds `pmx pbs notification matcher
 // field-values ls` — list every known metadata field value
 // (GET /config/notifications/matcher-field-values).
 func newNotifMatcherFieldValuesLsCmd() *cobra.Command {

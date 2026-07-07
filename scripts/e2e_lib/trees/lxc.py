@@ -185,7 +185,7 @@ def run(ctx: Ctx) -> None:
                   node=n, validate=has_features)
 
         # permissions: ACL entries scoped to the container's /vms/{vmid} path
-        # (shared with `pve qemu permissions`, since both guest kinds sit under
+        # (shared with `pmx qemu permissions`, since both guest kinds sit under
         # the same path grammar). `list`/`effective` are read-only ACL queries;
         # `grant`/`revoke` mutate cluster-wide ACLs and are deferred below.
         def has_permissions_effective(res: CmdResult) -> str | None:
@@ -231,58 +231,58 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "create",
         "creates a container — covered live by `e2e --mutate`",
-        f"pve lxc create ... --pool {Isolation.POOL} --tags {Isolation.TAG}",
+        f"pmx lxc create ... --pool {Isolation.POOL} --tags {Isolation.TAG}",
         isolation=True, live_covered=True,
     )
     ctx.defer("start/stop/shutdown/reboot/suspend/resume",
               "changes CT power state — covered live by `e2e --mutate`",
-              "pve lxc start <ctid> --node <node>", isolation=True, live_covered=True)
+              "pmx lxc start <ctid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("delete", "destroys a container — covered live by `e2e --mutate`",
-              "pve lxc delete <ctid> --node <node>", isolation=True, live_covered=True)
+              "pmx lxc delete <ctid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("snapshot create/rollback/delete",
               "mutates CT snapshots — covered live by `e2e --mutate`",
-              "pve lxc snapshot create <ctid> <name>", isolation=True, live_covered=True)
+              "pmx lxc snapshot create <ctid> <name>", isolation=True, live_covered=True)
     ctx.defer(
         "clone",
         "clones a container — covered live by `e2e --mutate`",
-        f"pve lxc clone <ctid> --newid <id> --pool {Isolation.POOL} --hostname {Isolation.NAME_PREFIX}ctclone",
+        f"pmx lxc clone <ctid> --newid <id> --pool {Isolation.POOL} --hostname {Isolation.NAME_PREFIX}ctclone",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "migrate",
         "migrates a container to another node — covered live by `e2e --mutate` on multi-node clusters",
-        "pve lxc migrate <ctid> --target-node <node>",
+        "pmx lxc migrate <ctid> --target-node <node>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "disk resize",
         "grows a container volume — covered live by `e2e --mutate`",
-        "pve lxc disk resize <ctid> --disk rootfs --size +1G",
+        "pmx lxc disk resize <ctid> --disk rootfs --size +1G",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "disk move",
         "relocates a container volume — covered live by `e2e --mutate` when a second rootdir storage exists",
-        "pve lxc disk move <ctid> --volume rootfs --storage <other>",
+        "pmx lxc disk move <ctid> --volume rootfs --storage <other>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "firewall rules/ipset/alias create-delete + options set",
         "mutates a CT's firewall config — covered live by `e2e --mutate` on the isolated container",
-        "pve lxc firewall rules create <ctid> --type in --action ACCEPT --proto tcp --dport 22",
+        "pmx lxc firewall rules create <ctid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "console connect (websocket/spice viewer)",
         "opening the proxied console session needs an interactive viewer — the "
         "CLI only returns the ticket, which the read-only sweep validates",
-        "pve lxc console <ctid> --type spice",
+        "pmx lxc console <ctid> --type spice",
     )
     ctx.defer(
         "remote-migrate",
         "migrates a container to a different Proxmox VE cluster — requires two "
         "live clusters; no rollback without manual intervention; not exercised live",
-        "pve lxc remote-migrate <ctid> --yes --target-endpoint https://remote:8006 "
+        "pmx lxc remote-migrate <ctid> --yes --target-endpoint https://remote:8006 "
         "--target-storage local-lvm",
         isolation=False, live_covered=False,
     )
@@ -291,7 +291,7 @@ def run(ctx: Ctx) -> None:
         "converts the discovered container into a template — irreversible for that "
         "instance and only sensible as the terminal step of a dedicated throwaway "
         "guest lifecycle; not exercised against a live container; covered by unit tests",
-        "pve lxc to-template <ctid> --node <node>",
+        "pmx lxc to-template <ctid> --node <node>",
         isolation=True, live_covered=False,
     )
     # `security` mutations have no read-only form and are not wired into the
@@ -304,34 +304,34 @@ def run(ctx: Ctx) -> None:
         "rewrites the container capability whitelist in /etc/pve/lxc/<vmid>.conf "
         "over root ssh, so it cannot be driven head-less by the read-only sweep; "
         "not wired into the mutate phase; covered by unit tests",
-        "pve lxc security caps set <ctid> --preset minimal",
+        "pmx lxc security caps set <ctid> --preset minimal",
     )
     ctx.defer(
         "security caps add",
         "grants a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so "
         "it cannot be driven head-less by the read-only sweep; not wired into the "
         "mutate phase; covered by unit tests",
-        "pve lxc security caps add <ctid> net_admin",
+        "pmx lxc security caps add <ctid> net_admin",
     )
     ctx.defer(
         "security caps remove",
         "revokes a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so "
         "it cannot be driven head-less by the read-only sweep; not wired into the "
         "mutate phase; covered by unit tests",
-        "pve lxc security caps remove <ctid> net_admin",
+        "pmx lxc security caps remove <ctid> net_admin",
     )
     ctx.defer(
         "security caps reset",
         "clears the capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, "
         "so it cannot be driven head-less by the read-only sweep; not wired into "
         "the mutate phase; covered by unit tests",
-        "pve lxc security caps reset <ctid>",
+        "pmx lxc security caps reset <ctid>",
     )
     ctx.defer(
         "security features set",
         "mutates the container features= flags via the config API; not wired into "
         "the mutate phase; covered by unit tests",
-        "pve lxc security features set <ctid> --nesting",
+        "pmx lxc security features set <ctid> --nesting",
     )
     ctx.defer(
         "security caps show --effective",
@@ -339,7 +339,7 @@ def run(ctx: Ctx) -> None:
         "root ssh (the configured caps read is exercised by the sweep above); it "
         "needs a running container and root ssh, so it is not driven head-less; "
         "covered by unit tests",
-        "pve lxc security caps show <ctid> --effective",
+        "pmx lxc security caps show <ctid> --effective",
     )
     # `permissions grant`/`revoke` mutate cluster-wide ACLs (not scoped to the
     # isolated container's own resources), so they are not wired into the
@@ -349,13 +349,13 @@ def run(ctx: Ctx) -> None:
         "permissions grant",
         "grants ACL roles on the container's /vms/{vmid} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve lxc permissions grant <ctid> --roles PVEVMAdmin --users alice@pve",
+        "pmx lxc permissions grant <ctid> --roles PVEVMAdmin --users alice@pve",
     )
     ctx.defer(
         "permissions revoke",
         "revokes ACL roles on the container's /vms/{vmid} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pve lxc permissions revoke <ctid> --roles PVEVMAdmin --users alice@pve",
+        "pmx lxc permissions revoke <ctid> --roles PVEVMAdmin --users alice@pve",
     )
     # `firewall alias get` / `firewall ipset get-member` read a single
     # pre-existing entry by name. A fresh lab has none by default, and the
@@ -366,11 +366,11 @@ def run(ctx: Ctx) -> None:
         "firewall alias get",
         "reads a single firewall alias by name — needs a pre-existing alias; "
         "not wired into the mutate phase; covered by unit tests",
-        "pve lxc firewall alias get <ctid> <name>",
+        "pmx lxc firewall alias get <ctid> <name>",
     )
     ctx.defer(
         "firewall ipset get-member",
         "reads a single CIDR entry of an IP set — needs a pre-existing "
         "member; not wired into the mutate phase; covered by unit tests",
-        "pve lxc firewall ipset get-member <ctid> <name> <cidr>",
+        "pmx lxc firewall ipset get-member <ctid> <name> <cidr>",
     )

@@ -21,15 +21,15 @@ from dataclasses import dataclass, field
 
 class Isolation:
     # Every created resource carries this tag (qemu/lxc `--tags`, pool grouping).
-    TAG = "pve-cli"
+    TAG = "pmx-cli"
     # Created VMs/CTs join this resource pool for one-glance identification.
-    POOL = "pve-cli"
+    POOL = "pmx-cli"
     # Names are prefixed so a stray resource is obviously ours.
-    NAME_PREFIX = "pve-cli-"
+    NAME_PREFIX = "pmx-cli-"
     # A dedicated SDN simple zone + vnet keeps test NICs off the host bridge and
     # off the 172.x management subnet entirely.
-    SDN_ZONE = "pvecli"          # PVE zone id: <=8 chars, alnum
-    SDN_VNET = "pvecli0"
+    SDN_ZONE = "pmxcli"          # PVE zone id: <=8 chars, alnum
+    SDN_VNET = "pmxcli0"
     # Private subnet within the 172.16/12 space, deliberately distinct from the
     # bosh-pve-cpi networks (172.16.5.0/24, 172.31.0.0/24) and off the lab host
     # management network.

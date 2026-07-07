@@ -8,7 +8,7 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
+	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
 )
 
 // blockingReader fails the test if Read is ever called, so a test using it
@@ -139,16 +139,16 @@ func TestNewManualVerifyCallback_TTY_FirstLineDecidesTrailingDataIgnored(t *test
 func TestFingerprintCachePath_PerContextUnderConfigDir(t *testing.T) {
 	t.Parallel()
 
-	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "prod")
+	got := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "prod")
 
-	require.Equal(t, "/home/user/.config/pve/fingerprints/prod.json", got)
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/prod.json", got)
 }
 
 func TestFingerprintCachePath_DistinctContextsDistinctFiles(t *testing.T) {
 	t.Parallel()
 
-	a := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "prod")
-	b := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "staging")
+	a := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "prod")
+	b := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "staging")
 
 	require.NotEqual(t, a, b)
 }
@@ -156,23 +156,23 @@ func TestFingerprintCachePath_DistinctContextsDistinctFiles(t *testing.T) {
 func TestFingerprintCachePath_SanitizesUnsafeContextNameCharacters(t *testing.T) {
 	t.Parallel()
 
-	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "../../etc/passwd")
+	got := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "../../etc/passwd")
 
 	// The encoded file name must stay a single path component directly under
 	// the fingerprints directory: no path separators survive, so the result
 	// cannot escape that directory regardless of how the context name is
 	// spelled. Each '.' encodes to "_2E" and each '/' encodes to "_2F".
-	require.Equal(t, "/home/user/.config/pve/fingerprints/_2E_2E_2F_2E_2E_2Fetc_2Fpasswd.json", got)
-	require.NotContains(t, got[len("/home/user/.config/pve/fingerprints/"):], "/")
-	require.NotContains(t, got[len("/home/user/.config/pve/fingerprints/"):], "\\")
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/_2E_2E_2F_2E_2E_2Fetc_2Fpasswd.json", got)
+	require.NotContains(t, got[len("/home/user/.config/pmx/fingerprints/"):], "/")
+	require.NotContains(t, got[len("/home/user/.config/pmx/fingerprints/"):], "\\")
 }
 
 func TestFingerprintCachePath_EmptyContextNameCollapsesToPlaceholder(t *testing.T) {
 	t.Parallel()
 
-	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "")
+	got := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "")
 
-	require.Equal(t, "/home/user/.config/pve/fingerprints/_.json", got)
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/_.json", got)
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +192,7 @@ func TestFingerprintCachePath_DifferingOnlyByDisallowedChar_NoCollision(t *testi
 	seen := make(map[string]string, len(names))
 
 	for _, name := range names {
-		path := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+		path := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", name)
 
 		if other, ok := seen[path]; ok {
 			t.Fatalf("context names %q and %q collide on cache path %q", other, name, path)
@@ -211,9 +211,9 @@ func TestFingerprintCachePath_PassthroughAlphabetUnchanged(t *testing.T) {
 	// digits, and '-') must encode byte-for-byte identically to the pre-fix
 	// sanitizer, so existing cache files for these names remain valid after
 	// the fix.
-	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "Prod-Cluster-01")
+	got := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "Prod-Cluster-01")
 
-	require.Equal(t, "/home/user/.config/pve/fingerprints/Prod-Cluster-01.json", got)
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/Prod-Cluster-01.json", got)
 }
 
 func TestFingerprintCachePath_EncodingIsInjectiveForAdversarialInputs(t *testing.T) {
@@ -228,7 +228,7 @@ func TestFingerprintCachePath_EncodingIsInjectiveForAdversarialInputs(t *testing
 	seen := make(map[string]string, len(names))
 
 	for _, name := range names {
-		path := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+		path := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", name)
 
 		if other, ok := seen[path]; ok {
 			t.Fatalf("context names %q and %q collide on cache path %q", other, name, path)
@@ -260,7 +260,7 @@ func TestFingerprintCachePath_EncodingIsCollisionFreeOverRandomSet(t *testing.T)
 	seen := make(map[string]string, len(names))
 
 	for _, name := range names {
-		path := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+		path := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", name)
 
 		if other, ok := seen[path]; ok && other != name {
 			t.Fatalf("context names %q and %q collide on cache path %q", other, name, path)
@@ -277,11 +277,11 @@ func TestFingerprintCachePath_MultiByteRuneEncodesPerByteAndStaysFilesystemSafe(
 	// multi-byte rune must be escaped independently, and the resulting file
 	// name must contain only ASCII letters, digits, '-', and '_' so it is
 	// safe on any filesystem regardless of locale/encoding support.
-	got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", "ctx-ü")
+	got := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", "ctx-ü")
 
-	require.Equal(t, "/home/user/.config/pve/fingerprints/ctx-_C3_BC.json", got)
+	require.Equal(t, "/home/user/.config/pmx/fingerprints/ctx-_C3_BC.json", got)
 
-	fileName := got[len("/home/user/.config/pve/fingerprints/") : len(got)-len(".json")]
+	fileName := got[len("/home/user/.config/pmx/fingerprints/") : len(got)-len(".json")]
 	for _, r := range fileName {
 		safe := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_'
 		require.True(t, safe, "file name %q contains unsafe rune %q", fileName, r)
@@ -300,15 +300,15 @@ func FuzzFingerprintCacheFileName(f *testing.F) {
 	f.Fuzz(func(t *testing.T, name string) {
 		// Must never panic, and must never produce a path separator that
 		// could escape the fingerprints directory.
-		got := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", name)
+		got := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", name)
 
-		fileName := got[len("/home/user/.config/pve/fingerprints/") : len(got)-len(".json")]
+		fileName := got[len("/home/user/.config/pmx/fingerprints/") : len(got)-len(".json")]
 		require.NotContains(t, fileName, "/")
 		require.NotContains(t, fileName, "\\")
 
 		// Encoding a second, different name must not collide with this one.
 		other := name + "-distinct-suffix-marker"
-		gotOther := apiclient.FingerprintCachePath("/home/user/.config/pve/config.yml", other)
+		gotOther := apiclient.FingerprintCachePath("/home/user/.config/pmx/config.yml", other)
 		require.NotEqual(t, got, gotOther)
 	})
 }

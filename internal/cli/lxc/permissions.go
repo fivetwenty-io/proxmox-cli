@@ -8,9 +8,9 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/permshared"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // permissionsAclPath derives a container's ACL path from its resolved VMID:
@@ -20,20 +20,20 @@ func permissionsAclPath(vmid string) string {
 	return "/vms/" + vmid
 }
 
-// newPermissionsCmd builds `pve lxc permissions` and its sub-commands: a
-// thin, container-scoped wrapper over the global `pve access acl`/`pve
+// newPermissionsCmd builds `pmx lxc permissions` and its sub-commands: a
+// thin, container-scoped wrapper over the global `pmx access acl`/`pve
 // access permissions` commands that derives the container's ACL path
 // automatically.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Inspect and manage ACL entries scoped to a container",
-		Long: "Scope the global 'pve access acl' and 'pve access permissions' commands to a " +
+		Long: "Scope the global 'pmx access acl' and 'pmx access permissions' commands to a " +
 			"single container's ACL path, /vms/{vmid} (the same path grammar shared by QEMU VMs " +
-			"under 'pve qemu permissions'), so operators never have to hand-type it. 'list' and " +
+			"under 'pmx qemu permissions'), so operators never have to hand-type it. 'list' and " +
 			"'effective' are read-only views; 'grant' and 'revoke' are thin wrappers over the " +
 			"underlying access.acl update call. For any ACL path other than a single " +
-			"container's, use 'pve access acl'/'pve access permissions' directly.",
+			"container's, use 'pmx access acl'/'pmx access permissions' directly.",
 	}
 	cmd.AddCommand(
 		newPermissionsListCmd(),
@@ -44,7 +44,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pve lxc permissions list <vmid|name>`.
+// newPermissionsListCmd builds `pmx lxc permissions list <vmid|name>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -90,7 +90,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pve lxc permissions effective <vmid|name>`.
+// newPermissionsEffectiveCmd builds `pmx lxc permissions effective <vmid|name>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -131,12 +131,12 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantCmd builds `pve lxc permissions grant <vmid|name>`.
+// newPermissionsGrantCmd builds `pmx lxc permissions grant <vmid|name>`.
 func newPermissionsGrantCmd() *cobra.Command {
 	return newPermissionsGrantRevokeCmd(false)
 }
 
-// newPermissionsRevokeCmd builds `pve lxc permissions revoke <vmid|name>`.
+// newPermissionsRevokeCmd builds `pmx lxc permissions revoke <vmid|name>`.
 func newPermissionsRevokeCmd() *cobra.Command {
 	return newPermissionsGrantRevokeCmd(true)
 }

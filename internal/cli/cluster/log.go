@@ -8,8 +8,8 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
 // clusterLogEntry is the decoded shape of one entry from cluster.ListLog.
@@ -42,7 +42,7 @@ func scalarCell(raw json.RawMessage) string {
 	return string(raw)
 }
 
-// newLogCmd builds `pve cluster log`.
+// newLogCmd builds `pmx cluster log`.
 func newLogCmd() *cobra.Command {
 	var maxEntries int64
 

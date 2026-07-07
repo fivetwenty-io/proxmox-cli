@@ -47,7 +47,7 @@ class Ctx:
 
     def run(self, *args: str, node: str | None = None, fmt: str = "json",
             with_context: bool = True) -> CmdResult:
-        """Invoke `pve` with context/output/no-log injected. Never raises.
+        """Invoke `pmx` with context/output/no-log injected. Never raises.
 
         `with_context=False` omits `--context`; used by checks that operate on a
         scratch `--config` file and must not resolve the configured context.
@@ -74,7 +74,7 @@ class Ctx:
     @staticmethod
     def pretty(argv: list[str]) -> str:
         # Strip the absolute binary path for readable reports.
-        shown = ["pve", *argv[1:]]
+        shown = ["pmx", *argv[1:]]
         return " ".join(shown)
 
     # -- check recording -----------------------------------------------------

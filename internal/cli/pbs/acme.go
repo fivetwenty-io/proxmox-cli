@@ -7,13 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newAcmeCmd builds `pve pbs acme` — manage ACME accounts and challenge
+// newAcmeCmd builds `pmx pbs acme` — manage ACME accounts and challenge
 // plugins used to automatically request and renew TLS certificates
 // (/config/acme/account and /config/acme/plugins CRUD), and read the
 // read-only ACME reference data PBS ships (challenge-plugin schema, known
@@ -48,7 +48,7 @@ func newAcmeCmd() *cobra.Command {
 // account
 // ===========================================================================
 
-// newAcmeAccountCmd builds `pve pbs acme account` — manage ACME accounts
+// newAcmeAccountCmd builds `pmx pbs acme account` — manage ACME accounts
 // (/config/acme/account CRUD). Account create/update/delete return null on
 // the wire: unlike PVE, where the equivalent endpoints queue a background
 // task, PBS performs the ACME provider round-trip synchronously and returns
@@ -78,7 +78,7 @@ type acmeAccountListEntry struct {
 	Name string `json:"name"`
 }
 
-// newAcmeAccountLsCmd builds `pve pbs acme account ls` — list every
+// newAcmeAccountLsCmd builds `pmx pbs acme account ls` — list every
 // registered ACME account (GET /config/acme/account).
 func newAcmeAccountLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -123,7 +123,7 @@ func newAcmeAccountLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmeAccountShowCmd builds `pve pbs acme account show <name>` — show one
+// newAcmeAccountShowCmd builds `pmx pbs acme account show <name>` — show one
 // ACME account's provider data (GET /config/acme/account/{name}). The
 // "account" field is the ACME provider's own dynamic account object (its
 // shape is defined by the provider, not PBS), and is rendered losslessly
@@ -160,7 +160,7 @@ func newAcmeAccountShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmeAccountAddCmd builds `pve pbs acme account add <name>` — register a
+// newAcmeAccountAddCmd builds `pmx pbs acme account add <name>` — register a
 // new ACME account (POST /config/acme/account).
 func newAcmeAccountAddCmd() *cobra.Command {
 	var (
@@ -177,7 +177,7 @@ func newAcmeAccountAddCmd() *cobra.Command {
 			"/config/acme/account). --contact is required (comma-separated list of " +
 			"email addresses); every other flag is optional and only forwarded when " +
 			"explicitly set. Pass --tos-url to indicate agreement with the CA's " +
-			"Terms of Service (see 'pve pbs acme tos show').",
+			"Terms of Service (see 'pmx pbs acme tos show').",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -231,7 +231,7 @@ func newAcmeAccountAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmeAccountUpdateCmd builds `pve pbs acme account update <name>` —
+// newAcmeAccountUpdateCmd builds `pmx pbs acme account update <name>` —
 // update an ACME account's contact addresses (PUT /config/acme/account/{name}).
 func newAcmeAccountUpdateCmd() *cobra.Command {
 	var contact string
@@ -271,7 +271,7 @@ func newAcmeAccountUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmeAccountDeleteCmd builds `pve pbs acme account delete <name>` —
+// newAcmeAccountDeleteCmd builds `pmx pbs acme account delete <name>` —
 // deactivate an ACME account (DELETE /config/acme/account/{name}).
 func newAcmeAccountDeleteCmd() *cobra.Command {
 	var (
@@ -319,7 +319,7 @@ func newAcmeAccountDeleteCmd() *cobra.Command {
 // plugin
 // ===========================================================================
 
-// newAcmePluginCmd builds `pve pbs acme plugin` — manage ACME DNS challenge
+// newAcmePluginCmd builds `pmx pbs acme plugin` — manage ACME DNS challenge
 // plugins (/config/acme/plugins CRUD).
 func newAcmePluginCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -351,7 +351,7 @@ type acmePluginEntry struct {
 	ValidationDelay *int64  `json:"validation-delay,omitempty"`
 }
 
-// newAcmePluginLsCmd builds `pve pbs acme plugin ls` — list every configured
+// newAcmePluginLsCmd builds `pmx pbs acme plugin ls` — list every configured
 // ACME challenge plugin (GET /config/acme/plugins). The plugin's DNS API
 // configuration data (potentially large and provider-credential-bearing) is
 // intentionally excluded from the table; it remains available via
@@ -405,7 +405,7 @@ func newAcmePluginLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmePluginShowCmd builds `pve pbs acme plugin show <id>` — show one
+// newAcmePluginShowCmd builds `pmx pbs acme plugin show <id>` — show one
 // ACME challenge plugin's full configuration (GET /config/acme/plugins/{id}).
 func newAcmePluginShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -460,7 +460,7 @@ func registerAcmePluginArgs(cmd *cobra.Command, a *acmePluginArgs) {
 		"extra seconds to wait before requesting validation, to cope with long DNS record TTLs")
 }
 
-// newAcmePluginAddCmd builds `pve pbs acme plugin add <id>` — create an ACME
+// newAcmePluginAddCmd builds `pmx pbs acme plugin add <id>` — create an ACME
 // challenge plugin configuration (POST /config/acme/plugins).
 func newAcmePluginAddCmd() *cobra.Command {
 	var (
@@ -526,7 +526,7 @@ func newAcmePluginAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmePluginUpdateCmd builds `pve pbs acme plugin update <id>` — update an
+// newAcmePluginUpdateCmd builds `pmx pbs acme plugin update <id>` — update an
 // ACME challenge plugin configuration (PUT /config/acme/plugins/{id}).
 func newAcmePluginUpdateCmd() *cobra.Command {
 	var (
@@ -604,7 +604,7 @@ func newAcmePluginUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmePluginDeleteCmd builds `pve pbs acme plugin delete <id>` — remove an
+// newAcmePluginDeleteCmd builds `pmx pbs acme plugin delete <id>` — remove an
 // ACME challenge plugin configuration (DELETE /config/acme/plugins/{id}).
 // This binding takes no request parameters at all (no digest guard).
 func newAcmePluginDeleteCmd() *cobra.Command {
@@ -642,7 +642,7 @@ func newAcmePluginDeleteCmd() *cobra.Command {
 // challenge-schema
 // ===========================================================================
 
-// newAcmeChallengeSchemaCmd builds `pve pbs acme challenge-schema` — read the
+// newAcmeChallengeSchemaCmd builds `pmx pbs acme challenge-schema` — read the
 // parameter schema for every known ACME challenge-plugin type
 // (GET /config/acme/challenge-schema).
 func newAcmeChallengeSchemaCmd() *cobra.Command {
@@ -667,7 +667,7 @@ type acmeChallengeSchemaEntry struct {
 	Type   string          `json:"type"`
 }
 
-// newAcmeChallengeSchemaLsCmd builds `pve pbs acme challenge-schema ls` —
+// newAcmeChallengeSchemaLsCmd builds `pmx pbs acme challenge-schema ls` —
 // list the parameter schema for every known ACME challenge-plugin type
 // (GET /config/acme/challenge-schema).
 func newAcmeChallengeSchemaLsCmd() *cobra.Command {
@@ -718,7 +718,7 @@ func newAcmeChallengeSchemaLsCmd() *cobra.Command {
 // directories
 // ===========================================================================
 
-// newAcmeDirectoriesCmd builds `pve pbs acme directories` — list the known
+// newAcmeDirectoriesCmd builds `pmx pbs acme directories` — list the known
 // ACME directory endpoints PBS ships (GET /config/acme/directories).
 func newAcmeDirectoriesCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -737,7 +737,7 @@ type acmeDirectoryEntry struct {
 	Url  string `json:"url"`
 }
 
-// newAcmeDirectoriesLsCmd builds `pve pbs acme directories ls` — list the
+// newAcmeDirectoriesLsCmd builds `pmx pbs acme directories ls` — list the
 // known ACME directory endpoints (GET /config/acme/directories).
 func newAcmeDirectoriesLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -786,7 +786,7 @@ func newAcmeDirectoriesLsCmd() *cobra.Command {
 // tos
 // ===========================================================================
 
-// newAcmeTosCmd builds `pve pbs acme tos` — read an ACME directory's Terms
+// newAcmeTosCmd builds `pmx pbs acme tos` — read an ACME directory's Terms
 // of Service URL (GET /config/acme/tos).
 func newAcmeTosCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -798,7 +798,7 @@ func newAcmeTosCmd() *cobra.Command {
 	return cmd
 }
 
-// newAcmeTosShowCmd builds `pve pbs acme tos show` — show the Terms of
+// newAcmeTosShowCmd builds `pmx pbs acme tos show` — show the Terms of
 // Service URL for an ACME directory (GET /config/acme/tos). Some directories
 // have no Terms of Service; in that case PBS returns no data, and this
 // renders a message rather than an error.

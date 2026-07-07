@@ -41,9 +41,9 @@ def run(ctx: Ctx) -> None:
         # status: the node is parsed from the UPID itself, so no --node is needed.
         ctx.check("status", "task", "status", str(upid))
 
-    ctx.defer("wait", "blocks until a task finishes", "pve task wait <upid> --node <node>")
+    ctx.defer("wait", "blocks until a task finishes", "pmx task wait <upid> --node <node>")
     # `stop` aborts a running task; it stays deferred in this read-only sweep but
     # is exercised live by the mutate phase against a deterministic server-side
     # shutdown task.
     ctx.defer("stop", "aborts a running task — covered live by `e2e --mutate`",
-              "pve task stop <upid> --node <node>", live_covered=True)
+              "pmx task stop <upid> --node <node>", live_covered=True)

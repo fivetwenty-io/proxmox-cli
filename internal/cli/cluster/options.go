@@ -7,12 +7,12 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newOptionsCmd builds the `pve cluster options` sub-tree, which reads and edits
+// newOptionsCmd builds the `pmx cluster options` sub-tree, which reads and edits
 // the datacenter-wide options stored in datacenter.cfg (console defaults,
 // migration policy, MAC prefix, language, and similar cluster settings).
 func newOptionsCmd() *cobra.Command {
@@ -31,7 +31,7 @@ func newOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newOptionsDescribeCmd builds `pve cluster options describe`, an offline
+// newOptionsDescribeCmd builds `pmx cluster options describe`, an offline
 // catalog of every settable datacenter option from the PVE API schema (see
 // options_schema_gen.go). Unlike get, it needs no cluster connection.
 func newOptionsDescribeCmd() *cobra.Command {
@@ -41,7 +41,7 @@ func newOptionsDescribeCmd() *cobra.Command {
 		Long: "List every settable datacenter option from the PVE API schema: type, " +
 			"built-in default, allowed values, and the sub-keys of dict-encoded options. " +
 			"Runs offline. Pass an option name to show only that option with full descriptions.",
-		CommandHint:         "pve cluster options describe",
+		CommandHint:         "pmx cluster options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }

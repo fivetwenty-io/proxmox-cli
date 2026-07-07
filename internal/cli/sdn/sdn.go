@@ -1,9 +1,9 @@
-// Package sdn implements the `pve sdn` command group: software-defined network
+// Package sdn implements the `pmx sdn` command group: software-defined network
 // zones, vnets, and subnets, plus the apply step that commits pending changes.
 //
 // PVE SDN configuration is staged: creating or deleting a zone, vnet, or subnet
 // only edits the pending config. The changes take effect on the nodes only
-// after `pve sdn apply` (PUT /cluster/sdn) reloads the network configuration.
+// after `pmx sdn apply` (PUT /cluster/sdn) reloads the network configuration.
 package sdn
 
 import (
@@ -14,11 +14,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// Group builds the `pve sdn` command and all of its sub-commands. The
+// Group builds the `pmx sdn` command and all of its sub-commands. The
 // passed *cli.Deps is a placeholder used only so cobra can assemble the command
 // tree; live dependencies are resolved per-invocation via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {
@@ -26,7 +26,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Use:   "sdn",
 		Short: "Manage software-defined networking (zones, vnets, subnets)",
 		Long: "List, create, and delete SDN zones, vnets, and subnets. Changes are " +
-			"staged until committed with `pve sdn apply`.",
+			"staged until committed with `pmx sdn apply`.",
 	}
 	cmd.AddCommand(
 		newApplyCmd(),

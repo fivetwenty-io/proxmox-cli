@@ -1,11 +1,11 @@
-// Package exitcode defines semantic exit code constants and maps pve-apiclient-go errors to exit codes.
+// Package exitcode defines semantic exit code constants and maps proxmox-apiclient-go errors to exit codes.
 package exitcode
 
 import (
 	"errors"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/exec"
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
-	"github.com/fivetwenty-io/pve-cli/internal/exec"
 )
 
 // Exit code constants. Values match the A-02 decision in the design document.
@@ -28,10 +28,10 @@ const (
 	TFARequired = 7
 )
 
-// FromError maps a pve-apiclient-go error value to the appropriate exit code.
+// FromError maps a proxmox-apiclient-go error value to the appropriate exit code.
 //
 // Mapping rules (tested in priority order):
-//  0. *exec.ExitError (child process exit, e.g. from `pve ssh`/`pve rsync`) →
+//  0. *exec.ExitError (child process exit, e.g. from `pmx ssh`/`pmx rsync`) →
 //     the child's own exit code, verbatim, regardless of any other mapping
 //     the error chain might also match
 //  1. TFARequiredError or AuthenticationError with TFA=true → TFARequired (7)

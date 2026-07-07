@@ -6,15 +6,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 func TestZoneSetRequiresChange(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "zone", "set", "pvecli")
+	_, err := run(t, f, "", "zone", "set", "pmxcli")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no changes to set")
 	require.Empty(t, rec)
@@ -23,15 +23,15 @@ func TestZoneSetRequiresChange(t *testing.T) {
 func TestZoneSetForwardsChanged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "zone", "set", "pvecli",
+	out, err := run(t, f, "", "zone", "set", "pmxcli",
 		"--nodes", "pve1,pve2", "--ipam", "pve", "--mtu", "1500")
 	require.NoError(t, err)
 	require.Contains(t, out, "updated")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodPut, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/zones/pvecli", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/zones/pmxcli", rec[0].path)
 	require.Equal(t, "pve1,pve2", rec[0].body["nodes"])
 	require.Equal(t, "pve", rec[0].body["ipam"])
 	require.Equal(t, "1500", rec[0].body["mtu"])
@@ -42,9 +42,9 @@ func TestZoneSetForwardsChanged(t *testing.T) {
 func TestZoneSetOmitsUnsetFlags(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "zone", "set", "pvecli", "--bridge", "vmbr0")
+	_, err := run(t, f, "", "zone", "set", "pmxcli", "--bridge", "vmbr0")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "vmbr0", rec[0].body["bridge"])
@@ -56,9 +56,9 @@ func TestZoneSetOmitsUnsetFlags(t *testing.T) {
 func TestZoneSetDeleteOnly(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	out, err := run(t, f, "", "zone", "set", "pvecli", "--delete", "bridge")
+	out, err := run(t, f, "", "zone", "set", "pmxcli", "--delete", "bridge")
 	require.NoError(t, err)
 	require.Contains(t, out, "updated")
 	require.Len(t, rec, 1)
@@ -68,9 +68,9 @@ func TestZoneSetDeleteOnly(t *testing.T) {
 func TestZoneSetBoolFlag(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pvecli", map[string]any{}, 200)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pmxcli", map[string]any{}, 200)
 
-	_, err := run(t, f, "", "zone", "set", "pvecli", "--advertise-subnets")
+	_, err := run(t, f, "", "zone", "set", "pmxcli", "--advertise-subnets")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
 	require.Equal(t, "1", rec[0].body["advertise-subnets"])
@@ -79,9 +79,9 @@ func TestZoneSetBoolFlag(t *testing.T) {
 func TestZoneSetError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pvecli", nil, 500)
+	record(f, &rec, "PUT /api2/json/cluster/sdn/zones/pmxcli", nil, 500)
 
-	_, err := run(t, f, "", "zone", "set", "pvecli", "--nodes", "pve1")
+	_, err := run(t, f, "", "zone", "set", "pmxcli", "--nodes", "pve1")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "update SDN zone")
 }

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 	"github.com/stretchr/testify/require"
 )
 

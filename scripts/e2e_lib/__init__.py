@@ -1,4 +1,4 @@
-"""pve CLI end-to-end happy-path harness.
+"""pmx CLI end-to-end happy-path harness.
 
 Exercises every command tree's read-only commands against a configured target
 (default: `lab`). Destructive / mutating operations are recorded as deferred

@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
 
 // rsyncFlags holds the options for the rsync sub-command.
@@ -21,7 +21,7 @@ type rsyncFlags struct {
 	exclude  []string
 }
 
-// newRsyncCmd builds `pve node <node> rsync <src> <dst>`.
+// newRsyncCmd builds `pmx node <node> rsync <src> <dst>`.
 //
 // Either <src> or <dst> may carry a "node:" prefix to denote the remote side;
 // that prefix is rewritten to "<user>@<host>:" using the resolved node address.

@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestMappingDir_List verifies `pve cluster mapping dir list` reads
+// TestMappingDir_List verifies `pmx cluster mapping dir list` reads
 // GET /cluster/mapping/dir and renders the focused columns.
 func TestMappingDir_List(t *testing.T) {
 	f, ac := newFakeClient(t)

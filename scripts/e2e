@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
-"""End-to-end happy-path sweep of the pve CLI command trees against a context.
+"""End-to-end happy-path sweep of the pmx CLI command trees against a context.
 
 Runs the read-only commands of each command tree (default: all) in parallel
 against a configured context (default: `lab`) and reports pass/fail/skip per
@@ -18,7 +18,7 @@ Usage:
   scripts/e2e --no-deferred        # hide the deferred section
   scripts/e2e --mutate             # also run the destructive qemu/lxc verb matrix
   scripts/e2e --mutate --vm-only   # ... limited to the VM (skip the container)
-  scripts/e2e --pbs-context pbs-lab  # also sweep `pve pbs` against a PBS server
+  scripts/e2e --pbs-context pbs-lab  # also sweep `pmx pbs` against a PBS server
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from e2e_lib.trees import TREES  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="e2e",
-        description="Happy-path e2e sweep of pve CLI command trees.",
+        description="Happy-path e2e sweep of pmx CLI command trees.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Trees: " + ", ".join(TREES.keys()),
     )
@@ -47,14 +47,14 @@ def main() -> None:
         nargs="*",
         help="command trees to run (default: all)",
     )
-    parser.add_argument("--context", "-c", default=os.environ.get("PVE_E2E_CONTEXT", "lab"),
-                        help="configured context name (default: lab, or $PVE_E2E_CONTEXT)")
-    parser.add_argument("--pbs-context", default=os.environ.get("PVE_E2E_PBS_CONTEXT", ""),
+    parser.add_argument("--context", "-c", default=os.environ.get("PMX_E2E_CONTEXT", "lab"),
+                        help="configured context name (default: lab, or $PMX_E2E_CONTEXT)")
+    parser.add_argument("--pbs-context", default=os.environ.get("PMX_E2E_PBS_CONTEXT", ""),
                         help="configured `product: pbs` context for the opt-in pbs tree "
-                             "(default: $PVE_E2E_PBS_CONTEXT; empty = pbs tree skips)")
-    parser.add_argument("--binary", help="path to the pve binary (default: ./dist/pve)")
+                             "(default: $PMX_E2E_PBS_CONTEXT; empty = pbs tree skips)")
+    parser.add_argument("--binary", help="path to the pmx binary (default: ./dist/pmx)")
     parser.add_argument("--no-build", action="store_true",
-                        help="do not auto-build the binary if ./dist/pve is missing")
+                        help="do not auto-build the binary if ./dist/pmx is missing")
     parser.add_argument("--jobs", "-j", type=int, default=min(8, len(TREES)),
                         help="parallel tree workers (default: min(8, #trees))")
     parser.add_argument("--timeout", type=int, default=60,
@@ -97,7 +97,7 @@ def main() -> None:
         if args.strict:
             runner.die(msg, code=3)
         print(f"e2e: skipping — {msg}")
-        print("e2e: configure the context (see `pve init config`) or pass --context.")
+        print("e2e: configure the context (see `pmx init config`) or pass --context.")
         return
 
     node = runner.discover_node(binary, args.context)

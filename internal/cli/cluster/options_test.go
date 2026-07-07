@@ -8,12 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// TestClusterOptions_Get verifies `pve cluster options get` reads
+// TestClusterOptions_Get verifies `pmx cluster options get` reads
 // GET /cluster/options and renders the datacenter settings.
 func TestClusterOptions_Get(t *testing.T) {
 	f, ac := newFakeClient(t)

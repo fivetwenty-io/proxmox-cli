@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 func TestIpamList(t *testing.T) {
@@ -156,8 +156,8 @@ func TestIpamStatus(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/cluster/sdn/ipams/pve/status", []any{
-		map[string]any{"vmid": "100", "ip": "10.241.0.10", "vnet": "pvecli0"},
-		map[string]any{"vmid": "101", "ip": "10.241.0.11", "vnet": "pvecli0"},
+		map[string]any{"vmid": "100", "ip": "10.241.0.10", "vnet": "pmxcli0"},
+		map[string]any{"vmid": "101", "ip": "10.241.0.11", "vnet": "pmxcli0"},
 	}, 200)
 
 	out, err := run(t, f, "", "ipam", "status", "pve")

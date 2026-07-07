@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // rrddataPath is the node-scoped rrddata endpoint for testStorage.
@@ -15,7 +15,7 @@ const rrddataPath = "/api2/json/nodes/pve1/storage/local/rrddata"
 // rrdPath is the node-scoped rrd endpoint for testStorage.
 const rrdPath = "/api2/json/nodes/pve1/storage/local/rrd"
 
-// TestStorageRrddata_ForwardsTimeframe verifies `pve storage rrddata` sends the
+// TestStorageRrddata_ForwardsTimeframe verifies `pmx storage rrddata` sends the
 // timeframe query parameter to the API and renders the returned data points.
 func TestStorageRrddata_ForwardsTimeframe(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -108,7 +108,7 @@ func TestStorageRrddata_ServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestStorageRrd_ForwardsParams verifies `pve storage rrd` forwards timeframe
+// TestStorageRrd_ForwardsParams verifies `pmx storage rrd` forwards timeframe
 // and ds parameters and renders the returned filename.
 func TestStorageRrd_ForwardsParams(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newCpuCmd builds the `pve qemu cpu` sub-group.
+// newCpuCmd builds the `pmx qemu cpu` sub-group.
 func newCpuCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cpu",
@@ -21,7 +21,7 @@ func newCpuCmd() *cobra.Command {
 	return cmd
 }
 
-// newCpuListCmd builds `pve qemu cpu list`.
+// newCpuListCmd builds `pmx qemu cpu list`.
 // Calls nodes.ListCapabilitiesQemuCpu on the resolved node.
 func newCpuListCmd() *cobra.Command {
 	var arch string
@@ -59,7 +59,7 @@ func newCpuListCmd() *cobra.Command {
 	return cmd
 }
 
-// newMachineCmd builds the `pve qemu machine` sub-group.
+// newMachineCmd builds the `pmx qemu machine` sub-group.
 func newMachineCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "machine",
@@ -69,7 +69,7 @@ func newMachineCmd() *cobra.Command {
 	return cmd
 }
 
-// newMachineListCmd builds `pve qemu machine list`.
+// newMachineListCmd builds `pmx qemu machine list`.
 // Calls nodes.ListCapabilitiesQemuMachines on the resolved node.
 func newMachineListCmd() *cobra.Command {
 	var arch string
@@ -107,7 +107,7 @@ func newMachineListCmd() *cobra.Command {
 	return cmd
 }
 
-// newCpuFlagsCmd builds `pve qemu cpu-flags`.
+// newCpuFlagsCmd builds `pmx qemu cpu-flags`.
 // Calls nodes.ListCapabilitiesQemuCpuFlags on the resolved node.
 func newCpuFlagsCmd() *cobra.Command {
 	var (

@@ -3,7 +3,7 @@
 Unlike every other tree, this one targets a *different product*: the checks
 need a context whose `product` is `pbs` and a reachable Proxmox Backup Server.
 The sweep therefore treats the tree as opt-in — the runner hands it the
-`--pbs-context` / `$PVE_E2E_PBS_CONTEXT` context instead of the sweep context
+`--pbs-context` / `$PMX_E2E_PBS_CONTEXT` context instead of the sweep context
 (empty when not given), and `run` records a single SKIP and returns when the
 opt-in is absent, the context is not a `product: pbs` context, or the server
 does not answer `pbs ping`.
@@ -61,7 +61,7 @@ def is_list(res: CmdResult) -> str | None:
 
 def run(ctx: Ctx) -> None:
     if not ctx.env.context:
-        ctx.skip("pbs sweep", "opt-in: pass --pbs-context or set PVE_E2E_PBS_CONTEXT")
+        ctx.skip("pbs sweep", "opt-in: pass --pbs-context or set PMX_E2E_PBS_CONTEXT")
         return
     ok, why = _gate(ctx)
     if not ok:
@@ -621,321 +621,321 @@ def _tape(ctx: Ctx) -> None:
 def _defers(ctx: Ctx) -> None:
     # raw write passthrough
     ctx.defer("api post", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pve pbs api post /pull --data store=main")
+              "pmx pbs api post /pull --data store=main")
     ctx.defer("api put", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pve pbs api put /config/datastore/main --data gc-schedule=daily")
+              "pmx pbs api put /config/datastore/main --data gc-schedule=daily")
     ctx.defer("api delete", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pve pbs api delete /config/datastore/pve-cli-ds")
+              "pmx pbs api delete /config/datastore/pmx-cli-ds")
 
     # datastore + data-touching tasks
     ctx.defer("datastore create", "creates a datastore (allocates a chunk store on disk); covered by unit tests",
-              "pve pbs datastore create pve-cli-ds --path /tmp/pve-cli-ds")
+              "pmx pbs datastore create pmx-cli-ds --path /tmp/pmx-cli-ds")
     ctx.defer("datastore update", "modifies datastore configuration; covered by unit tests",
-              "pve pbs datastore update pve-cli-ds --gc-schedule daily")
+              "pmx pbs datastore update pmx-cli-ds --gc-schedule daily")
     ctx.defer("datastore delete", "removes a datastore definition; covered by unit tests",
-              "pve pbs datastore delete pve-cli-ds --yes")
+              "pmx pbs datastore delete pmx-cli-ds --yes")
     ctx.defer("gc run", "runs garbage collection, which deletes unreferenced chunks; covered by unit tests",
-              "pve pbs gc run --store main")
+              "pmx pbs gc run --store main")
     ctx.defer("prune run", "prunes snapshots by retention policy (deletes data); covered by unit tests",
-              "pve pbs prune run ct/100 --store main --keep-last 1")
+              "pmx pbs prune run ct/100 --store main --keep-last 1")
     ctx.defer("prune job run", "runs a configured prune job (deletes data); covered by unit tests",
-              "pve pbs prune job run <id>")
+              "pmx pbs prune job run <id>")
     ctx.defer("prune job add", "creates a prune job; covered by unit tests",
-              "pve pbs prune job add pve-cli-prune --store main --keep-last 3 --schedule daily")
+              "pmx pbs prune job add pmx-cli-prune --store main --keep-last 3 --schedule daily")
     ctx.defer("prune job update", "modifies a prune job; covered by unit tests",
-              "pve pbs prune job update pve-cli-prune --keep-last 5")
+              "pmx pbs prune job update pmx-cli-prune --keep-last 5")
     ctx.defer("prune job delete", "removes a prune job; covered by unit tests",
-              "pve pbs prune job delete pve-cli-prune --yes")
+              "pmx pbs prune job delete pmx-cli-prune --yes")
     ctx.defer("verify run", "runs a datastore verification task (long, IO-heavy); covered by unit tests",
-              "pve pbs verify run --store main")
+              "pmx pbs verify run --store main")
     ctx.defer("verify job run", "runs a configured verify job (long, IO-heavy); covered by unit tests",
-              "pve pbs verify job run <id>")
+              "pmx pbs verify job run <id>")
     ctx.defer("verify job add", "creates a verify job; covered by unit tests",
-              "pve pbs verify job add pve-cli-verify --store main --schedule daily")
+              "pmx pbs verify job add pmx-cli-verify --store main --schedule daily")
     ctx.defer("verify job update", "modifies a verify job; covered by unit tests",
-              "pve pbs verify job update pve-cli-verify --schedule weekly")
+              "pmx pbs verify job update pmx-cli-verify --schedule weekly")
     ctx.defer("verify job delete", "removes a verify job; covered by unit tests",
-              "pve pbs verify job delete pve-cli-verify --yes")
+              "pmx pbs verify job delete pmx-cli-verify --yes")
     ctx.defer("group delete", "deletes an entire backup group and all its snapshots; covered by unit tests",
-              "pve pbs group delete ct/100 --store main --yes")
+              "pmx pbs group delete ct/100 --store main --yes")
     ctx.defer("snapshot delete", "deletes a backup snapshot; covered by unit tests",
-              "pve pbs snapshot delete ct/100/<time> --store main --yes")
+              "pmx pbs snapshot delete ct/100/<time> --store main --yes")
     ctx.defer("snapshot protect", "sets the protected flag on a snapshot; covered by unit tests",
-              "pve pbs snapshot protect ct/100/<time> --store main")
+              "pmx pbs snapshot protect ct/100/<time> --store main")
     ctx.defer("snapshot unprotect", "clears the protected flag on a snapshot; covered by unit tests",
-              "pve pbs snapshot unprotect ct/100/<time> --store main")
+              "pmx pbs snapshot unprotect ct/100/<time> --store main")
     ctx.defer("encryption-key add", "creates a datastore encryption key; covered by unit tests",
-              "pve pbs encryption-key add pve-cli-key --kdf none")
+              "pmx pbs encryption-key add pmx-cli-key --kdf none")
     ctx.defer("encryption-key delete", "removes a datastore encryption key; covered by unit tests",
-              "pve pbs encryption-key delete pve-cli-key --yes")
+              "pmx pbs encryption-key delete pmx-cli-key --yes")
     ctx.defer("encryption-key toggle-archive", "flips the key's archive state on every call — not automatable idempotently; covered by unit tests",
-              "pve pbs encryption-key toggle-archive pve-cli-key")
+              "pmx pbs encryption-key toggle-archive pmx-cli-key")
 
     # sync / remotes / traffic
     ctx.defer("sync pull", "transfers backup data into a local datastore; covered by unit tests",
-              "pve pbs sync pull --store main --remote-store other")
+              "pmx pbs sync pull --store main --remote-store other")
     ctx.defer("sync push", "transfers backup data to a remote; covered by unit tests",
-              "pve pbs sync push --store main --remote r1 --remote-store other")
+              "pmx pbs sync push --store main --remote r1 --remote-store other")
     ctx.defer("sync job run", "runs a configured sync job (transfers data); covered by unit tests",
-              "pve pbs sync job run <id>")
+              "pmx pbs sync job run <id>")
     ctx.defer("sync job add", "creates a sync job; covered by unit tests",
-              "pve pbs sync job add pve-cli-sync --store main --remote r1 --remote-store other")
+              "pmx pbs sync job add pmx-cli-sync --store main --remote r1 --remote-store other")
     ctx.defer("sync job update", "modifies a sync job; covered by unit tests",
-              "pve pbs sync job update pve-cli-sync --schedule hourly")
+              "pmx pbs sync job update pmx-cli-sync --schedule hourly")
     ctx.defer("sync job delete", "removes a sync job; covered by unit tests",
-              "pve pbs sync job delete pve-cli-sync --yes")
+              "pmx pbs sync job delete pmx-cli-sync --yes")
     ctx.defer("remote add", "adds a remote PBS connection (stores credentials); covered by unit tests",
-              "pve pbs remote add pve-cli-remote --host pbs2.example --auth-id sync@pbs --password ...")
+              "pmx pbs remote add pmx-cli-remote --host pbs2.example --auth-id sync@pbs --password ...")
     ctx.defer("remote update", "modifies a remote PBS connection; covered by unit tests",
-              "pve pbs remote update pve-cli-remote --port 8007")
+              "pmx pbs remote update pmx-cli-remote --port 8007")
     ctx.defer("remote delete", "removes a remote PBS connection; covered by unit tests",
-              "pve pbs remote delete pve-cli-remote --yes")
+              "pmx pbs remote delete pmx-cli-remote --yes")
     ctx.defer("traffic add", "creates a traffic-control rule; covered by unit tests",
-              "pve pbs traffic add pve-cli-tc --network 192.0.2.0/24 --rate-in 10MB")
+              "pmx pbs traffic add pmx-cli-tc --network 192.0.2.0/24 --rate-in 10MB")
     ctx.defer("traffic update", "modifies a traffic-control rule; covered by unit tests",
-              "pve pbs traffic update pve-cli-tc --rate-in 20MB")
+              "pmx pbs traffic update pmx-cli-tc --rate-in 20MB")
     ctx.defer("traffic delete", "removes a traffic-control rule; covered by unit tests",
-              "pve pbs traffic delete pve-cli-tc --yes")
+              "pmx pbs traffic delete pmx-cli-tc --yes")
 
     # access control
     ctx.defer("acl update", "modifies the access control list; covered by unit tests",
-              "pve pbs acl update /datastore/main DatastoreAudit --auth-id audit@pbs")
+              "pmx pbs acl update /datastore/main DatastoreAudit --auth-id audit@pbs")
     ctx.defer("user add", "creates a user; covered by unit tests",
-              "pve pbs user add pve-cli-user@pbs --password ...")
+              "pmx pbs user add pmx-cli-user@pbs --password ...")
     ctx.defer("user update", "modifies a user; covered by unit tests",
-              "pve pbs user update pve-cli-user@pbs --comment e2e")
+              "pmx pbs user update pmx-cli-user@pbs --comment e2e")
     ctx.defer("user delete", "removes a user; covered by unit tests",
-              "pve pbs user delete pve-cli-user@pbs --yes")
+              "pmx pbs user delete pmx-cli-user@pbs --yes")
     ctx.defer("user passwd", "prompts for the new password interactively; covered by unit tests",
-              "pve pbs user passwd pve-cli-user@pbs")
+              "pmx pbs user passwd pmx-cli-user@pbs")
     ctx.defer("user unlock-tfa", "resets a user's second factors; covered by unit tests",
-              "pve pbs user unlock-tfa pve-cli-user@pbs")
+              "pmx pbs user unlock-tfa pmx-cli-user@pbs")
     ctx.defer("user token add", "creates a credential and prints a once-only secret — out of scope for the automated sweep; covered by unit tests",
-              "pve pbs user token add pve-cli-user@pbs e2e")
+              "pmx pbs user token add pmx-cli-user@pbs e2e")
     ctx.defer("user token update", "modifies an API token; covered by unit tests",
-              "pve pbs user token update pve-cli-user@pbs e2e --comment e2e")
+              "pmx pbs user token update pmx-cli-user@pbs e2e --comment e2e")
     ctx.defer("user token delete", "removes an API token; covered by unit tests",
-              "pve pbs user token delete pve-cli-user@pbs e2e --yes")
+              "pmx pbs user token delete pmx-cli-user@pbs e2e --yes")
     ctx.defer("realm ad add", "adds an AD authentication realm; covered by unit tests",
-              "pve pbs realm ad add pve-cli-ad --server1 dc.example --base-dn dc=example")
+              "pmx pbs realm ad add pmx-cli-ad --server1 dc.example --base-dn dc=example")
     ctx.defer("realm ad update", "modifies an AD realm; covered by unit tests",
-              "pve pbs realm ad update pve-cli-ad --comment e2e")
+              "pmx pbs realm ad update pmx-cli-ad --comment e2e")
     ctx.defer("realm ad delete", "removes an AD realm; covered by unit tests",
-              "pve pbs realm ad delete pve-cli-ad --yes")
+              "pmx pbs realm ad delete pmx-cli-ad --yes")
     ctx.defer("realm ldap add", "adds an LDAP authentication realm; covered by unit tests",
-              "pve pbs realm ldap add pve-cli-ldap --server1 ldap.example --base-dn dc=example --user-attr uid")
+              "pmx pbs realm ldap add pmx-cli-ldap --server1 ldap.example --base-dn dc=example --user-attr uid")
     ctx.defer("realm ldap update", "modifies an LDAP realm; covered by unit tests",
-              "pve pbs realm ldap update pve-cli-ldap --comment e2e")
+              "pmx pbs realm ldap update pmx-cli-ldap --comment e2e")
     ctx.defer("realm ldap delete", "removes an LDAP realm; covered by unit tests",
-              "pve pbs realm ldap delete pve-cli-ldap --yes")
+              "pmx pbs realm ldap delete pmx-cli-ldap --yes")
     ctx.defer("realm openid add", "adds an OpenID authentication realm; covered by unit tests",
-              "pve pbs realm openid add pve-cli-oidc --issuer-url https://idp.example --client-id pbs")
+              "pmx pbs realm openid add pmx-cli-oidc --issuer-url https://idp.example --client-id pbs")
     ctx.defer("realm openid update", "modifies an OpenID realm; covered by unit tests",
-              "pve pbs realm openid update pve-cli-oidc --comment e2e")
+              "pmx pbs realm openid update pmx-cli-oidc --comment e2e")
     ctx.defer("realm openid delete", "removes an OpenID realm; covered by unit tests",
-              "pve pbs realm openid delete pve-cli-oidc --yes")
+              "pmx pbs realm openid delete pmx-cli-oidc --yes")
     ctx.defer("realm pam update", "modifies the built-in PAM realm; covered by unit tests",
-              "pve pbs realm pam update --comment e2e")
+              "pmx pbs realm pam update --comment e2e")
     ctx.defer("realm pbs update", "modifies the built-in PBS realm; covered by unit tests",
-              "pve pbs realm pbs update --comment e2e")
+              "pmx pbs realm pbs update --comment e2e")
     ctx.defer("realm sync", "runs a realm sync task that can create or update users; covered by unit tests",
-              "pve pbs realm sync pve-cli-ldap")
+              "pmx pbs realm sync pmx-cli-ldap")
 
     # notification config (literal per-kind defers: the coverage matrix reads
     # the command strings statically, so no f-string/loop generation here)
     ctx.defer("notification endpoint gotify add", "creates a gotify notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint gotify add pve-cli-gotify --server ... --token ...")
+              "pmx pbs notification endpoint gotify add pmx-cli-gotify --server ... --token ...")
     ctx.defer("notification endpoint gotify update", "modifies a gotify notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint gotify update pve-cli-gotify --comment e2e")
+              "pmx pbs notification endpoint gotify update pmx-cli-gotify --comment e2e")
     ctx.defer("notification endpoint gotify delete", "removes a gotify notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint gotify delete pve-cli-gotify --yes")
+              "pmx pbs notification endpoint gotify delete pmx-cli-gotify --yes")
     ctx.defer("notification endpoint sendmail add", "creates a sendmail notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint sendmail add pve-cli-sendmail --mailto ops@example")
+              "pmx pbs notification endpoint sendmail add pmx-cli-sendmail --mailto ops@example")
     ctx.defer("notification endpoint sendmail update", "modifies a sendmail notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint sendmail update pve-cli-sendmail --comment e2e")
+              "pmx pbs notification endpoint sendmail update pmx-cli-sendmail --comment e2e")
     ctx.defer("notification endpoint sendmail delete", "removes a sendmail notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint sendmail delete pve-cli-sendmail --yes")
+              "pmx pbs notification endpoint sendmail delete pmx-cli-sendmail --yes")
     ctx.defer("notification endpoint smtp add", "creates an smtp notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint smtp add pve-cli-smtp --server smtp.example --from-address pbs@example --mailto ops@example")
+              "pmx pbs notification endpoint smtp add pmx-cli-smtp --server smtp.example --from-address pbs@example --mailto ops@example")
     ctx.defer("notification endpoint smtp update", "modifies an smtp notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint smtp update pve-cli-smtp --comment e2e")
+              "pmx pbs notification endpoint smtp update pmx-cli-smtp --comment e2e")
     ctx.defer("notification endpoint smtp delete", "removes an smtp notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint smtp delete pve-cli-smtp --yes")
+              "pmx pbs notification endpoint smtp delete pmx-cli-smtp --yes")
     ctx.defer("notification endpoint webhook add", "creates a webhook notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint webhook add pve-cli-webhook --url https://hooks.example --method post")
+              "pmx pbs notification endpoint webhook add pmx-cli-webhook --url https://hooks.example --method post")
     ctx.defer("notification endpoint webhook update", "modifies a webhook notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint webhook update pve-cli-webhook --comment e2e")
+              "pmx pbs notification endpoint webhook update pmx-cli-webhook --comment e2e")
     ctx.defer("notification endpoint webhook delete", "removes a webhook notification endpoint; covered by unit tests",
-              "pve pbs notification endpoint webhook delete pve-cli-webhook --yes")
+              "pmx pbs notification endpoint webhook delete pmx-cli-webhook --yes")
     ctx.defer("notification matcher add", "creates a notification matcher; covered by unit tests",
-              "pve pbs notification matcher add pve-cli-matcher --target mail-to-root")
+              "pmx pbs notification matcher add pmx-cli-matcher --target mail-to-root")
     ctx.defer("notification matcher update", "modifies a notification matcher; covered by unit tests",
-              "pve pbs notification matcher update pve-cli-matcher --mode all")
+              "pmx pbs notification matcher update pmx-cli-matcher --mode all")
     ctx.defer("notification matcher delete", "removes a notification matcher; covered by unit tests",
-              "pve pbs notification matcher delete pve-cli-matcher --yes")
+              "pmx pbs notification matcher delete pmx-cli-matcher --yes")
     ctx.defer("notification target test", "sends a real notification through the live target — out of scope for the automated sweep; covered by unit tests",
-              "pve pbs notification target test mail-to-root")
+              "pmx pbs notification target test mail-to-root")
 
     # acme config
     ctx.defer("acme account add", "registers an account with a live certificate authority; covered by unit tests",
-              "pve pbs acme account add pve-cli-acme --contact ops@example")
+              "pmx pbs acme account add pmx-cli-acme --contact ops@example")
     ctx.defer("acme account update", "updates the registration at the certificate authority; covered by unit tests",
-              "pve pbs acme account update pve-cli-acme --contact ops@example")
+              "pmx pbs acme account update pmx-cli-acme --contact ops@example")
     ctx.defer("acme account delete", "deactivates the account at the certificate authority; covered by unit tests",
-              "pve pbs acme account delete pve-cli-acme --yes")
+              "pmx pbs acme account delete pmx-cli-acme --yes")
     ctx.defer("acme plugin add", "creates an ACME challenge plugin (stores API credentials); covered by unit tests",
-              "pve pbs acme plugin add pve-cli-dns --type dns --api cloudflare")
+              "pmx pbs acme plugin add pmx-cli-dns --type dns --api cloudflare")
     ctx.defer("acme plugin update", "modifies an ACME challenge plugin; covered by unit tests",
-              "pve pbs acme plugin update pve-cli-dns --disable")
+              "pmx pbs acme plugin update pmx-cli-dns --disable")
     ctx.defer("acme plugin delete", "removes an ACME challenge plugin; covered by unit tests",
-              "pve pbs acme plugin delete pve-cli-dns --yes")
+              "pmx pbs acme plugin delete pmx-cli-dns --yes")
 
     # metrics config
     ctx.defer("metrics influxdb-http add", "creates an influxdb-http metric server; covered by unit tests",
-              "pve pbs metrics influxdb-http add pve-cli-metrics --url https://influx.example:8086 --bucket pbs --organization ops --token ...")
+              "pmx pbs metrics influxdb-http add pmx-cli-metrics --url https://influx.example:8086 --bucket pbs --organization ops --token ...")
     ctx.defer("metrics influxdb-http update", "modifies an influxdb-http metric server; covered by unit tests",
-              "pve pbs metrics influxdb-http update pve-cli-metrics --enable=false")
+              "pmx pbs metrics influxdb-http update pmx-cli-metrics --enable=false")
     ctx.defer("metrics influxdb-http delete", "removes an influxdb-http metric server; covered by unit tests",
-              "pve pbs metrics influxdb-http delete pve-cli-metrics --yes")
+              "pmx pbs metrics influxdb-http delete pmx-cli-metrics --yes")
     ctx.defer("metrics influxdb-udp add", "creates an influxdb-udp metric server; covered by unit tests",
-              "pve pbs metrics influxdb-udp add pve-cli-metrics --host udp.example --port 8089")
+              "pmx pbs metrics influxdb-udp add pmx-cli-metrics --host udp.example --port 8089")
     ctx.defer("metrics influxdb-udp update", "modifies an influxdb-udp metric server; covered by unit tests",
-              "pve pbs metrics influxdb-udp update pve-cli-metrics --enable=false")
+              "pmx pbs metrics influxdb-udp update pmx-cli-metrics --enable=false")
     ctx.defer("metrics influxdb-udp delete", "removes an influxdb-udp metric server; covered by unit tests",
-              "pve pbs metrics influxdb-udp delete pve-cli-metrics --yes")
+              "pmx pbs metrics influxdb-udp delete pmx-cli-metrics --yes")
 
     # node administration
     ctx.defer("node reboot", "reboots the real host; covered by unit tests",
-              "pve pbs node reboot --yes")
+              "pmx pbs node reboot --yes")
     ctx.defer("node shutdown", "shuts down the real host; covered by unit tests",
-              "pve pbs node shutdown --yes")
+              "pmx pbs node shutdown --yes")
     ctx.defer("node config update", "modifies host configuration; covered by unit tests",
-              "pve pbs node config update --email-from pbs@example")
+              "pmx pbs node config update --email-from pbs@example")
     ctx.defer("node dns update", "modifies host DNS configuration; covered by unit tests",
-              "pve pbs node dns update --dns1 192.0.2.53")
+              "pmx pbs node dns update --dns1 192.0.2.53")
     ctx.defer("node time update", "modifies the host timezone; covered by unit tests",
-              "pve pbs node time update --timezone UTC")
+              "pmx pbs node time update --timezone UTC")
     ctx.defer("node subscription set", "registers a subscription key with the vendor; covered by unit tests",
-              "pve pbs node subscription set <key>")
+              "pmx pbs node subscription set <key>")
     ctx.defer("node subscription update", "re-checks the subscription with the vendor; covered by unit tests",
-              "pve pbs node subscription update")
+              "pmx pbs node subscription update")
     ctx.defer("node subscription delete", "removes the subscription key; covered by unit tests",
-              "pve pbs node subscription delete --yes")
+              "pmx pbs node subscription delete --yes")
     ctx.defer("node tasks delete", "removes a task-log entry; covered by unit tests",
-              "pve pbs node tasks delete <upid> --yes")
+              "pmx pbs node tasks delete <upid> --yes")
     ctx.defer("node services start", "starts a PBS system service — disruptive to the server; covered by unit tests",
-              "pve pbs node services start <svc>")
+              "pmx pbs node services start <svc>")
     ctx.defer("node services stop", "stops a PBS system service — disruptive to the server; covered by unit tests",
-              "pve pbs node services stop <svc>")
+              "pmx pbs node services stop <svc>")
     ctx.defer("node services restart", "restarts a PBS system service — disruptive to the server; covered by unit tests",
-              "pve pbs node services restart <svc>")
+              "pmx pbs node services restart <svc>")
     ctx.defer("node services reload", "reloads a PBS system service — disruptive to the server; covered by unit tests",
-              "pve pbs node services reload <svc>")
+              "pmx pbs node services reload <svc>")
     ctx.defer("node apt update", "refreshes the package index on the host; covered by unit tests",
-              "pve pbs node apt update")
+              "pmx pbs node apt update")
     ctx.defer("node apt repo-add", "adds a package repository to the host; covered by unit tests",
-              "pve pbs node apt repo-add --handle no-subscription")
+              "pmx pbs node apt repo-add --handle no-subscription")
     ctx.defer("node apt repo-update", "enables or disables a package repository on the host; covered by unit tests",
-              "pve pbs node apt repo-update --path /etc/apt/sources.list --index 0 --enabled=false")
+              "pmx pbs node apt repo-update --path /etc/apt/sources.list --index 0 --enabled=false")
     ctx.defer("node certificates acme order", "orders a real certificate from the CA and replaces the server cert; covered by unit tests",
-              "pve pbs node certificates acme order")
+              "pmx pbs node certificates acme order")
     ctx.defer("node certificates acme renew", "renews the certificate at the CA and replaces the server cert; covered by unit tests",
-              "pve pbs node certificates acme renew")
+              "pmx pbs node certificates acme renew")
     ctx.defer("node certificates custom upload", "replaces the server's TLS certificate; covered by unit tests",
-              "pve pbs node certificates custom upload --certificate cert.pem --key key.pem")
+              "pmx pbs node certificates custom upload --certificate cert.pem --key key.pem")
     ctx.defer("node certificates custom delete", "removes the custom TLS certificate; covered by unit tests",
-              "pve pbs node certificates custom delete --yes")
+              "pmx pbs node certificates custom delete --yes")
     ctx.defer("node disks initgpt", "writes a new GPT, destroying data on a physical disk of the real host; covered by unit tests",
-              "pve pbs node disks initgpt --disk sdX --yes")
+              "pmx pbs node disks initgpt --disk sdX --yes")
     ctx.defer("node disks wipe", "wipes a physical disk of the real host, destroying its data; covered by unit tests",
-              "pve pbs node disks wipe --disk sdX --yes")
+              "pmx pbs node disks wipe --disk sdX --yes")
     ctx.defer("node disks directory create", "formats a physical disk of the real host into a directory datastore; covered by unit tests",
-              "pve pbs node disks directory create pve-cli-dir --disk sdX")
+              "pmx pbs node disks directory create pmx-cli-dir --disk sdX")
     ctx.defer("node disks directory delete", "removes a directory mount backed by a physical disk of the real host; covered by unit tests",
-              "pve pbs node disks directory delete pve-cli-dir --yes")
+              "pmx pbs node disks directory delete pmx-cli-dir --yes")
     ctx.defer("node disks zfs create", "creates a zpool consuming physical disks of the real host; covered by unit tests",
-              "pve pbs node disks zfs create pve-cli-pool --devices sdX")
+              "pmx pbs node disks zfs create pmx-cli-pool --devices sdX")
     ctx.defer("node network create", "changes host network configuration; covered by unit tests",
-              "pve pbs node network create pve-cli-br0 --type bridge")
+              "pmx pbs node network create pmx-cli-br0 --type bridge")
     ctx.defer("node network update", "changes host network configuration; covered by unit tests",
-              "pve pbs node network update pve-cli-br0 --comment e2e")
+              "pmx pbs node network update pmx-cli-br0 --comment e2e")
     ctx.defer("node network delete", "changes host network configuration; covered by unit tests",
-              "pve pbs node network delete pve-cli-br0 --yes")
+              "pmx pbs node network delete pmx-cli-br0 --yes")
     ctx.defer("node network apply", "applies staged host network changes; covered by unit tests",
-              "pve pbs node network apply")
+              "pmx pbs node network apply")
     ctx.defer("node network revert", "reverts staged host network changes; covered by unit tests",
-              "pve pbs node network revert")
+              "pmx pbs node network revert")
 
     # tape hardware / config
     ctx.defer("tape backup", "runs a tape backup, writing datastore contents to tape; covered by unit tests",
-              "pve pbs tape backup --store main --pool pve-cli-pool --drive drive0")
+              "pmx pbs tape backup --store main --pool pmx-cli-pool --drive drive0")
     ctx.defer("tape restore", "restores from tape into a datastore; covered by unit tests",
-              "pve pbs tape restore <media-set> --store main --drive drive0")
+              "pmx pbs tape restore <media-set> --store main --drive drive0")
     ctx.defer("tape drive add", "adds a tape drive definition; covered by unit tests",
-              "pve pbs tape drive add pve-cli-drive --path /dev/tape/by-id/...")
+              "pmx pbs tape drive add pmx-cli-drive --path /dev/tape/by-id/...")
     ctx.defer("tape drive update", "modifies a tape drive definition; covered by unit tests",
-              "pve pbs tape drive update pve-cli-drive --changer sl3")
+              "pmx pbs tape drive update pmx-cli-drive --changer sl3")
     ctx.defer("tape drive delete", "removes a tape drive definition; covered by unit tests",
-              "pve pbs tape drive delete pve-cli-drive --yes")
+              "pmx pbs tape drive delete pmx-cli-drive --yes")
     ctx.defer("tape drive format", "formats (erases) the loaded tape, destroying media contents — not automatable; covered by unit tests",
-              "pve pbs tape drive format drive0 --yes")
+              "pmx pbs tape drive format drive0 --yes")
     ctx.defer("tape drive label", "writes a new label to the loaded tape, destroying its contents — not automatable; covered by unit tests",
-              "pve pbs tape drive label drive0 --label-text pve-cli-tape")
+              "pmx pbs tape drive label drive0 --label-text pmx-cli-tape")
     ctx.defer("tape drive barcode-label", "labels every unlabelled tape in the changer, overwriting media headers — not automatable; covered by unit tests",
-              "pve pbs tape drive barcode-label drive0 --pool pve-cli-pool")
+              "pmx pbs tape drive barcode-label drive0 --pool pmx-cli-pool")
     ctx.defer("tape drive restore-key", "prompts for the encryption-key password interactively; covered by unit tests",
-              "pve pbs tape drive restore-key drive0")
+              "pmx pbs tape drive restore-key drive0")
     ctx.defer("tape drive load-media", "moves tape library hardware (loads a tape into the drive); covered by unit tests",
-              "pve pbs tape drive load-media drive0 --label-text <tape>")
+              "pmx pbs tape drive load-media drive0 --label-text <tape>")
     ctx.defer("tape drive load-slot", "moves tape library hardware (loads from a slot); covered by unit tests",
-              "pve pbs tape drive load-slot drive0 --slot 1")
+              "pmx pbs tape drive load-slot drive0 --slot 1")
     ctx.defer("tape drive unload", "moves tape library hardware (unloads the drive); covered by unit tests",
-              "pve pbs tape drive unload drive0")
+              "pmx pbs tape drive unload drive0")
     ctx.defer("tape drive eject", "ejects the loaded tape from the drive; covered by unit tests",
-              "pve pbs tape drive eject drive0")
+              "pmx pbs tape drive eject drive0")
     ctx.defer("tape drive rewind", "rewinds the loaded tape; covered by unit tests",
-              "pve pbs tape drive rewind drive0")
+              "pmx pbs tape drive rewind drive0")
     ctx.defer("tape drive clean", "runs a drive cleaning cycle with a cleaning cartridge; covered by unit tests",
-              "pve pbs tape drive clean drive0")
+              "pmx pbs tape drive clean drive0")
     ctx.defer("tape drive catalog", "reads the whole loaded tape to rebuild its catalog (long, drive-locking); covered by unit tests",
-              "pve pbs tape drive catalog drive0")
+              "pmx pbs tape drive catalog drive0")
     ctx.defer("tape drive export", "moves tape library hardware (exports media to the IE slot); covered by unit tests",
-              "pve pbs tape drive export drive0")
+              "pmx pbs tape drive export drive0")
     ctx.defer("tape drive inventory", "moves tape library hardware (loads each tape to read labels); covered by unit tests",
-              "pve pbs tape drive inventory drive0")
+              "pmx pbs tape drive inventory drive0")
     ctx.defer("tape drive update-inventory", "moves tape library hardware (re-reads every tape label); covered by unit tests",
-              "pve pbs tape drive update-inventory drive0")
+              "pmx pbs tape drive update-inventory drive0")
     ctx.defer("tape changer add", "adds a tape changer definition; covered by unit tests",
-              "pve pbs tape changer add pve-cli-changer --path /dev/tape/by-id/...")
+              "pmx pbs tape changer add pmx-cli-changer --path /dev/tape/by-id/...")
     ctx.defer("tape changer update", "modifies a tape changer definition; covered by unit tests",
-              "pve pbs tape changer update pve-cli-changer --export-slots 15,16")
+              "pmx pbs tape changer update pmx-cli-changer --export-slots 15,16")
     ctx.defer("tape changer delete", "removes a tape changer definition; covered by unit tests",
-              "pve pbs tape changer delete pve-cli-changer --yes")
+              "pmx pbs tape changer delete pmx-cli-changer --yes")
     ctx.defer("tape changer transfer", "moves tape library hardware (transfers media between slots); covered by unit tests",
-              "pve pbs tape changer transfer sl3 --from 1 --to 2")
+              "pmx pbs tape changer transfer sl3 --from 1 --to 2")
     ctx.defer("tape media move", "moves tape library hardware (relocates a tape); covered by unit tests",
-              "pve pbs tape media move --label-text <tape> --vault-name offsite")
+              "pmx pbs tape media move --label-text <tape> --vault-name offsite")
     ctx.defer("tape media set-status", "changes a tape medium's status flag; covered by unit tests",
-              "pve pbs tape media set-status --label-text <tape> --status full")
+              "pmx pbs tape media set-status --label-text <tape> --status full")
     ctx.defer("tape media destroy", "destroys all data on a tape medium — not automatable; covered by unit tests",
-              "pve pbs tape media destroy --label-text <tape> --yes")
+              "pmx pbs tape media destroy --label-text <tape> --yes")
     ctx.defer("tape pool add", "creates a media pool; covered by unit tests",
-              "pve pbs tape pool add pve-cli-pool --allocation continue")
+              "pmx pbs tape pool add pmx-cli-pool --allocation continue")
     ctx.defer("tape pool update", "modifies a media pool; covered by unit tests",
-              "pve pbs tape pool update pve-cli-pool --retention overwrite")
+              "pmx pbs tape pool update pmx-cli-pool --retention overwrite")
     ctx.defer("tape pool delete", "removes a media pool; covered by unit tests",
-              "pve pbs tape pool delete pve-cli-pool --yes")
+              "pmx pbs tape pool delete pmx-cli-pool --yes")
     ctx.defer("tape key add", "creates a tape encryption key; covered by unit tests",
-              "pve pbs tape key add --hint pve-cli --password ...")
+              "pmx pbs tape key add --hint pmx-cli --password ...")
     ctx.defer("tape key update", "modifies a tape encryption key; covered by unit tests",
-              "pve pbs tape key update <fingerprint> --hint pve-cli")
+              "pmx pbs tape key update <fingerprint> --hint pmx-cli")
     ctx.defer("tape key delete", "removes a tape encryption key; covered by unit tests",
-              "pve pbs tape key delete <fingerprint> --yes")
+              "pmx pbs tape key delete <fingerprint> --yes")
     ctx.defer("tape job add", "creates a tape backup job; covered by unit tests",
-              "pve pbs tape job add pve-cli-tape --store main --pool pve-cli-pool --drive drive0")
+              "pmx pbs tape job add pmx-cli-tape --store main --pool pmx-cli-pool --drive drive0")
     ctx.defer("tape job update", "modifies a tape backup job; covered by unit tests",
-              "pve pbs tape job update pve-cli-tape --schedule weekly")
+              "pmx pbs tape job update pmx-cli-tape --schedule weekly")
     ctx.defer("tape job delete", "removes a tape backup job; covered by unit tests",
-              "pve pbs tape job delete pve-cli-tape --yes")
+              "pmx pbs tape job delete pmx-cli-tape --yes")
     ctx.defer("tape job run", "runs a tape backup job, writing to tape; covered by unit tests",
-              "pve pbs tape job run pve-cli-tape")
+              "pmx pbs tape job run pmx-cli-tape")

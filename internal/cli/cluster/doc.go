@@ -1,2 +1,2 @@
-// Package cluster implements the pve cluster command group.
+// Package cluster implements the pmx cluster command group.
 package cluster

@@ -7,14 +7,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 )
 
-// newRemoteCmd builds `pve pbs remote` — manage remote Proxmox Backup Server
+// newRemoteCmd builds `pmx pbs remote` — manage remote Proxmox Backup Server
 // connections used as sync-job endpoints, and scan them for datastores,
 // backup groups, and namespaces (/config/remote CRUD and scan sub-tree).
 func newRemoteCmd() *cobra.Command {
@@ -46,7 +46,7 @@ type remoteListEntry struct {
 	Port        *int64  `json:"port,omitempty"`
 }
 
-// newRemoteLsCmd builds `pve pbs remote ls` — list configured remotes
+// newRemoteLsCmd builds `pmx pbs remote ls` — list configured remotes
 // (GET /config/remote).
 func newRemoteLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -93,7 +93,7 @@ func newRemoteLsCmd() *cobra.Command {
 	return cmd
 }
 
-// newRemoteShowCmd builds `pve pbs remote show <name>` — show a single
+// newRemoteShowCmd builds `pmx pbs remote show <name>` — show a single
 // remote's configuration (GET /config/remote/{name}).
 func newRemoteShowCmd() *cobra.Command {
 	var withDefaults bool
@@ -204,7 +204,7 @@ func (rf *remoteFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateRemote
 	}
 }
 
-// newRemoteAddCmd builds `pve pbs remote add <name>` — create a remote
+// newRemoteAddCmd builds `pmx pbs remote add <name>` — create a remote
 // configuration (POST /config/remote). --host, --auth-id, and --password
 // are required; every other option is optional.
 func newRemoteAddCmd() *cobra.Command {
@@ -269,7 +269,7 @@ func newRemoteAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newRemoteUpdateCmd builds `pve pbs remote update <name>` — update a remote
+// newRemoteUpdateCmd builds `pmx pbs remote update <name>` — update a remote
 // configuration (PUT /config/remote/{name}). Only flags explicitly set are
 // sent; use --delete to reset properties to their default.
 func newRemoteUpdateCmd() *cobra.Command {
@@ -313,7 +313,7 @@ func newRemoteUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newRemoteDeleteCmd builds `pve pbs remote delete <name>` — remove a remote
+// newRemoteDeleteCmd builds `pmx pbs remote delete <name>` — remove a remote
 // configuration (DELETE /config/remote/{name}).
 func newRemoteDeleteCmd() *cobra.Command {
 	var (
@@ -353,7 +353,7 @@ func newRemoteDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newRemoteScanCmd builds `pve pbs remote scan` — list a remote's
+// newRemoteScanCmd builds `pmx pbs remote scan` — list a remote's
 // datastores, and the backup groups or namespaces within one of them
 // (GET /config/remote/{name}/scan and its /groups, /namespaces children).
 //
@@ -384,7 +384,7 @@ type remoteScanDatastoreEntry struct {
 	Store       string  `json:"store"`
 }
 
-// newRemoteScanLsCmd builds `pve pbs remote scan ls <remote>` — list the
+// newRemoteScanLsCmd builds `pmx pbs remote scan ls <remote>` — list the
 // datastores accessible on a remote (GET /config/remote/{name}/scan).
 func newRemoteScanLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -445,7 +445,7 @@ type remoteScanGroupEntry struct {
 	Owner       *string  `json:"owner,omitempty"`
 }
 
-// newRemoteScanGroupsCmd builds `pve pbs remote scan groups <remote>
+// newRemoteScanGroupsCmd builds `pmx pbs remote scan groups <remote>
 // <store>` — list the backup groups in a remote's datastore (GET
 // /config/remote/{name}/scan/{store}/groups), optionally scoped to a
 // namespace with --namespace.
@@ -518,7 +518,7 @@ type remoteScanNamespaceEntry struct {
 	Ns      string  `json:"ns"`
 }
 
-// newRemoteScanNamespacesCmd builds `pve pbs remote scan namespaces
+// newRemoteScanNamespacesCmd builds `pmx pbs remote scan namespaces
 // <remote> <store>` — list the namespaces in a remote's datastore (GET
 // /config/remote/{name}/scan/{store}/namespaces).
 func newRemoteScanNamespacesCmd() *cobra.Command {

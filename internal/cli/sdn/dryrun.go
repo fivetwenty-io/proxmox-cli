@@ -5,15 +5,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-cli/internal/cli"
-	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
-// newDryRunCmd builds `pve sdn dry-run` — preview the difference between the
+// newDryRunCmd builds `pmx sdn dry-run` — preview the difference between the
 // running and pending SDN configuration for a node before committing it with
-// `pve sdn apply`. It is read-only: the diffs are computed without changing any
-// configuration. Requires a node (--node, PVE_NODE, or a configured default).
+// `pmx sdn apply`. It is read-only: the diffs are computed without changing any
+// configuration. Requires a node (--node, PMX_NODE, or a configured default).
 func newDryRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dry-run",
@@ -21,12 +21,12 @@ func newDryRunCmd() *cobra.Command {
 		Long: "Show the difference between the running and pending SDN " +
 			"configuration (the FRR config and /etc/network/interfaces.d/sdn) " +
 			"for a node, without applying anything. Use this to review staged " +
-			"changes before `pve sdn apply`. Requires a node.",
+			"changes before `pmx sdn apply`. Requires a node.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PVE_NODE, or configure a default node")
+				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
 			resp, err := deps.API.Cluster.ListSdnDryRun(
@@ -40,9 +40,9 @@ func newDryRunCmd() *cobra.Command {
 	return cmd
 }
 
-// newRollbackCmd builds `pve sdn rollback` — discard all pending (staged) SDN
+// newRollbackCmd builds `pmx sdn rollback` — discard all pending (staged) SDN
 // configuration changes cluster-wide, reverting to the running configuration.
-// It is the inverse of `pve sdn apply` and drops every staged SDN edit, so it
+// It is the inverse of `pmx sdn apply` and drops every staged SDN edit, so it
 // requires confirmation.
 func newRollbackCmd() *cobra.Command {
 	var (
@@ -54,7 +54,7 @@ func newRollbackCmd() *cobra.Command {
 		Use:   "rollback",
 		Short: "Discard pending SDN configuration changes",
 		Long: "Revert all staged SDN configuration changes cluster-wide, " +
-			"discarding everything not yet committed with `pve sdn apply`. This " +
+			"discarding everything not yet committed with `pmx sdn apply`. This " +
 			"affects every pending SDN edit, not just your own.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
