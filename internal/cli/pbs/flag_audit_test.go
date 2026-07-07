@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -23,6 +24,33 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		"prune":     {"run", "simulate", "job"},
 		"gc":        {"run", "status", "ls"},
 		"verify":    {"run", "job"},
+		"sync":      {"ls", "job", "pull", "push"},
+		"remote":    {"ls", "show", "add", "update", "delete", "scan"},
+		"traffic":   {"ls", "show", "add", "update", "delete", "current"},
+		"status":    {"datastore-usage"},
+		"api":       {"get", "post", "put", "delete"},
+		"node": {
+			"ls", "status", "reboot", "shutdown", "rrd", "report", "syslog", "journal",
+			"dns", "time", "config", "subscription", "identity",
+			"tasks", "services", "apt", "disks", "network", "certificates",
+		},
+	}
+	nested := map[string][]string{
+		"remote scan":              {"ls", "groups", "namespaces"},
+		"node tasks":               {"ls", "show", "log", "delete"},
+		"node services":            {"ls", "show", "state", "start", "stop", "restart", "reload"},
+		"node dns":                 {"show", "update"},
+		"node time":                {"show", "update"},
+		"node config":              {"show", "update"},
+		"node subscription":        {"show", "set", "update", "delete"},
+		"node apt":                 {"ls", "update", "repositories", "repo-add", "repo-update", "versions", "changelog"},
+		"node disks":               {"ls", "smart", "initgpt", "wipe", "directory", "zfs"},
+		"node disks directory":     {"ls", "create", "delete"},
+		"node disks zfs":           {"ls", "show", "create"},
+		"node network":             {"ls", "show", "create", "update", "delete", "revert", "apply"},
+		"node certificates":        {"ls", "info", "acme", "custom"},
+		"node certificates acme":   {"order", "renew"},
+		"node certificates custom": {"upload", "delete"},
 	}
 	jobVerbs := []string{"ls", "show", "add", "update", "delete", "run"}
 
@@ -48,7 +76,7 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		}
 	}
 
-	for _, group := range []string{"prune", "verify"} {
+	for _, group := range []string{"prune", "verify", "sync"} {
 		job := findSubcommand(t, findSubcommand(t, root, group), "job")
 		verbNames := make(map[string]bool)
 
@@ -59,6 +87,27 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		for _, verb := range jobVerbs {
 			require.True(t, verbNames[verb], "expected pbs %s job verb %q to be registered", group, verb)
 		}
+	}
+
+	for path, verbs := range nested {
+		sub := root
+		for _, name := range strings.Fields(path) {
+			sub = findSubcommand(t, sub, name)
+		}
+
+		verbNames := make(map[string]bool)
+
+		for _, c := range sub.Commands() {
+			verbNames[c.Name()] = true
+		}
+
+		for _, verb := range verbs {
+			require.True(t, verbNames[verb], "expected pbs %s verb %q to be registered", path, verb)
+		}
+	}
+
+	for _, leaf := range []string{"version", "ping"} {
+		require.True(t, byName[leaf], "expected pbs sub-command %q to be registered", leaf)
 	}
 }
 

@@ -36,6 +36,14 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newPruneCmd(),
 		newGcCmd(),
 		newVerifyCmd(),
+		newSyncCmd(),
+		newRemoteCmd(),
+		newTrafficCmd(),
+		newNodeCmd(),
+		newStatusCmd(),
+		newVersionCmd(),
+		newPingCmd(),
+		newAPIRawCmd(),
 	)
 
 	return cmd
