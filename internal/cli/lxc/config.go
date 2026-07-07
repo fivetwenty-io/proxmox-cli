@@ -3,6 +3,8 @@ package lxc
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -132,6 +134,9 @@ func newConfigSetCmd() *cobra.Command {
 		lock         string
 		digest       string
 		debug        bool
+
+		// --set KEY=VALUE escape hatch (see cli.ParseKeyValues/OverlayKeyValues).
+		rawSetFlags []string
 	)
 
 	cmd := &cobra.Command{
@@ -304,12 +309,36 @@ func newConfigSetCmd() *cobra.Command {
 				set = true
 			}
 
+			sets, err := cli.ParseKeyValues(rawSetFlags)
+			if err != nil {
+				return err
+			}
+
+			var rawBody map[string]any
+			if len(sets) > 0 {
+				set = true
+				rawBody, err = cli.ParamsToMap(params)
+				if err != nil {
+					return fmt.Errorf("build config update body for container %s: %w", vmid, err)
+				}
+				if rawBody, err = cli.OverlayKeyValues(cmd.ErrOrStderr(), rawBody, sets, isKnownConfigKey); err != nil {
+					return err
+				}
+			}
+
 			if !set {
 				return fmt.Errorf("no configuration fields given: specify at least one --hostname/--memory/--cores/... flag")
 			}
 
-			if err := deps.API.Nodes.UpdateLxcConfig(cmd.Context(), node, vmid, params); err != nil {
-				return fmt.Errorf("update config for container %s: %w", vmid, err)
+			if len(sets) == 0 {
+				if err := deps.API.Nodes.UpdateLxcConfig(cmd.Context(), node, vmid, params); err != nil {
+					return fmt.Errorf("update config for container %s: %w", vmid, err)
+				}
+			} else {
+				path := fmt.Sprintf("/nodes/%s/lxc/%s/config", url.PathEscape(node), url.PathEscape(vmid))
+				if _, err := deps.API.Raw.PutCtx(cmd.Context(), path, rawBody); err != nil {
+					return fmt.Errorf("update config for container %s: %w", vmid, err)
+				}
 			}
 
 			res := output.Result{Message: fmt.Sprintf("Container %s config updated.", vmid)}
@@ -355,11 +384,46 @@ func newConfigSetCmd() *cobra.Command {
 	fl.StringVar(&lock, "lock", "", "lock/unlock the container")
 	fl.StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
 	fl.BoolVar(&debug, "debug", false, "enable debug log-level on start")
+	fl.StringArrayVar(&rawSetFlags, "set", nil,
+		"set an arbitrary config option as KEY=VALUE (repeatable); the value is sent to the "+
+			"API verbatim. Escape hatch for options that have no dedicated flag yet.")
 
 	// Append generated schema detail (allowed values, defaults, sub-keys) to
 	// each option flag's help text; see config_schema_gen.go.
 	optionschema.EnrichFlags(fl, configSchemas)
 	return cmd
+}
+
+// isKnownConfigKey reports whether key is a name the CLI's offline config
+// schema recognizes, either directly or via an indexed family (e.g. "net0"
+// matches the "net[n]" schema entry via its "net" flag prefix). Used by
+// --set to emit a stderr note for options unknown to this CLI without
+// blocking them — new PVE options are exactly what the escape hatch is for.
+func isKnownConfigKey(key string) bool {
+	if optionschema.Find(configSchemas, key) != nil {
+		return true
+	}
+	for i := range configSchemas {
+		s := &configSchemas[i]
+		if !s.Indexed || s.Flag == "" {
+			continue
+		}
+		if rest, ok := strings.CutPrefix(key, s.Flag); ok && rest != "" && isASCIIDigits(rest) {
+			return true
+		}
+	}
+	return false
+}
+
+// isASCIIDigits reports whether s is non-empty and consists only of ASCII
+// digits, used to recognize indexed config keys such as "net0" or "mp12".
+func isASCIIDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // lxcPendingEntry is one element from the ListLxcPending response array. Each

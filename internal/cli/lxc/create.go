@@ -1,7 +1,9 @@
 package lxc
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -64,6 +66,9 @@ func newCreateCmd() *cobra.Command {
 		debug              bool
 
 		unusedSlots []string
+
+		// --set KEY=VALUE escape hatch (see cli.ParseKeyValues/OverlayKeyValues).
+		rawSetFlags []string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vmid>",
@@ -237,11 +242,36 @@ func newCreateCmd() *cobra.Command {
 				params.Debug = &debug
 			}
 
-			resp, err := deps.API.Nodes.CreateLxc(cmd.Context(), node, params)
+			sets, err := cli.ParseKeyValues(rawSetFlags)
+			if err != nil {
+				return err
+			}
+
+			if len(sets) == 0 {
+				resp, err := deps.API.Nodes.CreateLxc(cmd.Context(), node, params)
+				if err != nil {
+					return fmt.Errorf("create container %d on node %q: %w", vmid, node, err)
+				}
+				return emitTask(cmd, deps, *resp, fmt.Sprintf("Container %d created.", vmid))
+			}
+
+			rawBody, err := cli.ParamsToMap(params)
+			if err != nil {
+				return fmt.Errorf("build create body for container %d: %w", vmid, err)
+			}
+			if rawBody, err = cli.OverlayKeyValues(cmd.ErrOrStderr(), rawBody, sets, isKnownConfigKey); err != nil {
+				return err
+			}
+			path := fmt.Sprintf("/nodes/%s/lxc", url.PathEscape(node))
+			data, err := deps.API.Raw.PostCtx(cmd.Context(), path, rawBody)
 			if err != nil {
 				return fmt.Errorf("create container %d on node %q: %w", vmid, node, err)
 			}
-			return emitTask(cmd, deps, *resp, fmt.Sprintf("Container %d created.", vmid))
+			raw, err := json.Marshal(data)
+			if err != nil {
+				return fmt.Errorf("create container %d on node %q: encode task response: %w", vmid, node, err)
+			}
+			return emitTask(cmd, deps, json.RawMessage(raw), fmt.Sprintf("Container %d created.", vmid))
 		},
 	}
 	f := cmd.Flags()
@@ -293,6 +323,9 @@ func newCreateCmd() *cobra.Command {
 	f.StringArrayVar(&unusedSlots, "unused", nil,
 		"unused volume slot as INDEX=VALUE (repeatable; these volumes are normally "+
 			"PVE-managed and set during restore, e.g. --unused 0=local-lvm:vm-101-disk-1)")
+	f.StringArrayVar(&rawSetFlags, "set", nil,
+		"set an arbitrary config option as KEY=VALUE (repeatable); the value is sent to the "+
+			"API verbatim. Escape hatch for options that have no dedicated flag yet.")
 	cli.MustMarkRequired(cmd, "ostemplate")
 	return cmd
 }

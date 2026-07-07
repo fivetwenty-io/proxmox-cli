@@ -3,6 +3,7 @@ package qemu
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -125,6 +126,9 @@ func newCreateCmd() *cobra.Command {
 		// Convenience / scheduling.
 		autostart bool
 		cdrom     string
+
+		// --set KEY=VALUE escape hatch (see cli.ParseKeyValues/OverlayKeyValues).
+		rawSetFlags []string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vmid>",
@@ -289,12 +293,38 @@ func newCreateCmd() *cobra.Command {
 				}
 			}
 
-			resp, err := deps.API.Nodes.CreateQemu(cmd.Context(), node, params)
+			sets, err := cli.ParseKeyValues(rawSetFlags)
+			if err != nil {
+				return err
+			}
+			warnDangerousConfig(cmd, fl, sets, false)
+
+			if len(sets) == 0 {
+				resp, err := deps.API.Nodes.CreateQemu(cmd.Context(), node, params)
+				if err != nil {
+					return fmt.Errorf("create VM %d on node %q: %w", vmid, node, err)
+				}
+				return finishAsync(cmd, deps, json.RawMessage(*resp),
+					fmt.Sprintf("VM %d created.", vmid))
+			}
+
+			rawBody, err := cli.ParamsToMap(params)
+			if err != nil {
+				return fmt.Errorf("build create body for VM %d: %w", vmid, err)
+			}
+			if rawBody, err = cli.OverlayKeyValues(cmd.ErrOrStderr(), rawBody, sets, isKnownConfigKey); err != nil {
+				return err
+			}
+			path := fmt.Sprintf("/nodes/%s/qemu", url.PathEscape(node))
+			data, err := deps.API.Raw.PostCtx(cmd.Context(), path, rawBody)
 			if err != nil {
 				return fmt.Errorf("create VM %d on node %q: %w", vmid, node, err)
 			}
-			return finishAsync(cmd, deps, json.RawMessage(*resp),
-				fmt.Sprintf("VM %d created.", vmid))
+			raw, err := json.Marshal(data)
+			if err != nil {
+				return fmt.Errorf("create VM %d on node %q: encode task response: %w", vmid, node, err)
+			}
+			return finishAsync(cmd, deps, json.RawMessage(raw), fmt.Sprintf("VM %d created.", vmid))
 		},
 	}
 	f := cmd.Flags()
@@ -397,6 +427,10 @@ func newCreateCmd() *cobra.Command {
 	f.StringVar(&scsi0, "scsi0", "", "SCSI disk 0 (alias for --scsi 0=...)")
 	f.StringVar(&ide2, "ide2", "", "IDE device 2 (alias for --ide 2=...)")
 	f.StringVar(&ipconfig0, "ipconfig0", "", "cloud-init IP config for net0 (alias for --ipconfig 0=...)")
+
+	f.StringArrayVar(&rawSetFlags, "set", nil,
+		"set an arbitrary config option as KEY=VALUE (repeatable); the value is sent to the "+
+			"API verbatim. Escape hatch for options that have no dedicated flag yet.")
 	return cmd
 }
 

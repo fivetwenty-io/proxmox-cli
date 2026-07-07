@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -252,6 +253,9 @@ func newConfigSetCmd() *cobra.Command {
 		virtio1   string
 		ipconfig0 string
 		ipconfig1 string
+
+		// --set KEY=VALUE escape hatch (see cli.ParseKeyValues/OverlayKeyValues).
+		rawSetFlags []string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
@@ -383,12 +387,38 @@ func newConfigSetCmd() *cobra.Command {
 				}
 			}
 
+			sets, err := cli.ParseKeyValues(rawSetFlags)
+			if err != nil {
+				return err
+			}
+
+			var rawBody map[string]any
+			if len(sets) > 0 {
+				changed = true
+				rawBody, err = cli.ParamsToMap(params)
+				if err != nil {
+					return fmt.Errorf("build config update body for VM %s: %w", vmid, err)
+				}
+				if rawBody, err = cli.OverlayKeyValues(cmd.ErrOrStderr(), rawBody, sets, isKnownConfigKey); err != nil {
+					return err
+				}
+			}
+
+			warnDangerousConfig(cmd, fl, sets, protectionCleared(fl, protection, deleteKeys, sets))
+
 			if !changed {
 				return fmt.Errorf("no configuration changes specified: pass at least one --<key> flag")
 			}
 
-			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
-				return fmt.Errorf("update config for VM %s on node %q: %w", vmid, node, err)
+			if len(sets) == 0 {
+				if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
+					return fmt.Errorf("update config for VM %s on node %q: %w", vmid, node, err)
+				}
+			} else {
+				path := fmt.Sprintf("/nodes/%s/qemu/%s/config", url.PathEscape(node), url.PathEscape(vmid))
+				if _, err := deps.API.Raw.PutCtx(cmd.Context(), path, rawBody); err != nil {
+					return fmt.Errorf("update config for VM %s on node %q: %w", vmid, node, err)
+				}
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(),
@@ -495,12 +525,48 @@ func newConfigSetCmd() *cobra.Command {
 	f.StringVar(&ipconfig0, "ipconfig0", "", "cloud-init IP config for net0 (alias for --ipconfig 0=...)")
 	f.StringVar(&ipconfig1, "ipconfig1", "", "cloud-init IP config for net1 (alias for --ipconfig 1=...)")
 
+	f.StringArrayVar(&rawSetFlags, "set", nil,
+		"set an arbitrary config option as KEY=VALUE (repeatable); the value is sent to the "+
+			"API verbatim. Escape hatch for options that have no dedicated flag yet.")
+
 	// Append generated schema detail (allowed values, defaults, numeric
 	// ranges, sub-keys) to each option flag's help text; flags with no
 	// matching schema entry (aliases, legacy slots) are left untouched. See
 	// config_schema_gen.go.
 	optionschema.EnrichFlags(f, configSchemas)
 	return cmd
+}
+
+// isKnownConfigKey reports whether key is a name the CLI's offline config
+// schema recognizes, either directly or via an indexed family (e.g. "net0"
+// matches the "net[n]" schema entry via its "net" flag prefix). Used by
+// --set to emit a stderr note for options unknown to this CLI without
+// blocking them — new PVE options are exactly what the escape hatch is for.
+func isKnownConfigKey(key string) bool {
+	if optionschema.Find(configSchemas, key) != nil {
+		return true
+	}
+	for i := range configSchemas {
+		s := &configSchemas[i]
+		if !s.Indexed || s.Flag == "" {
+			continue
+		}
+		if rest, ok := strings.CutPrefix(key, s.Flag); ok && rest != "" && isASCIIDigits(rest) {
+			return true
+		}
+	}
+	return false
+}
+
+// isASCIIDigits reports whether s is non-empty and consists only of ASCII
+// digits, used to recognize indexed config keys such as "net0" or "usb12".
+func isASCIIDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // pendingEntry is the minimal decoded shape of one entry from nodes.ListQemuPending.
