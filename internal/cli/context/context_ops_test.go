@@ -53,9 +53,10 @@ func labContext() *config.Context {
 		Protocol: "https",
 		Realm:    "pam",
 		Auth: config.AuthBlock{
-			Type:    "token",
-			TokenID: "mytoken",
-			Secret:  "s3cr3t",
+			Type:     "token",
+			Username: "root@pam",
+			TokenID:  "mytoken",
+			Secret:   "s3cr3t",
 		},
 	}
 }

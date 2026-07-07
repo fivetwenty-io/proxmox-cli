@@ -66,6 +66,25 @@ func newAddCmd() *cobra.Command {
 				if f.secret == "" {
 					return fmt.Errorf("--secret is required when --auth-type is \"token\"")
 				}
+				// Accept a full Proxmox token identifier (user@realm!tokenname) in
+				// --token-id and split it, so operators can paste the value Proxmox
+				// shows verbatim. The username derived here must not conflict with an
+				// explicit --username.
+				user, tokenID, err := splitTokenID(f.username, f.tokenID)
+				if err != nil {
+					return err
+				}
+				f.username, f.tokenID = user, tokenID
+
+				// The API token header is USER@REALM!TOKENID=SECRET; without a
+				// username the client would send "@realm!tokenid=secret" and the API
+				// answers 401. Require it explicitly rather than writing a context
+				// that cannot authenticate.
+				if f.username == "" {
+					return fmt.Errorf(
+						"--username is required for token auth (user@realm, e.g. root@pam); " +
+							"alternatively pass the full identifier to --token-id as user@realm!tokenname")
+				}
 			}
 			if f.authType == "password" {
 				if f.username == "" {
@@ -166,8 +185,9 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.protocol, "protocol", "https", "connection scheme: https or http")
 	cmd.Flags().StringVar(&f.realm, "realm", "pam", "authentication realm")
 	cmd.Flags().StringVar(&f.authType, "auth-type", "token", "authentication type: token or password")
-	cmd.Flags().StringVar(&f.username, "username", "", "PVE username (e.g. root@pam); required for --auth-type=password")
-	cmd.Flags().StringVar(&f.tokenID, "token-id", "", "API token identifier (e.g. mytoken); required for --auth-type=token")
+	cmd.Flags().StringVar(&f.username, "username", "", "PVE username (e.g. root@pam); required for token and password auth")
+	cmd.Flags().StringVar(&f.tokenID, "token-id", "",
+		"API token name (e.g. mytoken), or the full user@realm!mytoken identifier; required for --auth-type=token")
 	cmd.Flags().StringVar(&f.secret, "secret", "", "token value or password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
 	cmd.Flags().BoolVar(&f.insecure, "insecure", false, "disable TLS certificate verification")
 	cmd.Flags().StringVar(&f.fingerprint, "fingerprint", "", "expected TLS certificate fingerprint (hex SHA-256)")
@@ -181,6 +201,54 @@ func newAddCmd() *cobra.Command {
 	cli.MustMarkRequired(cmd, "host")
 
 	return cmd
+}
+
+// splitTokenID normalises the identity fields for token auth.
+//
+// A Proxmox API token is fully identified by "user@realm!tokenname". Operators
+// commonly copy that whole string, so when tokenID contains "!" it is split into
+// the embedded user (before the first "!") and the token name (after it):
+//
+//	splitTokenID("",         "root@pam!backup") → ("root@pam", "backup", nil)
+//	splitTokenID("root@pam", "backup")          → ("root@pam", "backup", nil)
+//
+// When tokenID has no "!" the inputs pass through unchanged. An explicit
+// username that disagrees with an embedded one is an error, as is a token name
+// that still contains "@" or "!" after the split.
+func splitTokenID(username, tokenID string) (user, token string, err error) {
+	user, token = username, tokenID
+
+	if strings.Contains(tokenID, "!") {
+		embeddedUser, name, _ := strings.Cut(tokenID, "!")
+		if embeddedUser == "" {
+			return "", "", fmt.Errorf(
+				"--token-id %q is missing the user@realm before %q", tokenID, "!")
+		}
+		if name == "" {
+			return "", "", fmt.Errorf(
+				"--token-id %q is missing the token name after %q", tokenID, "!")
+		}
+		if username != "" && username != embeddedUser {
+			return "", "", fmt.Errorf(
+				"--username %q conflicts with the user %q embedded in --token-id", username, embeddedUser)
+		}
+		user, token = embeddedUser, name
+	}
+
+	if strings.Contains(token, "!") {
+		return "", "", fmt.Errorf(
+			"--token-id token name %q must not contain %q; expected user@realm!tokenname", token, "!")
+	}
+	if strings.Contains(token, "@") {
+		return "", "", fmt.Errorf(
+			"--token-id token name %q must not contain %q; put user@realm in --username", token, "@")
+	}
+	if strings.Contains(user, "!") {
+		return "", "", fmt.Errorf(
+			`--username %q must not contain "!"; the token name belongs in --token-id`, user)
+	}
+
+	return user, token, nil
 }
 
 // isSecretRef reports whether s is an environment-variable reference

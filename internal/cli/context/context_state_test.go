@@ -597,6 +597,7 @@ func TestAdd_CreateAlias_Works(t *testing.T) {
 	_, err := run(t, deps, "", "create", "newctx",
 		"--host", "10.0.0.5",
 		"--auth-type", "token",
+		"--username", "root@pam",
 		"--token-id", "mytoken",
 		"--secret", "${MY_SECRET}",
 	)
@@ -636,6 +637,7 @@ func TestAdd_TofuFlag_Persisted(t *testing.T) {
 	_, err := run(t, deps, "", "add", "newctx",
 		"--host", "10.0.0.5",
 		"--auth-type", "token",
+		"--username", "root@pam",
 		"--token-id", "mytoken",
 		"--secret", "${MY_SECRET}",
 		"--tofu",
@@ -657,6 +659,7 @@ func TestAdd_TofuFlag_DefaultsFalse(t *testing.T) {
 	_, err := run(t, deps, "", "add", "newctx",
 		"--host", "10.0.0.5",
 		"--auth-type", "token",
+		"--username", "root@pam",
 		"--token-id", "mytoken",
 		"--secret", "${MY_SECRET}",
 	)

@@ -612,6 +612,9 @@ func Execute(factories []GroupFactory) error {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
 			fmt.Fprintln(os.Stderr, err)
+			if hint := AuthHint(err); hint != "" {
+				fmt.Fprintln(os.Stderr, hint)
+			}
 		}
 		return err
 	}

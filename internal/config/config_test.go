@@ -274,7 +274,7 @@ func TestStrictValidateContext_FullyValidContext_NoErrors(t *testing.T) {
 		Host:     "host.example.com",
 		Port:     8006,
 		Protocol: "https",
-		Auth:     config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+		Auth:     config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
 		TLS:      config.TLSBlock{Fingerprint: strictFingerprint},
 	}
 	errs := config.StrictValidateContext(c)
@@ -293,6 +293,42 @@ func TestStrictValidateContext_MissingTokenID_ReturnsWarning(t *testing.T) {
 	errs := config.StrictValidateContext(c)
 	require.NotEmpty(t, errs)
 	require.Contains(t, errs, "auth.token-id is required for token auth")
+}
+
+// TestStrictValidateContext_TokenMissingUsername pins that token auth requires
+// a username: the Proxmox API header is USER@REALM!TOKENID=SECRET, so a context
+// without a username cannot authenticate.
+func TestStrictValidateContext_TokenMissingUsername(t *testing.T) {
+	c := &config.Context{
+		Host: "host.example.com",
+		Auth: config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs, "auth.username is required for token auth (user@realm, e.g. root@pam)")
+}
+
+// TestStrictValidateContext_UsernameWithBang catches the exact hand-edited
+// misconfiguration where the full token id was pasted into auth.username.
+func TestStrictValidateContext_UsernameWithBang(t *testing.T) {
+	c := &config.Context{
+		Host: "host.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam!deploy", TokenID: "deploy", Secret: "s"},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs,
+		`auth.username must not contain "!"; put the token name in auth.token-id, not the username`)
+}
+
+// TestStrictValidateContext_TokenIDWithAtOrBang catches a full user@realm!name
+// identifier that landed in auth.token-id instead of being split.
+func TestStrictValidateContext_TokenIDWithAtOrBang(t *testing.T) {
+	c := &config.Context{
+		Host: "host.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "root@pam!deploy", Secret: "s"},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs,
+		`auth.token-id must be the token name only (no "@" or "!"); put user@realm in auth.username`)
 }
 
 // strictFingerprint is a syntactically valid colon-separated hex SHA-256
@@ -705,7 +741,7 @@ func TestStrictValidateContext_SSHPortOutOfRange_ReturnsError(t *testing.T) {
 		Host:     "host.example.com",
 		Port:     8006,
 		Protocol: "https",
-		Auth:     config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+		Auth:     config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
 		TLS:      config.TLSBlock{Fingerprint: strictFingerprint},
 		SSH:      config.SSHBlock{Port: 70000},
 	}
@@ -721,7 +757,7 @@ func TestStrictValidateContext_SSHPortZero_NoError(t *testing.T) {
 		Host:     "host.example.com",
 		Port:     8006,
 		Protocol: "https",
-		Auth:     config.AuthBlock{Type: "token", TokenID: "deploy", Secret: "s"},
+		Auth:     config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
 		TLS:      config.TLSBlock{Fingerprint: strictFingerprint},
 	}
 	errs := config.StrictValidateContext(c)

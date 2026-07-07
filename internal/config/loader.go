@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	yaml "github.com/goccy/go-yaml"
 )
@@ -157,6 +158,25 @@ func StrictValidateContext(c *Context) []string {
 		}
 		if c.Auth.Secret == "" {
 			errs = append(errs, "auth.secret is required for token auth")
+		}
+		// The Proxmox API token header is USER@REALM!TOKENID=SECRET, so a token
+		// context needs a username (the USER@REALM part) in addition to the token
+		// name. Without it the client sends "@realm!tokenid=secret" and the API
+		// answers 401.
+		if c.Auth.Username == "" {
+			errs = append(errs, "auth.username is required for token auth (user@realm, e.g. root@pam)")
+		}
+		// The "!token-name" belongs in auth.token-id, never in the username; a "!"
+		// here means the full token id was pasted into the wrong field.
+		if strings.Contains(c.Auth.Username, "!") {
+			errs = append(errs,
+				`auth.username must not contain "!"; put the token name in auth.token-id, not the username`)
+		}
+		// auth.token-id is the token NAME only; "@" or "!" means a full user@realm!name
+		// identifier landed here instead of being split across username and token-id.
+		if strings.ContainsAny(c.Auth.TokenID, "@!") {
+			errs = append(errs,
+				`auth.token-id must be the token name only (no "@" or "!"); put user@realm in auth.username`)
 		}
 	case "password":
 		if c.Auth.Username == "" {

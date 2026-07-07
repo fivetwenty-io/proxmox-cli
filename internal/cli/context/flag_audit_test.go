@@ -82,6 +82,7 @@ func TestContextAudit_Add_OmitsUnsetFlags(t *testing.T) {
 	_, err := run(t, deps, "", "add", "minimal",
 		"--host", "10.1.2.4",
 		"--auth-type", "token",
+		"--username", "root@pam",
 		"--token-id", "tok",
 		"--secret", "${SECRET}",
 	)
@@ -91,7 +92,7 @@ func TestContextAudit_Add_OmitsUnsetFlags(t *testing.T) {
 	ctx, ok := updated.Contexts["minimal"]
 	require.True(t, ok)
 
-	require.Equal(t, "", ctx.Auth.Username, "unset --username must persist empty")
+	require.Equal(t, "root@pam", ctx.Auth.Username, "--username must persist as given")
 	require.Equal(t, "", ctx.TLS.Fingerprint, "unset --fingerprint must persist empty")
 	require.False(t, ctx.TLS.Insecure, "unset --insecure must default false")
 	require.False(t, ctx.TLS.Tofu, "unset --tofu must default false")
@@ -119,6 +120,7 @@ func TestContextAudit_Add_SelectFlag(t *testing.T) {
 	_, err := run(t, deps, "", "add", "newctx",
 		"--host", "10.0.0.9",
 		"--auth-type", "token",
+		"--username", "root@pam",
 		"--token-id", "tok",
 		"--secret", "${SECRET}",
 		"--select",
@@ -144,13 +146,14 @@ func TestContextAudit_Add_ForceFlag(t *testing.T) {
 	deps := makeDeps(t, path, cfg)
 
 	_, err := run(t, deps, "", "add", "dup",
-		"--host", "10.0.0.9", "--auth-type", "token", "--token-id", "tok", "--secret", "${SECRET}")
+		"--host", "10.0.0.9", "--auth-type", "token", "--username", "root@pam",
+		"--token-id", "tok", "--secret", "${SECRET}")
 	require.Error(t, err, "add of a duplicate name must fail without --force")
 	require.Contains(t, err.Error(), "--force")
 
 	_, err = run(t, deps, "", "add", "dup",
-		"--host", "10.0.0.9", "--auth-type", "token", "--token-id", "tok", "--secret", "${SECRET}",
-		"--force")
+		"--host", "10.0.0.9", "--auth-type", "token", "--username", "root@pam",
+		"--token-id", "tok", "--secret", "${SECRET}", "--force")
 	require.NoError(t, err)
 
 	updated := reloadCfg(t, path)
