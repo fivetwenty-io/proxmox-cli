@@ -19,6 +19,9 @@ def run(ctx: Ctx) -> None:
     # so they run even before node discovery.
     ctx.check("config describe", "qemu", "config", "describe")
     ctx.check("firewall options describe", "qemu", "firewall", "options", "describe")
+    # security cpu-flags describe: offline mitigation-flag catalog — no API
+    # call, so it runs alongside the other offline schema catalogs.
+    ctx.check("security cpu-flags describe", "qemu", "security", "cpu-flags", "describe")
 
     n = ctx.node
     if not n:
@@ -146,12 +149,87 @@ def run(ctx: Ctx) -> None:
         ctx.check("cloudinit pending", "qemu", "cloudinit", "pending", vid,
                   node=n, validate=is_list)
 
+        # security posture reads: all API-only, gated on a discovered VM so the
+        # posture blocks and the cluster audit table render against real data.
+        # `show` is the layered per-VM posture, `list` the cluster-wide audit,
+        # `agent show`/`secureboot show`/`tpm show`/`confidential show`/
+        # `cpu-flags show`/`nic show` the per-facet reads. The mutating
+        # counterparts (agent set, secureboot enable, tpm add/remove,
+        # confidential set/clear, cpu-flags set, nic firewall, protection
+        # enable/disable) are deferred below.
+        def has_security_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            missing = [k for k in ("vmid", "protection") if k not in data]
+            return f"security posture missing keys: {missing}" if missing else None
+
+        def has_agent_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "enabled" in data else "agent posture missing 'enabled' key"
+
+        def has_boot_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "posture" in data else "boot posture missing 'posture' key"
+
+        def has_tpm_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "present" in data else "TPM posture missing 'present' key"
+
+        def has_confidential_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "platform" in data else "confidential posture missing 'platform' key"
+
+        def has_cpuflags_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "enabled" in data else "cpu-flags posture missing 'enabled' key"
+
+        ctx.check("security show", "qemu", "security", "show", vid,
+                  node=n, validate=has_security_posture)
+        # list is a cluster resources scan plus one config read per VM; an
+        # empty cluster still returns a valid (possibly empty) array.
+        ctx.check("security list", "qemu", "security", "list", node=n, validate=is_list)
+        ctx.check("security agent show", "qemu", "security", "agent", "show", vid,
+                  node=n, validate=has_agent_posture)
+        ctx.check("security secureboot show", "qemu", "security", "secureboot", "show", vid,
+                  node=n, validate=has_boot_posture)
+        ctx.check("security tpm show", "qemu", "security", "tpm", "show", vid,
+                  node=n, validate=has_tpm_posture)
+        ctx.check("security confidential show", "qemu", "security", "confidential", "show", vid,
+                  node=n, validate=has_confidential_posture)
+        ctx.check("security cpu-flags show", "qemu", "security", "cpu-flags", "show", vid,
+                  node=n, validate=has_cpuflags_posture)
+        ctx.check("security nic show", "qemu", "security", "nic", "show", vid,
+                  node=n, validate=is_list)
+
     # QEMU capability queries are node-scoped and always safe: they report the
     # CPU models, CPU flags, and machine types the node's QEMU binary can offer
     # guests, independent of whether any VM exists.
     ctx.check("cpu list", "qemu", "cpu", "list", node=n, validate=is_list)
     ctx.check("cpu-flags", "qemu", "cpu-flags", node=n, validate=is_list)
     ctx.check("machine list", "qemu", "machine", "list", node=n, validate=is_list)
+
+    # migrate capabilities: node-scoped QEMU migration feature report,
+    # independent of whether any VM exists (mirrors `pve node capabilities
+    # qemu migration`).
+    def has_migrate_capabilities(res: CmdResult) -> str | None:
+        data = res.json()
+        if not isinstance(data, dict):
+            return "expected a JSON object"
+        return None if "has-dbus-vmstate" in data else "capabilities response missing 'has-dbus-vmstate' key"
+
+    ctx.check("migrate capabilities", "qemu", "migrate", "capabilities",
+              node=n, validate=has_migrate_capabilities)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
@@ -317,4 +395,86 @@ def run(ctx: Ctx) -> None:
         "opens an interactive SSH tunnel into a guest — not automatable head-less, "
         "same class as `node shell`/`node console`; covered by unit tests",
         "pve qemu ssh <vmid>",
+    )
+    # `security` mutations are pure PVE-API read-modify-write operations (no
+    # ssh, unlike lxc's capability caps), but the mutate phase does not yet
+    # drive a purpose-built VM through them: each stays deferred here and is
+    # covered by unit tests (internal/cli/qemu/security*_test.go).
+    ctx.defer(
+        "security agent set",
+        "sets the guest-agent config option (agent=); not wired into the "
+        "mutate phase; covered by unit tests",
+        "pve qemu security agent set <vmid> --enabled --type virtio",
+    )
+    ctx.defer(
+        "security secureboot enable",
+        "switches firmware to OVMF and allocates an EFI vars disk; not wired "
+        "into the mutate phase; covered by unit tests",
+        "pve qemu security secureboot enable <vmid> --storage local-lvm",
+    )
+    ctx.defer(
+        "security tpm add",
+        "allocates a TPM state disk; not wired into the mutate phase; "
+        "covered by unit tests",
+        "pve qemu security tpm add <vmid> --storage local-lvm",
+    )
+    ctx.defer(
+        "security tpm remove",
+        "destroys the TPM state device and every key sealed in it; not "
+        "wired into the mutate phase; covered by unit tests",
+        "pve qemu security tpm remove <vmid> --force",
+    )
+    ctx.defer(
+        "security confidential set",
+        "configures AMD SEV / Intel TDX memory encryption, which needs "
+        "matching host CPU/firmware support; not wired into the mutate "
+        "phase; covered by unit tests",
+        "pve qemu security confidential set <vmid> --sev std",
+    )
+    ctx.defer(
+        "security confidential clear",
+        "removes the confidential-computing configuration; not wired into "
+        "the mutate phase; covered by unit tests",
+        "pve qemu security confidential clear <vmid>",
+    )
+    ctx.defer(
+        "security cpu-flags set",
+        "edits the VM's security-relevant CPU flags; not wired into the "
+        "mutate phase; covered by unit tests",
+        "pve qemu security cpu-flags set <vmid> --enable spec-ctrl",
+    )
+    ctx.defer(
+        "security nic firewall",
+        "toggles per-NIC firewall coverage; not wired into the mutate "
+        "phase; covered by unit tests",
+        "pve qemu security nic firewall <vmid> --on --all",
+    )
+    ctx.defer(
+        "security protection enable",
+        "sets the VM protection flag; not wired into the mutate phase; "
+        "covered by unit tests",
+        "pve qemu security protection enable <vmid>",
+    )
+    ctx.defer(
+        "security protection disable",
+        "clears the VM protection flag; not wired into the mutate phase; "
+        "covered by unit tests",
+        "pve qemu security protection disable <vmid>",
+    )
+    # `firewall alias get` / `firewall ipset get-member` read a single
+    # pre-existing entry by name. A fresh lab has none by default, and the
+    # mutate phase's isolated alias/ipset create-list-update-delete lifecycle
+    # (see `scripts/e2e_lib/lifecycle.py`) does not yet call these two reads,
+    # so they cannot be driven head-less; covered by unit tests.
+    ctx.defer(
+        "firewall alias get",
+        "reads a single firewall alias by name — needs a pre-existing alias; "
+        "not wired into the mutate phase; covered by unit tests",
+        "pve qemu firewall alias get <vmid> <name>",
+    )
+    ctx.defer(
+        "firewall ipset get-member",
+        "reads a single CIDR entry of an IP set — needs a pre-existing "
+        "member; not wired into the mutate phase; covered by unit tests",
+        "pve qemu firewall ipset get-member <vmid> <name> <cidr>",
     )

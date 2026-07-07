@@ -329,3 +329,20 @@ def run(ctx: Ctx) -> None:
         "covered by unit tests",
         "pve lxc security caps show <ctid> --effective",
     )
+    # `firewall alias get` / `firewall ipset get-member` read a single
+    # pre-existing entry by name. A fresh lab has none by default, and the
+    # mutate phase's isolated alias/ipset create-list-update-delete lifecycle
+    # (see `scripts/e2e_lib/lifecycle.py`) does not yet call these two reads,
+    # so they cannot be driven head-less; covered by unit tests.
+    ctx.defer(
+        "firewall alias get",
+        "reads a single firewall alias by name — needs a pre-existing alias; "
+        "not wired into the mutate phase; covered by unit tests",
+        "pve lxc firewall alias get <ctid> <name>",
+    )
+    ctx.defer(
+        "firewall ipset get-member",
+        "reads a single CIDR entry of an IP set — needs a pre-existing "
+        "member; not wired into the mutate phase; covered by unit tests",
+        "pve lxc firewall ipset get-member <ctid> <name> <cidr>",
+    )
