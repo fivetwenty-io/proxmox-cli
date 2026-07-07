@@ -280,14 +280,21 @@ func newTapeChangerUpdateCmd() *cobra.Command {
 // this API, this one has no --digest guard): the PBS API schema declares no
 // request body for it.
 func newTapeChangerDeleteCmd() *cobra.Command {
+	var yes bool
+
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a tape changer configuration",
-		Long:  "Remove a tape changer configuration (DELETE /config/changer/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a tape changer configuration (DELETE /config/changer/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete tape changer %q without confirmation: pass --yes/-y", name)
+			}
 
 			err := deps.PBS.Config.DeleteChanger(cmd.Context(), name)
 			if err != nil {
@@ -298,6 +305,8 @@ func newTapeChangerDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+
 	return cmd
 }
 

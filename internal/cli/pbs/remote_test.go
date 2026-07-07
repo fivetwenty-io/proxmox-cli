@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -70,6 +71,44 @@ func TestRemoteShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "pbs1.example.com")
 	require.Contains(t, out, "primary backup target")
+}
+
+func TestRemoteShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+remoteConfigPath+"/"+remoteName, map[string]any{
+		"name": remoteName, "host": "pbs1.example.com", "auth-id": "root@pam",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "show", remoteName, "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "pbs1.example.com")
+	require.Contains(t, out, "false (default)", "use-node-proxy defaults to false")
+}
+
+func TestRemoteShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+remoteConfigPath+"/"+remoteName, map[string]any{
+		"name": remoteName, "host": "pbs1.example.com", "auth-id": "root@pam",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "show", remoteName, "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "pbs1.example.com", got.Set["host"])
+	require.Equal(t, "false", got.Defaults["use-node-proxy"])
 }
 
 func TestRemoteShow_SurfacesAPIError(t *testing.T) {
@@ -259,7 +298,7 @@ func TestRemoteDelete_DeletesRemote(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newRemoteCmd(), "remote", "delete", remoteName, "--digest", "abc123")
+	err := run(deps, &buf, newRemoteCmd(), "remote", "delete", remoteName, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -276,9 +315,25 @@ func TestRemoteDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newRemoteCmd(), "remote", "delete", remoteName)
+	err := run(deps, &buf, newRemoteCmd(), "remote", "delete", remoteName, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete remote")
+}
+
+func TestRemoteDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+remoteConfigPath+"/"+remoteName, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "delete", remoteName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }
 
 // --- remote scan ls ---------------------------------------------------------------

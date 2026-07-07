@@ -274,19 +274,26 @@ func newAcmeAccountUpdateCmd() *cobra.Command {
 // newAcmeAccountDeleteCmd builds `pve pbs acme account delete <name>` —
 // deactivate an ACME account (DELETE /config/acme/account/{name}).
 func newAcmeAccountDeleteCmd() *cobra.Command {
-	var force bool
+	var (
+		force bool
+		yes   bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Deactivate an ACME account",
 		Long: "Deactivate an ACME account with its provider and remove its local " +
 			"configuration (DELETE /config/acme/account/{name}). --force removes the " +
-			"local configuration even if the provider refuses the deactivation request.",
+			"local configuration even if the provider refuses the deactivation request. " +
+			"This is destructive: pass --yes/-y to confirm.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("account name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to deactivate acme account %q without confirmation: pass --yes/-y", name)
 			}
 
 			params := &pbsconfig.DeleteAcmeAccountParams{}
@@ -304,6 +311,7 @@ func newAcmeAccountDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "remove local account data even if the provider refuses deactivation")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 
@@ -600,16 +608,21 @@ func newAcmePluginUpdateCmd() *cobra.Command {
 // ACME challenge plugin configuration (DELETE /config/acme/plugins/{id}).
 // This binding takes no request parameters at all (no digest guard).
 func newAcmePluginDeleteCmd() *cobra.Command {
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete an ACME challenge plugin",
-		Long:  "Remove an ACME DNS challenge-plugin configuration (DELETE /config/acme/plugins/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove an ACME DNS challenge-plugin configuration (DELETE " +
+			"/config/acme/plugins/{id}). This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if id == "" {
 				return fmt.Errorf("plugin id must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete acme plugin %q without confirmation: pass --yes/-y", id)
 			}
 
 			err := deps.PBS.Config.DeleteAcmePlugins(cmd.Context(), id)
@@ -621,6 +634,7 @@ func newAcmePluginDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

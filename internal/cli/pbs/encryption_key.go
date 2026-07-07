@@ -144,15 +144,24 @@ func newEncKeyAddCmd() *cobra.Command {
 // newEncKeyDeleteCmd builds `pve pbs encryption-key delete <id>` — remove a
 // datastore encryption key (DELETE /config/encryption-keys/{id}).
 func newEncKeyDeleteCmd() *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a datastore encryption key",
-		Long:  "Remove a datastore encryption key (DELETE /config/encryption-keys/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a datastore encryption key (DELETE /config/encryption-keys/{id}). " +
+			"This is destructive: backups encrypted with this key become unrecoverable. " +
+			"Pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete encryption key %q without confirmation: pass --yes/-y", id)
+			}
 
 			params := &pbsconfig.DeleteEncryptionKeysParams{}
 			if cmd.Flags().Changed("digest") {
@@ -169,6 +178,7 @@ func newEncKeyDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

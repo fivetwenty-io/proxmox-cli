@@ -235,6 +235,26 @@ func TestSnapshotShow_RendersAllFields(t *testing.T) {
 	require.Contains(t, out, "drive-scsi0.img.fidx")
 }
 
+// TestSnapshotShow_RejectsMatchingTimeWrongTypeOrID verifies the client-side
+// match requires backup-type and backup-id to agree with the requested
+// reference, not just backup-time. Defense-in-depth: the server-side params
+// already scope the list, but this guards against a future API loosening
+// its filter.
+func TestSnapshotShow_RejectsMatchingTimeWrongTypeOrID(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	recordJSON(f, "GET "+snapshotsPath, new(recordedRequest), []map[string]any{
+		{"backup-type": "ct", "backup-id": "100", "backup-time": 1700000000, "protected": false},
+		{"backup-type": "vm", "backup-id": "200", "backup-time": 1700000000, "protected": false},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newSnapshotShowCmd(), "show", vm100Ref, "--store", testStore)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
 func TestSnapshotShow_NotFound(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -324,7 +344,7 @@ func TestSnapshotDelete_Success(t *testing.T) {
 	recordJSON(f, "DELETE "+snapshotsPath, &rec, map[string]any{})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newSnapshotDeleteCmd(), "delete", vm100Ref, "--store", testStore)
+	err := run(deps, &buf, newSnapshotDeleteCmd(), "delete", vm100Ref, "--store", testStore, "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, snapshotsPath, rec.path)
@@ -343,8 +363,25 @@ func TestSnapshotDelete_ServerError(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
+	err := run(deps, &buf, newSnapshotDeleteCmd(), "delete", vm100Ref, "--store", testStore, "--yes")
+	require.Error(t, err)
+}
+
+func TestSnapshotDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var called bool
+	f.HandleFunc("DELETE "+snapshotsPath, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, map[string]any{})
+	})
+
+	var buf bytes.Buffer
 	err := run(deps, &buf, newSnapshotDeleteCmd(), "delete", vm100Ref, "--store", testStore)
 	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }
 
 // --- snapshot protect / unprotect --------------------------------------------------------------

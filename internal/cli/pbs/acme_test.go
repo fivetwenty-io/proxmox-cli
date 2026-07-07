@@ -270,7 +270,7 @@ func TestAcmeAccountDelete_Success(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/acme/account/myaccount", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount", "--force")
+	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount", "--force", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "1", rec.query.Get("force"))
@@ -285,7 +285,7 @@ func TestAcmeAccountDelete_NoForceOmitsParam(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/acme/account/myaccount", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount")
+	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount", "--yes")
 	require.NoError(t, err)
 	_, hasForce := rec.query["force"]
 	require.False(t, hasForce)
@@ -296,7 +296,7 @@ func TestAcmeAccountDelete_EmptyNameRejected(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "")
+	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "must not be empty")
 }
@@ -310,9 +310,19 @@ func TestAcmeAccountDelete_ServerErrorSurfaced(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount")
+	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "provider unreachable")
+}
+
+func TestAcmeAccountDelete_RequiresYes(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newAcmeAccountDeleteCmd(), "delete", "myaccount")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes/-y")
 }
 
 // ---------------------------------------------------------------------------
@@ -623,7 +633,7 @@ func TestAcmePluginDelete_Success(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/acme/plugins/dns1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "dns1")
+	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "dns1", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Contains(t, buf.String(), "dns1")
@@ -634,7 +644,7 @@ func TestAcmePluginDelete_EmptyIDRejected(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "")
+	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "must not be empty")
 }
@@ -648,9 +658,19 @@ func TestAcmePluginDelete_ServerErrorSurfaced(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "dns1")
+	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "dns1", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no such plugin")
+}
+
+func TestAcmePluginDelete_RequiresYes(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newAcmePluginDeleteCmd(), "delete", "dns1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes/-y")
 }
 
 // ---------------------------------------------------------------------------

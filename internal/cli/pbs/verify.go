@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
@@ -232,11 +233,15 @@ func newVerifyJobLsCmd() *cobra.Command {
 // newVerifyJobShowCmd builds `pve pbs verify job show <id>` — show one
 // verification job's full configuration (GET /config/verify/{id}).
 func newVerifyJobShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show one verification job's configuration",
-		Long:  "Show the full configuration of one verification job (GET /config/verify/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full configuration of one verification job (GET " +
+			"/config/verify/{id}). The PBS API omits options left at their built-in " +
+			"defaults; pass --defaults to also list those, with the value they " +
+			"effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -289,10 +294,17 @@ func newVerifyJobShowCmd() *cobra.Command {
 				single["verify-threads"] = strconv.FormatInt(*resp.VerifyThreads, 10)
 			}
 
-			res := output.Result{Single: single, Raw: resp}
+			var raw any = resp
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(verifyJobOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -504,16 +516,21 @@ func newVerifyJobUpdateCmd() *cobra.Command {
 // verification job configuration (DELETE /config/verify/{id}).
 func newVerifyJobDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a scheduled verification job",
-		Long:  "Remove a verification job configuration (DELETE /config/verify/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a verification job configuration (DELETE /config/verify/{id}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if id == "" {
 				return fmt.Errorf("job id must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete verify job %q without confirmation: pass --yes/-y", id)
 			}
 
 			params := &pbsconfig.DeleteVerifyParams{}
@@ -531,6 +548,7 @@ func newVerifyJobDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

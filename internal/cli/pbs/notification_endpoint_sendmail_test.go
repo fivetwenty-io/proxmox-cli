@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -81,6 +82,46 @@ func TestNotifEndpointSendmailShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "admin@example.com")
 	require.Contains(t, out, "primary")
+}
+
+// TestNotifEndpointSendmailShow_DefaultsTable verifies --defaults lists an
+// unset option (the PBS sendmail endpoint schema declares no built-in
+// defaults, so unset options render "(unset)" rather than "(default)").
+func TestNotifEndpointSendmailShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifSendmailPath+"/sendmail-a", map[string]any{
+		"name": "sendmail-a", "mailto": []string{"admin@example.com"},
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointSendmailCmd(), "sendmail", "show", "sendmail-a", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "admin@example.com")
+	require.Contains(t, out, "(unset)", "comment has no schema default")
+}
+
+func TestNotifEndpointSendmailShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifSendmailPath+"/sendmail-a", map[string]any{
+		"name": "sendmail-a", "mailto": []string{"admin@example.com"},
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointSendmailCmd(), "sendmail", "show", "sendmail-a", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Empty(t, got.Defaults, "sendmail endpoint schema declares no built-in defaults")
 }
 
 func TestNotifEndpointSendmailShow_EmptyNameRejected(t *testing.T) {
@@ -302,7 +343,7 @@ func TestNotifEndpointSendmailUpdate_SurfacesAPIError(t *testing.T) {
 
 // --- sendmail delete -------------------------------------------------------------------
 
-func TestNotifEndpointSendmailDelete_DeletesEndpoint(t *testing.T) {
+func TestNotifEndpointSendmailDelete_RequiresYes(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "DELETE "+notifSendmailPath+"/sendmail-a", &rec, nil)
@@ -310,6 +351,19 @@ func TestNotifEndpointSendmailDelete_DeletesEndpoint(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNotifEndpointSendmailCmd(), "sendmail", "delete", "sendmail-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
+func TestNotifEndpointSendmailDelete_DeletesEndpoint(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+notifSendmailPath+"/sendmail-a", &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointSendmailCmd(), "sendmail", "delete", "sendmail-a", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -334,7 +388,7 @@ func TestNotifEndpointSendmailDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNotifEndpointSendmailCmd(), "sendmail", "delete", "sendmail-a")
+	err := run(deps, &buf, newNotifEndpointSendmailCmd(), "sendmail", "delete", "sendmail-a", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete sendmail endpoint")
 }

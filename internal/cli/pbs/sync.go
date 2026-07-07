@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
@@ -250,11 +251,15 @@ func newSyncJobLsCmd() *cobra.Command {
 // newSyncJobShowCmd builds `pve pbs sync job show <id>` — show one sync
 // job's full configuration (GET /config/sync/{id}).
 func newSyncJobShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show one sync job's configuration",
-		Long:  "Show every populated field of a single sync job configuration (GET /config/sync/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every populated field of a single sync job configuration (GET " +
+			"/config/sync/{id}). The PBS API omits options left at their built-in " +
+			"defaults; pass --defaults to also list those, with the value they " +
+			"effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -276,10 +281,18 @@ func newSyncJobShowCmd() *cobra.Command {
 				return fmt.Errorf("decode sync job %q: %w", id, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(syncJobOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -627,16 +640,21 @@ func newSyncJobUpdateCmd() *cobra.Command {
 // job configuration (DELETE /config/sync/{id}).
 func newSyncJobDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a scheduled sync job",
-		Long:  "Remove a sync job configuration (DELETE /config/sync/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a sync job configuration (DELETE /config/sync/{id}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if id == "" {
 				return fmt.Errorf("job id must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete sync job %q without confirmation: pass --yes/-y", id)
 			}
 
 			params := &pbsconfig.DeleteSyncParams{}
@@ -654,6 +672,7 @@ func newSyncJobDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

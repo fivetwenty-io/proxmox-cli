@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -86,6 +87,44 @@ func TestDatastoreShow_RendersPopulatedFields(t *testing.T) {
 	require.Contains(t, out, "store1")
 	require.Contains(t, out, "/mnt/store1")
 	require.Contains(t, out, "true")
+}
+
+func TestDatastoreShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	recordJSON(f, "GET "+fmt.Sprintf(pathConfigDatastoreFmt, "store1"), &recordedRequest{}, map[string]any{
+		"name": "store1", "path": "/mnt/store1",
+	})
+
+	var buf bytes.Buffer
+	deps := depsFor(t, pc, output.FormatTable, false)
+	err := run(deps, &buf, newDatastoreShowCmd(), "show", "store1", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "/mnt/store1")
+	require.Contains(t, out, "notification-system (default)", "notification-mode defaults to notification-system")
+}
+
+func TestDatastoreShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	recordJSON(f, "GET "+fmt.Sprintf(pathConfigDatastoreFmt, "store1"), &recordedRequest{}, map[string]any{
+		"name": "store1", "path": "/mnt/store1",
+	})
+
+	var buf bytes.Buffer
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	err := run(deps, &buf, newDatastoreShowCmd(), "show", "store1", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "/mnt/store1", got.Set["path"])
+	require.Equal(t, "notification-system", got.Defaults["notification-mode"])
 }
 
 func TestDatastoreShow_ServerError(t *testing.T) {
@@ -233,7 +272,7 @@ func TestDatastoreDelete_BlocksUntilComplete(t *testing.T) {
 
 	var buf bytes.Buffer
 	deps := depsFor(t, pc, output.FormatTable, false)
-	err := run(deps, &buf, newDatastoreDeleteCmd(), "delete", "store1", "--destroy-data")
+	err := run(deps, &buf, newDatastoreDeleteCmd(), "delete", "store1", "--destroy-data", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -249,7 +288,7 @@ func TestDatastoreDelete_AsyncReturnsUPID(t *testing.T) {
 
 	var buf bytes.Buffer
 	deps := depsFor(t, pc, output.FormatTable, true)
-	err := run(deps, &buf, newDatastoreDeleteCmd(), "delete", "store1")
+	err := run(deps, &buf, newDatastoreDeleteCmd(), "delete", "store1", "--yes")
 	require.NoError(t, err)
 	require.Contains(t, buf.String(), validUPID)
 	require.NotContains(t, buf.String(), "deleted.")
@@ -263,8 +302,21 @@ func TestDatastoreDelete_ServerError(t *testing.T) {
 
 	var buf bytes.Buffer
 	deps := depsFor(t, pc, output.FormatTable, false)
+	err := run(deps, &buf, newDatastoreDeleteCmd(), "delete", "store1", "--yes")
+	require.Error(t, err)
+}
+
+func TestDatastoreDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+fmt.Sprintf(pathConfigDatastoreFmt, "store1"), &rec, validUPID)
+
+	var buf bytes.Buffer
+	deps := depsFor(t, pc, output.FormatTable, false)
 	err := run(deps, &buf, newDatastoreDeleteCmd(), "delete", "store1")
 	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
 }
 
 // --- status -----------------------------------------------------------------

@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -211,6 +212,44 @@ func TestPruneJobShow_RendersSingle(t *testing.T) {
 	require.Contains(t, out, "daily")
 }
 
+func TestPruneJobShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+pruneConfigPath+"/"+pruneJobID, map[string]any{
+		"id": pruneJobID, "store": pruneStore, "schedule": "daily",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "show", pruneJobID, "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "daily")
+	require.Contains(t, out, "false (default)", "disable defaults to false")
+}
+
+func TestPruneJobShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+pruneConfigPath+"/"+pruneJobID, map[string]any{
+		"id": pruneJobID, "store": pruneStore, "schedule": "daily",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "show", pruneJobID, "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "daily", got.Set["schedule"])
+	require.Equal(t, "false", got.Defaults["disable"])
+}
+
 func TestPruneJobShow_SurfacesAPIError(t *testing.T) {
 	f, pc := newFakeClient(t)
 	f.HandleFunc("GET "+pruneConfigPath+"/"+pruneJobID, func(w http.ResponseWriter, _ *http.Request) {
@@ -319,6 +358,19 @@ func TestPruneJobUpdate_SurfacesAPIError(t *testing.T) {
 	require.Contains(t, err.Error(), "update prune job")
 }
 
+func TestPruneJobDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+pruneConfigPath+"/"+pruneJobID, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "delete", pruneJobID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestPruneJobDelete_DeletesJob(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
@@ -326,7 +378,7 @@ func TestPruneJobDelete_DeletesJob(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newPruneCmd(), "prune", "job", "delete", pruneJobID, "--digest", "abc123")
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "delete", pruneJobID, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -343,7 +395,7 @@ func TestPruneJobDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newPruneCmd(), "prune", "job", "delete", pruneJobID)
+	err := run(deps, &buf, newPruneCmd(), "prune", "job", "delete", pruneJobID, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete prune job")
 }

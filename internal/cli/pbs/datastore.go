@@ -15,6 +15,7 @@ import (
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -105,11 +106,14 @@ func newDatastoreLsCmd() *cobra.Command {
 // newDatastoreShowCmd builds `pve pbs datastore show <name>` — show a single
 // datastore configuration (GET /config/datastore/{name}).
 func newDatastoreShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single datastore configuration",
-		Long:  "Show every populated field of a single Proxmox Backup Server datastore configuration.",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every populated field of a single Proxmox Backup Server datastore " +
+			"configuration. The PBS API omits options left at their built-in defaults; " +
+			"pass --defaults to also list those, with the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -124,10 +128,18 @@ func newDatastoreShowCmd() *cobra.Command {
 				return fmt.Errorf("decode datastore %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(datastoreOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -427,6 +439,7 @@ func newDatastoreDeleteCmd() *cobra.Command {
 		destroyData    bool
 		keepJobConfigs bool
 		digest         string
+		yes            bool
 	)
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
@@ -435,12 +448,16 @@ func newDatastoreDeleteCmd() *cobra.Command {
 			"datastore's underlying contents; without it, only the configuration entry is removed " +
 			"and the on-disk data is left in place. This is an asynchronous task: by default the " +
 			"command blocks until it completes; pass --async (persistent flag) to return the UPID " +
-			"immediately instead.",
+			"immediately instead. This is destructive: pass --yes/-y to confirm.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			fl := cmd.Flags()
+
+			if !yes {
+				return fmt.Errorf("refusing to delete datastore %q without confirmation: pass --yes/-y", name)
+			}
 
 			params := &pbsconfig.DeleteDatastoreParams{}
 			if fl.Changed("destroy-data") {
@@ -468,6 +485,7 @@ func newDatastoreDeleteCmd() *cobra.Command {
 	fl.BoolVar(&destroyData, "destroy-data", false, "also delete the datastore's underlying contents")
 	fl.BoolVar(&keepJobConfigs, "keep-job-configs", false, "keep job configurations related to this datastore")
 	fl.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
+	fl.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

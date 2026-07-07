@@ -277,15 +277,24 @@ func newUserTokenUpdateCmd() *cobra.Command {
 // <token-name>` — remove an API token (DELETE
 // /access/users/{userid}/token/{token-name}).
 func newUserTokenDeleteCmd() *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <userid> <token-name>",
 		Short: "Delete an API token",
-		Long:  "Remove an API token from a user (DELETE /access/users/{userid}/token/{token-name}).",
-		Args:  cobra.ExactArgs(2),
+		Long: "Remove an API token from a user (DELETE /access/users/{userid}/token/{token-name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, tokenName := args[0], args[1]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete token %q for user %q without confirmation: pass --yes/-y",
+					tokenName, userid)
+			}
 
 			params := &pbsaccess.DeleteUsersTokenParams{}
 			if cmd.Flags().Changed("digest") {
@@ -302,5 +311,6 @@ func newUserTokenDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

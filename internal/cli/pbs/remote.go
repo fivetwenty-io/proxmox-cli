@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -95,11 +96,15 @@ func newRemoteLsCmd() *cobra.Command {
 // newRemoteShowCmd builds `pve pbs remote show <name>` — show a single
 // remote's configuration (GET /config/remote/{name}).
 func newRemoteShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single remote's configuration",
-		Long:  "Show every populated field of a single remote configuration (GET /config/remote/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every populated field of a single remote configuration (GET " +
+			"/config/remote/{name}). The PBS API omits options left at their built-in " +
+			"defaults; pass --defaults to also list those, with the value they " +
+			"effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -114,10 +119,18 @@ func newRemoteShowCmd() *cobra.Command {
 				return fmt.Errorf("decode remote %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(remoteOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -303,15 +316,23 @@ func newRemoteUpdateCmd() *cobra.Command {
 // newRemoteDeleteCmd builds `pve pbs remote delete <name>` — remove a remote
 // configuration (DELETE /config/remote/{name}).
 func newRemoteDeleteCmd() *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a remote connection",
-		Long:  "Remove a remote Proxmox Backup Server connection (DELETE /config/remote/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a remote Proxmox Backup Server connection (DELETE /config/remote/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete remote %q without confirmation: pass --yes/-y", name)
+			}
 
 			params := &pbsconfig.DeleteRemoteParams{}
 			if cmd.Flags().Changed("digest") {
@@ -328,6 +349,7 @@ func newRemoteDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

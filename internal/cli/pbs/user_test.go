@@ -306,7 +306,7 @@ func TestUserDelete_DeletesUser(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid, "--digest", "abc123")
+	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -322,7 +322,7 @@ func TestUserDelete_OmitsDigestWhenUnset(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid)
+	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid, "--yes")
 	require.NoError(t, err)
 	_, present := rec.query["digest"]
 	require.False(t, present)
@@ -336,9 +336,25 @@ func TestUserDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid)
+	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete user")
+}
+
+func TestUserDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+usersPath+"/"+testUserid, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newUserCmd(), "user", "delete", testUserid)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }
 
 // --- user unlock-tfa ---------------------------------------------------------------

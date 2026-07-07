@@ -289,6 +289,7 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 		fast        bool
 		labelText   string
 		loadBarcode string
+		yes         bool
 	)
 	cmd := &cobra.Command{
 		Use:   "format <drive>",
@@ -296,13 +297,19 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 		Long: "Format (erase) the media currently loaded in a drive (POST " +
 			"/tape/drive/{drive}/format-media). Every option is optional and only " +
 			"forwarded when explicitly set. Runs as an asynchronous task; the " +
-			"command blocks until it finishes unless --async is set.",
+			"command blocks until it finishes unless --async is set. This is " +
+			"destructive: all data on the media is erased and unrecoverable. Pass " +
+			"--yes/-y to confirm.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
 			if err != nil {
 				return err
+			}
+
+			if !yes {
+				return fmt.Errorf("refusing to format media in drive %q without confirmation: pass --yes/-y", drive)
 			}
 
 			fl := cmd.Flags()
@@ -335,6 +342,7 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 	fl.BoolVar(&fast, "fast", false, "use fast erase")
 	fl.StringVar(&labelText, "label-text", "", "media label text/barcode to write after formatting")
 	fl.StringVar(&loadBarcode, "load-barcode", "", "load media with this label/barcode before formatting")
+	fl.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 
 	return cmd
 }

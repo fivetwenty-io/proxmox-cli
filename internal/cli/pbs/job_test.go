@@ -287,6 +287,19 @@ func TestTapeJobUpdate_SurfacesAPIError(t *testing.T) {
 
 // --- tape job delete -------------------------------------------------------
 
+func TestTapeJobDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+tapeJobConfigPath+"/"+tapeJobID, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapeJobCmd(), "job", "delete", tapeJobID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestTapeJobDelete_DeletesJob(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
@@ -294,7 +307,7 @@ func TestTapeJobDelete_DeletesJob(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeJobCmd(), "job", "delete", tapeJobID, "--digest", "abc123")
+	err := run(deps, &buf, newTapeJobCmd(), "job", "delete", tapeJobID, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -311,7 +324,7 @@ func TestTapeJobDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeJobCmd(), "job", "delete", tapeJobID)
+	err := run(deps, &buf, newTapeJobCmd(), "job", "delete", tapeJobID, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete tape backup job")
 }

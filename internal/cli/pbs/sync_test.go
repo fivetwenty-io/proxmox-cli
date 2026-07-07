@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -160,6 +161,44 @@ func TestSyncJobShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "nightly sync")
 	require.Contains(t, out, "daily")
+}
+
+func TestSyncJobShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+syncConfigPath+"/"+syncJobID, map[string]any{
+		"id": syncJobID, "store": "store1", "remote-store": "rs1",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newSyncCmd(), "sync", "job", "show", syncJobID, "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "rs1")
+	require.Contains(t, out, "pull (default)", "sync-direction defaults to pull")
+}
+
+func TestSyncJobShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+syncConfigPath+"/"+syncJobID, map[string]any{
+		"id": syncJobID, "store": "store1", "remote-store": "rs1",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newSyncCmd(), "sync", "job", "show", syncJobID, "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "store1", got.Set["store"])
+	require.Equal(t, "pull", got.Defaults["sync-direction"])
 }
 
 func TestSyncJobShow_SurfacesAPIError(t *testing.T) {
@@ -372,6 +411,19 @@ func TestSyncJobUpdate_SurfacesAPIError(t *testing.T) {
 
 // --- sync job delete -------------------------------------------------------
 
+func TestSyncJobDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+syncConfigPath+"/"+syncJobID, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newSyncCmd(), "sync", "job", "delete", syncJobID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestSyncJobDelete_DeletesJob(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
@@ -379,7 +431,7 @@ func TestSyncJobDelete_DeletesJob(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newSyncCmd(), "sync", "job", "delete", syncJobID, "--digest", "abc123")
+	err := run(deps, &buf, newSyncCmd(), "sync", "job", "delete", syncJobID, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -396,7 +448,7 @@ func TestSyncJobDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newSyncCmd(), "sync", "job", "delete", syncJobID)
+	err := run(deps, &buf, newSyncCmd(), "sync", "job", "delete", syncJobID, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete sync job")
 }

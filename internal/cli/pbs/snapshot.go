@@ -366,9 +366,12 @@ func newSnapshotShowCmd() *cobra.Command {
 				return fmt.Errorf("decode snapshot list in datastore %q: %w", df.store, err)
 			}
 
+			// The server-side params already scope the list to btype/bid, but
+			// match all three fields client-side too: defense-in-depth against
+			// a future API that loosens its filter params.
 			var found *snapshotEntry
 			for i := range entries {
-				if entries[i].BackupTime == btime {
+				if entries[i].BackupType == btype && entries[i].BackupID == bid && entries[i].BackupTime == btime {
 					found = &entries[i]
 					break
 				}
@@ -470,19 +473,27 @@ func newSnapshotFilesCmd() *cobra.Command {
 // permanently remove one backup snapshot (DELETE
 // /admin/datastore/{store}/snapshots).
 func newSnapshotDeleteCmd() *cobra.Command {
-	var df storeFlags
+	var (
+		df  storeFlags
+		yes bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "delete <type>/<id>/<time>",
 		Short: "Delete a backup snapshot",
-		Long:  "Permanently remove one backup snapshot and all its archive files from a datastore.",
-		Args:  cobra.ExactArgs(1),
+		Long: "Permanently remove one backup snapshot and all its archive files from a " +
+			"datastore. This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
 			btype, bid, btime, err := parseSnapshotRef(args[0])
 			if err != nil {
 				return err
+			}
+
+			if !yes {
+				return fmt.Errorf("refusing to delete snapshot %q without confirmation: pass --yes/-y", args[0])
 			}
 
 			params := &pbsadmin.DeleteDatastoreSnapshotsParams{
@@ -502,6 +513,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 		},
 	}
 	df.register(cmd)
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 
 	return cmd
 }

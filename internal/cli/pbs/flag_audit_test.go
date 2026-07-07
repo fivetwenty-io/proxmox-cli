@@ -58,7 +58,7 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		"node disks directory":           {"ls", "create", "delete"},
 		"node disks zfs":                 {"ls", "show", "create"},
 		"node network":                   {"ls", "show", "create", "update", "delete", "revert", "apply"},
-		"node certificates":              {"ls", "info", "acme", "custom"},
+		"node certificates":              {"info", "acme", "custom"},
 		"node certificates acme":         {"order", "renew"},
 		"node certificates custom":       {"upload", "delete"},
 		"user token":                     {"ls", "show", "add", "update", "delete"},

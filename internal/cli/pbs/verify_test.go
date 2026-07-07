@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -139,6 +140,44 @@ func TestVerifyJobShow_RendersSingle(t *testing.T) {
 	require.Contains(t, out, "daily")
 }
 
+func TestVerifyJobShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+verifyConfigPath+"/"+verifyJobID, map[string]any{
+		"id": verifyJobID, "store": verifyStore, "schedule": "daily",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "show", verifyJobID, "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "daily")
+	require.Contains(t, out, "true (default)", "ignore-verified defaults to true")
+}
+
+func TestVerifyJobShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+verifyConfigPath+"/"+verifyJobID, map[string]any{
+		"id": verifyJobID, "store": verifyStore, "schedule": "daily",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "show", verifyJobID, "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "daily", got.Set["schedule"])
+	require.Equal(t, "true", got.Defaults["ignore-verified"])
+}
+
 func TestVerifyJobShow_SurfacesAPIError(t *testing.T) {
 	f, pc := newFakeClient(t)
 	f.HandleFunc("GET "+verifyConfigPath+"/"+verifyJobID, func(w http.ResponseWriter, _ *http.Request) {
@@ -242,6 +281,19 @@ func TestVerifyJobUpdate_SurfacesAPIError(t *testing.T) {
 	require.Contains(t, err.Error(), "update verify job")
 }
 
+func TestVerifyJobDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+verifyConfigPath+"/"+verifyJobID, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "delete", verifyJobID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestVerifyJobDelete_DeletesJob(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
@@ -249,7 +301,7 @@ func TestVerifyJobDelete_DeletesJob(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "delete", verifyJobID, "--digest", "abc123")
+	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "delete", verifyJobID, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -266,7 +318,7 @@ func TestVerifyJobDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "delete", verifyJobID)
+	err := run(deps, &buf, newVerifyCmd(), "verify", "job", "delete", verifyJobID, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete verify job")
 }

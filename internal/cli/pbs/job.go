@@ -473,16 +473,21 @@ func newTapeJobUpdateCmd() *cobra.Command {
 // backup job configuration (DELETE /config/tape-backup-job/{id}).
 func newTapeJobDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a scheduled tape backup job",
-		Long:  "Remove a tape backup job configuration (DELETE /config/tape-backup-job/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a tape backup job configuration (DELETE /config/tape-backup-job/{id}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if id == "" {
 				return fmt.Errorf("job id must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete tape backup job %q without confirmation: pass --yes/-y", id)
 			}
 
 			params := &pbsconfig.DeleteTapeBackupJobParams{}
@@ -500,6 +505,7 @@ func newTapeJobDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

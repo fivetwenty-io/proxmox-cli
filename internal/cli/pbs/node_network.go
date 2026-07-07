@@ -380,17 +380,25 @@ func newNodeNetworkUpdateCmd(nf *nodeFlags) *cobra.Command {
 // newNodeNetworkDeleteCmd builds `pve pbs node network delete <iface>` —
 // remove a single interface's configuration (DELETE /nodes/{node}/network/{iface}).
 func newNodeNetworkDeleteCmd(nf *nodeFlags) *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "delete <iface>",
 		Short: "Remove a network interface configuration",
 		Long: "Remove a single network interface configuration. Changes are staged in " +
-			"/etc/network/interfaces.new; run `network apply` to activate them.",
+			"/etc/network/interfaces.new; run `network apply` to activate them. This is " +
+			"destructive: pass --yes/-y to confirm.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			iface := args[0]
+			if !yes {
+				return fmt.Errorf("refusing to remove network interface %q on node %q without confirmation: pass --yes/-y",
+					iface, nf.node)
+			}
 
 			params := &pbsnodes.DeleteNetwork2Params{}
 			if cmd.Flags().Changed("digest") {
@@ -407,6 +415,7 @@ func newNodeNetworkDeleteCmd(nf *nodeFlags) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 
 	return cmd
 }
@@ -415,13 +424,19 @@ func newNodeNetworkDeleteCmd(nf *nodeFlags) *cobra.Command {
 // staged network changes (DELETE /nodes/{node}/network, removing
 // /etc/network/interfaces.new).
 func newNodeNetworkRevertCmd(nf *nodeFlags) *cobra.Command {
-	return &cobra.Command{
+	var yes bool
+	cmd := &cobra.Command{
 		Use:   "revert",
 		Short: "Discard staged network configuration changes",
-		Long:  "Discard every staged network configuration change by removing /etc/network/interfaces.new.",
-		Args:  cobra.NoArgs,
+		Long: "Discard every staged network configuration change by removing " +
+			"/etc/network/interfaces.new. This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
+			if !yes {
+				return fmt.Errorf("refusing to revert staged network configuration on node %q without confirmation: pass --yes/-y",
+					nf.node)
+			}
 
 			err := deps.PBS.Nodes.DeleteNetwork(cmd.Context(), nf.node)
 			if err != nil {
@@ -432,6 +447,8 @@ func newNodeNetworkRevertCmd(nf *nodeFlags) *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+	return cmd
 }
 
 // newNodeNetworkApplyCmd builds `pve pbs node network apply` — activate

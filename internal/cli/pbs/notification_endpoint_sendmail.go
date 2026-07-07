@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -100,11 +101,14 @@ func newNotifEndpointSendmailLsCmd() *cobra.Command {
 // sendmail show <name>` — show a single sendmail endpoint's configuration
 // (GET /config/notifications/endpoints/sendmail/{name}).
 func newNotifEndpointSendmailShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single sendmail endpoint's configuration",
 		Long: "Show every populated field of a single sendmail endpoint (GET " +
-			"/config/notifications/endpoints/sendmail/{name}).",
+			"/config/notifications/endpoints/sendmail/{name}). The API omits options " +
+			"left at their built-in defaults; pass --defaults to also list those, " +
+			"with the value they effectively have.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -123,10 +127,18 @@ func newNotifEndpointSendmailShowCmd() *cobra.Command {
 				return fmt.Errorf("decode sendmail endpoint %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(notifSendmailOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -332,16 +344,21 @@ func newNotifEndpointSendmailUpdateCmd() *cobra.Command {
 // digest parameter — PBS does not support conditional deletes for
 // notification endpoints.
 func newNotifEndpointSendmailDeleteCmd() *cobra.Command {
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a sendmail notification endpoint",
-		Long:  "Remove a sendmail notification endpoint (DELETE /config/notifications/endpoints/sendmail/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a sendmail notification endpoint (DELETE /config/notifications/endpoints/sendmail/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("endpoint name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete sendmail endpoint %q without confirmation: pass --yes/-y", name)
 			}
 
 			err := deps.PBS.Config.DeleteNotificationsEndpointsSendmail(cmd.Context(), name)
@@ -353,5 +370,6 @@ func newNotifEndpointSendmailDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

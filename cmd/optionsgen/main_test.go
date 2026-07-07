@@ -100,3 +100,40 @@ func TestGenerate_Errors(t *testing.T) {
 	_, _, err = generate(raw, cfg)
 	require.ErrorContains(t, err, "no POST parameter schema")
 }
+
+// TestGenerate_PBSTree verifies the parser handles a PBS-shaped apidoc: the
+// top-level array wraps every namespace inside one "/" root node (unlike
+// PVE's apidoc, whose top-level array lists namespaces directly), and node
+// paths one level deeper still resolve via the same recursive search.
+func TestGenerate_PBSTree(t *testing.T) {
+	raw, err := os.ReadFile("testdata/pbs_apidoc_mini.json")
+	require.NoError(t, err)
+
+	cfg := genConfig{
+		Path:    "/config/datastore",
+		Verb:    "POST",
+		Symbol:  "datastoreOptionSchemas",
+		Pkg:     "pbs",
+		Exclude: splitSet("name"),
+		Source:  "pbs-apidoc.json",
+	}
+	src, count, err := generate(raw, cfg)
+	require.NoError(t, err)
+	out := string(src)
+
+	require.Equal(t, 1, count, "name is excluded, leaving only gc-schedule")
+	require.Contains(t, out, "package pbs\n")
+	require.Contains(t, out, "datastoreOptionSchemas describes every settable option from the Proxmox Backup Server API schema for")
+	require.NotContains(t, out, `"name"`, "identity parameter must be excluded")
+	require.Regexp(t, `Flag:\s+"gc-schedule"`, out)
+	require.Regexp(t, `Default:\s+"true"`, out, "boolean 1 default must map to true")
+}
+
+// TestProductLabel verifies the generated doc comment's product wording:
+// "pbs-"-prefixed sources are labelled Proxmox Backup Server, everything
+// else (including the default "apidoc.json") keeps the original "PVE"
+// wording so existing PVE invocations stay byte-identical.
+func TestProductLabel(t *testing.T) {
+	require.Equal(t, "PVE", productLabel("apidoc.json"))
+	require.Equal(t, "Proxmox Backup Server", productLabel("pbs-apidoc.json"))
+}

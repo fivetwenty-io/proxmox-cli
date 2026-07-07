@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -51,6 +52,23 @@ func TestMetricsInfluxdbHTTPLs_EmptyList(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestMetricsInfluxdbHTTPLs_TokenStrippedFromRaw verifies the API token is
+// stripped from the Raw payload backing -o json/yaml, not just omitted from
+// the table columns.
+func TestMetricsInfluxdbHTTPLs_TokenStrippedFromRaw(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	recordJSON(f, "GET /api2/json/config/metrics/influxdb-http", &recordedRequest{}, []map[string]any{
+		{"name": "srv1", "url": "https://influx.example.com:8086", "token": "secret-token-value"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbHTTPLsCmd(), "ls")
+	require.NoError(t, err)
+	require.NotContains(t, buf.String(), "secret-token-value")
+}
+
 func TestMetricsInfluxdbHTTPLs_ServerErrorSurfaced(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -83,6 +101,68 @@ func TestMetricsInfluxdbHTTPShow_RendersServer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "/api2/json/config/metrics/influxdb-http/srv1", rec.path)
 	require.Contains(t, buf.String(), "influx.example.com")
+}
+
+// TestMetricsInfluxdbHTTPShow_TokenNotEchoed verifies the write-only API
+// token the GET response returns is stripped from show output in every
+// format, not just omitted from a subset of fields.
+func TestMetricsInfluxdbHTTPShow_TokenNotEchoed(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	recordJSON(f, "GET /api2/json/config/metrics/influxdb-http/srv1", &recordedRequest{}, map[string]any{
+		"name": "srv1", "url": "https://influx.example.com:8086", "token": "secret-token-value",
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbHTTPShowCmd(), "show", "srv1")
+	require.NoError(t, err)
+	require.NotContains(t, buf.String(), "secret-token-value")
+}
+
+func TestMetricsInfluxdbHTTPShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	recordJSON(f, "GET /api2/json/config/metrics/influxdb-http/srv1", &recordedRequest{}, map[string]any{
+		"name": "srv1", "url": "https://influx.example.com:8086",
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbHTTPShowCmd(), "show", "srv1", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "influx.example.com")
+	require.Contains(t, out, "proxmox (default)", "bucket defaults to proxmox")
+}
+
+// TestMetricsInfluxdbHTTPShow_DefaultsJSON verifies the JSON set/defaults
+// shape and that the write-only token is never resurrected as an "unset"
+// default: it is excluded from the schema table entirely, so --defaults
+// cannot reintroduce it.
+func TestMetricsInfluxdbHTTPShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	recordJSON(f, "GET /api2/json/config/metrics/influxdb-http/srv1", &recordedRequest{}, map[string]any{
+		"name": "srv1", "url": "https://influx.example.com:8086", "token": "secret-token-value",
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbHTTPShowCmd(), "show", "srv1", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+	require.NotContains(t, buf.String(), "secret-token-value")
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "proxmox", got.Defaults["bucket"])
+	require.NotContains(t, got.Defaults, "token", "token must not appear even as an unset default")
 }
 
 func TestMetricsInfluxdbHTTPShow_EmptyNameRejected(t *testing.T) {
@@ -324,6 +404,20 @@ func TestMetricsInfluxdbHTTPUpdate_ServerErrorSurfaced(t *testing.T) {
 // metrics influxdb-http delete
 // ---------------------------------------------------------------------------
 
+func TestMetricsInfluxdbHTTPDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "DELETE /api2/json/config/metrics/influxdb-http/srv1", &rec, nil)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestMetricsInfluxdbHTTPDelete_Success(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -332,7 +426,7 @@ func TestMetricsInfluxdbHTTPDelete_Success(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/metrics/influxdb-http/srv1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1", "--digest", "deadbeef")
+	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1", "--digest", "deadbeef", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "deadbeef", rec.query.Get("digest"))
@@ -347,7 +441,7 @@ func TestMetricsInfluxdbHTTPDelete_NoDigestOmitsParam(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/metrics/influxdb-http/srv1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1")
+	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1", "--yes")
 	require.NoError(t, err)
 	_, hasDigest := rec.query["digest"]
 	require.False(t, hasDigest)
@@ -372,7 +466,7 @@ func TestMetricsInfluxdbHTTPDelete_ServerErrorSurfaced(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1")
+	err := run(deps, &buf, newMetricsInfluxdbHTTPDeleteCmd(), "delete", "srv1", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no such server")
 }
@@ -448,6 +542,46 @@ func TestMetricsInfluxdbUDPShow_RendersServer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "/api2/json/config/metrics/influxdb-udp/srv1", rec.path)
 	require.Contains(t, buf.String(), "udp.example.com")
+}
+
+func TestMetricsInfluxdbUDPShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	recordJSON(f, "GET /api2/json/config/metrics/influxdb-udp/srv1", &recordedRequest{}, map[string]any{
+		"name": "srv1", "host": "udp.example.com:8089",
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbUDPShowCmd(), "show", "srv1", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "udp.example.com")
+	require.Contains(t, out, "1500 (default)", "mtu defaults to 1500")
+}
+
+func TestMetricsInfluxdbUDPShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	recordJSON(f, "GET /api2/json/config/metrics/influxdb-udp/srv1", &recordedRequest{}, map[string]any{
+		"name": "srv1", "host": "udp.example.com:8089",
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbUDPShowCmd(), "show", "srv1", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "udp.example.com:8089", got.Set["host"])
+	require.Equal(t, "1500", got.Defaults["mtu"])
 }
 
 func TestMetricsInfluxdbUDPShow_EmptyNameRejected(t *testing.T) {
@@ -671,6 +805,20 @@ func TestMetricsInfluxdbUDPUpdate_ServerErrorSurfaced(t *testing.T) {
 // metrics influxdb-udp delete
 // ---------------------------------------------------------------------------
 
+func TestMetricsInfluxdbUDPDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "DELETE /api2/json/config/metrics/influxdb-udp/srv1", &rec, nil)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestMetricsInfluxdbUDPDelete_Success(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -679,7 +827,7 @@ func TestMetricsInfluxdbUDPDelete_Success(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/metrics/influxdb-udp/srv1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1", "--digest", "deadbeef")
+	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1", "--digest", "deadbeef", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "deadbeef", rec.query.Get("digest"))
@@ -694,7 +842,7 @@ func TestMetricsInfluxdbUDPDelete_NoDigestOmitsParam(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/metrics/influxdb-udp/srv1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1")
+	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1", "--yes")
 	require.NoError(t, err)
 	_, hasDigest := rec.query["digest"]
 	require.False(t, hasDigest)
@@ -719,7 +867,7 @@ func TestMetricsInfluxdbUDPDelete_ServerErrorSurfaced(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1")
+	err := run(deps, &buf, newMetricsInfluxdbUDPDeleteCmd(), "delete", "srv1", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no such server")
 }

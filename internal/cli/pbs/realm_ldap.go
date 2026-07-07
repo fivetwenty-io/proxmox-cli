@@ -11,6 +11,7 @@ import (
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -105,11 +106,16 @@ func newRealmLdapLsCmd() *cobra.Command {
 // newRealmLdapShowCmd builds `pve pbs realm ldap show <realm>` — show a
 // single LDAP realm's configuration (GET /config/access/ldap/{realm}).
 func newRealmLdapShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <realm>",
 		Short: "Show a single LDAP realm's configuration",
-		Long:  "Show every populated field of a single LDAP realm configuration (GET /config/access/ldap/{realm}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every populated field of a single LDAP realm configuration (GET " +
+			"/config/access/ldap/{realm}). The bind password is write-only and is " +
+			"never returned by the API. The API also omits options left at their " +
+			"built-in defaults; pass --defaults to also list those, with the value " +
+			"they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -124,10 +130,18 @@ func newRealmLdapShowCmd() *cobra.Command {
 				return fmt.Errorf("decode LDAP realm %q: %w", realm, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(realmLdapOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -399,15 +413,23 @@ func newRealmLdapUpdateCmd() *cobra.Command {
 // newRealmLdapDeleteCmd builds `pve pbs realm ldap delete <realm>` — remove
 // an LDAP realm configuration (DELETE /config/access/ldap/{realm}).
 func newRealmLdapDeleteCmd() *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <realm>",
 		Short: "Delete an LDAP realm configuration",
-		Long:  "Remove an LDAP realm configuration (DELETE /config/access/ldap/{realm}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove an LDAP realm configuration (DELETE /config/access/ldap/{realm}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete LDAP realm %q without confirmation: pass --yes/-y", realm)
+			}
 
 			params := &pbsconfig.DeleteAccessLdapParams{}
 			if cmd.Flags().Changed("digest") {
@@ -424,5 +446,6 @@ func newRealmLdapDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

@@ -1,0 +1,38 @@
+[
+  {
+    "path": "/",
+    "children": [
+      {
+        "path": "/config",
+        "children": [
+          {
+            "path": "/config/datastore",
+            "info": {
+              "POST": {
+                "parameters": {
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Datastore name.",
+                      "format": "pbs-datastore-name"
+                    },
+                    "gc-schedule": {
+                      "type": "boolean",
+                      "description": "Run garbage collection before unmounting.",
+                      "default": 1,
+                      "optional": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "path": "/backup/_upgrade_",
+    "children": []
+  }
+]

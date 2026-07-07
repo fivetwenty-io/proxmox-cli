@@ -232,7 +232,7 @@ func TestTapeMediaDestroy_DestroysMedia(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeMediaCmd(), "media", "destroy", "--uuid", tapeMediaUuid, "--force")
+	err := run(deps, &buf, newTapeMediaCmd(), "media", "destroy", "--uuid", tapeMediaUuid, "--force", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodGet, rec.method)
@@ -251,6 +251,20 @@ func TestTapeMediaDestroy_RequiresUuidOrLabelText(t *testing.T) {
 	require.Contains(t, err.Error(), "--uuid or --label-text is required")
 }
 
+func TestTapeMediaDestroy_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "GET "+tapeMediaDestroyPath, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapeMediaCmd(), "media", "destroy", "--uuid", tapeMediaUuid)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Contains(t, err.Error(), "--yes/-y")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestTapeMediaDestroy_SurfacesAPIError(t *testing.T) {
 	f, pc := newFakeClient(t)
 	f.HandleFunc("GET "+tapeMediaDestroyPath, func(w http.ResponseWriter, _ *http.Request) {
@@ -259,7 +273,7 @@ func TestTapeMediaDestroy_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeMediaCmd(), "media", "destroy", "--label-text", "TAPE01")
+	err := run(deps, &buf, newTapeMediaCmd(), "media", "destroy", "--label-text", "TAPE01", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "destroy tape media")
 }

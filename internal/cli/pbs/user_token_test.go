@@ -288,7 +288,8 @@ func TestUserTokenDelete_DeletesToken(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName, "--digest", "abc123")
+	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName,
+		"--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -304,7 +305,7 @@ func TestUserTokenDelete_OmitsDigestWhenUnset(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName)
+	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName, "--yes")
 	require.NoError(t, err)
 	_, present := rec.query["digest"]
 	require.False(t, present)
@@ -318,7 +319,23 @@ func TestUserTokenDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName)
+	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete token")
+}
+
+func TestUserTokenDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+userTokenPath()+"/"+testTokenName, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newUserCmd(), "user", "token", "delete", testUserid, testTokenName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }

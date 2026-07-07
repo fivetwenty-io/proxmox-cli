@@ -45,6 +45,22 @@ func newMetricsServerCmd() *cobra.Command {
 // metricsServerListColumns are the stable columns rendered for the server list.
 var metricsServerListColumns = []string{"id", "type", "server", "port", "disable", "comment"}
 
+// metricsSecretKeys are the credential fields that must never be echoed back
+// to the user. --token is forwarded to the API on create/set but the API's
+// GET/list responses include the stored value, so it must be stripped from
+// get/list output, mirroring the omitted TOKEN column in the list table.
+var metricsSecretKeys = []string{"token"}
+
+// stripMetricsSecrets deletes every key in metricsSecretKeys from each entry,
+// in place.
+func stripMetricsSecrets(entries []map[string]any) {
+	for _, e := range entries {
+		for _, k := range metricsSecretKeys {
+			delete(e, k)
+		}
+	}
+}
+
 func newMetricsServerListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -64,6 +80,16 @@ func newMetricsServerListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list metric servers: %w", err)
 			}
+			// The table columns omit token, but Raw carries every decoded field
+			// (rawFixedColumnsResult keeps it lossless for -o json/yaml), so it
+			// must be stripped here too. The assertion is hard, not a silent
+			// "if ok" no-op: if rawFixedColumnsResult's Raw type ever changes,
+			// this must fail loudly rather than skip stripping the token.
+			entries, ok := res.Raw.([]map[string]any)
+			if !ok {
+				return fmt.Errorf("list metric servers: unexpected raw result type %T, cannot strip secrets", res.Raw)
+			}
+			stripMetricsSecrets(entries)
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -85,6 +111,17 @@ func newMetricsServerGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get metric server %q: %w", id, err)
 			}
+			for _, k := range metricsSecretKeys {
+				delete(single, k)
+			}
+			// Same hard-assertion rationale as the list command above: a
+			// future change to objectToSingle's Raw type must surface as an
+			// error, not silently skip stripping the token.
+			obj, ok := raw.(map[string]any)
+			if !ok {
+				return fmt.Errorf("get metric server %q: unexpected raw result type %T, cannot strip secrets", id, raw)
+			}
+			stripMetricsSecrets([]map[string]any{obj})
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Single: single, Raw: raw}, deps.Format)
 		},

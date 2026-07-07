@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -71,6 +72,47 @@ func TestRealmOpenidShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "https://idp1.example.com")
 	require.Contains(t, out, "primary IdP")
+}
+
+func TestRealmOpenidShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+realmOpenidConfigPath+"/"+realmOpenidName, map[string]any{
+		"realm": realmOpenidName, "issuer-url": "https://idp1.example.com", "client-id": "client1",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "show", realmOpenidName, "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "client1")
+	require.Contains(t, out, "email profile (default)", "scopes defaults to email profile")
+}
+
+// TestRealmOpenidShow_DefaultsJSON verifies the JSON set/defaults shape and
+// that the write-only client key is never resurrected as an "unset"
+// default: it is excluded from the schema table entirely.
+func TestRealmOpenidShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+realmOpenidConfigPath+"/"+realmOpenidName, map[string]any{
+		"realm": realmOpenidName, "issuer-url": "https://idp1.example.com", "client-id": "client1",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "show", realmOpenidName, "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "email profile", got.Defaults["scopes"])
+	require.NotContains(t, got.Defaults, "client-key", "client-key must not appear even as an unset default")
 }
 
 func TestRealmOpenidShow_SurfacesAPIError(t *testing.T) {
@@ -309,7 +351,7 @@ func TestRealmOpenidDelete_DeletesRealm(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "delete", realmOpenidName, "--digest", "abc123")
+	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "delete", realmOpenidName, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -326,7 +368,23 @@ func TestRealmOpenidDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "delete", realmOpenidName)
+	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "delete", realmOpenidName, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete OpenID realm")
+}
+
+func TestRealmOpenidDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+realmOpenidConfigPath+"/"+realmOpenidName, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "delete", realmOpenidName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }

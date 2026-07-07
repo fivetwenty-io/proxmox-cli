@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -96,12 +97,15 @@ func newNotifEndpointGotifyLsCmd() *cobra.Command {
 // (GET /config/notifications/endpoints/gotify/{name}). The API never
 // returns the token back, so it is never rendered.
 func newNotifEndpointGotifyShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single gotify endpoint's configuration",
 		Long: "Show every populated field of a single gotify endpoint (GET " +
 			"/config/notifications/endpoints/gotify/{name}). The authentication token " +
-			"is write-only and is never returned by the API.",
+			"is write-only and is never returned by the API. The API also omits " +
+			"options left at their built-in defaults; pass --defaults to also list " +
+			"those, with the value they effectively have.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -120,10 +124,18 @@ func newNotifEndpointGotifyShowCmd() *cobra.Command {
 				return fmt.Errorf("decode gotify endpoint %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(notifGotifyOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -315,16 +327,21 @@ func newNotifEndpointGotifyUpdateCmd() *cobra.Command {
 // digest parameter — PBS does not support conditional deletes for
 // notification endpoints.
 func newNotifEndpointGotifyDeleteCmd() *cobra.Command {
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a gotify notification endpoint",
-		Long:  "Remove a gotify notification endpoint (DELETE /config/notifications/endpoints/gotify/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a gotify notification endpoint (DELETE /config/notifications/endpoints/gotify/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("endpoint name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete gotify endpoint %q without confirmation: pass --yes/-y", name)
 			}
 
 			err := deps.PBS.Config.DeleteNotificationsEndpointsGotify(cmd.Context(), name)
@@ -336,5 +353,6 @@ func newNotifEndpointGotifyDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

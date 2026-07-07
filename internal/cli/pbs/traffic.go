@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
@@ -174,11 +175,15 @@ func newTrafficLsCmd() *cobra.Command {
 // newTrafficShowCmd builds `pve pbs traffic show <name>` — show one
 // traffic-control rule's full configuration (GET /config/traffic-control/{name}).
 func newTrafficShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show one traffic-control rule's configuration",
-		Long:  "Show the full configuration of one traffic-control rule (GET /config/traffic-control/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full configuration of one traffic-control rule (GET " +
+			"/config/traffic-control/{name}). The PBS API omits options left at " +
+			"their built-in defaults; pass --defaults to also list those, with the " +
+			"value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -210,10 +215,18 @@ func newTrafficShowCmd() *cobra.Command {
 				entry.Name = name
 			}
 
-			res := output.Result{Single: trafficRuleSingle(entry), Raw: resp}
+			single := trafficRuleSingle(entry)
+			var raw any = resp
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(trafficOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -401,16 +414,21 @@ func newTrafficUpdateCmd() *cobra.Command {
 // traffic-control rule (DELETE /config/traffic-control/{name}).
 func newTrafficDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a traffic-control rule",
-		Long:  "Remove a traffic-control rule (DELETE /config/traffic-control/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a traffic-control rule (DELETE /config/traffic-control/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("rule name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete traffic-control rule %q without confirmation: pass --yes/-y", name)
 			}
 
 			params := &pbsconfig.DeleteTrafficControlParams{}
@@ -428,6 +446,7 @@ func newTrafficDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

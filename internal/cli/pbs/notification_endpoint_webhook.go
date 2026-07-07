@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -99,12 +100,15 @@ func newNotifEndpointWebhookLsCmd() *cobra.Command {
 // (GET /config/notifications/endpoints/webhook/{name}). Secret values are
 // write-only; only secret names are ever returned by the API.
 func newNotifEndpointWebhookShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single webhook endpoint's configuration",
 		Long: "Show every populated field of a single webhook endpoint (GET " +
 			"/config/notifications/endpoints/webhook/{name}). Secret values are " +
-			"write-only; only secret names are ever returned by the API.",
+			"write-only; only secret names are ever returned by the API. The API " +
+			"also omits options left at their built-in defaults; pass --defaults to " +
+			"also list those, with the value they effectively have.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -123,10 +127,18 @@ func newNotifEndpointWebhookShowCmd() *cobra.Command {
 				return fmt.Errorf("decode webhook endpoint %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(notifWebhookOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -351,16 +363,21 @@ func newNotifEndpointWebhookUpdateCmd() *cobra.Command {
 // digest parameter — PBS does not support conditional deletes for
 // notification endpoints.
 func newNotifEndpointWebhookDeleteCmd() *cobra.Command {
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a webhook notification endpoint",
-		Long:  "Remove a webhook notification endpoint (DELETE /config/notifications/endpoints/webhook/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a webhook notification endpoint (DELETE /config/notifications/endpoints/webhook/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("endpoint name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete webhook endpoint %q without confirmation: pass --yes/-y", name)
 			}
 
 			err := deps.PBS.Config.DeleteNotificationsEndpointsWebhook(cmd.Context(), name)
@@ -372,5 +389,6 @@ func newNotifEndpointWebhookDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

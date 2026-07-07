@@ -125,6 +125,7 @@ func newGroupDeleteCmd() *cobra.Command {
 	var (
 		df               storeFlags
 		errorOnProtected bool
+		yes              bool
 	)
 
 	cmd := &cobra.Command{
@@ -132,7 +133,7 @@ func newGroupDeleteCmd() *cobra.Command {
 		Short: "Delete a backup group and all its snapshots",
 		Long: "Permanently remove a backup group and every snapshot it contains from a " +
 			"datastore. With --error-on-protected, the deletion fails instead of silently " +
-			"skipping protected snapshots.",
+			"skipping protected snapshots. This is destructive: pass --yes/-y to confirm.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -140,6 +141,10 @@ func newGroupDeleteCmd() *cobra.Command {
 			btype, bid, err := parseGroupRef(args[0])
 			if err != nil {
 				return err
+			}
+
+			if !yes {
+				return fmt.Errorf("refusing to delete group %q without confirmation: pass --yes/-y", args[0])
 			}
 
 			params := &pbsadmin.DeleteDatastoreGroupsParams{
@@ -168,6 +173,7 @@ func newGroupDeleteCmd() *cobra.Command {
 	df.register(cmd)
 	cmd.Flags().BoolVar(&errorOnProtected, "error-on-protected", false,
 		"fail instead of skipping when the group has protected snapshots")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 
 	return cmd
 }

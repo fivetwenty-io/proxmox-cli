@@ -258,12 +258,26 @@ func TestTapeDriveDelete_DeletesDrive(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeDriveCmd(), "drive", "delete", "drive1")
+	err := run(deps, &buf, newTapeDriveCmd(), "drive", "delete", "drive1", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, fmt.Sprintf(pathConfigDriveFmt, "drive1"), rec.path)
 	require.Contains(t, buf.String(), `Tape drive "drive1" deleted.`)
+}
+
+func TestTapeDriveDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+fmt.Sprintf(pathConfigDriveFmt, "drive1"), &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapeDriveCmd(), "drive", "delete", "drive1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Contains(t, err.Error(), "--yes/-y")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
 }
 
 func TestTapeDriveDelete_ServerError(t *testing.T) {
@@ -274,7 +288,7 @@ func TestTapeDriveDelete_ServerError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeDriveCmd(), "drive", "delete", "drive1")
+	err := run(deps, &buf, newTapeDriveCmd(), "drive", "delete", "drive1", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete tape drive")
 }

@@ -102,7 +102,7 @@ func TestGroupDelete_Success(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newGroupDeleteCmd(), "delete", vm100GroupRef, "--store", testStore)
+	err := run(deps, &buf, newGroupDeleteCmd(), "delete", vm100GroupRef, "--store", testStore, "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, groupsPath, rec.path)
@@ -129,7 +129,7 @@ func TestGroupDelete_ErrorOnProtectedFlag(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newGroupDeleteCmd(), "delete", hostPbs1GroupID,
-		"--store", testStore, "--error-on-protected")
+		"--store", testStore, "--error-on-protected", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, "1", rec.query.Get("error-on-protected"))
 }
@@ -143,8 +143,25 @@ func TestGroupDelete_ServerError(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
+	err := run(deps, &buf, newGroupDeleteCmd(), "delete", vm100GroupRef, "--store", testStore, "--yes")
+	require.Error(t, err)
+}
+
+func TestGroupDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var called bool
+	f.HandleFunc("DELETE "+groupsPath, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, map[string]any{})
+	})
+
+	var buf bytes.Buffer
 	err := run(deps, &buf, newGroupDeleteCmd(), "delete", vm100GroupRef, "--store", testStore)
 	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }
 
 func TestGroupDelete_InvalidRef(t *testing.T) {

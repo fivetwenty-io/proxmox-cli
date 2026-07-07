@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -81,6 +82,47 @@ func TestNotifEndpointSmtpShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "smtp1.example.com")
 	require.Contains(t, out, "primary")
+}
+
+func TestNotifEndpointSmtpShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifSmtpPath+"/smtp-a", map[string]any{
+		"name": "smtp-a", "server": "smtp1.example.com", "from-address": "a@example.com",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointSmtpCmd(), "smtp", "show", "smtp-a", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "smtp1.example.com")
+	require.Contains(t, out, "tls (default)", "mode defaults to tls")
+}
+
+// TestNotifEndpointSmtpShow_DefaultsJSON verifies the JSON set/defaults
+// shape and that the write-only password is never resurrected as an
+// "unset" default: it is excluded from the schema table entirely.
+func TestNotifEndpointSmtpShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifSmtpPath+"/smtp-a", map[string]any{
+		"name": "smtp-a", "server": "smtp1.example.com", "from-address": "a@example.com",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointSmtpCmd(), "smtp", "show", "smtp-a", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "tls", got.Defaults["mode"])
+	require.NotContains(t, got.Defaults, "password", "password must not appear even as an unset default")
 }
 
 func TestNotifEndpointSmtpShow_EmptyNameRejected(t *testing.T) {
@@ -341,7 +383,7 @@ func TestNotifEndpointSmtpUpdate_SurfacesAPIError(t *testing.T) {
 
 // --- smtp delete -------------------------------------------------------------------
 
-func TestNotifEndpointSmtpDelete_DeletesEndpoint(t *testing.T) {
+func TestNotifEndpointSmtpDelete_RequiresYes(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "DELETE "+notifSmtpPath+"/smtp-a", &rec, nil)
@@ -349,6 +391,19 @@ func TestNotifEndpointSmtpDelete_DeletesEndpoint(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNotifEndpointSmtpCmd(), "smtp", "delete", "smtp-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
+func TestNotifEndpointSmtpDelete_DeletesEndpoint(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+notifSmtpPath+"/smtp-a", &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointSmtpCmd(), "smtp", "delete", "smtp-a", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -373,7 +428,7 @@ func TestNotifEndpointSmtpDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNotifEndpointSmtpCmd(), "smtp", "delete", "smtp-a")
+	err := run(deps, &buf, newNotifEndpointSmtpCmd(), "smtp", "delete", "smtp-a", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete smtp endpoint")
 }

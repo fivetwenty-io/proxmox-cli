@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -71,6 +72,47 @@ func TestRealmLdapShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "ldap1.example.com")
 	require.Contains(t, out, "primary LDAP")
+}
+
+func TestRealmLdapShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+realmLdapConfigPath+"/"+realmLdapName, map[string]any{
+		"realm": realmLdapName, "server1": "ldap1.example.com", "base-dn": "dc=example,dc=com", "user-attr": "uid",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "show", realmLdapName, "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "ldap1.example.com")
+	require.Contains(t, out, "ldap (default)", "mode defaults to ldap")
+}
+
+// TestRealmLdapShow_DefaultsJSON verifies the JSON set/defaults shape and
+// that the write-only bind password is never resurrected as an "unset"
+// default: it is excluded from the schema table entirely.
+func TestRealmLdapShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+realmLdapConfigPath+"/"+realmLdapName, map[string]any{
+		"realm": realmLdapName, "server1": "ldap1.example.com", "base-dn": "dc=example,dc=com", "user-attr": "uid",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "show", realmLdapName, "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "ldap", got.Defaults["mode"])
+	require.NotContains(t, got.Defaults, "password", "password must not appear even as an unset default")
 }
 
 func TestRealmLdapShow_SurfacesAPIError(t *testing.T) {
@@ -341,7 +383,7 @@ func TestRealmLdapDelete_DeletesRealm(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName, "--digest", "abc123")
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -358,7 +400,23 @@ func TestRealmLdapDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName)
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete LDAP realm")
+}
+
+func TestRealmLdapDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+realmLdapConfigPath+"/"+realmLdapName, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }

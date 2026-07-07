@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,7 +28,11 @@ type nodeCertInfoEntry struct {
 }
 
 // newNodeCertificatesCmd builds `pve pbs node certificates` and its
-// ls/info/acme/custom verbs (/nodes/{node}/certificates...).
+// info/acme/custom verbs (/nodes/{node}/certificates...).
+//
+// GET /nodes/{node}/certificates itself is only a directory index (returns
+// null; its sub-resources are acme, custom, info) with no data behind it, so
+// there is no `ls` verb — the group's own help lists its real sub-commands.
 func newNodeCertificatesCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "certificates",
@@ -37,62 +40,11 @@ func newNodeCertificatesCmd(nf *nodeFlags) *cobra.Command {
 		Short:   "Inspect and manage the node's TLS certificates",
 	}
 	cmd.AddCommand(
-		newNodeCertificatesLsCmd(nf),
 		newNodeCertificatesInfoCmd(nf),
 		newNodeCertificatesAcmeCmd(nf),
 		newNodeCertificatesCustomCmd(nf),
 	)
 	return cmd
-}
-
-// newNodeCertificatesLsCmd builds `pve pbs node certificates ls` — the
-// certificates directory index (GET /nodes/{node}/certificates).
-//
-// The generated Nodes.ListCertificates binding discards its response body
-// (it is only a directory index of sub-resources: acme, custom, info), so
-// this bypasses it via the shared raw transport to list the sub-resource
-// names.
-func newNodeCertificatesLsCmd(nf *nodeFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "ls",
-		Short: "List the certificates API sub-resources",
-		Long: "List the certificates API's sub-resources (acme, custom, info). For the " +
-			"actual certificate chain, use `certificates info`.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := cli.GetDeps(cmd)
-
-			path := fmt.Sprintf("/nodes/%s/certificates", url.PathEscape(nf.node))
-
-			resp, err := deps.PBS.Raw.GetRawCtx(cmd.Context(), path, nil)
-			if err != nil {
-				return fmt.Errorf("list certificates on node %q: %w", nf.node, err)
-			}
-			if resp == nil {
-				return fmt.Errorf("list certificates on node %q: empty response from server", nf.node)
-			}
-
-			items, err := nodeRawArrayItems(resp.Data)
-			if err != nil {
-				return fmt.Errorf("list certificates on node %q: %w", nf.node, err)
-			}
-
-			headers := []string{"SUBDIR"}
-			rows := make([][]string, 0, len(items))
-			for _, raw := range items {
-				var e struct {
-					Subdir string `json:"subdir"`
-				}
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode certificates entry: %w", err)
-				}
-				rows = append(rows, []string{e.Subdir})
-			}
-
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
-			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
-		},
-	}
 }
 
 // newNodeCertificatesInfoCmd builds `pve pbs node certificates info` — the

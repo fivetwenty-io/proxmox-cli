@@ -8,6 +8,7 @@ import (
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -190,10 +191,14 @@ func newNodeConfigCmd(nf *nodeFlags) *cobra.Command {
 }
 
 func newNodeConfigShowCmd(nf *nodeFlags) *cobra.Command {
-	return &cobra.Command{
+	var withDefaults bool
+	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the node configuration",
-		Args:  cobra.NoArgs,
+		Long: "Show the node configuration. The PBS API omits options left at their " +
+			"built-in defaults; pass --defaults to also list those, with the value " +
+			"they effectively have.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -210,10 +215,19 @@ func newNodeConfigShowCmd(nf *nodeFlags) *cobra.Command {
 				return fmt.Errorf("decode config for node %q: %w", nf.node, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(nodeConfigOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
+	return cmd
 }
 
 // nodeConfigFlags collects the update-only flags for `node config update`,
@@ -434,12 +448,17 @@ func newNodeSubscriptionUpdateCmd(nf *nodeFlags) *cobra.Command {
 }
 
 func newNodeSubscriptionDeleteCmd(nf *nodeFlags) *cobra.Command {
-	return &cobra.Command{
+	var yes bool
+	cmd := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete the node's subscription info",
+		Long:  "Remove the node's stored subscription info. This is destructive: pass --yes/-y to confirm.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
+			if !yes {
+				return fmt.Errorf("refusing to delete subscription info on node %q without confirmation: pass --yes/-y", nf.node)
+			}
 
 			err := deps.PBS.Nodes.DeleteSubscription(cmd.Context(), nf.node)
 			if err != nil {
@@ -450,6 +469,8 @@ func newNodeSubscriptionDeleteCmd(nf *nodeFlags) *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+	return cmd
 }
 
 // --- identity -------------------------------------------------------------

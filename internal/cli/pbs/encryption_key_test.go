@@ -112,13 +112,27 @@ func TestEncKeyDelete_DeletesKey(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newEncryptionKeyCmd(), "encryption-key", "delete", encKeyId, "--digest", "abc123")
+	err := run(deps, &buf, newEncryptionKeyCmd(), "encryption-key", "delete", encKeyId, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, encKeyConfigPath+"/"+encKeyId, rec.path)
 	require.Equal(t, "abc123", rec.query.Get("digest"))
 	require.Contains(t, buf.String(), `Encryption key "key1" deleted.`)
+}
+
+func TestEncKeyDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+encKeyConfigPath+"/"+encKeyId, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newEncryptionKeyCmd(), "encryption-key", "delete", encKeyId)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Contains(t, err.Error(), "--yes/-y")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
 }
 
 func TestEncKeyDelete_SurfacesAPIError(t *testing.T) {
@@ -129,7 +143,7 @@ func TestEncKeyDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newEncryptionKeyCmd(), "encryption-key", "delete", encKeyId)
+	err := run(deps, &buf, newEncryptionKeyCmd(), "encryption-key", "delete", encKeyId, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete encryption key")
 }

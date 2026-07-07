@@ -11,34 +11,36 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
 
-func TestNodeCertificatesLs_RendersTable(t *testing.T) {
+// TestNodeCertificatesCmd_NoLsSubcommand verifies `certificates ls` was
+// removed (GET /nodes/{node}/certificates is only a directory index with no
+// data behind it, per the PVE index-endpoint policy) and that the bare
+// `certificates` group still lists its real sub-commands via help rather
+// than making any API call.
+func TestNodeCertificatesCmd_NoLsSubcommand(t *testing.T) {
+	cmd := newNodeCertificatesCmd(&nodeFlags{node: "pbs1"})
+	names := make(map[string]bool)
+	for _, c := range cmd.Commands() {
+		names[c.Name()] = true
+	}
+	require.False(t, names["ls"], "certificates ls must not exist (index endpoint, no data)")
+	require.True(t, names["info"])
+	require.True(t, names["acme"])
+	require.True(t, names["custom"])
+
 	f, pc := newFakeClient(t)
-	var rec recordedRequest
-	recordJSON(f, "GET "+nodeAPIBase+"/certificates", &rec, []map[string]any{
-		{"subdir": "acme"}, {"subdir": "custom"}, {"subdir": "info"},
-	})
-
-	deps := depsFor(t, pc, output.FormatTable, false)
-	var buf bytes.Buffer
-	err := run(deps, &buf, newNodeCmd(), "node", "certificates", "ls")
-	require.NoError(t, err)
-
-	require.Equal(t, http.MethodGet, rec.method)
-	require.Contains(t, buf.String(), "acme")
-	require.Contains(t, buf.String(), "custom")
-}
-
-func TestNodeCertificatesLs_SurfacesAPIError(t *testing.T) {
-	f, pc := newFakeClient(t)
+	var called bool
 	f.HandleFunc("GET "+nodeAPIBase+"/certificates", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+		called = true
+		testhelper.WriteData(w, nil)
 	})
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNodeCmd(), "node", "certificates", "ls")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "list certificates on node")
+	err := run(deps, &buf, newNodeCmd(), "node", "certificates")
+	require.NoError(t, err)
+	require.False(t, called, "bare `certificates` group must not call the API")
+	require.Contains(t, buf.String(), "info")
+	require.Contains(t, buf.String(), "custom")
 }
 
 func TestNodeCertificatesInfo_RendersTable(t *testing.T) {

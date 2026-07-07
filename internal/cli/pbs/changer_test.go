@@ -233,12 +233,26 @@ func TestTapeChangerDelete_DeletesChanger(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeChangerCmd(), "changer", "delete", tapeChangerName)
+	err := run(deps, &buf, newTapeChangerCmd(), "changer", "delete", tapeChangerName, "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, tapeChangerConfigPath+"/"+tapeChangerName, rec.path)
 	require.Contains(t, buf.String(), "Tape changer \"changer1\" deleted.")
+}
+
+func TestTapeChangerDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+tapeChangerConfigPath+"/"+tapeChangerName, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapeChangerCmd(), "changer", "delete", tapeChangerName)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Contains(t, err.Error(), "--yes/-y")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
 }
 
 func TestTapeChangerDelete_SurfacesAPIError(t *testing.T) {
@@ -249,7 +263,7 @@ func TestTapeChangerDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeChangerCmd(), "changer", "delete", tapeChangerName)
+	err := run(deps, &buf, newTapeChangerCmd(), "changer", "delete", tapeChangerName, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete tape changer")
 }

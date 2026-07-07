@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -80,6 +81,50 @@ func TestNotifEndpointGotifyShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "https://gotify.example.com")
 	require.Contains(t, out, "primary")
+}
+
+// TestNotifEndpointGotifyShow_DefaultsTable verifies --defaults lists an
+// unset option (the PBS gotify endpoint schema declares no built-in
+// defaults, so unset options render "(unset)" rather than "(default)").
+func TestNotifEndpointGotifyShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifGotifyPath+"/gotify-a", map[string]any{
+		"name": "gotify-a", "server": "https://gotify.example.com",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "show", "gotify-a", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "https://gotify.example.com")
+	require.Contains(t, out, "(unset)", "comment has no schema default")
+}
+
+// TestNotifEndpointGotifyShow_DefaultsJSON verifies the JSON set/defaults
+// shape and that the write-only token is never resurrected as an "unset"
+// default: it is excluded from the schema table entirely.
+func TestNotifEndpointGotifyShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifGotifyPath+"/gotify-a", map[string]any{
+		"name": "gotify-a", "server": "https://gotify.example.com",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "show", "gotify-a", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "https://gotify.example.com", got.Set["server"])
+	require.NotContains(t, got.Defaults, "token", "token must not appear even as an unset default")
 }
 
 func TestNotifEndpointGotifyShow_EmptyNameRejected(t *testing.T) {
@@ -311,7 +356,7 @@ func TestNotifEndpointGotifyUpdate_SurfacesAPIError(t *testing.T) {
 
 // --- gotify delete -------------------------------------------------------------------
 
-func TestNotifEndpointGotifyDelete_DeletesEndpoint(t *testing.T) {
+func TestNotifEndpointGotifyDelete_RequiresYes(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "DELETE "+notifGotifyPath+"/gotify-a", &rec, nil)
@@ -319,6 +364,19 @@ func TestNotifEndpointGotifyDelete_DeletesEndpoint(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "delete", "gotify-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
+func TestNotifEndpointGotifyDelete_DeletesEndpoint(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+notifGotifyPath+"/gotify-a", &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "delete", "gotify-a", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -343,7 +401,7 @@ func TestNotifEndpointGotifyDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "delete", "gotify-a")
+	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "delete", "gotify-a", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete gotify endpoint")
 }

@@ -316,15 +316,23 @@ func newUserUpdateCmd() *cobra.Command {
 // newUserDeleteCmd builds `pve pbs user delete <userid>` — remove a user
 // (DELETE /access/users/{userid}).
 func newUserDeleteCmd() *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <userid>",
 		Short: "Delete a user",
-		Long:  "Remove a user from the configuration file (DELETE /access/users/{userid}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a user from the configuration file (DELETE /access/users/{userid}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete user %q without confirmation: pass --yes/-y", userid)
+			}
 
 			params := &pbsaccess.DeleteUsersParams{}
 			if cmd.Flags().Changed("digest") {
@@ -341,6 +349,7 @@ func newUserDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

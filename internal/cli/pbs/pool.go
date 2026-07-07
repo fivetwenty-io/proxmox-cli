@@ -312,16 +312,22 @@ func newTapePoolUpdateCmd() *cobra.Command {
 // endpoint accepts no parameters beyond the pool name; there is no digest
 // guard.
 func newTapePoolDeleteCmd() *cobra.Command {
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a tape media pool",
-		Long:  "Remove a tape media pool configuration (DELETE /config/media-pool/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a tape media pool configuration (DELETE /config/media-pool/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("media pool name must not be empty")
+			}
+
+			if !yes {
+				return fmt.Errorf("refusing to delete tape media pool %q without confirmation: pass --yes/-y", name)
 			}
 
 			err := deps.PBS.Config.DeleteMediaPool(cmd.Context(), name)
@@ -333,5 +339,6 @@ func newTapePoolDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

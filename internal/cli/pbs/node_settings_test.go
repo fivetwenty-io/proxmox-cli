@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -128,6 +129,47 @@ func TestNodeConfigShow_RendersSingle(t *testing.T) {
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Contains(t, buf.String(), "my node")
+}
+
+// TestNodeConfigShow_DefaultsTable verifies --defaults lists an unset option
+// (the PBS node config schema declares no built-in defaults, so unset
+// options render "(unset)" rather than "(default)").
+func TestNodeConfigShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	recordJSON(f, "GET "+nodeAPIBase+"/config", &recordedRequest{}, map[string]any{
+		"description": "my node",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "config", "show", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "my node")
+	require.Contains(t, out, "(unset)", "location has no schema default")
+}
+
+func TestNodeConfigShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	recordJSON(f, "GET "+nodeAPIBase+"/config", &recordedRequest{}, map[string]any{
+		"description": "my node",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "config", "show", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "my node", got.Set["description"])
+	require.Empty(t, got.Defaults, "node config schema declares no built-in defaults")
 }
 
 func TestNodeConfigUpdate_RequiresAFlag(t *testing.T) {
@@ -269,9 +311,18 @@ func TestNodeSubscriptionDelete_Deletes(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNodeCmd(), "node", "subscription", "delete")
+	err := run(deps, &buf, newNodeCmd(), "node", "subscription", "delete", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
+}
+
+func TestNodeSubscriptionDelete_RequiresYes(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "subscription", "delete")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes/-y")
 }
 
 // --- identity -------------------------------------------------------------

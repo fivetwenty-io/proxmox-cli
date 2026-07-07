@@ -19,7 +19,10 @@
 // The package name defaults to $GOPACKAGE, which go generate sets.
 //
 // The apidoc.json location defaults to the pve-apiclient-go module directory
-// reported by `go list -m`; pass -apidoc to point at another copy.
+// reported by `go list -m`; pass -apidoc to point at another copy. -source
+// picks a different file within that module's _data directory without
+// spelling out the whole path — e.g. -source pbs-apidoc.json reads the
+// Proxmox Backup Server API schema shipped alongside apidoc.json.
 package main
 
 import (
@@ -103,7 +106,9 @@ func (p property) subKeys() map[string]property {
 }
 
 func main() {
-	apidoc := flag.String("apidoc", "", "path to apidoc.json (default: <"+clientModule+" module dir>/_data/apidoc.json)")
+	apidoc := flag.String("apidoc", "", "path to apidoc.json (default: <"+clientModule+" module dir>/_data/<source>)")
+	source := flag.String("source", "apidoc.json",
+		"apidoc filename within <module dir>/_data, e.g. pbs-apidoc.json (ignored when -apidoc is set)")
 	out := flag.String("out", "options_schema_gen.go", "output Go source file")
 	path := flag.String("path", "", "apidoc node path, e.g. /cluster/options (required)")
 	verbName := flag.String("verb", "PUT", "HTTP method whose parameters form the schema")
@@ -128,7 +133,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("locate %s module dir: %v", clientModule, err)
 		}
-		apidocPath = filepath.Join(strings.TrimSpace(string(dir)), "_data", "apidoc.json")
+		apidocPath = filepath.Join(strings.TrimSpace(string(dir)), "_data", *source)
 	}
 
 	cfg := genConfig{
@@ -257,7 +262,7 @@ func render(props map[string]property, names []string, cfg genConfig) ([]byte, e
 		cfg.Source, clientModule, cfg.Verb, cfg.Path)
 	fmt.Fprintf(&b, "package %s\n\n", cfg.Pkg)
 	fmt.Fprintf(&b, "import %q\n\n", schemaPackage)
-	fmt.Fprintf(&b, "// %s describes every settable option from the PVE API schema for\n", cfg.Symbol)
+	fmt.Fprintf(&b, "// %s describes every settable option from the %s API schema for\n", cfg.Symbol, productLabel(cfg.Source))
 	fmt.Fprintf(&b, "// %s %s, in lexical order by API key.\n", cfg.Verb, cfg.Path)
 	fmt.Fprintf(&b, "var %s = []optionschema.Schema{\n", cfg.Symbol)
 	for _, name := range names {
@@ -332,6 +337,18 @@ func writeBounds(b *bytes.Buffer, indent string, p property) {
 // (net[n], scsi[n], …).
 func indexedName(name string) bool {
 	return strings.HasSuffix(name, "[n]")
+}
+
+// productLabel names the API schema's product for the generated doc comment,
+// inferred from the apidoc source filename: "pbs-apidoc.json" (and any other
+// name starting with "pbs-") is Proxmox Backup Server; everything else,
+// including the default "apidoc.json", is Proxmox VE — preserving existing
+// PVE invocations' generated output byte-for-byte.
+func productLabel(source string) string {
+	if strings.HasPrefix(source, "pbs-") {
+		return "Proxmox Backup Server"
+	}
+	return "PVE"
 }
 
 // flagName maps an API parameter name to its CLI flag spelling: overrides

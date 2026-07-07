@@ -387,6 +387,7 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 		force     bool
 		labelText string
 		uuid      string
+		yes       bool
 	)
 	cmd := &cobra.Command{
 		Use:   "destroy",
@@ -395,7 +396,9 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 			"(GET /tape/media/destroy). Identify the medium with --uuid or " +
 			"--label-text; at least one is required. Pass --force to remove it " +
 			"even if it belongs to a media set. This is a synchronous operation: " +
-			"the PBS API returns no task ID for it.",
+			"the PBS API returns no task ID for it. This is destructive: the " +
+			"medium's cataloged backup content becomes unrecoverable through PBS. " +
+			"Pass --yes/-y to confirm.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -403,6 +406,10 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 
 			if !fl.Changed("uuid") && !fl.Changed("label-text") {
 				return fmt.Errorf("destroy tape media: --uuid or --label-text is required to identify the medium")
+			}
+
+			if !yes {
+				return fmt.Errorf("refusing to destroy tape media without confirmation: pass --yes/-y")
 			}
 
 			params := &pbstape.ListMediaDestroyParams{}
@@ -432,6 +439,7 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 	f.BoolVar(&force, "force", false, "remove the medium even if it belongs to a media set")
 	f.StringVar(&labelText, "label-text", "", "media label/barcode identifying the medium")
 	f.StringVar(&uuid, "uuid", "", "media UUID identifying the medium")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

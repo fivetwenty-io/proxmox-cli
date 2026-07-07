@@ -73,6 +73,7 @@ swept clean before the next provisions.
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 70 | 5 | 21 | 39 | 0 | 11 | 0 | 0 |
 | `node` | 166 | 3 | 75 | 47 | 0 | 40 | 6 | 0 |
+| `pbs` | 276 | 0 | 0 | 0 | 0 | 0 | 0 | 276 |
 | `pool` | 10 | 1 | 4 | 3 | 0 | 2 | 0 | 0 |
 | `qemu` | 94 | 8 | 24 | 52 | 1 | 15 | 1 | 0 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
@@ -81,9 +82,9 @@ swept clean before the next provisions.
 | `storage` | 30 | 2 | 12 | 12 | 0 | 7 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **692** | **94** | **180** | **356** | **6** | **99** | **8** | **0** |
+| **Total** | **968** | **94** | **180** | **356** | **6** | **99** | **8** | **276** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **692** leaves, **585** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **968** leaves, **585** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **276** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -577,6 +578,287 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node vzdump extract-config` | ◑ | — |  |
 | `node wakeonlan` | — | — | deferred — sends a Wake-on-LAN packet to power on another node — the API rejects waking the local node, and this is a single-node cluster, so there is no remote target; not exercised live; covered by unit tests |
 
+## `pbs`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `pbs acl ls` | — | — | **uncovered** |
+| `pbs acl update` | — | — | **uncovered** |
+| `pbs acme account add` | — | — | **uncovered** |
+| `pbs acme account delete` | — | — | **uncovered** |
+| `pbs acme account ls` | — | — | **uncovered** |
+| `pbs acme account show` | — | — | **uncovered** |
+| `pbs acme account update` | — | — | **uncovered** |
+| `pbs acme challenge-schema ls` | — | — | **uncovered** |
+| `pbs acme directories ls` | — | — | **uncovered** |
+| `pbs acme plugin add` | — | — | **uncovered** |
+| `pbs acme plugin delete` | — | — | **uncovered** |
+| `pbs acme plugin ls` | — | — | **uncovered** |
+| `pbs acme plugin show` | — | — | **uncovered** |
+| `pbs acme plugin update` | — | — | **uncovered** |
+| `pbs acme tos show` | — | — | **uncovered** |
+| `pbs api delete` | — | — | **uncovered** |
+| `pbs api get` | — | — | **uncovered** |
+| `pbs api post` | — | — | **uncovered** |
+| `pbs api put` | — | — | **uncovered** |
+| `pbs datastore create` | — | — | **uncovered** |
+| `pbs datastore delete` | — | — | **uncovered** |
+| `pbs datastore ls` | — | — | **uncovered** |
+| `pbs datastore rrd` | — | — | **uncovered** |
+| `pbs datastore show` | — | — | **uncovered** |
+| `pbs datastore status` | — | — | **uncovered** |
+| `pbs datastore update` | — | — | **uncovered** |
+| `pbs datastore usage` | — | — | **uncovered** |
+| `pbs encryption-key add` | — | — | **uncovered** |
+| `pbs encryption-key delete` | — | — | **uncovered** |
+| `pbs encryption-key ls` | — | — | **uncovered** |
+| `pbs encryption-key toggle-archive` | — | — | **uncovered** |
+| `pbs gc ls` | — | — | **uncovered** |
+| `pbs gc run` | — | — | **uncovered** |
+| `pbs gc status` | — | — | **uncovered** |
+| `pbs group delete` | — | — | **uncovered** |
+| `pbs group ls` | — | — | **uncovered** |
+| `pbs group notes` | — | — | **uncovered** |
+| `pbs metrics data` | — | — | **uncovered** |
+| `pbs metrics influxdb-http add` | — | — | **uncovered** |
+| `pbs metrics influxdb-http delete` | — | — | **uncovered** |
+| `pbs metrics influxdb-http ls` | — | — | **uncovered** |
+| `pbs metrics influxdb-http show` | — | — | **uncovered** |
+| `pbs metrics influxdb-http update` | — | — | **uncovered** |
+| `pbs metrics influxdb-udp add` | — | — | **uncovered** |
+| `pbs metrics influxdb-udp delete` | — | — | **uncovered** |
+| `pbs metrics influxdb-udp ls` | — | — | **uncovered** |
+| `pbs metrics influxdb-udp show` | — | — | **uncovered** |
+| `pbs metrics influxdb-udp update` | — | — | **uncovered** |
+| `pbs node apt changelog` | — | — | **uncovered** |
+| `pbs node apt ls` | — | — | **uncovered** |
+| `pbs node apt repo-add` | — | — | **uncovered** |
+| `pbs node apt repo-update` | — | — | **uncovered** |
+| `pbs node apt repositories` | — | — | **uncovered** |
+| `pbs node apt update` | — | — | **uncovered** |
+| `pbs node apt versions` | — | — | **uncovered** |
+| `pbs node certificates acme order` | — | — | **uncovered** |
+| `pbs node certificates acme renew` | — | — | **uncovered** |
+| `pbs node certificates custom delete` | — | — | **uncovered** |
+| `pbs node certificates custom upload` | — | — | **uncovered** |
+| `pbs node certificates info` | — | — | **uncovered** |
+| `pbs node config show` | — | — | **uncovered** |
+| `pbs node config update` | — | — | **uncovered** |
+| `pbs node disks directory create` | — | — | **uncovered** |
+| `pbs node disks directory delete` | — | — | **uncovered** |
+| `pbs node disks directory ls` | — | — | **uncovered** |
+| `pbs node disks initgpt` | — | — | **uncovered** |
+| `pbs node disks ls` | — | — | **uncovered** |
+| `pbs node disks smart` | — | — | **uncovered** |
+| `pbs node disks wipe` | — | — | **uncovered** |
+| `pbs node disks zfs create` | — | — | **uncovered** |
+| `pbs node disks zfs ls` | — | — | **uncovered** |
+| `pbs node disks zfs show` | — | — | **uncovered** |
+| `pbs node dns show` | — | — | **uncovered** |
+| `pbs node dns update` | — | — | **uncovered** |
+| `pbs node identity` | — | — | **uncovered** |
+| `pbs node journal` | — | — | **uncovered** |
+| `pbs node ls` | — | — | **uncovered** |
+| `pbs node network apply` | — | — | **uncovered** |
+| `pbs node network create` | — | — | **uncovered** |
+| `pbs node network delete` | — | — | **uncovered** |
+| `pbs node network ls` | — | — | **uncovered** |
+| `pbs node network revert` | — | — | **uncovered** |
+| `pbs node network show` | — | — | **uncovered** |
+| `pbs node network update` | — | — | **uncovered** |
+| `pbs node reboot` | — | — | **uncovered** |
+| `pbs node report` | — | — | **uncovered** |
+| `pbs node rrd` | — | — | **uncovered** |
+| `pbs node services ls` | — | — | **uncovered** |
+| `pbs node services reload` | — | — | **uncovered** |
+| `pbs node services restart` | — | — | **uncovered** |
+| `pbs node services show` | — | — | **uncovered** |
+| `pbs node services start` | — | — | **uncovered** |
+| `pbs node services state` | — | — | **uncovered** |
+| `pbs node services stop` | — | — | **uncovered** |
+| `pbs node shutdown` | — | — | **uncovered** |
+| `pbs node status` | — | — | **uncovered** |
+| `pbs node subscription delete` | — | — | **uncovered** |
+| `pbs node subscription set` | — | — | **uncovered** |
+| `pbs node subscription show` | — | — | **uncovered** |
+| `pbs node subscription update` | — | — | **uncovered** |
+| `pbs node syslog` | — | — | **uncovered** |
+| `pbs node tasks delete` | — | — | **uncovered** |
+| `pbs node tasks log` | — | — | **uncovered** |
+| `pbs node tasks ls` | — | — | **uncovered** |
+| `pbs node tasks show` | — | — | **uncovered** |
+| `pbs node time show` | — | — | **uncovered** |
+| `pbs node time update` | — | — | **uncovered** |
+| `pbs notification endpoint gotify add` | — | — | **uncovered** |
+| `pbs notification endpoint gotify delete` | — | — | **uncovered** |
+| `pbs notification endpoint gotify ls` | — | — | **uncovered** |
+| `pbs notification endpoint gotify show` | — | — | **uncovered** |
+| `pbs notification endpoint gotify update` | — | — | **uncovered** |
+| `pbs notification endpoint sendmail add` | — | — | **uncovered** |
+| `pbs notification endpoint sendmail delete` | — | — | **uncovered** |
+| `pbs notification endpoint sendmail ls` | — | — | **uncovered** |
+| `pbs notification endpoint sendmail show` | — | — | **uncovered** |
+| `pbs notification endpoint sendmail update` | — | — | **uncovered** |
+| `pbs notification endpoint smtp add` | — | — | **uncovered** |
+| `pbs notification endpoint smtp delete` | — | — | **uncovered** |
+| `pbs notification endpoint smtp ls` | — | — | **uncovered** |
+| `pbs notification endpoint smtp show` | — | — | **uncovered** |
+| `pbs notification endpoint smtp update` | — | — | **uncovered** |
+| `pbs notification endpoint webhook add` | — | — | **uncovered** |
+| `pbs notification endpoint webhook delete` | — | — | **uncovered** |
+| `pbs notification endpoint webhook ls` | — | — | **uncovered** |
+| `pbs notification endpoint webhook show` | — | — | **uncovered** |
+| `pbs notification endpoint webhook update` | — | — | **uncovered** |
+| `pbs notification matcher add` | — | — | **uncovered** |
+| `pbs notification matcher delete` | — | — | **uncovered** |
+| `pbs notification matcher field-values ls` | — | — | **uncovered** |
+| `pbs notification matcher fields ls` | — | — | **uncovered** |
+| `pbs notification matcher ls` | — | — | **uncovered** |
+| `pbs notification matcher show` | — | — | **uncovered** |
+| `pbs notification matcher update` | — | — | **uncovered** |
+| `pbs notification target ls` | — | — | **uncovered** |
+| `pbs notification target test` | — | — | **uncovered** |
+| `pbs permission ls` | — | — | **uncovered** |
+| `pbs ping` | — | — | **uncovered** |
+| `pbs prune job add` | — | — | **uncovered** |
+| `pbs prune job delete` | — | — | **uncovered** |
+| `pbs prune job ls` | — | — | **uncovered** |
+| `pbs prune job run` | — | — | **uncovered** |
+| `pbs prune job show` | — | — | **uncovered** |
+| `pbs prune job update` | — | — | **uncovered** |
+| `pbs prune run` | — | — | **uncovered** |
+| `pbs prune simulate` | — | — | **uncovered** |
+| `pbs realm ad add` | — | — | **uncovered** |
+| `pbs realm ad delete` | — | — | **uncovered** |
+| `pbs realm ad ls` | — | — | **uncovered** |
+| `pbs realm ad show` | — | — | **uncovered** |
+| `pbs realm ad update` | — | — | **uncovered** |
+| `pbs realm ldap add` | — | — | **uncovered** |
+| `pbs realm ldap delete` | — | — | **uncovered** |
+| `pbs realm ldap ls` | — | — | **uncovered** |
+| `pbs realm ldap show` | — | — | **uncovered** |
+| `pbs realm ldap update` | — | — | **uncovered** |
+| `pbs realm ls` | — | — | **uncovered** |
+| `pbs realm openid add` | — | — | **uncovered** |
+| `pbs realm openid delete` | — | — | **uncovered** |
+| `pbs realm openid ls` | — | — | **uncovered** |
+| `pbs realm openid show` | — | — | **uncovered** |
+| `pbs realm openid update` | — | — | **uncovered** |
+| `pbs realm pam show` | — | — | **uncovered** |
+| `pbs realm pam update` | — | — | **uncovered** |
+| `pbs realm pbs show` | — | — | **uncovered** |
+| `pbs realm pbs update` | — | — | **uncovered** |
+| `pbs realm sync` | — | — | **uncovered** |
+| `pbs remote add` | — | — | **uncovered** |
+| `pbs remote delete` | — | — | **uncovered** |
+| `pbs remote ls` | — | — | **uncovered** |
+| `pbs remote scan groups` | — | — | **uncovered** |
+| `pbs remote scan ls` | — | — | **uncovered** |
+| `pbs remote scan namespaces` | — | — | **uncovered** |
+| `pbs remote show` | — | — | **uncovered** |
+| `pbs remote update` | — | — | **uncovered** |
+| `pbs role ls` | — | — | **uncovered** |
+| `pbs snapshot delete` | — | — | **uncovered** |
+| `pbs snapshot files` | — | — | **uncovered** |
+| `pbs snapshot ls` | — | — | **uncovered** |
+| `pbs snapshot notes` | — | — | **uncovered** |
+| `pbs snapshot protect` | — | — | **uncovered** |
+| `pbs snapshot show` | — | — | **uncovered** |
+| `pbs snapshot unprotect` | — | — | **uncovered** |
+| `pbs status datastore-usage` | — | — | **uncovered** |
+| `pbs sync job add` | — | — | **uncovered** |
+| `pbs sync job delete` | — | — | **uncovered** |
+| `pbs sync job ls` | — | — | **uncovered** |
+| `pbs sync job run` | — | — | **uncovered** |
+| `pbs sync job show` | — | — | **uncovered** |
+| `pbs sync job update` | — | — | **uncovered** |
+| `pbs sync ls` | — | — | **uncovered** |
+| `pbs sync pull` | — | — | **uncovered** |
+| `pbs sync push` | — | — | **uncovered** |
+| `pbs tape backup` | — | — | **uncovered** |
+| `pbs tape changer add` | — | — | **uncovered** |
+| `pbs tape changer delete` | — | — | **uncovered** |
+| `pbs tape changer ls` | — | — | **uncovered** |
+| `pbs tape changer scan` | — | — | **uncovered** |
+| `pbs tape changer show` | — | — | **uncovered** |
+| `pbs tape changer status` | — | — | **uncovered** |
+| `pbs tape changer transfer` | — | — | **uncovered** |
+| `pbs tape changer update` | — | — | **uncovered** |
+| `pbs tape drive add` | — | — | **uncovered** |
+| `pbs tape drive barcode-label` | — | — | **uncovered** |
+| `pbs tape drive cartridge-memory` | — | — | **uncovered** |
+| `pbs tape drive catalog` | — | — | **uncovered** |
+| `pbs tape drive clean` | — | — | **uncovered** |
+| `pbs tape drive delete` | — | — | **uncovered** |
+| `pbs tape drive eject` | — | — | **uncovered** |
+| `pbs tape drive export` | — | — | **uncovered** |
+| `pbs tape drive format` | — | — | **uncovered** |
+| `pbs tape drive inventory` | — | — | **uncovered** |
+| `pbs tape drive label` | — | — | **uncovered** |
+| `pbs tape drive load-media` | — | — | **uncovered** |
+| `pbs tape drive load-slot` | — | — | **uncovered** |
+| `pbs tape drive ls` | — | — | **uncovered** |
+| `pbs tape drive read-label` | — | — | **uncovered** |
+| `pbs tape drive restore-key` | — | — | **uncovered** |
+| `pbs tape drive rewind` | — | — | **uncovered** |
+| `pbs tape drive scan` | — | — | **uncovered** |
+| `pbs tape drive show` | — | — | **uncovered** |
+| `pbs tape drive status` | — | — | **uncovered** |
+| `pbs tape drive unload` | — | — | **uncovered** |
+| `pbs tape drive update` | — | — | **uncovered** |
+| `pbs tape drive update-inventory` | — | — | **uncovered** |
+| `pbs tape drive volume-statistics` | — | — | **uncovered** |
+| `pbs tape job add` | — | — | **uncovered** |
+| `pbs tape job delete` | — | — | **uncovered** |
+| `pbs tape job ls` | — | — | **uncovered** |
+| `pbs tape job run` | — | — | **uncovered** |
+| `pbs tape job show` | — | — | **uncovered** |
+| `pbs tape job status` | — | — | **uncovered** |
+| `pbs tape job update` | — | — | **uncovered** |
+| `pbs tape key add` | — | — | **uncovered** |
+| `pbs tape key delete` | — | — | **uncovered** |
+| `pbs tape key ls` | — | — | **uncovered** |
+| `pbs tape key show` | — | — | **uncovered** |
+| `pbs tape key update` | — | — | **uncovered** |
+| `pbs tape media content` | — | — | **uncovered** |
+| `pbs tape media destroy` | — | — | **uncovered** |
+| `pbs tape media ls` | — | — | **uncovered** |
+| `pbs tape media move` | — | — | **uncovered** |
+| `pbs tape media set-status` | — | — | **uncovered** |
+| `pbs tape media sets` | — | — | **uncovered** |
+| `pbs tape pool add` | — | — | **uncovered** |
+| `pbs tape pool delete` | — | — | **uncovered** |
+| `pbs tape pool ls` | — | — | **uncovered** |
+| `pbs tape pool show` | — | — | **uncovered** |
+| `pbs tape pool update` | — | — | **uncovered** |
+| `pbs tape restore` | — | — | **uncovered** |
+| `pbs traffic add` | — | — | **uncovered** |
+| `pbs traffic current` | — | — | **uncovered** |
+| `pbs traffic delete` | — | — | **uncovered** |
+| `pbs traffic ls` | — | — | **uncovered** |
+| `pbs traffic show` | — | — | **uncovered** |
+| `pbs traffic update` | — | — | **uncovered** |
+| `pbs user add` | — | — | **uncovered** |
+| `pbs user delete` | — | — | **uncovered** |
+| `pbs user ls` | — | — | **uncovered** |
+| `pbs user passwd` | — | — | **uncovered** |
+| `pbs user show` | — | — | **uncovered** |
+| `pbs user token add` | — | — | **uncovered** |
+| `pbs user token delete` | — | — | **uncovered** |
+| `pbs user token ls` | — | — | **uncovered** |
+| `pbs user token show` | — | — | **uncovered** |
+| `pbs user token update` | — | — | **uncovered** |
+| `pbs user unlock-tfa` | — | — | **uncovered** |
+| `pbs user update` | — | — | **uncovered** |
+| `pbs verify job add` | — | — | **uncovered** |
+| `pbs verify job delete` | — | — | **uncovered** |
+| `pbs verify job ls` | — | — | **uncovered** |
+| `pbs verify job run` | — | — | **uncovered** |
+| `pbs verify job show` | — | — | **uncovered** |
+| `pbs verify job update` | — | — | **uncovered** |
+| `pbs verify run` | — | — | **uncovered** |
+| `pbs version` | — | — | **uncovered** |
+
 ## `pool`
 
 | Leaf | e2e | mutate | Notes |
@@ -856,7 +1138,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 
 Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
 
-_None — every leaf is exercised or explicitly deferred._
+**`pbs`** (276) — `pbs acl ls`, `pbs acl update`, `pbs acme account add`, `pbs acme account delete`, `pbs acme account ls`, `pbs acme account show`, `pbs acme account update`, `pbs acme challenge-schema ls`, `pbs acme directories ls`, `pbs acme plugin add`, `pbs acme plugin delete`, `pbs acme plugin ls`, `pbs acme plugin show`, `pbs acme plugin update`, `pbs acme tos show`, `pbs api delete`, `pbs api get`, `pbs api post`, `pbs api put`, `pbs datastore create`, `pbs datastore delete`, `pbs datastore ls`, `pbs datastore rrd`, `pbs datastore show`, `pbs datastore status`, `pbs datastore update`, `pbs datastore usage`, `pbs encryption-key add`, `pbs encryption-key delete`, `pbs encryption-key ls`, `pbs encryption-key toggle-archive`, `pbs gc ls`, `pbs gc run`, `pbs gc status`, `pbs group delete`, `pbs group ls`, `pbs group notes`, `pbs metrics data`, `pbs metrics influxdb-http add`, `pbs metrics influxdb-http delete`, `pbs metrics influxdb-http ls`, `pbs metrics influxdb-http show`, `pbs metrics influxdb-http update`, `pbs metrics influxdb-udp add`, `pbs metrics influxdb-udp delete`, `pbs metrics influxdb-udp ls`, `pbs metrics influxdb-udp show`, `pbs metrics influxdb-udp update`, `pbs node apt changelog`, `pbs node apt ls`, `pbs node apt repo-add`, `pbs node apt repo-update`, `pbs node apt repositories`, `pbs node apt update`, `pbs node apt versions`, `pbs node certificates acme order`, `pbs node certificates acme renew`, `pbs node certificates custom delete`, `pbs node certificates custom upload`, `pbs node certificates info`, `pbs node config show`, `pbs node config update`, `pbs node disks directory create`, `pbs node disks directory delete`, `pbs node disks directory ls`, `pbs node disks initgpt`, `pbs node disks ls`, `pbs node disks smart`, `pbs node disks wipe`, `pbs node disks zfs create`, `pbs node disks zfs ls`, `pbs node disks zfs show`, `pbs node dns show`, `pbs node dns update`, `pbs node identity`, `pbs node journal`, `pbs node ls`, `pbs node network apply`, `pbs node network create`, `pbs node network delete`, `pbs node network ls`, `pbs node network revert`, `pbs node network show`, `pbs node network update`, `pbs node reboot`, `pbs node report`, `pbs node rrd`, `pbs node services ls`, `pbs node services reload`, `pbs node services restart`, `pbs node services show`, `pbs node services start`, `pbs node services state`, `pbs node services stop`, `pbs node shutdown`, `pbs node status`, `pbs node subscription delete`, `pbs node subscription set`, `pbs node subscription show`, `pbs node subscription update`, `pbs node syslog`, `pbs node tasks delete`, `pbs node tasks log`, `pbs node tasks ls`, `pbs node tasks show`, `pbs node time show`, `pbs node time update`, `pbs notification endpoint gotify add`, `pbs notification endpoint gotify delete`, `pbs notification endpoint gotify ls`, `pbs notification endpoint gotify show`, `pbs notification endpoint gotify update`, `pbs notification endpoint sendmail add`, `pbs notification endpoint sendmail delete`, `pbs notification endpoint sendmail ls`, `pbs notification endpoint sendmail show`, `pbs notification endpoint sendmail update`, `pbs notification endpoint smtp add`, `pbs notification endpoint smtp delete`, `pbs notification endpoint smtp ls`, `pbs notification endpoint smtp show`, `pbs notification endpoint smtp update`, `pbs notification endpoint webhook add`, `pbs notification endpoint webhook delete`, `pbs notification endpoint webhook ls`, `pbs notification endpoint webhook show`, `pbs notification endpoint webhook update`, `pbs notification matcher add`, `pbs notification matcher delete`, `pbs notification matcher field-values ls`, `pbs notification matcher fields ls`, `pbs notification matcher ls`, `pbs notification matcher show`, `pbs notification matcher update`, `pbs notification target ls`, `pbs notification target test`, `pbs permission ls`, `pbs ping`, `pbs prune job add`, `pbs prune job delete`, `pbs prune job ls`, `pbs prune job run`, `pbs prune job show`, `pbs prune job update`, `pbs prune run`, `pbs prune simulate`, `pbs realm ad add`, `pbs realm ad delete`, `pbs realm ad ls`, `pbs realm ad show`, `pbs realm ad update`, `pbs realm ldap add`, `pbs realm ldap delete`, `pbs realm ldap ls`, `pbs realm ldap show`, `pbs realm ldap update`, `pbs realm ls`, `pbs realm openid add`, `pbs realm openid delete`, `pbs realm openid ls`, `pbs realm openid show`, `pbs realm openid update`, `pbs realm pam show`, `pbs realm pam update`, `pbs realm pbs show`, `pbs realm pbs update`, `pbs realm sync`, `pbs remote add`, `pbs remote delete`, `pbs remote ls`, `pbs remote scan groups`, `pbs remote scan ls`, `pbs remote scan namespaces`, `pbs remote show`, `pbs remote update`, `pbs role ls`, `pbs snapshot delete`, `pbs snapshot files`, `pbs snapshot ls`, `pbs snapshot notes`, `pbs snapshot protect`, `pbs snapshot show`, `pbs snapshot unprotect`, `pbs status datastore-usage`, `pbs sync job add`, `pbs sync job delete`, `pbs sync job ls`, `pbs sync job run`, `pbs sync job show`, `pbs sync job update`, `pbs sync ls`, `pbs sync pull`, `pbs sync push`, `pbs tape backup`, `pbs tape changer add`, `pbs tape changer delete`, `pbs tape changer ls`, `pbs tape changer scan`, `pbs tape changer show`, `pbs tape changer status`, `pbs tape changer transfer`, `pbs tape changer update`, `pbs tape drive add`, `pbs tape drive barcode-label`, `pbs tape drive cartridge-memory`, `pbs tape drive catalog`, `pbs tape drive clean`, `pbs tape drive delete`, `pbs tape drive eject`, `pbs tape drive export`, `pbs tape drive format`, `pbs tape drive inventory`, `pbs tape drive label`, `pbs tape drive load-media`, `pbs tape drive load-slot`, `pbs tape drive ls`, `pbs tape drive read-label`, `pbs tape drive restore-key`, `pbs tape drive rewind`, `pbs tape drive scan`, `pbs tape drive show`, `pbs tape drive status`, `pbs tape drive unload`, `pbs tape drive update`, `pbs tape drive update-inventory`, `pbs tape drive volume-statistics`, `pbs tape job add`, `pbs tape job delete`, `pbs tape job ls`, `pbs tape job run`, `pbs tape job show`, `pbs tape job status`, `pbs tape job update`, `pbs tape key add`, `pbs tape key delete`, `pbs tape key ls`, `pbs tape key show`, `pbs tape key update`, `pbs tape media content`, `pbs tape media destroy`, `pbs tape media ls`, `pbs tape media move`, `pbs tape media set-status`, `pbs tape media sets`, `pbs tape pool add`, `pbs tape pool delete`, `pbs tape pool ls`, `pbs tape pool show`, `pbs tape pool update`, `pbs tape restore`, `pbs traffic add`, `pbs traffic current`, `pbs traffic delete`, `pbs traffic ls`, `pbs traffic show`, `pbs traffic update`, `pbs user add`, `pbs user delete`, `pbs user ls`, `pbs user passwd`, `pbs user show`, `pbs user token add`, `pbs user token delete`, `pbs user token ls`, `pbs user token show`, `pbs user token update`, `pbs user unlock-tfa`, `pbs user update`, `pbs verify job add`, `pbs verify job delete`, `pbs verify job ls`, `pbs verify job run`, `pbs verify job show`, `pbs verify job update`, `pbs verify run`, `pbs version`
 
 ## Running the suites
 

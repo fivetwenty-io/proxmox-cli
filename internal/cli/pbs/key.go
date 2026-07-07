@@ -325,17 +325,27 @@ func newTapeKeyUpdateCmd() *cobra.Command {
 // remove a tape encryption key (DELETE
 // /config/tape-encryption-keys/{fingerprint}).
 func newTapeKeyDeleteCmd() *cobra.Command {
-	var digest string
+	var (
+		digest string
+		yes    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "delete <fingerprint>",
 		Short: "Delete a tape encryption key",
-		Long:  "Remove a tape encryption key (DELETE /config/tape-encryption-keys/{fingerprint}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a tape encryption key (DELETE /config/tape-encryption-keys/{fingerprint}). " +
+			"This is destructive: tape backups encrypted with this key become unrecoverable. " +
+			"Pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fingerprint := args[0]
 			if fingerprint == "" {
 				return fmt.Errorf("fingerprint must not be empty")
+			}
+
+			if !yes {
+				return fmt.Errorf("refusing to delete tape encryption key %q without confirmation: pass --yes/-y",
+					fingerprint)
 			}
 
 			params := &pbsconfig.DeleteTapeEncryptionKeysParams{}
@@ -353,5 +363,6 @@ func newTapeKeyDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

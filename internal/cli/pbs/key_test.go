@@ -254,13 +254,27 @@ func TestTapeKeyDelete_DeletesKey(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeKeyCmd(), "key", "delete", tapeKeyFingerprint, "--digest", "abc123")
+	err := run(deps, &buf, newTapeKeyCmd(), "key", "delete", tapeKeyFingerprint, "--digest", "abc123", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, tapeKeyConfigPath+"/"+tapeKeyFingerprint, rec.path)
 	require.Equal(t, "abc123", rec.query.Get("digest"))
 	require.Contains(t, buf.String(), "deleted")
+}
+
+func TestTapeKeyDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+tapeKeyConfigPath+"/"+tapeKeyFingerprint, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapeKeyCmd(), "key", "delete", tapeKeyFingerprint)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Contains(t, err.Error(), "--yes/-y")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
 }
 
 func TestTapeKeyDelete_SurfacesAPIError(t *testing.T) {
@@ -271,7 +285,7 @@ func TestTapeKeyDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeKeyCmd(), "key", "delete", tapeKeyFingerprint)
+	err := run(deps, &buf, newTapeKeyCmd(), "key", "delete", tapeKeyFingerprint, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete tape encryption key")
 }

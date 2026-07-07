@@ -268,14 +268,21 @@ func newTapeDriveUpdateCmd() *cobra.Command {
 // most other /config DELETE endpoints, this one has no digest-guard option
 // in the PBS API schema), so this command has no --digest flag.
 func newTapeDriveDeleteCmd() *cobra.Command {
+	var yes bool
+
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a tape drive configuration",
-		Long:  "Remove a tape drive configuration (DELETE /config/drive/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a tape drive configuration (DELETE /config/drive/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
+
+			if !yes {
+				return fmt.Errorf("refusing to delete tape drive %q without confirmation: pass --yes/-y", name)
+			}
 
 			err := deps.PBS.Config.DeleteDrive(cmd.Context(), name)
 			if err != nil {
@@ -286,6 +293,8 @@ func newTapeDriveDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+
 	return cmd
 }
 

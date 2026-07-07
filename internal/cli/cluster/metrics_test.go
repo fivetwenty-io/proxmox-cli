@@ -46,6 +46,41 @@ func TestMetricsServer_Get(t *testing.T) {
 	require.Contains(t, buf.String(), "10.0.0.9")
 }
 
+// TestMetricsServer_ListTokenNotEchoed verifies the InfluxDB access token is
+// stripped from `metrics server list` output, including the Raw payload
+// backing -o json/yaml (the table columns already omit it).
+func TestMetricsServer_ListTokenNotEchoed(t *testing.T) {
+	f, ac := newFakeClient(t)
+	const secret = "s3cr3ttoken"
+	f.HandleJSON("GET /api2/json/cluster/metrics/server", []any{
+		map[string]any{"id": "influx", "type": "influxdb", "server": "10.0.0.9", "port": 8086, "token": secret},
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "metrics", "server", "list"))
+	require.NotContains(t, buf.String(), secret, "token must never be echoed to output")
+}
+
+// TestMetricsServer_GetTokenNotEchoed verifies the InfluxDB access token
+// returned by GET /cluster/metrics/server/{id} is stripped from `get` output.
+func TestMetricsServer_GetTokenNotEchoed(t *testing.T) {
+	f, ac := newFakeClient(t)
+	const secret = "s3cr3ttoken"
+	f.HandleFunc("GET /api2/json/cluster/metrics/server/influx", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"type": "influxdb", "server": "10.0.0.9", "port": 8086, "token": secret,
+		})
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatJSON}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "metrics", "server", "get", "influx"))
+	require.NotContains(t, buf.String(), secret, "token must never be echoed to output")
+}
+
 func TestMetricsServer_CreateForwardsRequiredOmitsUnset(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var gotForm url.Values

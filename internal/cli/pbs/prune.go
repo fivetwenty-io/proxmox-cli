@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsadmin "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/admin"
@@ -399,11 +400,14 @@ func newPruneJobLsCmd() *cobra.Command {
 // newPruneJobShowCmd builds `pve pbs prune job show <id>` — show one prune
 // job's full configuration (GET /config/prune/{id}).
 func newPruneJobShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show one prune job's configuration",
-		Long:  "Show the full configuration of one prune job (GET /config/prune/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full configuration of one prune job (GET /config/prune/{id}). " +
+			"The PBS API omits options left at their built-in defaults; pass " +
+			"--defaults to also list those, with the value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -465,10 +469,17 @@ func newPruneJobShowCmd() *cobra.Command {
 				single["ns"] = *resp.Ns
 			}
 
-			res := output.Result{Single: single, Raw: resp}
+			var raw any = resp
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(pruneJobOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -654,16 +665,21 @@ func newPruneJobUpdateCmd() *cobra.Command {
 // prune job configuration (DELETE /config/prune/{id}).
 func newPruneJobDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a scheduled prune job",
-		Long:  "Remove a prune job configuration (DELETE /config/prune/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a prune job configuration (DELETE /config/prune/{id}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 			if id == "" {
 				return fmt.Errorf("job id must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete prune job %q without confirmation: pass --yes/-y", id)
 			}
 
 			params := &pbsconfig.DeletePruneParams{}
@@ -681,6 +697,7 @@ func newPruneJobDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

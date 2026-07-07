@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -85,6 +86,49 @@ func TestTrafficShow_RendersRule(t *testing.T) {
 	require.Equal(t, "/api2/json/config/traffic-control/rule1", rec.path)
 	require.Contains(t, buf.String(), "10MB")
 	require.Contains(t, buf.String(), "20MB")
+}
+
+// TestTrafficShow_DefaultsTable verifies --defaults lists an unset option
+// (the PBS traffic-control schema declares no built-in defaults, so unset
+// options render "(unset)" rather than "(default)").
+func TestTrafficShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	recordJSON(f, "GET /api2/json/config/traffic-control/rule1", &recordedRequest{}, map[string]any{
+		"name": "rule1", "network": []string{"10.0.0.0/8"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTrafficShowCmd(), "show", "rule1", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "10.0.0.0/8")
+	require.Contains(t, out, "(unset)", "comment has no schema default")
+}
+
+func TestTrafficShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	recordJSON(f, "GET /api2/json/config/traffic-control/rule1", &recordedRequest{}, map[string]any{
+		"name": "rule1", "network": []string{"10.0.0.0/8"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTrafficShowCmd(), "show", "rule1", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "rule1", got.Set["name"])
+	require.Empty(t, got.Defaults, "traffic-control schema declares no built-in defaults")
 }
 
 func TestTrafficShow_EmptyNameRejected(t *testing.T) {
@@ -277,6 +321,20 @@ func TestTrafficUpdate_ServerErrorSurfaced(t *testing.T) {
 // traffic delete
 // ---------------------------------------------------------------------------
 
+func TestTrafficDelete_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "DELETE /api2/json/config/traffic-control/rule1", &rec, nil)
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
 func TestTrafficDelete_Success(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -285,7 +343,7 @@ func TestTrafficDelete_Success(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/traffic-control/rule1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1", "--digest", "deadbeef")
+	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1", "--digest", "deadbeef", "--yes")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "deadbeef", rec.query.Get("digest"))
@@ -300,7 +358,7 @@ func TestTrafficDelete_NoDigestOmitsParam(t *testing.T) {
 	recordJSON(f, "DELETE /api2/json/config/traffic-control/rule1", &rec, nil)
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1")
+	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1", "--yes")
 	require.NoError(t, err)
 	_, hasDigest := rec.query["digest"]
 	require.False(t, hasDigest)
@@ -325,7 +383,7 @@ func TestTrafficDelete_ServerErrorSurfaced(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1")
+	err := run(deps, &buf, newTrafficDeleteCmd(), "delete", "rule1", "--yes")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no such rule")
 }

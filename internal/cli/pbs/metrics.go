@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -43,6 +44,20 @@ func metricsFormatOptionalBool(b *bool) string {
 	}
 
 	return strconv.FormatBool(*b)
+}
+
+// metricsSecretKeys are the credential fields that must never be echoed back
+// to the user. They are forwarded to the API on add/update but the API's GET
+// responses include the stored value, so it must be stripped from ls/show output.
+var metricsSecretKeys = []string{"token"}
+
+// stripMetricsSecrets deletes every key in metricsSecretKeys from fields, in
+// place, mirroring storage.go's handling of the storage password/keyring/
+// encryption-key/master-pubkey fields.
+func stripMetricsSecrets(fields map[string]any) {
+	for _, k := range metricsSecretKeys {
+		delete(fields, k)
+	}
 }
 
 // ===========================================================================
@@ -132,7 +147,12 @@ func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
 				})
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			raws := decodeRawList(items)
+			for _, m := range raws {
+				stripMetricsSecrets(m)
+			}
+
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -143,11 +163,15 @@ func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
 // <name>` — show one InfluxDB HTTP(s) metric server's full configuration
 // (GET /config/metrics/influxdb-http/{name}).
 func newMetricsInfluxdbHTTPShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show one InfluxDB HTTP(s) metric server's configuration",
 		Long: "Show the full configuration of one InfluxDB HTTP(s) metric server " +
-			"(GET /config/metrics/influxdb-http/{name}).",
+			"(GET /config/metrics/influxdb-http/{name}). The token is write-only and " +
+			"never returned by the API. The API also omits options left at their " +
+			"built-in defaults; pass --defaults to also list those, with the value " +
+			"they effectively have.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -165,11 +189,21 @@ func newMetricsInfluxdbHTTPShowCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("decode influxdb-http metric server %q: %w", name, err)
 			}
+			stripMetricsSecrets(fields)
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(
+					metricsInfluxdbHTTPOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -372,16 +406,22 @@ func newMetricsInfluxdbHTTPUpdateCmd() *cobra.Command {
 // (DELETE /config/metrics/influxdb-http/{name}).
 func newMetricsInfluxdbHTTPDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete an InfluxDB HTTP(s) metric server",
-		Long:  "Remove an InfluxDB HTTP(s) metric server (DELETE /config/metrics/influxdb-http/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove an InfluxDB HTTP(s) metric server (DELETE /config/metrics/influxdb-http/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("metric server name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete influxdb-http metric server %q without confirmation: pass --yes/-y",
+					name)
 			}
 
 			params := &pbsconfig.DeleteMetricsInfluxdbHttpParams{}
@@ -399,6 +439,7 @@ func newMetricsInfluxdbHTTPDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 
@@ -491,11 +532,14 @@ func newMetricsInfluxdbUDPLsCmd() *cobra.Command {
 // <name>` — show one InfluxDB UDP metric server's full configuration
 // (GET /config/metrics/influxdb-udp/{name}).
 func newMetricsInfluxdbUDPShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show one InfluxDB UDP metric server's configuration",
 		Long: "Show the full configuration of one InfluxDB UDP metric server " +
-			"(GET /config/metrics/influxdb-udp/{name}).",
+			"(GET /config/metrics/influxdb-udp/{name}). The API omits options left " +
+			"at their built-in defaults; pass --defaults to also list those, with " +
+			"the value they effectively have.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -514,10 +558,19 @@ func newMetricsInfluxdbUDPShowCmd() *cobra.Command {
 				return fmt.Errorf("decode influxdb-udp metric server %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(
+					metricsInfluxdbUDPOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -680,16 +733,22 @@ func newMetricsInfluxdbUDPUpdateCmd() *cobra.Command {
 // (DELETE /config/metrics/influxdb-udp/{name}).
 func newMetricsInfluxdbUDPDeleteCmd() *cobra.Command {
 	var digest string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete an InfluxDB UDP metric server",
-		Long:  "Remove an InfluxDB UDP metric server (DELETE /config/metrics/influxdb-udp/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove an InfluxDB UDP metric server (DELETE /config/metrics/influxdb-udp/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("metric server name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete influxdb-udp metric server %q without confirmation: pass --yes/-y",
+					name)
 			}
 
 			params := &pbsconfig.DeleteMetricsInfluxdbUdpParams{}
@@ -707,6 +766,7 @@ func newMetricsInfluxdbUDPDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&digest, "digest", "", "only delete if the current config digest matches")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

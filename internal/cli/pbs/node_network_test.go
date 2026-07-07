@@ -149,11 +149,20 @@ func TestNodeNetworkDelete_Deletes(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNodeCmd(), "node", "network", "delete", "eth0", "--digest", "d1")
+	err := run(deps, &buf, newNodeCmd(), "node", "network", "delete", "eth0", "--digest", "d1", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, "d1", rec.query.Get("digest"))
+}
+
+func TestNodeNetworkDelete_RequiresYes(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "network", "delete", "eth0")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes/-y")
 }
 
 func TestNodeNetworkRevert_Reverts(t *testing.T) {
@@ -163,12 +172,21 @@ func TestNodeNetworkRevert_Reverts(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNodeCmd(), "node", "network", "revert")
+	err := run(deps, &buf, newNodeCmd(), "node", "network", "revert", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
 	require.Equal(t, nodeAPIBase+"/network", rec.path)
 	require.Contains(t, buf.String(), "reverted")
+}
+
+func TestNodeNetworkRevert_RequiresYes(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "network", "revert")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--yes/-y")
 }
 
 func TestNodeNetworkApply_Applies(t *testing.T) {

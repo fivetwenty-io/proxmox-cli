@@ -222,7 +222,7 @@ func TestTapePoolDelete_DeletesPool(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapePoolCmd(), "pool", "delete", tapePoolName)
+	err := run(deps, &buf, newTapePoolCmd(), "pool", "delete", tapePoolName, "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -238,7 +238,23 @@ func TestTapePoolDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapePoolCmd(), "pool", "delete", tapePoolName)
+	err := run(deps, &buf, newTapePoolCmd(), "pool", "delete", tapePoolName, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete tape media pool")
+}
+
+func TestTapePoolDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+tapePoolConfigPath+"/"+tapePoolName, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapePoolCmd(), "pool", "delete", tapePoolName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/optionschema"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
 	pbsconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/config"
@@ -104,11 +105,15 @@ func newNotifMatcherLsCmd() *cobra.Command {
 // — show a single matcher's configuration
 // (GET /config/notifications/matchers/{name}).
 func newNotifMatcherShowCmd() *cobra.Command {
+	var withDefaults bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a single matcher's configuration",
-		Long:  "Show every populated field of a single notification matcher (GET /config/notifications/matchers/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every populated field of a single notification matcher (GET " +
+			"/config/notifications/matchers/{name}). The API omits options left at " +
+			"their built-in defaults; pass --defaults to also list those, with the " +
+			"value they effectively have.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -126,10 +131,18 @@ func newNotifMatcherShowCmd() *cobra.Command {
 				return fmt.Errorf("decode notification matcher %q: %w", name, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			single := stringMap(fields)
+			var raw any = fields
+			if withDefaults {
+				single, raw = optionschema.MergeDefaults(notifMatcherOptionSchemas, single, raw, optionschema.MergeOpts{})
+			}
+
+			res := output.Result{Single: single, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVar(&withDefaults, "defaults", false,
+		"include the unset options with their built-in default values")
 	return cmd
 }
 
@@ -349,16 +362,21 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 // parameter — PBS does not support conditional deletes for notification
 // matchers.
 func newNotifMatcherDeleteCmd() *cobra.Command {
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a notification matcher",
-		Long:  "Remove a notification matcher (DELETE /config/notifications/matchers/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a notification matcher (DELETE /config/notifications/matchers/{name}). " +
+			"This is destructive: pass --yes/-y to confirm.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			if name == "" {
 				return fmt.Errorf("matcher name must not be empty")
+			}
+			if !yes {
+				return fmt.Errorf("refusing to delete notification matcher %q without confirmation: pass --yes/-y", name)
 			}
 
 			err := deps.PBS.Config.DeleteNotificationsMatchers(cmd.Context(), name)
@@ -370,6 +388,7 @@ func newNotifMatcherDeleteCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }
 

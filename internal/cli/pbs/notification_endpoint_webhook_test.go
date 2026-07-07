@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -80,6 +81,51 @@ func TestNotifEndpointWebhookShow_RendersSingle(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "https://a.example.com/hook")
 	require.Contains(t, out, "primary")
+}
+
+// TestNotifEndpointWebhookShow_DefaultsTable verifies --defaults lists an
+// unset option. "method" has a schema default ("post") but the API always
+// returns it (it is a required response field), so it is never actually
+// unset; "comment" has no schema default at all and renders "(unset)".
+func TestNotifEndpointWebhookShow_DefaultsTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifWebhookPath+"/webhook-a", map[string]any{
+		"name": "webhook-a", "url": "https://a.example.com/hook", "method": "put",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointWebhookCmd(), "webhook", "show", "webhook-a", "--defaults")
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "https://a.example.com/hook")
+	require.Contains(t, out, "(unset)", "comment has no schema default")
+}
+
+// TestNotifEndpointWebhookShow_DefaultsJSON verifies the JSON set/defaults
+// shape and that write-only secret values are never resurrected as an
+// "unset" default: "secret" is excluded from the schema table entirely.
+func TestNotifEndpointWebhookShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+notifWebhookPath+"/webhook-a", map[string]any{
+		"name": "webhook-a", "url": "https://a.example.com/hook", "method": "put",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointWebhookCmd(), "webhook", "show", "webhook-a", "--defaults")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), `"set"`)
+	require.Contains(t, buf.String(), `"defaults"`)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "put", got.Set["method"], "method is always present in the response, never merged from schema")
+	require.NotContains(t, got.Defaults, "secret", "secret must not appear even as an unset default")
 }
 
 func TestNotifEndpointWebhookShow_EmptyNameRejected(t *testing.T) {
@@ -327,7 +373,7 @@ func TestNotifEndpointWebhookUpdate_SurfacesAPIError(t *testing.T) {
 
 // --- webhook delete -------------------------------------------------------------------
 
-func TestNotifEndpointWebhookDelete_DeletesEndpoint(t *testing.T) {
+func TestNotifEndpointWebhookDelete_RequiresYes(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "DELETE "+notifWebhookPath+"/webhook-a", &rec, nil)
@@ -335,6 +381,19 @@ func TestNotifEndpointWebhookDelete_DeletesEndpoint(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNotifEndpointWebhookCmd(), "webhook", "delete", "webhook-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
+}
+
+func TestNotifEndpointWebhookDelete_DeletesEndpoint(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+notifWebhookPath+"/webhook-a", &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNotifEndpointWebhookCmd(), "webhook", "delete", "webhook-a", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodDelete, rec.method)
@@ -359,7 +418,7 @@ func TestNotifEndpointWebhookDelete_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newNotifEndpointWebhookCmd(), "webhook", "delete", "webhook-a")
+	err := run(deps, &buf, newNotifEndpointWebhookCmd(), "webhook", "delete", "webhook-a", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "delete webhook endpoint")
 }

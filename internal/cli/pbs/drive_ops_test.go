@@ -258,7 +258,7 @@ func TestTapeDriveOpFormat_BlocksUntilTaskFinishes(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive,
-		"--fast", "--label-text", "TAPE02", "--load-barcode", "BC02")
+		"--fast", "--label-text", "TAPE02", "--load-barcode", "BC02", "--yes")
 	require.NoError(t, err)
 
 	require.Equal(t, http.MethodPost, rec.method)
@@ -278,7 +278,7 @@ func TestTapeDriveOpFormat_OmitsUnsetFlags(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive)
+	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive, "--yes")
 	require.NoError(t, err)
 
 	for _, key := range []string{"fast", "label-text", "load-barcode"} {
@@ -293,7 +293,7 @@ func TestTapeDriveOpFormat_AsyncPrintsUPID(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, true)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive)
+	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive, "--yes")
 	require.NoError(t, err)
 	require.Contains(t, buf.String(), validUPID)
 	require.NotContains(t, buf.String(), "formatted")
@@ -307,9 +307,23 @@ func TestTapeDriveOpFormat_SurfacesAPIError(t *testing.T) {
 
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
-	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive)
+	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive, "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "format media")
+}
+
+func TestTapeDriveOpFormat_RequiresYes(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "POST "+tapeDriveOpsPath("format-media"), &rec, validUPID)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newTapeDriveOpsRoot(), "drive", "format", tapeDriveOpsDrive)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "without confirmation")
+	require.Contains(t, err.Error(), "--yes/-y")
+	require.Empty(t, rec.method, "no request must be issued without --yes")
 }
 
 // --- label -------------------------------------------------------------------
