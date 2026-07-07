@@ -272,14 +272,14 @@ uses the `pve node` subtree.
 | `version` | Cluster API version and CLI build info | `version`, `version client` |
 | `access` | Users, tokens, groups, roles, ACLs | `user` (with `user token`), `group`, `role`, `acl`, `permissions`, `password` |
 | `cluster` | Cluster state | `status`, `resources`, `next-id`, `log`, `tasks` |
-| `node` | Node administration and remote access | `list`, `status`, `ssh`, `rsync`, `shell`, `exec`, `console`, `services`, `task` |
+| `node` | Node administration and remote access | `list`, `status`, `ssh`, `rsync`, `shell`, `exec`, `console`, `services`, `task`, `permissions` |
 | `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
 | `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
-| `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security` |
-| `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security` |
-| `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete` |
-| `sdn` | Software-defined networking | `zone`, `vnet`, `subnet` (each `list\|show\|create\|delete`), `apply` |
-| `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete` |
+| `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security`, `permissions` |
+| `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security`, `permissions` |
+| `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete`, `permissions` |
+| `sdn` | Software-defined networking | `zone`, `vnet` (each `list\|show\|create\|delete\|permissions`), `subnet` (`list\|show\|create\|delete`), `apply` |
+| `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete`, `permissions` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
 
 The top-level alias `pve ctx` resolves to `pve context`; `pve auth` resolves to
@@ -465,6 +465,38 @@ pve lxc security caps reset 105 --restart
 
 Without `--restart`, each mutation prints the manual restart command instead; the
 changes only take effect on the next container start.
+
+## Object permissions
+
+Every object tree with its own ACL path — `qemu`, `lxc`, `storage`, `pool`,
+`node`, `sdn zone`, and `sdn vnet` — carries a `permissions` sub-command
+that derives that path automatically, so day-to-day ACL work never
+requires typing PVE's path grammar (`/vms/100`, `/pool/lab`,
+`/sdn/zones/dmz/vnet0`, and so on) by hand.
+
+```bash
+# Grant a role on a VM, addressed by vmid or name.
+pve qemu permissions grant 100 --roles PVEVMAdmin --users alice@pve
+
+# List ACL entries on a storage, including entries inherited from its
+# ancestor paths (/, /storage).
+pve storage permissions list local-lvm --inherited
+```
+
+Every tree exposes the same four verbs: `list` (`--inherited` also
+includes entries from ancestor paths), `effective` (`--userid` checks
+another user or token, which needs `Sys.Audit` on `/access`), and `grant`/
+`revoke` (both need `Permissions.Modify` on the derived path, take
+`--roles` plus at least one of `--users`, `--groups`, or `--tokens`
+comma-separated, and accept `--no-propagate` to withhold the default
+propagation to sub-paths). `pve pool permissions` derives PVE's singular
+`/pool/{poolid}` ACL path automatically, even though the `pool` object
+tree and its own sub-commands are plural — a mismatch the command handles
+so the operator never has to remember it.
+
+These commands are thin, path-deriving wrappers: for any ACL path outside
+a single object, `pve access acl` and `pve access permissions` remain the
+general-purpose commands, and both still accept an arbitrary `--path`.
 
 The keep-mode presets are:
 

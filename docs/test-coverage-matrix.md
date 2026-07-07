@@ -71,19 +71,19 @@ swept clean before the next provisions.
 | `cluster` | 168 | 46 | 16 | 109 | 5 | 13 | 0 | 0 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 66 | 5 | 19 | 39 | 0 | 9 | 0 | 0 |
-| `node` | 162 | 3 | 73 | 47 | 0 | 38 | 6 | 0 |
-| `pool` | 6 | 1 | 2 | 3 | 0 | 0 | 0 | 0 |
-| `qemu` | 90 | 8 | 22 | 52 | 1 | 13 | 1 | 0 |
+| `lxc` | 70 | 5 | 21 | 39 | 0 | 11 | 0 | 0 |
+| `node` | 166 | 3 | 75 | 47 | 0 | 40 | 6 | 0 |
+| `pool` | 10 | 1 | 4 | 3 | 0 | 2 | 0 | 0 |
+| `qemu` | 94 | 8 | 24 | 52 | 1 | 15 | 1 | 0 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
-| `sdn` | 85 | 6 | 14 | 62 | 0 | 6 | 0 | 0 |
+| `sdn` | 93 | 6 | 18 | 62 | 0 | 10 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
-| `storage` | 26 | 2 | 10 | 12 | 0 | 5 | 0 | 0 |
+| `storage` | 30 | 2 | 12 | 12 | 0 | 7 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **669** | **96** | **167** | **357** | **6** | **86** | **8** | **0** |
+| **Total** | **697** | **96** | **181** | **357** | **6** | **100** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **669** leaves, **575** are exercised by at least one live suite, **86** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **697** leaves, **589** are exercised by at least one live suite, **100** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -376,6 +376,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc metrics` | ◑ | — |  |
 | `lxc migrate` | — | ✓ |  |
 | `lxc migrate check` | ◑ | — |  |
+| `lxc permissions effective` | ◑ | — |  |
+| `lxc permissions grant` | — | — | deferred — grants ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `lxc permissions list` | ◑ | — |  |
+| `lxc permissions revoke` | — | — | deferred — revokes ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `lxc reboot` | — | ✓ |  |
 | `lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
 | `lxc resume` | — | ✓ |  |
@@ -521,6 +525,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `node network set` | — | ✓ |  |
 | `node oci pull` | — | ✓ |  |
 | `node oci tags` | — | ✓ |  |
+| `node permissions effective` | ◑ | — |  |
+| `node permissions grant` | — | — | deferred — grants ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `node permissions list` | ◑ | — |  |
+| `node permissions revoke` | — | — | deferred — revokes ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `node query-url-metadata` | — | ✓ |  |
 | `node reboot` | — | — | n/a — reboots the real host — would take the shared lab node offline; not automatable |
 | `node replication get` | ◑ | — |  |
@@ -580,6 +588,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `pool delete` | — | ✓ |  |
 | `pool get` | ◑ | — |  |
 | `pool list` | ✓ | — |  |
+| `pool permissions effective` | ◑ | — |  |
+| `pool permissions grant` | — | — | deferred — grants ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pool permissions list` | ◑ | — |  |
+| `pool permissions revoke` | — | — | deferred — revokes ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pool set` | — | ✓ |  |
 | `pool show` | ◑ | — |  |
 
@@ -639,6 +651,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu migrate capabilities` | ✓ | — |  |
 | `qemu migrate check` | ◑ | — |  |
 | `qemu monitor` | — | ✓ |  |
+| `qemu permissions effective` | ◑ | — |  |
+| `qemu permissions grant` | — | — | deferred — grants ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `qemu permissions list` | ◑ | — |  |
+| `qemu permissions revoke` | — | — | deferred — revokes ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `qemu reboot` | — | · |  |
 | `qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live clusters with shared or compatible storage; no rollback without manual intervention; not exercised live |
 | `qemu reset` | — | ✓ |  |
@@ -766,11 +782,19 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn vnet ips delete` | — | ✓ |  |
 | `sdn vnet ips set` | — | ✓ |  |
 | `sdn vnet list` | ✓ | — |  |
+| `sdn vnet permissions effective` | ◑ | — |  |
+| `sdn vnet permissions grant` | — | — | deferred — grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `sdn vnet permissions list` | ◑ | — |  |
+| `sdn vnet permissions revoke` | — | — | deferred — revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `sdn vnet set` | — | ✓ |  |
 | `sdn vnet show` | ◑ | — |  |
 | `sdn zone create` | — | ✓ |  |
 | `sdn zone delete` | — | ✓ |  |
 | `sdn zone list` | ✓ | — |  |
+| `sdn zone permissions effective` | ◑ | — |  |
+| `sdn zone permissions grant` | — | — | deferred — grants ACL roles on the zone's /sdn/zones/{zone} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `sdn zone permissions list` | ◑ | — |  |
+| `sdn zone permissions revoke` | — | — | deferred — revokes ACL roles on the zone's /sdn/zones/{zone} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `sdn zone set` | — | ✓ |  |
 | `sdn zone show` | ◑ | — |  |
 
@@ -799,6 +823,10 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `storage list` | ✓ | — |  |
 | `storage node-list` | ◑ | — |  |
 | `storage oci-pull` | — | — | deferred — pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests |
+| `storage permissions effective` | ◑ | — |  |
+| `storage permissions grant` | — | — | deferred — grants ACL roles on the storage's /storage/{storage} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `storage permissions list` | ◑ | — |  |
+| `storage permissions revoke` | — | — | deferred — revokes ACL roles on the storage's /storage/{storage} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `storage prune` | ◑ | ✓ |  |
 | `storage rrd` | ◑ | — |  |
 | `storage rrddata` | ◑ | — |  |
