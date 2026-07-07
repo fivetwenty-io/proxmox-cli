@@ -18,6 +18,9 @@ def run(ctx: Ctx) -> None:
     # so they run even before node discovery.
     ctx.check("config describe", "lxc", "config", "describe")
     ctx.check("firewall options describe", "lxc", "firewall", "options", "describe")
+    # security caps describe: offline capability catalog + preset listing — no
+    # API call, so it runs alongside the other offline schema catalogs.
+    ctx.check("security caps describe", "lxc", "security", "caps", "describe")
 
     n = ctx.node
     if not n:
@@ -146,6 +149,41 @@ def run(ctx: Ctx) -> None:
         ctx.check("console vnc ticket", "lxc", "console", cid, "--type", "vnc",
                   node=n, validate=has_ticket)
 
+        # security posture reads: all API-only, gated on a discovered container
+        # so the posture blocks and the cluster audit table render against real
+        # data. `show` is the layered per-CT posture, `list` the cluster-wide
+        # audit, `caps show` the capability whitelist, `features show` the
+        # parsed feature flags. The mutating counterparts (caps set/add/remove/
+        # reset, features set) and `caps show --effective` are deferred below.
+        def has_posture(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            missing = [k for k in ("vmid", "unprivileged") if k not in data]
+            return f"security posture missing keys: {missing}" if missing else None
+
+        def has_caps_mode(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "mode" in data else "caps response missing 'mode' key"
+
+        def has_features(res: CmdResult) -> str | None:
+            data = res.json()
+            if not isinstance(data, dict):
+                return "expected a JSON object"
+            return None if "nesting" in data else "features response missing 'nesting' key"
+
+        ctx.check("security show", "lxc", "security", "show", cid,
+                  node=n, validate=has_posture)
+        # list is a cluster resources scan plus one config read per container;
+        # an empty cluster still returns a valid (possibly empty) array.
+        ctx.check("security list", "lxc", "security", "list", node=n, validate=is_list)
+        ctx.check("security caps show", "lxc", "security", "caps", "show", cid,
+                  node=n, validate=has_caps_mode)
+        ctx.check("security features show", "lxc", "security", "features", "show", cid,
+                  node=n, validate=has_features)
+
     # `interfaces` reads the container's live network namespace, so it only
     # works against a running container. Discover one explicitly; when none is
     # running the read-only sweep skips it (the verb is exercised live on the
@@ -243,4 +281,51 @@ def run(ctx: Ctx) -> None:
         "guest lifecycle; not exercised against a live container; covered by unit tests",
         "pve lxc to-template <ctid> --node <node>",
         isolation=True, live_covered=False,
+    )
+    # `security` mutations have no read-only form and are not wired into the
+    # mutate phase: the caps verbs rewrite /etc/pve/lxc/<vmid>.conf on the node
+    # over root ssh, and `features set` writes the config API. Each stays
+    # deferred here and is covered by unit tests (internal/lxcconf,
+    # internal/nodefile, internal/cli/lxc/security*_test.go).
+    ctx.defer(
+        "security caps set",
+        "rewrites the container capability whitelist in /etc/pve/lxc/<vmid>.conf "
+        "over root ssh, so it cannot be driven head-less by the read-only sweep; "
+        "not wired into the mutate phase; covered by unit tests",
+        "pve lxc security caps set <ctid> --preset minimal",
+    )
+    ctx.defer(
+        "security caps add",
+        "grants a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so "
+        "it cannot be driven head-less by the read-only sweep; not wired into the "
+        "mutate phase; covered by unit tests",
+        "pve lxc security caps add <ctid> net_admin",
+    )
+    ctx.defer(
+        "security caps remove",
+        "revokes a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so "
+        "it cannot be driven head-less by the read-only sweep; not wired into the "
+        "mutate phase; covered by unit tests",
+        "pve lxc security caps remove <ctid> net_admin",
+    )
+    ctx.defer(
+        "security caps reset",
+        "clears the capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, "
+        "so it cannot be driven head-less by the read-only sweep; not wired into "
+        "the mutate phase; covered by unit tests",
+        "pve lxc security caps reset <ctid>",
+    )
+    ctx.defer(
+        "security features set",
+        "mutates the container features= flags via the config API; not wired into "
+        "the mutate phase; covered by unit tests",
+        "pve lxc security features set <ctid> --nesting",
+    )
+    ctx.defer(
+        "security caps show --effective",
+        "the --effective probe reads the running container's /proc/1/status over "
+        "root ssh (the configured caps read is exercised by the sweep above); it "
+        "needs a running container and root ssh, so it is not driven head-less; "
+        "covered by unit tests",
+        "pve lxc security caps show <ctid> --effective",
     )

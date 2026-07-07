@@ -71,7 +71,7 @@ swept clean before the next provisions.
 | `cluster` | 168 | 46 | 16 | 109 | 5 | 13 | 0 | 0 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 54 | 4 | 15 | 39 | 0 | 2 | 0 | 0 |
+| `lxc` | 64 | 5 | 19 | 39 | 0 | 7 | 0 | 0 |
 | `node` | 162 | 3 | 73 | 47 | 0 | 38 | 6 | 0 |
 | `pool` | 6 | 1 | 2 | 3 | 0 | 0 | 0 | 0 |
 | `qemu` | 68 | 6 | 14 | 52 | 1 | 1 | 1 | 0 |
@@ -81,9 +81,9 @@ swept clean before the next provisions.
 | `storage` | 26 | 2 | 10 | 12 | 0 | 5 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **635** | **93** | **155** | **357** | **6** | **67** | **8** | **0** |
+| **Total** | **645** | **94** | **159** | **357** | **6** | **72** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **635** leaves, **560** are exercised by at least one live suite, **67** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **645** leaves, **565** are exercised by at least one live suite, **72** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -378,6 +378,16 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
 | `lxc resume` | — | ✓ |  |
 | `lxc rrd` | ◑ | — |  |
+| `lxc security caps add` | — | — | deferred — grants a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `lxc security caps describe` | ✓ | — |  |
+| `lxc security caps remove` | — | — | deferred — revokes a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `lxc security caps reset` | — | — | deferred — clears the capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `lxc security caps set` | — | — | deferred — rewrites the container capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `lxc security caps show` | ◑ | — |  |
+| `lxc security features set` | — | — | deferred — mutates the container features= flags via the config API; not wired into the mutate phase; covered by unit tests |
+| `lxc security features show` | ◑ | — |  |
+| `lxc security list` | ◑ | — |  |
+| `lxc security show` | ◑ | — |  |
 | `lxc shutdown` | — | ✓ |  |
 | `lxc snapshot create` | — | ✓ |  |
 | `lxc snapshot delete` | — | ✓ |  |
