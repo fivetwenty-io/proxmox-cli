@@ -13,6 +13,7 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/cli/initcmd"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/lxc"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/node"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/pbs"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/pool"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/qemu"
 	"github.com/fivetwenty-io/pve-cli/internal/cli/remote"
@@ -36,6 +37,7 @@ var factories = []cli.GroupFactory{
 	initcmd.Group,
 	lxc.Group,
 	node.Group,
+	pbs.Group,
 	pool.Group,
 	qemu.Group,
 	remote.Rsync,
