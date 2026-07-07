@@ -34,6 +34,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newMigrateCmd(),
 		newDiskCmd(),
 		newFirewallCmd(),
+		newSecurityCmd(),
 		newConsoleCmd(),
 		newSSHCmd(),
 		newAgentCmd(),
