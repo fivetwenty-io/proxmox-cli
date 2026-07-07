@@ -496,12 +496,21 @@ func TestSyncPull_AsyncPrintsUPID(t *testing.T) {
 	require.NotContains(t, buf.String(), "finished")
 }
 
-func TestSyncPull_RequiresRemote(t *testing.T) {
-	_, pc := newFakeClient(t)
+func TestSyncPull_LocalWithoutRemote(t *testing.T) {
+	f, pc := newFakeClient(t)
+	handleTaskStatus(f, validUPID)
+
+	var rec recordedRequest
+	recordJSON(f, "POST "+syncPullPath, &rec, validUPID)
+
 	deps := depsFor(t, pc, output.FormatTable, false)
 	var buf bytes.Buffer
 	err := run(deps, &buf, newSyncCmd(), "sync", "pull", "--remote-store", "rs1", "--store", "store1")
-	require.Error(t, err)
+	require.NoError(t, err)
+
+	require.False(t, rec.form.Has("remote"))
+	require.Equal(t, "rs1", rec.form.Get("remote-store"))
+	require.Contains(t, buf.String(), "Pull of datastore \"store1\" from local datastore \"rs1\" finished.")
 }
 
 func TestSyncPull_RequiresRemoteStore(t *testing.T) {

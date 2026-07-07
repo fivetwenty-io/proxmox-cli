@@ -736,16 +736,13 @@ func newSyncPullCmd() *cobra.Command {
 		Use:   "pull",
 		Short: "Pull backup snapshots from a remote datastore",
 		Long: "Run a one-shot pull sync (POST /pull): copy backup snapshots from a " +
-			"remote datastore into a local one. --remote, --remote-store, and --store " +
-			"are required. Runs as an asynchronous task; the command blocks until it " +
+			"remote datastore into a local one. --remote-store and --store are " +
+			"required; omitting --remote pulls from another datastore on this " +
+			"server. Runs as an asynchronous task; the command blocks until it " +
 			"finishes unless --async is set.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			if remote == "" {
-				return fmt.Errorf("--remote is required")
-			}
-
 			if remoteStore == "" {
 				return fmt.Errorf("--remote-store is required")
 			}
@@ -756,9 +753,11 @@ func newSyncPullCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			body := map[string]interface{}{
-				"remote":       remote,
 				"remote-store": remoteStore,
 				"store":        store,
+			}
+			if remote != "" {
+				body["remote"] = remote
 			}
 			if fl.Changed("burst-in") {
 				body["burst-in"] = burstIn
@@ -806,13 +805,18 @@ func newSyncPullCmd() *cobra.Command {
 				body["worker-threads"] = workerThreads
 			}
 
+			source := fmt.Sprintf("remote %q", remote)
+			if remote == "" {
+				source = fmt.Sprintf("local datastore %q", remoteStore)
+			}
+
 			resp, err := deps.PBS.Raw.PostRawCtx(cmd.Context(), "/pull", body)
 			if err != nil {
-				return fmt.Errorf("pull datastore %q from remote %q: %w", store, remote, err)
+				return fmt.Errorf("pull datastore %q from %s: %w", store, source, err)
 			}
 
 			if resp == nil {
-				return fmt.Errorf("pull datastore %q from remote %q: nil response from PBS", store, remote)
+				return fmt.Errorf("pull datastore %q from %s: nil response from PBS", store, source)
 			}
 
 			raw, err := json.Marshal(resp.Data)
@@ -821,7 +825,7 @@ func newSyncPullCmd() *cobra.Command {
 			}
 
 			return finishAsync(cmd, deps, raw,
-				fmt.Sprintf("Pull of datastore %q from remote %q finished.", store, remote))
+				fmt.Sprintf("Pull of datastore %q from %s finished.", store, source))
 		},
 	}
 	f := cmd.Flags()
@@ -835,7 +839,7 @@ func newSyncPullCmd() *cobra.Command {
 	f.StringVar(&ns, "ns", "", "local namespace")
 	f.StringVar(&rateIn, "rate-in", "", "inbound rate limit, e.g. '10MB'")
 	f.StringVar(&rateOut, "rate-out", "", "outbound rate limit, e.g. '10MB'")
-	f.StringVar(&remote, "remote", "", "remote ID (required)")
+	f.StringVar(&remote, "remote", "", "remote ID (omit to pull from a local datastore)")
 	f.StringVar(&remoteNs, "remote-ns", "", "remote namespace")
 	f.StringVar(&remoteStore, "remote-store", "", "remote datastore name (required)")
 	f.BoolVar(&removeVanished, "remove-vanished", false, "delete local backups no longer present on the remote")
@@ -844,7 +848,6 @@ func newSyncPullCmd() *cobra.Command {
 	f.Int64Var(&transferLast, "transfer-last", 0, "limit transfer to the last N snapshots per group")
 	f.BoolVar(&verifiedOnly, "verified-only", false, "only sync verified backup snapshots")
 	f.Int64Var(&workerThreads, "worker-threads", 0, "number of worker threads processing groups in parallel")
-	cli.MustMarkRequired(cmd, "remote")
 	cli.MustMarkRequired(cmd, "remote-store")
 	cli.MustMarkRequired(cmd, "store")
 	return cmd
