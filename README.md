@@ -276,7 +276,7 @@ uses the `pve node` subtree.
 | `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
 | `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
 | `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
-| `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
+| `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security` |
 | `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete` |
 | `sdn` | Software-defined networking | `zone`, `vnet`, `subnet` (each `list\|show\|create\|delete`), `apply` |
 | `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete` |
@@ -317,6 +317,98 @@ pve access user token create root@pam ci --privsep 1
 pve --node pve1 task list
 pve --node pve1 task wait UPID:pve1:...
 ```
+
+## Container security (`pve lxc security`)
+
+`pve lxc security` inspects and hardens the layered security posture of an LXC
+container: its privilege level, its `features=` flags, and the low-level Linux
+capability whitelist. Containers created through `pve lxc create` are
+**unprivileged by default** — the container's `root` is mapped to an unprivileged
+host UID — which is the safe baseline. The `security` commands help you keep that
+baseline and grant only the capabilities a workload actually needs.
+
+All the read verbs use only the API and need no SSH:
+
+```bash
+pve lxc security show 105          # full posture: privilege, features, caps, raw lxc.* keys
+pve lxc security list              # cluster-wide audit table (privileged CTs flagged '!' first)
+pve lxc security caps show 105     # the configured lxc.cap.keep / lxc.cap.drop lists
+pve lxc security caps describe     # offline catalog of every capability and the presets
+pve lxc security features show 105 # nesting, keyctl, fuse, mknod, force_rw_sys, mount
+```
+
+### Tuning features
+
+`pve lxc security features set` edits the container's `features=` option with
+structured per-feature flags. It is a read-merge-write over the config API, so
+only the flags you pass change and the rest are left untouched:
+
+```bash
+pve lxc security features set 105 --nesting --keyctl
+pve lxc security features set 105 --mount 'nfs;cifs'
+pve lxc security features set 105 --reset            # clear features= entirely
+```
+
+`keyctl` (unprivileged only) is needed by some Docker workloads but breaks
+systemd-networkd, `mknod` is experimental, and mounting loop or NFS filesystems
+widens the attack surface. Feature changes apply on the next container start.
+
+> `pve lxc security features` is **not** `pve lxc feature`. The latter is an
+> unrelated, read-only probe of whether a container supports a snapshot, clone,
+> or copy operation.
+
+### Capability whitelist workflow
+
+PVE grants a broad default capability set. To lock a container down to only what
+it needs, replace that set with an explicit keep-list and iterate:
+
+```bash
+# 1. Confirm the container is unprivileged. A keep-list on a privileged CT is far
+#    weaker, because its mapped root already has host-level reach.
+pve lxc security show 105
+
+# 2. Start from a preset (or an explicit --keep list). A keep-list writes
+#    lxc.cap.keep and drops every capability not named.
+pve lxc security caps set 105 --preset minimal --restart
+#    or: pve lxc security caps set 105 --keep chown,setuid,setgid,kill --restart
+
+# 3. Verify what the running container actually holds (decodes /proc/1/status).
+pve lxc security caps show 105 --effective
+
+# 4. If the workload is missing a capability, grant one, restart, and retest.
+#    Add narrowly rather than widening back toward the defaults.
+pve lxc security caps add 105 net_bind_service --restart
+pve lxc security caps show 105 --effective
+
+# Revoke a single capability, or restore PVE's defaults entirely.
+pve lxc security caps remove 105 net_raw --restart
+pve lxc security caps reset 105 --restart
+```
+
+Without `--restart`, each mutation prints the manual restart command instead; the
+changes only take effect on the next container start.
+
+The keep-mode presets are:
+
+| Preset | Capabilities | For |
+|--------|--------------|-----|
+| `minimal` | `chown`, `dac_override`, `fowner`, `setuid`, `setgid`, `kill` | a bare init or single-service container |
+| `systemd` | `minimal` plus `setpcap` | a systemd-based distribution |
+| `network` | `systemd` plus `net_bind_service`, `net_raw` | privileged ports or raw sockets |
+
+Granting a dangerous capability (`sys_admin`, `sys_module`, `sys_rawio`,
+`sys_boot`, or `sys_time`) breaks the container isolation boundary and can
+compromise the host, so `caps set` and `caps add` refuse these unless you pass
+`--force`, which proceeds but still prints a warning.
+
+PVE exposes no API for `lxc.cap.keep` / `lxc.cap.drop`, so the capability
+**mutations** (`caps set`, `add`, `remove`, and `reset`) and the `caps show
+--effective` probe reach the node over SSH and require a **root SSH login**
+(`/etc/pve` is only writable by root). They honor the context's `ssh.*` defaults
+and the standard `-l`/`-i`/`-p`/`-A`/`--no-strict` flags. Each edit is serialized
+against `pct`'s own config lock, guarded by an optimistic checksum, and validated
+with `pct config`, rolling back automatically if the result would not parse. The
+read verbs above need only the API.
 
 ## Exit codes
 
