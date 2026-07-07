@@ -34,14 +34,16 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 			"dns", "time", "config", "subscription", "identity",
 			"tasks", "services", "apt", "disks", "network", "certificates",
 		},
-		"user":         {"ls", "show", "add", "update", "delete", "unlock-tfa", "passwd", "token"},
-		"acl":          {"ls", "update"},
-		"role":         {"ls"},
-		"permission":   {"ls"},
-		"realm":        {"ls", "sync", "ad", "ldap", "openid", "pam", "pbs"},
-		"metrics":      {"influxdb-http", "influxdb-udp", "data"},
-		"notification": {"endpoint", "matcher", "target"},
-		"acme":         {"account", "plugin", "challenge-schema", "directories", "tos"},
+		"user":           {"ls", "show", "add", "update", "delete", "unlock-tfa", "passwd", "token"},
+		"acl":            {"ls", "update"},
+		"role":           {"ls"},
+		"permission":     {"ls"},
+		"realm":          {"ls", "sync", "ad", "ldap", "openid", "pam", "pbs"},
+		"metrics":        {"influxdb-http", "influxdb-udp", "data"},
+		"notification":   {"endpoint", "matcher", "target"},
+		"acme":           {"account", "plugin", "challenge-schema", "directories", "tos"},
+		"tape":           {"drive", "changer", "media", "pool", "key", "job", "backup", "restore"},
+		"encryption-key": {"ls", "add", "delete", "toggle-archive"},
 	}
 	nested := map[string][]string{
 		"remote scan":                    {"ls", "groups", "namespaces"},
@@ -79,6 +81,18 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		"acme challenge-schema":          {"ls"},
 		"acme directories":               {"ls"},
 		"acme tos":                       {"show"},
+		"tape drive": {
+			"ls", "show", "add", "update", "delete", "scan", "status",
+			"cartridge-memory", "volume-statistics", "read-label", "inventory",
+			"load-media", "load-slot", "unload", "eject", "rewind", "clean",
+			"format", "label", "barcode-label", "catalog", "export",
+			"update-inventory", "restore-key",
+		},
+		"tape changer": {"ls", "show", "add", "update", "delete", "scan", "status", "transfer"},
+		"tape media":   {"ls", "content", "sets", "move", "destroy", "set-status"},
+		"tape pool":    {"ls", "show", "add", "update", "delete"},
+		"tape key":     {"ls", "show", "add", "update", "delete"},
+		"tape job":     {"ls", "show", "add", "update", "delete", "run", "status"},
 	}
 	jobVerbs := []string{"ls", "show", "add", "update", "delete", "run"}
 

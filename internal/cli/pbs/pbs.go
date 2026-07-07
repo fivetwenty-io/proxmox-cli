@@ -48,6 +48,8 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newMetricsCmd(),
 		newNotificationCmd(),
 		newAcmeCmd(),
+		newTapeCmd(),
+		newEncryptionKeyCmd(),
 		newStatusCmd(),
 		newVersionCmd(),
 		newPingCmd(),
