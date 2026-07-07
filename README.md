@@ -1,7 +1,8 @@
 # pve
 
-A comprehensive command-line interface for the Proxmox VE API, built on
-[`pve-apiclient-go`](https://github.com/fivetwenty-io/pve-apiclient-go).
+A comprehensive command-line interface for the Proxmox VE and Proxmox Backup
+Server APIs, built on
+[`proxmox-apiclient-go`](https://github.com/fivetwenty-io/proxmox-apiclient-go).
 
 `pve` manages multiple named Proxmox contexts, authenticates with API tokens or
 password tickets, blocks on long-running tasks by default, and renders every
@@ -23,6 +24,10 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
 
 - Node administration over SSH and rsync, plus an interactive shell and remote
   exec.
+
+- Proxmox Backup Server support: contexts with `product: pbs` drive the full
+  `pve pbs` command group — datastores, snapshots, sync/prune/GC/verify jobs,
+  access control, tape backup, and a raw API passthrough.
 
 - JSONL audit logs written to `~/.pve/logs/`, with secrets redacted.
 
@@ -99,6 +104,7 @@ contexts:
     host: pve.example.com
     port: 8006
     protocol: https
+    product: pve               # pve (default) or pbs — selects the API dialect
     realm: pam
     default-node: pve1
     default-output: table      # per-context output format override
@@ -212,6 +218,20 @@ Per-context `default-node` and `default-output` fields supply defaults for
 `--node` and `--output`. The full resolution order for both fields is:
 explicit flag > environment variable (`$PVE_NODE` / `$PVE_OUTPUT`) > context default > built-in default (`""` / `table`).
 
+Each context targets one product. The default, `product: pve`, is a Proxmox VE
+API endpoint (port 8006); `product: pbs` marks the context as a Proxmox Backup
+Server (port 8007 unless `--port` is given) and enables the `pve pbs` command
+group for it — see
+[Proxmox Backup Server](#proxmox-backup-server-pve-pbs) below.
+
+```bash
+# Add a PBS context (defaults to port 8007).
+pve context add backup \
+  --product pbs \
+  --host pbs.example.com --username root@pam \
+  --token-id automation --secret ${PBS_TOKEN} --select
+```
+
 Per-context `ssh.user`, `ssh.port`, and `ssh.identity` fields supply defaults
 for `pve ssh`/`pve rsync` (and `pve node ssh`/`pve node rsync`): explicit flag
 (`-l`/`-p`/`-i` on `pve ssh`, `--ssh-user`/`--ssh-port`/`--ssh-identity` on
@@ -290,6 +310,7 @@ uses the `pve node` subtree.
 | `sdn` | Software-defined networking | `zone`, `vnet` (each `list\|show\|create\|delete\|permissions`), `subnet` (`list\|show\|create\|delete`), `apply` |
 | `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete`, `permissions` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
+| `pbs` | Proxmox Backup Server (contexts with `product: pbs`) | see [Proxmox Backup Server](#proxmox-backup-server-pve-pbs) |
 
 The top-level alias `pve ctx` resolves to `pve context`; `pve auth` resolves to
 `pve api auth`.
@@ -369,6 +390,61 @@ pve --node pve1 qemu cloudinit update 100
 `--checksum` is not supported in this mode, and no PVE task is created — the
 transfer is a plain SSH stream. Once the upstream API grows a snippets content
 type, the SSH path can be retired in favor of the normal upload endpoint.
+
+## Proxmox Backup Server (`pve pbs`)
+
+`pve pbs` manages a Proxmox Backup Server through its own API. It requires the
+active context (or `--context`) to have `product: pbs`; PVE commands reject PBS
+contexts and vice versa, so a mixed fleet is a matter of switching contexts.
+Everything else works exactly like the PVE side: the same output formats,
+`--async` on task-producing verbs, JSONL logging, and exit codes.
+
+| Group | Purpose | Sub-commands |
+|-------|---------|--------------|
+| `datastore` | Datastore configuration and usage | `ls`, `show`, `create`, `update`, `delete`, `status`, `usage`, `rrd` |
+| `snapshot` | Backup snapshots in a datastore | `ls`, `show`, `files`, `delete`, `protect`, `unprotect`, `notes` |
+| `group` | Backup groups | `ls`, `delete`, `notes` |
+| `prune` | Prune jobs and one-shot prune runs | `run`, `simulate`, `job` (CRUD + `run`) |
+| `gc` | Garbage collection | `run`, `status`, `ls` |
+| `verify` | Verification jobs and one-shot runs | `run`, `job` (CRUD + `run`) |
+| `sync` | Sync jobs and one-shot pull/push | `ls`, `job` (CRUD + `run`), `pull`, `push` |
+| `remote` | Remote PBS instances for sync | `ls`, `show`, `add`, `update`, `delete`, `scan` |
+| `traffic` | Traffic-control rules | `ls`, `show`, `add`, `update`, `delete`, `current` |
+| `node` | Node administration | `ls`, `status`, `reboot`, `shutdown`, `rrd`, `report`, `syslog`, `journal`, `dns`, `time`, `config`, `subscription`, `identity`, `tasks`, `services`, `apt`, `disks`, `network`, `certificates` |
+| `user` | Users and API tokens | `ls`, `show`, `add`, `update`, `delete`, `unlock-tfa`, `passwd`, `token` |
+| `acl` | Access control list | `ls`, `update` |
+| `role` | Roles (fixed set) | `ls` |
+| `permission` | Effective permissions | `ls` |
+| `realm` | Authentication realms | `ls`, `sync`, `ad`, `ldap`, `openid`, `pam`, `pbs` |
+| `metrics` | Metric servers and metric data | `influxdb-http`, `influxdb-udp`, `data` |
+| `notification` | Notification endpoints, matchers, targets | `endpoint`, `matcher`, `target` |
+| `acme` | ACME accounts and plugins | `account`, `plugin`, `challenge-schema`, `directories`, `tos` |
+| `tape` | Tape backup | `drive`, `changer`, `media`, `pool`, `key`, `job`, `backup`, `restore` |
+| `encryption-key` | Datastore encryption keys | `ls`, `add`, `delete`, `toggle-archive` |
+| `status` | Server-wide status | `datastore-usage` |
+| `version` | PBS version | — |
+| `ping` | API reachability check | — |
+| `api` | Raw API passthrough | `get`, `post`, `put`, `delete` (repeatable `--data KEY=VALUE`) |
+
+```bash
+# Datastores and their contents.
+pve -c backup pbs datastore ls
+pve -c backup pbs snapshot ls --store tank
+pve -c backup pbs snapshot delete --store tank vm/100/2026-07-01T02:00:00Z
+
+# Jobs: one-shot runs and configured schedules.
+pve -c backup pbs gc run --store tank
+pve -c backup pbs prune simulate vm/100 --store tank --keep-last 3
+pve -c backup pbs sync pull --store tank --remote offsite --remote-store tank
+pve -c backup pbs verify job add nightly --store tank --schedule daily
+
+# Tape.
+pve -c backup pbs tape drive ls
+pve -c backup pbs tape backup --store tank --pool weekly --drive lto9
+
+# Anything without a dedicated verb.
+pve -c backup pbs api get /admin/datastore/tank/status
+```
 
 ## VM security (`pve qemu security`)
 
@@ -645,8 +721,8 @@ The binary entry point is `cmd/pve`; all logic lives under `internal/`:
 - `internal/cli` — the cobra root, persistent flags, dependency wiring, and one
   package per command group under `internal/cli/<group>/`.
 
-- `internal/apiclient` — a thin wrapper assembling the `pve-apiclient-go` service
-  handles, UPID extraction, and task-wait helpers.
+- `internal/apiclient` — a thin wrapper assembling the `proxmox-apiclient-go`
+  service handles (PVE and PBS), UPID extraction, and task-wait helpers.
 
 - `internal/config` — config types, loader, atomic writer, and secret resolver.
 
