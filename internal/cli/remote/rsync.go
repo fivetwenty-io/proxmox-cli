@@ -108,7 +108,7 @@ Supplying your own -e/--rsh is rejected: pve always injects its own.`,
 // address), injects "-e "+sshcmd.RemoteShell(f) ahead of the caller's own
 // arguments, and execs rsync.
 func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []string) error {
-	applyContextSSHDefaults(cmd, deps, f, "ssh-user", "ssh-port", "ssh-identity")
+	ApplyContextSSHDefaults(cmd, deps, f, "ssh-user", "ssh-port", "ssh-identity")
 
 	operands, node, err := classifyRsyncArgs(rsyncArgs)
 	if err != nil {

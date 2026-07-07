@@ -63,7 +63,7 @@ and the first token that is not an option starts the remote command. Use
 // sshcmd.SplitPassthrough, and execs ssh interactively. It is shared by
 // `pve ssh` and `pve node <node> ssh` so both commands connect identically.
 func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, rest []string) error {
-	applyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
+	ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
 
 	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
 	if err != nil {
@@ -84,13 +84,13 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 	return nil
 }
 
-// applyContextSSHDefaults fills any of f's User/Port/Identity fields the
+// ApplyContextSSHDefaults fills any of f's User/Port/Identity fields the
 // caller did not explicitly set (checked via cmd.Flags().Changed under the
 // given flag names) from the active context's SSH block. An explicit flag
 // always wins; a context value never overrides one the operator actually
 // passed. deps or deps.Ctx being nil (no active context, e.g. a noClient
 // command path) leaves f untouched.
-func applyContextSSHDefaults(
+func ApplyContextSSHDefaults(
 	cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, userFlag, portFlag, identityFlag string,
 ) {
 	if deps == nil || deps.Ctx == nil {
