@@ -35,8 +35,10 @@ def git_commit() -> str:
 
 
 def git_version() -> str:
+    # --dirty is incompatible with an explicit commit-ish, so describe HEAD
+    # implicitly; a dirty tree on a tagged commit yields e.g. "v0.1.8-dirty".
     result = subprocess.run(
-        ["git", "describe", "--tags", "--exact-match", "HEAD"],
+        ["git", "describe", "--tags", "--exact-match", "--dirty"],
         capture_output=True,
         text=True,
     )
