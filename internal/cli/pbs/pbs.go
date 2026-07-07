@@ -29,6 +29,15 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPBS},
 	}
 
+	cmd.AddCommand(
+		newDatastoreCmd(),
+		newSnapshotCmd(),
+		newGroupCmd(),
+		newPruneCmd(),
+		newGcCmd(),
+		newVerifyCmd(),
+	)
+
 	return cmd
 }
 
