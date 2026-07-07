@@ -275,7 +275,7 @@ uses the `pve node` subtree.
 | `node` | Node administration and remote access | `list`, `status`, `ssh`, `rsync`, `shell`, `exec`, `console`, `services`, `task` |
 | `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
 | `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
-| `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot` |
+| `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security` |
 | `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security` |
 | `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete` |
 | `sdn` | Software-defined networking | `zone`, `vnet`, `subnet` (each `list\|show\|create\|delete`), `apply` |
@@ -317,6 +317,84 @@ pve access user token create root@pam ci --privsep 1
 pve --node pve1 task list
 pve --node pve1 task wait UPID:pve1:...
 ```
+
+### Escape hatches and small additions
+
+`qemu create`, `qemu config set`, `lxc create`, and `lxc config set` all
+accept a repeatable `--set KEY=VALUE` flag, an escape hatch that sends an
+arbitrary config option straight to the API, verbatim, for options with no
+dedicated flag yet; a `--set` key that collides with a dedicated flag passed
+in the same invocation is rejected rather than silently overwritten.
+
+`pve qemu firewall alias get <vmid> <name>` and `pve qemu firewall ipset
+get-member <vmid> <name> <cidr>` (with `pve lxc` equivalents) read a single
+firewall alias or IP set member by name, alongside the existing `list`
+verbs. `pve qemu migrate capabilities` reports the node's QEMU live-migration
+feature support — the same data as `pve node capabilities qemu migration`.
+
+## VM security (`pve qemu security`)
+
+`pve qemu security` inspects and hardens the layered security posture of a
+QEMU VM: the protection flag, Secure Boot / EFI and TPM state, confidential
+computing (AMD SEV / Intel TDX), security-relevant CPU flags, the guest
+agent configuration, and per-NIC firewall coverage. Every command uses only
+the PVE config and firewall APIs — no ssh.
+
+```bash
+pve qemu security show 100              # full posture: protection, boot chain, TPM, confidential, agent, NIC firewall
+pve qemu security list                  # cluster-wide audit table (risky VMs flagged '!' first)
+pve qemu security agent show 100        # agent= sub-options at their effective value
+pve qemu security secureboot show 100   # bios/efidisk0 and the derived Secure Boot posture
+pve qemu security tpm show 100          # tpmstate0 presence, volume, and version
+pve qemu security confidential show 100 # amd-sev / intel-tdx configuration, if any
+pve qemu security cpu-flags show 100    # the 13-flag PVE security-relevant catalog, per-VM state
+pve qemu security cpu-flags describe    # the same catalog offline, with mitigation notes
+pve qemu security nic show 100          # per-NIC model, bridge, VLAN, firewall, link-down
+```
+
+Every mutating `security` sub-command, except `protection enable`/`disable`
+(which apply immediately, with no digest race to close), reads the VM's
+current configuration first and sends that digest back with its update; an
+explicit `--digest` overrides this. Those same sub-commands also accept
+`--restart`, which reboots a running VM after a successful change; without
+it, the change is pending until the VM's next stop/start or reboot.
+
+### Hardening examples
+
+```bash
+# Guest agent: enable communication, keep freeze-fs (snapshot consistency) on.
+pve qemu security agent set 100 --enabled --type virtio --restart
+
+# Secure Boot: allocate a pre-enrolled EFI vars disk (OVMF + Secure Boot keys).
+pve qemu security secureboot enable 100 --storage local-lvm --restart
+
+# TPM: add a 2.0 state device (Windows 11 requires it); remove destroys sealed keys.
+pve qemu security tpm add 100 --storage local-lvm
+pve qemu security tpm remove 100 --force
+
+# Confidential computing: AMD SEV-SNP without hypervisor debug access.
+pve qemu security confidential set 100 --sev snp --sev-no-debug
+pve qemu security confidential clear 100
+
+# CPU flags: enable the Spectre/MDS mitigations; disabling one needs --force.
+pve qemu security cpu-flags set 100 --enable spec-ctrl,ssbd,md-clear
+pve qemu security cpu-flags set 100 --disable spec-ctrl --force
+
+# Per-NIC firewall: turn coverage on for every configured NIC.
+pve qemu security nic firewall 100 --on --all
+
+# Protection flag: block destroy/disk removal, then allow it again.
+pve qemu security protection enable 100
+pve qemu security protection disable 100
+```
+
+There is deliberately no `secureboot disable`: the real Secure Boot on/off
+switch lives in the EFI variables themselves, flipped from the guest's own
+firmware setup menu. `secureboot enable` refuses to touch an existing
+`efidisk0` unless you pass `--recreate`, since replacing it discards every
+enrolled key and boot entry; pass `--recreate` (optionally with a different
+`--storage`) to allocate a fresh vars disk, moving the old one to
+`unused[n]`.
 
 ## Container security (`pve lxc security`)
 

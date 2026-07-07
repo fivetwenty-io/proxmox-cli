@@ -71,19 +71,19 @@ swept clean before the next provisions.
 | `cluster` | 168 | 46 | 16 | 109 | 5 | 13 | 0 | 0 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 64 | 5 | 19 | 39 | 0 | 7 | 0 | 0 |
+| `lxc` | 66 | 5 | 19 | 39 | 0 | 9 | 0 | 0 |
 | `node` | 162 | 3 | 73 | 47 | 0 | 38 | 6 | 0 |
 | `pool` | 6 | 1 | 2 | 3 | 0 | 0 | 0 | 0 |
-| `qemu` | 68 | 6 | 14 | 52 | 1 | 1 | 1 | 0 |
+| `qemu` | 90 | 8 | 22 | 52 | 1 | 13 | 1 | 0 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `sdn` | 85 | 6 | 14 | 62 | 0 | 6 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `storage` | 26 | 2 | 10 | 12 | 0 | 5 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **645** | **94** | **159** | **357** | **6** | **72** | **8** | **0** |
+| **Total** | **669** | **96** | **167** | **357** | **6** | **86** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **645** leaves, **565** are exercised by at least one live suite, **72** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **669** leaves, **575** are exercised by at least one live suite, **86** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -351,11 +351,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `lxc feature` | ◑ | — |  |
 | `lxc firewall alias create` | — | ✓ |  |
 | `lxc firewall alias delete` | — | ✓ |  |
+| `lxc firewall alias get` | — | — | deferred — reads a single firewall alias by name — needs a pre-existing alias; not wired into the mutate phase; covered by unit tests |
 | `lxc firewall alias list` | — | ✓ |  |
 | `lxc firewall alias update` | — | ✓ |  |
 | `lxc firewall ipset add` | — | ✓ |  |
 | `lxc firewall ipset create` | — | ✓ |  |
 | `lxc firewall ipset delete` | — | ✓ |  |
+| `lxc firewall ipset get-member` | — | — | deferred — reads a single CIDR entry of an IP set — needs a pre-existing member; not wired into the mutate phase; covered by unit tests |
 | `lxc firewall ipset list` | — | ✓ |  |
 | `lxc firewall ipset remove` | — | ✓ |  |
 | `lxc firewall ipset update-member` | — | ✓ |  |
@@ -610,11 +612,13 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu feature` | ◑ | — |  |
 | `qemu firewall alias create` | — | ✓ |  |
 | `qemu firewall alias delete` | — | ✓ |  |
+| `qemu firewall alias get` | — | — | deferred — reads a single firewall alias by name — needs a pre-existing alias; not wired into the mutate phase; covered by unit tests |
 | `qemu firewall alias list` | — | ✓ |  |
 | `qemu firewall alias update` | — | ✓ |  |
 | `qemu firewall ipset add` | — | ✓ |  |
 | `qemu firewall ipset create` | — | ✓ |  |
 | `qemu firewall ipset delete` | — | ✓ |  |
+| `qemu firewall ipset get-member` | — | — | deferred — reads a single CIDR entry of an IP set — needs a pre-existing member; not wired into the mutate phase; covered by unit tests |
 | `qemu firewall ipset list` | — | ✓ |  |
 | `qemu firewall ipset remove` | — | ✓ |  |
 | `qemu firewall ipset update-member` | — | ✓ |  |
@@ -632,6 +636,7 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu machine list` | ✓ | — |  |
 | `qemu metrics` | ◑ | — |  |
 | `qemu migrate` | — | ✓ |  |
+| `qemu migrate capabilities` | ✓ | — |  |
 | `qemu migrate check` | ◑ | — |  |
 | `qemu monitor` | — | ✓ |  |
 | `qemu reboot` | — | · |  |
@@ -639,6 +644,25 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `qemu reset` | — | ✓ |  |
 | `qemu resume` | — | ✓ |  |
 | `qemu rrd` | ◑ | — |  |
+| `qemu security agent set` | — | — | deferred — sets the guest-agent config option (agent=); not wired into the mutate phase; covered by unit tests |
+| `qemu security agent show` | ◑ | — |  |
+| `qemu security confidential clear` | — | — | deferred — removes the confidential-computing configuration; not wired into the mutate phase; covered by unit tests |
+| `qemu security confidential set` | — | — | deferred — configures AMD SEV / Intel TDX memory encryption, which needs matching host CPU/firmware support; not wired into the mutate phase; covered by unit tests |
+| `qemu security confidential show` | ◑ | — |  |
+| `qemu security cpu-flags describe` | ✓ | — |  |
+| `qemu security cpu-flags set` | — | — | deferred — edits the VM's security-relevant CPU flags; not wired into the mutate phase; covered by unit tests |
+| `qemu security cpu-flags show` | ◑ | — |  |
+| `qemu security list` | ◑ | — |  |
+| `qemu security nic firewall` | — | — | deferred — toggles per-NIC firewall coverage; not wired into the mutate phase; covered by unit tests |
+| `qemu security nic show` | ◑ | — |  |
+| `qemu security protection disable` | — | — | deferred — clears the VM protection flag; not wired into the mutate phase; covered by unit tests |
+| `qemu security protection enable` | — | — | deferred — sets the VM protection flag; not wired into the mutate phase; covered by unit tests |
+| `qemu security secureboot enable` | — | — | deferred — switches firmware to OVMF and allocates an EFI vars disk; not wired into the mutate phase; covered by unit tests |
+| `qemu security secureboot show` | ◑ | — |  |
+| `qemu security show` | ◑ | — |  |
+| `qemu security tpm add` | — | — | deferred — allocates a TPM state disk; not wired into the mutate phase; covered by unit tests |
+| `qemu security tpm remove` | — | — | deferred — destroys the TPM state device and every key sealed in it; not wired into the mutate phase; covered by unit tests |
+| `qemu security tpm show` | ◑ | — |  |
 | `qemu sendkey` | — | ✓ |  |
 | `qemu shutdown` | — | ✓ |  |
 | `qemu snapshot create` | — | ✓ | error-contract checked |
