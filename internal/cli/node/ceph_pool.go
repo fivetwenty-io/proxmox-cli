@@ -47,6 +47,10 @@ func newCephPoolListCmd() *cobra.Command {
 	}
 }
 
+// newCephPoolGetCmd builds `pve node ceph pool get <name>`.
+//
+// GET /nodes/{node}/ceph/pool/{name} is only a directory index (status); the
+// pool parameters live at the status child endpoint.
 func newCephPoolGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
@@ -58,11 +62,12 @@ func newCephPoolGetCmd() *cobra.Command {
 			if err := requireNode(deps); err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.GetCephPool(cmd.Context(), deps.Node, args[0])
+			resp, err := deps.API.Nodes.ListCephPoolStatus(cmd.Context(), deps.Node, args[0],
+				&nodes.ListCephPoolStatusParams{})
 			if err != nil {
 				return fmt.Errorf("get Ceph pool %q on node %q: %w", args[0], deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderObject(cmd, deps, resp)
 		},
 	}
 }

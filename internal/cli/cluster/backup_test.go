@@ -161,31 +161,6 @@ func TestBackupDelete_RequiresYes(t *testing.T) {
 	require.Contains(t, buf.String(), "deleted")
 }
 
-// TestBackupInfo_DynamicTable verifies `pve cluster backup info` reads the
-// coverage endpoint and renders a table derived from the returned fields.
-func TestBackupInfo_DynamicTable(t *testing.T) {
-	f, ac := newFakeClient(t)
-
-	f.HandleFunc("GET /api2/json/cluster/backup-info", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteData(w, []any{
-			map[string]any{"guest": 100, "name": "web", "backup-count": 3},
-			map[string]any{"guest": 101, "name": "db", "backup-count": 0},
-		})
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-
-	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "backup", "info"))
-
-	out := buf.String()
-	require.Contains(t, out, "GUEST")
-	require.Contains(t, out, "NAME")
-	require.Contains(t, out, "COUNT")
-	require.Contains(t, out, "web")
-	require.Contains(t, out, "db")
-}
-
 // TestBackupList_ServerError verifies a server failure on list surfaces an error.
 func TestBackupList_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -214,9 +189,11 @@ func TestBackupCommandTree(t *testing.T) {
 	for _, c := range backup.Commands() {
 		names[c.Name()] = true
 	}
-	for _, want := range []string{"list", "get", "create", "set", "delete", "info"} {
+	for _, want := range []string{"list", "get", "create", "set", "delete"} {
 		require.True(t, names[want], "expected backup sub-command %q", want)
 	}
+	require.False(t, names["info"],
+		"backup info was removed: GET /cluster/backup-info is a directory index; use backup-info not-backed-up")
 }
 
 // TestClusterBackup_NoLocalTargetFlag guards against shadowing the root's

@@ -13,13 +13,14 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/testhelper"
 )
 
-// TestHaStatusList_Table verifies `pve cluster ha status list` queries
-// GET /cluster/ha/status and renders the entries.
+// TestHaStatusList_Table verifies `pve cluster ha status list` is an alias of
+// current: GET /cluster/ha/status is only a directory index, so list serves
+// the current view (GET /cluster/ha/status/current).
 func TestHaStatusList_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
 
 	var gotPath string
-	f.HandleFunc("GET /api2/json/cluster/ha/status", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/ha/status/current", func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		testhelper.WriteData(w, []any{
 			map[string]any{"id": "quorum", "node": "pve", "status": "OK", "type": "quorum"},
@@ -32,7 +33,7 @@ func TestHaStatusList_Table(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "ha", "status", "list"))
 
-	require.Equal(t, "/api2/json/cluster/ha/status", gotPath)
+	require.Equal(t, "/api2/json/cluster/ha/status/current", gotPath)
 	out := buf.String()
 	require.Contains(t, out, "quorum")
 	require.Contains(t, out, "master")
@@ -144,7 +145,7 @@ func TestHaStatusDisarm_RequiresYesAndMode(t *testing.T) {
 // an error.
 func TestHaStatusList_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
-	f.HandleFunc("GET /api2/json/cluster/ha/status", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/ha/status/current", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
 

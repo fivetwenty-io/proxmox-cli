@@ -159,63 +159,11 @@ func TestClusterFirewallGetSubcommands(t *testing.T) {
 // cluster bulk-action guest
 // ---------------------------------------------------------------------------
 
-// TestClusterBulkGuest_Success verifies `pve cluster bulk guest` queries
-// GET /cluster/bulk-action/guest and renders a dynamic table.
-func TestClusterBulkGuest_Success(t *testing.T) {
-	f, ac := newFakeClient(t)
-
-	var gotMethod, gotPath string
-	f.HandleFunc("GET /api2/json/cluster/bulk-action/guest", func(w http.ResponseWriter, r *http.Request) {
-		gotMethod, gotPath = r.Method, r.URL.Path
-		testhelper.WriteData(w, []any{
-			map[string]any{"vmid": 100, "name": "web01", "type": "qemu"},
-			map[string]any{"vmid": 101, "name": "db01", "type": "lxc"},
-		})
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "bulk", "guest"))
-
-	require.Equal(t, http.MethodGet, gotMethod)
-	require.Equal(t, "/api2/json/cluster/bulk-action/guest", gotPath)
-
-	out := buf.String()
-	require.Contains(t, out, "web01")
-	require.Contains(t, out, "db01")
-}
-
-// TestClusterBulkGuestAlias_Success verifies the command is also reachable as
-// `pve cluster bulk-action guest` via the bulk-action alias.
-func TestClusterBulkGuestAlias_Success(t *testing.T) {
-	f, ac := newFakeClient(t)
-
-	f.HandleFunc("GET /api2/json/cluster/bulk-action/guest", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteData(w, []any{
-			map[string]any{"vmid": 100, "name": "web01"},
-		})
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "bulk-action", "guest"))
-	require.Contains(t, buf.String(), "web01")
-}
-
-// TestClusterBulkGuest_ServerError verifies a server error surfaces correctly.
-func TestClusterBulkGuest_ServerError(t *testing.T) {
-	f, ac := newFakeClient(t)
-	f.HandleFunc("GET /api2/json/cluster/bulk-action/guest", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusInternalServerError, "server error")
-	})
-
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
-	var buf bytes.Buffer
-	require.Error(t, run(deps, &buf, "bulk", "guest"))
-}
-
-// TestClusterBulkCommandTree_GuestPreview verifies the guest sub-command is registered.
-func TestClusterBulkCommandTree_GuestPreview(t *testing.T) {
+// TestClusterBulkGuest_Removed pins the removal of `pve cluster bulk guest`:
+// GET /cluster/bulk-action/guest is only a directory index of the bulk POST
+// actions (start, shutdown, suspend, migrate), so no guest-preview command can
+// exist over it.
+func TestClusterBulkGuest_Removed(t *testing.T) {
 	root := Group(&cli.Deps{})
 	var bulkCmd *cobra.Command
 	for _, c := range root.Commands() {
@@ -224,12 +172,10 @@ func TestClusterBulkCommandTree_GuestPreview(t *testing.T) {
 		}
 	}
 	require.NotNil(t, bulkCmd, "bulk sub-command must be registered")
-
-	names := make(map[string]bool)
 	for _, c := range bulkCmd.Commands() {
-		names[c.Name()] = true
+		require.NotEqual(t, "guest", c.Name(),
+			"bulk guest was removed: its endpoint is a directory index, not a guest list")
 	}
-	require.True(t, names["guest"], "bulk must expose guest sub-command")
 }
 
 // ---------------------------------------------------------------------------

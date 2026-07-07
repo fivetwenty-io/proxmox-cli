@@ -21,15 +21,17 @@ func newOpenidCmd() *cobra.Command {
 	return cmd
 }
 
-// openidRealm is the minimal shape of each entry returned by GET /access/openid.
-// PVE returns a heterogeneous list; we decode the stable fields for table output.
+// openidRealm is the minimal decoded shape of a GET /access/domains entry.
 type openidRealm struct {
-	Realm  string `json:"realm"`
-	Type   string `json:"type"`
-	Issuer string `json:"issuer-url,omitempty"`
+	Realm   string `json:"realm"`
+	Type    string `json:"type"`
+	Comment string `json:"comment,omitempty"`
 }
 
 // newOpenidListCmd builds `pve access openid list`.
+//
+// GET /access/openid is only a directory index (auth-url, login), not a realm
+// list; realms live in GET /access/domains, filtered to type openid here.
 func newOpenidListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -38,24 +40,31 @@ func newOpenidListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
-			resp, err := deps.API.Access.ListOpenid(cmd.Context())
+			resp, err := deps.API.Access.ListDomains(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list openid realms: %w", err)
 			}
 
-			rows := make([][]string, 0, len(*resp))
-			for _, raw := range *resp {
-				var r openidRealm
-				if err := json.Unmarshal(raw, &r); err != nil {
-					return fmt.Errorf("decode openid realm: %w", err)
+			rows := make([][]string, 0)
+			raws := make([]json.RawMessage, 0)
+			if resp != nil {
+				for _, raw := range *resp {
+					var r openidRealm
+					if err := json.Unmarshal(raw, &r); err != nil {
+						return fmt.Errorf("decode openid realm: %w", err)
+					}
+					if r.Type != "openid" {
+						continue
+					}
+					rows = append(rows, []string{r.Realm, r.Type, r.Comment})
+					raws = append(raws, raw)
 				}
-				rows = append(rows, []string{r.Realm, r.Type, r.Issuer})
 			}
 
 			result := output.Result{
-				Headers: []string{"REALM", "TYPE", "ISSUER"},
+				Headers: []string{"REALM", "TYPE", "COMMENT"},
 				Rows:    rows,
-				Raw:     resp,
+				Raw:     raws,
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), result, deps.Format)
 		},

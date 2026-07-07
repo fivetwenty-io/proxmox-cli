@@ -65,7 +65,8 @@ func TestStatusCommandTree(t *testing.T) {
 		require.True(t, zonesSub[want], "status zones must expose %q", want)
 	}
 
-	// Verify vnets sub-commands.
+	// Verify vnets sub-commands. There is no `vnets get`: the per-vnet GET is
+	// only a directory index, so mac-vrf is the vnet-level live view.
 	vnetsSub := map[string]bool{}
 	for _, c := range root.Commands() {
 		if c.Name() == "status" {
@@ -78,11 +79,12 @@ func TestStatusCommandTree(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"get", "mac-vrf"} {
-		require.True(t, vnetsSub[want], "status vnets must expose %q", want)
-	}
+	require.True(t, vnetsSub["mac-vrf"], "status vnets must expose mac-vrf")
+	require.False(t, vnetsSub["get"],
+		"status vnets get was removed: its endpoint is a directory index")
 
-	// Verify fabrics sub-commands.
+	// Verify fabrics sub-commands. There is no `fabrics get`: the per-fabric
+	// GET is only a directory index of routes/neighbors/interfaces.
 	fabricsSub := map[string]bool{}
 	for _, c := range root.Commands() {
 		if c.Name() == "status" {
@@ -95,13 +97,17 @@ func TestStatusCommandTree(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"get", "interfaces", "neighbors", "routes"} {
+	for _, want := range []string{"interfaces", "neighbors", "routes"} {
 		require.True(t, fabricsSub[want], "status fabrics must expose %q", want)
 	}
+	require.False(t, fabricsSub["get"],
+		"status fabrics get was removed: its endpoint is a directory index")
 }
 
-// TestStatusListSdn verifies `sdn status` calls GET /nodes/{node}/sdn.
-func TestStatusListSdn(t *testing.T) {
+// TestStatusRootShowsHelp verifies the bare `sdn status` group makes no API
+// call: GET /nodes/{node}/sdn is only a directory index, so the group shows
+// help and defers to its sub-commands.
+func TestStatusRootShowsHelp(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/nodes/pve1/sdn", []any{
@@ -110,22 +116,8 @@ func TestStatusListSdn(t *testing.T) {
 
 	out, err := run(t, f, "", "--node", "pve1", "status")
 	require.NoError(t, err)
-	require.Contains(t, out, "zone1")
-	require.Len(t, rec, 1)
-	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn", rec[0].path)
-}
-
-// TestStatusListSdnRequiresNode verifies an error is returned when no node is set.
-func TestStatusListSdnRequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn", []any{}, 200)
-
-	_, err := run(t, f, "", "status")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "no node specified")
-	require.Empty(t, rec)
+	require.Contains(t, out, "zones", "help must list the zones sub-command")
+	require.Empty(t, rec, "the status group itself must not call the API")
 }
 
 // TestStatusZonesList verifies `sdn status zones` calls GET /nodes/{node}/sdn/zones.
@@ -144,20 +136,38 @@ func TestStatusZonesList(t *testing.T) {
 	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones", rec[0].path)
 }
 
-// TestStatusZonesGet verifies `sdn status zones get <zone>` calls GET /nodes/{node}/sdn/zones/{zone}.
+// TestStatusZonesGet verifies `sdn status zones get <zone>` filters the zones
+// status list to the requested zone: the per-zone GET is only a directory
+// index (content, bridges, ip-vrf).
 func TestStatusZonesGet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones/pvecli", []any{
+	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones", []any{
 		map[string]any{"zone": "pvecli", "status": "ok"},
+		map[string]any{"zone": "other", "status": "error"},
 	}, 200)
 
 	out, err := run(t, f, "", "--node", "pve1", "status", "zones", "get", "pvecli")
 	require.NoError(t, err)
 	require.Contains(t, out, "pvecli")
+	require.NotContains(t, out, "other", "only the requested zone must be shown")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pvecli", rec[0].path)
+	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones", rec[0].path)
+}
+
+// TestStatusZonesGetNotFound verifies an unknown zone errors instead of
+// rendering an empty table.
+func TestStatusZonesGetNotFound(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/zones", []any{
+		map[string]any{"zone": "other", "status": "ok"},
+	}, 200)
+
+	_, err := run(t, f, "", "--node", "pve1", "status", "zones", "get", "pvecli")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "not found")
 }
 
 // TestStatusZonesBridges verifies `sdn status zones bridges <zone>` calls
@@ -211,23 +221,6 @@ func TestStatusZonesIpVrf(t *testing.T) {
 	require.Equal(t, "/api2/json/nodes/pve1/sdn/zones/pvecli/ip-vrf", rec[0].path)
 }
 
-// TestStatusVnetsGet verifies `sdn status vnets get <vnet>` calls
-// GET /nodes/{node}/sdn/vnets/{vnet}.
-func TestStatusVnetsGet(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/vnets/pvecli0", []any{
-		map[string]any{"vnet": "pvecli0", "status": "ok"},
-	}, 200)
-
-	out, err := run(t, f, "", "--node", "pve1", "status", "vnets", "get", "pvecli0")
-	require.NoError(t, err)
-	require.Contains(t, out, "pvecli0")
-	require.Len(t, rec, 1)
-	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/vnets/pvecli0", rec[0].path)
-}
-
 // TestStatusVnetsMacVrf verifies `sdn status vnets mac-vrf <vnet>` calls
 // GET /nodes/{node}/sdn/vnets/{vnet}/mac-vrf.
 func TestStatusVnetsMacVrf(t *testing.T) {
@@ -243,23 +236,6 @@ func TestStatusVnetsMacVrf(t *testing.T) {
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
 	require.Equal(t, "/api2/json/nodes/pve1/sdn/vnets/pvecli0/mac-vrf", rec[0].path)
-}
-
-// TestStatusFabricsGet verifies `sdn status fabrics get <fabric>` calls
-// GET /nodes/{node}/sdn/fabrics/{fabric}.
-func TestStatusFabricsGet(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/nodes/pve1/sdn/fabrics/fab1", []any{
-		map[string]any{"id": "fab1", "status": "up"},
-	}, 200)
-
-	out, err := run(t, f, "", "--node", "pve1", "status", "fabrics", "get", "fab1")
-	require.NoError(t, err)
-	require.Contains(t, out, "fab1")
-	require.Len(t, rec, 1)
-	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/nodes/pve1/sdn/fabrics/fab1", rec[0].path)
 }
 
 // TestStatusFabricsInterfaces verifies `sdn status fabrics interfaces <fabric>` calls

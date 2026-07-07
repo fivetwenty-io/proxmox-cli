@@ -559,14 +559,15 @@ func TestNodeServicesList_Success(t *testing.T) {
 	require.Contains(t, out, "running")
 }
 
+// TestNodeServicesGet_Success verifies `services get` reads the state child
+// endpoint: GET /nodes/{node}/services/{service} is only a directory index.
 func TestNodeServicesGet_Success(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
-	recordOn(f, "GET /api2/json/nodes/pve1/services/pveproxy", &rec, []any{
-		map[string]any{
-			"service": "pveproxy", "state": "running",
-			"desc": "PVE API Proxy", "active-state": "active",
-		},
+	recordOn(f, "GET /api2/json/nodes/pve1/services/pveproxy/state", &rec, map[string]any{
+		"service": "pveproxy", "state": "running",
+		"desc": "PVE API Proxy", "active-state": "active",
+		"unit-state": "enabled",
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -574,7 +575,10 @@ func TestNodeServicesGet_Success(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "GET", rec.method)
-	require.Contains(t, buf.String(), "running")
+	require.Equal(t, "/api2/json/nodes/pve1/services/pveproxy/state", rec.path)
+	out := buf.String()
+	require.Contains(t, out, "running")
+	require.Contains(t, out, "enabled")
 }
 
 func TestNodeServicesStart_BlocksUntilTaskDone(t *testing.T) {

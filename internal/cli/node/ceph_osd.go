@@ -51,6 +51,10 @@ func newCephOsdListCmd() *cobra.Command {
 	}
 }
 
+// newCephOsdGetCmd builds `pve node ceph osd get <osdid>`.
+//
+// GET /nodes/{node}/ceph/osd/{osdid} is only a directory index (metadata,
+// lv-info, ...); the OSD detail lives at the metadata child endpoint.
 func newCephOsdGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <osdid>",
@@ -62,11 +66,11 @@ func newCephOsdGetCmd() *cobra.Command {
 			if err := requireNode(deps); err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.GetCephOsd(cmd.Context(), deps.Node, args[0])
+			resp, err := deps.API.Nodes.ListCephOsdMetadata(cmd.Context(), deps.Node, args[0])
 			if err != nil {
 				return fmt.Errorf("get Ceph OSD %q on node %q: %w", args[0], deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderObject(cmd, deps, resp)
 		},
 	}
 }

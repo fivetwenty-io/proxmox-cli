@@ -80,21 +80,53 @@ func newCertAcmeCmd() *cobra.Command {
 	return cmd
 }
 
+// acmeManagedCertFilename is where ACME (and custom) certificates are
+// installed on a PVE node; pve-ssl.pem is the self-signed fallback.
+const acmeManagedCertFilename = "pveproxy-ssl.pem"
+
+// newCertAcmeListCmd builds `pve node cert acme list`.
+//
+// GET /nodes/{node}/certificates/acme is only a directory index (certificate);
+// the certificate details live in /nodes/{node}/certificates/info, filtered
+// here to the ACME-managed file.
 func newCertAcmeListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "Show the node's ACME certificate state",
-		Args:  cobra.NoArgs,
+		Short: "Show the node's ACME-managed certificate",
+		Long: "Show the certificate installed at " + acmeManagedCertFilename + " on the resolved node — the file " +
+			"ACME orders and renewals manage. If none is installed, the node is serving its self-signed certificate.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.ListCertificatesAcme(cmd.Context(), deps.Node)
+			resp, err := deps.API.Nodes.ListCertificatesInfo(cmd.Context(), deps.Node)
 			if err != nil {
 				return fmt.Errorf("list ACME certificate state on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			matches := make([]json.RawMessage, 0, 1)
+			for _, raw := range derefRaws(resp) {
+				var e struct {
+					Filename string `json:"filename"`
+				}
+				if err := json.Unmarshal(raw, &e); err != nil {
+					return fmt.Errorf("decode certificate entry: %w", err)
+				}
+				if e.Filename == acmeManagedCertFilename {
+					matches = append(matches, raw)
+				}
+			}
+			if len(matches) == 0 {
+				// Raw keeps -o json/yaml emitting an empty list rather than a
+				// message object; table mode still prints the message.
+				return deps.Out.Render(cmd.OutOrStdout(), output.Result{
+					Message: fmt.Sprintf("No ACME or custom certificate installed on node %q; "+
+						"the self-signed pve-ssl.pem is in use.", deps.Node),
+					Raw: []json.RawMessage{},
+				}, deps.Format)
+			}
+			return renderScan(cmd, deps, matches, matches)
 		},
 	}
 }

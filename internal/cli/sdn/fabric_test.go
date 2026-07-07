@@ -11,10 +11,13 @@ import (
 
 // --- fabric CRUD ---
 
+// TestFabricList verifies `sdn fabric list` reads the fabric definitions from
+// GET /cluster/sdn/fabrics/fabric (GET /cluster/sdn/fabrics is only a
+// directory index of fabric/node/all).
 func TestFabricList(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/fabrics", []any{
+	record(f, &rec, "GET /api2/json/cluster/sdn/fabrics/fabric", []any{
 		map[string]any{"id": "fab1", "protocol": "openfabric"},
 		map[string]any{"id": "fab2", "protocol": "ospf"},
 	}, 200)
@@ -26,13 +29,27 @@ func TestFabricList(t *testing.T) {
 	require.Contains(t, out, "fab2")
 	require.Len(t, rec, 1)
 	require.Equal(t, http.MethodGet, rec[0].method)
-	require.Equal(t, "/api2/json/cluster/sdn/fabrics", rec[0].path)
+	require.Equal(t, "/api2/json/cluster/sdn/fabrics/fabric", rec[0].path)
+}
+
+// TestFabricListPending verifies the --pending flag is forwarded.
+func TestFabricListPending(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/fabrics/fabric", []any{
+		map[string]any{"id": "fab1", "protocol": "openfabric"},
+	}, 200)
+
+	_, err := run(t, f, "", "fabric", "list", "--pending")
+	require.NoError(t, err)
+	require.Len(t, rec, 1)
+	require.Equal(t, "1", rec[0].query.Get("pending"))
 }
 
 func TestFabricListError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest
-	record(f, &rec, "GET /api2/json/cluster/sdn/fabrics", nil, 500)
+	record(f, &rec, "GET /api2/json/cluster/sdn/fabrics/fabric", nil, 500)
 
 	_, err := run(t, f, "", "fabric", "list")
 	require.Error(t, err)

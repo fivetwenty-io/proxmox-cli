@@ -60,14 +60,60 @@ func newNotificationsEndpointsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "endpoints",
 		Short: "List all notification endpoints",
-		Args:  cobra.NoArgs,
+		Long: "List every configured notification endpoint across all endpoint types " +
+			"(sendmail, gotify, smtp, webhook), with a type column identifying each.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.ListNotificationsEndpoints(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("list notification endpoints: %w", err)
+			ctx := cmd.Context()
+
+			// GET /cluster/notifications/endpoints is only a directory index of
+			// the endpoint types; the configured endpoints live one level down,
+			// so fetch each typed list and merge them.
+			byType := []struct {
+				name string
+				list func() ([]json.RawMessage, error)
+			}{
+				{"sendmail", func() ([]json.RawMessage, error) {
+					r, err := deps.API.Cluster.ListNotificationsEndpointsSendmail(ctx)
+					return derefRawList(r), err
+				}},
+				{"gotify", func() ([]json.RawMessage, error) {
+					r, err := deps.API.Cluster.ListNotificationsEndpointsGotify(ctx)
+					return derefRawList(r), err
+				}},
+				{"smtp", func() ([]json.RawMessage, error) {
+					r, err := deps.API.Cluster.ListNotificationsEndpointsSmtp(ctx)
+					return derefRawList(r), err
+				}},
+				{"webhook", func() ([]json.RawMessage, error) {
+					r, err := deps.API.Cluster.ListNotificationsEndpointsWebhook(ctx)
+					return derefRawList(r), err
+				}},
 			}
-			return renderRawList(cmd, deps, derefRawList(resp))
+
+			merged := make([]json.RawMessage, 0)
+			for _, t := range byType {
+				raws, err := t.list()
+				if err != nil {
+					return fmt.Errorf("list %s notification endpoints: %w", t.name, err)
+				}
+				for _, raw := range raws {
+					var m map[string]any
+					if err := json.Unmarshal(raw, &m); err != nil {
+						return fmt.Errorf("decode %s notification endpoint: %w", t.name, err)
+					}
+					if _, ok := m["type"]; !ok {
+						m["type"] = t.name
+					}
+					annotated, err := json.Marshal(m)
+					if err != nil {
+						return fmt.Errorf("encode %s notification endpoint: %w", t.name, err)
+					}
+					merged = append(merged, annotated)
+				}
+			}
+			return renderRawList(cmd, deps, merged)
 		},
 	}
 }

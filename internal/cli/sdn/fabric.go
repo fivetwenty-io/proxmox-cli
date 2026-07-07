@@ -177,19 +177,36 @@ func newFabricListAllCmd() *cobra.Command {
 }
 
 func newFabricListCmd() *cobra.Command {
+	var (
+		pending bool
+		running bool
+	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN fabrics",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.ListSdnFabrics(cmd.Context())
+			// GET /cluster/sdn/fabrics is only a directory index (fabric, node,
+			// all); the fabric definitions live at /cluster/sdn/fabrics/fabric.
+			params := &cluster.ListSdnFabricsFabricParams{}
+			fl := cmd.Flags()
+			if fl.Changed("pending") {
+				params.Pending = boolPtr(pending)
+			}
+			if fl.Changed("running") {
+				params.Running = boolPtr(running)
+			}
+			resp, err := deps.API.Cluster.ListSdnFabricsFabric(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("list SDN fabrics: %w", err)
 			}
 			return renderRawList(cmd, deps, []json.RawMessage(*resp))
 		},
 	}
+	f := cmd.Flags()
+	f.BoolVar(&pending, "pending", false, "display the pending configuration")
+	f.BoolVar(&running, "running", false, "display the running configuration")
 	return cmd
 }
 

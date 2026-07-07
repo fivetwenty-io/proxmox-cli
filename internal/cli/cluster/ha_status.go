@@ -22,7 +22,6 @@ func newHaStatusCmd() *cobra.Command {
 			"cluster-wide HA stack. Arm and disarm change HA behavior across the whole cluster.",
 	}
 	cmd.AddCommand(
-		newHaStatusListCmd(),
 		newHaStatusCurrentCmd(),
 		newHaStatusManagerCmd(),
 		newHaStatusArmCmd(),
@@ -48,34 +47,15 @@ func renderHaStatusList(cmd *cobra.Command, raws []json.RawMessage, what string)
 		output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
 }
 
-// newHaStatusListCmd builds `pve cluster ha status list`.
-func newHaStatusListCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "list",
-		Aliases: []string{"ls"},
-		Short:   "Show the HA status overview",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.ListHaStatus(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("list HA status: %w", err)
-			}
-			var raws []json.RawMessage
-			if resp != nil {
-				raws = *resp
-			}
-			return renderHaStatusList(cmd, raws, "HA status entry")
-		},
-	}
-}
-
-// newHaStatusCurrentCmd builds `pve cluster ha status current`.
+// newHaStatusCurrentCmd builds `pve cluster ha status current`. It answers to
+// list/ls as well: GET /cluster/ha/status is only a directory index of the
+// status views, so the current view is the overview.
 func newHaStatusCurrentCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "current",
-		Short: "Show the current HA status of resources and nodes",
-		Args:  cobra.NoArgs,
+		Use:     "current",
+		Aliases: []string{"list", "ls"},
+		Short:   "Show the current HA status of resources and nodes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListHaStatusCurrent(cmd.Context())

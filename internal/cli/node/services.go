@@ -79,6 +79,9 @@ func newServicesListCmd() *cobra.Command {
 }
 
 // newServicesGetCmd builds `pve node services get <node> <svc>`.
+//
+// GET /nodes/{node}/services/{service} is only a directory index (state,
+// start, stop, ...); the service detail lives at the state child endpoint.
 func newServicesGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <node> <svc>",
@@ -89,31 +92,35 @@ func newServicesGetCmd() *cobra.Command {
 			node := args[0]
 			svc := args[1]
 
-			resp, err := deps.API.Nodes.GetServices(cmd.Context(), node, svc)
+			resp, err := deps.API.Nodes.ListServicesState(cmd.Context(), node, svc)
 			if err != nil {
 				return fmt.Errorf("get service %q on node %q: %w", svc, node, err)
 			}
 
 			single := map[string]string{"SERVICE": svc}
 			if resp != nil {
-				for _, raw := range *resp {
-					var e serviceEntry
-					if err := json.Unmarshal(raw, &e); err != nil {
-						return fmt.Errorf("decode service entry: %w", err)
-					}
-					if e.State != "" {
-						single["STATE"] = e.State
-					}
-					if e.Desc != "" {
-						single["DESC"] = e.Desc
-					}
-					if e.ActiveState != "" {
-						single["ACTIVE-STATE"] = e.ActiveState
-					}
+				name := resp.Service
+				if name == "" {
+					name = resp.Name
+				}
+				if name != "" {
+					single["SERVICE"] = name
+				}
+				if resp.State != "" {
+					single["STATE"] = resp.State
+				}
+				if resp.Desc != "" {
+					single["DESC"] = resp.Desc
+				}
+				if resp.ActiveState != "" {
+					single["ACTIVE-STATE"] = resp.ActiveState
+				}
+				if resp.UnitState != "" {
+					single["UNIT-STATE"] = resp.UnitState
 				}
 			}
 
-			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single}, deps.Format)
+			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: resp}, deps.Format)
 		},
 	}
 }

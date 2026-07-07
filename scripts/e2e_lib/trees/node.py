@@ -328,7 +328,10 @@ def run(ctx: Ctx) -> None:
         # upload/delete) replaces the node's TLS certificate or contacts an ACME
         # directory, so each is deferred below rather than exercised live.
         ctx.check("cert list", "node", "cert", "list", node=n, validate=is_list)
-        ctx.check("cert acme list", "node", "cert", "acme", "list", node=n, validate=is_list)
+        # cert acme list shows the pveproxy-ssl.pem info row when an ACME or
+        # custom certificate is installed, and a plain message when only the
+        # self-signed pve-ssl.pem exists — so no list-shape validation.
+        ctx.check("cert acme list", "node", "cert", "acme", "list", node=n)
         ctx.check("cert acme order --help", "node", "cert", "acme", "order", "--help", fmt="")
         ctx.check("cert custom upload --help", "node", "cert", "custom", "upload", "--help", fmt="")
 

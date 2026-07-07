@@ -1,6 +1,7 @@
 package node
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -34,22 +35,16 @@ func newHardwarePciCmd() *cobra.Command {
 		classBlacklist string
 	)
 	cmd := &cobra.Command{
-		Use:   "pci [id-or-mapping]",
-		Short: "List PCI devices, or show one device's capabilities",
+		Use:   "pci [id]",
+		Short: "List PCI devices, or show one device's details",
 		Long: "Without an argument, list the PCI(e) devices on the resolved node. With a " +
-			"PCI ID or mapping name, show that device's detailed capabilities.",
+			"PCI ID (with or without the domain prefix, e.g. 0000:01:00.0 or 01:00.0), " +
+			"show that device's detail row.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
 				return err
-			}
-			if len(args) == 1 {
-				resp, err := deps.API.Nodes.GetHardwarePci(cmd.Context(), deps.Node, args[0])
-				if err != nil {
-					return fmt.Errorf("show PCI device %q on node %q: %w", args[0], deps.Node, err)
-				}
-				return renderScan(cmd, deps, derefRaws(resp), resp)
 			}
 			params := &nodes.ListHardwarePciParams{}
 			fl := cmd.Flags()
@@ -63,7 +58,18 @@ func newHardwarePciCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list PCI devices on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			raws := derefRaws(resp)
+			if len(args) == 1 {
+				// GET /nodes/{node}/hardware/pci/{id} is only a directory index
+				// (mdev); the device details are rows of the list response, so
+				// filter it client-side.
+				match, err := findPciDevice(raws, args[0])
+				if err != nil {
+					return fmt.Errorf("show PCI device %q on node %q: %w", args[0], deps.Node, err)
+				}
+				raws = match
+			}
+			return renderScan(cmd, deps, raws, raws)
 		},
 	}
 	f := cmd.Flags()
@@ -71,6 +77,24 @@ func newHardwarePciCmd() *cobra.Command {
 	f.StringVar(&classBlacklist, "class-blacklist", "",
 		"comma-separated PCI classes to exclude (memory, bridge, and processor are excluded by default)")
 	return cmd
+}
+
+// findPciDevice filters PCI list entries down to the one whose id matches the
+// given ID, accepting both the full form (0000:01:00.0) and the domain-less
+// form (01:00.0).
+func findPciDevice(raws []json.RawMessage, id string) ([]json.RawMessage, error) {
+	for _, raw := range raws {
+		var e struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &e); err != nil {
+			return nil, fmt.Errorf("decode PCI device entry: %w", err)
+		}
+		if e.ID == id || e.ID == "0000:"+id {
+			return []json.RawMessage{raw}, nil
+		}
+	}
+	return nil, fmt.Errorf("device not found")
 }
 
 // ---- pci mdev --------------------------------------------------------------

@@ -407,16 +407,24 @@ func TestHaGroupRuleTree(t *testing.T) {
 	}{
 		{"group", []string{"list", "get", "create", "set", "delete"}},
 		{"rule", []string{"list", "get", "create", "set", "delete"}},
-		{"status", []string{"list", "current", "manager", "arm", "disarm"}},
+		// status has no separate list command: current answers to the list/ls
+		// aliases because GET /cluster/ha/status is only a directory index.
+		{"status", []string{"current", "manager", "arm", "disarm"}},
 	} {
 		b := sub(ha, branch.name)
 		require.NotNil(t, b, "ha must expose a %q sub-command", branch.name)
 		names := make(map[string]bool)
 		for _, c := range b.Commands() {
 			names[c.Name()] = true
+			for _, a := range c.Aliases {
+				names[a] = true
+			}
 		}
 		for _, want := range branch.verbs {
 			require.True(t, names[want], "expected ha %s sub-command %q", branch.name, want)
+		}
+		if branch.name == "status" {
+			require.True(t, names["list"], "ha status current must alias list")
 		}
 	}
 }

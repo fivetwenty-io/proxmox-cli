@@ -19,25 +19,14 @@ func resolveNode(deps *cli.Deps) (string, error) {
 
 // newStatusCmd builds `pve sdn status` and its sub-commands.
 // All commands are read-only and node-scoped; --node (or PVE_NODE) is required.
+// The group itself only shows help: GET /nodes/{node}/sdn is a directory index,
+// not a status view.
 func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show live SDN status on a node",
 		Long: "Read live SDN state from a specific cluster node. All commands here are " +
 			"read-only. A node must be provided via --node or PVE_NODE.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
-			if err != nil {
-				return err
-			}
-			resp, err := deps.API.Nodes.ListSdn(cmd.Context(), node)
-			if err != nil {
-				return fmt.Errorf("list SDN status on node %q: %w", node, err)
-			}
-			return renderRawList(cmd, deps, []json.RawMessage(*resp))
-		},
 	}
 	cmd.AddCommand(
 		newStatusZonesCmd(),
@@ -75,6 +64,11 @@ func newStatusZonesCmd() *cobra.Command {
 	return cmd
 }
 
+// newStatusZonesGetCmd builds `pve sdn status zones get`.
+//
+// GET /nodes/{node}/sdn/zones/{zone} is only a directory index (content,
+// bridges, ip-vrf); the zone's status is its row in the zones status list,
+// so filter that client-side.
 func newStatusZonesGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <zone>",
@@ -86,11 +80,24 @@ func newStatusZonesGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.GetSdnZones(cmd.Context(), node, args[0])
+			resp, err := deps.API.Nodes.ListSdnZones(cmd.Context(), node)
 			if err != nil {
 				return fmt.Errorf("get SDN zone %q status on node %q: %w", args[0], node, err)
 			}
-			return renderRawList(cmd, deps, []json.RawMessage(*resp))
+			if resp != nil {
+				for _, raw := range *resp {
+					var e struct {
+						Zone string `json:"zone"`
+					}
+					if err := json.Unmarshal(raw, &e); err != nil {
+						return fmt.Errorf("decode SDN zone status entry: %w", err)
+					}
+					if e.Zone == args[0] {
+						return renderRawList(cmd, deps, []json.RawMessage{raw})
+					}
+				}
+			}
+			return fmt.Errorf("SDN zone %q not found on node %q", args[0], node)
 		},
 	}
 }
@@ -156,36 +163,17 @@ func newStatusZonesIpVrfCmd() *cobra.Command {
 }
 
 // newStatusVnetsCmd builds `pve sdn status vnets` and its sub-commands.
+// There is no per-vnet status endpoint (GET /nodes/{node}/sdn/vnets/{vnet} is
+// only a directory index); mac-vrf is the vnet-level live view.
 func newStatusVnetsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnets",
 		Short: "Show SDN vnet status on a node",
 	}
 	cmd.AddCommand(
-		newStatusVnetsGetCmd(),
 		newStatusVnetsMacVrfCmd(),
 	)
 	return cmd
-}
-
-func newStatusVnetsGetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "get <vnet>",
-		Short: "Show a vnet's live status on a node",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
-			if err != nil {
-				return err
-			}
-			resp, err := deps.API.Nodes.GetSdnVnets(cmd.Context(), node, args[0])
-			if err != nil {
-				return fmt.Errorf("get SDN vnet %q status on node %q: %w", args[0], node, err)
-			}
-			return renderRawList(cmd, deps, []json.RawMessage(*resp))
-		},
-	}
 }
 
 func newStatusVnetsMacVrfCmd() *cobra.Command {
@@ -209,38 +197,20 @@ func newStatusVnetsMacVrfCmd() *cobra.Command {
 }
 
 // newStatusFabricsCmd builds `pve sdn status fabrics` and its sub-commands.
+// There is no per-fabric status summary endpoint (GET
+// /nodes/{node}/sdn/fabrics/{fabric} is only a directory index); routes,
+// neighbors, and interfaces are the fabric-level live views.
 func newStatusFabricsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fabrics",
 		Short: "Show SDN fabric status on a node",
 	}
 	cmd.AddCommand(
-		newStatusFabricsGetCmd(),
 		newStatusFabricsInterfacesCmd(),
 		newStatusFabricsNeighborsCmd(),
 		newStatusFabricsRoutesCmd(),
 	)
 	return cmd
-}
-
-func newStatusFabricsGetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "get <fabric>",
-		Short: "Show a fabric's live status on a node",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := cli.GetDeps(cmd)
-			node, err := resolveNode(deps)
-			if err != nil {
-				return err
-			}
-			resp, err := deps.API.Nodes.GetSdnFabrics(cmd.Context(), node, args[0])
-			if err != nil {
-				return fmt.Errorf("get SDN fabric %q status on node %q: %w", args[0], node, err)
-			}
-			return renderRawList(cmd, deps, []json.RawMessage(*resp))
-		},
-	}
 }
 
 func newStatusFabricsInterfacesCmd() *cobra.Command {

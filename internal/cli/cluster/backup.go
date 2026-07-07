@@ -14,13 +14,14 @@ import (
 )
 
 // newBackupCmd builds the `pve cluster backup` sub-tree: scheduled vzdump backup
-// job management plus a cluster-wide coverage audit.
+// job management. Use `pve cluster backup-info not-backed-up` to audit which
+// guests no schedule covers.
 func newBackupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "backup",
 		Short: "Manage cluster-wide backup schedules",
-		Long: "List, create, inspect, update, and delete scheduled vzdump backup jobs, " +
-			"and audit which guests are covered by a backup schedule.",
+		Long: "List, create, inspect, update, and delete scheduled vzdump backup jobs. " +
+			"To audit which guests no backup schedule covers, use `pve cluster backup-info not-backed-up`.",
 	}
 	cmd.AddCommand(
 		newBackupListCmd(),
@@ -28,7 +29,6 @@ func newBackupCmd() *cobra.Command {
 		newBackupCreateCmd(),
 		newBackupSetCmd(),
 		newBackupDeleteCmd(),
-		newBackupInfoCmd(),
 		newBackupIncludedVolumesCmd(),
 	)
 	return cmd
@@ -518,39 +518,6 @@ func newBackupDeleteCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
 	return cmd
-}
-
-// newBackupInfoCmd builds `pve cluster backup info` — a coverage audit listing
-// every guest and whether a backup schedule includes it.
-func newBackupInfoCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "info",
-		Short: "Audit which guests are covered by a backup schedule",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := cli.GetDeps(cmd)
-
-			resp, err := deps.API.Cluster.ListBackupInfo(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("list backup coverage: %w", err)
-			}
-
-			entries := make([]map[string]any, 0)
-			if resp != nil {
-				for _, rawEntry := range *resp {
-					var m map[string]any
-					if err := json.Unmarshal(rawEntry, &m); err != nil {
-						return fmt.Errorf("decode backup coverage entry: %w", err)
-					}
-					entries = append(entries, m)
-				}
-			}
-
-			headers, rows := dynamicTable(entries)
-			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Headers: headers, Rows: rows, Raw: entries}, deps.Format)
-		},
-	}
 }
 
 // --- helpers ---

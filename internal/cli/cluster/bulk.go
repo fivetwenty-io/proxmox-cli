@@ -28,43 +28,15 @@ func newBulkCmd() *cobra.Command {
 		Long: "Start, shut down, suspend, or migrate guests across the whole cluster. " +
 			"Without --vmids every guest is affected, so each action requires --yes. " +
 			"Actions run as asynchronous tasks; pass --async to return the UPID immediately. " +
-			"Use 'bulk guest' to preview which guests a bulk action would target.",
+			"Use `pve cluster resources --type vm` to preview which guests exist.",
 	}
 	cmd.AddCommand(
-		newBulkGuestCmd(),
 		newBulkStartCmd(),
 		newBulkShutdownCmd(),
 		newBulkSuspendCmd(),
 		newBulkMigrateCmd(),
 	)
 	return cmd
-}
-
-// newBulkGuestCmd builds `pve cluster bulk guest` (also reachable as
-// `pve cluster bulk-action guest`). It calls GET /cluster/bulk-action/guest
-// to list the guests that a bulk action would target.
-func newBulkGuestCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "guest",
-		Short: "List guests that would be targeted by a bulk action",
-		Long: "Preview which guests a cluster-wide bulk action would affect. " +
-			"The list reflects the current cluster state and includes every " +
-			"running guest unless the bulk action were narrowed by --vmids.",
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			deps := cli.GetDeps(cmd)
-			resp, err := deps.API.Cluster.ListBulkActionGuest(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("list bulk-action guests: %w", err)
-			}
-			res, err := rawUnionResult(derefRawList(resp))
-			if err != nil {
-				return fmt.Errorf("list bulk-action guests: %w", err)
-			}
-			res.Raw = resp
-			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
-		},
-	}
 }
 
 // parseVMIDs splits a comma-separated list of VMIDs into int64 values. Empty

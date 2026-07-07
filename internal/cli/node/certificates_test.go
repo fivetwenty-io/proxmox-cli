@@ -2,6 +2,7 @@ package node_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -35,11 +36,15 @@ func TestNodeCert_List(t *testing.T) {
 
 // ---- acme list -------------------------------------------------------------
 
+// TestNodeCertAcme_List verifies `cert acme list` reads the certificates info
+// endpoint (GET /nodes/{node}/certificates/acme is only a directory index)
+// and keeps only the ACME-managed pveproxy-ssl.pem entry.
 func TestNodeCertAcme_List(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
-	recordOn(f, "GET /api2/json/nodes/pve1/certificates/acme", &rec, []any{
-		map[string]any{"domain": "pve1.lab", "type": "dns"},
+	recordOn(f, "GET /api2/json/nodes/pve1/certificates/info", &rec, []any{
+		map[string]any{"filename": "pve-ssl.pem", "subject": "CN=self-signed"},
+		map[string]any{"filename": "pveproxy-ssl.pem", "subject": "CN=pve1.lab", "issuer": "CN=R3"},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -47,8 +52,47 @@ func TestNodeCertAcme_List(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "GET", rec.method)
-	require.Equal(t, "/api2/json/nodes/pve1/certificates/acme", rec.path)
-	require.Contains(t, buf.String(), "pve1.lab")
+	require.Equal(t, "/api2/json/nodes/pve1/certificates/info", rec.path)
+	out := buf.String()
+	require.Contains(t, out, "CN=pve1.lab")
+	require.NotContains(t, out, "CN=self-signed", "only the ACME-managed certificate must be shown")
+}
+
+// TestNodeCertAcme_ListNoneInstalled verifies the friendly message when no
+// pveproxy-ssl.pem certificate exists.
+func TestNodeCertAcme_ListNoneInstalled(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/certificates/info", &rec, []any{
+		map[string]any{"filename": "pve-ssl.pem", "subject": "CN=self-signed"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "cert", "acme", "list"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), "No ACME or custom certificate")
+}
+
+// TestNodeCertAcme_ListNoneInstalledJSON verifies -o json emits an empty list
+// (not a message object) when no pveproxy-ssl.pem certificate exists, so the
+// output shape matches the found case.
+func TestNodeCertAcme_ListNoneInstalledJSON(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/certificates/info", &rec, []any{
+		map[string]any{"filename": "pve-ssl.pem", "subject": "CN=self-signed"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatJSON, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "cert", "acme", "list"))
+
+	require.NoError(t, root.Execute())
+	// The buffer starts with the --insecure TLS warning; the JSON follows.
+	out := buf.String()
+	i := strings.Index(out, "[")
+	require.NotEqual(t, -1, i, "expected a JSON array in output, got: %s", out)
+	require.JSONEq(t, "[]", out[i:])
 }
 
 // ---- acme order ------------------------------------------------------------

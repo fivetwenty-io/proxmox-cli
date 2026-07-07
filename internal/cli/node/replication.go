@@ -49,23 +49,26 @@ func newReplicationCmd() *cobra.Command {
 	return cmd
 }
 
+// newReplicationGetCmd builds `pve node replication get <id>`.
+//
+// GET /nodes/{node}/replication/{id} is only a directory index (status, log,
+// schedule_now); the job configuration lives cluster-wide at
+// /cluster/replication/{id}.
 func newReplicationGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <id>",
 		Short: "Show the configuration of a replication job",
-		Long: "Show the full configuration of a single storage-replication job on the resolved node, " +
-			"including its target, schedule, rate limit, remove-job setting, and comment.",
+		Long: "Show the full configuration of a single storage-replication job, including its target, " +
+			"schedule, rate limit, remove-job setting, and comment. Job configuration is cluster-wide; " +
+			"this is equivalent to `pve cluster replication get`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if err := requireNode(deps); err != nil {
-				return err
-			}
-			resp, err := deps.API.Nodes.GetReplication(cmd.Context(), deps.Node, args[0])
+			resp, err := deps.API.Cluster.GetReplication(cmd.Context(), args[0])
 			if err != nil {
-				return fmt.Errorf("get replication job %q on node %q: %w", args[0], deps.Node, err)
+				return fmt.Errorf("get replication job %q: %w", args[0], err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderObject(cmd, deps, resp)
 		},
 	}
 }

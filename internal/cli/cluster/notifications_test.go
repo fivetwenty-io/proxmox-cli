@@ -29,6 +29,54 @@ func TestNotifications_Targets(t *testing.T) {
 	require.Contains(t, out, "mail-to-root")
 }
 
+// TestNotifications_EndpointsMergesTypes verifies `notifications endpoints`
+// aggregates the four typed endpoint lists (GET /cluster/notifications/endpoints
+// is only a directory index of the types) and labels each row with its type.
+func TestNotifications_EndpointsMergesTypes(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleJSON("GET /api2/json/cluster/notifications/endpoints/sendmail", []any{
+		map[string]any{"name": "mail-to-root", "mailto-user": "root@pam"},
+	})
+	f.HandleJSON("GET /api2/json/cluster/notifications/endpoints/gotify", []any{
+		map[string]any{"name": "g1", "server": "https://gotify.example"},
+	})
+	f.HandleJSON("GET /api2/json/cluster/notifications/endpoints/smtp", []any{})
+	f.HandleJSON("GET /api2/json/cluster/notifications/endpoints/webhook", []any{
+		map[string]any{"name": "w1", "url": "https://hooks.example"},
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "notifications", "endpoints"))
+	out := buf.String()
+	require.Contains(t, out, "TYPE")
+	require.Contains(t, out, "mail-to-root")
+	require.Contains(t, out, "sendmail")
+	require.Contains(t, out, "g1")
+	require.Contains(t, out, "gotify")
+	require.Contains(t, out, "w1")
+	require.Contains(t, out, "webhook")
+}
+
+// TestNotifications_EndpointsTypeError verifies a failure fetching one typed
+// list surfaces with the type name.
+func TestNotifications_EndpointsTypeError(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleJSON("GET /api2/json/cluster/notifications/endpoints/sendmail", []any{})
+	f.HandleFunc("GET /api2/json/cluster/notifications/endpoints/gotify",
+		func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+		})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "notifications", "endpoints")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gotify")
+}
+
 func TestGotify_List(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleJSON("GET /api2/json/cluster/notifications/endpoints/gotify", []any{

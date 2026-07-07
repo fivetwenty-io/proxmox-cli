@@ -15,16 +15,23 @@ import (
 // openid list
 // ---------------------------------------------------------------------------
 
+// TestAccess_OpenidList_Table verifies `pve access openid list` reads the
+// realm list from GET /access/domains (GET /access/openid is only a directory
+// index) and keeps only openid realms.
 func TestAccess_OpenidList_Table(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordReq
-	f.HandleFunc("GET /api2/json/access/openid", func(w http.ResponseWriter, r *http.Request) {
+	f.HandleFunc("GET /api2/json/access/domains", func(w http.ResponseWriter, r *http.Request) {
 		rec.method, rec.path = r.Method, r.URL.Path
 		testhelper.WriteData(w, []any{
 			map[string]any{
-				"realm":      "myoidc",
-				"type":       "openid",
-				"issuer-url": "https://accounts.example.com",
+				"realm":   "myoidc",
+				"type":    "openid",
+				"comment": "Example OIDC",
+			},
+			map[string]any{
+				"realm": "pam",
+				"type":  "pam",
 			},
 		})
 	})
@@ -34,20 +41,21 @@ func TestAccess_OpenidList_Table(t *testing.T) {
 	require.NoError(t, run(deps, &buf, "openid", "list"))
 
 	require.Equal(t, http.MethodGet, rec.method)
-	require.Equal(t, "/api2/json/access/openid", rec.path)
+	require.Equal(t, "/api2/json/access/domains", rec.path)
 
 	out := buf.String()
 	require.Contains(t, out, "REALM")
 	require.Contains(t, out, "TYPE")
-	require.Contains(t, out, "ISSUER")
+	require.Contains(t, out, "COMMENT")
 	require.Contains(t, out, "myoidc")
 	require.Contains(t, out, "openid")
-	require.Contains(t, out, "https://accounts.example.com")
+	require.Contains(t, out, "Example OIDC")
+	require.NotContains(t, out, "pam", "non-openid realms must be filtered out")
 }
 
 func TestAccess_OpenidList_Empty(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	f.HandleFunc("GET /api2/json/access/openid", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/access/domains", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, []any{})
 	})
 
@@ -60,7 +68,7 @@ func TestAccess_OpenidList_Empty(t *testing.T) {
 
 func TestAccess_OpenidList_ServerError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	f.HandleFunc("GET /api2/json/access/openid", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/access/domains", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
 	})
 

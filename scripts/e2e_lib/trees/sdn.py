@@ -182,13 +182,8 @@ def run(ctx: Ctx) -> None:
     # mutate phase's fabric create/get/set/delete cycle deliberately never
     # applies (see the fabric defer below), so no fabric is ever actually
     # running FRR in this lab — these read-only verbs have no live target to
-    # query and are not exercised.
-    ctx.defer(
-        "status fabrics get",
-        "requires applied FRR fabric backend not present in lab",
-        "pve sdn status fabrics get <fabric> --node <node>",
-        isolation=False, live_covered=False,
-    )
+    # query and are not exercised. (There is no `status fabrics get`: the
+    # per-fabric GET is only a directory index of these three views.)
     ctx.defer(
         "status fabrics interfaces",
         "requires applied FRR fabric backend not present in lab",

@@ -68,7 +68,7 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `access` | 39 | 9 | 8 | 28 | 0 | 0 | 0 | 0 |
 | `api` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `cluster` | 168 | 46 | 16 | 109 | 5 | 13 | 0 | 0 |
+| `cluster` | 165 | 44 | 15 | 109 | 5 | 13 | 0 | 0 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lxc` | 70 | 5 | 21 | 39 | 0 | 11 | 0 | 0 |
@@ -76,14 +76,14 @@ swept clean before the next provisions.
 | `pool` | 10 | 1 | 4 | 3 | 0 | 2 | 0 | 0 |
 | `qemu` | 94 | 8 | 24 | 52 | 1 | 15 | 1 | 0 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
-| `sdn` | 93 | 6 | 18 | 62 | 0 | 10 | 0 | 0 |
+| `sdn` | 91 | 6 | 18 | 61 | 0 | 9 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `storage` | 30 | 2 | 12 | 12 | 0 | 7 | 0 | 0 |
 | `task` | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
 | `version` | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **697** | **96** | **181** | **357** | **6** | **100** | **8** | **0** |
+| **Total** | **692** | **94** | **180** | **356** | **6** | **99** | **8** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **697** leaves, **589** are exercised by at least one live suite, **100** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pve <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **692** leaves, **585** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **8** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `access`
 
@@ -161,11 +161,9 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster backup delete` | — | ✓ |  |
 | `cluster backup get` | — | ✓ |  |
 | `cluster backup included-volumes` | ◑ | — |  |
-| `cluster backup info` | ◑ | — |  |
 | `cluster backup list` | ✓ | ✓ |  |
 | `cluster backup set` | — | ✓ |  |
 | `cluster backup-info not-backed-up` | ◑ | — |  |
-| `cluster bulk guest` | ✓ | — |  |
 | `cluster bulk migrate` | — | — | deferred — migrates guests cluster-wide — requires a second node; not exercisable on a single-node lab |
 | `cluster bulk shutdown` | — | ✓ |  |
 | `cluster bulk start` | — | ✓ |  |
@@ -240,7 +238,6 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `cluster ha status arm` | — | — | deferred — re-enables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
 | `cluster ha status current` | ✓ | — |  |
 | `cluster ha status disarm` | — | — | deferred — disables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
-| `cluster ha status list` | ✓ | — |  |
 | `cluster ha status manager` | ✓ | — |  |
 | `cluster jobs realm-sync create` | — | ✓ |  |
 | `cluster jobs realm-sync delete` | — | ✓ |  |
@@ -753,11 +750,9 @@ Leaf commands are counted from a walk of the built command tree (`pve <tree> …
 | `sdn route-map entry set` | — | ✓ |  |
 | `sdn route-map get` | — | ✓ |  |
 | `sdn route-map list` | ◑ | — |  |
-| `sdn status fabrics get` | — | — | deferred — requires applied FRR fabric backend not present in lab |
 | `sdn status fabrics interfaces` | — | — | deferred — requires applied FRR fabric backend not present in lab |
 | `sdn status fabrics neighbors` | — | — | deferred — requires applied FRR fabric backend not present in lab |
 | `sdn status fabrics routes` | — | — | deferred — requires applied FRR fabric backend not present in lab |
-| `sdn status vnets get` | — | ✓ |  |
 | `sdn status vnets mac-vrf` | — | ✓ |  |
 | `sdn status zones bridges` | — | ✓ |  |
 | `sdn status zones content` | — | ✓ |  |

@@ -25,16 +25,9 @@ def run(ctx: Ctx) -> None:
     ctx.check("recent tasks", "cluster", "tasks")
 
     # Backup schedules: the job list is an array (possibly empty on a fresh
-    # cluster). The coverage audit (GET /cluster/backup-info) requires root@pam,
-    # which an API-token identity lacks — record a skip rather than a failure when
-    # the server denies it.
+    # cluster). `backup info` was removed (its endpoint is only a directory
+    # index); the coverage audit is `backup-info not-backed-up`, checked below.
     ctx.check("backup list", "cluster", "backup", "list", validate=is_list)
-    info = ctx.run("cluster", "backup", "info")
-    info_err = (info.stderr or info.stdout).lower()
-    if info.rc != 0 and ("root@pam" in info_err or "permission" in info_err):
-        ctx.skip("backup info", "GET /cluster/backup-info requires root@pam")
-    else:
-        ctx.check("backup info", "cluster", "backup", "info", validate=is_list)
     # backup included-volumes: list volumes the schedule would back up per guest.
     # Requires an existing backup job id; discover one from the list and skip if
     # none exist.
@@ -526,9 +519,8 @@ def run(ctx: Ctx) -> None:
     # touch no other workload (`suspend` pauses the running QEMU process, the
     # same operation as `qemu suspend`). `migrate` needs a second node, so it
     # stays deferred; its argument parsing is still exercised via --help.
-    # bulk guest: a preview listing of the guests a bulk action would target
-    # (GET /cluster/bulk-action/guest). Read-only, no --vmids narrowing needed.
-    ctx.check("bulk guest", "cluster", "bulk", "guest", validate=is_list)
+    # bulk guest was removed: GET /cluster/bulk-action/guest is only a directory
+    # index of the bulk POST actions, not a guest preview.
     ctx.check("bulk start --help", "cluster", "bulk", "start", "--help", fmt="")
     ctx.check("bulk shutdown --help", "cluster", "bulk", "shutdown", "--help", fmt="")
     ctx.check("bulk suspend --help", "cluster", "bulk", "suspend", "--help", fmt="")

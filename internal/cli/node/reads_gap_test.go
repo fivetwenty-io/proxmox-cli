@@ -132,12 +132,15 @@ func TestNodeTaskStatus_InCommandTree(t *testing.T) {
 // node replication get <id>
 // ---------------------------------------------------------------------------
 
+// TestNodeReplicationGet_Success verifies `node replication get` reads the
+// cluster-wide job configuration: GET /nodes/{node}/replication/{id} is only
+// a directory index (status, log, schedule_now).
 func TestNodeReplicationGet_Success(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
-	recordOn(f, "GET /api2/json/nodes/pve1/replication/100-0", &rec, []any{
-		map[string]any{"key": "target", "value": "pve2"},
-		map[string]any{"key": "rate", "value": 1.0},
+	recordOn(f, "GET /api2/json/cluster/replication/100-0", &rec, map[string]any{
+		"id": "100-0", "guest": 100, "jobnum": 0, "type": "local",
+		"target": "pve2", "schedule": "*/15",
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -145,23 +148,13 @@ func TestNodeReplicationGet_Success(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "GET", rec.method)
-	require.Equal(t, "/api2/json/nodes/pve1/replication/100-0", rec.path)
-	require.Contains(t, buf.String(), "target")
-}
-
-func TestNodeReplicationGet_RequiresNode(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "replication", "get", "100-0"))
-
-	err := root.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	require.Equal(t, "/api2/json/cluster/replication/100-0", rec.path)
+	require.Contains(t, buf.String(), "pve2")
 }
 
 func TestNodeReplicationGet_APIError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	f.HandleFunc("GET /api2/json/nodes/pve1/replication/100-0", func(w http.ResponseWriter, _ *http.Request) {
+	f.HandleFunc("GET /api2/json/cluster/replication/100-0", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusNotFound, "not found")
 	})
 

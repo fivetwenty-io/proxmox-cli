@@ -120,10 +120,12 @@ func TestNodeCephOsd_List(t *testing.T) {
 	require.Contains(t, buf.String(), "noout")
 }
 
+// TestNodeCephOsd_Get verifies `osd get` reads the metadata child endpoint:
+// GET /nodes/{node}/ceph/osd/{osdid} itself is only a directory index.
 func TestNodeCephOsd_Get(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	f.HandleJSON("GET /api2/json/nodes/pve1/ceph/osd/0", []any{
-		map[string]any{"name": "osd.0", "ceph_version": "19.2.0"},
+	f.HandleJSON("GET /api2/json/nodes/pve1/ceph/osd/0/metadata", map[string]any{
+		"osd": map[string]any{"name": "osd.0", "ceph_version": "19.2.0"},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -234,6 +236,23 @@ func TestNodeCephPool_List(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	require.Contains(t, buf.String(), "rbd")
+}
+
+// TestNodeCephPool_Get verifies `pool get` reads the status child endpoint:
+// GET /nodes/{node}/ceph/pool/{name} itself is only a directory index.
+func TestNodeCephPool_Get(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph/pool/rbd/status", &rec, map[string]any{
+		"name": "rbd", "size": 3, "min_size": 2, "crush_rule": "replicated_rule",
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "pool", "get", "rbd"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "/api2/json/nodes/pve1/ceph/pool/rbd/status", rec.path)
+	require.Contains(t, buf.String(), "replicated_rule")
 }
 
 func TestNodeCephPool_Status(t *testing.T) {

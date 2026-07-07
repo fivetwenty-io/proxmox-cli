@@ -511,8 +511,8 @@ def provision_network(r: Runner) -> None:
                 skip_markers=("evpn", "not supported", "not implemented", "no such",
                               "not found"),
                 skip_reason="IP-VRF data only applies to EVPN zones; pvecli is a simple zone")
-    r.step("infra", "sdn status vnets get", f"sdn status vnets get {Isolation.SDN_VNET}",
-           "sdn", "status", "vnets", "get", Isolation.SDN_VNET, json_out=True)
+    # `sdn status vnets get` was removed: GET /nodes/{node}/sdn/vnets/{vnet}
+    # is a directory index with no per-vnet data endpoint behind it.
     r.soft_step("infra", "sdn status vnets mac-vrf",
                 f"sdn status vnets mac-vrf {Isolation.SDN_VNET}",
                 "sdn", "status", "vnets", "mac-vrf", Isolation.SDN_VNET,
