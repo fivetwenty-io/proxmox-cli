@@ -211,6 +211,69 @@ func TestOptionArgs(t *testing.T) {
 	}
 }
 
+func TestBatchOptionArgs(t *testing.T) {
+	cases := []struct {
+		name string
+		f    Flags
+		want []string
+	}{
+		{
+			name: "defaults",
+			f:    Flags{User: "root", Port: 22},
+			want: []string{"-p", "22", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"},
+		},
+		{
+			name: "custom port",
+			f:    Flags{User: "root", Port: 2222},
+			want: []string{"-p", "2222", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"},
+		},
+		{
+			name: "identity file",
+			f:    Flags{User: "root", Port: 22, Identity: "/home/root/.ssh/id_rsa"},
+			want: []string{"-p", "22", "-i", "/home/root/.ssh/id_rsa", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"},
+		},
+		{
+			name: "all combined",
+			f: Flags{
+				User:     "admin",
+				Port:     2222,
+				Identity: "/home/admin/.ssh/id_ed25519",
+				Agent:    true,
+				NoStrict: true,
+			},
+			want: []string{
+				"-p", "2222",
+				"-i", "/home/admin/.ssh/id_ed25519",
+				"-A",
+				"-o", "StrictHostKeyChecking=no",
+				"-o", "BatchMode=yes",
+				"-o", "ConnectTimeout=10",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, BatchOptionArgs(&tc.f))
+		})
+	}
+}
+
+// TestBatchOptionArgs_IsOptionArgsPlusBatch locks in that BatchOptionArgs stays
+// exactly OptionArgs followed by the two non-interactive hardening options, so
+// the interactive OptionArgs/BaseArgs paths keep their behavior unchanged.
+func TestBatchOptionArgs_IsOptionArgsPlusBatch(t *testing.T) {
+	cases := []Flags{
+		{User: "root", Port: 22},
+		{User: "admin", Port: 2222, Identity: "/home/admin/.ssh/id_ed25519", Agent: true, NoStrict: true},
+	}
+
+	for _, f := range cases {
+		want := append(OptionArgs(&f), "-o", "BatchMode=yes", "-o", "ConnectTimeout=10")
+		require.Equal(t, want, BatchOptionArgs(&f))
+	}
+}
+
 func TestDest(t *testing.T) {
 	cases := []struct {
 		name string

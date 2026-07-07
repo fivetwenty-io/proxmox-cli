@@ -45,6 +45,24 @@ func OptionArgs(f *Flags) []string {
 	return args
 }
 
+// DefaultConnectTimeoutSec bounds connection establishment for scripted
+// (non-interactive) ssh invocations built by BatchOptionArgs.
+const DefaultConnectTimeoutSec = 10
+
+// BatchOptionArgs builds the ssh option argv for scripted, non-interactive
+// invocations: OptionArgs plus the two options that make ssh safe to run
+// without a terminal. BatchMode=yes makes ssh fail instead of prompting for a
+// password, passphrase, or host-key confirmation, and ConnectTimeout bounds
+// how long connection establishment may hang. It never mutates the OptionArgs
+// result: interactive callers (pve ssh, node shell, qemu ssh) keep their
+// prompting behavior.
+func BatchOptionArgs(f *Flags) []string {
+	return append(OptionArgs(f),
+		"-o", "BatchMode=yes",
+		"-o", fmt.Sprintf("ConnectTimeout=%d", DefaultConnectTimeoutSec),
+	)
+}
+
 // Dest builds the ssh destination ("user@host") for the given host using the
 // supplied flags.
 func Dest(f *Flags, host string) string {
