@@ -72,10 +72,12 @@ Requires Go 1.26 or newer.
 
 ```bash
 # 1. Add a context authenticated with an API token, and make it active.
+#    The Proxmox token id "root@pam!automation" maps to --username + --token-id.
 pve context add lab \
   --host pve.example.com \
   --username root@pam \
-  --token automation=${PVE_TOKEN} \
+  --token-id automation \
+  --secret ${PVE_TOKEN} \
   --select
 
 # 2. Use it.
@@ -168,10 +170,10 @@ in the config file. All verbs operate on the local config and never contact the
 Proxmox VE API.
 
 ```bash
-# Add a context.
+# Add a context. (Or paste the full token id: --token-id 'root@pam!automation')
 pve context add lab \
   --host pve.example.com --username root@pam \
-  --token automation=${PVE_TOKEN} --select
+  --token-id automation --secret ${PVE_TOKEN} --select
 
 # List all contexts (* marks the active one).
 pve context ls
@@ -284,7 +286,7 @@ uses the `pve node` subtree.
 | `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
 | `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security`, `permissions` |
 | `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security`, `permissions` |
-| `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete`, `permissions` |
+| `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete`, `upload`, `permissions` |
 | `sdn` | Software-defined networking | `zone`, `vnet` (each `list\|show\|create\|delete\|permissions`), `subnet` (`list\|show\|create\|delete`), `apply` |
 | `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete`, `permissions` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
@@ -338,6 +340,35 @@ get-member <vmid> <name> <cidr>` (with `pve lxc` equivalents) read a single
 firewall alias or IP set member by name, alongside the existing `list`
 verbs. `pve qemu migrate capabilities` reports the node's QEMU live-migration
 feature support — the same data as `pve node capabilities qemu migration`.
+
+### Cloud-init snippets over SSH
+
+The PVE upload API cannot upload snippets: the endpoint's content enum is
+`iso|vztmpl|import`, so custom cloud-init files referenced by `--cicustom`
+normally have to be copied onto snippet storage by hand. This is a
+long-standing upstream gap
+([Proxmox Bugzilla #2208](https://bugzilla.proxmox.com/show_bug.cgi?id=2208)).
+
+As a workaround, `pve storage upload --content snippets` streams the file over
+SSH into the storage's `snippets/` directory instead of calling the upload
+API. It requires:
+
+- a path-backed storage (`dir`, `nfs`, `cifs`, ...) with the `snippets`
+  content type enabled (`pve storage set local --content iso,vztmpl,snippets`)
+
+- SSH access to the node (root by default; `-l`/`-i`/`-p` and the context's
+  `ssh:` block apply, same as `pve ssh`)
+
+```bash
+# Push a custom cloud-init user-data snippet, then wire it to a VM.
+pve --node pve1 storage upload local --file ./user-data.yaml --content snippets
+pve --node pve1 qemu config set 100 --cicustom "user=local:snippets/user-data.yaml"
+pve --node pve1 qemu cloudinit update 100
+```
+
+`--checksum` is not supported in this mode, and no PVE task is created — the
+transfer is a plain SSH stream. Once the upstream API grows a snippets content
+type, the SSH path can be retired in favor of the normal upload endpoint.
 
 ## VM security (`pve qemu security`)
 
