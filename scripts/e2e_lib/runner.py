@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import replace
 
 from .context import Ctx, Env
 from .model import Isolation, Status, TreeReport
@@ -100,9 +101,13 @@ def discover_node(binary: str, target: str) -> str:
 # --- parallel execution -----------------------------------------------------
 
 
-def _run_tree(env: Env, name: str) -> TreeReport:
+def _run_tree(env: Env, name: str, pbs_context: str = "") -> TreeReport:
     report = TreeReport(name)
     module = TREES[name]
+    if getattr(module, "PRODUCT", "pve") == "pbs":
+        # A PBS tree targets a different product: hand it the opt-in PBS
+        # context (empty = tree skips itself) and drop the PVE node.
+        env = replace(env, context=pbs_context, node="")
     ctx = Ctx(env, name)
     try:
         module.run(ctx)
@@ -113,10 +118,11 @@ def _run_tree(env: Env, name: str) -> TreeReport:
     return report
 
 
-def run_trees(env: Env, names: list[str], jobs: int) -> list[TreeReport]:
+def run_trees(env: Env, names: list[str], jobs: int,
+              pbs_context: str = "") -> list[TreeReport]:
     reports: dict[str, TreeReport] = {}
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        futs = {pool.submit(_run_tree, env, n): n for n in names}
+        futs = {pool.submit(_run_tree, env, n, pbs_context): n for n in names}
         for fut in as_completed(futs):
             r = fut.result()
             reports[r.name] = r

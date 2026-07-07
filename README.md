@@ -672,12 +672,16 @@ Each Makefile category delegates to a script under `scripts/` (`build`, `test`,
 `scripts/e2e` is a live, read-only happy-path sweep of every command tree
 against a configured context (default: `lab`). It runs the trees in parallel and
 reports pass/fail/skip per check; mutating or destructive operations are never
-executed — they are listed as deferred. Run it directly or via Make:
+executed — they are listed as deferred. The `pbs` tree is opt-in: it sweeps the
+`pve pbs` group against a separate `product: pbs` context named via
+`--pbs-context` (or `PBS_CONTEXT=`/`$PVE_E2E_PBS_CONTEXT`) and skips when the
+opt-in is absent or the PBS server is unreachable. Run it directly or via Make:
 
 ```bash
 make test-e2e                   # all trees against the `lab` context
 make test-e2e TREES=qemu        # a subset
 make test-e2e CONTEXT=prod      # a different configured context
+make test-e2e PBS_CONTEXT=pbs-lab  # opt into the pbs tree (needs a PBS server)
 scripts/e2e --list              # list trees and the lab isolation contract
 scripts/e2e qemu cluster -j 4   # named trees, four parallel workers
 ```

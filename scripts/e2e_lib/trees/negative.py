@@ -49,6 +49,14 @@ def run(ctx: Ctx) -> None:
     ctx.expect_fail("group delete without --yes",
                     "access", "group", "delete", MISSING_NAME)
 
+    # --- product guard (rejected before any API call) ------------------------
+
+    # The sweep context targets Proxmox VE, so every `pve pbs` command must be
+    # refused with a pointer to `context add --product pbs`. This runs without
+    # any PBS server — the guard reads only the local context config.
+    ctx.expect_fail("pbs command against a PVE context",
+                    "pbs", "ping", must_contain="requires a PBS context")
+
     # --- not-found lookups (reads; never mutate) ----------------------------
 
     n = ctx.node
