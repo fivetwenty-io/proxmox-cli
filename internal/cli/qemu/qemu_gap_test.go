@@ -263,22 +263,29 @@ func TestQemuGap_CpuFlagsRequest(t *testing.T) {
 	require.Contains(t, buf.String(), "aes")
 }
 
-// TestQemuGap_ListCluster asserts `qemu list --cluster` calls the cluster endpoint.
+// TestQemuGap_ListCluster asserts `qemu list --cluster` reads the cluster
+// resource inventory (GET /cluster/resources?type=vm) — /cluster/qemu is only
+// a directory index (cpu-flags, custom-cpu-models), not a VM list — and keeps
+// only qemu guests out of the mixed qemu+lxc response.
 func TestQemuGap_ListCluster(t *testing.T) {
 	f, ac := newFakeClient(t)
-	var gotPath string
-	f.HandleFunc("GET /api2/json/cluster/qemu", func(w http.ResponseWriter, r *http.Request) {
+	var gotPath, gotType string
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
+		gotType = r.URL.Query().Get("type")
 		testhelper.WriteData(w, []any{
-			map[string]any{"vmid": 100, "name": "vm-cluster", "status": "running", "node": "pve2"},
+			map[string]any{"vmid": 100, "name": "vm-cluster", "status": "running", "node": "pve2", "type": "qemu"},
+			map[string]any{"vmid": 200, "name": "ct-cluster", "status": "running", "node": "pve2", "type": "lxc"},
 		})
 	})
 	// No node required for --cluster mode.
 	deps := depsFor(t, ac, output.FormatTable, "", false)
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "list", "--cluster"))
-	require.Equal(t, "/api2/json/cluster/qemu", gotPath)
+	require.Equal(t, "/api2/json/cluster/resources", gotPath)
+	require.Equal(t, "vm", gotType)
 	require.Contains(t, buf.String(), "vm-cluster")
+	require.NotContains(t, buf.String(), "ct-cluster", "lxc guests must be filtered out of qemu list")
 }
 
 // TestQemuGap_ListClusterAbsent asserts without --cluster the node-scoped endpoint is used.

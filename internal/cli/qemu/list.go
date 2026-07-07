@@ -7,13 +7,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
 // qemuListEntry is the minimal decoded shape of one entry from nodes.ListQemu
-// and cluster.ListQemu.
+// or a cluster/resources VM entry. Type is only present in cluster/resources
+// entries and is used to keep qemu guests and drop lxc ones.
 type qemuListEntry struct {
 	VMID     int64  `json:"vmid"`
 	Name     string `json:"name"`
@@ -22,6 +24,7 @@ type qemuListEntry struct {
 	Bootdisk string `json:"bootdisk"`
 	PID      int64  `json:"pid"`
 	Node     string `json:"node"`
+	Type     string `json:"type"`
 }
 
 // newListCmd builds `pve qemu list`.
@@ -58,7 +61,12 @@ func newListCmd() *cobra.Command {
 					if err := json.Unmarshal(raw, &e); err != nil {
 						return fmt.Errorf("decode VM entry: %w", err)
 					}
-					// Cluster endpoint populates Node; node endpoint does not.
+					// cluster/resources type=vm returns both qemu and lxc guests;
+					// keep only qemu. Node-scoped entries carry no type field.
+					if e.Type != "" && e.Type != "qemu" {
+						continue
+					}
+					// Cluster entries populate Node; node endpoint entries do not.
 					if e.Node == "" {
 						e.Node = defaultNode
 					}
@@ -82,7 +90,12 @@ func newListCmd() *cobra.Command {
 			}
 
 			if cluster {
-				resp, err := deps.API.Cluster.ListQemu(cmd.Context())
+				// GET /cluster/qemu is only a directory index (cpu-flags,
+				// custom-cpu-models), not a VM list; the cluster-wide guest
+				// inventory lives in /cluster/resources filtered to VMs.
+				typeVM := "vm"
+				resp, err := deps.API.Cluster.ListResources(cmd.Context(),
+					&pvecluster.ListResourcesParams{Type: &typeVM})
 				if err != nil {
 					return fmt.Errorf("list VMs cluster-wide: %w", err)
 				}
