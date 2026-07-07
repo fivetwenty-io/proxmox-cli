@@ -258,6 +258,13 @@ and CSRF headers and `password`/`token`/`secret` parameters are redacted.
 Suppress log files with `--no-log`; raise verbosity with `--verbose`, `--debug`,
 or `--trace`.
 
+`pve --version` (or `-v`) prints the CLI's own build information — release tag,
+short commit, build date, Go toolchain, and OS/arch — without contacting any
+server. `make build` and release binaries inject these via ldflags; ad-hoc
+`go build` binaries report a dev version with unknown commit. The same
+information is available as a command (with `-o json`/`-o yaml` support) via
+`pve version client`.
+
 ## Command overview
 
 `pve` organizes the API into logical groups. VM and container operations take a

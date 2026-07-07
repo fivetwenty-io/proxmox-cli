@@ -19,6 +19,7 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/exec"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pve-cli/internal/version"
 )
 
 // TestRootFlags_Defaults verifies that NewRootCmd sets the expected flag
@@ -1205,4 +1206,44 @@ func TestApplyTOFUOptions_DifferentContexts_DistinctCachePaths(t *testing.T) {
 
 	require.NotEqual(t, prod.FingerprintCachePath, staging.FingerprintCachePath,
 		"each context must persist trust decisions to its own cache file")
+}
+
+// TestVersionFlag_PrintsBuildInfo verifies that `pve --version` prints the
+// full build-info line from internal/version and exits without running
+// PersistentPreRunE (no config load, no API client construction).
+func TestVersionFlag_PrintsBuildInfo(t *testing.T) {
+	// Point --config at a nonexistent path: if PersistentPreRunE ran, it
+	// would be exercised with this config; --version must not need it.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"--version"})
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, version.String()+"\n", out.String(),
+		"--version must print exactly the internal/version build-info line")
+	require.Contains(t, out.String(), version.Version)
+	require.Contains(t, out.String(), version.Commit)
+}
+
+// TestVersionFlag_ShortV verifies the -v shorthand maps to --version and is
+// not shadowed by any other persistent flag.
+func TestVersionFlag_ShortV(t *testing.T) {
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"-v"})
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, out.String(), "pve version")
+
+	vFlag := root.Flags().Lookup("version")
+	require.NotNil(t, vFlag, "--version flag must exist")
+	require.Equal(t, "v", vFlag.Shorthand, "--version shorthand must be -v")
 }

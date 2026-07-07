@@ -22,6 +22,7 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/exitcode"
 	"github.com/fivetwenty-io/pve-cli/internal/logx"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
+	"github.com/fivetwenty-io/pve-cli/internal/version"
 )
 
 // noopLogCloser satisfies io.Closer for the log-init fallback path where no
@@ -163,10 +164,19 @@ func NewRootCmd() (*cobra.Command, func()) {
 
 It supports multiple named contexts, token and password authentication, and
 structured output in table, ascii, plain, JSON, and YAML formats.`,
+		// Version enables cobra's built-in --version/-v flag. It resolves at
+		// build time: `make build` injects the git-describe tag (or "dev"
+		// fallback) plus the short commit; release binaries get the tag and
+		// short sha from GoReleaser ldflags. Cobra prints it and exits before
+		// PersistentPreRunE, so no config or API client is constructed.
+		Version: version.String(),
 		// Silence cobra's built-in error printing; Execute() handles it.
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
+	// version.String() already includes the "pve version ..." prefix; the
+	// default template would prepend "pve version" a second time.
+	root.SetVersionTemplate("{{.Version}}\n")
 
 	// --- persistent flags ---
 	root.PersistentFlags().StringVar(&pf.config, "config",
