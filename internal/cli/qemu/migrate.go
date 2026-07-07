@@ -158,9 +158,54 @@ func newMigrateCmd() *cobra.Command {
 		"target storage mapping; a single storage ID maps all source storages, "+
 			"or '1' maps each source storage to itself")
 
-	// Add the pre-flight check as a sub-command so both
-	// `pve qemu migrate 100 --target-node pve2` and
-	// `pve qemu migrate check 100` are valid.
-	cmd.AddCommand(newMigrateCheckCmd())
+	// Add the pre-flight check and capabilities leaf as sub-commands so both
+	// `pve qemu migrate 100 --target-node pve2` and `pve qemu migrate check
+	// 100` / `pve qemu migrate capabilities` are valid.
+	cmd.AddCommand(newMigrateCheckCmd(), newMigrateCapabilitiesCmd())
 	return cmd
+}
+
+// newMigrateCapabilitiesCmd builds `pve qemu migrate capabilities`. It
+// mirrors `pve node capabilities qemu migration` exactly (same headers/Raw
+// shape) so the two spellings are interchangeable; `migrate check` already
+// reads this data internally, this leaf just surfaces it directly.
+func newMigrateCapabilitiesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "capabilities",
+		Short: "List QEMU migration capabilities of a node",
+		Long: "Show which migration features the node's QEMU build supports (e.g. " +
+			"dbus-vmstate for switchover of attached daemons). Node-scoped: uses --node. " +
+			"Same data as 'pve node capabilities qemu migration'.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			node, err := resolveNode(deps)
+			if err != nil {
+				return err
+			}
+
+			resp, err := deps.API.Nodes.ListCapabilitiesQemuMigration(cmd.Context(), node)
+			if err != nil {
+				return fmt.Errorf("get QEMU migration capabilities on node %q: %w", node, err)
+			}
+			if resp == nil {
+				return fmt.Errorf("get QEMU migration capabilities on node %q: empty response", node)
+			}
+
+			single := map[string]string{"has-dbus-vmstate": boolYesNo(bool(resp.HasDbusVmstate))}
+			raw := map[string]any{"has-dbus-vmstate": bool(resp.HasDbusVmstate)}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: raw}, deps.Format)
+		},
+	}
+}
+
+// boolYesNo renders a bool as "yes"/"no", matching the node-level
+// capabilities rendering (internal/cli/node) so `qemu migrate capabilities`
+// and `node capabilities qemu migration` produce identical table output.
+func boolYesNo(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "no"
 }
