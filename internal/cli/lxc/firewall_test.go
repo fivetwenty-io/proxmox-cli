@@ -306,6 +306,40 @@ func TestLxcFirewallIpsetDelete_Force(t *testing.T) {
 	require.Contains(t, buf.String(), "deleted")
 }
 
+func TestLxcFirewallIpsetGetMember_Single(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/100/firewall/ipset/trusted/172.30.0.0/24", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{
+			"cidr": "172.30.0.0/24", "nomatch": 0, "comment": "lab nets", "digest": "abc123",
+		})
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "firewall", "ipset", "get-member", "100", "trusted", "172.30.0.0/24")
+	require.NoError(t, run())
+	require.Equal(t, "/api2/json/nodes/pve1/lxc/100/firewall/ipset/trusted/172.30.0.0/24", gotPath)
+	out := buf.String()
+	require.Contains(t, out, "172.30.0.0/24")
+	require.Contains(t, out, "lab nets")
+}
+
+func TestLxcFirewallIpsetGetMember_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/100/firewall/ipset/trusted/172.30.0.0/24", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusNotFound, "no such member")
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "firewall", "ipset", "get-member", "100", "trusted", "172.30.0.0/24")
+	err := run()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "get 172.30.0.0/24 in IP set")
+}
+
 // --- firewall alias ---------------------------------------------------------
 
 func TestLxcFirewallAliasList_Table(t *testing.T) {
@@ -324,6 +358,41 @@ func TestLxcFirewallAliasList_Table(t *testing.T) {
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "gw")
 	require.Contains(t, out, "172.30.0.1")
+}
+
+func TestLxcFirewallAliasGet_Single(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/100/firewall/aliases/gw", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{
+			"name": "gw", "cidr": "172.30.0.1", "comment": "gateway", "ipversion": 4, "digest": "abc123",
+		})
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "firewall", "alias", "get", "100", "gw")
+	require.NoError(t, run())
+	require.Equal(t, "/api2/json/nodes/pve1/lxc/100/firewall/aliases/gw", gotPath)
+	out := buf.String()
+	require.Contains(t, out, "gw")
+	require.Contains(t, out, "172.30.0.1")
+	require.Contains(t, out, "gateway")
+}
+
+func TestLxcFirewallAliasGet_ServerError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/100/firewall/aliases/gw", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusNotFound, "no such alias")
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "firewall", "alias", "get", "100", "gw")
+	err := run()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "get alias")
 }
 
 func TestLxcFirewallAliasCreate_FlagParams(t *testing.T) {

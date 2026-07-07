@@ -528,8 +528,49 @@ func newFirewallIpsetCmd() *cobra.Command {
 		newFirewallIpsetAddCmd(),
 		newFirewallIpsetRemoveCmd(),
 		newFirewallIpsetUpdateMemberCmd(),
+		newFirewallIpsetGetMemberCmd(),
 	)
 	return cmd
+}
+
+// newFirewallIpsetGetMemberCmd builds
+// `pve qemu firewall ipset get-member <vmid|name> <name> <cidr>` — show a
+// single CIDR entry of an IP set (GET .../firewall/ipset/{name}/{cidr}).
+// Named get-member (not get) because `ipset list <vmid> [name]` already
+// overloads the name-scoped read, and update-member set the member-verb
+// naming precedent.
+func newFirewallIpsetGetMemberCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get-member <vmid|name> <name> <cidr>",
+		Short: "Show a single CIDR entry of an IP set",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			if err != nil {
+				return err
+			}
+			name, cidr := args[1], args[2]
+
+			resp, err := deps.API.Nodes.GetQemuFirewallIpset2(cmd.Context(), node, vmid, name, cidr)
+			if err != nil {
+				return fmt.Errorf("get %s in IP set %q for VM %s on node %q: %w", cidr, name, vmid, node, err)
+			}
+			if resp == nil {
+				return fmt.Errorf("get %s in IP set %q for VM %s on node %q: empty response", cidr, name, vmid, node)
+			}
+			var m map[string]any
+			if err := json.Unmarshal(*resp, &m); err != nil {
+				return fmt.Errorf("decode IP set member %s in %q: %w", cidr, name, err)
+			}
+			single := make(map[string]string, len(m))
+			for k, v := range m {
+				single[k] = stringifyValue(v)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: m}, deps.Format)
+		},
+	}
 }
 
 // newFirewallIpsetUpdateMemberCmd builds
@@ -776,11 +817,49 @@ func newFirewallAliasCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newFirewallAliasListCmd(),
+		newFirewallAliasGetCmd(),
 		newFirewallAliasCreateCmd(),
 		newFirewallAliasUpdateCmd(),
 		newFirewallAliasDeleteCmd(),
 	)
 	return cmd
+}
+
+// newFirewallAliasGetCmd builds `pve qemu firewall alias get <vmid|name>
+// <name>` — show a single firewall alias by name
+// (GET .../firewall/aliases/{name}).
+func newFirewallAliasGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <vmid|name> <name>",
+		Short: "Show a single firewall alias by name",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			if err != nil {
+				return err
+			}
+			name := args[1]
+
+			resp, err := deps.API.Nodes.GetQemuFirewallAliases(cmd.Context(), node, vmid, name)
+			if err != nil {
+				return fmt.Errorf("get alias %q for VM %s on node %q: %w", name, vmid, node, err)
+			}
+			if resp == nil {
+				return fmt.Errorf("get alias %q for VM %s on node %q: empty response", name, vmid, node)
+			}
+			var m map[string]any
+			if err := json.Unmarshal(*resp, &m); err != nil {
+				return fmt.Errorf("decode alias %q: %w", name, err)
+			}
+			single := make(map[string]string, len(m))
+			for k, v := range m {
+				single[k] = stringifyValue(v)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{Single: single, Raw: m}, deps.Format)
+		},
+	}
 }
 
 func newFirewallAliasListCmd() *cobra.Command {
