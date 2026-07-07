@@ -40,6 +40,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newSnapshotCmd(),
 		newMetricsCmd(),
 		newFeatureCmd(),
+		newSecurityCmd(),
 		newRrdCmd(),
 		newToTemplateCmd(),
 	)
