@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	pveerrors "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/errors"
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"

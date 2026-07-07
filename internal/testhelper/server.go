@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/stretchr/testify/require"
 )
 

@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )

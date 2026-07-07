@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/tasks"
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"

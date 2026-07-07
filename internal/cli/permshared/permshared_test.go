@@ -8,7 +8,7 @@ import (
 
 	yaml "github.com/goccy/go-yaml"
 
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
 )

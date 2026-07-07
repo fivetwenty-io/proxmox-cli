@@ -37,7 +37,7 @@ import (
 )
 
 // clientModule is the module whose _data/apidoc.json carries the PVE API schema.
-const clientModule = "github.com/fivetwenty-io/pve-apiclient-go/v3"
+const clientModule = "github.com/fivetwenty-io/proxmox-apiclient-go/v3"
 
 // schemaPackage is the package providing the Schema/SubKey types the
 // generated file references.

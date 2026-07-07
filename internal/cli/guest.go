@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	pvecluster "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
+	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 )
 
 // Guest type identifiers. These match the "type" field of a cluster/resources

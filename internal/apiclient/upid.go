@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/tasks"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 )
 
 // UPIDFromRaw extracts a UPID string from a json.RawMessage.

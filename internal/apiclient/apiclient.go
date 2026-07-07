@@ -1,15 +1,15 @@
 package apiclient
 
 import (
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/clusterstorage"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/pools"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/storage"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/tasks"
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/version"
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/clusterstorage"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/pools"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/storage"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/version"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // APIClient holds all 8 service handles plus the raw pve client.

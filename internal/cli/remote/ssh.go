@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
 	"github.com/fivetwenty-io/pve-cli/internal/config"

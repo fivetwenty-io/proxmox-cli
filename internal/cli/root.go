@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/pve-cli/internal/apiclient"
 	"github.com/fivetwenty-io/pve-cli/internal/config"

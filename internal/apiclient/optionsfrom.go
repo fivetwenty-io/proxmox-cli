@@ -3,7 +3,7 @@ package apiclient
 import (
 	"fmt"
 
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // BuildOptions maps individual configuration fields onto a pve.Options value

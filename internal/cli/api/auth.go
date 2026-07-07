@@ -18,8 +18,8 @@ import (
 	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 
-	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
-	pve "github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/client"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // ticketLifetime is the PVE ticket validity window used to compute a session's
