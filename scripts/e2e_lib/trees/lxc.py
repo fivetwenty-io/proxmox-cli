@@ -184,6 +184,18 @@ def run(ctx: Ctx) -> None:
         ctx.check("security features show", "lxc", "security", "features", "show", cid,
                   node=n, validate=has_features)
 
+        # permissions: ACL entries scoped to the container's /vms/{vmid} path
+        # (shared with `pve qemu permissions`, since both guest kinds sit under
+        # the same path grammar). `list`/`effective` are read-only ACL queries;
+        # `grant`/`revoke` mutate cluster-wide ACLs and are deferred below.
+        def has_permissions_effective(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        ctx.check("permissions list", "lxc", "permissions", "list", cid,
+                  node=n, validate=is_list)
+        ctx.check("permissions effective", "lxc", "permissions", "effective", cid,
+                  node=n, validate=has_permissions_effective)
+
     # `interfaces` reads the container's live network namespace, so it only
     # works against a running container. Discover one explicitly; when none is
     # running the read-only sweep skips it (the verb is exercised live on the
@@ -328,6 +340,22 @@ def run(ctx: Ctx) -> None:
         "needs a running container and root ssh, so it is not driven head-less; "
         "covered by unit tests",
         "pve lxc security caps show <ctid> --effective",
+    )
+    # `permissions grant`/`revoke` mutate cluster-wide ACLs (not scoped to the
+    # isolated container's own resources), so they are not wired into the
+    # mutate phase; `permissions list`/`effective` above are read-only and
+    # exercised live.
+    ctx.defer(
+        "permissions grant",
+        "grants ACL roles on the container's /vms/{vmid} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve lxc permissions grant <ctid> --roles PVEVMAdmin --users alice@pve",
+    )
+    ctx.defer(
+        "permissions revoke",
+        "revokes ACL roles on the container's /vms/{vmid} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve lxc permissions revoke <ctid> --roles PVEVMAdmin --users alice@pve",
     )
     # `firewall alias get` / `firewall ipset get-member` read a single
     # pre-existing entry by name. A fresh lab has none by default, and the

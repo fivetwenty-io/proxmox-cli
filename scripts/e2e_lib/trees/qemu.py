@@ -212,6 +212,18 @@ def run(ctx: Ctx) -> None:
         ctx.check("security nic show", "qemu", "security", "nic", "show", vid,
                   node=n, validate=is_list)
 
+        # permissions: ACL entries scoped to the VM's /vms/{vmid} path (shared
+        # with `pve lxc permissions`, since both guest kinds sit under the same
+        # path grammar). `list`/`effective` are read-only ACL queries; `grant`/
+        # `revoke` mutate cluster-wide ACLs and are deferred below.
+        def has_permissions_effective(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        ctx.check("permissions list", "qemu", "permissions", "list", vid,
+                  node=n, validate=is_list)
+        ctx.check("permissions effective", "qemu", "permissions", "effective", vid,
+                  node=n, validate=has_permissions_effective)
+
     # QEMU capability queries are node-scoped and always safe: they report the
     # CPU models, CPU flags, and machine types the node's QEMU binary can offer
     # guests, independent of whether any VM exists.
@@ -460,6 +472,22 @@ def run(ctx: Ctx) -> None:
         "clears the VM protection flag; not wired into the mutate phase; "
         "covered by unit tests",
         "pve qemu security protection disable <vmid>",
+    )
+    # `permissions grant`/`revoke` mutate cluster-wide ACLs (not scoped to the
+    # isolated VM's own resources), so they are not wired into the mutate
+    # phase; `permissions list`/`effective` above are read-only and exercised
+    # live.
+    ctx.defer(
+        "permissions grant",
+        "grants ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide "
+        "ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve qemu permissions grant <vmid> --roles PVEVMAdmin --users alice@pve",
+    )
+    ctx.defer(
+        "permissions revoke",
+        "revokes ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide "
+        "ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve qemu permissions revoke <vmid> --roles PVEVMAdmin --users alice@pve",
     )
     # `firewall alias get` / `firewall ipset get-member` read a single
     # pre-existing entry by name. A fresh lab has none by default, and the

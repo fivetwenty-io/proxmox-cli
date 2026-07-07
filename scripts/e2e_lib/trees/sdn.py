@@ -30,10 +30,22 @@ def run(ctx: Ctx) -> None:
             zone_id = ctx.first(zones.json(), "zone")
         except ValueError:
             zone_id = None
+    def has_permissions_effective(res: CmdResult) -> str | None:
+        return None if isinstance(res.json(), dict) else "expected a JSON object"
+
     if zone_id:
         ctx.check("zone show", "sdn", "zone", "show", str(zone_id))
+        # zone permissions: ACL entries scoped to the zone's own
+        # /sdn/zones/{zone} path. `grant`/`revoke` mutate cluster-wide ACLs
+        # and are deferred below.
+        ctx.check("zone permissions list", "sdn", "zone", "permissions", "list",
+                  str(zone_id), validate=is_list)
+        ctx.check("zone permissions effective", "sdn", "zone", "permissions", "effective",
+                  str(zone_id), validate=has_permissions_effective)
     else:
         ctx.skip("zone show", "no zone defined")
+        ctx.skip("zone permissions list", "no zone defined")
+        ctx.skip("zone permissions effective", "no zone defined")
 
     vnet = None
     if vnets.rc == 0:
@@ -43,6 +55,33 @@ def run(ctx: Ctx) -> None:
             vnet = None
     if vnet:
         ctx.check("vnet show", "sdn", "vnet", "show", str(vnet))
+
+        # vnet permissions: ACL entries scoped to the vnet's derived
+        # /sdn/zones/{zone}/{vnet} path. The plain checks below omit --zone, so
+        # they exercise the auto-resolve lookup (GET /cluster/sdn/vnets/{vnet});
+        # a third check passes --zone explicitly (when the vnet's zone is known
+        # from the vnet list) to also cover the lookup-skipping code path.
+        # `grant`/`revoke` mutate cluster-wide ACLs and are deferred below.
+        zone_of_vnet = None
+        if vnets.rc == 0:
+            try:
+                for entry in vnets.json():
+                    if isinstance(entry, dict) and str(entry.get("vnet", "")) == vnet:
+                        zone_of_vnet = entry.get("zone")
+                        break
+            except (ValueError, AttributeError):
+                zone_of_vnet = None
+
+        ctx.check("vnet permissions list", "sdn", "vnet", "permissions", "list",
+                  str(vnet), validate=is_list)
+        ctx.check("vnet permissions effective", "sdn", "vnet", "permissions", "effective",
+                  str(vnet), validate=has_permissions_effective)
+        if zone_of_vnet:
+            ctx.check("vnet permissions list --zone", "sdn", "vnet", "permissions", "list",
+                      str(vnet), "--zone", str(zone_of_vnet), validate=is_list)
+        else:
+            ctx.skip("vnet permissions list --zone", "vnet's zone not found in the vnet list")
+
         subnets = ctx.check("subnet list", "sdn", "subnet", "list", str(vnet), validate=is_list)
         # subnet show: per-subnet configuration detail. Discover a real subnet id
         # from the list just checked; skip when the vnet has no subnet defined.
@@ -62,6 +101,9 @@ def run(ctx: Ctx) -> None:
                   str(vnet))
     else:
         ctx.skip("vnet show", "no vnet defined")
+        ctx.skip("vnet permissions list", "no vnet defined")
+        ctx.skip("vnet permissions effective", "no vnet defined")
+        ctx.skip("vnet permissions list --zone", "no vnet defined")
         ctx.skip("subnet list", "no vnet defined")
         ctx.skip("subnet show", "no vnet defined")
         ctx.skip("vnet firewall rules list", "no vnet defined")
@@ -286,3 +328,32 @@ def run(ctx: Ctx) -> None:
               "isolated guest-free pvecli0 vnet — covered live by `e2e --mutate`",
               f"pve sdn vnet firewall options set {Isolation.SDN_VNET} --policy-forward ACCEPT",
               isolation=True, live_covered=True)
+
+    # `zone`/`vnet permissions grant`/`revoke` mutate cluster-wide ACLs (not
+    # scoped to the isolated pvecli zone/vnet's own SDN config), so neither is
+    # wired into the mutate phase. The `list`/`effective` reads above are
+    # exercised live.
+    ctx.defer(
+        "zone permissions grant",
+        "grants ACL roles on the zone's /sdn/zones/{zone} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve sdn zone permissions grant <zone> --roles PVEAuditor --users alice@pve",
+    )
+    ctx.defer(
+        "zone permissions revoke",
+        "revokes ACL roles on the zone's /sdn/zones/{zone} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve sdn zone permissions revoke <zone> --roles PVEAuditor --users alice@pve",
+    )
+    ctx.defer(
+        "vnet permissions grant",
+        "grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; "
+        "mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve sdn vnet permissions grant <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
+    )
+    ctx.defer(
+        "vnet permissions revoke",
+        "revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; "
+        "mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve sdn vnet permissions revoke <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
+    )

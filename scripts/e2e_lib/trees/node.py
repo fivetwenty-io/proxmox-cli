@@ -43,6 +43,21 @@ def run(ctx: Ctx) -> None:
             return f"node status missing keys: {missing}" if missing else None
 
         ctx.check("status", "node", "status", n, validate=has_node_status)
+
+        # permissions: ACL entries scoped to the node's /nodes/{node} path.
+        # Both are cluster-wide ACL queries (no --node routing needed for the
+        # API call itself, even though the node name is the positional id).
+        # `grant`/`revoke` mutate cluster-wide ACLs and are deferred below.
+        def has_permissions_effective(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        def is_list_local(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), list) else "expected a JSON array"
+
+        ctx.check("permissions list", "node", "permissions", "list", n, validate=is_list_local)
+        ctx.check("permissions effective", "node", "permissions", "effective", n,
+                  validate=has_permissions_effective)
+
         svc = ctx.check("services list", "node", "services", "list", n)
         if svc.rc == 0:
             try:
@@ -489,6 +504,22 @@ def run(ctx: Ctx) -> None:
     # deterministic server-side shutdown task and aborts it).
     ctx.defer("task stop", "aborts a running task — covered live by `e2e --mutate`",
               "pve node task stop <node> <upid>", live_covered=True)
+
+    # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
+    # mutate phase. `permissions list`/`effective` above are read-only and
+    # exercised live.
+    ctx.defer(
+        "permissions grant",
+        "grants ACL roles on the node's /nodes/{node} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve node permissions grant <node> --roles PVEAuditor --users alice@pve",
+    )
+    ctx.defer(
+        "permissions revoke",
+        "revokes ACL roles on the node's /nodes/{node} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve node permissions revoke <node> --roles PVEAuditor --users alice@pve",
+    )
 
     # The mutate phase appends a disabled host firewall rule tagged with the
     # pve-cli comment, finds it by comment, then deletes it — covered live

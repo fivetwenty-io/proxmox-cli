@@ -35,6 +35,8 @@ def run(ctx: Ctx) -> None:
 
     if sid is None:
         ctx.skip("get", "no storage defined")
+        ctx.skip("permissions list", "no storage defined")
+        ctx.skip("permissions effective", "no storage defined")
         ctx.skip("content", "no storage defined")
         ctx.skip("status", "no storage defined")
         ctx.skip("identity", "no storage defined")
@@ -42,6 +44,19 @@ def run(ctx: Ctx) -> None:
         ctx.skip("rrd", "no storage defined")
     else:
         ctx.check("get", "storage", "get", str(sid), validate=has_storage_keys)
+
+        # permissions: ACL entries scoped to the storage's /storage/{storage}
+        # path. Both are cluster-wide ACL queries (no --node routing needed,
+        # unlike the storage-content checks below). `grant`/`revoke` mutate
+        # cluster-wide ACLs and are deferred below.
+        def has_permissions_effective(res: CmdResult) -> str | None:
+            return None if isinstance(res.json(), dict) else "expected a JSON object"
+
+        ctx.check("permissions list", "storage", "permissions", "list", str(sid),
+                  validate=is_list)
+        ctx.check("permissions effective", "storage", "permissions", "effective", str(sid),
+                  validate=has_permissions_effective)
+
         if ctx.node:
             ctx.check("content", "storage", "content", str(sid), node=ctx.node)
             # status: per-storage usage summary; requires a node context.
@@ -276,4 +291,19 @@ def run(ctx: Ctx) -> None:
         "pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests",
         "pve storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
         isolation=False, live_covered=False,
+    )
+    # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
+    # mutate phase. `permissions list`/`effective` above are read-only and
+    # exercised live.
+    ctx.defer(
+        "permissions grant",
+        "grants ACL roles on the storage's /storage/{storage} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve storage permissions grant local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+    )
+    ctx.defer(
+        "permissions revoke",
+        "revokes ACL roles on the storage's /storage/{storage} path; mutates "
+        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "pve storage permissions revoke local-lvm --roles PVEDatastoreAdmin --users alice@pve",
     )
