@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -37,6 +38,7 @@ func newLsCmd() *cobra.Command {
 				Active        bool   `json:"active"`
 				Host          string `json:"host"`
 				Port          int    `json:"port"`
+				Product       string `json:"product"`
 				AuthType      string `json:"auth_type"`
 				Username      string `json:"username"`
 				DefaultNode   string `json:"default_node"`
@@ -61,10 +63,15 @@ func newLsCmd() *cobra.Command {
 				if port == 0 {
 					port = 8006
 				}
+				product := ctx.Product
+				if product == "" {
+					product = config.ProductPVE
+				}
 				rows = append(rows, []string{
 					displayName,
 					ctx.Host,
 					fmt.Sprintf("%d", port),
+					product,
 					ctx.Auth.Type,
 					ctx.Auth.Username,
 					ctx.DefaultNode,
@@ -75,6 +82,7 @@ func newLsCmd() *cobra.Command {
 					Active:        active,
 					Host:          ctx.Host,
 					Port:          port,
+					Product:       product,
 					AuthType:      ctx.Auth.Type,
 					Username:      ctx.Auth.Username,
 					DefaultNode:   ctx.DefaultNode,
@@ -83,7 +91,7 @@ func newLsCmd() *cobra.Command {
 			}
 
 			res := output.Result{
-				Headers: []string{"NAME", "HOST", "PORT", "AUTH TYPE", "USERNAME", "DEFAULT NODE", "DEFAULT OUTPUT"},
+				Headers: []string{"NAME", "HOST", "PORT", "PRODUCT", "AUTH TYPE", "USERNAME", "DEFAULT NODE", "DEFAULT OUTPUT"},
 				Rows:    rows,
 				Raw:     rawEntries,
 			}

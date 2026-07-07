@@ -110,6 +110,7 @@ func deepCopyContext(src *config.Context) *config.Context {
 		Realm:         src.Realm,
 		DefaultNode:   src.DefaultNode,
 		DefaultOutput: src.DefaultOutput,
+		Product:       src.Product,
 		Auth: config.AuthBlock{
 			Type:     src.Auth.Type,
 			Username: src.Auth.Username,

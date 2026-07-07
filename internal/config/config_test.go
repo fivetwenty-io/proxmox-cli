@@ -763,3 +763,198 @@ func TestStrictValidateContext_SSHPortZero_NoError(t *testing.T) {
 	errs := config.StrictValidateContext(c)
 	require.Empty(t, errs)
 }
+
+// ── Product ────────────────────────────────────────────────────────────────
+
+// TestProduct_RoundTrip verifies that an explicit product value survives a
+// save/load cycle and is emitted under the "product:" yaml key.
+func TestProduct_RoundTrip(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "backup",
+		Contexts: map[string]*config.Context{
+			"backup": {
+				Host:     "pbs.example.com",
+				Port:     8007,
+				Protocol: "https",
+				Realm:    "pam",
+				Product:  config.ProductPBS,
+				Auth: config.AuthBlock{
+					Type:   "token",
+					Secret: "s",
+				},
+			},
+		},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	require.NoError(t, config.Save(path, cfg))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "product: pbs")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPBS, loaded.Contexts["backup"].Product)
+}
+
+// TestProduct_EmptyOmittedFromYAML verifies that an unset Product does not
+// emit a "product:" key, preserving round-trip compatibility with config
+// files written before Product existed.
+func TestProduct_EmptyOmittedFromYAML(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "t",
+		Contexts: map[string]*config.Context{
+			"t": {
+				Host:     "host",
+				Port:     8006,
+				Protocol: "https",
+				Realm:    "pam",
+				Auth:     config.AuthBlock{Type: "token", Secret: "s"},
+			},
+		},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	require.NoError(t, config.Save(path, cfg))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "product:")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Empty(t, loaded.Contexts["t"].Product)
+}
+
+// TestContext_IsPBS covers both branches of Context.IsPBS: an explicit "pbs"
+// product, and the backward-compat empty-Product case which must NOT report
+// as PBS (it defaults to PVE).
+func TestContext_IsPBS(t *testing.T) {
+	pbs := &config.Context{Product: config.ProductPBS}
+	require.True(t, pbs.IsPBS())
+
+	pve := &config.Context{Product: config.ProductPVE}
+	require.False(t, pve.IsPBS())
+
+	empty := &config.Context{}
+	require.False(t, empty.IsPBS(), "empty Product must be treated as pve, not pbs")
+}
+
+// ── ApplyDefaults — Product / product-aware Port ─────────────────────────────
+
+// TestApplyDefaults_ProductDefaultsToPVE verifies an unset Product defaults
+// to "pve".
+func TestApplyDefaults_ProductDefaultsToPVE(t *testing.T) {
+	c := &config.Context{Host: "host.example.com"}
+	config.ApplyDefaults(c)
+	require.Equal(t, config.ProductPVE, c.Product)
+}
+
+// TestApplyDefaults_ProductPreservesExplicitValue verifies an explicit
+// Product is not overwritten by ApplyDefaults.
+func TestApplyDefaults_ProductPreservesExplicitValue(t *testing.T) {
+	c := &config.Context{Host: "host.example.com", Product: config.ProductPBS}
+	config.ApplyDefaults(c)
+	require.Equal(t, config.ProductPBS, c.Product, "explicit product must not be overwritten")
+}
+
+// TestApplyDefaults_PortDefaultIsProductAware verifies the Port default is
+// 8006 for pve and 8007 for pbs when Port is unset.
+func TestApplyDefaults_PortDefaultIsProductAware(t *testing.T) {
+	cases := []struct {
+		name     string
+		product  string
+		wantPort int
+	}{
+		{"empty product defaults to pve port", "", 8006},
+		{"explicit pve", config.ProductPVE, 8006},
+		{"explicit pbs", config.ProductPBS, 8007},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &config.Context{Host: "host.example.com", Product: tc.product}
+			config.ApplyDefaults(c)
+			require.Equal(t, tc.wantPort, c.Port)
+		})
+	}
+}
+
+// TestApplyDefaults_ExplicitPortNotOverriddenByProduct verifies an explicit
+// Port is preserved even when Product is pbs (which would otherwise default
+// to 8007).
+func TestApplyDefaults_ExplicitPortNotOverriddenByProduct(t *testing.T) {
+	c := &config.Context{Host: "host.example.com", Product: config.ProductPBS, Port: 9999}
+	config.ApplyDefaults(c)
+	require.Equal(t, 9999, c.Port, "explicit port must not be overwritten by product-aware default")
+}
+
+// ── StrictValidateContext — Product ───────────────────────────────────────────
+
+// TestStrictValidateContext_InvalidProduct_ReturnsError verifies an
+// unrecognised product value is rejected with a clear error message.
+func TestStrictValidateContext_InvalidProduct_ReturnsError(t *testing.T) {
+	c := &config.Context{
+		Host:    "host.example.com",
+		Product: "vmware",
+		Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs, `product "vmware" must be "pve" or "pbs"`)
+}
+
+// TestStrictValidateContext_EmptyOrValidProduct_NoProductError verifies that
+// "", "pve", and "pbs" all pass the product check.
+func TestStrictValidateContext_EmptyOrValidProduct_NoProductError(t *testing.T) {
+	for _, product := range []string{"", config.ProductPVE, config.ProductPBS} {
+		c := &config.Context{
+			Host:    "host.example.com",
+			Product: product,
+			Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
+		}
+		errs := config.StrictValidateContext(c)
+		for _, e := range errs {
+			require.NotContains(t, e, "product", "product %q must not raise a product error", product)
+		}
+	}
+}
+
+// ── ResolveContext — Product-aware defaults ───────────────────────────────────
+
+// TestResolveContext_PBSContext_DefaultsPort8007 verifies ResolveContext
+// applies the pbs-specific port default end-to-end.
+func TestResolveContext_PBSContext_DefaultsPort8007(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "backup",
+		Contexts: map[string]*config.Context{
+			"backup": {
+				Host:    "pbs.example.com",
+				Product: config.ProductPBS,
+				Auth:    config.AuthBlock{Type: "token", Secret: "tok"},
+			},
+		},
+	}
+	ctx, _, err := config.ResolveContext(cfg, "")
+	require.NoError(t, err)
+	require.Equal(t, 8007, ctx.Port)
+	require.Equal(t, config.ProductPBS, ctx.Product)
+}
+
+// TestResolveContext_LenientValidate_UnknownProduct_NotRejected pins the
+// documented leniency: unlike StrictValidateContext, load-time validation
+// (via ResolveContext) does not reject an unrecognised product, so CLI
+// startup does not hard-fail on a hand-edited or future config value.
+func TestResolveContext_LenientValidate_UnknownProduct_NotRejected(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "weird",
+		Contexts: map[string]*config.Context{
+			"weird": {
+				Host:    "host.example.com",
+				Product: "vmware",
+				Auth:    config.AuthBlock{Type: "token", Secret: "tok"},
+			},
+		},
+	}
+	_, _, err := config.ResolveContext(cfg, "")
+	require.NoError(t, err, "load-time validation must not reject an unrecognised product")
+}

@@ -54,7 +54,8 @@ func Load(path string) (*Config, error) {
 // ResolveContext selects and validates a context from cfg.
 // If nameOverride is non-empty it is used; otherwise cfg.CurrentContext is used.
 // Returns the resolved Context, its canonical name, and any error.
-// Applies default values: Port=8006, Protocol="https", Realm="pam".
+// Applies default values: Product="pve", Port=8006 (8007 for Product="pbs"),
+// Protocol="https", Realm="pam".
 func ResolveContext(cfg *Config, nameOverride string) (*Context, string, error) {
 	if cfg == nil {
 		return nil, "", errors.New("config is nil")
@@ -92,15 +93,29 @@ func ResolveContext(cfg *Config, nameOverride string) (*Context, string, error) 
 
 // ApplyDefaults is the exported form of applyDefaults.  CLI packages that
 // construct or edit a Context struct independently of ResolveContext call this
-// to ensure Port, Protocol, and Realm are populated with standard values.
+// to ensure Product, Port, Protocol, and Realm are populated with standard
+// values.
 func ApplyDefaults(c *Context) {
 	applyDefaults(c)
 }
 
+// defaultPortForProduct returns the standard API port for product: 8006 for
+// Proxmox VE, 8007 for Proxmox Backup Server.
+func defaultPortForProduct(product string) int {
+	if product == ProductPBS {
+		return 8007
+	}
+	return 8006
+}
+
 // applyDefaults fills in missing optional fields with standard values.
+// Product is defaulted first since the Port default is product-aware.
 func applyDefaults(c *Context) {
+	if c.Product == "" {
+		c.Product = ProductPVE
+	}
 	if c.Port == 0 {
-		c.Port = 8006
+		c.Port = defaultPortForProduct(c.Product)
 	}
 	if c.Protocol == "" {
 		c.Protocol = "https"
@@ -126,6 +141,7 @@ func ValidateContext(c *Context) error {
 // writable paths (context add, context edit) and the validate verb enforce.
 // Rules beyond validateContext:
 //   - token auth: token-id must be present (in addition to secret).
+//   - product, if set, must be "pve" or "pbs".
 //   - default-output, if set, must be one of: table, ascii, plain, json, yaml.
 //   - fingerprint, if set, must match the colon-separated hex SHA-256 pattern.
 //   - port, if non-zero, must be in [1, 65535].
@@ -141,6 +157,11 @@ func StrictValidateContext(c *Context) []string {
 
 	if c.Host == "" {
 		errs = append(errs, "host is required")
+	}
+
+	if c.Product != "" && c.Product != ProductPVE && c.Product != ProductPBS {
+		errs = append(errs, fmt.Sprintf(
+			"product %q must be \"pve\" or \"pbs\"", c.Product))
 	}
 
 	if c.Port != 0 && (c.Port < 1 || c.Port > 65535) {

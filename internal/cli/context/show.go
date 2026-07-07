@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/config"
 	"github.com/fivetwenty-io/pve-cli/internal/output"
 )
 
@@ -56,10 +57,18 @@ func newShowCmd() *cobra.Command {
 			// in logs, shell history, or shared terminal output.
 			redactedSecret := redactSecret(ctx.Auth.Secret)
 
+			// Resolve display product (default "pve" for display only — do not
+			// mutate the stored config).
+			product := ctx.Product
+			if product == "" {
+				product = config.ProductPVE
+			}
+
 			single := map[string]string{
 				"NAME":           name,
 				"HOST":           ctx.Host,
 				"PORT":           fmt.Sprintf("%d", port),
+				"PRODUCT":        product,
 				"PROTOCOL":       ctx.Protocol,
 				"REALM":          ctx.Realm,
 				"AUTH TYPE":      ctx.Auth.Type,
@@ -78,6 +87,7 @@ func newShowCmd() *cobra.Command {
 				Name          string `json:"name"`
 				Host          string `json:"host"`
 				Port          int    `json:"port"`
+				Product       string `json:"product"`
 				Protocol      string `json:"protocol"`
 				Realm         string `json:"realm"`
 				AuthType      string `json:"auth_type"`
@@ -95,6 +105,7 @@ func newShowCmd() *cobra.Command {
 				Name:          name,
 				Host:          ctx.Host,
 				Port:          port,
+				Product:       product,
 				Protocol:      ctx.Protocol,
 				Realm:         ctx.Realm,
 				AuthType:      ctx.Auth.Type,

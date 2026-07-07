@@ -161,6 +161,107 @@ func TestContextAudit_Add_ForceFlag(t *testing.T) {
 		"--force must persist the overwritten host")
 }
 
+// TestContextAudit_Add_ProductFlag asserts --product lands under
+// config.Context.Product (yaml key "product"), defaulting to "pve" when
+// unset.
+func TestContextAudit_Add_ProductFlag(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "defaultproduct",
+		"--host", "10.1.2.5",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+	)
+	require.NoError(t, err)
+
+	updated := reloadCfg(t, path)
+	require.Equal(t, config.ProductPVE, updated.Contexts["defaultproduct"].Product,
+		"unset --product must default to pve")
+
+	_, err = run(t, deps, "", "add", "explicitpbs",
+		"--host", "10.1.2.6",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--product", "pbs",
+	)
+	require.NoError(t, err)
+
+	updated = reloadCfg(t, path)
+	require.Equal(t, config.ProductPBS, updated.Contexts["explicitpbs"].Product)
+}
+
+// TestContextAudit_Add_ProductRejectsInvalidValue asserts an unrecognised
+// --product value is refused rather than silently persisted.
+func TestContextAudit_Add_ProductRejectsInvalidValue(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "badproduct",
+		"--host", "10.1.2.7",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--product", "vmware",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--product must be")
+
+	updated := reloadCfg(t, path)
+	require.NotContains(t, updated.Contexts, "badproduct",
+		"an invalid --product must not persist a context")
+}
+
+// TestContextAudit_Add_ProductPBS_DefaultsPort8007 asserts --product=pbs
+// without an explicit --port defaults the persisted port to 8007 (the PBS API
+// port), not the PVE default of 8006.
+func TestContextAudit_Add_ProductPBS_DefaultsPort8007(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "pbsctx",
+		"--host", "10.1.2.8",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--product", "pbs",
+	)
+	require.NoError(t, err)
+
+	updated := reloadCfg(t, path)
+	require.Equal(t, 8007, updated.Contexts["pbsctx"].Port,
+		"--product=pbs without --port must default the port to 8007")
+}
+
+// TestContextAudit_Add_ProductPBS_ExplicitPortWins asserts an explicit --port
+// is never overridden by the product-aware port default, even when
+// --product=pbs is given.
+func TestContextAudit_Add_ProductPBS_ExplicitPortWins(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "pbsctxport",
+		"--host", "10.1.2.9",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--product", "pbs",
+		"--port", "9000",
+	)
+	require.NoError(t, err)
+
+	updated := reloadCfg(t, path)
+	require.Equal(t, 9000, updated.Contexts["pbsctxport"].Port,
+		"explicit --port must win over the product-aware default")
+}
+
 // ---------------------------------------------------------------------------
 // context copy
 // ---------------------------------------------------------------------------

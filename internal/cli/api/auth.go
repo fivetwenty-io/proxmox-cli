@@ -65,6 +65,23 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 	return c, nil
 }
 
+// rejectPBSContext returns an error when ctx targets Proxmox Backup Server.
+// The auth commands drive PVE's ticket endpoints through a PVE-flavored
+// client (PVEAuthCookie / PVECSRFPreventionToken header names); PBS session
+// auth is not wired yet, so failing fast here beats a confusing server-side
+// authentication error. Called by every auth path that opens a connection
+// (clientForContext and buildClientForOIDC — the only two places this
+// package constructs an API client).
+func rejectPBSContext(ctx *config.Context, contextName string) error {
+	if ctx.IsPBS() {
+		return fmt.Errorf(
+			"context %q targets Proxmox Backup Server (product: pbs); 'pve api auth' supports only PVE contexts",
+			contextName,
+		)
+	}
+	return nil
+}
+
 // newAuthLoginCmd builds `pve api auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
@@ -715,6 +732,10 @@ func serverLogout(cmd *cobra.Command, ctx *config.Context, contextName string) e
 // only to derive the per-context TOFU fingerprint cache path (see
 // contextOptions) and has no bearing on which credential is selected.
 func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName string) (*apiclient.APIClient, error) {
+	err := rejectPBSContext(ctx, contextName)
+	if err != nil {
+		return nil, err
+	}
 	if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
 		return clientForContext(cmd, ctx, contextName, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	}
@@ -746,6 +767,10 @@ func clientForContext(
 	ctx *config.Context,
 	contextName, user, realm, password, ticket, csrf string,
 ) (*apiclient.APIClient, error) {
+	err := rejectPBSContext(ctx, contextName)
+	if err != nil {
+		return nil, err
+	}
 	flagInsecure := cli.GetDeps(cmd).Insecure
 	if flagInsecure || ctx.TLS.Insecure {
 		cli.WarnInsecureTLS(cmd.ErrOrStderr())

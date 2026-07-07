@@ -2,6 +2,15 @@
 // for the pve CLI configuration file (~/.config/pve/config.yml).
 package config
 
+// Product identifies which Proxmox product a context targets.
+const (
+	// ProductPVE targets Proxmox VE (the default when Product is empty).
+	ProductPVE = "pve"
+
+	// ProductPBS targets Proxmox Backup Server.
+	ProductPBS = "pbs"
+)
+
 // Config is the top-level configuration file struct.
 type Config struct {
 	// CurrentContext is the name of the active context used when --context is not specified.
@@ -45,6 +54,17 @@ type Context struct {
 
 	// SSH holds per-context defaults for the `pve ssh` and `pve rsync` commands.
 	SSH SSHBlock `yaml:"ssh,omitempty"`
+
+	// Product selects which Proxmox product this context targets: "pve" or
+	// "pbs". Empty means "pve" (backward compatible with configs written
+	// before Product existed).
+	Product string `yaml:"product,omitempty"`
+}
+
+// IsPBS reports whether c targets Proxmox Backup Server. Empty Product
+// (backward-compat configs) is treated as ProductPVE, so IsPBS returns false.
+func (c *Context) IsPBS() bool {
+	return c.Product == ProductPBS
 }
 
 // AuthBlock holds credential configuration for a context.

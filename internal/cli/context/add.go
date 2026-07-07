@@ -26,6 +26,7 @@ type addFlags struct {
 	tofu          bool
 	defaultNode   string
 	defaultOutput string
+	product       string
 	selectCtx     bool
 	force         bool
 }
@@ -95,6 +96,21 @@ func newAddCmd() *cobra.Command {
 				}
 			}
 
+			// Validate product.
+			switch f.product {
+			case config.ProductPVE, config.ProductPBS:
+			default:
+				return fmt.Errorf("--product must be \"pve\" or \"pbs\", got %q", f.product)
+			}
+
+			// The --port flag default (8006) targets Proxmox VE. When the operator
+			// selects --product=pbs without also giving an explicit --port, switch
+			// to the Proxmox Backup Server default (8007) instead of silently
+			// pointing a PBS context at the PVE port.
+			if f.product == config.ProductPBS && !cmd.Flags().Changed("port") {
+				f.port = 8007
+			}
+
 			// Validate port range.
 			if f.port < 1 || f.port > 65535 {
 				return fmt.Errorf("--port %d is out of range [1, 65535]", f.port)
@@ -140,6 +156,7 @@ func newAddCmd() *cobra.Command {
 				Realm:         f.realm,
 				DefaultNode:   f.defaultNode,
 				DefaultOutput: f.defaultOutput,
+				Product:       f.product,
 				Auth: config.AuthBlock{
 					Type:     f.authType,
 					Username: f.username,
@@ -195,6 +212,8 @@ func newAddCmd() *cobra.Command {
 		"opt in to Trust-On-First-Use certificate pinning (TTY prompt on unknown cert; ignored with --insecure)")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
+	cmd.Flags().StringVar(&f.product, "product", config.ProductPVE,
+		"Proxmox product this context targets: pve|pbs (pbs defaults --port to 8007 unless --port is also given)")
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the same name")
 

@@ -125,6 +125,30 @@ func TestContextCopy_PreservesTLSFields(t *testing.T) {
 	require.Equal(t, src.TLS.Tofu, dst.TLS.Tofu)
 }
 
+// TestContextCopy_PreservesProduct guards against the copy verb silently
+// dropping Product, mirroring TestContextCopy_PreservesTLSFields's intent for
+// the pve/pbs product selector.
+func TestContextCopy_PreservesProduct(t *testing.T) {
+	src := labContext()
+	src.Product = config.ProductPBS
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": src,
+		},
+	}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "copy", "lab", "staging"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	dst := loaded.Contexts["staging"]
+	require.NotNil(t, dst)
+	require.Equal(t, config.ProductPBS, dst.Product)
+}
+
 func TestContextCopy_MissingSrc(t *testing.T) {
 	cfg := &config.Config{
 		Contexts: map[string]*config.Context{

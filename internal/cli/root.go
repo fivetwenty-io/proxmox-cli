@@ -40,8 +40,14 @@ const ctxKey contextKey = 0
 // Deps holds all runtime dependencies resolved once in PersistentPreRunE and
 // passed to every sub-command via the cobra context.
 type Deps struct {
-	// API is the constructed API client. Nil for commands annotated with noClient.
+	// API is the constructed API client. Nil for commands annotated with
+	// noClient and for commands that require the PBS product (see PBS).
 	API *apiclient.APIClient
+
+	// PBS is the constructed Proxmox Backup Server client. It is non-nil
+	// only for commands whose annotation chain requires the "pbs" product
+	// (see ProductAnnotation); every other command gets API instead.
+	PBS *apiclient.PBSClient
 
 	// Out is the output renderer used by all commands.
 	Out output.Renderer
@@ -109,6 +115,29 @@ func setDeps(cmd *cobra.Command, deps *Deps) {
 // Production code does not call this directly; PersistentPreRunE uses setDeps.
 func WithDeps(ctx context.Context, deps *Deps) context.Context {
 	return context.WithValue(ctx, ctxKey, deps)
+}
+
+// ProductAnnotation is the cobra Annotations key a command group sets to
+// declare which Proxmox product its API calls target: config.ProductPVE
+// (the default when the key is absent) or config.ProductPBS. The root
+// command's PersistentPreRunE reads the nearest annotation up the parent
+// chain to decide whether to build Deps.API (PVE) or Deps.PBS (PBS), and
+// the corresponding client builder rejects a context whose product does
+// not match, so a PVE command can never silently talk to a PBS host or
+// vice versa.
+const ProductAnnotation = "product"
+
+// requiredProduct returns the product cmd requires: the nearest
+// ProductAnnotation value on cmd or any ancestor, defaulting to
+// config.ProductPVE when no command in the chain declares one.
+func requiredProduct(cmd *cobra.Command) string {
+	for c := cmd; c != nil; c = c.Parent() {
+		if p, ok := c.Annotations[ProductAnnotation]; ok {
+			return p
+		}
+	}
+
+	return config.ProductPVE
 }
 
 // GroupFactory is a function that constructs a cobra sub-command group given
@@ -311,10 +340,25 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		return logCloser, nil
 	}
 
-	// Resolve context — flag > env > config — and build the API client for it.
-	// See BuildContextClient's doc comment for why this is factored out.
-	ac, ctx, err := BuildContextClient(cmd, cfg, pf.config, pf.context, pf.insecure,
-		func() bool { return isInteractiveInput(cmd.InOrStdin()) })
+	// Resolve context — flag > env > config — and build the client for the
+	// product this command requires (see ProductAnnotation): PVE commands
+	// get Deps.API, 'pve pbs' commands get Deps.PBS, and the builders
+	// reject a context whose product does not match. See
+	// BuildContextClient's doc comment for why this is factored out.
+	isTTY := func() bool { return isInteractiveInput(cmd.InOrStdin()) }
+
+	var (
+		ac  *apiclient.APIClient
+		pc  *apiclient.PBSClient
+		ctx *config.Context
+	)
+
+	if requiredProduct(cmd) == config.ProductPBS {
+		pc, ctx, err = BuildContextPBSClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+	} else {
+		ac, ctx, err = BuildContextClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+	}
+
 	if err != nil {
 		return logCloser, err
 	}
@@ -344,10 +388,18 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	}
 
 	// Inject the logger so HTTP request/response activity is captured in the
-	// JSONL log with secret redaction enabled.
-	ac.SetSlogLogger(logger)
+	// JSONL log with secret redaction enabled, and stash whichever client
+	// was built for this command's product.
+	if ac != nil {
+		ac.SetSlogLogger(logger)
+		deps.API = ac
+	}
 
-	deps.API = ac
+	if pc != nil {
+		pc.SetSlogLogger(logger)
+		deps.PBS = pc
+	}
+
 	setDeps(cmd, deps)
 	return logCloser, nil
 }
@@ -394,7 +446,10 @@ func ApplyTOFUOptions(
 // env > config current-context) and constructs the corresponding
 // *apiclient.APIClient: secret resolution, TLS/TOFU option wiring, and
 // apiclient.NewAPIClient — exactly the tail of persistentPreRunE's
-// context/client construction. It is factored out (and exported) so a
+// context/client construction. A context whose product is "pbs" is
+// rejected: PVE commands must never talk to a Proxmox Backup Server host
+// (BuildContextPBSClient is the PBS counterpart, applying the inverse
+// guard). It is factored out (and exported) so a
 // caller that needs a client without running the rest of persistentPreRunE
 // (logger init, Deps construction, noClient handling) — e.g. a
 // ValidArgsFunction shell-completion helper — builds one identically instead
@@ -410,9 +465,68 @@ func ApplyTOFUOptions(
 func BuildContextClient(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
 ) (*apiclient.APIClient, *config.Context, error) {
+	opts, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if ctx.IsPBS() {
+		return nil, nil, fmt.Errorf(
+			"context %q targets Proxmox Backup Server (product: %s); this command requires a PVE context — use 'pve pbs' commands or select a PVE context",
+			contextName, config.ProductPBS,
+		)
+	}
+
+	ac, err := apiclient.NewAPIClient(opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+
+	return ac, ctx, nil
+}
+
+// BuildContextPBSClient is BuildContextClient's Proxmox Backup Server
+// counterpart: identical context resolution, secret handling, and TLS/TOFU
+// wiring, but it requires the resolved context to declare product "pbs" and
+// constructs an *apiclient.PBSClient. apiclient.NewPBSClient fills the
+// PBS-specific option defaults (port 8007, PBSAPIToken, PBSAuthCookie) for
+// any of those fields still zero-valued after context resolution.
+func BuildContextPBSClient(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
+) (*apiclient.PBSClient, *config.Context, error) {
+	opts, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !ctx.IsPBS() {
+		return nil, nil, fmt.Errorf(
+			"context %q targets Proxmox VE (product: %s); this command requires a PBS context — create one with 'pve context add --product %s'",
+			contextName, config.ProductPVE, config.ProductPBS,
+		)
+	}
+
+	pc, err := apiclient.NewPBSClient(opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+
+	return pc, ctx, nil
+}
+
+// buildContextOptions performs the context-and-options resolution shared by
+// BuildContextClient and BuildContextPBSClient: active-context selection
+// (flag > env > config current-context), secret resolution, the insecure-TLS
+// merge/warning, credential selection by auth type, and TLS/TOFU option
+// wiring. It returns the fully wired pve.Options alongside the resolved
+// context and its name so the callers can apply their product guard and
+// construct the product-appropriate client.
+func buildContextOptions(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
+) (pve.Options, *config.Context, string, error) {
 	contextName := config.Resolve(contextFlag, "PVE_CONTEXT", cfg.CurrentContext, "")
 	if contextName == "" {
-		return nil, nil, fmt.Errorf(
+		return pve.Options{}, nil, "", fmt.Errorf(
 			"no context specified: use --context/-c, set $PVE_CONTEXT, or run 'pve context select' (config: %s)",
 			configPath,
 		)
@@ -420,13 +534,13 @@ func BuildContextClient(
 
 	ctx, _, err := config.ResolveContext(cfg, contextName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve context %q: %w", contextName, err)
+		return pve.Options{}, nil, "", fmt.Errorf("resolve context %q: %w", contextName, err)
 	}
 
 	// Resolve the secret (env ref, keychain ref, or literal).
 	secret, err := config.ResolveSecret(ctx.Auth.Secret)
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve secret for context %q: %w", contextName, err)
+		return pve.Options{}, nil, "", fmt.Errorf("resolve secret for context %q: %w", contextName, err)
 	}
 
 	// Determine TLS flag: --insecure flag overrides config.
@@ -435,7 +549,7 @@ func BuildContextClient(
 		WarnInsecureTLS(cmd.ErrOrStderr())
 	}
 
-	// Build pve.Options and construct the API client.
+	// Select the credential BuildOptions embeds by auth type.
 	var ticket, csrf, password string
 	switch ctx.Auth.Type {
 	case "password":
@@ -483,12 +597,7 @@ func BuildContextClient(
 		isTTY,
 	)
 
-	ac, err := apiclient.NewAPIClient(opts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
-	}
-
-	return ac, ctx, nil
+	return opts, ctx, contextName, nil
 }
 
 // isInteractiveInput reports whether in is an interactive terminal, used to

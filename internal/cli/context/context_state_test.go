@@ -570,6 +570,73 @@ func TestShow_RendersTofuField(t *testing.T) {
 	require.Contains(t, out, "true")
 }
 
+// TestLs_RendersProductColumn asserts `context ls` surfaces an explicit
+// product and renders the backward-compat default ("pve") for a context that
+// predates the Product field.
+func TestLs_RendersProductColumn(t *testing.T) {
+	cfg := &config.Config{
+		Contexts: map[string]*config.Context{
+			"backup": {
+				Host: "pbs.example.com", Port: 8007, Protocol: "https", Product: config.ProductPBS,
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+			},
+			"legacy": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t2", Secret: "${S}"},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "ls")
+	require.NoError(t, err)
+	require.Contains(t, out, "PRODUCT")
+	require.Contains(t, out, "pbs")
+	require.Contains(t, out, "pve")
+}
+
+// TestShow_RendersProductField asserts `context show` surfaces the product
+// selector, defaulting an unset Product to "pve" for display.
+func TestShow_RendersProductField(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "backup",
+		Contexts: map[string]*config.Context{
+			"backup": {
+				Host: "pbs.example.com", Port: 8007, Protocol: "https", Product: config.ProductPBS,
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "show")
+	require.NoError(t, err)
+	require.Contains(t, out, "PRODUCT")
+	require.Contains(t, out, "pbs")
+}
+
+// TestShow_ProductDefaultsToPVEWhenUnset asserts a context with no stored
+// Product renders "pve" (backward compat), not an empty value.
+func TestShow_ProductDefaultsToPVEWhenUnset(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "legacy",
+		Contexts: map[string]*config.Context{
+			"legacy": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "show")
+	require.NoError(t, err)
+	require.Contains(t, out, "pve")
+}
+
 // TestPrevious_NoContexts_ExitsNonZero asserts `context previous` on an empty
 // config returns a verb-level error, not an API-client error.
 func TestPrevious_NoContexts_ExitsNonZero(t *testing.T) {

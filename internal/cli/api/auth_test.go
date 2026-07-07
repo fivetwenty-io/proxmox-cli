@@ -182,3 +182,52 @@ func TestIsInteractiveInput_NonFileReader_ReturnsFalse(t *testing.T) {
 	// regardless of content — the same behavior a real non-TTY invocation gets.
 	require.False(t, isInteractiveInput(strings.NewReader("y\n")))
 }
+
+// ---------------------------------------------------------------------------
+// rejectPBSContext — product guard on the auth client builders
+// ---------------------------------------------------------------------------
+
+func TestRejectPBSContext_PBSProduct_Errors(t *testing.T) {
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = config.ProductPBS
+
+	err := rejectPBSContext(ctx, "backup1")
+
+	require.Error(t, err, "auth commands must reject PBS contexts")
+	require.Contains(t, err.Error(), "backup1", "error must name the offending context")
+	require.Contains(t, err.Error(), "Proxmox Backup Server")
+}
+
+func TestRejectPBSContext_PVEAndEmptyProduct_Allowed(t *testing.T) {
+	ctx := sampleAuthContext(false, false)
+	require.NoError(t, rejectPBSContext(ctx, "prod"), "empty product means PVE")
+
+	ctx.Product = config.ProductPVE
+	require.NoError(t, rejectPBSContext(ctx, "prod"))
+}
+
+func TestClientForContext_RejectsPBSContext(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = config.ProductPBS
+
+	ac, err := clientForContext(cmd, ctx, "backup1", "admin@pam", "pam", "secretpw", "", "")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Proxmox Backup Server")
+	require.Nil(t, ac)
+}
+
+func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pve/config.yml", "", &stderr)
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = config.ProductPBS
+
+	ac, err := buildClientForOIDC(cmd, ctx, "backup1")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Proxmox Backup Server")
+	require.Nil(t, ac)
+}
