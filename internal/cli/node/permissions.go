@@ -1,0 +1,210 @@
+package node
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/fivetwenty-io/pve-apiclient-go/v3/pkg/api/access"
+
+	"github.com/fivetwenty-io/pve-cli/internal/cli"
+	"github.com/fivetwenty-io/pve-cli/internal/cli/permshared"
+	"github.com/fivetwenty-io/pve-cli/internal/output"
+)
+
+// nodeACLPath derives the ACL/permission path for a node.
+func nodeACLPath(node string) string {
+	return fmt.Sprintf("/nodes/%s", node)
+}
+
+// newPermissionsCmd builds `pve node permissions` and its sub-commands.
+func newPermissionsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "permissions",
+		Short: "Manage ACL entries and inspect effective permissions on a node",
+		Long: "List, grant, and revoke ACL entries on a node's ACL path (/nodes/{node}), and " +
+			"inspect the resulting effective permissions. Some node-scoped privileges " +
+			"(Sys.Incoming, PCI mdev operations) are checked at the root path \"/\" rather than " +
+			"at /nodes/{node}; this command only shows /nodes/{node}. Use " +
+			"`pve access permissions --path /` (or `pve access acl list --path /`) to inspect or " +
+			"grant those root-scoped privileges.",
+	}
+	cmd.AddCommand(
+		newPermissionsListCmd(),
+		newPermissionsEffectiveCmd(),
+		newPermissionsGrantRevokeCmd(false),
+		newPermissionsGrantRevokeCmd(true),
+	)
+	return cmd
+}
+
+// newPermissionsListCmd builds `pve node permissions list <node>`.
+func newPermissionsListCmd() *cobra.Command {
+	var inherited bool
+	cmd := &cobra.Command{
+		Use:   "list <node>",
+		Short: "List ACL entries on a node's ACL path",
+		Long: "List the ACL entries whose path exactly matches /nodes/{node}. With --inherited, " +
+			"also include entries from every ancestor path (/, /nodes), each row showing which " +
+			"path it came from. Some node privileges (Sys.Incoming, PCI mdev) are checked at " +
+			"root \"/\" and are not shown here even with --inherited beyond the normal chain; use " +
+			"`pve access acl list --path /` to inspect root grants directly.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			path := nodeACLPath(args[0])
+
+			resp, err := deps.API.Access.ListAcl(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("list acl for node %q: %w", args[0], err)
+			}
+			entries, err := permshared.DecodeAclList(resp)
+			if err != nil {
+				return err
+			}
+
+			var matched []permshared.AclEntry
+			if inherited {
+				for _, p := range permshared.ParentChain(path) {
+					matched = append(matched, permshared.FilterByPath(entries, p, true)...)
+				}
+			} else {
+				matched = permshared.FilterByPath(entries, path, true)
+			}
+
+			res := permshared.RenderAclList(matched, inherited)
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	cmd.Flags().BoolVar(&inherited, "inherited", false,
+		"also include ACL entries inherited from ancestor paths (/, /nodes)")
+	return cmd
+}
+
+// newPermissionsEffectiveCmd builds `pve node permissions effective <node>`.
+func newPermissionsEffectiveCmd() *cobra.Command {
+	var userid string
+	cmd := &cobra.Command{
+		Use:   "effective <node>",
+		Short: "Show effective permissions on a node's ACL path",
+		Long: "Show the effective (post-inheritance) privileges on /nodes/{node} for the " +
+			"caller, or for --userid when passed. Querying another user's or token's permissions " +
+			"requires Sys.Audit on /access. Some node privileges (Sys.Incoming, PCI mdev) are " +
+			"checked at root \"/\" instead and will not appear here; use " +
+			"`pve access permissions --path /` to inspect those.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			path := nodeACLPath(args[0])
+
+			params := &access.ListPermissionsParams{Path: &path}
+			if cmd.Flags().Changed("userid") {
+				params.Userid = &userid
+			}
+
+			resp, err := deps.API.Access.ListPermissions(cmd.Context(), params)
+			if err != nil {
+				return fmt.Errorf("get effective permissions for node %q: %w", args[0], err)
+			}
+			tree, err := permshared.DecodePermissions(resp)
+			if err != nil {
+				return err
+			}
+
+			res := permshared.RenderEffective(tree)
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&userid, "userid", "",
+		"query effective permissions for this user/token instead of the caller (requires Sys.Audit on /access)")
+	return cmd
+}
+
+// newPermissionsGrantRevokeCmd builds `pve node permissions grant <node>` when
+// revoke is false, and `pve node permissions revoke <node>` when true. The two
+// verbs share identical mechanics: both call Access.UpdateAcl with the derived
+// node path, differing only in the Delete flag.
+func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
+	var roles, users, groups, tokens string
+	var noPropagate bool
+
+	verb, verbPast, prep := "grant", "Granted", "to"
+	short := "Grant roles to users, groups, or tokens on a node's ACL path"
+	if revoke {
+		verb, verbPast, prep = "revoke", "Revoked", "from"
+		short = "Revoke roles from users, groups, or tokens on a node's ACL path"
+	}
+
+	cmd := &cobra.Command{
+		Use:   verb + " <node>",
+		Short: short,
+		Long: short + " (/nodes/{node}). Some node privileges (Sys.Incoming, PCI mdev) are " +
+			"checked at root \"/\" instead and are unaffected by this command; use " +
+			"`pve access acl set --path /` for those. Mutating ACL entries requires " +
+			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
+			"silently, matching PVE server behavior. This command does not block self-lockout; " +
+			"check `permissions effective` first if unsure.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			node := args[0]
+
+			if users == "" && groups == "" && tokens == "" {
+				return fmt.Errorf("at least one of --users, --groups, or --tokens is required")
+			}
+
+			var usersPtr, groupsPtr, tokensPtr *string
+			if users != "" {
+				usersPtr = &users
+			}
+			if groups != "" {
+				groupsPtr = &groups
+			}
+			if tokens != "" {
+				tokensPtr = &tokens
+			}
+
+			var propagate *bool
+			if noPropagate {
+				f := false
+				propagate = &f
+			}
+
+			path := nodeACLPath(node)
+			params := permshared.GrantRevokeParams(path, roles, usersPtr, groupsPtr, tokensPtr, propagate, revoke)
+			if err := deps.API.Access.UpdateAcl(cmd.Context(), params); err != nil {
+				return fmt.Errorf("%s roles on node %q: %w", verb, node, err)
+			}
+
+			msg := fmt.Sprintf("%s roles %s %s %s on %s.",
+				verbPast, roles, prep, strings.Join(permissionsSubjectClauses(users, groups, tokens), ", "), path)
+			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&roles, "roles", "", "comma-separated role list (required)")
+	cmd.Flags().StringVar(&users, "users", "", "comma-separated user list")
+	cmd.Flags().StringVar(&groups, "groups", "", "comma-separated group list")
+	cmd.Flags().StringVar(&tokens, "tokens", "", "comma-separated API token list (user@realm!token)")
+	cmd.Flags().BoolVar(&noPropagate, "no-propagate", false,
+		"do not propagate these roles to paths below the node's ACL path")
+	cli.MustMarkRequired(cmd, "roles")
+	return cmd
+}
+
+// permissionsSubjectClauses renders the subject flags that carried a value
+// (users, groups, tokens, in that order) as human-readable clauses for the
+// grant/revoke success message, e.g. ["users alice,bob", "tokens root@pam!ci"].
+func permissionsSubjectClauses(users, groups, tokens string) []string {
+	clauses := make([]string, 0, 3)
+	if users != "" {
+		clauses = append(clauses, "users "+users)
+	}
+	if groups != "" {
+		clauses = append(clauses, "groups "+groups)
+	}
+	if tokens != "" {
+		clauses = append(clauses, "tokens "+tokens)
+	}
+	return clauses
+}
