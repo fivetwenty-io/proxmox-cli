@@ -36,7 +36,10 @@ func newZoneCmd() *cobra.Command {
 		Use:   "zone",
 		Short: "Manage SDN zones",
 	}
-	cmd.AddCommand(newZoneListCmd(), newZoneShowCmd(), newZoneCreateCmd(), newZoneSetCmd(), newZoneDeleteCmd())
+	cmd.AddCommand(
+		newZoneListCmd(), newZoneShowCmd(), newZoneCreateCmd(), newZoneSetCmd(), newZoneDeleteCmd(),
+		newZonePermissionsCmd(),
+	)
 	return cmd
 }
 

@@ -34,6 +34,7 @@ func newVnetCmd() *cobra.Command {
 		newVnetDeleteCmd(),
 		newVnetFirewallCmd(),
 		newVnetIpsCmd(),
+		newVnetPermissionsCmd(),
 	)
 	return cmd
 }
