@@ -31,11 +31,13 @@ func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authenticate against a context",
-		Long: "Manage local credentials and session state for a context. status, whoami, set-token, " +
+		Long: "Manage local credentials and session state for a context. status, set-token, " +
 			"set-password, and logout work with any context, Proxmox VE (PVE) or Proxmox Backup " +
 			"Server (PBS). login and refresh, which negotiate a session ticket with the server, " +
 			"currently support PVE contexts only; run 'auth login --help' for details on this " +
-			"limitation.",
+			"limitation. whoami, which queries the server to verify credentials, also currently " +
+			"requires a PVE context; for local credential info on a PBS context use 'auth status' " +
+			"or 'context show'.",
 	}
 	cmd.AddCommand(
 		newAuthLoginCmd(),

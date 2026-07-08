@@ -14,10 +14,11 @@ func Group(_ *cli.Deps) *cobra.Command {
 }
 
 // Auth is the factory for the canonical top-level `auth` command
-// (login/logout/status/whoami/set-token/set-password). status, whoami,
-// set-token, set-password, and logout work with any context; login and
-// refresh, which negotiate a session ticket with the server, currently
-// support PVE contexts only (see newAuthLoginCmd's Long text for why).
+// (login/logout/status/whoami/set-token/set-password). status, set-token,
+// set-password, and logout work with any context; login and refresh, which
+// negotiate a session ticket with the server, currently support PVE contexts
+// only (see newAuthLoginCmd's Long text for why), and whoami, which queries
+// the server to verify credentials, also currently requires a PVE context.
 func Auth(_ *cli.Deps) *cobra.Command { return newAuthCmd() }
 
 // NewCommand builds the `pmx api` command and its sub-commands: raw
