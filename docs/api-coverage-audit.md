@@ -274,7 +274,7 @@ Safe to leave open or document rather than build.
   `vncwebsocket`, `vncticket`, and the access ticket primitives are transport or
   session internals, not operator commands.
 - **Auth flow documentation.** The `--otp` and `--tfa-challenge` two-step
-  challenge sequence on `api auth login` would benefit from a documentation
+  challenge sequence on `auth login` would benefit from a documentation
   example.
 
 ## The deprecated-endpoint case in pool (resolved)
