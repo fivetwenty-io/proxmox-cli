@@ -268,3 +268,45 @@ func TestSSH_RequiresAtLeastOneArg(t *testing.T) {
 	_, err := runSSH(deps)
 	require.Error(t, err)
 }
+
+// TestSSH_ProductContextAnnotation asserts the top-level `pmx ssh` command
+// carries the product:context annotation, so the root resolves whichever
+// client (PVE or PBS) the active context needs instead of always requiring
+// PVE.
+func TestSSH_ProductContextAnnotation(t *testing.T) {
+	cmd := SSH(&cli.Deps{})
+	require.Equal(t, cli.ProductFromContext, cmd.Annotations[cli.ProductAnnotation])
+}
+
+// TestSSH_PBS_TargetsContextHostWithNoNodeLookup covers the PBS branch of
+// RunSSH: a PBS context connects directly to deps.Ctx.Host with no node
+// argument and no cluster lookup. deps.API is deliberately left nil so a
+// regression that fell through to the PVE branch would nil-pointer panic on
+// deps.API.Cluster instead of silently passing.
+func TestSSH_PBS_TargetsContextHostWithNoNodeLookup(t *testing.T) {
+	fr := exec.Fake()
+	deps := &cli.Deps{
+		Runner: fr,
+		Ctx:    &config.Context{Product: config.ProductPBS, Host: "pbs.example.com"},
+	}
+
+	_, err := runSSH(deps, "uptime")
+	require.NoError(t, err)
+
+	c := lastCall(t, fr)
+	require.True(t, c.Interactive)
+	require.Equal(t, []string{"-p", "22", "root@pbs.example.com", "uptime"}, c.Args)
+}
+
+// TestSSH_PVE_RequiresNodeArgument covers the PVE branch when no node is
+// given: unlike PBS, a PVE (or context-less) invocation must fail with a
+// clear error rather than attempt to connect anywhere.
+func TestSSH_PVE_RequiresNodeArgument(t *testing.T) {
+	_, ac := newFakeClient(t)
+	fr := exec.Fake()
+	deps := &cli.Deps{API: ac, Runner: fr}
+
+	_, err := runSSH(deps)
+	require.ErrorContains(t, err, "node argument is required")
+	require.Empty(t, fr.Calls)
+}

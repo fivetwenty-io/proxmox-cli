@@ -1,6 +1,7 @@
 // Package remote implements the top-level `pmx ssh` and `pmx rsync` commands:
-// thin wrappers over the system ssh(1)/rsync(1) binaries that resolve a PVE
-// node name to its cluster management address before connecting.
+// thin wrappers over the system ssh(1)/rsync(1) binaries that connect to the
+// active context's target — a PVE node's resolved cluster management address,
+// or a PBS context's single endpoint host directly — before connecting.
 package remote
 
 import (
@@ -25,16 +26,22 @@ import (
 const completeNodeNamesTimeout = 3 * time.Second
 
 // SSH builds the top-level `pmx ssh` command: a passthrough wrapper over the
-// system ssh(1) binary that resolves <node> to its cluster management
-// address before connecting.
+// system ssh(1) binary that connects to the active context's target — a PVE
+// node's resolved cluster management address, or a PBS context's single
+// endpoint host directly. It carries the product:context annotation (see
+// cli.ProductFromContext) so the root resolves whichever client the active
+// context needs.
 func SSH(deps *cli.Deps) *cobra.Command {
 	var f sshcmd.Flags
 
 	cmd := &cobra.Command{
-		Use:   "ssh <node> [ssh-option...] [command...]",
-		Short: "Open an SSH session to a PVE node (optionally run a remote command)",
-		Long: `pmx ssh resolves <node> to its cluster management address and execs the
-system ssh(1) binary against it.
+		Use:   "ssh [node] [ssh-option...] [command...]",
+		Short: "Open an SSH session to a PVE node or PBS host (optionally run a remote command)",
+		Long: `pmx ssh connects to the active context's target and execs the system
+ssh(1) binary against it. Against a PVE context, <node> resolves to its
+cluster management address and is required. Against a PBS context, ssh
+connects directly to the context's host; no node argument is needed or
+accepted — the first token is treated as an ssh option/remote command.
 
 The connection flags below (-l, -i, -p, -A, --no-strict) must precede
 <node>. Everything after <node> is passed through to ssh verbatim: options
@@ -42,9 +49,17 @@ The connection flags below (-l, -i, -p, -A, --no-strict) must precede
 since ssh's own option parser does not permute arguments on every platform,
 and the first token that is not an option starts the remote command. Use
 "--" to force the remote-command boundary explicitly.`,
-		Args: cobra.MinimumNArgs(1),
+		Args:        cobra.ArbitraryArgs,
+		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return RunSSH(cmd, cli.GetDeps(cmd), &f, args[0], args[1:])
+			deps := cli.GetDeps(cmd)
+			if deps.Ctx != nil && deps.Ctx.IsPBS() {
+				return RunSSH(cmd, deps, &f, "", args)
+			}
+			if len(args) == 0 {
+				return fmt.Errorf("a node argument is required for a PVE context")
+			}
+			return RunSSH(cmd, deps, &f, args[0], args[1:])
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return completeNodeNames(cmd, deps, args)
@@ -57,17 +72,34 @@ and the first token that is not an option starts the remote command. Use
 	return cmd
 }
 
-// RunSSH resolves node to its cluster management address, applies any
-// context SSH default the caller did not explicitly set on f, splits rest
-// into leading ssh options and a trailing remote command via
-// sshcmd.SplitPassthrough, and execs ssh interactively. It is shared by
-// `pmx ssh` and `pmx node <node> ssh` so both commands connect identically.
+// RunSSH resolves the connection target, applies any context SSH default the
+// caller did not explicitly set on f, splits rest into leading ssh options
+// and a trailing remote command via sshcmd.SplitPassthrough, and execs ssh
+// interactively. It is shared by `pmx ssh` and `pmx node <node> ssh` so both
+// commands connect identically.
+//
+// Target resolution branches on the active context's product: a PBS context
+// (deps.Ctx.IsPBS()) connects directly to deps.Ctx.Host, ignoring node
+// (callers pass "" in that case) and performing no cluster lookup; any other
+// context requires a non-empty node and resolves it to its cluster
+// management address via nodeaddr.Resolve.
 func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, rest []string) error {
 	ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
 
-	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
-	if err != nil {
-		return fmt.Errorf("resolve address for node %q: %w", node, err)
+	var host, target string
+	if deps.Ctx != nil && deps.Ctx.IsPBS() {
+		host = deps.Ctx.Host
+		target = host
+	} else {
+		if node == "" {
+			return fmt.Errorf("a node argument is required for a PVE context")
+		}
+		var err error
+		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
+		if err != nil {
+			return fmt.Errorf("resolve address for node %q: %w", node, err)
+		}
+		target = node
 	}
 
 	opts, command := sshcmd.SplitPassthrough(rest)
@@ -79,7 +111,7 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 	argv = append(argv, command...)
 
 	if err := deps.Runner.RunInteractive("ssh", argv, nil); err != nil {
-		return fmt.Errorf("ssh to node %q: %w", node, err)
+		return fmt.Errorf("ssh to %q: %w", target, err)
 	}
 	return nil
 }

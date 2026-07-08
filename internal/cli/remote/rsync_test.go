@@ -2,6 +2,7 @@ package remote
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
 	"github.com/fivetwenty-io/pmx-cli/internal/exec"
+	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
@@ -222,6 +224,41 @@ func TestRsync_EInjectionQuotesIdentityWithSpecialCharacters(t *testing.T) {
 	c := runner.Calls[0]
 	require.Equal(t, "-e", c.Args[0])
 	require.Equal(t, `ssh -p 22 -i '/path with space/id_ed25519'`, c.Args[1])
+}
+
+// TestRsync_ProductContextAnnotation asserts the top-level `pmx rsync`
+// command carries the product:context annotation, so the root resolves
+// whichever client (PVE or PBS) the active context needs instead of always
+// requiring PVE.
+func TestRsync_ProductContextAnnotation(t *testing.T) {
+	cmd := Rsync(&cli.Deps{})
+	require.Equal(t, cli.ProductFromContext, cmd.Annotations[cli.ProductAnnotation])
+}
+
+// TestRunRsync_PBS_TargetsContextHostWithNoNodeLookup covers the PBS branch
+// of runRsync: every remote operand is rewritten to deps.Ctx.Host directly,
+// regardless of what host label the operand named, and no node lookup
+// happens. deps.API is deliberately left nil so a regression that fell
+// through to the PVE branch would nil-pointer panic on deps.API.Cluster
+// instead of silently passing.
+func TestRunRsync_PBS_TargetsContextHostWithNoNodeLookup(t *testing.T) {
+	runner := exec.Fake()
+	deps := &cli.Deps{
+		Runner: runner,
+		Ctx:    &config.Context{Product: config.ProductPBS, Host: "pbs.example.com"},
+	}
+	f := sshcmd.Flags{User: "root", Port: 22}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	err := runRsync(cmd, deps, &f, []string{"pbs:/etc", "./dst"})
+	require.NoError(t, err)
+
+	require.Len(t, runner.Calls, 1)
+	c := runner.Calls[0]
+	require.Equal(t, "rsync", c.Name)
+	require.Equal(t, []string{"-e", "ssh -p 22", "root@pbs.example.com:/etc", "./dst"}, c.Args)
 }
 
 func TestRsync_ExitCodePropagation(t *testing.T) {
