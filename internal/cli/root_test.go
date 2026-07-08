@@ -16,6 +16,7 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/api"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
 	pvegroup "github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
@@ -1392,4 +1393,26 @@ func TestHoistedPVEChildrenRequirePVEProduct(t *testing.T) {
 	node, _, err := root.Find([]string{"node"})
 	require.NoError(t, err)
 	require.Equal(t, config.ProductPVE, cli.RequiredProduct(node))
+}
+
+// TestAuthWhoamiRequiresPVEProduct is the regression test for `auth whoami`
+// under the "pbs" persona: the persona root tags itself with ProductAnnotation
+// = config.ProductPBS (see NewRootCmd), and `auth whoami` is the one shared,
+// non-noClient command under the auth group that set no product annotation of
+// its own — so before the fix it silently inherited config.ProductPBS from the
+// persona root instead of requiring config.ProductPVE like the rest of the
+// auth group's live-client behavior (login/refresh/whoami currently only
+// support PVE contexts). Left unfixed, `pbs auth whoami` panics on a nil
+// deps.API (the root builds a PBS client for a PBS-tagged command, not a PVE
+// client) instead of cleanly rejecting a PBS context.
+func TestAuthWhoamiRequiresPVEProduct(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pbs")
+	defer cleanup()
+	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{api.Auth})
+
+	whoami, _, err := root.Find([]string{"auth", "whoami"})
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPVE, cli.RequiredProduct(whoami),
+		"auth whoami must require a PVE context under every persona, "+
+			"including pbs, since it is not yet implemented against the PBS API")
 }

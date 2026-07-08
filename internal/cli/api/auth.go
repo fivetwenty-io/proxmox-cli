@@ -516,6 +516,11 @@ func newAuthWhoamiCmd() *cobra.Command {
 		Use:   "whoami",
 		Short: "Show the identity the current credentials authenticate as",
 		Args:  cobra.NoArgs,
+		// whoami calls the PVE-only Access.ListPermissions endpoint (see the
+		// doc comment above), so it must always require a PVE context — even
+		// hoisted directly onto a "pbs" persona root, which otherwise tags
+		// every unannotated command with config.ProductPBS.
+		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPVE},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
