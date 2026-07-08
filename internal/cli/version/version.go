@@ -23,7 +23,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the connected server's API version",
-		Long: "Show the API version reported by the active context's server (PVE cluster or PBS).\n\n" +
+		Long: "Show the API version reported by the active context's server (PVE cluster, PBS, or PDM).\n\n" +
 			"Use `pmx version client` to show this CLI's own build information.",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
