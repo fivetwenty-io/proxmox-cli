@@ -1247,3 +1247,49 @@ func TestVersionFlag_ShortV(t *testing.T) {
 	require.NotNil(t, vFlag, "--version flag must exist")
 	require.Equal(t, "v", vFlag.Shorthand, "--version shorthand must be -v")
 }
+
+// newTwoContextConfig builds a *config.Config with two token-auth contexts —
+// "pve1" (product pve) and "pbs1" (product pbs) — so BuildContextAnyClient
+// tests can select a client by product without any network or keychain
+// access (Auth.Secret is a literal, resolved with no external lookup).
+func newTwoContextConfig(t *testing.T) *config.Config {
+	t.Helper()
+	return &config.Config{
+		CurrentContext: "pve1",
+		Contexts: map[string]*config.Context{
+			"pve1": {
+				Host: "10.0.0.1", Port: 8006, Protocol: "https", Realm: "pam",
+				Product: config.ProductPVE,
+				Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s1"},
+			},
+			"pbs1": {
+				Host: "10.0.0.2", Port: 8007, Protocol: "https", Realm: "pam",
+				Product: config.ProductPBS,
+				Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s2"},
+			},
+		},
+	}
+}
+
+// TestBuildContextAnyClient_SelectsByProduct verifies that BuildContextAnyClient
+// resolves the requested context and builds exactly the client matching that
+// context's product, with no cross-product guard (unlike BuildContextClient /
+// BuildContextPBSClient, which each reject the other product).
+func TestBuildContextAnyClient_SelectsByProduct(t *testing.T) {
+	cfg := newTwoContextConfig(t)
+
+	root, cleanup := cli.NewRootCmd()
+	defer cleanup()
+
+	ac, pc, ctx, err := cli.BuildContextAnyClient(root, cfg, "", "pbs1", false, func() bool { return false })
+	require.NoError(t, err)
+	require.Nil(t, ac)
+	require.NotNil(t, pc)
+	require.Equal(t, config.ProductPBS, ctx.Product)
+
+	ac, pc, ctx, err = cli.BuildContextAnyClient(root, cfg, "", "pve1", false, func() bool { return false })
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	require.Nil(t, pc)
+	require.False(t, ctx.IsPBS())
+}

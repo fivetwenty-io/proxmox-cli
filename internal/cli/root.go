@@ -127,6 +127,12 @@ func WithDeps(ctx context.Context, deps *Deps) context.Context {
 // vice versa.
 const ProductAnnotation = "product"
 
+// ProductFromContext is the ProductAnnotation value a shared command sets to
+// declare that its client should target whichever product the active context
+// selects, rather than a fixed product. persistentPreRunE resolves the context
+// first, then builds the matching client without a cross-product guard.
+const ProductFromContext = "context"
+
 // requiredProduct returns the product cmd requires: the nearest
 // ProductAnnotation value on cmd or any ancestor, defaulting to
 // config.ProductPVE when no command in the chain declares one.
@@ -353,9 +359,12 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		ctx *config.Context
 	)
 
-	if requiredProduct(cmd) == config.ProductPBS {
+	switch requiredProduct(cmd) {
+	case config.ProductPBS:
 		pc, ctx, err = BuildContextPBSClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
-	} else {
+	case ProductFromContext:
+		ac, pc, ctx, err = BuildContextAnyClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+	default:
 		ac, ctx, err = BuildContextClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
 	}
 
@@ -512,6 +521,34 @@ func BuildContextPBSClient(
 	}
 
 	return pc, ctx, nil
+}
+
+// BuildContextAnyClient resolves the active context product-agnostically and
+// builds the client matching its product. Exactly one of the returned clients
+// is non-nil. Unlike BuildContextClient / BuildContextPBSClient it applies no
+// cross-product guard: it is used only by shared commands annotated
+// ProductFromContext, which are valid against either product.
+func BuildContextAnyClient(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
+) (*apiclient.APIClient, *apiclient.PBSClient, *config.Context, error) {
+	opts, ctx, _, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if ctx.IsPBS() {
+		pc, err := apiclient.NewPBSClient(opts)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+		}
+		return nil, pc, ctx, nil
+	}
+
+	ac, err := apiclient.NewAPIClient(opts)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+	return ac, nil, ctx, nil
 }
 
 // buildContextOptions performs the context-and-options resolution shared by
