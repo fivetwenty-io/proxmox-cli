@@ -327,11 +327,12 @@ func isReservedRemoteShellFlag(tok string) bool {
 // as literal filenames once "--" has been seen, so no flag or reserved-flag
 // classification applies to them here either.
 //
-// All remote operands found must name the SAME node — rsync allows several
-// sources but they must all come from (or go to) one host — and at least one
-// remote operand is required, since `pmx rsync` always targets exactly one
-// PVE node. Both violations are reported as errors; the caller must not
-// attempt to resolve or exec rsync when classifyRsyncArgs fails.
+// All remote operands found must name the SAME remote target — rsync allows
+// several sources but they must all come from (or go to) one host — and at
+// least one remote operand is required, since `pmx rsync` always targets
+// exactly one remote (a PVE node or a PBS host). Both violations are reported
+// as errors; the caller must not attempt to resolve or exec rsync when
+// classifyRsyncArgs fails.
 func classifyRsyncArgs(tokens []string) (operands []rsyncOperand, node string, err error) {
 	forcedOperand := false
 
@@ -369,13 +370,13 @@ func classifyRsyncArgs(tokens []string) (operands []rsyncOperand, node string, e
 			node = op.Node
 		case node != op.Node:
 			return nil, "", fmt.Errorf(
-				"rsync operands reference different nodes %q and %q; all remote operands must name the same node",
+				"rsync operands reference different remotes %q and %q; all remote operands must name the same remote target",
 				node, op.Node)
 		}
 	}
 
 	if node == "" {
-		return nil, "", fmt.Errorf("no remote (node:path) operand found; pmx rsync requires exactly one PVE node target")
+		return nil, "", fmt.Errorf("no remote (node:path) operand found; pmx rsync requires exactly one remote target")
 	}
 
 	return operands, node, nil
