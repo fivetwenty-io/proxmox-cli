@@ -97,18 +97,24 @@ func newAddCmd() *cobra.Command {
 			}
 
 			// Validate product.
-			switch f.product {
-			case config.ProductPVE, config.ProductPBS:
-			default:
-				return fmt.Errorf("--product must be \"pve\" or \"pbs\", got %q", f.product)
+			validProducts := config.Products()
+			productValid := false
+			for _, p := range validProducts {
+				if f.product == p {
+					productValid = true
+					break
+				}
+			}
+			if !productValid {
+				return fmt.Errorf("--product must be one of: %s, got %q", strings.Join(validProducts, ", "), f.product)
 			}
 
 			// The --port flag default (8006) targets Proxmox VE. When the operator
-			// selects --product=pbs without also giving an explicit --port, switch
-			// to the Proxmox Backup Server default (8007) instead of silently
-			// pointing a PBS context at the PVE port.
-			if f.product == config.ProductPBS && !cmd.Flags().Changed("port") {
-				f.port = 8007
+			// selects a product with a different default port without also giving
+			// an explicit --port, switch to the product's standard port instead of
+			// silently pointing a context at the wrong port.
+			if !cmd.Flags().Changed("port") {
+				f.port = config.DefaultPortForProduct(f.product)
 			}
 
 			// Validate port range.
@@ -213,7 +219,8 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
 	cmd.Flags().StringVar(&f.product, "product", config.ProductPVE,
-		"Proxmox product this context targets: pve|pbs (pbs defaults --port to 8007 unless --port is also given)")
+		fmt.Sprintf("Proxmox product this context targets: %s (%s defaults --port to 8007 unless --port is also given)",
+			strings.Join(config.Products(), "|"), config.ProductPBS))
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the same name")
 

@@ -9,6 +9,9 @@ const (
 
 	// ProductPBS targets Proxmox Backup Server.
 	ProductPBS = "pbs"
+
+	// ProductPDM targets Proxmox Datacenter Manager.
+	ProductPDM = "pdm"
 )
 
 // Config is the top-level configuration file struct.
@@ -65,6 +68,23 @@ type Context struct {
 // (backward-compat configs) is treated as ProductPVE, so IsPBS returns false.
 func (c *Context) IsPBS() bool {
 	return c.Product == ProductPBS
+}
+
+// Products enumerates every supported product identifier, in display order.
+func Products() []string {
+	return []string{ProductPVE, ProductPBS, ProductPDM}
+}
+
+// DefaultPortForProduct returns the API port a product listens on by default.
+func DefaultPortForProduct(product string) int {
+	switch product {
+	case ProductPBS:
+		return 8007
+	case ProductPDM:
+		return 8443
+	default:
+		return 8006
+	}
 }
 
 // AuthBlock holds credential configuration for a context.

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -870,6 +871,7 @@ func TestApplyDefaults_PortDefaultIsProductAware(t *testing.T) {
 		{"empty product defaults to pve port", "", 8006},
 		{"explicit pve", config.ProductPVE, 8006},
 		{"explicit pbs", config.ProductPBS, 8007},
+		{"explicit pdm", config.ProductPDM, 8443},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -900,13 +902,24 @@ func TestStrictValidateContext_InvalidProduct_ReturnsError(t *testing.T) {
 		Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
 	}
 	errs := config.StrictValidateContext(c)
-	require.Contains(t, errs, `product "vmware" must be "pve" or "pbs"`)
+	require.Greater(t, len(errs), 0, "should have at least one error")
+	productErrs := []string{}
+	for _, e := range errs {
+		if strings.Contains(e, "product") {
+			productErrs = append(productErrs, e)
+		}
+	}
+	require.Len(t, productErrs, 1, "should have exactly one product error")
+	require.Contains(t, productErrs[0], "vmware")
+	require.Contains(t, productErrs[0], "pve")
+	require.Contains(t, productErrs[0], "pbs")
+	require.Contains(t, productErrs[0], "pdm")
 }
 
 // TestStrictValidateContext_EmptyOrValidProduct_NoProductError verifies that
-// "", "pve", and "pbs" all pass the product check.
+// "", "pve", "pbs", and "pdm" all pass the product check.
 func TestStrictValidateContext_EmptyOrValidProduct_NoProductError(t *testing.T) {
-	for _, product := range []string{"", config.ProductPVE, config.ProductPBS} {
+	for _, product := range []string{"", config.ProductPVE, config.ProductPBS, config.ProductPDM} {
 		c := &config.Context{
 			Host:    "host.example.com",
 			Product: product,
@@ -957,4 +970,81 @@ func TestResolveContext_LenientValidate_UnknownProduct_NotRejected(t *testing.T)
 	}
 	_, _, err := config.ResolveContext(cfg, "")
 	require.NoError(t, err, "load-time validation must not reject an unrecognised product")
+}
+
+// ── Products ──────────────────────────────────────────────────────────────────
+
+// TestProducts_EnumeratesThree verifies Products() returns all three products
+// in the expected order.
+func TestProducts_EnumeratesThree(t *testing.T) {
+	products := config.Products()
+	require.Equal(t, []string{"pve", "pbs", "pdm"}, products)
+}
+
+// ── DefaultPortForProduct ─────────────────────────────────────────────────────
+
+// TestDefaultPortForProduct verifies the port defaults for each product.
+func TestDefaultPortForProduct(t *testing.T) {
+	cases := []struct {
+		name     string
+		product  string
+		wantPort int
+	}{
+		{"pve port", config.ProductPVE, 8006},
+		{"pbs port", config.ProductPBS, 8007},
+		{"pdm port", config.ProductPDM, 8443},
+		{"unknown defaults to pve port", "unknown", 8006},
+		{"empty defaults to pve port", "", 8006},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := config.DefaultPortForProduct(tc.product)
+			require.Equal(t, tc.wantPort, got)
+		})
+	}
+}
+
+// ── StrictValidateContext — PDM ───────────────────────────────────────────────
+
+// TestStrictValidateContext_AcceptsPDM verifies that "pdm" is a valid product.
+func TestStrictValidateContext_AcceptsPDM(t *testing.T) {
+	c := &config.Context{
+		Host:    "host.example.com",
+		Product: config.ProductPDM,
+		Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
+	}
+	errs := config.StrictValidateContext(c)
+	for _, e := range errs {
+		require.NotContains(t, e, "product", "product pdm must not raise a product error")
+	}
+}
+
+// TestStrictValidateContext_RejectsUnknownProductListingAllThree verifies
+// that an invalid product is rejected with an error message listing all three.
+func TestStrictValidateContext_RejectsUnknownProductListingAllThree(t *testing.T) {
+	c := &config.Context{
+		Host:    "host.example.com",
+		Product: "unknown",
+		Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
+	}
+	errs := config.StrictValidateContext(c)
+	require.Greater(t, len(errs), 0, "should have at least one error")
+	productErrs := []string{}
+	for _, e := range errs {
+		if strings.Contains(e, "product") {
+			productErrs = append(productErrs, e)
+		}
+	}
+	require.Len(t, productErrs, 1, "should have exactly one product error")
+	// Error should mention all three products
+	require.Contains(t, productErrs[0], "pve")
+	require.Contains(t, productErrs[0], "pbs")
+	require.Contains(t, productErrs[0], "pdm")
+}
+
+// TestApplyDefaults_PDMPort8443 verifies the PDM port default is 8443.
+func TestApplyDefaults_PDMPort8443(t *testing.T) {
+	c := &config.Context{Host: "host.example.com", Product: config.ProductPDM}
+	config.ApplyDefaults(c)
+	require.Equal(t, 8443, c.Port, "pdm product must default port to 8443")
 }

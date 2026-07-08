@@ -99,13 +99,10 @@ func ApplyDefaults(c *Context) {
 	applyDefaults(c)
 }
 
-// defaultPortForProduct returns the standard API port for product: 8006 for
-// Proxmox VE, 8007 for Proxmox Backup Server.
+// defaultPortForProduct returns the standard API port for product, delegating
+// to the exported DefaultPortForProduct.
 func defaultPortForProduct(product string) int {
-	if product == ProductPBS {
-		return 8007
-	}
-	return 8006
+	return DefaultPortForProduct(product)
 }
 
 // applyDefaults fills in missing optional fields with standard values.
@@ -159,9 +156,18 @@ func StrictValidateContext(c *Context) []string {
 		errs = append(errs, "host is required")
 	}
 
-	if c.Product != "" && c.Product != ProductPVE && c.Product != ProductPBS {
-		errs = append(errs, fmt.Sprintf(
-			"product %q must be \"pve\" or \"pbs\"", c.Product))
+	if c.Product != "" {
+		valid := false
+		for _, p := range Products() {
+			if c.Product == p {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			errs = append(errs, fmt.Sprintf(
+				"product %q must be %s", c.Product, strings.Join(Products(), ", ")))
+		}
 	}
 
 	if c.Port != 0 && (c.Port < 1 || c.Port > 65535) {
