@@ -104,3 +104,21 @@ release:
 
     Download the archive for your platform from the assets below, verify it
     against `pmx_{{ .Version }}_SHA256SUMS`, extract, and place `pmx` on your `PATH`.
+
+    ### Persona symlinks (optional)
+
+    `pmx` inspects how it was invoked (`argv[0]`) to decide which commands to
+    expose: named (or symlinked as) `pve`, it hoists the Proxmox VE groups to
+    the root; named `pbs`, it hoists the Proxmox Backup Server groups. The
+    archive ships a single `pmx` binary — most archive formats (notably `.zip`,
+    used for the Windows build) do not reliably preserve symlinks, so create
+    them yourself after installing:
+
+    ```bash
+    sudo ln -s pmx /usr/local/bin/pve
+    sudo ln -s pmx /usr/local/bin/pbs
+    ```
+
+    (`make install`, when building from source, creates both symlinks
+    automatically.) See the [README's Personas section](https://github.com/fivetwenty-io/pmx-cli#personas)
+    for the full command surface each persona exposes.

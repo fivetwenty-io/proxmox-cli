@@ -29,6 +29,10 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
   `pmx pbs` command group — datastores, snapshots, sync/prune/GC/verify jobs,
   access control, tape backup, and a raw API passthrough.
 
+- Persona-aware binary: run it as `pmx` for the combined tree, or as `pve`/
+  `pbs` (a symlink to the same binary) to hoist that product's commands
+  straight onto the root — see [Personas](#personas).
+
 - JSONL audit logs written to `~/.pmx/logs/`, with secrets redacted.
 
 - Semantic exit codes (0–7) for scripting.
@@ -58,6 +62,14 @@ sudo install pmx /usr/local/bin/pmx
 Windows users download `pmx__windows_amd64.zip`, verify against the
 `SHA256SUMS` file, and place `pmx.exe` on their `PATH`.
 
+Release archives ship only the `pmx` binary; create the `pve`/`pbs` persona
+symlinks yourself if you want them (see [Personas](#personas)):
+
+```bash
+sudo ln -s pmx /usr/local/bin/pve
+sudo ln -s pmx /usr/local/bin/pbs
+```
+
 ### Install with `go install`
 
 ```bash
@@ -67,8 +79,8 @@ go install github.com/fivetwenty-io/pmx-cli/cmd/pmx@latest
 ### Build from source
 
 ```bash
-make build      # builds ./dist/pmx with version ldflags
-make install    # installs pmx to $GOPATH/bin (or ~/go/bin)
+make build      # builds ./dist/pmx (+ pve/pbs symlinks) with version ldflags
+make install    # installs pmx + pve/pbs symlinks to $GOPATH/bin (or ~/go/bin)
 ```
 
 Requires Go 1.26 or newer.
@@ -85,11 +97,75 @@ pmx context add lab \
   --secret ${PMX_TOKEN} \
   --select
 
-# 2. Use it.
-pmx cluster status
-pmx node list
-pmx --node pve1 qemu list
+# 2. Use it. (Proxmox VE commands live under `pve` — see Personas below;
+#    this is the same as running the `pve` binary/symlink without the prefix.)
+pmx pve cluster status
+pmx pve node list
+pmx pve --node pve1 qemu list
 ```
+
+## Personas
+
+`pmx` inspects how it was invoked (`argv[0]`, with any `.exe` suffix
+stripped) to decide which command surface to expose:
+
+- Invoked as `pmx` (or anything else — `go run`/`go test` temp binary names,
+  etc.): the combined tree. Proxmox VE resource groups live under
+  `pmx pve`, Proxmox Backup Server groups under `pmx pbs`, and the shared
+  commands below sit at the root.
+
+- Invoked as `pve`: the Proxmox VE groups (`cluster`, `qemu`, `lxc`, `node`,
+  `storage`, `sdn`, `pool`, `access`, `task`) are hoisted directly onto the
+  root — `pve node ls` instead of `pmx pve node ls`.
+
+- Invoked as `pbs`: the Proxmox Backup Server groups (`datastore`,
+  `snapshot`, `sync`, and the rest of the [Proxmox Backup
+  Server](#proxmox-backup-server-pmx-pbs) subtree) are hoisted the same way
+  — `pbs datastore ls` instead of `pmx pbs datastore ls`.
+
+`pve` and `pbs` are ordinary symlinks (or copies, on platforms without
+symlinks) to the same `pmx` binary. `make build`/`make install` create them
+automatically; set them up by hand after a release-archive install with:
+
+```bash
+sudo ln -s pmx /usr/local/bin/pve
+sudo ln -s pmx /usr/local/bin/pbs
+```
+
+Every persona — `pmx`, `pve`, and `pbs` — exposes the same top-level
+commands, since these operate on the active context rather than a specific
+product:
+
+| Command | Purpose |
+|---------|---------|
+| `context` (alias `ctx`) | Manage named contexts (local config only) |
+| `init` | Scaffold local CLI configuration |
+| `auth` | Authenticate against the active context: `login`, `logout`, `status`, `refresh`, `whoami`, `set-token`, `set-password` |
+| `version` | Active context's server API version; `version client` for CLI build info; `version ping` for a PBS reachability check |
+| `ssh` | Open an SSH session to a resolved node |
+| `rsync` | Sync files to/from a resolved node over SSH |
+| `api` | Raw `get`/`post`/`put`/`delete` passthrough against the active context |
+
+### Breaking change
+
+Earlier `pmx` releases exposed the Proxmox VE resource groups (`cluster`,
+`qemu`, `lxc`, `node`, `storage`, `sdn`, `pool`, `access`, `task`) flat at
+the root. They now live under `pmx pve` (or at the root of the `pve`
+binary):
+
+```bash
+# Before              # Now
+pmx node list          pmx pve node list        # or: pve node list
+pmx qemu start 100     pmx pve qemu start 100    # or: pve qemu start 100
+```
+
+`pmx api` also changed meaning. It used to be the authentication command;
+that's now the canonical `pmx auth` (unchanged behavior), and `pmx api` is
+the raw API passthrough described above. `pmx pbs version`, `pmx pbs api`,
+and `pmx pbs ping` moved out of the `pbs` subtree onto the shared root
+commands above: use `pmx version`, `pmx api`, and `pmx version ping`
+against a `product: pbs` context (or, via the `pbs` binary: `pbs version`,
+`pbs api`, `pbs version ping`).
 
 ## Configuration
 
@@ -167,7 +243,7 @@ The `auth.secret` value is resolved in three tiers:
   plaintext secrets in config are visible.
 
 Password login stores a live `session` (ticket + CSRF + expiry) back into the
-target; `pmx api auth logout` wipes it.
+target; `pmx auth logout` wipes it.
 
 ## Contexts
 
@@ -233,10 +309,10 @@ pmx context add backup \
 ```
 
 Per-context `ssh.user`, `ssh.port`, and `ssh.identity` fields supply defaults
-for `pmx ssh`/`pmx rsync` (and `pmx node ssh`/`pmx node rsync`): explicit flag
-(`-l`/`-p`/`-i` on `pmx ssh`, `--ssh-user`/`--ssh-port`/`--ssh-identity` on
-`pmx rsync`) > context `ssh.*` > built-in default (`root` / `22` / no identity
-file).
+for `pmx ssh`/`pmx rsync` (and `pmx pve node ssh`/`pmx pve node rsync`):
+explicit flag (`-l`/`-p`/`-i` on `pmx ssh`, `--ssh-user`/`--ssh-port`/
+`--ssh-identity` on `pmx rsync`) > context `ssh.*` > built-in default
+(`root` / `22` / no identity file).
 
 ## Authentication
 
@@ -244,22 +320,26 @@ file).
 # Token auth: store the token id + secret on the context (see Quick start).
 
 # Password auth: obtain and persist a ticket + CSRF token.
-pmx api auth login --username root@pam
-pmx api auth status            # show the active identity and expiry
-pmx api auth logout            # invalidate and wipe the stored session
+pmx auth login --username root@pam
+pmx auth status            # show the active identity and expiry
+pmx auth logout            # invalidate and wipe the stored session
 
 # Two-factor auth (TOTP): first login returns a TFA challenge; re-issue with the
 # one-time password and the signed challenge the server returned.
-pmx api auth login --username root@pam --otp 123456 --tfa-challenge <signed-challenge>
+pmx auth login --username root@pam --otp 123456 --tfa-challenge <signed-challenge>
 
 # OIDC login (interactive): prints the authorization URL; open it in a browser,
 # authenticate, then paste the full redirect URL at the prompt.
-pmx api auth login --oidc --realm myoidc
+pmx auth login --oidc --realm myoidc
 
 # OIDC login (non-interactive): supply the authorization code and state directly,
 # e.g. from a script that completes the browser step out of band.
-pmx api auth login --oidc --realm myoidc --code <auth-code> --state <state>
+pmx auth login --oidc --realm myoidc --code <auth-code> --state <state>
 ```
+
+`auth` is a shared, product-neutral command: `login`/`refresh`/`whoami`
+currently support PVE contexts only, while `status`/`set-token`/
+`set-password`/`logout` work against any context (PVE or PBS).
 
 ## Output and logging
 
@@ -269,9 +349,9 @@ full API response with native types; tables show a curated column set, and
 `ascii` renders the same tables with ASCII-only borders.
 
 ```bash
-pmx node list -o json | jq '.[].node'
-pmx cluster resources -o yaml
-pmx qemu list -o ascii         # ASCII-only table borders
+pmx pve node list -o json | jq '.[].node'
+pmx pve cluster resources -o yaml
+pmx pve qemu list -o ascii         # ASCII-only table borders
 ```
 
 Diagnostic logs are written as JSON Lines to
@@ -291,48 +371,62 @@ information is available as a command (with `-o json`/`-o yaml` support) via
 
 `pmx` organizes the API into logical groups. VM and container operations take a
 node via `--node`/`$PMX_NODE` (or the context's `default-node`); node administration
-uses the `pmx node` subtree.
+uses the `pmx pve node` subtree. The commands below are shared across every
+persona (see [Personas](#personas)); everything else lives under `pmx pve`
+(Proxmox VE) or `pmx pbs` (Proxmox Backup Server, `product: pbs` contexts).
 
 | Group | Purpose | Sub-commands |
 |-------|---------|--------------|
 | `init` | Scaffold local CLI configuration | `config` |
 | `context` | Named contexts (local config) | `add`, `ls`, `show`, `select`, `previous`, `rm`, `copy`, `edit`, `validate` |
-| `api` | Authentication (local config) | `auth login\|logout\|status\|refresh\|set-token\|set-password` |
-| `version` | Cluster API version and CLI build info | `version`, `version client` |
+| `auth` | Authenticate against the active context | `login`, `logout`, `status`, `refresh`, `whoami`, `set-token`, `set-password` |
+| `version` | Active context's server API version and CLI build info | `version`, `version client`, `version ping` (PBS only) |
+| `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
+| `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
+| `api` | Raw API passthrough against the active context | `get`, `post`, `put`, `delete` |
+
+The top-level alias `pmx ctx` resolves to `pmx context`.
+
+### Proxmox VE (`pmx pve`)
+
+| Group | Purpose | Sub-commands |
+|-------|---------|--------------|
 | `access` | Users, tokens, groups, roles, ACLs | `user` (with `user token`), `group`, `role`, `acl`, `permissions`, `password` |
 | `cluster` | Cluster state | `status`, `resources`, `next-id`, `log`, `tasks` |
 | `node` | Node administration and remote access | `list`, `status`, `ssh`, `rsync`, `shell`, `exec`, `console`, `services`, `task`, `permissions` |
-| `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
-| `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
 | `qemu` | QEMU virtual machines | `list`, `status`, `create`, `start`, `stop`, `shutdown`, `reboot`, `reset`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security`, `permissions` |
 | `lxc` | LXC containers | `list`, `status`, `create`, `template`, `start`, `stop`, `shutdown`, `reboot`, `suspend`, `resume`, `delete`, `config`, `snapshot`, `security`, `permissions` |
 | `storage` | Cluster storage configuration | `list`, `get`, `content`, `create`, `set`, `delete`, `upload`, `permissions` |
 | `sdn` | Software-defined networking | `zone`, `vnet` (each `list\|show\|create\|delete\|permissions`), `subnet` (`list\|show\|create\|delete`), `apply` |
 | `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete`, `permissions` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
-| `pbs` | Proxmox Backup Server (contexts with `product: pbs`) | see [Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) |
 
-The top-level alias `pmx ctx` resolves to `pmx context`; `pmx auth` resolves to
-`pmx api auth`.
+`pmx pbs` — Proxmox Backup Server (contexts with `product: pbs`) — is documented
+separately: see [Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below.
 
 ### Examples
 
+Shown as run via the `pve` binary/symlink; drop the leading `pve` and prefix
+`pmx pve` instead if you're invoking the plain `pmx` binary (e.g.
+`pmx pve --node pve1 qemu start 100`).
+
 ```bash
 # VM lifecycle (blocks until the task finishes).
-pmx --node pve1 qemu start 100
-pmx --node pve1 qemu shutdown 100 --timeout 60
-pmx --node pve1 qemu start 100 --async         # return the UPID immediately
+pve --node pve1 qemu start 100
+pve --node pve1 qemu shutdown 100 --timeout 60
+pve --node pve1 qemu start 100 --async         # return the UPID immediately
 
 # Snapshots.
-pmx --node pve1 qemu snapshot create 100 pre-upgrade --vmstate
-pmx --node pve1 qemu snapshot rollback 100 pre-upgrade
+pve --node pve1 qemu snapshot create 100 pre-upgrade --vmstate
+pve --node pve1 qemu snapshot rollback 100 pre-upgrade
 
 # Node access.
-pmx node ssh pve1 -- uptime
-pmx node rsync ./bundle/ pve1:/var/tmp/bundle/ --identity ~/.ssh/id_ed25519
-pmx node shell pve1
+pve node ssh pve1 -- uptime
+pve node rsync ./bundle/ pve1:/var/tmp/bundle/ --identity ~/.ssh/id_ed25519
+pve node shell pve1
 
-# Top-level ssh/rsync (same node resolver as above, no "node" prefix).
+# Top-level ssh/rsync (same node resolver as above, no "node" prefix; shared —
+# use the pmx binary, not pve/pbs, since these commands never take a "pve"/"pbs" prefix).
 pmx ssh pve1
 pmx ssh -c prod pve1 uptime
 pmx ssh pve1 -L 8080:localhost:80 -N
@@ -340,12 +434,12 @@ pmx ssh pve1 -- ls -la
 pmx rsync -c prod -avz --delete ./site/ pve1:/var/www/
 
 # Access control.
-pmx access user list
-pmx access user token create root@pam ci --privsep 1
+pve access user list
+pve access user token create root@pam ci --privsep 1
 
 # Tasks.
-pmx --node pve1 task list
-pmx --node pve1 task wait UPID:pve1:...
+pve --node pve1 task list
+pve --node pve1 task wait UPID:pve1:...
 ```
 
 ### Escape hatches and small additions
@@ -356,11 +450,12 @@ arbitrary config option straight to the API, verbatim, for options with no
 dedicated flag yet; a `--set` key that collides with a dedicated flag passed
 in the same invocation is rejected rather than silently overwritten.
 
-`pmx qemu firewall alias get <vmid> <name>` and `pmx qemu firewall ipset
-get-member <vmid> <name> <cidr>` (with `pmx lxc` equivalents) read a single
-firewall alias or IP set member by name, alongside the existing `list`
-verbs. `pmx qemu migrate capabilities` reports the node's QEMU live-migration
-feature support — the same data as `pmx node capabilities qemu migration`.
+`pmx pve qemu firewall alias get <vmid> <name>` and `pmx pve qemu firewall
+ipset get-member <vmid> <name> <cidr>` (with `pmx pve lxc` equivalents) read a
+single firewall alias or IP set member by name, alongside the existing `list`
+verbs. `pmx pve qemu migrate capabilities` reports the node's QEMU
+live-migration feature support — the same data as `pmx pve node capabilities
+qemu migration`.
 
 ### Cloud-init snippets over SSH
 
@@ -370,21 +465,21 @@ normally have to be copied onto snippet storage by hand. This is a
 long-standing upstream gap
 ([Proxmox Bugzilla #2208](https://bugzilla.proxmox.com/show_bug.cgi?id=2208)).
 
-As a workaround, `pmx storage upload --content snippets` streams the file over
-SSH into the storage's `snippets/` directory instead of calling the upload
-API. It requires:
+As a workaround, `pmx pve storage upload --content snippets` streams the file
+over SSH into the storage's `snippets/` directory instead of calling the
+upload API. It requires:
 
 - a path-backed storage (`dir`, `nfs`, `cifs`, ...) with the `snippets`
-  content type enabled (`pmx storage set local --content iso,vztmpl,snippets`)
+  content type enabled (`pmx pve storage set local --content iso,vztmpl,snippets`)
 
 - SSH access to the node (root by default; `-l`/`-i`/`-p` and the context's
   `ssh:` block apply, same as `pmx ssh`)
 
 ```bash
 # Push a custom cloud-init user-data snippet, then wire it to a VM.
-pmx --node pve1 storage upload local --file ./user-data.yaml --content snippets
-pmx --node pve1 qemu config set 100 --cicustom "user=local:snippets/user-data.yaml"
-pmx --node pve1 qemu cloudinit update 100
+pmx pve --node pve1 storage upload local --file ./user-data.yaml --content snippets
+pmx pve --node pve1 qemu config set 100 --cicustom "user=local:snippets/user-data.yaml"
+pmx pve --node pve1 qemu cloudinit update 100
 ```
 
 `--checksum` is not supported in this mode, and no PVE task is created — the
@@ -422,9 +517,12 @@ Everything else works exactly like the PVE side: the same output formats,
 | `tape` | Tape backup | `drive`, `changer`, `media`, `pool`, `key`, `job`, `backup`, `restore` |
 | `encryption-key` | Datastore encryption keys | `ls`, `add`, `delete`, `toggle-archive` |
 | `status` | Server-wide status | `datastore-usage` |
-| `version` | PBS version | — |
-| `ping` | API reachability check | — |
-| `api` | Raw API passthrough | `get`, `post`, `put`, `delete` (repeatable `--data KEY=VALUE`) |
+
+The PBS version, a reachability check, and a raw API passthrough are shared
+root commands (present under every persona — see [Personas](#personas)),
+not part of this subtree: `pmx version` (or `pbs version`), `pmx version
+ping` (or `pbs version ping`), and `pmx api get\|post\|put\|delete` (or
+`pbs api ...`), each against a `product: pbs` context.
 
 ```bash
 # Datastores and their contents.
@@ -442,28 +540,28 @@ pmx -c backup pbs verify job add nightly --store tank --schedule daily
 pmx -c backup pbs tape drive ls
 pmx -c backup pbs tape backup --store tank --pool weekly --drive lto9
 
-# Anything without a dedicated verb.
-pmx -c backup pbs api get /admin/datastore/tank/status
+# Anything without a dedicated verb (shared "api" command, not nested under "pbs").
+pmx -c backup api get /admin/datastore/tank/status
 ```
 
-## VM security (`pmx qemu security`)
+## VM security (`pmx pve qemu security`)
 
-`pmx qemu security` inspects and hardens the layered security posture of a
+`pmx pve qemu security` inspects and hardens the layered security posture of a
 QEMU VM: the protection flag, Secure Boot / EFI and TPM state, confidential
 computing (AMD SEV / Intel TDX), security-relevant CPU flags, the guest
 agent configuration, and per-NIC firewall coverage. Every command uses only
 the PVE config and firewall APIs — no ssh.
 
 ```bash
-pmx qemu security show 100              # full posture: protection, boot chain, TPM, confidential, agent, NIC firewall
-pmx qemu security list                  # cluster-wide audit table (risky VMs flagged '!' first)
-pmx qemu security agent show 100        # agent= sub-options at their effective value
-pmx qemu security secureboot show 100   # bios/efidisk0 and the derived Secure Boot posture
-pmx qemu security tpm show 100          # tpmstate0 presence, volume, and version
-pmx qemu security confidential show 100 # amd-sev / intel-tdx configuration, if any
-pmx qemu security cpu-flags show 100    # the 13-flag PVE security-relevant catalog, per-VM state
-pmx qemu security cpu-flags describe    # the same catalog offline, with mitigation notes
-pmx qemu security nic show 100          # per-NIC model, bridge, VLAN, firewall, link-down
+pmx pve qemu security show 100              # full posture: protection, boot chain, TPM, confidential, agent, NIC firewall
+pmx pve qemu security list                  # cluster-wide audit table (risky VMs flagged '!' first)
+pmx pve qemu security agent show 100        # agent= sub-options at their effective value
+pmx pve qemu security secureboot show 100   # bios/efidisk0 and the derived Secure Boot posture
+pmx pve qemu security tpm show 100          # tpmstate0 presence, volume, and version
+pmx pve qemu security confidential show 100 # amd-sev / intel-tdx configuration, if any
+pmx pve qemu security cpu-flags show 100    # the 13-flag PVE security-relevant catalog, per-VM state
+pmx pve qemu security cpu-flags describe    # the same catalog offline, with mitigation notes
+pmx pve qemu security nic show 100          # per-NIC model, bridge, VLAN, firewall, link-down
 ```
 
 Every mutating `security` sub-command, except `protection enable`/`disable`
@@ -477,29 +575,29 @@ it, the change is pending until the VM's next stop/start or reboot.
 
 ```bash
 # Guest agent: enable communication, keep freeze-fs (snapshot consistency) on.
-pmx qemu security agent set 100 --enabled --type virtio --restart
+pmx pve qemu security agent set 100 --enabled --type virtio --restart
 
 # Secure Boot: allocate a pre-enrolled EFI vars disk (OVMF + Secure Boot keys).
-pmx qemu security secureboot enable 100 --storage local-lvm --restart
+pmx pve qemu security secureboot enable 100 --storage local-lvm --restart
 
 # TPM: add a 2.0 state device (Windows 11 requires it); remove destroys sealed keys.
-pmx qemu security tpm add 100 --storage local-lvm
-pmx qemu security tpm remove 100 --force
+pmx pve qemu security tpm add 100 --storage local-lvm
+pmx pve qemu security tpm remove 100 --force
 
 # Confidential computing: AMD SEV-SNP without hypervisor debug access.
-pmx qemu security confidential set 100 --sev snp --sev-no-debug
-pmx qemu security confidential clear 100
+pmx pve qemu security confidential set 100 --sev snp --sev-no-debug
+pmx pve qemu security confidential clear 100
 
 # CPU flags: enable the Spectre/MDS mitigations; disabling one needs --force.
-pmx qemu security cpu-flags set 100 --enable spec-ctrl,ssbd,md-clear
-pmx qemu security cpu-flags set 100 --disable spec-ctrl --force
+pmx pve qemu security cpu-flags set 100 --enable spec-ctrl,ssbd,md-clear
+pmx pve qemu security cpu-flags set 100 --disable spec-ctrl --force
 
 # Per-NIC firewall: turn coverage on for every configured NIC.
-pmx qemu security nic firewall 100 --on --all
+pmx pve qemu security nic firewall 100 --on --all
 
 # Protection flag: block destroy/disk removal, then allow it again.
-pmx qemu security protection enable 100
-pmx qemu security protection disable 100
+pmx pve qemu security protection enable 100
+pmx pve qemu security protection disable 100
 ```
 
 There is deliberately no `secureboot disable`: the real Secure Boot on/off
@@ -510,11 +608,11 @@ enrolled key and boot entry; pass `--recreate` (optionally with a different
 `--storage`) to allocate a fresh vars disk, moving the old one to
 `unused[n]`.
 
-## Container security (`pmx lxc security`)
+## Container security (`pmx pve lxc security`)
 
-`pmx lxc security` inspects and hardens the layered security posture of an LXC
+`pmx pve lxc security` inspects and hardens the layered security posture of an LXC
 container: its privilege level, its `features=` flags, and the low-level Linux
-capability whitelist. Containers created through `pmx lxc create` are
+capability whitelist. Containers created through `pmx pve lxc create` are
 **unprivileged by default** — the container's `root` is mapped to an unprivileged
 host UID — which is the safe baseline. The `security` commands help you keep that
 baseline and grant only the capabilities a workload actually needs.
@@ -522,30 +620,30 @@ baseline and grant only the capabilities a workload actually needs.
 All the read verbs use only the API and need no SSH:
 
 ```bash
-pmx lxc security show 105          # full posture: privilege, features, caps, raw lxc.* keys
-pmx lxc security list              # cluster-wide audit table (privileged CTs flagged '!' first)
-pmx lxc security caps show 105     # the configured lxc.cap.keep / lxc.cap.drop lists
-pmx lxc security caps describe     # offline catalog of every capability and the presets
-pmx lxc security features show 105 # nesting, keyctl, fuse, mknod, force_rw_sys, mount
+pmx pve lxc security show 105          # full posture: privilege, features, caps, raw lxc.* keys
+pmx pve lxc security list              # cluster-wide audit table (privileged CTs flagged '!' first)
+pmx pve lxc security caps show 105     # the configured lxc.cap.keep / lxc.cap.drop lists
+pmx pve lxc security caps describe     # offline catalog of every capability and the presets
+pmx pve lxc security features show 105 # nesting, keyctl, fuse, mknod, force_rw_sys, mount
 ```
 
 ### Tuning features
 
-`pmx lxc security features set` edits the container's `features=` option with
+`pmx pve lxc security features set` edits the container's `features=` option with
 structured per-feature flags. It is a read-merge-write over the config API, so
 only the flags you pass change and the rest are left untouched:
 
 ```bash
-pmx lxc security features set 105 --nesting --keyctl
-pmx lxc security features set 105 --mount 'nfs;cifs'
-pmx lxc security features set 105 --reset            # clear features= entirely
+pmx pve lxc security features set 105 --nesting --keyctl
+pmx pve lxc security features set 105 --mount 'nfs;cifs'
+pmx pve lxc security features set 105 --reset            # clear features= entirely
 ```
 
 `keyctl` (unprivileged only) is needed by some Docker workloads but breaks
 systemd-networkd, `mknod` is experimental, and mounting loop or NFS filesystems
 widens the attack surface. Feature changes apply on the next container start.
 
-> `pmx lxc security features` is **not** `pmx lxc feature`. The latter is an
+> `pmx pve lxc security features` is **not** `pmx pve lxc feature`. The latter is an
 > unrelated, read-only probe of whether a container supports a snapshot, clone,
 > or copy operation.
 
@@ -557,24 +655,24 @@ it needs, replace that set with an explicit keep-list and iterate:
 ```bash
 # 1. Confirm the container is unprivileged. A keep-list on a privileged CT is far
 #    weaker, because its mapped root already has host-level reach.
-pmx lxc security show 105
+pmx pve lxc security show 105
 
 # 2. Start from a preset (or an explicit --keep list). A keep-list writes
 #    lxc.cap.keep and drops every capability not named.
-pmx lxc security caps set 105 --preset minimal --restart
-#    or: pmx lxc security caps set 105 --keep chown,setuid,setgid,kill --restart
+pmx pve lxc security caps set 105 --preset minimal --restart
+#    or: pmx pve lxc security caps set 105 --keep chown,setuid,setgid,kill --restart
 
 # 3. Verify what the running container actually holds (decodes /proc/1/status).
-pmx lxc security caps show 105 --effective
+pmx pve lxc security caps show 105 --effective
 
 # 4. If the workload is missing a capability, grant one, restart, and retest.
 #    Add narrowly rather than widening back toward the defaults.
-pmx lxc security caps add 105 net_bind_service --restart
-pmx lxc security caps show 105 --effective
+pmx pve lxc security caps add 105 net_bind_service --restart
+pmx pve lxc security caps show 105 --effective
 
 # Revoke a single capability, or restore PVE's defaults entirely.
-pmx lxc security caps remove 105 net_raw --restart
-pmx lxc security caps reset 105 --restart
+pmx pve lxc security caps remove 105 net_raw --restart
+pmx pve lxc security caps reset 105 --restart
 ```
 
 Without `--restart`, each mutation prints the manual restart command instead; the
@@ -590,11 +688,11 @@ requires typing PVE's path grammar (`/vms/100`, `/pool/lab`,
 
 ```bash
 # Grant a role on a VM, addressed by vmid or name.
-pmx qemu permissions grant 100 --roles PVEVMAdmin --users alice@pve
+pmx pve qemu permissions grant 100 --roles PVEVMAdmin --users alice@pve
 
 # List ACL entries on a storage, including entries inherited from its
 # ancestor paths (/, /storage).
-pmx storage permissions list local-lvm --inherited
+pmx pve storage permissions list local-lvm --inherited
 ```
 
 Every tree exposes the same four verbs: `list` (`--inherited` also
@@ -603,14 +701,15 @@ another user or token, which needs `Sys.Audit` on `/access`), and `grant`/
 `revoke` (both need `Permissions.Modify` on the derived path, take
 `--roles` plus at least one of `--users`, `--groups`, or `--tokens`
 comma-separated, and accept `--no-propagate` to withhold the default
-propagation to sub-paths). `pmx pool permissions` derives PVE's singular
+propagation to sub-paths). `pmx pve pool permissions` derives PVE's singular
 `/pool/{poolid}` ACL path automatically, even though the `pool` object
 tree and its own sub-commands are plural — a mismatch the command handles
 so the operator never has to remember it.
 
 These commands are thin, path-deriving wrappers: for any ACL path outside
-a single object, `pmx access acl` and `pmx access permissions` remain the
-general-purpose commands, and both still accept an arbitrary `--path`.
+a single object, `pmx pve access acl` and `pmx pve access permissions`
+remain the general-purpose commands, and both still accept an arbitrary
+`--path`.
 
 The keep-mode presets are:
 
@@ -647,8 +746,8 @@ read verbs above need only the API.
 | 6 | Conflict (e.g. resource locked) |
 | 7 | Two-factor authentication required |
 
-Once `pmx ssh`/`pmx rsync` (or `pmx node ssh`/`pmx node rsync`) hands off to
-the child process, `pmx` exits with that child's own exit code, verbatim,
+Once `pmx ssh`/`pmx rsync` (or `pmx pve node ssh`/`pmx pve node rsync`) hands
+off to the child process, `pmx` exits with that child's own exit code, verbatim,
 instead of one of the codes above — `ssh` uses 255 for a connection/auth
 failure, `rsync` uses 23/24 for a partial transfer, and so on. A child exit
 code of 2 is indistinguishable from this table's `Bad arguments` (2): the

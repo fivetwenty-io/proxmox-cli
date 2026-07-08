@@ -33,8 +33,12 @@ help: ## Show this help message
 ##@ Build
 
 .PHONY: build
-build: ## Build ./dist/pmx binary with version ldflags
+build: ## Build ./dist/pmx binary (+ pve/pbs persona symlinks) with version ldflags
 	$(SCRIPTS)/build
+	@ln -sf pmx ./dist/pve
+	@ln -sf pmx ./dist/pbs
+	@echo "build: linked ./dist/pve -> pmx"
+	@echo "build: linked ./dist/pbs -> pmx"
 
 .PHONY: generate
 generate: ## Regenerate generated sources (cluster options schema from apidoc.json)
@@ -42,10 +46,15 @@ generate: ## Regenerate generated sources (cluster options schema from apidoc.js
 	@go generate ./...
 
 .PHONY: install
-install: build ## Install pmx binary to $GOPATH/bin (or ~/go/bin)
-	@DEST="$${GOPATH:-$$HOME/go}/bin/pmx"; \
-	cp $(BINARY) "$$DEST"; \
-	echo "install: copied $(BINARY) -> $$DEST"
+install: build ## Install pmx binary + pve/pbs persona symlinks to $GOPATH/bin (or ~/go/bin)
+	@BIN="$${GOPATH:-$$HOME/go}/bin"; \
+	mkdir -p "$$BIN"; \
+	cp $(BINARY) "$$BIN/pmx"; \
+	ln -sf pmx "$$BIN/pve"; \
+	ln -sf pmx "$$BIN/pbs"; \
+	echo "install: copied $(BINARY) -> $$BIN/pmx"; \
+	echo "install: linked $$BIN/pve -> pmx"; \
+	echo "install: linked $$BIN/pbs -> pmx"
 
 .PHONY: clean
 clean: ## Remove ./dist/ build artifacts
