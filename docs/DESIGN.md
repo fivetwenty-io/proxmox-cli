@@ -14,16 +14,16 @@ cmd/pmx/           — binary entry point; calls cli.Execute()
 internal/
   cli/             — Cobra root, persistent flags, dependency wiring
     context/       — pmx context / pmx ctx command group
-    api/           — pmx api command group (authentication only)
-    access/        — pmx access subtree
-    cluster/       — pmx cluster subtree
-    node/          — pmx node subtree
-    qemu/          — pmx qemu subtree
-    lxc/           — pmx lxc subtree
-    sdn/           — pmx sdn subtree
-    storage/       — pmx storage subtree
-    pool/          — pmx pool subtree
-    task/          — pmx task subtree
+    api/           — pmx api (raw request) and pmx auth command groups
+    access/        — pmx pve access subtree
+    cluster/       — pmx pve cluster subtree
+    node/          — pmx pve node subtree
+    qemu/          — pmx pve qemu subtree
+    lxc/           — pmx pve lxc subtree
+    sdn/           — pmx pve sdn subtree
+    storage/       — pmx pve storage subtree
+    pool/          — pmx pve pool subtree
+    task/          — pmx pve task subtree
     version/       — pmx version subtree
     initcmd/       — pmx init subtree
   apiclient/       — thin wrapper: service handles, UPID extraction, task-wait
@@ -127,7 +127,7 @@ release). Exit status is 0 when all validated contexts pass, 1 when any fail.
 - Literal — used verbatim, with a one-time stderr warning.
 
 Password login persists a live session (ticket + CSRF + expiry) back into the
-context entry; `pmx api auth logout` invalidates and removes it.
+context entry; `pmx auth logout` invalidates and removes it.
 
 ## Dependency wiring
 
@@ -139,7 +139,7 @@ context entry; `pmx api auth logout` invalidates and removes it.
 4. Stores it in the command's annotation map via `cli.SetDeps`.
 
 Sub-commands retrieve deps with `cli.GetDeps(cmd)`. Commands annotated
-`noClient: true` (all `pmx context` and `pmx api` verbs) skip API-client
+`noClient: true` (all `pmx context` and `pmx auth` verbs) skip API-client
 construction; they operate only on the local config file.
 
 ## Output rendering

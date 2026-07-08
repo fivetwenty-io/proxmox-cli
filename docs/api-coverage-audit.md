@@ -21,8 +21,8 @@ Three sources were compared for each command:
 > for the current picture instead.
 >
 > Fixed in the first pass (2026-06-26): appliance and container template
-> management (`pmx storage`), single-task status (`pmx task`), OIDC login
-> (`pmx api auth login --oidc`), SDN fabric redistribute and interfaces flags
+> management (`pmx pve storage`), single-task status (`pmx pve task`), OIDC login
+> (`pmx auth login --oidc`), SDN fabric redistribute and interfaces flags
 > plus per-node SDN status views, storage OCI pull and upload checksums, QEMU
 > convenience and discovery flags, node config/ceph/replication reads and
 > console-proxy and execute commands, cluster firewall single-item reads and
@@ -63,10 +63,10 @@ the routine version bump described below.
 Second, only three gaps rise to high severity, each a single contained piece of
 work:
 
-- `pmx storage` cannot list or download appliance and container templates (the
+- `pmx pve storage` cannot list or download appliance and container templates (the
   `pveam` equivalent).
-- `pmx task` cannot read a single task's status in one shot.
-- `pmx api auth` cannot complete an OpenID Connect login, even though Proxmox
+- `pmx pve task` cannot read a single task's status in one shot.
+- `pmx auth` cannot complete an OpenID Connect login, even though Proxmox
   supports OIDC realms and the client exposes the handshake.
 
 ## Coverage at a glance
@@ -105,18 +105,18 @@ from roughly sixty down to ten, all of which are now closed:
 
 | Area | Command added | What it exposes |
 |---|---|---|
-| Node Ceph | `pmx node ceph cmd-safety` | Whether a stop/destroy action on a Ceph service is currently safe to perform |
-| Node Ceph | `pmx node ceph osd lv-info <osdid>` | LVM logical-volume detail (name, path, size, UUID, volume group) backing an OSD |
-| Node Ceph | `pmx node ceph osd metadata <osdid>` | Detailed OSD runtime metadata, including backing devices |
-| SDN | `pmx sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
-| SDN | `pmx sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
-| SDN | `pmx sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |
-| Pool | `pmx pool show <poolid>` | Single-item pool detail via the current (non-deprecated) endpoint, alongside the existing `pool get` |
-| QEMU firewall | `pmx qemu firewall log`, `refs`, `ipset update-member` | Brings VM firewall command parity with the equivalent LXC container commands |
+| Node Ceph | `pmx pve node ceph cmd-safety` | Whether a stop/destroy action on a Ceph service is currently safe to perform |
+| Node Ceph | `pmx pve node ceph osd lv-info <osdid>` | LVM logical-volume detail (name, path, size, UUID, volume group) backing an OSD |
+| Node Ceph | `pmx pve node ceph osd metadata <osdid>` | Detailed OSD runtime metadata, including backing devices |
+| SDN | `pmx pve sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
+| SDN | `pmx pve sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
+| SDN | `pmx pve sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |
+| Pool | `pmx pve pool show <poolid>` | Single-item pool detail via the current (non-deprecated) endpoint, alongside the existing `pool get` |
+| QEMU firewall | `pmx pve qemu firewall log`, `refs`, `ipset update-member` | Brings VM firewall command parity with the equivalent LXC container commands |
 
 Two related, non-coverage fixes landed alongside the gap closure:
 
-- `pmx qemu console` and `pmx lxc console` now call the typed
+- `pmx pve qemu console` and `pmx pve lxc console` now call the typed
   `CreateQemu{Vncproxy,Termproxy,Spiceproxy}` / `CreateLxc{...}` client
   methods instead of a raw HTTP passthrough; the CLI surface, flags, and
   output are unchanged.
@@ -136,7 +136,7 @@ that already existed.
 
 ### Storage cannot manage appliance and container templates
 
-`pmx storage` exposes no command for the appliance index. Proxmox uses this index
+`pmx pve storage` exposes no command for the appliance index. Proxmox uses this index
 (the `pveam` workflow) to list available LXC and appliance templates and to
 download one onto a storage. Both endpoints are wrapped by the client but unwired
 in the CLI:
@@ -145,27 +145,27 @@ in the CLI:
 - `POST /nodes/{node}/aplinfo` downloads a template to a storage, taking
   `storage` and `template` (`nodes.CreateAplinfo`).
 
-Suggested shape: `pmx storage aplinfo list` and `pmx storage aplinfo download`.
+Suggested shape: `pmx pve storage aplinfo list` and `pmx pve storage aplinfo download`.
 
 ### Task status cannot be read without blocking
 
-`pmx task` can list tasks, stream a log, wait for completion, and stop a task,
+`pmx pve task` can list tasks, stream a log, wait for completion, and stop a task,
 but it cannot fetch a single task's current status in one call. Today the only
-way to learn a task's exit status is `pmx task wait`, which blocks until the task
+way to learn a task's exit status is `pmx pve task wait`, which blocks until the task
 finishes. The status endpoint and its typed response already exist
 (`GET /nodes/{node}/tasks/{upid}/status`, `nodes.ListTasksStatus`).
 
-Suggested shape: `pmx task status <upid>`.
+Suggested shape: `pmx pve task status <upid>`.
 
 ### OpenID Connect login is not supported
 
-`pmx api auth login` covers password, API token, and TOTP/two-factor
+`pmx auth login` covers password, API token, and TOTP/two-factor
 authentication, but not OIDC. Proxmox supports OpenID Connect realms, and the
 client exposes both handshake calls (`CreateOpenidAuthUrl` and
 `CreateOpenidLogin`), yet no CLI command drives them. An operator on an
 OIDC-only realm cannot log in.
 
-Suggested shape: `pmx api auth login --oidc`, which would request the
+Suggested shape: `pmx auth login --oidc`, which would request the
 authorization URL, accept the pasted redirect, and complete the login.
 
 ## Medium-severity gaps (historical, resolved)
@@ -193,8 +193,8 @@ per-node SDN state and verify an `apply`.
 
 - `POST /nodes/{node}/storage/{storage}/oci-registry-pull` pulls an OCI
   container image and is entirely unwired (`nodes.CreateStorageOciRegistryPull`).
-- `pmx storage upload` cannot send `checksum` or `checksum-algorithm`, so
-  uploads cannot be integrity-checked even though `pmx storage download-url`
+- `pmx pve storage upload` cannot send `checksum` or `checksum-algorithm`, so
+  uploads cannot be integrity-checked even though `pmx pve storage download-url`
   already supports both. The asymmetry is worth closing for consistency.
 
 ### qemu — convenience flags and discovery
@@ -207,7 +207,7 @@ each expose roughly ninety flags). The gaps are:
   `--ide 2=...,media=cdrom`.
 - `agent set-user-password` is missing `crypted`, so a pre-hashed password
   cannot be set.
-- There is no cluster-wide VM listing (`pmx qemu list` is per-node only) and no
+- There is no cluster-wide VM listing (`pmx pve qemu list` is per-node only) and no
   helper to discover valid `--cpu` or `--machine` values.
 
 ### node — reads, console proxies, and one config field
@@ -237,8 +237,8 @@ Every write verb is present and fully parameterised. The gaps are read-only:
 
 There is no dedicated command to convert an existing container into a template
 (`POST /nodes/{node}/lxc/{vmid}/template`, `nodes.CreateLxcTemplate`). The
-`pmx lxc template` name is already taken by the appliance-download wrapper, and
-the only current path is `pmx lxc config set --template`.
+`pmx pve lxc template` name is already taken by the appliance-download wrapper, and
+the only current path is `pmx pve lxc config set --template`.
 
 ### access — none
 
@@ -267,7 +267,7 @@ Safe to leave open or document rather than build.
 - **Index endpoints.** Across `cluster` (12), `node` (several), `sdn` (2), and
   others, bare directory-index GET endpoints stay unexposed by design, since
   their data is already reachable through child commands. A 2026-07-04
-  re-review of this design choice, including `pmx cluster jobs` (which lists
+  re-review of this design choice, including `pmx pve cluster jobs` (which lists
   only its `realm-sync` child) and the per-node Ceph directory index,
   confirmed the same judgment holds and left them unexposed.
 - **Internal and websocket endpoints.** `dbus-vmstate`, `mtunnel`,
@@ -279,12 +279,12 @@ Safe to leave open or document rather than build.
 
 ## The deprecated-endpoint case in pool (resolved)
 
-At audit time, `pmx pool get`, `set`, and `delete` routed through the
+At audit time, `pmx pve pool get`, `set`, and `delete` routed through the
 deprecated `/pools/{poolid}` endpoint variants rather than the current
 `/pools` forms that accept a pool ID as a query parameter, so nested resource
 pools (introduced in Proxmox VE 8.x) were not supported. This has since been
 fixed: `get`, `set`, `create`, and `delete` all use the current, non-deprecated
-`/pools` endpoint. `pmx pool show`, added in the 2026-07-04 completion pass,
+`/pools` endpoint. `pmx pve pool show`, added in the 2026-07-04 completion pass,
 is a deliberate exception — it targets the deprecated-but-still-live
 single-item `GET /pools/{poolid}` endpoint on purpose, for parity with
 scripts and operators who already address a pool that way; it does not
@@ -309,8 +309,8 @@ support described in the [README](../README.md#tls-trust).
 This was the order followed to close the gaps above; it is kept for
 reference only, since every item is now done.
 
-1. **High severity, CLI only.** Add `pmx storage aplinfo` (list and download),
-   `pmx task status`, and `pmx api auth login --oidc`. Done.
+1. **High severity, CLI only.** Add `pmx pve storage aplinfo` (list and download),
+   `pmx pve task status`, and `pmx auth login --oidc`. Done.
 2. **Medium, completeness.** SDN fabric `redistribute` and `interfaces`; storage
    `oci-registry-pull` and upload checksums; the qemu convenience and discovery
    flags; the lxc template-convert command. Done.
