@@ -16,6 +16,8 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
+	pvegroup "github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
 	"github.com/fivetwenty-io/pmx-cli/internal/exec"
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
@@ -1323,4 +1325,32 @@ func TestNewRootCmd_PersonaSetsUseAndAnnotation(t *testing.T) {
 	defer cleanup()
 	require.Equal(t, "pmx", root.Use)
 	require.Empty(t, root.Annotations[cli.ProductAnnotation])
+}
+
+// TestHoistedPBSChildrenRequirePBSProduct verifies that a "pbs" persona root
+// tags itself with ProductAnnotation (see NewRootCmd) so that a PBS resource
+// command hoisted directly onto the root by pbs.ChildFactories() — which sets
+// no annotation of its own — still resolves to config.ProductPBS by walking
+// up to the persona root.
+func TestHoistedPBSChildrenRequirePBSProduct(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pbs")
+	defer cleanup()
+	cli.AddGroups(root, &cli.Deps{}, pbs.ChildFactories())
+
+	ds, _, err := root.Find([]string{"datastore"})
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPBS, cli.RequiredProduct(ds),
+		"hoisted pbs child must resolve to pbs via the persona root annotation")
+}
+
+// TestHoistedPVEChildrenRequirePVEProduct is the PVE symmetric case of
+// TestHoistedPBSChildrenRequirePBSProduct.
+func TestHoistedPVEChildrenRequirePVEProduct(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pve")
+	defer cleanup()
+	cli.AddGroups(root, &cli.Deps{}, pvegroup.ChildFactories())
+
+	node, _, err := root.Find([]string{"node"})
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPVE, cli.RequiredProduct(node))
 }
