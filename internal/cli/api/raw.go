@@ -16,13 +16,17 @@ import (
 )
 
 // rawClient returns the pve.Client the active context selected: deps.PBS's
-// underlying transport when set (a PBS context), otherwise deps.API's. Both
-// APIClient and PBSClient wrap the same pve.Client interface, so a single raw
-// command tree can issue GET/POST/PUT/DELETE against whichever product the
-// active context targets without knowing which one it is.
+// underlying transport when set (a PBS context), deps.PDM's when set (a PDM
+// context), otherwise deps.API's. APIClient, PBSClient, and PDMClient all
+// wrap the same pve.Client interface, so a single raw command tree can issue
+// GET/POST/PUT/DELETE against whichever product the active context targets
+// without knowing which one it is.
 func rawClient(deps *cli.Deps) pve.Client {
 	if deps.PBS != nil {
 		return deps.PBS.Raw
+	}
+	if deps.PDM != nil {
+		return deps.PDM.Raw
 	}
 	return deps.API.Raw
 }

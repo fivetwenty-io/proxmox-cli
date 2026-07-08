@@ -1251,11 +1251,12 @@ func TestVersionFlag_ShortV(t *testing.T) {
 	require.Equal(t, "v", vFlag.Shorthand, "--version shorthand must be -v")
 }
 
-// newTwoContextConfig builds a *config.Config with two token-auth contexts —
-// "pve1" (product pve) and "pbs1" (product pbs) — so BuildContextAnyClient
-// tests can select a client by product without any network or keychain
-// access (Auth.Secret is a literal, resolved with no external lookup).
-func newTwoContextConfig(t *testing.T) *config.Config {
+// newThreeContextConfig builds a *config.Config with three token-auth
+// contexts — "pve1" (product pve), "pbs1" (product pbs), and "pdm1" (product
+// pdm) — so BuildContextAnyClient tests can select a client by product
+// without any network or keychain access (Auth.Secret is a literal, resolved
+// with no external lookup).
+func newThreeContextConfig(t *testing.T) *config.Config {
 	t.Helper()
 	return &config.Config{
 		CurrentContext: "pve1",
@@ -1270,41 +1271,101 @@ func newTwoContextConfig(t *testing.T) *config.Config {
 				Product: config.ProductPBS,
 				Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s2"},
 			},
+			"pdm1": {
+				Host: "10.0.0.3", Port: 8443, Protocol: "https", Realm: "pam",
+				Product: config.ProductPDM,
+				Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s3"},
+			},
 		},
 	}
 }
 
-// TestBuildContextAnyClient_SelectsByProduct verifies that BuildContextAnyClient
-// resolves the requested context and builds exactly the client matching that
-// context's product, with no cross-product guard (unlike BuildContextClient /
-// BuildContextPBSClient, which each reject the other product).
-func TestBuildContextAnyClient_SelectsByProduct(t *testing.T) {
-	cfg := newTwoContextConfig(t)
+// TestBuildContextAnyClient_ReturnsExactlyOneClient verifies that
+// BuildContextAnyClient resolves the requested context and builds exactly
+// the client matching that context's product — one non-nil Clients field per
+// product — with no cross-product guard (unlike BuildContextClient /
+// BuildContextPBSClient / BuildContextPDMClient, which each reject every
+// other product).
+func TestBuildContextAnyClient_ReturnsExactlyOneClient(t *testing.T) {
+	cfg := newThreeContextConfig(t)
 
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 
-	ac, pc, ctx, err := cli.BuildContextAnyClient(root, cfg, "", "pbs1", false, func() bool { return false })
-	require.NoError(t, err)
-	require.Nil(t, ac)
-	require.NotNil(t, pc)
-	require.Equal(t, config.ProductPBS, ctx.Product)
+	cases := []struct {
+		contextName string
+		product     string
+	}{
+		{"pve1", config.ProductPVE},
+		{"pbs1", config.ProductPBS},
+		{"pdm1", config.ProductPDM},
+	}
 
-	ac, pc, ctx, err = cli.BuildContextAnyClient(root, cfg, "", "pve1", false, func() bool { return false })
-	require.NoError(t, err)
-	require.NotNil(t, ac)
-	require.Nil(t, pc)
-	require.False(t, ctx.IsPBS())
+	for _, tc := range cases {
+		t.Run(tc.contextName, func(t *testing.T) {
+			clients, ctx, err := cli.BuildContextAnyClient(root, cfg, "", tc.contextName, false, func() bool { return false })
+			require.NoError(t, err)
+			require.Equal(t, tc.product, ctx.Product)
+
+			nonNil := 0
+			if clients.API != nil {
+				nonNil++
+			}
+			if clients.PBS != nil {
+				nonNil++
+			}
+			if clients.PDM != nil {
+				nonNil++
+			}
+			require.Equal(t, 1, nonNil, "exactly one Clients field must be non-nil for product %q", tc.product)
+
+			switch tc.product {
+			case config.ProductPVE:
+				require.NotNil(t, clients.API)
+			case config.ProductPBS:
+				require.NotNil(t, clients.PBS)
+			case config.ProductPDM:
+				require.NotNil(t, clients.PDM)
+			}
+		})
+	}
+}
+
+// TestBuildContextAnyClient_UnknownProductFailsLoudly verifies that
+// BuildContextAnyClient rejects a context whose product is not one of the
+// three known products, rather than silently falling back to a PVE client
+// (see the Global Constraints "no silent PVE fallthrough" rule).
+func TestBuildContextAnyClient_UnknownProductFailsLoudly(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "bogus1",
+		Contexts: map[string]*config.Context{
+			"bogus1": {
+				Host: "10.0.0.9", Port: 1, Protocol: "https", Realm: "pam",
+				Product: "bogus",
+				Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+			},
+		},
+	}
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+
+	clients, ctx, err := cli.BuildContextAnyClient(root, cfg, "", "bogus1", false, func() bool { return false })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `unsupported product "bogus"`)
+	require.Nil(t, ctx)
+	require.Zero(t, clients)
 }
 
 // TestPersona verifies that Persona maps an invocation name (os.Args[0]) to
-// its command surface: "pve" and "pbs" select that product's hoisted tree;
-// every other name (including "pmx", `go run`/`go test` temp binary names,
-// and the empty string) falls back to the full "pmx" tree.
+// its command surface: "pve", "pbs", and "pdm" each select that product's
+// hoisted tree; every other name (including "pmx", `go run`/`go test` temp
+// binary names, and the empty string) falls back to the full "pmx" tree.
 func TestPersona(t *testing.T) {
 	cases := map[string]string{
-		"pve": "pve", "pbs": "pbs", "pmx": "pmx",
+		"pve": "pve", "pbs": "pbs", "pdm": "pdm", "pmx": "pmx",
 		"/usr/local/bin/pve": "pve", "pbs.exe": "pbs",
+		"/usr/local/bin/pdm": "pdm", "pdm.exe": "pdm",
 		"pmx.exe": "pmx", "go_build_x": "pmx", "": "pmx",
 	}
 	for in, want := range cases {
@@ -1313,14 +1374,19 @@ func TestPersona(t *testing.T) {
 }
 
 // TestNewRootCmd_PersonaSetsUseAndAnnotation verifies that NewRootCmd sets
-// root.Use to the persona name and, for "pbs" (and by symmetry "pve"), tags
-// the root with ProductAnnotation so requiredProduct resolves correctly for
-// commands hoisted directly onto the root.
+// root.Use to the persona name and, for "pbs", "pdm" (and by symmetry
+// "pve"), tags the root with ProductAnnotation so requiredProduct resolves
+// correctly for commands hoisted directly onto the root.
 func TestNewRootCmd_PersonaSetsUseAndAnnotation(t *testing.T) {
 	root, cleanup := cli.NewRootCmd("pbs")
 	defer cleanup()
 	require.Equal(t, "pbs", root.Use)
 	require.Equal(t, config.ProductPBS, root.Annotations[cli.ProductAnnotation])
+
+	root, cleanup = cli.NewRootCmd("pdm")
+	defer cleanup()
+	require.Equal(t, "pdm", root.Use)
+	require.Equal(t, config.ProductPDM, root.Annotations[cli.ProductAnnotation])
 
 	root, cleanup = cli.NewRootCmd("pmx")
 	defer cleanup()
@@ -1328,19 +1394,38 @@ func TestNewRootCmd_PersonaSetsUseAndAnnotation(t *testing.T) {
 	require.Empty(t, root.Annotations[cli.ProductAnnotation])
 }
 
+// TestRequiredProduct_PDMAnnotationChain verifies that requiredProduct walks
+// up the parent chain to resolve config.ProductPDM from a "pdm"-annotated
+// group's unannotated child — the same inheritance mechanism already proven
+// for PBS by TestHoistedPBSChildrenRequirePBSProduct.
+func TestRequiredProduct_PDMAnnotationChain(t *testing.T) {
+	group := &cobra.Command{
+		Use:         "pdmgroup",
+		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPDM},
+	}
+	child := &cobra.Command{Use: "child"}
+	group.AddCommand(child)
+
+	require.Equal(t, config.ProductPDM, cli.RequiredProduct(child),
+		"a command with no annotation of its own must inherit product from its nearest annotated ancestor")
+}
+
 // TestNewRootCmd_PersonaDescribesActiveProduct verifies that the root
 // command's Short/Long text describes the persona actually invoked, rather
 // than always describing the combined "pmx" tree: the "pve" persona must
 // read as a Proxmox VE CLI, the "pbs" persona as a Proxmox Backup Server
-// CLI, and the default "pmx" persona must keep its existing combined
-// description unchanged. Each product persona's Long text must also point
-// back at the `pmx` binary for the full combined tree.
+// CLI, the "pdm" persona as a Proxmox Datacenter Manager CLI, and the
+// default "pmx" persona must keep its existing combined description
+// unchanged. Each product persona's Long text must also point back at the
+// `pmx` binary for the full combined tree.
 func TestNewRootCmd_PersonaDescribesActiveProduct(t *testing.T) {
 	pmxRoot, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	pveRoot, cleanup := cli.NewRootCmd("pve")
 	defer cleanup()
 	pbsRoot, cleanup := cli.NewRootCmd("pbs")
+	defer cleanup()
+	pdmRoot, cleanup := cli.NewRootCmd("pdm")
 	defer cleanup()
 
 	require.Equal(t, "pmx — Proxmox CLI", pmxRoot.Short,
@@ -1356,15 +1441,25 @@ func TestNewRootCmd_PersonaDescribesActiveProduct(t *testing.T) {
 	require.NotContains(t, pbsRoot.Short, "Proxmox VE",
 		"the pbs persona's Short text must not mention Proxmox VE")
 
+	require.Contains(t, pdmRoot.Short, "Datacenter Manager",
+		"the pdm persona's Short text must describe Proxmox Datacenter Manager")
+	require.NotContains(t, pveRoot.Short, "Datacenter Manager")
+	require.NotContains(t, pbsRoot.Short, "Datacenter Manager")
+
 	require.NotEqual(t, pveRoot.Short, pbsRoot.Short,
 		"pve and pbs personas must have distinct Short text")
 	require.NotEqual(t, pmxRoot.Short, pveRoot.Short)
 	require.NotEqual(t, pmxRoot.Short, pbsRoot.Short)
+	require.NotEqual(t, pmxRoot.Short, pdmRoot.Short)
+	require.NotEqual(t, pveRoot.Short, pdmRoot.Short)
+	require.NotEqual(t, pbsRoot.Short, pdmRoot.Short)
 
 	require.Contains(t, pveRoot.Long, "pmx",
 		"the pve persona's Long text must mention the pmx binary for the full combined tree")
 	require.Contains(t, pbsRoot.Long, "pmx",
 		"the pbs persona's Long text must mention the pmx binary for the full combined tree")
+	require.Contains(t, pdmRoot.Long, "pmx",
+		"the pdm persona's Long text must mention the pmx binary for the full combined tree")
 }
 
 // TestHoistedPBSChildrenRequirePBSProduct verifies that a "pbs" persona root

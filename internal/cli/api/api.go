@@ -23,19 +23,21 @@ func Auth(_ *cli.Deps) *cobra.Command { return newAuthCmd() }
 
 // NewCommand builds the `pmx api` command and its sub-commands: raw
 // GET/POST/PUT/DELETE passthrough requests against the active context's
-// Proxmox VE or Proxmox Backup Server API. The command carries the
-// product:context annotation so the root resolves whichever client (PVE or
-// PBS) the active context targets; each raw sub-command then selects
-// deps.PBS when set, falling back to deps.API otherwise (see rawClient).
+// Proxmox VE, Proxmox Backup Server, or Proxmox Datacenter Manager API. The
+// command carries the product:context annotation so the root resolves
+// whichever client (PVE, PBS, or PDM) the active context targets; each raw
+// sub-command then selects deps.PBS or deps.PDM when set, falling back to
+// deps.API otherwise (see rawClient).
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api",
 		Short: "Make raw Proxmox API requests against the active context",
-		Long: "Issue raw GET/POST/PUT/DELETE requests against the active context's Proxmox VE or " +
-			"Proxmox Backup Server API, for endpoints this CLI does not (yet) expose as a typed " +
-			"command. The response is rendered generically: as a key/value table for a single JSON " +
-			"object, a table for an array of objects, and a plain value otherwise; every format " +
-			"always preserves the full response losslessly via --output json or --output yaml.",
+		Long: "Issue raw GET/POST/PUT/DELETE requests against the active context's Proxmox VE, " +
+			"Proxmox Backup Server, or Proxmox Datacenter Manager API, for endpoints this CLI does " +
+			"not (yet) expose as a typed command. The response is rendered generically: as a " +
+			"key/value table for a single JSON object, a table for an array of objects, and a " +
+			"plain value otherwise; every format always preserves the full response losslessly via " +
+			"--output json or --output yaml.",
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 	}
 

@@ -50,6 +50,12 @@ type Deps struct {
 	// (see ProductAnnotation); every other command gets API instead.
 	PBS *apiclient.PBSClient
 
+	// PDM is the constructed Proxmox Datacenter Manager client. It is
+	// non-nil only for commands whose annotation chain requires the "pdm"
+	// product (see ProductAnnotation); every other command gets API or PBS
+	// instead.
+	PDM *apiclient.PDMClient
+
 	// Out is the output renderer used by all commands.
 	Out output.Renderer
 
@@ -120,12 +126,12 @@ func WithDeps(ctx context.Context, deps *Deps) context.Context {
 
 // ProductAnnotation is the cobra Annotations key a command group sets to
 // declare which Proxmox product its API calls target: config.ProductPVE
-// (the default when the key is absent) or config.ProductPBS. The root
-// command's PersistentPreRunE reads the nearest annotation up the parent
-// chain to decide whether to build Deps.API (PVE) or Deps.PBS (PBS), and
-// the corresponding client builder rejects a context whose product does
-// not match, so a PVE command can never silently talk to a PBS host or
-// vice versa.
+// (the default when the key is absent), config.ProductPBS, or
+// config.ProductPDM. The root command's PersistentPreRunE reads the nearest
+// annotation up the parent chain to decide whether to build Deps.API (PVE),
+// Deps.PBS (PBS), or Deps.PDM (PDM), and the corresponding client builder
+// rejects a context whose product does not match, so a PVE command can never
+// silently talk to a PBS or PDM host, or vice versa.
 const ProductAnnotation = "product"
 
 // ProductFromContext is the ProductAnnotation value a shared command sets to
@@ -169,12 +175,13 @@ type persistentFlags struct {
 }
 
 // Persona maps the invocation name (os.Args[0]) to a command surface:
-// "pve" or "pbs" expose that product hoisted to the root; anything else
-// (including "pmx", `go run` temp names, and tests) exposes the full tree.
+// "pve", "pbs", or "pdm" expose that product hoisted to the root; anything
+// else (including "pmx", `go run` temp names, and tests) exposes the full
+// tree.
 func Persona(arg0 string) string {
 	name := strings.TrimSuffix(filepath.Base(arg0), ".exe")
 	switch name {
-	case "pve", "pbs":
+	case "pve", "pbs", "pdm":
 		return name
 	default:
 		return "pmx"
@@ -182,7 +189,7 @@ func Persona(arg0 string) string {
 }
 
 // NewRootCmd constructs the top-level cobra.Command for the given persona
-// ("pmx", "pve", or "pbs"; see Persona). It registers all persistent flags
+// ("pmx", "pve", "pbs", or "pdm"; see Persona). It registers all persistent flags
 // and the PersistentPreRunE hook that wires config, auth, API client, logger,
 // and output renderer.
 // AddGroups must be called after NewRootCmd to attach group sub-commands from
@@ -249,6 +256,18 @@ structured output in table, ascii, plain, JSON, and YAML formats.
 
 The full combined tree (Proxmox VE and Proxmox Backup Server) is available
 via the pmx binary as ` + "`pmx pve ...`" + ` / ` + "`pmx pbs ...`" + `.`
+	case "pdm":
+		root.Annotations = map[string]string{ProductAnnotation: config.ProductPDM}
+		root.Short = "Manage a Proxmox Datacenter Manager"
+		root.Long = `pdm is a command-line interface for the Proxmox Datacenter Manager API.
+
+It supports multiple named contexts, token and password authentication, and
+structured output in table, ascii, plain, JSON, and YAML formats. Create a
+context with ` + "`pmx context add <name> --product pdm ...`" + ` before use.
+
+The full combined tree (Proxmox VE, Proxmox Backup Server, and Proxmox
+Datacenter Manager) is available via the pmx binary as ` + "`pmx pve ...`" + ` /
+` + "`pmx pbs ...`" + ` / ` + "`pmx pdm ...`" + `.`
 	default:
 		root.Short = "pmx — Proxmox CLI"
 		root.Long = `pmx is a command-line interface for the Proxmox VE and Proxmox Backup Server APIs.
@@ -400,16 +419,23 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	var (
 		ac  *apiclient.APIClient
 		pc  *apiclient.PBSClient
+		dc  *apiclient.PDMClient
 		ctx *config.Context
 	)
 
 	switch requiredProduct(cmd) {
 	case config.ProductPBS:
 		pc, ctx, err = BuildContextPBSClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+	case config.ProductPDM:
+		dc, ctx, err = BuildContextPDMClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
 	case ProductFromContext:
-		ac, pc, ctx, err = BuildContextAnyClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
-	default:
+		var clients Clients
+		clients, ctx, err = BuildContextAnyClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+		ac, pc, dc = clients.API, clients.PBS, clients.PDM
+	case config.ProductPVE:
 		ac, ctx, err = BuildContextClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+	default:
+		err = fmt.Errorf("unsupported product %q", requiredProduct(cmd))
 	}
 
 	if err != nil {
@@ -451,6 +477,11 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	if pc != nil {
 		pc.SetSlogLogger(logger)
 		deps.PBS = pc
+	}
+
+	if dc != nil {
+		dc.SetSlogLogger(logger)
+		deps.PDM = dc
 	}
 
 	setDeps(cmd, deps)
@@ -523,11 +554,21 @@ func BuildContextClient(
 		return nil, nil, err
 	}
 
-	if ctx.IsPBS() {
+	switch ctx.Product {
+	case config.ProductPVE, "":
+		// ok
+	case config.ProductPBS:
 		return nil, nil, fmt.Errorf(
 			"context %q targets Proxmox Backup Server (product: %s); this command requires a PVE context — use 'pmx pbs' commands or select a PVE context",
 			contextName, config.ProductPBS,
 		)
+	case config.ProductPDM:
+		return nil, nil, fmt.Errorf(
+			"context %q targets Proxmox Datacenter Manager (product: %s); this command requires a PVE context — use 'pmx pdm' commands or select a PVE context",
+			contextName, config.ProductPDM,
+		)
+	default:
+		return nil, nil, fmt.Errorf("unsupported product %q", ctx.Product)
 	}
 
 	ac, err := apiclient.NewAPIClient(opts)
@@ -552,10 +593,10 @@ func BuildContextPBSClient(
 		return nil, nil, err
 	}
 
-	if !ctx.IsPBS() {
+	if ctx.Product != config.ProductPBS {
 		return nil, nil, fmt.Errorf(
-			"context %q targets Proxmox VE (product: %s); this command requires a PBS context — create one with 'pmx context add --product %s'",
-			contextName, config.ProductPVE, config.ProductPBS,
+			"context %q targets %s (product: %s); this command requires a PBS context — create one with 'pmx context add --product %s'",
+			contextName, productDisplayName(ctx.Product), normalizedProduct(ctx.Product), config.ProductPBS,
 		)
 	}
 
@@ -567,32 +608,109 @@ func BuildContextPBSClient(
 	return pc, ctx, nil
 }
 
+// BuildContextPDMClient is BuildContextClient's Proxmox Datacenter Manager
+// counterpart: identical context resolution, secret handling, and TLS/TOFU
+// wiring, but it requires the resolved context to declare product "pdm" and
+// constructs an *apiclient.PDMClient. apiclient.NewPDMClient fills the
+// PDM-specific option defaults (port 8443, PDMAPIToken, PDMAuthCookie) for
+// any of those fields still zero-valued after context resolution.
+func BuildContextPDMClient(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
+) (*apiclient.PDMClient, *config.Context, error) {
+	opts, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if ctx.Product != config.ProductPDM {
+		return nil, nil, fmt.Errorf(
+			"context %q targets %s (product: %s); this command requires a PDM context — create one with 'pmx context add --product %s'",
+			contextName, productDisplayName(ctx.Product), normalizedProduct(ctx.Product), config.ProductPDM,
+		)
+	}
+
+	dc, err := apiclient.NewPDMClient(opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+	}
+
+	return dc, ctx, nil
+}
+
+// productDisplayName returns the human-readable product name for an error
+// message, treating "" (backward-compat configs) the same as ProductPVE.
+func productDisplayName(product string) string {
+	switch product {
+	case config.ProductPBS:
+		return "Proxmox Backup Server"
+	case config.ProductPDM:
+		return "Proxmox Datacenter Manager"
+	default:
+		return "Proxmox VE"
+	}
+}
+
+// normalizedProduct returns product, substituting ProductPVE for "" so error
+// messages never print an empty product identifier for backward-compat
+// configs.
+func normalizedProduct(product string) string {
+	if product == "" {
+		return config.ProductPVE
+	}
+	return product
+}
+
+// Clients carries the per-product API clients a context can resolve to.
+// Exactly one field is non-nil, matching the context's product.
+type Clients struct {
+	// API is set when the context targets Proxmox VE (product "pve" or "").
+	API *apiclient.APIClient
+
+	// PBS is set when the context targets Proxmox Backup Server.
+	PBS *apiclient.PBSClient
+
+	// PDM is set when the context targets Proxmox Datacenter Manager.
+	PDM *apiclient.PDMClient
+}
+
 // BuildContextAnyClient resolves the active context product-agnostically and
-// builds the client matching its product. Exactly one of the returned clients
-// is non-nil. Unlike BuildContextClient / BuildContextPBSClient it applies no
-// cross-product guard: it is used only by shared commands annotated
-// ProductFromContext, which are valid against either product.
+// builds the client matching its product. Exactly one field of the returned
+// Clients is non-nil. Unlike BuildContextClient / BuildContextPBSClient /
+// BuildContextPDMClient it applies no cross-product guard: it is used only by
+// shared commands annotated ProductFromContext, which are valid against any
+// product. An unrecognized ctx.Product errors rather than silently falling
+// back to a PVE client (see the Global Constraints "no silent PVE fallthrough"
+// rule).
 func BuildContextAnyClient(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
-) (*apiclient.APIClient, *apiclient.PBSClient, *config.Context, error) {
+) (Clients, *config.Context, error) {
 	opts, ctx, _, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
 	if err != nil {
-		return nil, nil, nil, err
+		return Clients{}, nil, err
 	}
 
-	if ctx.IsPBS() {
+	switch ctx.Product {
+	case config.ProductPBS:
 		pc, err := apiclient.NewPBSClient(opts)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return Clients{}, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
 		}
-		return nil, pc, ctx, nil
+		return Clients{PBS: pc}, ctx, nil
+	case config.ProductPDM:
+		dc, err := apiclient.NewPDMClient(opts)
+		if err != nil {
+			return Clients{}, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+		}
+		return Clients{PDM: dc}, ctx, nil
+	case config.ProductPVE, "":
+		ac, err := apiclient.NewAPIClient(opts)
+		if err != nil {
+			return Clients{}, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+		}
+		return Clients{API: ac}, ctx, nil
+	default:
+		return Clients{}, nil, fmt.Errorf("unsupported product %q", ctx.Product)
 	}
-
-	ac, err := apiclient.NewAPIClient(opts)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
-	}
-	return ac, nil, ctx, nil
 }
 
 // buildContextOptions performs the context-and-options resolution shared by

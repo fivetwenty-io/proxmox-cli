@@ -14,11 +14,11 @@ import (
 // Group builds the `pmx version` command and its sub-commands.
 //
 // The group command itself reports the active context's server API version —
-// a Proxmox VE cluster version or a Proxmox Backup Server version, depending
-// on which product the active context targets (see cli.ProductFromContext).
-// The `client` sub-command reports this CLI's own build information and
-// contacts nothing. The `ping` sub-command checks PBS connectivity and
-// requires a PBS context.
+// a Proxmox VE cluster version, a Proxmox Backup Server version, or a Proxmox
+// Datacenter Manager version, depending on which product the active context
+// targets (see cli.ProductFromContext). The `client` sub-command reports this
+// CLI's own build information and contacts nothing. The `ping` sub-command
+// checks PBS connectivity and requires a PBS context.
 func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
@@ -35,13 +35,23 @@ func Group(_ *cli.Deps) *cobra.Command {
 
 // runServerVersion queries GET /version on the active context's client and
 // renders the server API version. It branches on which client the root wired
-// into deps: a PBS context populates deps.PBS, everything else populates
-// deps.API.
+// into deps: a PBS context populates deps.PBS, a PDM context populates
+// deps.PDM, everything else populates deps.API.
 func runServerVersion(cmd *cobra.Command, _ []string) error {
 	deps := cli.GetDeps(cmd)
 
 	if deps.PBS != nil {
 		resp, err := deps.PBS.Version.Get(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("get server version: %w", err)
+		}
+
+		single := map[string]string{"version": resp.Version, "release": resp.Release, "repoid": resp.Repoid}
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: resp}, deps.Format)
+	}
+
+	if deps.PDM != nil {
+		resp, err := deps.PDM.Version.Get(cmd.Context())
 		if err != nil {
 			return fmt.Errorf("get server version: %w", err)
 		}
