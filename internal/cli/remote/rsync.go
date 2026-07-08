@@ -39,7 +39,7 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "rsync [flags] <rsync-arg>...",
-		Short: "Synchronise files to or from a PVE node or PBS host over SSH (node:path operands)",
+		Short: "Synchronise files to or from a PVE node, PBS host, or PDM host over SSH (node:path operands)",
 		Long: `pmx rsync execs the system rsync(1) binary, rewriting any "node:path"
 operand (optionally "user@node:path") to the active context's target, and
 injects "-e ssh ..." so the transfer authenticates the same way "pmx ssh"

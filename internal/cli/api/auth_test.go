@@ -184,26 +184,26 @@ func TestIsInteractiveInput_NonFileReader_ReturnsFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// rejectPBSContext — product guard on the auth client builders
+// requirePVEContext — product guard on the auth client builders
 // ---------------------------------------------------------------------------
 
-func TestRejectPBSContext_PBSProduct_Errors(t *testing.T) {
+func TestRequirePVEContext_PBSProduct_Errors(t *testing.T) {
 	ctx := sampleAuthContext(false, false)
 	ctx.Product = config.ProductPBS
 
-	err := rejectPBSContext(ctx, "backup1")
+	err := requirePVEContext(ctx, "backup1")
 
 	require.Error(t, err, "auth commands must reject PBS contexts")
 	require.Contains(t, err.Error(), "backup1", "error must name the offending context")
 	require.Contains(t, err.Error(), "Proxmox Backup Server")
 }
 
-func TestRejectPBSContext_PVEAndEmptyProduct_Allowed(t *testing.T) {
+func TestRequirePVEContext_PVEAndEmptyProduct_Allowed(t *testing.T) {
 	ctx := sampleAuthContext(false, false)
-	require.NoError(t, rejectPBSContext(ctx, "prod"), "empty product means PVE")
+	require.NoError(t, requirePVEContext(ctx, "prod"), "empty product means PVE")
 
 	ctx.Product = config.ProductPVE
-	require.NoError(t, rejectPBSContext(ctx, "prod"))
+	require.NoError(t, requirePVEContext(ctx, "prod"))
 }
 
 func TestClientForContext_RejectsPBSContext(t *testing.T) {
@@ -232,15 +232,15 @@ func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
 	require.Nil(t, ac)
 }
 
-// TestRejectPBSContext_PDMProduct_Errors mirrors
-// TestRejectPBSContext_PBSProduct_Errors for Proxmox Datacenter Manager: like
-// PBS, a PDM context's ticket-based login is not wired yet, so rejectPBSContext
+// TestRequirePVEContext_PDMProduct_Errors mirrors
+// TestRequirePVEContext_PBSProduct_Errors for Proxmox Datacenter Manager: like
+// PBS, a PDM context's ticket-based login is not wired yet, so requirePVEContext
 // must reject it with guidance pointing at 'auth set-token'.
-func TestRejectPBSContext_PDMProduct_Errors(t *testing.T) {
+func TestRequirePVEContext_PDMProduct_Errors(t *testing.T) {
 	ctx := sampleAuthContext(false, false)
 	ctx.Product = config.ProductPDM
 
-	err := rejectPBSContext(ctx, "dc1")
+	err := requirePVEContext(ctx, "dc1")
 
 	require.Error(t, err, "auth commands must reject PDM contexts")
 	require.Contains(t, err.Error(), "dc1", "error must name the offending context")

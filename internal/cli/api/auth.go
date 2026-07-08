@@ -32,11 +32,11 @@ func newAuthCmd() *cobra.Command {
 		Use:   "auth",
 		Short: "Authenticate against a context",
 		Long: "Manage local credentials and session state for a context. status, set-token, " +
-			"set-password, and logout work with any context, Proxmox VE (PVE) or Proxmox Backup " +
-			"Server (PBS). login and refresh, which negotiate a session ticket with the server, " +
+			"set-password, and logout work with any context, Proxmox VE (PVE), Proxmox Backup " +
+			"Server (PBS), or Proxmox Datacenter Manager (PDM). login and refresh, which negotiate a session ticket with the server, " +
 			"currently support PVE contexts only; run 'auth login --help' for details on this " +
 			"limitation. whoami, which queries the server to verify credentials, also currently " +
-			"requires a PVE context; for local credential info on a PBS context use 'auth status' " +
+			"requires a PVE context; for local credential info on a PBS or PDM context use 'auth status' " +
 			"or 'context show'.",
 	}
 	cmd.AddCommand(
@@ -72,7 +72,7 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 	return c, nil
 }
 
-// rejectPBSContext returns an error when ctx targets a single-host product
+// requirePVEContext returns an error when ctx targets a single-host product
 // (Proxmox Backup Server or Proxmox Datacenter Manager) rather than Proxmox
 // VE. The auth commands drive PVE's ticket endpoints through a PVE-flavored
 // client (PVEAuthCookie / PVECSRFPreventionToken header names); PBS/PDM
@@ -88,7 +88,7 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 // apiclient.PDMClient constructions) differ enough from PVE's that
 // supporting them is tracked as follow-up work rather than bolted on here;
 // see newAuthLoginCmd's Long text.
-func rejectPBSContext(ctx *config.Context, contextName string) error {
+func requirePVEContext(ctx *config.Context, contextName string) error {
 	switch ctx.Product {
 	case config.ProductPVE, "":
 		return nil
@@ -133,12 +133,13 @@ func newAuthLoginCmd() *cobra.Command {
 		Long: "Authenticate against a context's realm (password, TOTP/two-factor, or OpenID " +
 			"Connect via --oidc) and store the resulting session ticket in the config.\n\n" +
 			"Limitation: only Proxmox VE (PVE) contexts are supported. A context with " +
-			"product: pbs is rejected. Proxmox Backup Server exposes a comparable ticket " +
-			"endpoint (POST /access/ticket via pkg/pbs/access), but its request/response " +
-			"shapes and client wiring (PBSAPIToken/PBSAuthCookie headers, a separate PBS " +
-			"client construction path) differ enough from PVE's that wiring it into this " +
-			"command is tracked as follow-up work rather than done here. Until then, " +
-			"configure PBS contexts with 'auth set-token' instead.",
+			"product: pbs or product: pdm is rejected. Proxmox Backup Server and Proxmox " +
+			"Datacenter Manager expose comparable ticket endpoints (POST /access/ticket), but " +
+			"their request/response shapes and client wiring (PBSAPIToken/PBSAuthCookie or " +
+			"PDMAPIToken/PDMAuthCookie headers, separate client construction paths) differ " +
+			"enough from PVE's that wiring them into this command is tracked as follow-up work " +
+			"rather than done here. Until then, configure PBS and PDM contexts with " +
+			"'auth set-token' instead.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -773,7 +774,7 @@ func serverLogout(cmd *cobra.Command, ctx *config.Context, contextName string) e
 // only to derive the per-context TOFU fingerprint cache path (see
 // contextOptions) and has no bearing on which credential is selected.
 func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName string) (*apiclient.APIClient, error) {
-	err := rejectPBSContext(ctx, contextName)
+	err := requirePVEContext(ctx, contextName)
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +809,7 @@ func clientForContext(
 	ctx *config.Context,
 	contextName, user, realm, password, ticket, csrf string,
 ) (*apiclient.APIClient, error) {
-	err := rejectPBSContext(ctx, contextName)
+	err := requirePVEContext(ctx, contextName)
 	if err != nil {
 		return nil, err
 	}
