@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/context"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/initcmd"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/pdm"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/version"
@@ -31,8 +32,10 @@ func factoriesFor(persona string) []cli.GroupFactory {
 		return append(f, pve.ChildFactories()...)
 	case "pbs":
 		return append(f, pbs.ChildFactories()...)
+	case "pdm":
+		return append(f, pdm.ChildFactories()...)
 	default:
-		return append(f, pve.Group, pbs.Group)
+		return append(f, pve.Group, pbs.Group, pdm.Group)
 	}
 }
 
