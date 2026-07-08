@@ -13,18 +13,12 @@ func Group(_ *cli.Deps) *cobra.Command {
 	return NewCommand()
 }
 
-// AuthAlias is the factory for the hidden top-level `pmx auth` alias
-// (login/logout/status/refresh/set-token/set-password). It is the only way
-// to reach authentication commands now that `pmx api` means raw passthrough;
-// a later task promotes it to the canonical, non-hidden `pmx auth` command.
-func AuthAlias(_ *cli.Deps) *cobra.Command { return hidden(newAuthCmd()) }
-
-// hidden marks cmd as a hidden top-level alias so it works but is omitted from
-// `pmx --help` listings.
-func hidden(cmd *cobra.Command) *cobra.Command {
-	cmd.Hidden = true
-	return cmd
-}
+// Auth is the factory for the canonical top-level `auth` command
+// (login/logout/status/whoami/set-token/set-password). status, whoami,
+// set-token, set-password, and logout work with any context; login and
+// refresh, which negotiate a session ticket with the server, currently
+// support PVE contexts only (see newAuthLoginCmd's Long text for why).
+func Auth(_ *cli.Deps) *cobra.Command { return newAuthCmd() }
 
 // NewCommand builds the `pmx api` command and its sub-commands: raw
 // GET/POST/PUT/DELETE passthrough requests against the active context's

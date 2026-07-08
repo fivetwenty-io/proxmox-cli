@@ -20,17 +20,18 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// run executes an auth sub-command (via the hidden top-level `auth` alias,
-// see api.AuthAlias) through the real root command so that the production
-// PersistentPreRunE wires Deps (Out, Format, Cfg loaded from cfgPath, Runner)
-// and applies the noClient annotation. The deps argument is accepted for API
-// symmetry with other group tests but is unused: the auth alias never relies
-// on an injected API client (login/refresh build their own from config).
+// run executes an auth sub-command (via the canonical top-level `auth`
+// command, see api.Auth) through the real root command so that the
+// production PersistentPreRunE wires Deps (Out, Format, Cfg loaded from
+// cfgPath, Runner) and applies the noClient annotation. The deps argument is
+// accepted for API symmetry with other group tests but is unused: auth never
+// relies on an injected API client (login/refresh build their own from
+// config).
 //
 // `pmx api` was repurposed to mean raw GET/POST/PUT/DELETE passthrough; the
-// auth commands (login/logout/status/refresh/set-token/set-password) moved to
-// the standalone `auth` alias, so every call site below passes args starting
-// with "auth" rather than "api auth".
+// auth commands (login/logout/status/refresh/set-token/set-password) live
+// under the standalone `auth` command, so every call site below passes args
+// starting with "auth" rather than "api auth".
 func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, error) {
 	t.Helper()
 
@@ -42,7 +43,7 @@ func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, err
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
-	root.AddCommand(api.AuthAlias(&cli.Deps{}))
+	root.AddCommand(api.Auth(&cli.Deps{}))
 
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -1010,8 +1011,14 @@ func TestAuthLogin_OIDC_LoginServerError(t *testing.T) {
 // registration + annotations
 // ---------------------------------------------------------------------------
 
+func TestAuthFactory_IsVisibleAuthCommand(t *testing.T) {
+	cmd := api.Auth(&cli.Deps{})
+	require.Equal(t, "auth", cmd.Name())
+	require.False(t, cmd.Hidden)
+}
+
 func TestGroup_AllSubcommandsNoClient(t *testing.T) {
-	group := api.AuthAlias(&cli.Deps{})
+	group := api.Auth(&cli.Deps{})
 	leaves := leafCommands(group)
 	require.NotEmpty(t, leaves)
 	// whoami is the deliberate exception: it queries GET /access/permissions to

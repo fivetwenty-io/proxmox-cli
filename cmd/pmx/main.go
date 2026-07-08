@@ -30,7 +30,7 @@ import (
 var factories = []cli.GroupFactory{
 	access.Group,
 	api.Group,
-	api.AuthAlias,
+	api.Auth,
 	cluster.Group,
 	context.Group,
 	context.CtxAlias,

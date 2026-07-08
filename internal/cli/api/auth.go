@@ -26,11 +26,16 @@ import (
 // expiry timestamp; PVE tickets are valid for two hours.
 const ticketLifetime = 2 * time.Hour
 
-// newAuthCmd builds `pmx api auth` and its sub-commands.
+// newAuthCmd builds the canonical `pmx auth` command and its sub-commands.
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authenticate against a context",
+		Long: "Manage local credentials and session state for a context. status, whoami, set-token, " +
+			"set-password, and logout work with any context, Proxmox VE (PVE) or Proxmox Backup " +
+			"Server (PBS). login and refresh, which negotiate a session ticket with the server, " +
+			"currently support PVE contexts only; run 'auth login --help' for details on this " +
+			"limitation.",
 	}
 	cmd.AddCommand(
 		newAuthLoginCmd(),
@@ -72,17 +77,25 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 // authentication error. Called by every auth path that opens a connection
 // (clientForContext and buildClientForOIDC — the only two places this
 // package constructs an API client).
+//
+// PBS does expose a comparable ticket endpoint (pkg/pbs/access.Service's
+// CreateTicket, POST /access/ticket), but its request/response shapes and
+// client wiring (PBSAPIToken/PBSAuthCookie header names, a separate
+// apiclient.PBSClient built via apiclient.NewPBSClient) differ enough from
+// PVE's that supporting it is tracked as follow-up work rather than bolted on
+// here; see newAuthLoginCmd's Long text.
 func rejectPBSContext(ctx *config.Context, contextName string) error {
 	if ctx.IsPBS() {
 		return fmt.Errorf(
-			"context %q targets Proxmox Backup Server (product: pbs); 'pmx api auth' supports only PVE contexts",
+			"context %q targets Proxmox Backup Server (product: pbs); 'auth login'/'auth refresh' "+
+				"support only PVE contexts today; use 'auth set-token' to configure PBS credentials instead",
 			contextName,
 		)
 	}
 	return nil
 }
 
-// newAuthLoginCmd builds `pmx api auth login`.
+// newAuthLoginCmd builds `pmx auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
 		contextName  string
@@ -103,7 +116,16 @@ func newAuthLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Obtain a session ticket and store it in the config",
-		Args:  cobra.NoArgs,
+		Long: "Authenticate against a context's realm (password, TOTP/two-factor, or OpenID " +
+			"Connect via --oidc) and store the resulting session ticket in the config.\n\n" +
+			"Limitation: only Proxmox VE (PVE) contexts are supported. A context with " +
+			"product: pbs is rejected. Proxmox Backup Server exposes a comparable ticket " +
+			"endpoint (POST /access/ticket via pkg/pbs/access), but its request/response " +
+			"shapes and client wiring (PBSAPIToken/PBSAuthCookie headers, a separate PBS " +
+			"client construction path) differ enough from PVE's that wiring it into this " +
+			"command is tracked as follow-up work rather than done here. Until then, " +
+			"configure PBS contexts with 'auth set-token' instead.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
@@ -334,7 +356,7 @@ func parseOIDCRedirect(rawURL string) (code, state string, err error) {
 	return code, state, nil
 }
 
-// newAuthRefreshCmd builds `pmx api auth refresh`, re-obtaining a session ticket
+// newAuthRefreshCmd builds `pmx auth refresh`, re-obtaining a session ticket
 // for a password context.
 func newAuthRefreshCmd() *cobra.Command {
 	var (
@@ -394,7 +416,7 @@ func newAuthRefreshCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthLogoutCmd builds `pmx api auth logout`.
+// newAuthLogoutCmd builds `pmx auth logout`.
 func newAuthLogoutCmd() *cobra.Command {
 	var contextName string
 
@@ -437,7 +459,7 @@ func newAuthLogoutCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthStatusCmd builds `pmx api auth status`.
+// newAuthStatusCmd builds `pmx auth status`.
 func newAuthStatusCmd() *cobra.Command {
 	var contextName string
 
@@ -482,7 +504,7 @@ func newAuthStatusCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthWhoamiCmd builds `pmx api auth whoami`. Unlike the other auth
+// newAuthWhoamiCmd builds `pmx auth whoami`. Unlike the other auth
 // sub-commands it requires a live API client (built by the root from the
 // resolved context), so it is NOT annotated noClient: it calls
 // GET /access/permissions to confirm the stored credentials authenticate and
@@ -538,7 +560,7 @@ func authIdentity(ctx *config.Context) string {
 	return ctx.Auth.Username
 }
 
-// newAuthSetTokenCmd builds `pmx api auth set-token`.
+// newAuthSetTokenCmd builds `pmx auth set-token`.
 func newAuthSetTokenCmd() *cobra.Command {
 	var (
 		contextName string
@@ -596,7 +618,7 @@ func newAuthSetTokenCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// newAuthSetPasswordCmd builds `pmx api auth set-password`.
+// newAuthSetPasswordCmd builds `pmx auth set-password`.
 func newAuthSetPasswordCmd() *cobra.Command {
 	var (
 		contextName string
