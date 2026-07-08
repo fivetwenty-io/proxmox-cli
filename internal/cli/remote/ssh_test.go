@@ -310,3 +310,38 @@ func TestSSH_PVE_RequiresNodeArgument(t *testing.T) {
 	require.ErrorContains(t, err, "node argument is required")
 	require.Empty(t, fr.Calls)
 }
+
+// TestSSH_PDMContextUsesDirectHost covers the PDM branch of RunSSH: like
+// PBS, a PDM context is a single-host product, so it connects directly to
+// deps.Ctx.Host with no node argument and no cluster lookup. deps.API is
+// deliberately left nil so a regression that fell through to the PVE branch
+// would nil-pointer panic on deps.API.Cluster instead of silently passing.
+func TestSSH_PDMContextUsesDirectHost(t *testing.T) {
+	fr := exec.Fake()
+	deps := &cli.Deps{
+		Runner: fr,
+		Ctx:    &config.Context{Product: config.ProductPDM, Host: "pdm.example.com"},
+	}
+
+	_, err := runSSH(deps, "uptime")
+	require.NoError(t, err)
+
+	c := lastCall(t, fr)
+	require.True(t, c.Interactive)
+	require.Equal(t, []string{"-p", "22", "root@pdm.example.com", "uptime"}, c.Args)
+}
+
+// TestSSH_UnknownProductErrors covers the default arm of RunSSH's product
+// switch: a context declaring a product outside {pve, pbs, pdm, ""} must
+// fail loudly rather than silently falling into either addressing mode.
+func TestSSH_UnknownProductErrors(t *testing.T) {
+	fr := exec.Fake()
+	deps := &cli.Deps{
+		Runner: fr,
+		Ctx:    &config.Context{Product: "bogus", Host: "somewhere.example.com"},
+	}
+
+	_, err := runSSH(deps, "uptime")
+	require.ErrorContains(t, err, `unsupported product "bogus"`)
+	require.Empty(t, fr.Calls)
+}

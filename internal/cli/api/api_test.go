@@ -575,6 +575,46 @@ func TestAuthSetToken_Success(t *testing.T) {
 	require.Nil(t, cfg.Contexts["lab"].Auth.Session, "switching to token auth must drop any session")
 }
 
+// TestAuthSetToken_PDMContext confirms 'auth set-token' works uniformly
+// across products: unlike login/refresh (PVE-only ticket auth), set-token
+// only rewrites local config fields and never opens a connection, so a PDM
+// context follows the same token path a PBS or PVE context does.
+func TestAuthSetToken_PDMContext(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	cfg := seedCfg()
+	cfg.Contexts["dc1"] = &config.Context{
+		Product:  config.ProductPDM,
+		Host:     "pdm.example.com",
+		Port:     8443,
+		Protocol: "https",
+		Auth: config.AuthBlock{
+			Type:     "token",
+			Username: "root@pam",
+			TokenID:  "cli",
+			Secret:   "oldsecret",
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path,
+		"auth", "set-token", "--context", "dc1",
+		"--token-id", "newid", "--secret", "newsecret",
+		"--username", "svc@pam",
+	)
+	require.NoError(t, err)
+	require.Contains(t, out, "dc1")
+
+	got := loadCfg(t, path)
+	require.Equal(t, "token", got.Contexts["dc1"].Auth.Type)
+	require.Equal(t, "newid", got.Contexts["dc1"].Auth.TokenID)
+	require.Equal(t, "newsecret", got.Contexts["dc1"].Auth.Secret)
+	require.Equal(t, "svc@pam", got.Contexts["dc1"].Auth.Username)
+}
+
 func TestAuthSetToken_NotFound(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")

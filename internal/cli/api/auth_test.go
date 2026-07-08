@@ -231,3 +231,44 @@ func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
 	require.Contains(t, err.Error(), "Proxmox Backup Server")
 	require.Nil(t, ac)
 }
+
+// TestRejectPBSContext_PDMProduct_Errors mirrors
+// TestRejectPBSContext_PBSProduct_Errors for Proxmox Datacenter Manager: like
+// PBS, a PDM context's ticket-based login is not wired yet, so rejectPBSContext
+// must reject it with guidance pointing at 'auth set-token'.
+func TestRejectPBSContext_PDMProduct_Errors(t *testing.T) {
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = config.ProductPDM
+
+	err := rejectPBSContext(ctx, "dc1")
+
+	require.Error(t, err, "auth commands must reject PDM contexts")
+	require.Contains(t, err.Error(), "dc1", "error must name the offending context")
+	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
+}
+
+func TestClientForContext_RejectsPDMContext(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = config.ProductPDM
+
+	ac, err := clientForContext(cmd, ctx, "dc1", "admin@pam", "pam", "secretpw", "", "")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
+	require.Nil(t, ac)
+}
+
+func TestBuildClientForOIDC_RejectsPDMContext(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = config.ProductPDM
+
+	ac, err := buildClientForOIDC(cmd, ctx, "dc1")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
+	require.Nil(t, ac)
+}

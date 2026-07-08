@@ -1,7 +1,8 @@
 // Package remote implements the top-level `pmx ssh` and `pmx rsync` commands:
 // thin wrappers over the system ssh(1)/rsync(1) binaries that connect to the
 // active context's target — a PVE node's resolved cluster management address,
-// or a PBS context's single endpoint host directly — before connecting.
+// or a PBS or PDM context's single endpoint host directly — before
+// connecting.
 package remote
 
 import (
@@ -27,20 +28,20 @@ const completeNodeNamesTimeout = 3 * time.Second
 
 // SSH builds the top-level `pmx ssh` command: a passthrough wrapper over the
 // system ssh(1) binary that connects to the active context's target — a PVE
-// node's resolved cluster management address, or a PBS context's single
-// endpoint host directly. It carries the product:context annotation (see
-// cli.ProductFromContext) so the root resolves whichever client the active
-// context needs.
+// node's resolved cluster management address, or a PBS or PDM context's
+// single endpoint host directly. It carries the product:context annotation
+// (see cli.ProductFromContext) so the root resolves whichever client the
+// active context needs.
 func SSH(deps *cli.Deps) *cobra.Command {
 	var f sshcmd.Flags
 
 	cmd := &cobra.Command{
 		Use:   "ssh [node] [ssh-option...] [command...]",
-		Short: "Open an SSH session to a PVE node or PBS host (optionally run a remote command)",
+		Short: "Open an SSH session to a PVE node, PBS host, or PDM host (optionally run a remote command)",
 		Long: `pmx ssh connects to the active context's target and execs the system
 ssh(1) binary against it. Against a PVE context, <node> resolves to its
-cluster management address and is required. Against a PBS context, ssh
-connects directly to the context's host; no node argument is needed or
+cluster management address and is required. Against a PBS or PDM context,
+ssh connects directly to the context's host; no node argument is needed or
 accepted — the first token is treated as an ssh option/remote command.
 
 The connection flags below (-l, -i, -p, -A, --no-strict) must precede
@@ -53,13 +54,23 @@ and the first token that is not an option starts the remote command. Use
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Ctx != nil && deps.Ctx.IsPBS() {
+			var product string
+			if deps.Ctx != nil {
+				product = deps.Ctx.Product
+			}
+			switch product {
+			case config.ProductPBS, config.ProductPDM:
+				// Single-host products: address the context host directly, no
+				// node argument consumed.
 				return RunSSH(cmd, deps, &f, "", args)
+			case config.ProductPVE, "":
+				if len(args) == 0 {
+					return fmt.Errorf("a node argument is required for a PVE context")
+				}
+				return RunSSH(cmd, deps, &f, args[0], args[1:])
+			default:
+				return fmt.Errorf("unsupported product %q", product)
 			}
-			if len(args) == 0 {
-				return fmt.Errorf("a node argument is required for a PVE context")
-			}
-			return RunSSH(cmd, deps, &f, args[0], args[1:])
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return completeNodeNames(cmd, deps, args)
@@ -78,19 +89,25 @@ and the first token that is not an option starts the remote command. Use
 // interactively. It is shared by `pmx ssh` and `pmx node <node> ssh` so both
 // commands connect identically.
 //
-// Target resolution branches on the active context's product: a PBS context
-// (deps.Ctx.IsPBS()) connects directly to deps.Ctx.Host, ignoring node
-// (callers pass "" in that case) and performing no cluster lookup; any other
+// Target resolution branches on the active context's product: a PBS or PDM
+// context connects directly to deps.Ctx.Host, ignoring node (callers pass ""
+// in that case) and performing no cluster lookup; a PVE (or empty-product)
 // context requires a non-empty node and resolves it to its cluster
-// management address via nodeaddr.Resolve.
+// management address via nodeaddr.Resolve; any other product is rejected.
 func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, rest []string) error {
 	ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
 
+	var product string
+	if deps.Ctx != nil {
+		product = deps.Ctx.Product
+	}
+
 	var host, target string
-	if deps.Ctx != nil && deps.Ctx.IsPBS() {
+	switch product {
+	case config.ProductPBS, config.ProductPDM:
 		host = deps.Ctx.Host
 		target = host
-	} else {
+	case config.ProductPVE, "":
 		if node == "" {
 			return fmt.Errorf("a node argument is required for a PVE context")
 		}
@@ -100,6 +117,8 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 			return fmt.Errorf("resolve address for node %q: %w", node, err)
 		}
 		target = node
+	default:
+		return fmt.Errorf("unsupported product %q", product)
 	}
 
 	opts, command := sshcmd.SplitPassthrough(rest)

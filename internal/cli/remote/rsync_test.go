@@ -261,6 +261,51 @@ func TestRunRsync_PBS_TargetsContextHostWithNoNodeLookup(t *testing.T) {
 	require.Equal(t, []string{"-e", "ssh -p 22", "root@pbs.example.com:/etc", "./dst"}, c.Args)
 }
 
+// TestRunRsync_PDMContextUsesDirectHost covers the PDM branch of runRsync:
+// like PBS, a PDM context is a single-host product, so every remote operand
+// is rewritten to deps.Ctx.Host directly, regardless of what host label the
+// operand named, and no node lookup happens. deps.API is deliberately left
+// nil so a regression that fell through to the PVE branch would nil-pointer
+// panic on deps.API.Cluster instead of silently passing.
+func TestRunRsync_PDMContextUsesDirectHost(t *testing.T) {
+	runner := exec.Fake()
+	deps := &cli.Deps{
+		Runner: runner,
+		Ctx:    &config.Context{Product: config.ProductPDM, Host: "pdm.example.com"},
+	}
+	f := sshcmd.Flags{User: "root", Port: 22}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	err := runRsync(cmd, deps, &f, []string{"pdm:/etc", "./dst"})
+	require.NoError(t, err)
+
+	require.Len(t, runner.Calls, 1)
+	c := runner.Calls[0]
+	require.Equal(t, "rsync", c.Name)
+	require.Equal(t, []string{"-e", "ssh -p 22", "root@pdm.example.com:/etc", "./dst"}, c.Args)
+}
+
+// TestRunRsync_UnknownProductErrors covers the default arm of runRsync's
+// product switch: a context declaring a product outside {pve, pbs, pdm, ""}
+// must fail loudly rather than silently falling into either addressing mode.
+func TestRunRsync_UnknownProductErrors(t *testing.T) {
+	runner := exec.Fake()
+	deps := &cli.Deps{
+		Runner: runner,
+		Ctx:    &config.Context{Product: "bogus", Host: "somewhere.example.com"},
+	}
+	f := sshcmd.Flags{User: "root", Port: 22}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+
+	err := runRsync(cmd, deps, &f, []string{"bogus:/etc", "./dst"})
+	require.ErrorContains(t, err, `unsupported product "bogus"`)
+	require.Empty(t, runner.Calls)
+}
+
 func TestRsync_ExitCodePropagation(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	cfgPath := writeFakeConfig(t, f, config.SSHBlock{})

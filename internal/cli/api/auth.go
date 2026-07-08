@@ -72,29 +72,41 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 	return c, nil
 }
 
-// rejectPBSContext returns an error when ctx targets Proxmox Backup Server.
-// The auth commands drive PVE's ticket endpoints through a PVE-flavored
-// client (PVEAuthCookie / PVECSRFPreventionToken header names); PBS session
-// auth is not wired yet, so failing fast here beats a confusing server-side
-// authentication error. Called by every auth path that opens a connection
-// (clientForContext and buildClientForOIDC — the only two places this
-// package constructs an API client).
+// rejectPBSContext returns an error when ctx targets a single-host product
+// (Proxmox Backup Server or Proxmox Datacenter Manager) rather than Proxmox
+// VE. The auth commands drive PVE's ticket endpoints through a PVE-flavored
+// client (PVEAuthCookie / PVECSRFPreventionToken header names); PBS/PDM
+// session auth is not wired yet, so failing fast here beats a confusing
+// server-side authentication error. Called by every auth path that opens a
+// connection (clientForContext and buildClientForOIDC — the only two places
+// this package constructs an API client).
 //
 // PBS does expose a comparable ticket endpoint (pkg/pbs/access.Service's
-// CreateTicket, POST /access/ticket), but its request/response shapes and
-// client wiring (PBSAPIToken/PBSAuthCookie header names, a separate
-// apiclient.PBSClient built via apiclient.NewPBSClient) differ enough from
-// PVE's that supporting it is tracked as follow-up work rather than bolted on
-// here; see newAuthLoginCmd's Long text.
+// CreateTicket, POST /access/ticket), and PDM likewise, but their
+// request/response shapes and client wiring (PBSAPIToken/PBSAuthCookie or
+// PDMAPIToken/PDMAuthCookie header names, separate apiclient.PBSClient /
+// apiclient.PDMClient constructions) differ enough from PVE's that
+// supporting them is tracked as follow-up work rather than bolted on here;
+// see newAuthLoginCmd's Long text.
 func rejectPBSContext(ctx *config.Context, contextName string) error {
-	if ctx.IsPBS() {
+	switch ctx.Product {
+	case config.ProductPVE, "":
+		return nil
+	case config.ProductPBS:
 		return fmt.Errorf(
 			"context %q targets Proxmox Backup Server (product: pbs); 'auth login'/'auth refresh' "+
 				"support only PVE contexts today; use 'auth set-token' to configure PBS credentials instead",
 			contextName,
 		)
+	case config.ProductPDM:
+		return fmt.Errorf(
+			"context %q targets Proxmox Datacenter Manager (product: pdm); 'auth login'/'auth refresh' "+
+				"support only PVE contexts today; use 'auth set-token' to configure PDM credentials instead",
+			contextName,
+		)
+	default:
+		return fmt.Errorf("unsupported product %q", ctx.Product)
 	}
-	return nil
 }
 
 // newAuthLoginCmd builds `pmx auth login`.

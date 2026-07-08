@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
 	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
 )
@@ -14,10 +15,10 @@ import (
 // Rsync builds the top-level `pmx rsync` command: a thin wrapper over the
 // system rsync(1) binary that rewrites scp-like "[user@]node:path" operands
 // to the active context's target — the resolved cluster address of a PVE
-// node, or a PBS context's single endpoint host directly — and injects
-// "-e ssh ..." so the transfer authenticates the same way `pmx ssh` does. It
-// carries the product:context annotation (see cli.ProductFromContext) so the
-// root resolves whichever client the active context needs.
+// node, or a PBS or PDM context's single endpoint host directly — and
+// injects "-e ssh ..." so the transfer authenticates the same way `pmx ssh`
+// does. It carries the product:context annotation (see cli.ProductFromContext)
+// so the root resolves whichever client the active context needs.
 //
 // DisableFlagParsing is set because rsync owns most of the short flags pmx
 // would otherwise want (-l, -p, -i, ...), so cobra must never attempt to
@@ -47,7 +48,7 @@ operand must reference the SAME target.
 
 Against a PVE context, the host portion names a cluster node and resolves to
 its cluster management address; every remote operand must name the same
-node. Against a PBS context, every remote operand is rewritten to the
+node. Against a PBS or PDM context, every remote operand is rewritten to the
 context's single endpoint host directly — the host portion you type is not
 looked up, so any label (e.g. "pbs:/path") works.
 
@@ -118,11 +119,12 @@ Supplying your own -e/--rsh is rejected: pmx always injects its own.`,
 // injects "-e "+sshcmd.RemoteShell(f) ahead of the caller's own arguments,
 // and execs rsync.
 //
-// Target resolution branches on the active context's product: a PBS context
-// (deps.Ctx.IsPBS()) rewrites every remote operand to deps.Ctx.Host directly
-// — the host label classifyRsyncArgs extracted from the operand is not
-// looked up — performing no cluster lookup; any other context resolves the
-// agreed node to its cluster management address via nodeaddr.Resolve.
+// Target resolution branches on the active context's product: a PBS or PDM
+// context rewrites every remote operand to deps.Ctx.Host directly — the host
+// label classifyRsyncArgs extracted from the operand is not looked up —
+// performing no cluster lookup; a PVE (or empty-product) context resolves
+// the agreed node to its cluster management address via nodeaddr.Resolve;
+// any other product is rejected.
 func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []string) error {
 	ApplyContextSSHDefaults(cmd, deps, f, "ssh-user", "ssh-port", "ssh-identity")
 
@@ -131,14 +133,22 @@ func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []s
 		return err
 	}
 
+	var product string
+	if deps.Ctx != nil {
+		product = deps.Ctx.Product
+	}
+
 	var host string
-	if deps.Ctx != nil && deps.Ctx.IsPBS() {
+	switch product {
+	case config.ProductPBS, config.ProductPDM:
 		host = deps.Ctx.Host
-	} else {
+	case config.ProductPVE, "":
 		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
 		if err != nil {
 			return fmt.Errorf("resolve address for node %q: %w", node, err)
 		}
+	default:
+		return fmt.Errorf("unsupported product %q", product)
 	}
 	hostForOperand := bracketIfIPv6(host)
 
