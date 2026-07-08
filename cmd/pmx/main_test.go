@@ -26,7 +26,7 @@ func TestFactoriesFor_Personas(t *testing.T) {
 	pve := topNames(factoriesFor("pve"))
 	require.True(t, pve["node"] && pve["cluster"] && pve["qemu"])
 	require.True(t, pve["context"] && pve["version"] && pve["ssh"])
-	require.False(t, pve["pbs"] && pve["datastore"], "pve persona hides pbs")
+	require.False(t, pve["pbs"] || pve["datastore"], "pve persona hides pbs")
 
 	pbs := topNames(factoriesFor("pbs"))
 	require.True(t, pbs["datastore"] && pbs["snapshot"])
