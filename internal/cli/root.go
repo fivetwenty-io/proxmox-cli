@@ -208,12 +208,7 @@ func NewRootCmd(persona string) (*cobra.Command, func()) {
 	}
 
 	root := &cobra.Command{
-		Use:   persona,
-		Short: "pmx — Proxmox CLI",
-		Long: `pmx is a command-line interface for the Proxmox VE and Proxmox Backup Server APIs.
-
-It supports multiple named contexts, token and password authentication, and
-structured output in table, ascii, plain, JSON, and YAML formats.`,
+		Use: persona,
 		// Version enables cobra's built-in --version/-v flag. It resolves at
 		// build time: `make build` injects the git-describe tag (or "dev"
 		// fallback) plus the short commit; release binaries get the tag and
@@ -230,12 +225,36 @@ structured output in table, ascii, plain, JSON, and YAML formats.`,
 
 	// pve/pbs personas hoist that product's commands onto the root; tag the
 	// root itself with ProductAnnotation so the parent-walking requiredProduct
-	// lookup resolves correctly for children hoisted there.
+	// lookup resolves correctly for children hoisted there. Short/Long are set
+	// per persona too, so `pve --help`/`pbs --help` describe the product
+	// actually exposed instead of the combined pmx tree.
 	switch persona {
 	case "pve":
 		root.Annotations = map[string]string{ProductAnnotation: config.ProductPVE}
+		root.Short = "pve — Proxmox VE CLI"
+		root.Long = `pve is a command-line interface for the Proxmox VE API.
+
+It supports multiple named contexts, token and password authentication, and
+structured output in table, ascii, plain, JSON, and YAML formats.
+
+The full combined tree (Proxmox VE and Proxmox Backup Server) is available
+via the pmx binary as ` + "`pmx pve ...`" + ` / ` + "`pmx pbs ...`" + `.`
 	case "pbs":
 		root.Annotations = map[string]string{ProductAnnotation: config.ProductPBS}
+		root.Short = "pbs — Proxmox Backup Server CLI"
+		root.Long = `pbs is a command-line interface for the Proxmox Backup Server API.
+
+It supports multiple named contexts, token and password authentication, and
+structured output in table, ascii, plain, JSON, and YAML formats.
+
+The full combined tree (Proxmox VE and Proxmox Backup Server) is available
+via the pmx binary as ` + "`pmx pve ...`" + ` / ` + "`pmx pbs ...`" + `.`
+	default:
+		root.Short = "pmx — Proxmox CLI"
+		root.Long = `pmx is a command-line interface for the Proxmox VE and Proxmox Backup Server APIs.
+
+It supports multiple named contexts, token and password authentication, and
+structured output in table, ascii, plain, JSON, and YAML formats.`
 	}
 
 	// --- persistent flags ---

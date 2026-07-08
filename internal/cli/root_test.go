@@ -1327,6 +1327,45 @@ func TestNewRootCmd_PersonaSetsUseAndAnnotation(t *testing.T) {
 	require.Empty(t, root.Annotations[cli.ProductAnnotation])
 }
 
+// TestNewRootCmd_PersonaDescribesActiveProduct verifies that the root
+// command's Short/Long text describes the persona actually invoked, rather
+// than always describing the combined "pmx" tree: the "pve" persona must
+// read as a Proxmox VE CLI, the "pbs" persona as a Proxmox Backup Server
+// CLI, and the default "pmx" persona must keep its existing combined
+// description unchanged. Each product persona's Long text must also point
+// back at the `pmx` binary for the full combined tree.
+func TestNewRootCmd_PersonaDescribesActiveProduct(t *testing.T) {
+	pmxRoot, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	pveRoot, cleanup := cli.NewRootCmd("pve")
+	defer cleanup()
+	pbsRoot, cleanup := cli.NewRootCmd("pbs")
+	defer cleanup()
+
+	require.Equal(t, "pmx — Proxmox CLI", pmxRoot.Short,
+		"the default pmx persona's Short text must be unchanged")
+
+	require.Contains(t, pbsRoot.Short, "Backup Server",
+		"the pbs persona's Short text must describe Proxmox Backup Server")
+	require.NotContains(t, pveRoot.Short, "Backup Server",
+		"the pve persona's Short text must not mention Backup Server")
+
+	require.Contains(t, pveRoot.Short, "Proxmox VE",
+		"the pve persona's Short text must describe Proxmox VE")
+	require.NotContains(t, pbsRoot.Short, "Proxmox VE",
+		"the pbs persona's Short text must not mention Proxmox VE")
+
+	require.NotEqual(t, pveRoot.Short, pbsRoot.Short,
+		"pve and pbs personas must have distinct Short text")
+	require.NotEqual(t, pmxRoot.Short, pveRoot.Short)
+	require.NotEqual(t, pmxRoot.Short, pbsRoot.Short)
+
+	require.Contains(t, pveRoot.Long, "pmx",
+		"the pve persona's Long text must mention the pmx binary for the full combined tree")
+	require.Contains(t, pbsRoot.Long, "pmx",
+		"the pbs persona's Long text must mention the pmx binary for the full combined tree")
+}
+
 // TestHoistedPBSChildrenRequirePBSProduct verifies that a "pbs" persona root
 // tags itself with ProductAnnotation (see NewRootCmd) so that a PBS resource
 // command hoisted directly onto the root by pbs.ChildFactories() — which sets
