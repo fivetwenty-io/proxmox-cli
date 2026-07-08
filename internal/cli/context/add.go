@@ -97,16 +97,8 @@ func newAddCmd() *cobra.Command {
 			}
 
 			// Validate product.
-			validProducts := config.Products()
-			productValid := false
-			for _, p := range validProducts {
-				if f.product == p {
-					productValid = true
-					break
-				}
-			}
-			if !productValid {
-				return fmt.Errorf("--product must be one of: %s, got %q", strings.Join(validProducts, ", "), f.product)
+			if !config.IsValidProduct(f.product) {
+				return fmt.Errorf("--product must be one of: %s, got %q", strings.Join(config.Products(), ", "), f.product)
 			}
 
 			// The --port flag default (8006) targets Proxmox VE. When the operator

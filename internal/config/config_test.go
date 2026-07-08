@@ -981,6 +981,28 @@ func TestProducts_EnumeratesThree(t *testing.T) {
 	require.Equal(t, []string{"pve", "pbs", "pdm"}, products)
 }
 
+// TestIsValidProduct verifies IsValidProduct correctly identifies valid and
+// invalid product names.
+func TestIsValidProduct(t *testing.T) {
+	cases := []struct {
+		name     string
+		product  string
+		wantValid bool
+	}{
+		{"pve is valid", config.ProductPVE, true},
+		{"pbs is valid", config.ProductPBS, true},
+		{"pdm is valid", config.ProductPDM, true},
+		{"empty string is not valid", "", false},
+		{"bogus is not valid", "bogus", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := config.IsValidProduct(tc.product)
+			require.Equal(t, tc.wantValid, got)
+		})
+	}
+}
+
 // ── DefaultPortForProduct ─────────────────────────────────────────────────────
 
 // TestDefaultPortForProduct verifies the port defaults for each product.

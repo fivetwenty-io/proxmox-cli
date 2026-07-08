@@ -2,6 +2,8 @@
 // for the pmx CLI configuration file (~/.config/pmx/config.yml).
 package config
 
+import "slices"
+
 // Product identifies which Proxmox product a context targets.
 const (
 	// ProductPVE targets Proxmox VE (the default when Product is empty).
@@ -73,6 +75,11 @@ func (c *Context) IsPBS() bool {
 // Products enumerates every supported product identifier, in display order.
 func Products() []string {
 	return []string{ProductPVE, ProductPBS, ProductPDM}
+}
+
+// IsValidProduct reports whether product names a supported product.
+func IsValidProduct(product string) bool {
+	return slices.Contains(Products(), product)
 }
 
 // DefaultPortForProduct returns the API port a product listens on by default.

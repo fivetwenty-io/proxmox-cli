@@ -54,7 +54,7 @@ func Load(path string) (*Config, error) {
 // ResolveContext selects and validates a context from cfg.
 // If nameOverride is non-empty it is used; otherwise cfg.CurrentContext is used.
 // Returns the resolved Context, its canonical name, and any error.
-// Applies default values: Product="pve", Port=8006 (8007 for Product="pbs"),
+// Applies default values: Product="pve", Port=8006 (8007 for Product="pbs", 8443 for Product="pdm"),
 // Protocol="https", Realm="pam".
 func ResolveContext(cfg *Config, nameOverride string) (*Context, string, error) {
 	if cfg == nil {
@@ -138,7 +138,7 @@ func ValidateContext(c *Context) error {
 // writable paths (context add, context edit) and the validate verb enforce.
 // Rules beyond validateContext:
 //   - token auth: token-id must be present (in addition to secret).
-//   - product, if set, must be "pve" or "pbs".
+//   - product, if set, must be one of the supported products (pve, pbs, pdm).
 //   - default-output, if set, must be one of: table, ascii, plain, json, yaml.
 //   - fingerprint, if set, must match the colon-separated hex SHA-256 pattern.
 //   - port, if non-zero, must be in [1, 65535].
@@ -156,18 +156,9 @@ func StrictValidateContext(c *Context) []string {
 		errs = append(errs, "host is required")
 	}
 
-	if c.Product != "" {
-		valid := false
-		for _, p := range Products() {
-			if c.Product == p {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			errs = append(errs, fmt.Sprintf(
-				"product %q must be %s", c.Product, strings.Join(Products(), ", ")))
-		}
+	if c.Product != "" && !IsValidProduct(c.Product) {
+		errs = append(errs, fmt.Sprintf(
+			"product %q must be %s", c.Product, strings.Join(Products(), ", ")))
 	}
 
 	if c.Port != 0 && (c.Port < 1 || c.Port > 65535) {
