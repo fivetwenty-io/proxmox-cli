@@ -20,11 +20,17 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
-// run executes an api sub-command through the real root command so that the
-// production PersistentPreRunE wires Deps (Out, Format, Cfg loaded from cfgPath,
-// Runner) and applies the noClient annotation. The deps argument is accepted for
-// API symmetry with other group tests but is unused: the api group never relies
+// run executes an auth sub-command (via the hidden top-level `auth` alias,
+// see api.AuthAlias) through the real root command so that the production
+// PersistentPreRunE wires Deps (Out, Format, Cfg loaded from cfgPath, Runner)
+// and applies the noClient annotation. The deps argument is accepted for API
+// symmetry with other group tests but is unused: the auth alias never relies
 // on an injected API client (login/refresh build their own from config).
+//
+// `pmx api` was repurposed to mean raw GET/POST/PUT/DELETE passthrough; the
+// auth commands (login/logout/status/refresh/set-token/set-password) moved to
+// the standalone `auth` alias, so every call site below passes args starting
+// with "auth" rather than "api auth".
 func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, error) {
 	t.Helper()
 
@@ -36,13 +42,13 @@ func run(t *testing.T, _ *cli.Deps, cfgPath string, args ...string) (string, err
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
-	root.AddCommand(api.NewCommand())
+	root.AddCommand(api.AuthAlias(&cli.Deps{}))
 
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 
-	full := append([]string{"--config", cfgPath, "api"}, args...)
+	full := append([]string{"--config", cfgPath}, args...)
 	root.SetArgs(full)
 	err := root.Execute()
 	return buf.String(), err
@@ -1005,12 +1011,12 @@ func TestAuthLogin_OIDC_LoginServerError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGroup_AllSubcommandsNoClient(t *testing.T) {
-	group := api.NewCommand()
+	group := api.AuthAlias(&cli.Deps{})
 	leaves := leafCommands(group)
 	require.NotEmpty(t, leaves)
 	// whoami is the deliberate exception: it queries GET /access/permissions to
 	// confirm the stored credentials authenticate, so it needs a live client.
-	clientCommands := map[string]bool{"api auth whoami": true}
+	clientCommands := map[string]bool{"auth whoami": true}
 	for _, c := range leaves {
 		if clientCommands[c.CommandPath()] {
 			require.NotEqual(t, "true", c.Annotations["noClient"],
