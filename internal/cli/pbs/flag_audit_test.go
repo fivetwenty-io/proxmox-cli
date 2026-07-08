@@ -28,7 +28,6 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		"remote":    {"ls", "show", "add", "update", "delete", "scan"},
 		"traffic":   {"ls", "show", "add", "update", "delete", "current"},
 		"status":    {"datastore-usage"},
-		"api":       {"get", "post", "put", "delete"},
 		"node": {
 			"ls", "status", "reboot", "shutdown", "rrd", "report", "syslog", "journal",
 			"dns", "time", "config", "subscription", "identity",
@@ -146,10 +145,6 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		for _, verb := range verbs {
 			require.True(t, verbNames[verb], "expected pbs %s verb %q to be registered", path, verb)
 		}
-	}
-
-	for _, leaf := range []string{"version", "ping"} {
-		require.True(t, byName[leaf], "expected pbs sub-command %q to be registered", leaf)
 	}
 }
 

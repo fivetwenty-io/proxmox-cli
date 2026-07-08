@@ -29,34 +29,31 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPBS},
 	}
 
-	cmd.AddCommand(
-		newDatastoreCmd(),
-		newSnapshotCmd(),
-		newGroupCmd(),
-		newPruneCmd(),
-		newGcCmd(),
-		newVerifyCmd(),
-		newSyncCmd(),
-		newRemoteCmd(),
-		newTrafficCmd(),
-		newNodeCmd(),
-		newUserCmd(),
-		newACLCmd(),
-		newRoleCmd(),
-		newPermissionCmd(),
-		newRealmCmd(),
-		newMetricsCmd(),
-		newNotificationCmd(),
-		newAcmeCmd(),
-		newTapeCmd(),
-		newEncryptionKeyCmd(),
-		newStatusCmd(),
-		newVersionCmd(),
-		newPingCmd(),
-		newAPIRawCmd(),
-	)
+	for _, f := range ChildFactories() {
+		cmd.AddCommand(f(nil))
+	}
 
 	return cmd
+}
+
+// ChildFactories returns the PBS subtree's resource commands as GroupFactory
+// values so they can be hoisted directly onto the root command when the binary
+// is invoked as `pbs`. The shared version/api/ping commands are intentionally
+// excluded — they live at the root as product:context commands.
+func ChildFactories() []cli.GroupFactory {
+	return []cli.GroupFactory{
+		wrap(newDatastoreCmd), wrap(newSnapshotCmd), wrap(newGroupCmd),
+		wrap(newPruneCmd), wrap(newGcCmd), wrap(newVerifyCmd), wrap(newSyncCmd),
+		wrap(newRemoteCmd), wrap(newTrafficCmd), wrap(newNodeCmd), wrap(newUserCmd),
+		wrap(newACLCmd), wrap(newRoleCmd), wrap(newPermissionCmd), wrap(newRealmCmd),
+		wrap(newMetricsCmd), wrap(newNotificationCmd), wrap(newAcmeCmd), wrap(newTapeCmd),
+		wrap(newEncryptionKeyCmd), wrap(newStatusCmd),
+	}
+}
+
+// wrap adapts a zero-arg command constructor to a cli.GroupFactory.
+func wrap(ctor func() *cobra.Command) cli.GroupFactory {
+	return func(_ *cli.Deps) *cobra.Command { return ctor() }
 }
 
 // finishAsync renders the outcome of an asynchronous PBS task. When deps.Async

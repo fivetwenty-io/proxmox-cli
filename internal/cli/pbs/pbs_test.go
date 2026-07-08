@@ -195,3 +195,23 @@ func TestPtrHelpers(t *testing.T) {
 	require.True(t, *boolPtr(true))
 	require.Equal(t, int64(42), *int64Ptr(42))
 }
+
+func TestChildFactories_MatchesGroupChildrenAndExcludesShared(t *testing.T) {
+	deps := &cli.Deps{}
+	group := Group(deps)
+
+	var groupNames []string
+	for _, c := range group.Commands() {
+		groupNames = append(groupNames, c.Name())
+	}
+
+	var factoryNames []string
+	for _, f := range ChildFactories() {
+		factoryNames = append(factoryNames, f(deps).Name())
+	}
+
+	require.ElementsMatch(t, groupNames, factoryNames)
+	require.NotContains(t, factoryNames, "version")
+	require.NotContains(t, factoryNames, "api")
+	require.NotContains(t, factoryNames, "ping")
+}
