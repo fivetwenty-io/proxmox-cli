@@ -119,6 +119,14 @@ func strPtrString(p *string) string {
 	return *p
 }
 
+// float64PtrString renders a possibly-nil *float64 for a table cell.
+func float64PtrString(p *float64) string {
+	if p == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*p, 'f', -1, 64)
+}
+
 // boolPtr returns a pointer to v.
 func boolPtr(v bool) *bool { return &v }
 

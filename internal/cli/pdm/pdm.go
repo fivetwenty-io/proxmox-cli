@@ -41,7 +41,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 // is invoked as `pdm`. The shared version/api/ping commands are intentionally
 // excluded — they live at the root as product:context commands.
 func ChildFactories() []cli.GroupFactory {
-	return []cli.GroupFactory{}
+	return []cli.GroupFactory{
+		wrap(newRemoteCmd),
+	}
 }
 
 // wrap adapts a zero-arg command constructor to a cli.GroupFactory.
