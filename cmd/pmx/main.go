@@ -6,48 +6,37 @@ import (
 	"os"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/access"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/api"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/cluster"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/context"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/initcmd"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/lxc"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/node"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pool"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/qemu"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/sdn"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/storage"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/task"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/version"
 )
 
-// factories is the ordered list of group command factories wired into the root
-// command. The order here controls the help-output listing order and must
-// match the former init()-registration order (= import order in the old
-// blank-import block).
-var factories = []cli.GroupFactory{
-	access.Group,
-	api.Group,
-	api.Auth,
-	cluster.Group,
-	context.Group,
-	context.CtxAlias,
-	initcmd.Group,
-	lxc.Group,
-	node.Group,
-	pbs.Group,
-	pool.Group,
-	qemu.Group,
-	remote.Rsync,
-	sdn.Group,
-	remote.SSH,
-	storage.Group,
-	task.Group,
-	version.Group,
+// sharedFactories are the product-neutral commands present under every persona.
+func sharedFactories() []cli.GroupFactory {
+	return []cli.GroupFactory{
+		context.Group, context.CtxAlias, initcmd.Group,
+		api.Auth, api.Group, version.Group, remote.SSH, remote.Rsync,
+	}
+}
+
+// factoriesFor returns the ordered factory slice for the given persona.
+func factoriesFor(persona string) []cli.GroupFactory {
+	f := sharedFactories()
+	switch persona {
+	case "pve":
+		return append(f, pve.ChildFactories()...)
+	case "pbs":
+		return append(f, pbs.ChildFactories()...)
+	default:
+		return append(f, pve.Group, pbs.Group)
+	}
 }
 
 func main() {
-	os.Exit(cli.Main(cli.Persona(os.Args[0]), factories))
+	persona := cli.Persona(os.Args[0])
+	os.Exit(cli.Main(persona, factoriesFor(persona)))
 }
