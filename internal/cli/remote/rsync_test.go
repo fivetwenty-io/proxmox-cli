@@ -85,7 +85,7 @@ func newRemoteRoot(t *testing.T, cfgPath string, runner exec.Runner) (
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_OUTPUT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	t.Cleanup(cleanup)
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Rsync, SSH})
 

@@ -1037,7 +1037,7 @@ func TestQemuCommandTree(t *testing.T) {
 }
 
 func TestQemuGroupRegistered(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 

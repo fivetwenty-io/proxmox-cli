@@ -106,7 +106,7 @@ func TestNodeVzdump_BadUPID(t *testing.T) {
 // TestNodeVzdump_NoLocalTargetFlag guards against shadowing the root's persistent
 // -t/--target selector with a local --target anywhere in the node command tree.
 func TestNodeVzdump_NoLocalTargetFlag(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 	var nodeCmd *cobra.Command

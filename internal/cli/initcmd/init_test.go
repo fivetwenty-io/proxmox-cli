@@ -23,7 +23,7 @@ func run(t *testing.T, cfgPath string, args ...string) (string, error) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	root.AddCommand(initcmd.NewCommand())

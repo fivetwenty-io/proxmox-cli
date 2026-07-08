@@ -76,7 +76,7 @@ func newNodeRoot(t *testing.T, f *testhelper.FakePVE, format output.Format, runn
 
 	cfgPath := writeFakeConfig(t, f)
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 

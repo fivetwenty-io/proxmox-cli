@@ -355,7 +355,7 @@ func TestNodeDisksDelete_Zfs_WithYes(t *testing.T) {
 
 // TestNodeDisks_ExtendedCommandTree verifies the new ls/get/delete sub-trees.
 func TestNodeDisks_ExtendedCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -649,7 +649,7 @@ func TestNodeCapabilities_QemuCpuFlags_APIError(t *testing.T) {
 }
 
 func TestNodeCapabilities_CpuFlagsInCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -703,7 +703,7 @@ func TestNodeHardware_PciMdev_APIError(t *testing.T) {
 }
 
 func TestNodeHardware_MdevInCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -818,7 +818,7 @@ func TestNodeServicesState_APIError(t *testing.T) {
 }
 
 func TestNodeServicesState_CommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -841,7 +841,7 @@ func TestNodeServicesState_CommandTree(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNodeVzdump_ExtendedCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -866,7 +866,7 @@ func TestNodeVzdump_ExtendedCommandTree(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNode_GapCommandsInCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 

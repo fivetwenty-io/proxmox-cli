@@ -357,7 +357,7 @@ func TestAccess_DomainCommandTree(t *testing.T) {
 // persistent -t/--target and --node selectors with a local flag of the same
 // name anywhere in the access command tree.
 func TestAccess_NoLocalTargetOrNodeFlag(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 	var accessCmd *cobra.Command

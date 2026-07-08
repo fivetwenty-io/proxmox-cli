@@ -189,7 +189,7 @@ func TestNodeOci_RequiresNode(t *testing.T) {
 }
 
 func TestNodeOci_CommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 

@@ -119,7 +119,7 @@ func TestNodeScan_RequiresNode(t *testing.T) {
 }
 
 func TestNodeScan_CommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 

@@ -49,5 +49,5 @@ var factories = []cli.GroupFactory{
 }
 
 func main() {
-	os.Exit(cli.Main(factories))
+	os.Exit(cli.Main(cli.Persona(os.Args[0]), factories))
 }

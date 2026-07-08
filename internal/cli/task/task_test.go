@@ -30,7 +30,7 @@ func runTask(t *testing.T, f *testhelper.FakePVE, node string, format string, ar
 	host, port := splitHostPort(t, f.Server.Listener.Addr().String())
 	cfgPath := writeConfig(t, host, port, f.Options.APIToken, node)
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	addTaskGroup(root)
@@ -362,7 +362,7 @@ func TestWait_InvalidUPID(t *testing.T) {
 
 // TestGroupCmd_Subcommands verifies the leaf sub-commands are registered.
 func TestGroupCmd_Subcommands(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	addTaskGroup(root)

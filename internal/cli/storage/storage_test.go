@@ -66,7 +66,7 @@ func run(t *testing.T, f *testhelper.FakePVE, args ...string) (string, error) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_OUTPUT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	root.AddCommand(Group(&cli.Deps{}))

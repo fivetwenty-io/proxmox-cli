@@ -30,7 +30,7 @@ func TestRootFlags_Defaults(t *testing.T) {
 	t.Setenv("PMX_OUTPUT", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	flags := root.PersistentFlags()
 
@@ -98,7 +98,7 @@ func TestPersistentPreRunE_Insecure_WarnsOnStderr(t *testing.T) {
 	}
 	require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -126,7 +126,7 @@ func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -158,7 +158,7 @@ func TestPersistentPreRunE_ASCII_Format(t *testing.T) {
 func TestRootFlags_PVEOutput(t *testing.T) {
 	t.Setenv("PMX_OUTPUT", "json")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	outFlag := root.PersistentFlags().Lookup("output")
 	require.NotNil(t, outFlag)
@@ -169,7 +169,7 @@ func TestRootFlags_PVEOutput(t *testing.T) {
 func TestRootFlags_PVENode(t *testing.T) {
 	t.Setenv("PMX_NODE", "pve-host-01")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	nodeFlag := root.PersistentFlags().Lookup("node")
 	require.NotNil(t, nodeFlag)
@@ -185,7 +185,7 @@ func TestPersistentPreRunE_NoConfig_NoContext(t *testing.T) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -218,7 +218,7 @@ func TestPersistentPreRunE_NoClient_AnnotationSkipsClientBuild(t *testing.T) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -249,7 +249,7 @@ func TestPersistentPreRunE_NoClient_DepsAreInjected(t *testing.T) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -287,7 +287,7 @@ func TestAddGroups_GroupAppearsInHelp(t *testing.T) {
 		}
 	}
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{factory})
@@ -307,7 +307,7 @@ func TestMain_HelpExitsZero(t *testing.T) {
 	os.Args = []string{"pmx", "--help"}
 	defer func() { os.Args = old }()
 
-	code := cli.Main(nil)
+	code := cli.Main("pmx", nil)
 	// cobra exits 0 for --help.
 	require.Equal(t, 0, code)
 }
@@ -346,7 +346,7 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -372,7 +372,7 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -397,7 +397,7 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -429,7 +429,7 @@ func TestContextFlagPrecedence(t *testing.T) {
 		t.Setenv("PMX_OUTPUT", "table")
 		cfgPath := makeConfig(t)
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -492,7 +492,7 @@ func TestShellCompletionSkipsClientBuild(t *testing.T) {
 
 	buildRoot := func(t *testing.T) *cobra.Command {
 		t.Helper()
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		t.Cleanup(cleanup)
 		root.SetContext(context.Background())
 		called := false
@@ -529,7 +529,7 @@ func TestOutputChangedDetection(t *testing.T) {
 		t.Setenv("PMX_NODE", "")
 		t.Setenv("PMX_CONTEXT", "")
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -559,7 +559,7 @@ func TestOutputChangedDetection(t *testing.T) {
 		t.Setenv("PMX_NODE", "")
 		t.Setenv("PMX_CONTEXT", "")
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -620,7 +620,7 @@ func TestContextDefaultsResolution(t *testing.T) {
 		}
 		require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -645,7 +645,7 @@ func TestContextDefaultsResolution(t *testing.T) {
 		require.NoError(t, config.SaveForce(emptyCfgPath, &config.Config{}))
 
 		t.Setenv("PMX_OUTPUT", "table")
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -703,7 +703,7 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		// context default-output = yaml; flag = plain → plain must win.
 		cfgPath := makeCtxConfig(t, "yaml")
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -730,7 +730,7 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		// noClient branch: format = pf.output = yaml (baked from env); no context resolution.
 		cfgPath := makeCtxConfig(t, "json")
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -755,7 +755,7 @@ func TestOutputPrecedence_FourTiers(t *testing.T) {
 		t.Setenv("PMX_CONTEXT", "")
 		cfgPath := makeCtxConfig(t, "") // no context default-output
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		defer cleanup()
 		root.SetContext(context.Background())
 
@@ -806,7 +806,7 @@ func TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient(t *testing.T) {
 	}
 	require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -867,7 +867,7 @@ func TestPersistentPreRunE_Ctx_PopulatedForNonNoClient(t *testing.T) {
 	}
 	require.NoError(t, config.SaveForce(cfgPath, cfg))
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -910,7 +910,7 @@ func TestPersistentPreRunE_Ctx_NilForNoClient(t *testing.T) {
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -990,7 +990,7 @@ func TestExecute_ExitError_SuppressesStderr(t *testing.T) {
 
 	var execErr error
 	stderrOut := captureStderr(t, func() {
-		execErr = cli.Execute([]cli.GroupFactory{factory})
+		execErr = cli.Execute("pmx", []cli.GroupFactory{factory})
 	})
 
 	require.Error(t, execErr, "the child exit code must still be returned as an error")
@@ -1027,7 +1027,7 @@ func TestExecute_NonExitError_StillPrintsStderr(t *testing.T) {
 
 	var execErr error
 	stderrOut := captureStderr(t, func() {
-		execErr = cli.Execute([]cli.GroupFactory{factory})
+		execErr = cli.Execute("pmx", []cli.GroupFactory{factory})
 	})
 
 	require.Error(t, execErr)
@@ -1085,7 +1085,7 @@ func TestLogCloser_RunERecordsSurvive_F01(t *testing.T) {
 	// Empty config is fine; noClient command bypasses context resolution.
 	cfgPath := filepath.Join(tmpDir, "config.yml")
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 
@@ -1216,7 +1216,7 @@ func TestVersionFlag_PrintsBuildInfo(t *testing.T) {
 	// would be exercised with this config; --version must not need it.
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 
 	var out bytes.Buffer
@@ -1233,7 +1233,7 @@ func TestVersionFlag_PrintsBuildInfo(t *testing.T) {
 // TestVersionFlag_ShortV verifies the -v shorthand maps to --version and is
 // not shadowed by any other persistent flag.
 func TestVersionFlag_ShortV(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 
 	var out bytes.Buffer
@@ -1278,7 +1278,7 @@ func newTwoContextConfig(t *testing.T) *config.Config {
 func TestBuildContextAnyClient_SelectsByProduct(t *testing.T) {
 	cfg := newTwoContextConfig(t)
 
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 
 	ac, pc, ctx, err := cli.BuildContextAnyClient(root, cfg, "", "pbs1", false, func() bool { return false })
@@ -1292,4 +1292,35 @@ func TestBuildContextAnyClient_SelectsByProduct(t *testing.T) {
 	require.NotNil(t, ac)
 	require.Nil(t, pc)
 	require.False(t, ctx.IsPBS())
+}
+
+// TestPersona verifies that Persona maps an invocation name (os.Args[0]) to
+// its command surface: "pve" and "pbs" select that product's hoisted tree;
+// every other name (including "pmx", `go run`/`go test` temp binary names,
+// and the empty string) falls back to the full "pmx" tree.
+func TestPersona(t *testing.T) {
+	cases := map[string]string{
+		"pve": "pve", "pbs": "pbs", "pmx": "pmx",
+		"/usr/local/bin/pve": "pve", "pbs.exe": "pbs",
+		"pmx.exe": "pmx", "go_build_x": "pmx", "": "pmx",
+	}
+	for in, want := range cases {
+		require.Equal(t, want, cli.Persona(in), "Persona(%q)", in)
+	}
+}
+
+// TestNewRootCmd_PersonaSetsUseAndAnnotation verifies that NewRootCmd sets
+// root.Use to the persona name and, for "pbs" (and by symmetry "pve"), tags
+// the root with ProductAnnotation so requiredProduct resolves correctly for
+// commands hoisted directly onto the root.
+func TestNewRootCmd_PersonaSetsUseAndAnnotation(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pbs")
+	defer cleanup()
+	require.Equal(t, "pbs", root.Use)
+	require.Equal(t, config.ProductPBS, root.Annotations[cli.ProductAnnotation])
+
+	root, cleanup = cli.NewRootCmd("pmx")
+	defer cleanup()
+	require.Equal(t, "pmx", root.Use)
+	require.Empty(t, root.Annotations[cli.ProductAnnotation])
 }

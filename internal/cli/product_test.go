@@ -144,7 +144,7 @@ func TestPersistentPreRunE_ProductDispatch(t *testing.T) {
 	newRoot := func(t *testing.T) *cobra.Command {
 		t.Helper()
 
-		root, cleanup := cli.NewRootCmd()
+		root, cleanup := cli.NewRootCmd("pmx")
 		t.Cleanup(cleanup)
 		root.SetContext(context.Background())
 

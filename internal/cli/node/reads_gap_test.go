@@ -110,7 +110,7 @@ func TestNodeTaskStatus_APIError(t *testing.T) {
 }
 
 func TestNodeTaskStatus_InCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -167,7 +167,7 @@ func TestNodeReplicationGet_APIError(t *testing.T) {
 }
 
 func TestNodeReplicationGet_InCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -348,7 +348,7 @@ func TestNodeCephCrush_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNodeCephReadsCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -517,7 +517,7 @@ func TestNodeCephCfgValue_APIError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNodeCephCfgCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 
@@ -622,7 +622,7 @@ func TestNodeExecute_APIError(t *testing.T) {
 }
 
 func TestNodeExecute_InCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	addNodeGroup(root)
 

@@ -219,7 +219,7 @@ func TestVersion_Client_HasNoClientAnnotation(t *testing.T) {
 // TestVersion_GroupRegistered verifies that importing this package self-registers
 // a group factory named "version" with the cli root registry.
 func TestVersion_GroupRegistered(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 

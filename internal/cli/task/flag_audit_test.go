@@ -213,7 +213,7 @@ func TestTaskClusterList_NoWriteFlags(t *testing.T) {
 // "status") and task_gap_test.go (TestTask_GapCommandTree, "status" only)
 // into a single, complete audit of the package's final command surface.
 func TestTask_AuditCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	addTaskGroup(root)

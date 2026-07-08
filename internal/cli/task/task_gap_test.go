@@ -15,7 +15,7 @@ import (
 // TestTask_GapCommandTree verifies that `task status` is registered in the
 // task group's command tree.
 func TestTask_GapCommandTree(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	root.SetContext(context.Background())
 	addTaskGroup(root)

@@ -100,7 +100,7 @@ func captureBody(r *http.Request) map[string]any {
 // ---------------------------------------------------------------------------
 
 func TestAccess_GroupRegistered(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 

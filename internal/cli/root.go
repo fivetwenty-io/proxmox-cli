@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -167,9 +168,23 @@ type persistentFlags struct {
 	insecure bool
 }
 
-// NewRootCmd constructs the top-level 'pmx' cobra.Command.
-// It registers all persistent flags and the PersistentPreRunE hook that wires
-// config, auth, API client, logger, and output renderer.
+// Persona maps the invocation name (os.Args[0]) to a command surface:
+// "pve" or "pbs" expose that product hoisted to the root; anything else
+// (including "pmx", `go run` temp names, and tests) exposes the full tree.
+func Persona(arg0 string) string {
+	name := strings.TrimSuffix(filepath.Base(arg0), ".exe")
+	switch name {
+	case "pve", "pbs":
+		return name
+	default:
+		return "pmx"
+	}
+}
+
+// NewRootCmd constructs the top-level cobra.Command for the given persona
+// ("pmx", "pve", or "pbs"; see Persona). It registers all persistent flags
+// and the PersistentPreRunE hook that wires config, auth, API client, logger,
+// and output renderer.
 // AddGroups must be called after NewRootCmd to attach group sub-commands from
 // the registry.
 //
@@ -177,7 +192,7 @@ type persistentFlags struct {
 // by PersistentPreRunE. It must be called after root.Execute() returns so that
 // log records written during RunE are flushed before the fd is released. The
 // function is safe to call even if PersistentPreRunE never ran (e.g. --help).
-func NewRootCmd() (*cobra.Command, func()) {
+func NewRootCmd(persona string) (*cobra.Command, func()) {
 	var pf persistentFlags
 
 	// logCloser is set by persistentPreRunE and closed by the cleanup func
@@ -193,7 +208,7 @@ func NewRootCmd() (*cobra.Command, func()) {
 	}
 
 	root := &cobra.Command{
-		Use:   "pmx",
+		Use:   persona,
 		Short: "pmx — Proxmox CLI",
 		Long: `pmx is a command-line interface for the Proxmox VE and Proxmox Backup Server APIs.
 
@@ -212,6 +227,16 @@ structured output in table, ascii, plain, JSON, and YAML formats.`,
 	// version.String() already includes the "pmx version ..." prefix; the
 	// default template would prepend "pmx version" a second time.
 	root.SetVersionTemplate("{{.Version}}\n")
+
+	// pve/pbs personas hoist that product's commands onto the root; tag the
+	// root itself with ProductAnnotation so the parent-walking requiredProduct
+	// lookup resolves correctly for children hoisted there.
+	switch persona {
+	case "pve":
+		root.Annotations = map[string]string{ProductAnnotation: config.ProductPVE}
+	case "pbs":
+		root.Annotations = map[string]string{ProductAnnotation: config.ProductPBS}
+	}
 
 	// --- persistent flags ---
 	root.PersistentFlags().StringVar(&pf.config, "config",
@@ -737,8 +762,8 @@ func RequireSubcommands(cmd *cobra.Command) {
 // The log file closer captured by PersistentPreRunE is deferred here, after
 // root.Execute() returns, so that all log records written during RunE are
 // flushed and the fd is released only once the full command has completed.
-func Execute(factories []GroupFactory) error {
-	root, cleanup := NewRootCmd()
+func Execute(persona string, factories []GroupFactory) error {
+	root, cleanup := NewRootCmd(persona)
 	defer cleanup()
 
 	// Inject a background context so that commands can always call cmd.Context().
@@ -770,8 +795,8 @@ func Execute(factories []GroupFactory) error {
 // Main is the entry point for cmd/pmx/main.go.
 // It accepts the ordered factory slice and maps the returned error to a
 // semantic exit code.
-func Main(factories []GroupFactory) int {
-	if err := Execute(factories); err != nil {
+func Main(persona string, factories []GroupFactory) int {
+	if err := Execute(persona, factories); err != nil {
 		return exitcode.FromError(err)
 	}
 	return exitcode.OK

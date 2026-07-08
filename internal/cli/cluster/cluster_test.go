@@ -295,7 +295,7 @@ func TestClusterCommandTree(t *testing.T) {
 // TestClusterGroupRegistered verifies importing this package self-registers a
 // group factory named "cluster" with the cli root registry.
 func TestClusterGroupRegistered(t *testing.T) {
-	root, cleanup := cli.NewRootCmd()
+	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Group})
 
