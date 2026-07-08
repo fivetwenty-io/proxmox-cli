@@ -127,27 +127,3 @@ func strPtr(v string) *string { return &v }
 
 // int64Ptr returns a pointer to v.
 func int64Ptr(v int64) *int64 { return &v }
-
-// formatOptionalString renders a possibly-nil string for flag defaults.
-func formatOptionalString(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
-}
-
-// formatOptionalInt64 renders a possibly-nil int64 for flag defaults.
-func formatOptionalInt64(p *int64) string {
-	if p == nil {
-		return ""
-	}
-	return strconv.FormatInt(*p, 10)
-}
-
-// formatOptionalBool renders a possibly-nil bool for flag defaults.
-func formatOptionalBool(p *bool) string {
-	if p == nil {
-		return ""
-	}
-	return strconv.FormatBool(*p)
-}
