@@ -43,6 +43,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 func ChildFactories() []cli.GroupFactory {
 	return []cli.GroupFactory{
 		wrap(newRemoteCmd),
+		wrap(newResourceCmd),
+		wrap(newSdnCmd),
+		wrap(newCephCmd),
 	}
 }
 

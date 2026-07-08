@@ -130,6 +130,14 @@ func float64PtrString(p *float64) string {
 // boolPtr returns a pointer to v.
 func boolPtr(v bool) *bool { return &v }
 
+// boolPtrString renders a possibly-nil *bool for a table cell.
+func boolPtrString(p *bool) string {
+	if p == nil {
+		return ""
+	}
+	return strconv.FormatBool(*p)
+}
+
 // strPtr returns a pointer to v.
 func strPtr(v string) *string { return &v }
 
