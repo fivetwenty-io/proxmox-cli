@@ -985,8 +985,8 @@ func TestProducts_EnumeratesThree(t *testing.T) {
 // invalid product names.
 func TestIsValidProduct(t *testing.T) {
 	cases := []struct {
-		name     string
-		product  string
+		name      string
+		product   string
 		wantValid bool
 	}{
 		{"pve is valid", config.ProductPVE, true},
