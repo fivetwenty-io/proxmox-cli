@@ -6,7 +6,8 @@ The sweep therefore treats the tree as opt-in — the runner hands it the
 `--pbs-context` / `$PMX_E2E_PBS_CONTEXT` context instead of the sweep context
 (empty when not given), and `run` records a single SKIP and returns when the
 opt-in is absent, the context is not a `product: pbs` context, or the server
-does not answer `pbs ping`.
+does not answer `version ping` (the shared root ping command, gated to PBS
+contexts — see internal/cli/version).
 
 Every check in this module sits lexically inside an `if` on purpose: the whole
 tree is conditional on the opt-in, so the coverage matrix must classify its
@@ -93,7 +94,7 @@ def _gate(ctx: Ctx) -> tuple[bool, str]:
         return False, f"pbs context {ctx.env.context!r} not in config"
     if entry.get("product") != "pbs":
         return False, f"context {ctx.env.context!r} is not a product: pbs context"
-    ping = ctx.run("pbs", "ping")
+    ping = ctx.run("version", "ping")
     if ping.rc != 0:
         return False, f"PBS server unreachable: {_tail(ping)}"
     return True, ""
@@ -104,10 +105,13 @@ def _gate(ctx: Ctx) -> tuple[bool, str]:
 # --------------------------------------------------------------------------- #
 def _core(ctx: Ctx) -> None:
     if ctx.env.context:  # opt-in gate — keeps every check conditional (◑)
-        ctx.check("ping", "pbs", "ping")
-        ctx.check_formats("version", "pbs", "version")
+        # ping/version/api are shared root commands (product:context), not
+        # nested under the "pbs" group — see internal/cli/version and
+        # internal/cli/api.
+        ctx.check("ping", "version", "ping")
+        ctx.check_formats("version", "version")
         # raw read passthrough against a known-good path
-        ctx.check("api get /version", "pbs", "api", "get", "/version", fmt="")
+        ctx.check("api get /version", "api", "get", "/version", fmt="")
 
         ds = ctx.check("datastore ls", "pbs", "datastore", "ls", validate=is_list)
         ctx.check("datastore usage", "pbs", "datastore", "usage", validate=is_list)
@@ -619,13 +623,13 @@ def _tape(ctx: Ctx) -> None:
 # so every one is live_covered=False and covered by unit tests instead.        #
 # --------------------------------------------------------------------------- #
 def _defers(ctx: Ctx) -> None:
-    # raw write passthrough
+    # raw write passthrough (shared root "api" command, not nested under "pbs")
     ctx.defer("api post", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pmx pbs api post /pull --data store=main")
+              "pmx api post /pull --data store=main")
     ctx.defer("api put", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pmx pbs api put /config/datastore/main --data gc-schedule=daily")
+              "pmx api put /config/datastore/main --data gc-schedule=daily")
     ctx.defer("api delete", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pmx pbs api delete /config/datastore/pmx-cli-ds")
+              "pmx api delete /config/datastore/pmx-cli-ds")
 
     # datastore + data-touching tasks
     ctx.defer("datastore create", "creates a datastore (allocates a chunk store on disk); covered by unit tests",

@@ -1,5 +1,11 @@
 """api: authentication status and credential mutation.
 
+Despite the tree's name (kept for historical continuity with the coverage
+matrix grouping), these checks exercise the canonical top-level `auth`
+command, not the `api` command — `auth` was promoted out from under `api`
+(which is now the raw GET/POST/PUT/DELETE passthrough; see api_raw.py-style
+coverage in pbs.py and the api group's own unit tests).
+
 `auth status` reads state against the configured context.
 `auth set-token` and `auth set-password` mutate *local config only* — they
 are exercised here against a throwaway scratch `--config` file in a temp dir,
@@ -9,7 +15,7 @@ this read-only sweep but are exercised live by the mutate phase.
 
 The verbs `target`, `targets`, and `switch` were removed when the CLI was
 renamed from target to context (D-01 full rename). They are no longer present
-in the `api` group and are not tested here.
+in the `auth` group and are not tested here.
 """
 
 from __future__ import annotations
@@ -25,15 +31,15 @@ DESCRIPTION = "Manage authentication against named Proxmox VE contexts"
 
 
 def run(ctx: Ctx) -> None:
-    ctx.check("auth status", "api", "auth", "status")
+    ctx.check("auth status", "auth", "status")
 
     # auth whoami calls GET /access/permissions with the configured context's
     # live credentials (token or password session) to confirm they still
     # authenticate. Probe first and skip gracefully rather than failing the
     # sweep when the configured identity cannot be verified.
-    whoami_probe = ctx.run("api", "auth", "whoami")
+    whoami_probe = ctx.run("auth", "whoami")
     if whoami_probe.rc == 0:
-        ctx.check("auth whoami", "api", "auth", "whoami")
+        ctx.check("auth whoami", "auth", "whoami")
     else:
         ctx.skip("auth whoami", "credentials for the configured context could not be verified")
 
@@ -44,7 +50,7 @@ def run(ctx: Ctx) -> None:
     # pve-realm user + scratch `--config`, so the real session is never touched).
     ctx.defer("auth login/logout/refresh",
               "mutates stored session/credentials — covered live by `e2e --mutate`",
-              "pmx api auth login --context <scratch>", live_covered=True)
+              "pmx auth login --context <scratch>", live_covered=True)
 
 
 def _scratch_config_checks(ctx: Ctx) -> None:
@@ -84,10 +90,10 @@ def _auth_set_checks(ctx: Ctx, cfg: str, target: str) -> None:
             return f"token-id {data.get('Token-ID')!r} != {token_id!r}"
         return None
 
-    ctx.check("auth set-token (scratch)", "--config", cfg, "api", "auth", "set-token",
+    ctx.check("auth set-token (scratch)", "--config", cfg, "auth", "set-token",
               "--context", target, "--token-id", token_id, "--secret", token_secret,
               "--username", "root@pam", fmt="", with_context=False)
-    ctx.check("auth status after set-token (scratch)", "--config", cfg, "api", "auth",
+    ctx.check("auth status after set-token (scratch)", "--config", cfg, "auth",
               "status", "--context", target, with_context=False, validate=is_token)
 
     def is_password(res: CmdResult) -> str | None:
@@ -98,8 +104,8 @@ def _auth_set_checks(ctx: Ctx, cfg: str, target: str) -> None:
             return f"username {data.get('Username')!r} != 'root@pam'"
         return None
 
-    ctx.check("auth set-password (scratch)", "--config", cfg, "api", "auth", "set-password",
+    ctx.check("auth set-password (scratch)", "--config", cfg, "auth", "set-password",
               "--context", target, "--username", "root@pam", "--secret", "e2e-not-a-real-pw",
               fmt="", with_context=False)
-    ctx.check("auth status after set-password (scratch)", "--config", cfg, "api", "auth",
+    ctx.check("auth status after set-password (scratch)", "--config", cfg, "auth",
               "status", "--context", target, with_context=False, validate=is_password)

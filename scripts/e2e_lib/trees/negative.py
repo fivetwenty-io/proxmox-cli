@@ -54,8 +54,11 @@ def run(ctx: Ctx) -> None:
     # The sweep context targets Proxmox VE, so every `pmx pbs` command must be
     # refused with a pointer to `context add --product pbs`. This runs without
     # any PBS server — the guard reads only the local context config.
+    # (`datastore ls` — a still-nested pbs subcommand — rather than the old
+    # `pbs ping`, which moved to the shared root `version ping` command and no
+    # longer exists under the `pbs` group; see internal/cli/pbs's doc comment.)
     ctx.expect_fail("pbs command against a PVE context",
-                    "pbs", "ping", must_contain="requires a PBS context")
+                    "pbs", "datastore", "ls", must_contain="requires a PBS context")
 
     # --- not-found lookups (reads; never mutate) ----------------------------
 

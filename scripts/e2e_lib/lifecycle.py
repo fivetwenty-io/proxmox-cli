@@ -1352,8 +1352,10 @@ def role_lifecycle(r: Runner) -> None:
 
 
 def auth_lifecycle(r: Runner) -> None:
-    """Exercise `api auth login`/`refresh`/`logout` against the live server using
-    a throwaway pve-realm user and a scratch `--config` file.
+    """Exercise `auth login`/`refresh`/`logout` (the canonical top-level `auth`
+    command; `auth` was promoted out from under `api`, which is now the raw
+    passthrough) against the live server using a throwaway pve-realm user and
+    a scratch `--config` file.
 
     Isolation: the session is obtained for a fresh `pmx-cli-authprobe@pve` user
     (NEVER root) and stored only in a temp config; the real config, the configured
@@ -1401,13 +1403,13 @@ def auth_lifecycle(r: Runner) -> None:
         r.pmx_raw("--config", cfg, "context", "add", "authprobe",
                   "--host", host, "--username", login_user, "--realm", "pve",
                   "--auth-type", "password", "--secret", "placeholder", "--insecure")
-        r.pmx_raw("--config", cfg, "api", "auth", "set-password", "--context", "authprobe",
+        r.pmx_raw("--config", cfg, "auth", "set-password", "--context", "authprobe",
                   "--username", login_user, "--secret", probe_pw)
 
         # login → real session ticket, stored only in the scratch config.
         r.step_raw("api", "auth login", f"auth login as {user}",
-                   "--config", cfg, "api", "auth", "login", "--context", "authprobe")
-        st = r.pmx_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
+                   "--config", cfg, "auth", "login", "--context", "authprobe")
+        st = r.pmx_raw("--config", cfg, "auth", "status", "--context", "authprobe",
                        json_out=True)
         sess = ""
         if st.rc == 0:
@@ -1419,12 +1421,12 @@ def auth_lifecycle(r: Runner) -> None:
 
         # refresh → re-obtain the ticket for the password target.
         r.step_raw("api", "auth refresh", "auth refresh",
-                   "--config", cfg, "api", "auth", "refresh", "--context", "authprobe")
+                   "--config", cfg, "auth", "refresh", "--context", "authprobe")
 
         # logout → invalidate the ticket server-side and clear it locally.
         r.step_raw("api", "auth logout", "auth logout",
-                   "--config", cfg, "api", "auth", "logout", "--context", "authprobe")
-        st = r.pmx_raw("--config", cfg, "api", "auth", "status", "--context", "authprobe",
+                   "--config", cfg, "auth", "logout", "--context", "authprobe")
+        st = r.pmx_raw("--config", cfg, "auth", "status", "--context", "authprobe",
                        json_out=True)
         if st.rc == 0:
             sd = st.json()
@@ -1498,9 +1500,9 @@ def tfa_lifecycle(r: Runner) -> None:
         r.pmx_raw("--config", cfg, "context", "add", "tfaprobe",
                   "--host", host, "--username", login_user, "--realm", "pve",
                   "--auth-type", "password", "--secret", "placeholder", "--insecure")
-        r.pmx_raw("--config", cfg, "api", "auth", "set-password", "--context", "tfaprobe",
+        r.pmx_raw("--config", cfg, "auth", "set-password", "--context", "tfaprobe",
                   "--username", login_user, "--secret", probe_pw)
-        login = r.pmx_raw("--config", cfg, "api", "auth", "login", "--context", "tfaprobe")
+        login = r.pmx_raw("--config", cfg, "auth", "login", "--context", "tfaprobe")
         if login.rc != 0:
             detail = (login.err.strip() or login.out.strip())[:200]
             raise LifecycleError(f"tfa probe login: {detail}")
