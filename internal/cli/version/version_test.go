@@ -21,6 +21,17 @@ import (
 	selfversion "github.com/fivetwenty-io/pmx-cli/internal/version"
 )
 
+// fakePBSClient returns a FakePBS test server and a PBSClient pointed at it.
+func fakePBSClient(t *testing.T) (*testhelper.FakePBS, *apiclient.PBSClient) {
+	t.Helper()
+
+	f := testhelper.NewFakePBS(t)
+	pc, err := apiclient.NewPBSClient(f.Options)
+	require.NoError(t, err)
+
+	return f, pc
+}
+
 // fakeClient builds an APIClient pointed at the fake server. It splits the
 // fake's host:port so the underlying client does not append a default port to
 // an address that already carries one.
@@ -230,4 +241,144 @@ func TestVersion_GroupRegistered(t *testing.T) {
 		}
 	}
 	require.True(t, found, "version group must be registered with the root command")
+}
+
+// TestGroup_IsProductContext verifies that the version group is annotated
+// product:context so the root resolves the active client (PVE or PBS) from
+// the active context rather than defaulting to PVE, and that it carries both
+// the "client" and "ping" sub-commands.
+func TestGroup_IsProductContext(t *testing.T) {
+	cmd := Group(&cli.Deps{})
+	require.Equal(t, cli.ProductFromContext, cmd.Annotations[cli.ProductAnnotation])
+
+	names := map[string]bool{}
+	for _, c := range cmd.Commands() {
+		names[c.Name()] = true
+	}
+	require.True(t, names["client"])
+	require.True(t, names["ping"])
+}
+
+// ---------------------------------------------------------------------------
+// PBS render branch (deps.PBS set, deps.API nil)
+// ---------------------------------------------------------------------------
+
+// TestVersion_PBS_Table verifies that `pmx version` against a PBS context
+// queries GET /version on the PBS client and renders the PBS version fields.
+func TestVersion_PBS_Table(t *testing.T) {
+	f, pc := fakePBSClient(t)
+
+	var gotMethod, gotPath string
+	f.HandleFunc("GET /api2/json/version", func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		testhelper.WriteData(w, map[string]any{
+			"release": "3",
+			"repoid":  "abc123de",
+			"version": "3.4",
+		})
+	})
+
+	deps := &cli.Deps{PBS: pc, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf))
+
+	require.Equal(t, http.MethodGet, gotMethod)
+	require.Equal(t, "/api2/json/version", gotPath)
+
+	out := buf.String()
+	require.Contains(t, out, "3.4")
+	require.Contains(t, out, "abc123de")
+}
+
+// TestVersion_PBS_JSON verifies that JSON output for a PBS context carries the
+// typed PBS version response fields.
+func TestVersion_PBS_JSON(t *testing.T) {
+	_, pc := fakePBSClient(t)
+
+	deps := &cli.Deps{PBS: pc, Out: output.New(), Format: output.FormatJSON}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf))
+
+	out := buf.String()
+	require.Contains(t, out, `"version": "3.4"`)
+	require.Contains(t, out, `"release": "3"`)
+	require.Contains(t, out, `"repoid": "abc123de"`)
+}
+
+// TestVersion_PBS_ServerError verifies that a server-side failure on GET
+// /version for a PBS context is surfaced as an error from the command.
+func TestVersion_PBS_ServerError(t *testing.T) {
+	f, pc := fakePBSClient(t)
+	f.HandleFunc("GET /api2/json/version", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+	})
+
+	deps := &cli.Deps{PBS: pc, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "get server version")
+}
+
+// ---------------------------------------------------------------------------
+// ping
+// ---------------------------------------------------------------------------
+
+// TestPing_RendersDefaultFakeResponse verifies that `pmx version ping` reports
+// connectivity against a PBS context.
+func TestPing_RendersDefaultFakeResponse(t *testing.T) {
+	_, pc := fakePBSClient(t)
+	deps := &cli.Deps{PBS: pc, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "ping"))
+	require.Contains(t, buf.String(), "true")
+}
+
+// TestPing_JSONOutputContainsPong verifies the JSON render carries the typed
+// pong boolean.
+func TestPing_JSONOutputContainsPong(t *testing.T) {
+	f, pc := fakePBSClient(t)
+	deps := &cli.Deps{PBS: pc, Out: output.New(), Format: output.FormatJSON}
+
+	var gotPath string
+	f.HandleFunc("GET /api2/json/ping", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{"pong": true})
+	})
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "ping"))
+	require.Equal(t, "/api2/json/ping", gotPath)
+	require.Contains(t, buf.String(), `"pong": true`)
+}
+
+// TestPing_ServerErrorSurfaced verifies that a server-side failure on GET
+// /ping is surfaced as an error from the command.
+func TestPing_ServerErrorSurfaced(t *testing.T) {
+	f, pc := fakePBSClient(t)
+	f.HandleFunc("GET /api2/json/ping", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusBadRequest, "daemon offline")
+	})
+	deps := &cli.Deps{PBS: pc, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "ping")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "daemon offline")
+}
+
+// TestPing_RequiresPBSContext verifies that `pmx version ping` against a PVE
+// context (deps.PBS nil) fails with a clear error instead of a nil-pointer
+// panic.
+func TestPing_RequiresPBSContext(t *testing.T) {
+	deps := &cli.Deps{API: nil, PBS: nil, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "ping")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "ping is only available for a PBS context")
 }
