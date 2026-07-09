@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -125,21 +126,107 @@ func TestPveOptions_RendersClusterOptions(t *testing.T) {
 	require.Contains(t, buf.String(), "secure")
 }
 
-// TestPveUpdates_RendersEntryCountAndRaw asserts that `pve updates` decodes
-// the array of cached update entries, preserving every entry in Raw.
-func TestPveUpdates_RendersEntryCountAndRaw(t *testing.T) {
+// TestPveUpdates_SortsNodeRowsAndPairsRaw asserts that `pve updates` decodes
+// the RemoteUpdateSummary's nodes map into one row per node, sorted by node
+// name, and that each node's raw map (including an undeclared field the
+// typed entry does not capture) stays paired with its row in Raw.
+func TestPveUpdates_SortsNodeRowsAndPairsRaw(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/updates", []map[string]any{
-		{"Package": "proxmox-ve", "Version": "8.2.0"},
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/updates", map[string]any{
+		"remote-type": "pve",
+		"status":      "success",
+		"nodes": map[string]any{
+			"zeta": map[string]any{
+				"number-of-updates": 1, "last-refresh": 1752000001, "status": "success",
+				"repository-status": "ok",
+			},
+			"alpha": map[string]any{
+				"number-of-updates": 3, "last-refresh": 1752000000, "status": "success",
+				"repository-status": "non-production-ready",
+				"versions": []map[string]any{
+					{"package": "pve-manager", "version": "8.2.4"},
+				},
+			},
+		},
 	})
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newPveUpdatesCmd(), "updates", "cluster1")
 	require.NoError(t, err)
-	require.Contains(t, buf.String(), "proxmox-ve")
-	require.Contains(t, buf.String(), "8.2.0")
+	out := buf.String()
+	require.Less(t, strings.Index(out, "alpha"), strings.Index(out, "zeta"), "rows must sort by node name")
+
+	var got struct {
+		Nodes map[string]map[string]any `json:"nodes"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Contains(t, got.Nodes, "alpha")
+	require.Contains(t, got.Nodes, "zeta")
+
+	alphaVersions, ok := got.Nodes["alpha"]["versions"].([]any)
+	require.True(t, ok, "alpha's raw node must keep the undeclared versions field")
+	require.Len(t, alphaVersions, 1)
+	require.NotContains(t, got.Nodes["zeta"], "versions", "zeta's raw node must not gain alpha's versions field")
+}
+
+// TestPveUpdates_RendersTableColumns asserts that the table format renders
+// the documented per-node columns.
+func TestPveUpdates_RendersTableColumns(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/updates", map[string]any{
+		"remote-type": "pve",
+		"status":      "success",
+		"nodes": map[string]any{
+			"pve-node-1": map[string]any{
+				"number-of-updates": 3, "last-refresh": 1752000000, "status": "success",
+				"repository-status": "non-production-ready",
+			},
+		},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newPveUpdatesCmd(), "updates", "cluster1")
+	require.NoError(t, err)
+	out := buf.String()
+	require.Contains(t, out, "NODE")
+	require.Contains(t, out, "UPDATES")
+	require.Contains(t, out, "LAST - REFRESH")
+	require.Contains(t, out, "STATUS")
+	require.Contains(t, out, "REPO - STATUS")
+	require.Contains(t, out, "pve-node-1")
+	require.Contains(t, out, "3")
+	require.Contains(t, out, "1752000000")
+	require.Contains(t, out, "non-production-ready")
+}
+
+// TestPveUpdates_EmptyNodesFallsBackToSingle asserts that when a remote has
+// never been polled (or errored), the nodes map is empty and the command
+// renders Single with the remote-level status instead of an empty table.
+func TestPveUpdates_EmptyNodesFallsBackToSingle(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/updates", map[string]any{
+		"remote-type":    "pve",
+		"status":         "error",
+		"status-message": "connection refused",
+		"nodes":          map[string]any{},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newPveUpdatesCmd(), "updates", "cluster1")
+	require.NoError(t, err)
+	out := buf.String()
+	require.Contains(t, out, "remote-type")
+	require.Contains(t, out, "pve")
+	require.Contains(t, out, "status")
+	require.Contains(t, out, "error")
+	require.Contains(t, out, "status-message")
+	require.Contains(t, out, "connection refused")
 }
 
 // TestPveClusterStatus_PreservesServerOrder asserts that `pve cluster

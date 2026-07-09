@@ -316,11 +316,44 @@ func newPveOptionsCmd() *cobra.Command {
 	}
 }
 
+// pdmNodeUpdateSummary decodes one entry of a RemoteUpdateSummary's "nodes"
+// map: PDM's Rust source (lib/pdm-api-types/src/remote_updates.rs,
+// NodeUpdateSummary, kebab-case) is the ground truth, since the PDM API
+// schema declares no fields for this shape. Shared by newPveUpdatesCmd
+// (below) and newRemoteUpdatesSummaryCmd (remote_task.go), whose nodes maps
+// carry the identical per-node shape.
+type pdmNodeUpdateSummary struct {
+	NumberOfUpdates  int64   `json:"number-of-updates"`
+	LastRefresh      int64   `json:"last-refresh"`
+	Status           string  `json:"status"`
+	StatusMessage    *string `json:"status-message,omitempty"`
+	RepositoryStatus string  `json:"repository-status,omitempty"`
+}
+
+// pdmRemoteUpdateSummary decodes a RemoteUpdateSummary object: the body of
+// GET /pve/remotes/{remote}/updates, and each value of the "remotes" map
+// returned by GET /remotes/updates/summary (lib/pdm-api-types
+// RemoteUpdateSummary, kebab-case — see pdmNodeUpdateSummary above for why
+// this is modeled from the Rust source rather than the API schema). Shared
+// by newPveUpdatesCmd (below) and newRemoteUpdatesSummaryCmd (remote_task.go).
+type pdmRemoteUpdateSummary struct {
+	Nodes         map[string]json.RawMessage `json:"nodes"`
+	RemoteType    string                     `json:"remote-type"`
+	Status        string                     `json:"status"`
+	StatusMessage *string                    `json:"status-message,omitempty"`
+}
+
 // newPveUpdatesCmd builds `pmx pdm pve updates <remote>` — return the cached
 // update information about a remote (GET /pve/remotes/{remote}/updates).
-// The response is an array of opaque per-package update objects (the PDM
-// API schema does not declare their fields), so Single carries only the
-// entry count while Raw preserves every entry losslessly.
+// The PDM API schema declares a "null" return type for this endpoint (the
+// Rust handler's #[api(...)] macro omits `returns:`), but the real response
+// is a RemoteUpdateSummary object: remote-type, status, an optional
+// status-message, and nodes, a map of node name to that node's update
+// summary (pdmNodeUpdateSummary above). Rows are sorted by node name; when
+// nodes is empty — an error, or a remote PDM has never polled — the command
+// renders Single with the remote-level status/status-message instead of an
+// empty table. Raw always carries the full response losslessly, regardless
+// of which of Single/Rows also renders.
 func newPveUpdatesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "updates <remote>",
@@ -335,12 +368,66 @@ func newPveUpdatesCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get cached updates for PVE remote %q: %w", remote, err)
 			}
+			if resp == nil {
+				return fmt.Errorf("get cached updates for PVE remote %q: empty response from server", remote)
+			}
 
-			items := decodeRawList(rawItemsOf(resp))
+			body, err := json.Marshal(resp)
+			if err != nil {
+				return fmt.Errorf("get cached updates for PVE remote %q: %w", remote, err)
+			}
+			var summary pdmRemoteUpdateSummary
+			if err := json.Unmarshal(body, &summary); err != nil {
+				return fmt.Errorf("decode cached updates for PVE remote %q: %w", remote, err)
+			}
 
-			single := map[string]string{"updates": strconv.Itoa(len(items))}
+			names := make([]string, 0, len(summary.Nodes))
+			for name := range summary.Nodes {
+				names = append(names, name)
+			}
+			sort.Strings(names)
 
-			res := output.Result{Single: single, Raw: items}
+			rawNodes := make(map[string]any, len(names))
+			rows := make([][]string, 0, len(names))
+
+			for _, name := range names {
+				nodeRaw := summary.Nodes[name]
+
+				var entry pdmNodeUpdateSummary
+				if err := json.Unmarshal(nodeRaw, &entry); err != nil {
+					return fmt.Errorf("decode node %q update summary for PVE remote %q: %w", name, remote, err)
+				}
+				var rawNode map[string]any
+				if err := json.Unmarshal(nodeRaw, &rawNode); err != nil {
+					return fmt.Errorf("decode node %q update summary for PVE remote %q: %w", name, remote, err)
+				}
+				rawNodes[name] = rawNode
+
+				rows = append(rows, []string{
+					name,
+					strconv.FormatInt(entry.NumberOfUpdates, 10),
+					strconv.FormatInt(entry.LastRefresh, 10),
+					entry.Status,
+					entry.RepositoryStatus,
+				})
+			}
+
+			raw := map[string]any{"remote-type": summary.RemoteType, "status": summary.Status, "nodes": rawNodes}
+			if summary.StatusMessage != nil {
+				raw["status-message"] = *summary.StatusMessage
+			}
+
+			if len(summary.Nodes) == 0 {
+				single := map[string]string{"remote-type": summary.RemoteType, "status": summary.Status}
+				if summary.StatusMessage != nil {
+					single["status-message"] = *summary.StatusMessage
+				}
+				res := output.Result{Single: single, Raw: raw}
+				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+			}
+
+			headers := []string{"NODE", "UPDATES", "LAST-REFRESH", "STATUS", "REPO-STATUS"}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raw}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

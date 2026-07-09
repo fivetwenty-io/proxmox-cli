@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -315,6 +316,10 @@ func newRemoteUpdatesCmd() *cobra.Command {
 
 // newRemoteUpdatesSummaryCmd builds `pmx pdm remote updates summary` — show
 // the cached update summary for every managed remote (GET /remotes/updates/summary).
+// Each value of the "remotes" map is a RemoteUpdateSummary object
+// (pdmRemoteUpdateSummary, pve_proxy.go) whose nodes map is reduced to a
+// count and an update total per remote; the full per-node detail remains
+// available via --format json/yaml through Raw.
 func newRemoteUpdatesSummaryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "summary",
@@ -347,12 +352,33 @@ func newRemoteUpdatesSummaryCmd() *cobra.Command {
 			}
 			sort.Strings(names)
 
-			headers := []string{"REMOTE", "SUMMARY"}
+			headers := []string{"REMOTE", "TYPE", "STATUS", "NODES", "UPDATES", "MESSAGE"}
 			rows := make([][]string, 0, len(names))
 			raw := make(map[string]any, len(names))
 
 			for _, name := range names {
-				rows = append(rows, []string{name, string(byRemote[name])})
+				var summary pdmRemoteUpdateSummary
+				if err := json.Unmarshal(byRemote[name], &summary); err != nil {
+					return fmt.Errorf("decode update summary for remote %q: %w", name, err)
+				}
+
+				var updates int64
+				for _, nodeRaw := range summary.Nodes {
+					var node pdmNodeUpdateSummary
+					if err := json.Unmarshal(nodeRaw, &node); err != nil {
+						return fmt.Errorf("decode node update summary for remote %q: %w", name, err)
+					}
+					updates += node.NumberOfUpdates
+				}
+
+				rows = append(rows, []string{
+					name,
+					summary.RemoteType,
+					summary.Status,
+					strconv.Itoa(len(summary.Nodes)),
+					strconv.FormatInt(updates, 10),
+					strPtrString(summary.StatusMessage),
+				})
 
 				var v any
 				if err := json.Unmarshal(byRemote[name], &v); err == nil {

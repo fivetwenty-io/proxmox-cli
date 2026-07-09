@@ -95,16 +95,24 @@ func TestRemoteTaskStatistics_RendersSingle(t *testing.T) {
 }
 
 // TestRemoteUpdatesSummary_ListsPerRemoteRows asserts that `remote updates
-// summary` decodes the nested remotes map into one row per remote, sorted
-// by name.
+// summary` decodes the nested remotes map into one typed row per remote,
+// sorted by name, with NODES/UPDATES aggregated from each remote's nodes map.
 func TestRemoteUpdatesSummary_ListsPerRemoteRows(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	f.HandleJSON("GET /api2/json/remotes/updates/summary", map[string]any{
 		"remotes": map[string]any{
-			"zeta":  map[string]any{"total": 0},
-			"alpha": map[string]any{"total": 3},
+			"zeta": map[string]any{
+				"remote-type": "pve", "status": "unknown", "nodes": map[string]any{},
+			},
+			"alpha": map[string]any{
+				"remote-type": "pve", "status": "success",
+				"nodes": map[string]any{
+					"pve1": map[string]any{"number-of-updates": 2, "last-refresh": 1752000000, "status": "success"},
+					"pve2": map[string]any{"number-of-updates": 1, "last-refresh": 1752000001, "status": "success"},
+				},
+			},
 		},
 	})
 
@@ -112,10 +120,51 @@ func TestRemoteUpdatesSummary_ListsPerRemoteRows(t *testing.T) {
 	err := run(deps, &buf, newRemoteUpdatesSummaryCmd(), "summary")
 	require.NoError(t, err)
 	out := buf.String()
+	require.Contains(t, out, "REMOTE")
+	require.Contains(t, out, "TYPE")
+	require.Contains(t, out, "STATUS")
+	require.Contains(t, out, "NODES")
+	require.Contains(t, out, "UPDATES")
+	require.Contains(t, out, "MESSAGE")
 	require.Contains(t, out, "alpha")
 	require.Contains(t, out, "zeta")
 	require.Less(t, strings.Index(out, "alpha"), strings.Index(out, "zeta"),
 		"rows must sort by remote name")
+	require.Contains(t, out, "3", "UPDATES must sum number-of-updates across alpha's nodes")
+}
+
+// TestRemoteUpdatesSummary_UndeclaredNodeFieldReachesRaw asserts that a
+// field the typed per-node struct does not capture (e.g. versions) still
+// reaches Raw, since Raw is decoded independently of the typed columns.
+func TestRemoteUpdatesSummary_UndeclaredNodeFieldReachesRaw(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET /api2/json/remotes/updates/summary", map[string]any{
+		"remotes": map[string]any{
+			"alpha": map[string]any{
+				"remote-type": "pve", "status": "success",
+				"nodes": map[string]any{
+					"pve1": map[string]any{
+						"number-of-updates": 1, "last-refresh": 1752000000, "status": "success",
+						"versions": []map[string]any{{"package": "pve-manager", "version": "8.2.4"}},
+					},
+				},
+			},
+		},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteUpdatesSummaryCmd(), "summary")
+	require.NoError(t, err)
+
+	var got map[string]map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	nodes, ok := got["alpha"]["nodes"].(map[string]any)
+	require.True(t, ok)
+	pve1, ok := nodes["pve1"].(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, pve1, "versions", "undeclared versions field must reach Raw")
 }
 
 // TestRemoteUpdatesRefresh_AsyncPrintsUPID asserts that with the root
