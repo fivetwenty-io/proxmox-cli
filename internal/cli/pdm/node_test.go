@@ -3,6 +3,7 @@ package pdm
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,40 @@ func TestNodeLs_ListsNodes(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
 	require.Len(t, got, 1)
 	require.Equal(t, "pdm-host", got[0]["node"])
+}
+
+// TestNodeLs_SortsByNameAndPairsRawWithRows asserts that `node ls` sorts
+// entries by node name and keeps each row's raw JSON attached to its sorted
+// row, mirroring the paired-sort convention used by every other
+// discrete-entity ls in this package (remote.go, node_network.go).
+func TestNodeLs_SortsByNameAndPairsRawWithRows(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET /api2/json/nodes", []map[string]any{
+		{"node": "zeta-host", "extra": "z-marker"},
+		{"node": "alpha-host", "extra": "a-marker"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeLsCmd(), "ls")
+	require.NoError(t, err)
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2)
+	require.Equal(t, "alpha-host", got[0]["node"], "entries must sort by node name")
+	require.Equal(t, "a-marker", got[0]["extra"], "raw entry must stay paired with its sorted row")
+	require.Equal(t, "zeta-host", got[1]["node"])
+	require.Equal(t, "z-marker", got[1]["extra"])
+
+	var tableBuf bytes.Buffer
+	tableDeps := depsFor(t, pc, output.FormatTable, false)
+	err = run(tableDeps, &tableBuf, newNodeLsCmd(), "ls")
+	require.NoError(t, err)
+	rows := tableBuf.String()
+	require.Less(t, strings.Index(rows, "alpha-host"), strings.Index(rows, "zeta-host"),
+		"table rows must also be sorted by node name")
 }
 
 // TestNodeStatus_RendersSingle asserts that `node status` renders the

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -64,7 +65,7 @@ type nodeListEntry struct {
 }
 
 // newNodeLsCmd builds `pmx pdm node ls` — list the node entries visible at
-// the compatibility cluster-node listing (GET /nodes).
+// the compatibility cluster-node listing (GET /nodes), sorted by node name.
 //
 // The generated Nodes.ListNodes binding discards its response body: the PDM
 // API schema's returns.type for this "only for compatibility" endpoint is
@@ -74,6 +75,13 @@ type nodeListEntry struct {
 // transport (the same *client.Client every generated binding is itself built
 // on) to recover the actual entries, matching the PBS analog's identical
 // workaround (internal/cli/pbs/node.go:70-117).
+//
+// Like every other discrete-entity ls in this package (remote.go, realm_ad.go,
+// etc.), entries are sorted by their identifying name with the Raw/Rows
+// pair kept together through the sort (remote.go's inline `type xRow
+// struct{entry, raw}` convention) — unlike task-list or time-series
+// listings (remote_task.go, node_tasks.go, node_logs.go's rrddata), a named
+// list of nodes has no other meaningful order.
 func newNodeLsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
@@ -96,18 +104,41 @@ func newNodeLsCmd() *cobra.Command {
 				return fmt.Errorf("list nodes: %w", err)
 			}
 
-			entries, err := nodeDecodeArray[nodeListEntry](items)
-			if err != nil {
-				return fmt.Errorf("decode node entry: %w", err)
+			type nodeListRow struct {
+				entry nodeListEntry
+				raw   map[string]any
 			}
+			table := make([]nodeListRow, 0, len(items))
+
+			for _, raw := range items {
+				var e nodeListEntry
+
+				err := json.Unmarshal(raw, &e)
+				if err != nil {
+					return fmt.Errorf("decode node entry: %w", err)
+				}
+
+				var m map[string]any
+
+				err = json.Unmarshal(raw, &m)
+				if err != nil {
+					return fmt.Errorf("decode node entry: %w", err)
+				}
+
+				table = append(table, nodeListRow{entry: e, raw: m})
+			}
+			sort.Slice(table, func(i, j int) bool { return table[i].entry.Node < table[j].entry.Node })
 
 			headers := []string{"NODE"}
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
-				rows = append(rows, []string{e.Node})
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+
+			for _, t := range table {
+				rows = append(rows, []string{t.entry.Node})
+				raws = append(raws, t.raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
