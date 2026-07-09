@@ -1,7 +1,7 @@
 # pmx
 
-A comprehensive command-line interface for the Proxmox VE and Proxmox Backup
-Server APIs, built on
+A comprehensive command-line interface for the Proxmox VE, Proxmox Backup
+Server, and Proxmox Datacenter Manager APIs, built on
 [`proxmox-apiclient-go`](https://github.com/fivetwenty-io/proxmox-apiclient-go).
 
 `pmx` manages multiple named Proxmox contexts, authenticates with API tokens or
@@ -29,8 +29,14 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
   `pmx pbs` command group — datastores, snapshots, sync/prune/GC/verify jobs,
   access control, tape backup, and a raw API passthrough.
 
+- Proxmox Datacenter Manager support: contexts with `product: pdm` drive the
+  full `pmx pdm` command group — managed-remote directory, aggregated
+  resources/SDN/Ceph, subscription pool management, access control, the
+  instance's own node/config administration, automated installation, and
+  proxied PVE/PBS remote operations.
+
 - Persona-aware binary: run it as `pmx` for the combined tree, or as `pve`/
-  `pbs` (a symlink to the same binary) to hoist that product's commands
+  `pbs`/`pdm` (a symlink to the same binary) to hoist that product's commands
   straight onto the root — see [Personas](#personas).
 
 - JSONL audit logs written to `~/.pmx/logs/`, with secrets redacted.
@@ -62,12 +68,13 @@ sudo install pmx /usr/local/bin/pmx
 Windows users download `pmx__windows_amd64.zip`, verify against the
 `SHA256SUMS` file, and place `pmx.exe` on their `PATH`.
 
-Release archives ship only the `pmx` binary; create the `pve`/`pbs` persona
-symlinks yourself if you want them (see [Personas](#personas)):
+Release archives ship only the `pmx` binary; create the `pve`/`pbs`/`pdm`
+persona symlinks yourself if you want them (see [Personas](#personas)):
 
 ```bash
 sudo ln -s pmx /usr/local/bin/pve
 sudo ln -s pmx /usr/local/bin/pbs
+sudo ln -s pmx /usr/local/bin/pdm
 ```
 
 ### Install with `go install`
@@ -79,8 +86,8 @@ go install github.com/fivetwenty-io/pmx-cli/cmd/pmx@latest
 ### Build from source
 
 ```bash
-make build      # builds ./dist/pmx (+ pve/pbs symlinks) with version ldflags
-make install    # installs pmx + pve/pbs symlinks to $GOPATH/bin (or ~/go/bin)
+make build      # builds ./dist/pmx (+ pve/pbs/pdm symlinks) with version ldflags
+make install    # installs pmx + pve/pbs/pdm symlinks to $GOPATH/bin (or ~/go/bin)
 ```
 
 Requires Go 1.26 or newer.
@@ -111,8 +118,9 @@ stripped) to decide which command surface to expose:
 
 - Invoked as `pmx` (or anything else — `go run`/`go test` temp binary names,
   etc.): the combined tree. Proxmox VE resource groups live under
-  `pmx pve`, Proxmox Backup Server groups under `pmx pbs`, and the shared
-  commands below sit at the root.
+  `pmx pve`, Proxmox Backup Server groups under `pmx pbs`, Proxmox
+  Datacenter Manager groups under `pmx pdm`, and the shared commands below
+  sit at the root.
 
 - Invoked as `pve`: the Proxmox VE groups (`cluster`, `qemu`, `lxc`, `node`,
   `storage`, `sdn`, `pool`, `access`, `task`) are hoisted directly onto the
@@ -123,16 +131,27 @@ stripped) to decide which command surface to expose:
   Server](#proxmox-backup-server-pmx-pbs) subtree) are hoisted the same way
   — `pbs datastore ls` instead of `pmx pbs datastore ls`.
 
-`pve` and `pbs` are ordinary symlinks (or copies, on platforms without
-symlinks) to the same `pmx` binary. `make build`/`make install` create them
-automatically; set them up by hand after a release-archive install with:
+- Invoked as `pdm`: the Proxmox Datacenter Manager groups (`remote`,
+  `resource`, `sdn`, `ceph`, `subscription`, `user`, `token`, `acl`, `role`,
+  `permission`, `tfa`, `realm`, `config`, `node`, `auto-install`, and the
+  proxied `pbs`/`pve` remote-operation subtrees — see [Proxmox Datacenter
+  Manager](#proxmox-datacenter-manager-pmx-pdm)) are hoisted the same way —
+  `pdm remote ls` instead of `pmx pdm remote ls`. Under this persona `pve`
+  and `pbs` at the root are the PDM-proxied remote-operation groups, not the
+  native `pve`/`pbs` persona trees.
+
+`pve`, `pbs`, and `pdm` are ordinary symlinks (or copies, on platforms
+without symlinks) to the same `pmx` binary. `make build`/`make install`
+create them automatically; set them up by hand after a release-archive
+install with:
 
 ```bash
 sudo ln -s pmx /usr/local/bin/pve
 sudo ln -s pmx /usr/local/bin/pbs
+sudo ln -s pmx /usr/local/bin/pdm
 ```
 
-Every persona — `pmx`, `pve`, and `pbs` — exposes the same top-level
+Every persona — `pmx`, `pve`, `pbs`, and `pdm` — exposes the same top-level
 commands, since these operate on the active context rather than a specific
 product:
 
@@ -180,7 +199,7 @@ contexts:
     host: pve.example.com
     port: 8006
     protocol: https
-    product: pve               # pve (default) or pbs — selects the API dialect
+    product: pve               # pve (default), pbs, or pdm — selects the API dialect
     realm: pam
     default-node: pve1
     default-output: table      # per-context output format override
@@ -298,7 +317,10 @@ Each context targets one product. The default, `product: pve`, is a Proxmox VE
 API endpoint (port 8006); `product: pbs` marks the context as a Proxmox Backup
 Server (port 8007 unless `--port` is given) and enables the `pmx pbs` command
 group for it — see
-[Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below.
+[Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below; `product: pdm`
+marks the context as a Proxmox Datacenter Manager (port 8443 unless `--port`
+is given) and enables the `pmx pdm` command group for it — see
+[Proxmox Datacenter Manager](#proxmox-datacenter-manager-pmx-pdm) below.
 
 ```bash
 # Add a PBS context (defaults to port 8007).
@@ -306,6 +328,13 @@ pmx context add backup \
   --product pbs \
   --host pbs.example.com --username root@pam \
   --token-id automation --secret ${PBS_TOKEN} --select
+
+# Add a PDM context (--port 8443 is the default; shown explicitly here),
+# then attach the token secret with 'auth set-token' instead of --secret.
+pmx context add dcmgr \
+  --product pdm --host pdm.example.com --port 8443 \
+  --username root@pam --token-id automation --select
+pmx auth set-token --context dcmgr --token-id automation --secret ${PDM_TOKEN}
 ```
 
 Per-context `ssh.user`, `ssh.port`, and `ssh.identity` fields supply defaults
@@ -373,7 +402,8 @@ information is available as a command (with `-o json`/`-o yaml` support) via
 node via `--node`/`$PMX_NODE` (or the context's `default-node`); node administration
 uses the `pmx pve node` subtree. The commands below are shared across every
 persona (see [Personas](#personas)); everything else lives under `pmx pve`
-(Proxmox VE) or `pmx pbs` (Proxmox Backup Server, `product: pbs` contexts).
+(Proxmox VE), `pmx pbs` (Proxmox Backup Server, `product: pbs` contexts), or
+`pmx pdm` (Proxmox Datacenter Manager, `product: pdm` contexts).
 
 | Group | Purpose | Sub-commands |
 |-------|---------|--------------|
@@ -403,6 +433,9 @@ The top-level alias `pmx ctx` resolves to `pmx context`.
 
 `pmx pbs` — Proxmox Backup Server (contexts with `product: pbs`) — is documented
 separately: see [Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below.
+`pmx pdm` — Proxmox Datacenter Manager (contexts with `product: pdm`) — is
+documented separately: see [Proxmox Datacenter
+Manager](#proxmox-datacenter-manager-pmx-pdm) below.
 
 ### Examples
 
@@ -542,6 +575,73 @@ pmx -c backup pbs tape backup --store tank --pool weekly --drive lto9
 
 # Anything without a dedicated verb (shared "api" command, not nested under "pbs").
 pmx -c backup api get /admin/datastore/tank/status
+```
+
+## Proxmox Datacenter Manager (`pmx pdm`)
+
+`pmx pdm` manages a Proxmox Datacenter Manager (PDM) instance through its own
+API. It requires the active context (or `--context`) to have `product: pdm`;
+PVE and PBS commands reject PDM contexts and vice versa, so a mixed fleet is a
+matter of switching contexts. Everything else works exactly like the PVE and
+PBS sides: the same output formats, `--async` on task-producing verbs, JSONL
+logging, and exit codes.
+
+A Proxmox Datacenter Manager instance itself manages a fleet of PVE and PBS
+remotes. The `pdm pve` and `pdm pbs` groups proxy operations against those
+managed remotes — they are distinct from, and nested under, the top-level
+`pmx pve`/`pmx pbs` command trees, which talk directly to a PVE/PBS context
+instead of through a PDM instance.
+
+| Group | Purpose | Sub-commands |
+|-------|---------|--------------|
+| `remote` | Manage remotes registered with this Proxmox Datacenter Manager | `ls`, `show`, `add`, `update`, `delete`, `version`, `probe-certificate`, `rrddata`, `task`, `updates`, `metric-collection` |
+| `resource` | List and inspect aggregated resources across managed remotes | `ls`, `location-info`, `status`, `subscription`, `top-entities` |
+| `sdn` | Inspect and manage aggregated SDN configuration | `controller`, `vnet`, `zone` |
+| `ceph` | Inspect Ceph clusters registered with managed remotes | `ls`, `status`, `summary`, `flags`, `fs`, `mds`, `mgr`, `mon`, `osd-tree`, `pools` |
+| `subscription` | Manage the subscription key pool and remote subscription status | `key` (`ls`, `show`, `add`, `delete`, `assign`, `unassign`), `node-status`, `check`, `adopt-key`, `adopt-all`, `auto-assign`, `bulk-assign`, `apply-pending`, `clear-pending`, `queue-clear`, `revert-pending-clear` |
+| `user` | Manage Proxmox Datacenter Manager users | `ls`, `show`, `add`, `update`, `delete` |
+| `token` | Manage a user's API tokens | `ls`, `show`, `add`, `update`, `delete` |
+| `acl` | Manage the Proxmox Datacenter Manager access control list | `ls`, `update` |
+| `role` | List Proxmox Datacenter Manager roles | `ls` |
+| `permission` | Show effective permissions | `ls` |
+| `tfa` | Manage user two-factor authentication entries | `ls`, `show`, `update`, `delete` |
+| `realm` | Manage authentication realms | `ls`, `sync`, `ad`, `ldap`, `openid`, `pam`, `pdm` |
+| `config` | Manage this instance's own host configuration | `acme`, `certificate`, `notes`, `view`, `webauthn` |
+| `node` | Administer this instance's own node(s) | `ls`, `status`, `reboot`, `shutdown`, `config`, `dns`, `time`, `journal`, `syslog`, `report`, `rrddata`, `network`, `apt`, `certificate`, `task`, `sdn`, `subscription` |
+| `auto-install` | Manage automated installations, prepared answers, and tokens | `installation`, `prepared`, `token` |
+| `pbs` | Proxy operations against managed PBS remotes | `remote`, `scan`, `probe-tls`, `realms`, `status`, `rrddata`, `datastore`, `node`, `task` |
+| `pve` | Proxy operations against managed PVE remotes | `remote`, `scan`, `probe-tls`, `realms`, `options`, `updates`, `cluster`, `firewall`, `node`, `storage`, `task`, `qemu`, `lxc` |
+
+The PDM version, a reachability check, and a raw API passthrough are shared
+root commands (present under every persona — see [Personas](#personas)), not
+part of this subtree: `pmx version` (or `pdm version`) and `pmx api
+get\|post\|put\|delete` (or `pdm api ...`), each against a `product: pdm`
+context.
+
+```bash
+# Managed remotes and aggregated resources.
+pmx -c dcmgr pdm remote ls
+pmx -c dcmgr pdm resource ls --resource-type qemu
+pmx -c dcmgr pdm resource top-entities --timeframe hour
+
+# Subscription pool management.
+pmx -c dcmgr pdm subscription key ls
+pmx -c dcmgr pdm subscription auto-assign
+
+# Proxied PVE remote operations (through the PDM instance, not a direct PVE context).
+pmx -c dcmgr pdm pve remote ls
+pmx -c dcmgr pdm pve qemu list pve-remote-1
+pmx -c dcmgr pdm pve node status pve-remote-1 node1
+
+# Proxied PBS remote operations.
+pmx -c dcmgr pdm pbs datastore ls pbs-remote-1
+
+# This instance's own node/config administration.
+pmx -c dcmgr pdm node ls
+pmx -c dcmgr pdm config acme account ls
+
+# Anything without a dedicated verb (shared "api" command, not nested under "pdm").
+pmx -c dcmgr api get /remotes
 ```
 
 ## VM security (`pmx pve qemu security`)

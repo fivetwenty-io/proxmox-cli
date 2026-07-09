@@ -33,12 +33,14 @@ help: ## Show this help message
 ##@ Build
 
 .PHONY: build
-build: ## Build ./dist/pmx binary (+ pve/pbs persona symlinks) with version ldflags
+build: ## Build ./dist/pmx binary (+ pve/pbs/pdm persona symlinks) with version ldflags
 	$(SCRIPTS)/build
 	@ln -sf pmx ./dist/pve
 	@ln -sf pmx ./dist/pbs
+	@ln -sf pmx ./dist/pdm
 	@echo "build: linked ./dist/pve -> pmx"
 	@echo "build: linked ./dist/pbs -> pmx"
+	@echo "build: linked ./dist/pdm -> pmx"
 
 .PHONY: generate
 generate: ## Regenerate generated sources (cluster options schema from apidoc.json)
@@ -46,15 +48,17 @@ generate: ## Regenerate generated sources (cluster options schema from apidoc.js
 	@go generate ./...
 
 .PHONY: install
-install: build ## Install pmx binary + pve/pbs persona symlinks to $GOPATH/bin (or ~/go/bin)
+install: build ## Install pmx binary + pve/pbs/pdm persona symlinks to $GOPATH/bin (or ~/go/bin)
 	@BIN="$${GOPATH:-$$HOME/go}/bin"; \
 	mkdir -p "$$BIN"; \
 	cp $(BINARY) "$$BIN/pmx"; \
 	ln -sf pmx "$$BIN/pve"; \
 	ln -sf pmx "$$BIN/pbs"; \
+	ln -sf pmx "$$BIN/pdm"; \
 	echo "install: copied $(BINARY) -> $$BIN/pmx"; \
 	echo "install: linked $$BIN/pve -> pmx"; \
-	echo "install: linked $$BIN/pbs -> pmx"
+	echo "install: linked $$BIN/pbs -> pmx"; \
+	echo "install: linked $$BIN/pdm -> pmx"
 
 .PHONY: clean
 clean: ## Remove ./dist/ build artifacts

@@ -258,7 +258,7 @@ The full combined tree (Proxmox VE and Proxmox Backup Server) is available
 via the pmx binary as ` + "`pmx pve ...`" + ` / ` + "`pmx pbs ...`" + `.`
 	case "pdm":
 		root.Annotations = map[string]string{ProductAnnotation: config.ProductPDM}
-		root.Short = "Manage a Proxmox Datacenter Manager"
+		root.Short = "pdm — Proxmox Datacenter Manager CLI"
 		root.Long = `pdm is a command-line interface for the Proxmox Datacenter Manager API.
 
 It supports multiple named contexts, token and password authentication, and

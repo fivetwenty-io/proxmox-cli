@@ -18,6 +18,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/api"
 	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
+	"github.com/fivetwenty-io/pmx-cli/internal/cli/pdm"
 	pvegroup "github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
 	"github.com/fivetwenty-io/pmx-cli/internal/exec"
@@ -1488,6 +1489,38 @@ func TestHoistedPVEChildrenRequirePVEProduct(t *testing.T) {
 	node, _, err := root.Find([]string{"node"})
 	require.NoError(t, err)
 	require.Equal(t, config.ProductPVE, cli.RequiredProduct(node))
+}
+
+// TestHoistedPDMChildrenRequirePDMProduct is the PDM symmetric case of
+// TestHoistedPBSChildrenRequirePBSProduct / TestHoistedPVEChildrenRequirePVEProduct:
+// a pdm.ChildFactories() group hoisted directly onto the "pdm" persona root
+// — which sets no annotation of its own — still resolves to config.ProductPDM
+// by walking up to the persona root annotation. "remote" is a pdm-native
+// group (not a proxied pve/pbs one), so this also confirms the annotation
+// chain works for pdm's own commands, not just its proxied pve/pbs subtrees.
+func TestHoistedPDMChildrenRequirePDMProduct(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pdm")
+	defer cleanup()
+	cli.AddGroups(root, &cli.Deps{}, pdm.ChildFactories())
+
+	remote, _, err := root.Find([]string{"remote"})
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPDM, cli.RequiredProduct(remote),
+		"hoisted pdm-native child must resolve to pdm via the persona root annotation")
+
+	// The proxied "pve"/"pbs" groups (and their nested children) must also
+	// resolve to pdm — they are PDM API calls (proxying to a managed
+	// remote), not PVE/PBS-product calls, so they must NOT inherit
+	// config.ProductPVE/ProductPBS from anywhere.
+	pveProxy, _, err := root.Find([]string{"pve", "qemu"})
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPDM, cli.RequiredProduct(pveProxy),
+		"pdm's proxied pve subtree must resolve to pdm, not pve, since it is a PDM API call")
+
+	pbsProxy, _, err := root.Find([]string{"pbs", "datastore"})
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPDM, cli.RequiredProduct(pbsProxy),
+		"pdm's proxied pbs subtree must resolve to pdm, not pbs, since it is a PDM API call")
 }
 
 // TestAuthWhoamiRequiresPVEProduct is the regression test for `auth whoami`

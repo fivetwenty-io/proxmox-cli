@@ -109,16 +109,18 @@ release:
 
     `pmx` inspects how it was invoked (`argv[0]`) to decide which commands to
     expose: named (or symlinked as) `pve`, it hoists the Proxmox VE groups to
-    the root; named `pbs`, it hoists the Proxmox Backup Server groups. The
-    archive ships a single `pmx` binary — most archive formats (notably `.zip`,
-    used for the Windows build) do not reliably preserve symlinks, so create
-    them yourself after installing:
+    the root; named `pbs`, it hoists the Proxmox Backup Server groups; named
+    `pdm`, it hoists the Proxmox Datacenter Manager groups. The archive ships
+    a single `pmx` binary — most archive formats (notably `.zip`, used for
+    the Windows build) do not reliably preserve symlinks, so create them
+    yourself after installing:
 
     ```bash
     sudo ln -s pmx /usr/local/bin/pve
     sudo ln -s pmx /usr/local/bin/pbs
+    sudo ln -s pmx /usr/local/bin/pdm
     ```
 
-    (`make install`, when building from source, creates both symlinks
+    (`make install`, when building from source, creates all three symlinks
     automatically.) See the [README's Personas section](https://github.com/fivetwenty-io/pmx-cli#personas)
     for the full command surface each persona exposes.
