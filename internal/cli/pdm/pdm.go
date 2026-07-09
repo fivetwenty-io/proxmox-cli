@@ -53,6 +53,7 @@ func ChildFactories() []cli.GroupFactory {
 		wrap(newRoleCmd),
 		wrap(newPermissionCmd),
 		wrap(newTfaCmd),
+		wrap(newRealmCmd),
 	}
 }
 

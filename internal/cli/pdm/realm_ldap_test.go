@@ -1,0 +1,332 @@
+package pdm
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+)
+
+// realmLdapConfigPath is the base /config/access/ldap endpoint.
+const realmLdapConfigPath = "/api2/json/config/access/ldap"
+
+// realmLdapName is the sample LDAP realm name reused across ldap tests.
+const realmLdapName = "ldap1"
+
+// --- realm ldap ls ---------------------------------------------------------------
+
+func TestRealmLdapLs_RendersTable(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "GET "+realmLdapConfigPath, &rec, []map[string]any{
+		{"realm": "ldap2", "base-dn": "dc=b,dc=com", "server1": "ldap2.example.com", "user-attr": "uid"},
+		{"realm": "ldap1", "base-dn": "dc=a,dc=com", "server1": "ldap1.example.com", "user-attr": "uid", "comment": "primary LDAP"},
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "ls")
+	require.NoError(t, err)
+
+	require.Equal(t, http.MethodGet, rec.method)
+	require.Equal(t, realmLdapConfigPath, rec.path)
+
+	out := buf.String()
+	require.Contains(t, out, "ldap1")
+	require.Contains(t, out, "ldap2")
+	require.Contains(t, out, "ldap1.example.com")
+}
+
+func TestRealmLdapLs_SurfacesAPIError(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("GET "+realmLdapConfigPath, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "list failed")
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "ls")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "list LDAP realms")
+}
+
+// --- realm ldap show ---------------------------------------------------------------
+
+func TestRealmLdapShow_RendersSingle(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+realmLdapConfigPath+"/"+realmLdapName, map[string]any{
+		"realm": realmLdapName, "base-dn": "dc=example,dc=com", "server1": "ldap1.example.com",
+		"user-attr": "uid", "comment": "primary LDAP",
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "show", realmLdapName)
+	require.NoError(t, err)
+
+	out := buf.String()
+	require.Contains(t, out, "ldap1.example.com")
+	require.Contains(t, out, "primary LDAP")
+}
+
+func TestRealmLdapShow_DefaultsJSON(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleJSON("GET "+realmLdapConfigPath+"/"+realmLdapName, map[string]any{
+		"realm": realmLdapName, "base-dn": "dc=example,dc=com", "server1": "ldap1.example.com", "user-attr": "uid",
+	})
+
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "show", realmLdapName, "--defaults")
+	require.NoError(t, err)
+
+	var got struct {
+		Set      map[string]any    `json:"set"`
+		Defaults map[string]string `json:"defaults"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Equal(t, "ldap", got.Defaults["mode"])
+	require.NotContains(t, got.Defaults, "password", "password must not appear even as an unset default")
+}
+
+func TestRealmLdapShow_SurfacesAPIError(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("GET "+realmLdapConfigPath+"/"+realmLdapName, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusNotFound, "no such realm")
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "show", realmLdapName)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "get LDAP realm")
+}
+
+// --- realm ldap add ---------------------------------------------------------------
+
+func TestRealmLdapAdd_CreatesRealm(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "POST "+realmLdapConfigPath, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "add", realmLdapName,
+		"--base-dn", "dc=example,dc=com", "--server1", "ldap1.example.com", "--user-attr", "uid")
+	require.NoError(t, err)
+
+	require.Equal(t, http.MethodPost, rec.method)
+	require.Equal(t, realmLdapConfigPath, rec.path)
+	require.Equal(t, realmLdapName, rec.form.Get("realm"))
+	require.Equal(t, "dc=example,dc=com", rec.form.Get("base-dn"))
+	require.Equal(t, "ldap1.example.com", rec.form.Get("server1"))
+	require.Equal(t, "uid", rec.form.Get("user-attr"))
+	require.Contains(t, buf.String(), `LDAP realm "ldap1" created.`)
+}
+
+func TestRealmLdapAdd_RequiresBaseDnServer1UserAttr(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	cases := [][]string{
+		{"ldap", "add", realmLdapName},
+		{"ldap", "add", realmLdapName, "--base-dn", "dc=example,dc=com"},
+		{"ldap", "add", realmLdapName, "--base-dn", "dc=example,dc=com", "--server1", "ldap1.example.com"},
+	}
+	for _, args := range cases {
+		var buf bytes.Buffer
+		err := run(deps, &buf, newRealmLdapCmd(), args...)
+		require.Error(t, err, "args=%v", args)
+	}
+}
+
+func TestRealmLdapAdd_SurfacesAPIError(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("POST "+realmLdapConfigPath, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusBadRequest, "invalid realm")
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "add", realmLdapName,
+		"--base-dn", "dc=example,dc=com", "--server1", "ldap1.example.com", "--user-attr", "uid")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "create LDAP realm")
+}
+
+func TestRealmLdapAdd_AuditAllFlags(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "POST "+realmLdapConfigPath, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "add", "audit-ldap",
+		"--base-dn", "dc=example,dc=com",
+		"--server1", "ldap1.example.com",
+		"--user-attr", "uid",
+		"--bind-dn", "cn=admin,dc=example,dc=com",
+		"--capath", "/etc/ssl/certs",
+		"--comment", "audit comment",
+		"--default",
+		"--filter", "(objectClass=user)",
+		"--mode", "ldaps",
+		"--password", "secret",
+		"--port", "636",
+		"--server2", "ldap2.example.com",
+		"--sync-attributes", "email=mail",
+		"--sync-defaults-options", "remove-vanished=entry",
+		"--user-classes", "person,user",
+		"--verify",
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.MethodPost, rec.method)
+
+	want := map[string]string{
+		"realm":                 "audit-ldap",
+		"base-dn":               "dc=example,dc=com",
+		"server1":               "ldap1.example.com",
+		"user-attr":             "uid",
+		"bind-dn":               "cn=admin,dc=example,dc=com",
+		"capath":                "/etc/ssl/certs",
+		"comment":               "audit comment",
+		"default":               "1",
+		"filter":                "(objectClass=user)",
+		"mode":                  "ldaps",
+		"password":              "secret",
+		"port":                  "636",
+		"server2":               "ldap2.example.com",
+		"sync-attributes":       "email=mail",
+		"sync-defaults-options": "remove-vanished=entry",
+		"user-classes":          "person,user",
+		"verify":                "1",
+	}
+	for key, val := range want {
+		require.Equal(t, val, rec.form.Get(key), "body key %q", key)
+	}
+}
+
+// --- realm ldap update ---------------------------------------------------------------
+
+func TestRealmLdapUpdate_UpdatesRealm(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "PUT "+realmLdapConfigPath+"/"+realmLdapName, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "update", realmLdapName,
+		"--comment", "updated", "--digest", "abc123", "--delete", "comment", "--delete", "filter")
+	require.NoError(t, err)
+
+	require.Equal(t, http.MethodPut, rec.method)
+	require.Equal(t, realmLdapConfigPath+"/"+realmLdapName, rec.path)
+	require.Equal(t, "updated", rec.form.Get("comment"))
+	require.Equal(t, "abc123", rec.form.Get("digest"))
+	require.ElementsMatch(t, []string{"comment", "filter"}, rec.form["delete"])
+	require.Contains(t, buf.String(), `LDAP realm "ldap1" updated.`)
+}
+
+func TestRealmLdapUpdate_OmitsUnsetFlags(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "PUT "+realmLdapConfigPath+"/"+realmLdapName, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "update", realmLdapName, "--comment", "only-comment")
+	require.NoError(t, err)
+	require.Equal(t, "only-comment", rec.form.Get("comment"))
+
+	for _, key := range []string{
+		"server1", "base-dn", "bind-dn", "capath", "default", "filter", "mode", "password",
+		"port", "server2", "sync-attributes", "sync-defaults-options", "user-attr", "user-classes",
+		"verify", "delete", "digest",
+	} {
+		_, present := rec.form[key]
+		require.False(t, present, "%s must be omitted from the body when unset", key)
+	}
+}
+
+func TestRealmLdapUpdate_RequiresAtLeastOneFlag(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "update", realmLdapName)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no changes given")
+}
+
+func TestRealmLdapUpdate_RejectsEmptyDeleteEntry(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "update", realmLdapName, "--delete", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--delete")
+}
+
+func TestRealmLdapUpdate_SurfacesAPIError(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("PUT "+realmLdapConfigPath+"/"+realmLdapName, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "update failed")
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "update", realmLdapName, "--comment", "x")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "update LDAP realm")
+}
+
+// --- realm ldap delete ---------------------------------------------------------------
+
+func TestRealmLdapDelete_DeletesRealm(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "DELETE "+realmLdapConfigPath+"/"+realmLdapName, &rec, nil)
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName, "--digest", "abc123", "--yes")
+	require.NoError(t, err)
+
+	require.Equal(t, http.MethodDelete, rec.method)
+	require.Equal(t, realmLdapConfigPath+"/"+realmLdapName, rec.path)
+	require.Equal(t, "abc123", rec.query.Get("digest"))
+	require.Contains(t, buf.String(), `LDAP realm "ldap1" deleted.`)
+}
+
+func TestRealmLdapDelete_SurfacesAPIError(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("DELETE "+realmLdapConfigPath+"/"+realmLdapName, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "delete failed")
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName, "--yes")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "delete LDAP realm")
+}
+
+func TestRealmLdapDelete_WithoutConfirmation(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var called bool
+	f.HandleFunc("DELETE "+realmLdapConfigPath+"/"+realmLdapName, func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, nil)
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "delete", realmLdapName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "without confirmation")
+	require.False(t, called, "no request must be issued without --yes")
+}

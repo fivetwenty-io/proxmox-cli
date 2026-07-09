@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+
+	pveclient "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // --- helpers -----------------------------------------------------------------
@@ -143,3 +145,27 @@ func strPtr(v string) *string { return &v }
 
 // int64Ptr returns a pointer to v.
 func int64Ptr(v int64) *int64 { return &v }
+
+// pveBoolPtrString renders a possibly-nil *pveclient.PVEBool for a table
+// cell. PVEBool tolerantly decodes both native JSON booleans and the PVE
+// 0/1 encoding; realm-config responses (GetAccessAd/Ldap/OpenidResponse,
+// ListDomains items) declare their optional boolean fields with this type
+// rather than *bool. Nil renders as "", matching every other *T-pointer
+// formatter in this file (int64PtrString, strPtrString, etc.).
+func pveBoolPtrString(p *pveclient.PVEBool) string {
+	if p == nil {
+		return ""
+	}
+	return strconv.FormatBool(p.Bool())
+}
+
+// pveIntPtrString renders a possibly-nil *pveclient.PVEInt for a table
+// cell. PVEInt tolerantly decodes integers the PVE/PDM API may encode as a
+// JSON string; GetAccessAdResponse.Port and GetAccessLdapResponse.Port
+// declare this type rather than *int64.
+func pveIntPtrString(p *pveclient.PVEInt) string {
+	if p == nil {
+		return ""
+	}
+	return strconv.FormatInt(p.Int(), 10)
+}
