@@ -202,7 +202,7 @@ func TestClusterCpuModel_SetRequiresChange(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "cpu-model", "set", "custom-epyc")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes to set")
+	require.Contains(t, err.Error(), "no changes requested")
 	require.False(t, called, "set must not PUT when no field flags change")
 }
 

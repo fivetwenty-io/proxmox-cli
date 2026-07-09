@@ -141,7 +141,7 @@ func TestGotify_SetRequiresFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "notifications", "gotify", "set", "g1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes to set")
+	require.Contains(t, err.Error(), "no changes requested")
 	require.False(t, called)
 }
 
@@ -281,7 +281,7 @@ func TestMatcher_SetRequiresFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "notifications", "matcher", "set", "match1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes to set")
+	require.Contains(t, err.Error(), "no changes requested")
 	require.False(t, called)
 }
 

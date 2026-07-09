@@ -208,7 +208,7 @@ func newCephPoolSetCmd() *cobra.Command {
 				"min-size", "size", "pg-num", "pg-num-min", "target-size-ratio",
 			}
 			if !anyFlagChanged(fl, poolFields...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			if err := requireSystemYes(deps.Node, yes, fmt.Sprintf("update Ceph pool %q", args[0])); err != nil {
 				return err

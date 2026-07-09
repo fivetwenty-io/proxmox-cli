@@ -110,7 +110,7 @@ func TestDnsSetRequiresChange(t *testing.T) {
 
 	_, err := run(t, f, "", "dns", "set", "pdns1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 

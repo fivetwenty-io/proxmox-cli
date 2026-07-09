@@ -16,7 +16,7 @@ func TestVnetSetRequiresChange(t *testing.T) {
 
 	_, err := run(t, f, "", "vnet", "set", "pmxcli0")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 

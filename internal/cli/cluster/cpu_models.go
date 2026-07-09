@@ -156,7 +156,7 @@ func newCpuModelSetCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "reported-model", "flags", "guest-phys-bits",
 				"hidden", "hv-vendor-id", "level", "phys-bits", "delete") {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &pvecluster.UpdateQemuCustomCpuModelsParams{}
 			if fl.Changed("reported-model") {

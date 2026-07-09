@@ -322,7 +322,7 @@ func newControllerSetCmd() *cobra.Command {
 			controller := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(controllerFlagNames, "delete")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnControllersParams{}
 			cf.applyUpdate(fl, params)

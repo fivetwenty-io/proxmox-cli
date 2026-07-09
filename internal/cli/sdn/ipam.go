@@ -168,7 +168,7 @@ func newIpamSetCmd() *cobra.Command {
 			ipam := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(ipamFlagNames, "delete")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnIpamsParams{}
 			if fl.Changed("section") {

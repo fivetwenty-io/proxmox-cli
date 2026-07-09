@@ -94,7 +94,7 @@ func newSubnetSetCmd() *cobra.Command {
 			vnet, subnet := args[0], args[1]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(subnetSetFlagNames, "delete")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnVnetsSubnetsParams{}
 			if fl.Changed("delete") {

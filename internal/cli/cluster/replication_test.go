@@ -87,7 +87,7 @@ func TestClusterReplication_SetRequiresFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "replication", "set", "101-0")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes to set")
+	require.Contains(t, err.Error(), "no changes requested")
 	require.False(t, called, "set must not issue a PUT when no flags are passed")
 }
 

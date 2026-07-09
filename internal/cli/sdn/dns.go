@@ -175,7 +175,7 @@ func newDnsSetCmd() *cobra.Command {
 			dns := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(dnsSetFlagNames, "delete")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnDnsParams{}
 			if fl.Changed("url") {

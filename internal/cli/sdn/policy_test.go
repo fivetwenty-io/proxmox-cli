@@ -83,7 +83,7 @@ func TestPrefixListSetRequiresFlag(t *testing.T) {
 
 	_, err := run(t, f, "", "prefix-list", "set", "pl1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 
@@ -187,7 +187,7 @@ func TestPrefixListEntrySetRequiresFlag(t *testing.T) {
 
 	_, err := run(t, f, "", "prefix-list", "entry", "set", "pl1", "10")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 
@@ -305,7 +305,7 @@ func TestRouteMapEntrySetRequiresFlag(t *testing.T) {
 
 	_, err := run(t, f, "", "route-map", "entry", "set", "rm1", "10")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 

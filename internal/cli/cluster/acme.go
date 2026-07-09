@@ -383,7 +383,7 @@ func newAcmePluginSetCmd() *cobra.Command {
 			id := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "api", "data", "nodes", "disable", "validation-delay", "delete") {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &pvecluster.UpdateAcmePluginsParams{}
 			if fl.Changed("api") {

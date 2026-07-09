@@ -179,7 +179,7 @@ func newReplicationSetCmd() *cobra.Command {
 			id := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "schedule", "rate", "comment", "disable", "remove-job", "delete") {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateReplicationParams{}
 			if fl.Changed("schedule") {

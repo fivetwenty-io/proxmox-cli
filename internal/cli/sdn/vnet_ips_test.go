@@ -84,7 +84,7 @@ func TestVnetIpsSetRequiresChange(t *testing.T) {
 	_, err := run(t, f, "", "vnet", "ips", "set", "pmxcli0",
 		"--ip", "10.241.0.10", "--zone", "pmxcli")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 

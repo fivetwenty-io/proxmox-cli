@@ -140,7 +140,7 @@ func newPrefixListSetCmd() *cobra.Command {
 			id := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "entry", "delete", "digest", "lock-token") {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnPrefixListsParams{}
 			if fl.Changed("entry") {
@@ -328,7 +328,7 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 			id, urlSeq := args[0], args[1]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "action", "prefix", "ge", "le", "seq", "delete", "digest", "lock-token") {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnPrefixListsEntriesParams{}
 			if fl.Changed("action") {
@@ -633,7 +633,7 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 			routeMap, order := args[0], args[1]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "action", "match", "set", "call", "exit-action", "delete", "digest", "lock-token") {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnRouteMapsEntriesEntryParams{}
 			if fl.Changed("action") {

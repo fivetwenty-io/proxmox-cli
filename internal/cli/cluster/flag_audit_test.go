@@ -247,7 +247,7 @@ func TestFirewallIpsetUpdate_RequiresChange(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "firewall", "ipset", "update", "admins", "10.0.0.0/24")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes to set")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 // TestReplicationCreate_RemoveJob verifies remove-job forwards on POST

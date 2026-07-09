@@ -304,7 +304,7 @@ func newGotifySetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "server", "token", "comment", "disable", "delete", "digest") {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateNotificationsEndpointsGotifyParams{}
 			if fl.Changed("server") {
@@ -438,7 +438,7 @@ func newSendmailSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "mailto", "mailto-user", "from-address", "author", "comment", "disable", "delete", "digest") {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateNotificationsEndpointsSendmailParams{}
 			if fl.Changed("mailto") {
@@ -605,7 +605,7 @@ func newSMTPSetCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "server", "from-address", "mailto", "mailto-user", "username",
 				"password", "mode", "port", "author", "comment", "disable", "delete", "digest") {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateNotificationsEndpointsSmtpParams{}
 			if fl.Changed("server") {
@@ -771,7 +771,7 @@ func newWebhookSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "url", "method", "header", "secret", "body", "comment", "disable", "delete", "digest") {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateNotificationsEndpointsWebhookParams{}
 			if fl.Changed("url") {
@@ -900,7 +900,7 @@ func newMatcherSetCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "match-field", "match-severity", "match-calendar", "notify-target",
 				"mode", "comment", "invert-match", "disable", "delete", "digest") {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &pvecluster.UpdateNotificationsMatchersParams{}
 			if fl.Changed("match-field") {

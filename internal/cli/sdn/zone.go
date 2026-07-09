@@ -119,7 +119,7 @@ func newZoneSetCmd() *cobra.Command {
 			zone := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(zoneSetFlagNames, "delete")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnZonesParams{}
 			if fl.Changed("advertise-subnets") {

@@ -16,7 +16,7 @@ func TestSubnetSetRequiresChange(t *testing.T) {
 
 	_, err := run(t, f, "", "subnet", "set", "pmxcli0", "10.241.0.0-24")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 

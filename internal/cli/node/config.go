@@ -116,7 +116,7 @@ func newNodeConfigSetCmd() *cobra.Command {
 			}
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, setFlags...) {
-				return fmt.Errorf("no changes to set: pass at least one flag")
+				return fmt.Errorf("no changes requested: pass at least one flag")
 			}
 			params := &nodes.UpdateConfigParams{}
 			if fl.Changed("description") {

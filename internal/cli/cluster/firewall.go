@@ -901,7 +901,7 @@ func newClusterFirewallIpsetUpdateCmd() *cobra.Command {
 			name, cidr := args[0], args[1]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, "comment", "nomatch", "digest") {
-				return fmt.Errorf("no changes to set: pass --comment, --nomatch, or --digest")
+				return fmt.Errorf("no changes requested: pass --comment, --nomatch, or --digest")
 			}
 			params := &pvecluster.UpdateFirewallIpsetParams{}
 			if fl.Changed("comment") {

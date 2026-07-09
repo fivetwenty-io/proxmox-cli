@@ -314,7 +314,7 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			vnet, pos := args[0], args[1]
 			if !anyFlagChanged(cmd.Flags(), append(vnetRuleSetFlagNames, "digest")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnVnetsFirewallRulesParams{}
 			f.applyUpdate(cmd, params)

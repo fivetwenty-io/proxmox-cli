@@ -101,7 +101,7 @@ func TestVnetFirewallRulesSetRequiresChange(t *testing.T) {
 
 	_, err := run(t, f, "", "vnet", "firewall", "rules", "set", "pmxcli0", "0")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes to set")
+	require.ErrorContains(t, err, "no changes requested")
 	require.Empty(t, rec)
 }
 

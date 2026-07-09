@@ -140,7 +140,7 @@ func newVnetIpsSetCmd() *cobra.Command {
 			vnet := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, vnetIpsSetFlagNames...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnVnetsIpsParams{Ip: ip, Zone: zone}
 			if fl.Changed("mac") {
@@ -232,7 +232,7 @@ func newVnetSetCmd() *cobra.Command {
 			vnet := args[0]
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(vnetSetFlagNames, "delete")...) {
-				return fmt.Errorf("no changes to set: pass at least one field flag")
+				return fmt.Errorf("no changes requested: pass at least one field flag")
 			}
 			params := &cluster.UpdateSdnVnetsParams{}
 			if fl.Changed("zone") {

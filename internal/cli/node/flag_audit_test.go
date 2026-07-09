@@ -221,7 +221,7 @@ func TestNodeConfigSet_RequiresFlag(t *testing.T) {
 
 	err := root.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes to set")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestNodeConfigSet_BadAcmeDomain(t *testing.T) {
