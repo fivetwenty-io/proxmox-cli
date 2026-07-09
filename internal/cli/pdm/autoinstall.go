@@ -3,7 +3,6 @@ package pdm
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -305,62 +304,31 @@ func newAutoInstallPreparedLsCmd() *cobra.Command {
 }
 
 // newAutoInstallPreparedShowCmd builds `pmx pdm auto-install prepared show
-// <id>` — show a single prepared auto-installer answer configuration.
-//
-// The brief maps this command onto GetPrepared (GET
-// /auto-install/prepared/{id}), but the generated binding discards that
-// endpoint's response — Service.GetPrepared returns only an error
-// (autoinstall_gen.go:452-468, v3.6.0), and pdm-apidoc.json documents the
-// endpoint's "returns" schema as {"type": "null"}: it carries no data on
-// success. This command instead sources the configuration from ListPrepared
-// (GET /auto-install/prepared), whose items do carry the full object (per
-// pdm-apidoc.json's returns.items.properties, which includes "id"), and
-// filters the result client-side by id.
+// <id>` — show a single prepared auto-installer answer configuration (GET
+// /auto-install/prepared/{id}).
 func newAutoInstallPreparedShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <id>",
 		Short: "Show a prepared auto-installer answer configuration",
 		Long: "Show every populated field of a single prepared auto-installer answer " +
-			"configuration. GetPrepared (GET /auto-install/prepared/{id}) carries no " +
-			"response data on success per the PDM API schema, so this command sources " +
-			"the configuration from ListPrepared (GET /auto-install/prepared) filtered " +
-			"client-side by id instead.",
+			"configuration (GET /auto-install/prepared/{id}).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 
-			resp, err := deps.PDM.AutoInstall.ListPrepared(cmd.Context())
+			resp, err := deps.PDM.AutoInstall.GetPrepared(cmd.Context(), id)
 			if err != nil {
 				return fmt.Errorf("get prepared answer %q: %w", id, err)
 			}
 
-			for _, raw := range rawItemsOf(resp) {
-				var e struct {
-					Id string `json:"id"`
-				}
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode prepared answer entry: %w", err)
-				}
-
-				if e.Id != id {
-					continue
-				}
-
-				var fields map[string]any
-
-				err = json.Unmarshal(raw, &fields)
-				if err != nil {
-					return fmt.Errorf("decode prepared answer %q: %w", id, err)
-				}
-
-				res := output.Result{Single: stringMap(fields), Raw: fields}
-				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+			fields, err := flattenToMap(resp)
+			if err != nil {
+				return fmt.Errorf("get prepared answer %q: decode response: %w", id, err)
 			}
 
-			return fmt.Errorf("get prepared answer %q: not found", id)
+			res := output.Result{Single: stringMap(fields), Raw: fields}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	return cmd
@@ -368,17 +336,13 @@ func newAutoInstallPreparedShowCmd() *cobra.Command {
 
 // autoInstallPreparedFlags collects the prepared-answer attribute flags
 // shared by `prepared add` and `prepared update`. Every field maps onto the
-// CreatePreparedParams / UpdatePreparedParams field of the same name
-// (autoinstall_gen.go:322-383, :471-534, v3.6.0).
+// CreatePreparedParams / UpdatePreparedParams field of the same name.
 //
 // filesystem, disk-filter, netdev-filter, target-filter, and
 // template-counters are json.RawMessage-typed nested objects in both
 // generated params structs — filesystem is even a required field of
-// CreatePreparedParams. Both `add` and `update` bypass
-// deps.PDM.AutoInstall.CreatePrepared/UpdatePrepared and post through
-// deps.PDM.Raw instead (see newAutoInstallPreparedAddCmd's doc comment for
-// why), so these five flags carry literal JSON text for their respective
-// nested object rather than exposing individual sub-fields.
+// CreatePreparedParams — so these five flags carry literal JSON text for
+// their respective nested object rather than exposing individual sub-fields.
 type autoInstallPreparedFlags struct {
 	authorizedTokens        []string
 	cidr                    string
@@ -502,155 +466,199 @@ func (pf *autoInstallPreparedFlags) validate(id, verb string) error {
 	return nil
 }
 
-// applyCreate builds the create body. Core fields (country, disk-mode, fqdn,
-// keyboard, mailto, timezone, filesystem, reboot-mode, and the four required
-// booleans) have no "omitempty" in CreatePreparedParams, so they are always
-// sent; every other field is forwarded only when its flag was explicitly set.
-func (pf *autoInstallPreparedFlags) applyCreate(cmd *cobra.Command, id string) map[string]interface{} {
-	body := map[string]interface{}{
-		"id":                         id,
-		"country":                    pf.country,
-		"disk-mode":                  pf.diskMode,
-		"fqdn":                       pf.fqdn,
-		"keyboard":                   pf.keyboard,
-		"mailto":                     pf.mailto,
-		"timezone":                   pf.timezone,
-		"filesystem":                 pf.filesystem,
-		"reboot-mode":                pf.rebootMode,
-		"netif-name-pinning-enabled": pf.netifNamePinningEnabled,
-		"reboot-on-error":            pf.rebootOnError,
-		"use-dhcp-fqdn":              pf.useDhcpFqdn,
-		"use-dhcp-network":           pf.useDhcpNetwork,
+// toCreateParams builds the CreatePreparedParams for `prepared add`. Core
+// fields (country, disk-mode, fqdn, keyboard, mailto, timezone, filesystem,
+// reboot-mode, and the four required booleans) have no "omitempty" in
+// CreatePreparedParams, so they are always sent; every other field is
+// forwarded only when its flag was explicitly set.
+func (pf *autoInstallPreparedFlags) toCreateParams(cmd *cobra.Command, id string) *pdmautoinstall.CreatePreparedParams {
+	params := &pdmautoinstall.CreatePreparedParams{
+		Id:                      id,
+		Country:                 pf.country,
+		DiskMode:                pf.diskMode,
+		Fqdn:                    pf.fqdn,
+		Keyboard:                pf.keyboard,
+		Mailto:                  pf.mailto,
+		Timezone:                pf.timezone,
+		Filesystem:              json.RawMessage(pf.filesystem),
+		RebootMode:              pf.rebootMode,
+		NetifNamePinningEnabled: pf.netifNamePinningEnabled,
+		RebootOnError:           pf.rebootOnError,
+		UseDhcpFqdn:             pf.useDhcpFqdn,
+		UseDhcpNetwork:          pf.useDhcpNetwork,
 	}
-	pf.applyOptional(cmd, body)
-	return body
+	pf.applyOptionalCreate(cmd, params)
+	return params
 }
 
-// applyUpdate builds the update body. Every field, including the core ones,
-// is forwarded only when its flag was explicitly set.
-func (pf *autoInstallPreparedFlags) applyUpdate(cmd *cobra.Command) map[string]interface{} {
-	body := map[string]interface{}{}
+// toUpdateParams builds the UpdatePreparedParams for `prepared update`.
+// Every field, including the core ones, is forwarded only when its flag was
+// explicitly set.
+func (pf *autoInstallPreparedFlags) toUpdateParams(cmd *cobra.Command) *pdmautoinstall.UpdatePreparedParams {
+	params := &pdmautoinstall.UpdatePreparedParams{}
 	fl := cmd.Flags()
 
 	if fl.Changed("country") {
-		body["country"] = pf.country
+		params.Country = strPtr(pf.country)
 	}
 	if fl.Changed("disk-mode") {
-		body["disk-mode"] = pf.diskMode
+		params.DiskMode = strPtr(pf.diskMode)
 	}
 	if fl.Changed("fqdn") {
-		body["fqdn"] = pf.fqdn
+		params.Fqdn = strPtr(pf.fqdn)
 	}
 	if fl.Changed("keyboard") {
-		body["keyboard"] = pf.keyboard
+		params.Keyboard = strPtr(pf.keyboard)
 	}
 	if fl.Changed("mailto") {
-		body["mailto"] = pf.mailto
+		params.Mailto = strPtr(pf.mailto)
 	}
 	if fl.Changed("timezone") {
-		body["timezone"] = pf.timezone
+		params.Timezone = strPtr(pf.timezone)
 	}
 	if fl.Changed("filesystem") {
-		body["filesystem"] = pf.filesystem
+		params.Filesystem = json.RawMessage(pf.filesystem)
 	}
 	if fl.Changed("reboot-mode") {
-		body["reboot-mode"] = pf.rebootMode
+		params.RebootMode = strPtr(pf.rebootMode)
 	}
 	if fl.Changed("netif-name-pinning-enabled") {
-		body["netif-name-pinning-enabled"] = pf.netifNamePinningEnabled
+		params.NetifNamePinningEnabled = boolPtr(pf.netifNamePinningEnabled)
 	}
 	if fl.Changed("reboot-on-error") {
-		body["reboot-on-error"] = pf.rebootOnError
+		params.RebootOnError = boolPtr(pf.rebootOnError)
 	}
 	if fl.Changed("use-dhcp-fqdn") {
-		body["use-dhcp-fqdn"] = pf.useDhcpFqdn
+		params.UseDhcpFqdn = boolPtr(pf.useDhcpFqdn)
 	}
 	if fl.Changed("use-dhcp-network") {
-		body["use-dhcp-network"] = pf.useDhcpNetwork
+		params.UseDhcpNetwork = boolPtr(pf.useDhcpNetwork)
 	}
-	pf.applyOptional(cmd, body)
+	pf.applyOptionalUpdate(cmd, params)
 	if fl.Changed("delete") {
-		body["delete"] = pf.del
+		params.Delete = pf.del
 	}
 	if fl.Changed("digest") {
-		body["digest"] = pf.digest
+		params.Digest = strPtr(pf.digest)
 	}
-	return body
+	return params
 }
 
-// applyOptional forwards every optional field into body only when its flag
-// was explicitly set. Shared by applyCreate and applyUpdate.
-func (pf *autoInstallPreparedFlags) applyOptional(cmd *cobra.Command, body map[string]interface{}) {
+// applyOptionalCreate forwards every optional field into params only when
+// its flag was explicitly set. Field-for-field mirror of
+// applyOptionalUpdate, duplicated because CreatePreparedParams and
+// UpdatePreparedParams are distinct generated types.
+func (pf *autoInstallPreparedFlags) applyOptionalCreate(cmd *cobra.Command, params *pdmautoinstall.CreatePreparedParams) {
 	fl := cmd.Flags()
 	if fl.Changed("authorized-token") {
-		body["authorized-tokens"] = pf.authorizedTokens
+		params.AuthorizedTokens = pf.authorizedTokens
 	}
 	if fl.Changed("cidr") {
-		body["cidr"] = pf.cidr
+		params.Cidr = strPtr(pf.cidr)
 	}
 	if fl.Changed("disk-filter") {
-		body["disk-filter"] = pf.diskFilter
+		params.DiskFilter = json.RawMessage(pf.diskFilter)
 	}
 	if fl.Changed("disk-filter-match") {
-		body["disk-filter-match"] = pf.diskFilterMatch
+		params.DiskFilterMatch = strPtr(pf.diskFilterMatch)
 	}
 	if fl.Changed("disk-list") {
-		body["disk-list"] = pf.diskList
+		params.DiskList = pf.diskList
 	}
 	if fl.Changed("dns") {
-		body["dns"] = pf.dns
+		params.Dns = strPtr(pf.dns)
 	}
 	if fl.Changed("default") {
-		body["is-default"] = pf.isDefault
+		params.IsDefault = boolPtr(pf.isDefault)
 	}
 	if fl.Changed("netdev-filter") {
-		body["netdev-filter"] = pf.netdevFilter
+		params.NetdevFilter = json.RawMessage(pf.netdevFilter)
 	}
 	if fl.Changed("post-hook-base-url") {
-		body["post-hook-base-url"] = pf.postHookBaseUrl
+		params.PostHookBaseUrl = strPtr(pf.postHookBaseUrl)
 	}
 	if fl.Changed("post-hook-cert-fp") {
-		body["post-hook-cert-fp"] = pf.postHookCertFp
+		params.PostHookCertFp = strPtr(pf.postHookCertFp)
 	}
 	if fl.Changed("root-password") {
-		body["root-password"] = pf.rootPassword
+		params.RootPassword = strPtr(pf.rootPassword)
 	}
 	if fl.Changed("root-password-hashed") {
-		body["root-password-hashed"] = pf.rootPasswordHashed
+		params.RootPasswordHashed = strPtr(pf.rootPasswordHashed)
 	}
 	if fl.Changed("root-ssh-key") {
-		body["root-ssh-keys"] = pf.rootSshKeys
+		params.RootSshKeys = pf.rootSshKeys
 	}
 	if fl.Changed("subscription-key") {
-		body["subscription-key"] = pf.subscriptionKey
+		params.SubscriptionKey = strPtr(pf.subscriptionKey)
 	}
 	if fl.Changed("target-filter") {
-		body["target-filter"] = pf.targetFilter
+		params.TargetFilter = json.RawMessage(pf.targetFilter)
 	}
 	if fl.Changed("template-counters") {
-		body["template-counters"] = pf.templateCounters
+		params.TemplateCounters = json.RawMessage(pf.templateCounters)
+	}
+}
+
+// applyOptionalUpdate is applyOptionalCreate's UpdatePreparedParams
+// counterpart.
+func (pf *autoInstallPreparedFlags) applyOptionalUpdate(cmd *cobra.Command, params *pdmautoinstall.UpdatePreparedParams) {
+	fl := cmd.Flags()
+	if fl.Changed("authorized-token") {
+		params.AuthorizedTokens = pf.authorizedTokens
+	}
+	if fl.Changed("cidr") {
+		params.Cidr = strPtr(pf.cidr)
+	}
+	if fl.Changed("disk-filter") {
+		params.DiskFilter = json.RawMessage(pf.diskFilter)
+	}
+	if fl.Changed("disk-filter-match") {
+		params.DiskFilterMatch = strPtr(pf.diskFilterMatch)
+	}
+	if fl.Changed("disk-list") {
+		params.DiskList = pf.diskList
+	}
+	if fl.Changed("dns") {
+		params.Dns = strPtr(pf.dns)
+	}
+	if fl.Changed("default") {
+		params.IsDefault = boolPtr(pf.isDefault)
+	}
+	if fl.Changed("netdev-filter") {
+		params.NetdevFilter = json.RawMessage(pf.netdevFilter)
+	}
+	if fl.Changed("post-hook-base-url") {
+		params.PostHookBaseUrl = strPtr(pf.postHookBaseUrl)
+	}
+	if fl.Changed("post-hook-cert-fp") {
+		params.PostHookCertFp = strPtr(pf.postHookCertFp)
+	}
+	if fl.Changed("root-password") {
+		params.RootPassword = strPtr(pf.rootPassword)
+	}
+	if fl.Changed("root-password-hashed") {
+		params.RootPasswordHashed = strPtr(pf.rootPasswordHashed)
+	}
+	if fl.Changed("root-ssh-key") {
+		params.RootSshKeys = pf.rootSshKeys
+	}
+	if fl.Changed("subscription-key") {
+		params.SubscriptionKey = strPtr(pf.subscriptionKey)
+	}
+	if fl.Changed("target-filter") {
+		params.TargetFilter = json.RawMessage(pf.targetFilter)
+	}
+	if fl.Changed("template-counters") {
+		params.TemplateCounters = json.RawMessage(pf.templateCounters)
 	}
 }
 
 // newAutoInstallPreparedAddCmd builds `pmx pdm auto-install prepared add
 // <id>` — create a prepared auto-installer answer configuration (POST
-// /auto-install/prepared).
-//
-// This issues the request through deps.PDM.Raw rather than
-// deps.PDM.AutoInstall.CreatePrepared. CreatePreparedParams.Filesystem is a
-// required json.RawMessage field (DiskFilter/NetdevFilter/TargetFilter/
-// TemplateCounters are optional ones of the same type,
-// autoinstall_gen.go:322-383, v3.6.0); the generated binding marshals the
-// whole params struct to JSON and re-decodes it into a generic
-// map[string]interface{} before handing it to the transport, turning each
-// nested object into a Go map[string]interface{} value. The transport's
-// form-urlencoded encoder (addEncodedParam in
-// proxmox-apiclient-go/internal/http/encoder.go) then serialises any
-// map[string]interface{} value as Proxmox's comma-separated key=value option
-// string, not JSON — the same failure mode documented on sdn.go's
-// encodeRemoteZonePairs and subscription.go's newSubscriptionBulkAssignCmd.
-// Sending each of these five fields as pre-validated JSON-text form values
-// sidesteps the broken path entirely.
+// /auto-install/prepared). --filesystem, --disk-filter, --netdev-filter,
+// --target-filter, and --template-counters each take literal JSON text for
+// their respective CreatePreparedParams json.RawMessage field.
 func newAutoInstallPreparedAddCmd() *cobra.Command {
 	var pf autoInstallPreparedFlags
 	cmd := &cobra.Command{
@@ -669,17 +677,14 @@ func newAutoInstallPreparedAddCmd() *cobra.Command {
 				return err
 			}
 
-			body := pf.applyCreate(cmd, id)
+			params := pf.toCreateParams(cmd, id)
 
-			resp, err := deps.PDM.Raw.PostRawCtx(cmd.Context(), "/auto-install/prepared", body)
+			resp, err := deps.PDM.AutoInstall.CreatePrepared(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("add prepared answer %q: %w", id, err)
 			}
-			if resp == nil || resp.Data == nil {
-				return fmt.Errorf("add prepared answer %q: empty response from server", id)
-			}
 
-			fields, err := flattenToMap(resp.Data)
+			fields, err := flattenToMap(resp)
 			if err != nil {
 				return fmt.Errorf("add prepared answer %q: decode response: %w", id, err)
 			}
@@ -703,12 +708,6 @@ func newAutoInstallPreparedAddCmd() *cobra.Command {
 // update <id>` — update a prepared auto-installer answer configuration (PUT
 // /auto-install/prepared/{id}). Only flags explicitly set are sent; use
 // --delete to reset properties to their default.
-//
-// This issues the request through deps.PDM.Raw rather than
-// deps.PDM.AutoInstall.UpdatePrepared, for the same reason
-// newAutoInstallPreparedAddCmd bypasses CreatePrepared: UpdatePreparedParams
-// carries the same five json.RawMessage-typed fields
-// (autoinstall_gen.go:470-534, v3.6.0).
 func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 	var pf autoInstallPreparedFlags
 	cmd := &cobra.Command{
@@ -740,18 +739,14 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 				}
 			}
 
-			body := pf.applyUpdate(cmd)
+			params := pf.toUpdateParams(cmd)
 
-			resp, err := deps.PDM.Raw.PutRawCtx(cmd.Context(),
-				fmt.Sprintf("/auto-install/prepared/%s", url.PathEscape(id)), body)
+			resp, err := deps.PDM.AutoInstall.UpdatePrepared(cmd.Context(), id, params)
 			if err != nil {
 				return fmt.Errorf("update prepared answer %q: %w", id, err)
 			}
-			if resp == nil || resp.Data == nil {
-				return fmt.Errorf("update prepared answer %q: empty response from server", id)
-			}
 
-			fields, err := flattenToMap(resp.Data)
+			fields, err := flattenToMap(resp)
 			if err != nil {
 				return fmt.Errorf("update prepared answer %q: decode response: %w", id, err)
 			}

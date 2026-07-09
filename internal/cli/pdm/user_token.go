@@ -257,17 +257,12 @@ func newTokenUpdateCmd() *cobra.Command {
 				return fmt.Errorf("update token %q for user %q: %w", name, userid, err)
 			}
 
-			// UpdateUsersTokenResponse.Value is a plain (non-pointer) string in the
-			// generated binding (access_gen.go), but pdm-apidoc.json marks the whole
-			// return schema "optional": 1 and only populates it "if regenerate is
-			// set to true" (access.go Service.UpdateUsersToken doc comment). When
-			// regenerate is unset the field decodes to its zero value, so an empty
-			// check stands in for the missing pointer/nil distinction pbs's
-			// UpdateUsersTokenResponse.Secret *string uses for the same case.
-			if resp != nil && resp.Value != "" {
+			// UpdateUsersTokenResponse.Value is only populated when regenerate is
+			// set to true; otherwise the response carries no data.
+			if resp != nil && resp.Value != nil {
 				res := output.Result{
 					Headers: []string{"TOKENID", "VALUE"},
-					Rows:    [][]string{{name, resp.Value}},
+					Rows:    [][]string{{name, *resp.Value}},
 					Raw:     resp,
 				}
 				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

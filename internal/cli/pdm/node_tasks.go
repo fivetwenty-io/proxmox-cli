@@ -179,17 +179,6 @@ func newNodeTaskStatusCmd() *cobra.Command {
 
 // newNodeTaskLogCmd builds `pmx pdm node task log <node> <upid>` — read a
 // task's log (GET /nodes/{node}/tasks/{upid}/log).
-//
-// ListTasksLog returns a typed *ListTasksLogResponse{Active, Data, Success,
-// Total} (nodes_gen.go:1993-2002, v3.6.0), unlike the PBS analog whose
-// generated binding discards the body entirely and must bypass the raw
-// transport (internal/cli/pbs/node_tasks.go:190-262). Data is typed
-// json.RawMessage because the PDM API schema's "data" key documents only one
-// array element's shape ({n,t}, pdm-apidoc.json, verified 2026-07-08) rather
-// than the array itself — the generator could not infer the wrapping array,
-// but the wire response is the standard Proxmox paginated-log shape used
-// everywhere else in this codebase (matching PBS's nodeLogLine array), so
-// Data is decoded as []nodeLogLine here.
 func newNodeTaskLogCmd() *cobra.Command {
 	var (
 		start, limit int64
@@ -220,16 +209,18 @@ func newNodeTaskLogCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("read log of task %q on node %q: %w", upid, node, err)
 			}
-			if resp == nil {
-				return fmt.Errorf("read log of task %q on node %q: empty response from server", upid, node)
-			}
 
-			var lines []nodeLogLine
-			if len(resp.Data) > 0 {
-				err := json.Unmarshal(resp.Data, &lines)
+			items := rawItemsOf(resp)
+			lines := make([]nodeLogLine, 0, len(items))
+			for _, raw := range items {
+				var l nodeLogLine
+
+				err := json.Unmarshal(raw, &l)
 				if err != nil {
 					return fmt.Errorf("decode log of task %q on node %q: %w", upid, node, err)
 				}
+
+				lines = append(lines, l)
 			}
 
 			headers := []string{"LINE"}

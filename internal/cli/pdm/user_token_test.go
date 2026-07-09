@@ -111,7 +111,7 @@ func TestTokenUpdate_NonRegenerateShowsPlainMessage(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "PUT /api2/json/access/users/alpha@pam/token/mytoken", &rec,
-		map[string]any{"tokenid": "alpha@pam!mytoken", "value": ""})
+		map[string]any{"tokenid": "alpha@pam!mytoken", "value": nil})
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTokenUpdateCmd(), "update", "alpha@pam", "mytoken", "--comment", "updated")

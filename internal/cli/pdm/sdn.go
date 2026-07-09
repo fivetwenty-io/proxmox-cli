@@ -265,46 +265,27 @@ func newSdnVnetLsCmd() *cobra.Command {
 }
 
 // encodeRemoteZonePairs parses --remote entries of the form "<remote>=<zone>"
-// and JSON-encodes them into the compact array text the "remotes" body
-// parameter expects.
-//
-// This returns a JSON string rather than the []json.RawMessage shape
-// CreateVnetsParams.Remotes declares because the generated CreateVnets
-// binding cannot carry that shape onto the wire correctly: it marshals the
-// whole params struct to JSON and re-decodes it into a generic
-// map[string]interface{} before handing it to the transport, so each
-// []json.RawMessage element becomes a map[string]interface{}. The
-// transport's slice encoder (addSliceParam in
-// proxmox-apiclient-go/internal/http/encoder.go) stringifies non-scalar
-// slice elements with fmt.Sprintf("%v", …), producing Go syntax like
-// "map[remote:alpha zone:zone1]" instead of JSON — a real PDM server
-// rejects that. Sending "remotes" as one pre-encoded JSON-string form value
-// (the convention PVE-family APIs use for array-of-object body parameters)
-// sidesteps the broken path entirely, so this command bypasses
-// Sdn.CreateVnets and posts through the shared raw client instead.
-func encodeRemoteZonePairs(pairs []string) (string, error) {
-	entries := make([]map[string]string, 0, len(pairs))
+// into the []json.RawMessage shape CreateVnetsParams.Remotes expects, one
+// JSON object per pair.
+func encodeRemoteZonePairs(pairs []string) ([]json.RawMessage, error) {
+	entries := make([]json.RawMessage, 0, len(pairs))
 	for _, p := range pairs {
 		remote, zone, ok := strings.Cut(p, "=")
 		if !ok || remote == "" || zone == "" {
-			return "", fmt.Errorf("invalid --remote %q: expected format <remote>=<zone>", p)
+			return nil, fmt.Errorf("invalid --remote %q: expected format <remote>=<zone>", p)
 		}
-		entries = append(entries, map[string]string{"remote": remote, "zone": zone})
-	}
 
-	b, err := json.Marshal(entries)
-	if err != nil {
-		return "", fmt.Errorf("encode remotes: %w", err)
+		b, err := json.Marshal(map[string]string{"remote": remote, "zone": zone})
+		if err != nil {
+			return nil, fmt.Errorf("encode remotes: %w", err)
+		}
+		entries = append(entries, b)
 	}
-	return string(b), nil
+	return entries, nil
 }
 
 // newSdnVnetAddCmd builds `pmx pdm sdn vnet add <vnet>` — create a VNet
 // across multiple remotes (POST /sdn/vnets).
-//
-// This issues the request through deps.PDM.Raw rather than
-// deps.PDM.Sdn.CreateVnets; see encodeRemoteZonePairs for why the generated
-// binding cannot be used here.
 func newSdnVnetAddCmd() *cobra.Command {
 	var (
 		remoteZones []string
@@ -324,30 +305,25 @@ func newSdnVnetAddCmd() *cobra.Command {
 			vnet := args[0]
 			fl := cmd.Flags()
 
-			remotesJSON, err := encodeRemoteZonePairs(remoteZones)
+			remotes, err := encodeRemoteZonePairs(remoteZones)
 			if err != nil {
 				return fmt.Errorf("add vnet %q: %w", vnet, err)
 			}
 
-			body := map[string]interface{}{"vnet": vnet, "remotes": remotesJSON}
+			params := &pdmsdn.CreateVnetsParams{Vnet: vnet, Remotes: remotes}
 			if fl.Changed("tag") {
-				body["tag"] = tag
+				params.Tag = int64Ptr(tag)
 			}
 
-			resp, err := deps.PDM.Raw.PostRawCtx(cmd.Context(), "/sdn/vnets", body)
+			resp, err := deps.PDM.Sdn.CreateVnets(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("add vnet %q: %w", vnet, err)
 			}
-			if resp == nil || resp.Data == nil {
+			if resp == nil {
 				return fmt.Errorf("add vnet %q: empty response from server", vnet)
 			}
 
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("add vnet %q: re-marshal response: %w", vnet, err)
-			}
-
-			return finishAsync(cmd, deps, raw, fmt.Sprintf("VNet %q created.", vnet))
+			return finishAsync(cmd, deps, *resp, fmt.Sprintf("VNet %q created.", vnet))
 		},
 	}
 	f := cmd.Flags()
@@ -479,44 +455,34 @@ func newSdnZoneLsCmd() *cobra.Command {
 }
 
 // encodeRemoteControllerPairs parses --remote entries of the form "<remote>"
-// or "<remote>=<controller>" and JSON-encodes them into the compact array
-// text the "remotes" body parameter expects. The controller is optional
-// because most SDN zone types (simple, vlan, vxlan, qinq) do not use one;
-// only evpn zones require it.
-//
-// This returns a JSON string for the same reason encodeRemoteZonePairs
-// does: the generated CreateZones binding cannot carry a []json.RawMessage
-// of objects onto the wire correctly (see that function's comment for the
-// encoder-level root cause), so this command bypasses it and posts through
-// the shared raw client instead.
-func encodeRemoteControllerPairs(pairs []string) (string, error) {
-	entries := make([]map[string]string, 0, len(pairs))
+// or "<remote>=<controller>" into the []json.RawMessage shape
+// CreateZonesParams.Remotes expects, one JSON object per pair. The
+// controller is optional because most SDN zone types (simple, vlan, vxlan,
+// qinq) do not use one; only evpn zones require it.
+func encodeRemoteControllerPairs(pairs []string) ([]json.RawMessage, error) {
+	entries := make([]json.RawMessage, 0, len(pairs))
 	for _, p := range pairs {
 		remote, controller, _ := strings.Cut(p, "=")
 		if remote == "" {
-			return "", fmt.Errorf("invalid --remote %q: expected format <remote> or <remote>=<controller>", p)
+			return nil, fmt.Errorf("invalid --remote %q: expected format <remote> or <remote>=<controller>", p)
 		}
 
 		m := map[string]string{"remote": remote}
 		if controller != "" {
 			m["controller"] = controller
 		}
-		entries = append(entries, m)
-	}
 
-	b, err := json.Marshal(entries)
-	if err != nil {
-		return "", fmt.Errorf("encode remotes: %w", err)
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, fmt.Errorf("encode remotes: %w", err)
+		}
+		entries = append(entries, b)
 	}
-	return string(b), nil
+	return entries, nil
 }
 
 // newSdnZoneAddCmd builds `pmx pdm sdn zone add <zone>` — create a zone
 // across multiple remotes (POST /sdn/zones).
-//
-// This issues the request through deps.PDM.Raw rather than
-// deps.PDM.Sdn.CreateZones; see encodeRemoteZonePairs for why the generated
-// binding cannot be used here.
 func newSdnZoneAddCmd() *cobra.Command {
 	var (
 		remoteControllers []string
@@ -536,30 +502,25 @@ func newSdnZoneAddCmd() *cobra.Command {
 			zone := args[0]
 			fl := cmd.Flags()
 
-			remotesJSON, err := encodeRemoteControllerPairs(remoteControllers)
+			remotes, err := encodeRemoteControllerPairs(remoteControllers)
 			if err != nil {
 				return fmt.Errorf("add zone %q: %w", zone, err)
 			}
 
-			body := map[string]interface{}{"zone": zone, "remotes": remotesJSON}
+			params := &pdmsdn.CreateZonesParams{Zone: zone, Remotes: remotes}
 			if fl.Changed("vrf-vxlan") {
-				body["vrf-vxlan"] = vrfVxlan
+				params.VrfVxlan = int64Ptr(vrfVxlan)
 			}
 
-			resp, err := deps.PDM.Raw.PostRawCtx(cmd.Context(), "/sdn/zones", body)
+			resp, err := deps.PDM.Sdn.CreateZones(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("add zone %q: %w", zone, err)
 			}
-			if resp == nil || resp.Data == nil {
+			if resp == nil {
 				return fmt.Errorf("add zone %q: empty response from server", zone)
 			}
 
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("add zone %q: re-marshal response: %w", zone, err)
-			}
-
-			return finishAsync(cmd, deps, raw, fmt.Sprintf("Zone %q created.", zone))
+			return finishAsync(cmd, deps, *resp, fmt.Sprintf("Zone %q created.", zone))
 		},
 	}
 	f := cmd.Flags()

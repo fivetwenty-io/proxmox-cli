@@ -3,11 +3,13 @@ package pdm
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
 )
 
 // --- installation ------------------------------------------------------------
@@ -96,14 +98,13 @@ func TestAutoInstallPreparedLs_SortsById(t *testing.T) {
 }
 
 // TestAutoInstallPreparedShow_FindsEntryInList asserts that `prepared show`
-// filters ListPrepared's response by id, since GetPrepared carries no data.
+// decodes the typed GetPrepared response for the given id.
 func TestAutoInstallPreparedShow_FindsEntryInList(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/auto-install/prepared", []map[string]any{
-		{"id": "alpha", "country": "de", "fqdn": "alpha.example.com"},
-		{"id": "beta", "country": "us", "fqdn": "beta.example.com"},
+	f.HandleJSON("GET /api2/json/auto-install/prepared/beta", map[string]any{
+		"id": "beta", "country": "us", "fqdn": "beta.example.com",
 	})
 
 	var buf bytes.Buffer
@@ -116,20 +117,20 @@ func TestAutoInstallPreparedShow_FindsEntryInList(t *testing.T) {
 	require.Equal(t, "us", got["country"])
 }
 
-// TestAutoInstallPreparedShow_NotFound asserts that `prepared show` returns
-// an error when no entry in the list matches the given id.
+// TestAutoInstallPreparedShow_NotFound asserts that `prepared show` surfaces
+// the server's error when no entry with the given id exists.
 func TestAutoInstallPreparedShow_NotFound(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 
-	f.HandleJSON("GET /api2/json/auto-install/prepared", []map[string]any{
-		{"id": "alpha", "country": "de", "fqdn": "alpha.example.com"},
+	f.HandleFunc("GET /api2/json/auto-install/prepared/missing", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusNotFound, "no such prepared answer")
 	})
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAutoInstallPreparedShowCmd(), "show", "missing")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `get prepared answer "missing": not found`)
+	require.ErrorContains(t, err, `get prepared answer "missing"`)
 }
 
 // TestAutoInstallPreparedAdd_SendsRequiredFieldsAndJSONFlags asserts that

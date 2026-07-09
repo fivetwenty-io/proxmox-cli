@@ -53,14 +53,9 @@ func TestNodeTaskLog_RendersLines(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 
-	f.HandleJSON("GET /api2/json/nodes/pdm-host/tasks/"+validUPID+"/log", map[string]any{
-		"active":  false,
-		"success": 1,
-		"total":   2,
-		"data": []map[string]any{
-			{"n": 1, "t": "starting task"},
-			{"n": 2, "t": "task OK"},
-		},
+	f.HandleJSON("GET /api2/json/nodes/pdm-host/tasks/"+validUPID+"/log", []map[string]any{
+		{"n": 1, "t": "starting task"},
+		{"n": 2, "t": "task OK"},
 	})
 
 	var buf bytes.Buffer

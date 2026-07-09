@@ -685,21 +685,6 @@ func newSubscriptionAutoAssignCmd() *cobra.Command {
 // newSubscriptionBulkAssignCmd builds `pmx pdm subscription bulk-assign` —
 // apply a proposal previously returned by 'subscription auto-assign' (POST
 // /subscriptions/bulk-assign).
-//
-// This issues the request through deps.PDM.Raw rather than
-// deps.PDM.Subscriptions.CreateBulkAssign. CreateBulkAssignParams.Proposal is
-// a single nested JSON object; the generated binding marshals the whole
-// params struct to JSON and re-decodes it into a generic
-// map[string]interface{} before handing it to the transport, turning the
-// proposal into a Go map[string]interface{} value. The transport's
-// form-urlencoded encoder (addEncodedParam in
-// proxmox-apiclient-go/internal/http/encoder.go) then serialises any
-// map[string]interface{} value as Proxmox's comma-separated key=value option
-// string, not JSON — exactly the failure pdm-apidoc.json's own description
-// warns about ("the form-urlencoded path cannot encode the nested
-// structure"). Sending "proposal" as one pre-validated JSON-text form value
-// (the same convention sdn.go's vnet/zone add commands use for their
-// array-of-object "remotes" parameter) sidesteps the broken path entirely.
 func newSubscriptionBulkAssignCmd() *cobra.Command {
 	var (
 		proposal string
@@ -734,26 +719,14 @@ func newSubscriptionBulkAssignCmd() *cobra.Command {
 				return fmt.Errorf("bulk-assign subscriptions: --proposal is not valid JSON")
 			}
 
-			body := map[string]interface{}{"proposal": proposalJSON}
+			params := &pdmsubscriptions.CreateBulkAssignParams{Proposal: json.RawMessage(proposalJSON)}
 
-			resp, err := deps.PDM.Raw.PostRawCtx(cmd.Context(), "/subscriptions/bulk-assign", body)
+			resp, err := deps.PDM.Subscriptions.CreateBulkAssign(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("bulk-assign subscriptions: %w", err)
 			}
-			if resp == nil || resp.Data == nil {
-				return fmt.Errorf("bulk-assign subscriptions: empty response from server")
-			}
 
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("bulk-assign subscriptions: re-marshal response: %w", err)
-			}
-
-			var items []json.RawMessage
-			if err := json.Unmarshal(raw, &items); err != nil {
-				return fmt.Errorf("bulk-assign subscriptions: decode response: %w", err)
-			}
-
+			items := rawItemsOf(resp)
 			type assignmentRow struct {
 				entry subscriptionAssignmentEntry
 				raw   json.RawMessage
