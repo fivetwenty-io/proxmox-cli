@@ -428,29 +428,72 @@ func newPbsRrddataCmd() *cobra.Command {
 // remoteTaskWaitTimeoutSeconds and remoteTaskWaitIntervalMillis mirror the
 // vendored library's tasks.Wait defaults (internal/constants package,
 // v3.6.0: DefaultTaskTimeoutSeconds=300, TaskIntervalMillis=1000, no
-// backoff/jitter — pkg/api/tasks/tasks.go:160-192). finishRemoteAsync cannot
-// reuse tasks.Wait/WaitPDMTask directly: those always poll PDM's own
-// /nodes/{node}/tasks/{upid}/status, but a PBS-remote task (`pbs node apt
-// update-database`, etc.) runs on the managed remote and is only visible
-// through pdmpbs.Service.ListRemotesTasksStatus
-// (/pbs/remotes/{remote}/tasks/{upid}/status) — PDM's local node-task
+// backoff/jitter — pkg/api/tasks/tasks.go:160-192). finishRemoteTaskAsync
+// cannot reuse tasks.Wait/WaitPDMTask directly: those always poll PDM's own
+// /nodes/{node}/tasks/{upid}/status, but a remote-hosted task (`pbs node apt
+// update-database`, `pve node apt update-database`, etc.) runs on the
+// managed remote and is only visible through that product's own
+// ListRemotesTasksStatus (/pbs/remotes/{remote}/tasks/{upid}/status or
+// /pve/remotes/{remote}/tasks/{upid}/status) — PDM's local node-task
 // endpoint knows nothing about it.
 const (
 	remoteTaskWaitTimeoutSeconds = 300
 	remoteTaskWaitIntervalMillis = 1000
 )
 
+// remoteTaskStatus is the minimal common shape of a remote task's status,
+// shared by the PBS and PVE remote-task status endpoints.
+// pdmpbs.ListRemotesTasksStatusResponse and pdmpve.ListRemotesTasksStatusResponse
+// are structurally distinct Go types generated into different packages, but
+// both declare these two fields, which is all waitRemoteTask needs to detect
+// completion and success.
+type remoteTaskStatus struct {
+	Status     string
+	Exitstatus *string
+}
+
+// remoteTaskStatusFunc polls a specific product namespace's remote-task
+// status endpoint (PBS's /pbs/remotes/{remote}/tasks/{upid}/status or PVE's
+// /pve/remotes/{remote}/tasks/{upid}/status) once, adapting that product's
+// response type down to remoteTaskStatus. A nil result with a nil error
+// means the server returned an empty response.
+type remoteTaskStatusFunc func(ctx context.Context, remote, upid string) (*remoteTaskStatus, error)
+
+// pbsTaskStatusPoller adapts pdmpbs.Service.ListRemotesTasksStatus to a
+// remoteTaskStatusFunc.
+func pbsTaskStatusPoller(svc pdmpbs.Service) remoteTaskStatusFunc {
+	return func(ctx context.Context, remote, upid string) (*remoteTaskStatus, error) {
+		status, err := svc.ListRemotesTasksStatus(ctx, remote, upid, nil)
+		if err != nil {
+			return nil, err
+		}
+		if status == nil {
+			return nil, nil
+		}
+		return &remoteTaskStatus{Status: status.Status, Exitstatus: status.Exitstatus}, nil
+	}
+}
+
 // finishRemoteAsync renders the outcome of an asynchronous task running on a
 // managed PBS remote. When deps.Async is set it prints the UPID immediately;
 // otherwise it blocks until the task reaches a terminal state (polling the
 // pbs group's ListRemotesTasksStatus, since the task lives on the remote,
-// not on PDM's own node) and prints msg.
-//
-// This helper is intentionally PBS-only (YAGNI): a future PVE-remote task
-// helper may end up sharing this shape (a small parametrized core around
-// whichever ListRemotesTasksStatus-equivalent the pve group exposes), but
-// nothing in this task needs that abstraction built ahead of time.
+// not on PDM's own node) and prints msg. A thin PBS-flavored wrapper around
+// the shared finishRemoteTaskAsync core; see finishPveRemoteAsync
+// (pve_proxy_task.go) for the PVE-remote equivalent.
 func finishRemoteAsync(cmd *cobra.Command, deps *cli.Deps, remote string, raw json.RawMessage, msg string) error {
+	return finishRemoteTaskAsync(cmd, deps, "PBS", remote, raw, msg, pbsTaskStatusPoller(deps.PDM.Pbs))
+}
+
+// finishRemoteTaskAsync is the shared core behind finishRemoteAsync (PBS) and
+// finishPveRemoteAsync (PVE): render the outcome of an asynchronous task
+// running on a managed remote of the given product. When deps.Async is set
+// it prints the UPID immediately; otherwise it blocks until the task reaches
+// a terminal state (via poll) and prints msg. product labels error messages
+// ("PBS"/"PVE") and is otherwise inert.
+func finishRemoteTaskAsync(
+	cmd *cobra.Command, deps *cli.Deps, product, remote string, raw json.RawMessage, msg string, poll remoteTaskStatusFunc,
+) error {
 	upid, err := apiclient.UPIDFromRaw(raw)
 	if err != nil {
 		return err
@@ -465,7 +508,7 @@ func finishRemoteAsync(cmd *cobra.Command, deps *cli.Deps, remote string, raw js
 			}, deps.Format)
 	}
 
-	err = waitRemoteTask(cmd.Context(), deps.PDM.Pbs, remote, upid)
+	err = waitRemoteTask(cmd.Context(), product, remote, upid, poll)
 	if err != nil {
 		return err
 	}
@@ -473,26 +516,29 @@ func finishRemoteAsync(cmd *cobra.Command, deps *cli.Deps, remote string, raw js
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 }
 
-// waitRemoteTask polls ListRemotesTasksStatus for upid on remote until it
-// reaches a terminal state (Status != "running") or the timeout elapses,
-// mirroring the vendored tasks.Wait poll loop: an immediate first check
-// before any sleep, then fixed-interval polling (pkg/api/tasks/tasks.go,
-// v3.6.0). It returns an error if the task exits with a set Exitstatus that
-// is neither empty, "OK", nor a "WARNINGS: N" status — the same success
-// criteria tasks.Wait applies (isWarningExitStatus/isSuccessExitStatus).
-func waitRemoteTask(ctx context.Context, svc pdmpbs.Service, remote, upid string) error {
+// waitRemoteTask polls poll for upid on remote until it reaches a terminal
+// state (Status != "running") or the timeout elapses, mirroring the
+// vendored tasks.Wait poll loop: an immediate first check before any sleep,
+// then fixed-interval polling (pkg/api/tasks/tasks.go, v3.6.0). It returns
+// an error if the task exits with a set Exitstatus that is neither empty,
+// "OK"/"ok", nor a "WARNINGS: " status — the same success criteria the
+// vendored tasks.go's isSuccessExitStatus applies (s == "OK" || s == "ok" ||
+// s == ""). The pre-unification PBS-only check omitted the lowercase "ok"
+// case (ledgered from Task 14's review); unifying here fixes it for both
+// products.
+func waitRemoteTask(ctx context.Context, product, remote, upid string, poll remoteTaskStatusFunc) error {
 	ctx, cancel := context.WithTimeout(ctx, remoteTaskWaitTimeoutSeconds*time.Second)
 	defer cancel()
 
 	interval := time.Duration(remoteTaskWaitIntervalMillis) * time.Millisecond
 
 	for {
-		status, err := svc.ListRemotesTasksStatus(ctx, remote, upid, nil)
+		status, err := poll(ctx, remote, upid)
 		if err != nil {
-			return fmt.Errorf("wait for task %s on PBS remote %q: %w", upid, remote, err)
+			return fmt.Errorf("wait for task %s on %s remote %q: %w", upid, product, remote, err)
 		}
 		if status == nil {
-			return fmt.Errorf("wait for task %s on PBS remote %q: empty response from server", upid, remote)
+			return fmt.Errorf("wait for task %s on %s remote %q: empty response from server", upid, product, remote)
 		}
 
 		if status.Status != "running" {
@@ -500,15 +546,15 @@ func waitRemoteTask(ctx context.Context, svc pdmpbs.Service, remote, upid string
 			if status.Exitstatus != nil {
 				exit = *status.Exitstatus
 			}
-			if exit != "" && exit != "OK" && !strings.HasPrefix(exit, "WARNINGS: ") {
-				return fmt.Errorf("task %s on PBS remote %q failed: %s", upid, remote, exit)
+			if exit != "" && exit != "OK" && exit != "ok" && !strings.HasPrefix(exit, "WARNINGS: ") {
+				return fmt.Errorf("task %s on %s remote %q failed: %s", upid, product, remote, exit)
 			}
 			return nil
 		}
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("wait for task %s on PBS remote %q: %w", upid, remote, ctx.Err())
+			return fmt.Errorf("wait for task %s on %s remote %q: %w", upid, product, remote, ctx.Err())
 		case <-time.After(interval):
 		}
 	}
