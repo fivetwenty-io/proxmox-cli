@@ -74,18 +74,15 @@ swept clean before the next provisions.
 | `auth` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lxc` | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 |
-| `node` | 1 | 0 | 1 | 1 | 0 | 0 | 0 | 0 |
 | `pbs` | 270 | 0 | 122 | 0 | 0 | 132 | 16 | 0 |
 | `pdm` | 260 | 0 | 15 | 0 | 0 | 97 | 3 | 145 |
-| `pve` | 667 | 0 | 0 | 200 | 4 | 0 | 0 | 463 |
-| `qemu` | 2 | 1 | 0 | 2 | 0 | 0 | 0 | 0 |
-| `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
-| `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
+| `pve` | 671 | 80 | 179 | 354 | 4 | 97 | 7 | 1 |
+| `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
+| `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1227** | **15** | **142** | **209** | **4** | **229** | **23** | **608** |
+| **Total** | **1227** | **94** | **319** | **357** | **4** | **328** | **30** | **146** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1227** leaves, **367** are exercised by at least one live suite, **229** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **23** are n/a by design, and **608** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1227** leaves, **723** are exercised by at least one live suite, **328** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **30** are n/a by design, and **146** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -127,18 +124,6 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `init config` | ✓ | — |  |
-
-## `lxc`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|--------|-------|
-| `lxc migrate` | ◑ | ✓ |  |
-
-## `node`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|--------|-------|
-| `node vzdump` | ◑ | ✓ |  |
 
 ## `pbs`
 
@@ -684,343 +669,344 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `pve access acl list` | — | — | **uncovered** |
+| `pve access acl list` | ✓ | — |  |
 | `pve access acl set` | — | ✓ |  |
 | `pve access domain create` | — | ✓ |  |
 | `pve access domain delete` | — | ✓ |  |
-| `pve access domain get` | — | ✓ |  |
-| `pve access domain list` | — | — | **uncovered** |
+| `pve access domain get` | ◑ | ✓ |  |
+| `pve access domain list` | ✓ | — |  |
 | `pve access domain set` | — | ✓ |  |
 | `pve access domain sync` | — | ✓ |  |
-| `pve access group create` | — | — | **uncovered** |
-| `pve access group delete` | — | — | **uncovered** |
-| `pve access group get` | — | — | **uncovered** |
-| `pve access group list` | — | — | **uncovered** |
-| `pve access group set` | — | — | **uncovered** |
-| `pve access openid list` | — | — | **uncovered** |
-| `pve access password set` | — | — | **uncovered** |
-| `pve access permissions` | — | — | **uncovered** |
+| `pve access group create` | — | ✓ |  |
+| `pve access group delete` | — | ✓ | error-contract checked |
+| `pve access group get` | ◑ | ✓ |  |
+| `pve access group list` | ✓ | — |  |
+| `pve access group set` | — | ✓ |  |
+| `pve access openid list` | ✓ | — |  |
+| `pve access password set` | — | ✓ |  |
+| `pve access permissions` | ✓ | — |  |
 | `pve access role create` | — | ✓ |  |
 | `pve access role delete` | — | ✓ |  |
-| `pve access role get` | — | ✓ |  |
-| `pve access role list` | — | — | **uncovered** |
+| `pve access role get` | ◑ | ✓ |  |
+| `pve access role list` | ✓ | — |  |
 | `pve access role set` | — | ✓ |  |
 | `pve access tfa create` | — | ✓ |  |
-| `pve access tfa delete` | — | — | **uncovered** |
-| `pve access tfa get` | — | — | **uncovered** |
-| `pve access tfa get-entry` | — | — | **uncovered** |
-| `pve access tfa list` | — | — | **uncovered** |
+| `pve access tfa delete` | — | ✓ |  |
+| `pve access tfa get` | ◑ | — |  |
+| `pve access tfa get-entry` | ◑ | — |  |
+| `pve access tfa list` | ✓ | — |  |
 | `pve access tfa set` | — | ✓ |  |
-| `pve access tfa types` | — | — | **uncovered** |
+| `pve access tfa types` | ✓ | — |  |
 | `pve access tfa unlock` | — | ✓ |  |
 | `pve access user create` | — | ✓ |  |
-| `pve access user delete` | — | — | **uncovered** |
-| `pve access user get` | — | ✓ |  |
-| `pve access user list` | — | — | **uncovered** |
+| `pve access user delete` | — | ✓ |  |
+| `pve access user get` | ◑ | ✓ |  |
+| `pve access user list` | ✓ | — |  |
 | `pve access user set` | — | ✓ |  |
 | `pve access user token create` | — | ✓ |  |
-| `pve access user token delete` | — | — | **uncovered** |
-| `pve access user token get` | — | ✓ |  |
-| `pve access user token list` | — | ✓ |  |
+| `pve access user token delete` | — | ✓ |  |
+| `pve access user token get` | ◑ | ✓ |  |
+| `pve access user token list` | ◑ | ✓ |  |
 | `pve access user token set` | — | ✓ |  |
-| `pve cluster acme account create` | — | — | **uncovered** |
-| `pve cluster acme account delete` | — | — | **uncovered** |
-| `pve cluster acme account get` | — | — | **uncovered** |
-| `pve cluster acme account list` | — | — | **uncovered** |
-| `pve cluster acme account set` | — | — | **uncovered** |
-| `pve cluster acme challenge-schema` | — | — | **uncovered** |
-| `pve cluster acme directories` | — | — | **uncovered** |
+| `pve cluster acme account create` | — | — | deferred — registers a new account against the ACME CA — the endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
+| `pve cluster acme account delete` | — | — | deferred — deactivates and removes an account at the ACME CA — the endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
+| `pve cluster acme account get` | ◑ | — |  |
+| `pve cluster acme account list` | ✓ | — |  |
+| `pve cluster acme account set` | — | — | deferred — updates an account's contact at the ACME CA — the endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
+| `pve cluster acme challenge-schema` | ✓ | — |  |
+| `pve cluster acme directories` | ✓ | — |  |
 | `pve cluster acme plugin create` | — | ✓ |  |
-| `pve cluster acme plugin delete` | — | — | **uncovered** |
+| `pve cluster acme plugin delete` | — | ✓ |  |
 | `pve cluster acme plugin get` | — | ✓ |  |
-| `pve cluster acme plugin list` | — | ✓ |  |
+| `pve cluster acme plugin list` | ✓ | ✓ |  |
 | `pve cluster acme plugin set` | — | ✓ |  |
 | `pve cluster backup create` | — | ✓ |  |
 | `pve cluster backup delete` | — | ✓ |  |
 | `pve cluster backup get` | — | ✓ |  |
-| `pve cluster backup included-volumes` | — | — | **uncovered** |
-| `pve cluster backup list` | — | ✓ |  |
+| `pve cluster backup included-volumes` | ◑ | — |  |
+| `pve cluster backup list` | ✓ | ✓ |  |
 | `pve cluster backup set` | — | ✓ |  |
-| `pve cluster backup-info not-backed-up` | — | — | **uncovered** |
-| `pve cluster bulk migrate` | — | — | **uncovered** |
+| `pve cluster backup-info not-backed-up` | ◑ | — |  |
+| `pve cluster bulk migrate` | — | — | deferred — migrates guests cluster-wide — requires a second node; not exercisable on a single-node lab |
 | `pve cluster bulk shutdown` | — | ✓ |  |
 | `pve cluster bulk start` | — | ✓ |  |
 | `pve cluster bulk suspend` | — | ✓ |  |
-| `pve cluster ceph flags get` | — | — | **uncovered** |
-| `pve cluster ceph flags list` | — | — | **uncovered** |
-| `pve cluster ceph flags set` | — | — | **uncovered** |
-| `pve cluster ceph flags set-all` | — | — | **uncovered** |
-| `pve cluster ceph metadata` | — | — | **uncovered** |
-| `pve cluster ceph status` | — | — | **uncovered** |
-| `pve cluster config apiversion` | — | — | **uncovered** |
-| `pve cluster config create` | — | — | **uncovered** |
-| `pve cluster config join add` | — | — | **uncovered** |
-| `pve cluster config join list` | — | — | **uncovered** |
-| `pve cluster config nodes add` | — | — | **uncovered** |
-| `pve cluster config nodes delete` | — | — | **uncovered** |
-| `pve cluster config nodes list` | — | — | **uncovered** |
-| `pve cluster config qdevice` | — | — | **uncovered** |
-| `pve cluster config totem` | — | — | **uncovered** |
+| `pve cluster ceph flags get` | ◑ | — |  |
+| `pve cluster ceph flags list` | ◑ | — |  |
+| `pve cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
+| `pve cluster ceph flags set-all` | — | — | deferred — toggles several cluster-wide Ceph OSD flags atomically (e.g. noout, norebalance) in one request during maintenance — cluster-disruptive; not exercised live; covered by unit tests |
+| `pve cluster ceph metadata` | ◑ | — |  |
+| `pve cluster ceph status` | ◑ | — |  |
+| `pve cluster config apiversion` | ✓ | — |  |
+| `pve cluster config create` | — | — | deferred — creates/initializes a new corosync cluster on the local node — one-time and disruptive to run against an already-clustered target; not exercised live; covered by unit tests |
+| `pve cluster config join add` | — | — | deferred — joins the local node to an existing cluster — changes membership and quorum; not exercised live; covered by unit tests |
+| `pve cluster config join list` | ◑ | — |  |
+| `pve cluster config nodes add` | — | — | deferred — registers a new node in the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests |
+| `pve cluster config nodes delete` | — | — | deferred — removes a node from the cluster configuration — changes membership and quorum; not exercised live; covered by unit tests |
+| `pve cluster config nodes list` | ✓ | — |  |
+| `pve cluster config qdevice` | ◑ | — |  |
+| `pve cluster config totem` | ◑ | — |  |
 | `pve cluster cpu-model create` | — | ✓ |  |
 | `pve cluster cpu-model delete` | — | ✓ |  |
 | `pve cluster cpu-model get` | — | ✓ |  |
-| `pve cluster cpu-model list` | — | ✓ |  |
+| `pve cluster cpu-model list` | ✓ | ✓ |  |
 | `pve cluster cpu-model set` | — | ✓ |  |
-| `pve cluster firewall alias create` | — | — | **uncovered** |
-| `pve cluster firewall alias delete` | — | — | **uncovered** |
-| `pve cluster firewall alias get` | — | — | **uncovered** |
-| `pve cluster firewall alias list` | — | — | **uncovered** |
-| `pve cluster firewall alias update` | — | — | **uncovered** |
+| `pve cluster firewall alias create` | — | ✓ |  |
+| `pve cluster firewall alias delete` | — | ✓ |  |
+| `pve cluster firewall alias get` | ◑ | — |  |
+| `pve cluster firewall alias list` | ✓ | ✓ |  |
+| `pve cluster firewall alias update` | — | ✓ |  |
 | `pve cluster firewall group create` | — | ✓ |  |
 | `pve cluster firewall group delete` | — | ✓ |  |
-| `pve cluster firewall group get` | — | — | **uncovered** |
-| `pve cluster firewall group list` | — | ✓ |  |
+| `pve cluster firewall group get` | ◑ | — |  |
+| `pve cluster firewall group list` | ✓ | ✓ |  |
 | `pve cluster firewall group rule-add` | — | ✓ |  |
 | `pve cluster firewall group rule-delete` | — | ✓ |  |
 | `pve cluster firewall group rule-update` | — | ✓ |  |
 | `pve cluster firewall group rules` | — | ✓ |  |
-| `pve cluster firewall ipset add` | — | — | **uncovered** |
-| `pve cluster firewall ipset create` | — | — | **uncovered** |
-| `pve cluster firewall ipset delete` | — | — | **uncovered** |
-| `pve cluster firewall ipset get` | — | — | **uncovered** |
-| `pve cluster firewall ipset list` | — | — | **uncovered** |
-| `pve cluster firewall ipset remove` | — | — | **uncovered** |
+| `pve cluster firewall ipset add` | — | ✓ |  |
+| `pve cluster firewall ipset create` | — | ✓ |  |
+| `pve cluster firewall ipset delete` | — | ✓ |  |
+| `pve cluster firewall ipset get` | ◑ | — |  |
+| `pve cluster firewall ipset list` | ✓ | ✓ |  |
+| `pve cluster firewall ipset remove` | — | ✓ |  |
 | `pve cluster firewall ipset update` | — | ✓ |  |
-| `pve cluster firewall macros list` | — | — | **uncovered** |
-| `pve cluster firewall options describe` | — | — | **uncovered** |
-| `pve cluster firewall options get` | — | — | **uncovered** |
-| `pve cluster firewall options set` | — | — | **uncovered** |
-| `pve cluster firewall refs list` | — | — | **uncovered** |
-| `pve cluster firewall rules create` | — | — | **uncovered** |
-| `pve cluster firewall rules delete` | — | — | **uncovered** |
-| `pve cluster firewall rules get` | — | — | **uncovered** |
-| `pve cluster firewall rules list` | — | — | **uncovered** |
-| `pve cluster firewall rules update` | — | — | **uncovered** |
+| `pve cluster firewall macros list` | ✓ | — |  |
+| `pve cluster firewall options describe` | ✓ | — |  |
+| `pve cluster firewall options get` | ✓ | ✓ |  |
+| `pve cluster firewall options set` | — | ✓ |  |
+| `pve cluster firewall refs list` | ✓ | — |  |
+| `pve cluster firewall rules create` | — | ✓ |  |
+| `pve cluster firewall rules delete` | — | ✓ |  |
+| `pve cluster firewall rules get` | — | ✓ |  |
+| `pve cluster firewall rules list` | ✓ | ✓ |  |
+| `pve cluster firewall rules update` | — | ✓ |  |
 | `pve cluster ha group create` | — | ✓ |  |
 | `pve cluster ha group delete` | — | ✓ |  |
 | `pve cluster ha group get` | — | ✓ |  |
-| `pve cluster ha group list` | — | ✓ |  |
+| `pve cluster ha group list` | ◑ | ✓ |  |
 | `pve cluster ha group set` | — | ✓ |  |
 | `pve cluster ha resource create` | — | ✓ |  |
 | `pve cluster ha resource delete` | — | ✓ |  |
 | `pve cluster ha resource get` | — | ✓ |  |
-| `pve cluster ha resource list` | — | ✓ |  |
+| `pve cluster ha resource list` | ✓ | ✓ |  |
 | `pve cluster ha resource migrate` | — | · |  |
-| `pve cluster ha resource relocate` | — | — | **uncovered** |
+| `pve cluster ha resource relocate` | — | — | deferred — requires a second node as the relocation target — not exercisable on a single-node lab |
 | `pve cluster ha resource set` | — | ✓ |  |
 | `pve cluster ha rule create` | — | ✓ |  |
 | `pve cluster ha rule delete` | — | ✓ |  |
 | `pve cluster ha rule get` | — | ✓ |  |
-| `pve cluster ha rule list` | — | ✓ |  |
+| `pve cluster ha rule list` | ✓ | ✓ |  |
 | `pve cluster ha rule set` | — | ✓ |  |
-| `pve cluster ha status arm` | — | — | **uncovered** |
-| `pve cluster ha status current` | — | — | **uncovered** |
-| `pve cluster ha status disarm` | — | — | **uncovered** |
-| `pve cluster ha status manager` | — | — | **uncovered** |
+| `pve cluster ha status arm` | — | — | deferred — re-enables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
+| `pve cluster ha status current` | ✓ | — |  |
+| `pve cluster ha status disarm` | — | — | deferred — disables the cluster-wide HA stack — would disrupt every HA-managed resource on the lab |
+| `pve cluster ha status manager` | ✓ | — |  |
 | `pve cluster jobs realm-sync create` | — | ✓ |  |
 | `pve cluster jobs realm-sync delete` | — | ✓ |  |
 | `pve cluster jobs realm-sync get` | — | ✓ |  |
-| `pve cluster jobs realm-sync list` | — | ✓ |  |
+| `pve cluster jobs realm-sync list` | ✓ | ✓ |  |
 | `pve cluster jobs realm-sync set` | — | ✓ |  |
-| `pve cluster jobs schedule-analyze` | — | — | **uncovered** |
-| `pve cluster log` | — | — | **uncovered** |
+| `pve cluster jobs schedule-analyze` | ✓ | — |  |
+| `pve cluster log` | ✓ | — |  |
 | `pve cluster mapping dir create` | — | ✓ |  |
 | `pve cluster mapping dir delete` | — | ✓ |  |
 | `pve cluster mapping dir get` | — | ✓ |  |
-| `pve cluster mapping dir list` | — | ✓ |  |
+| `pve cluster mapping dir list` | ✓ | ✓ |  |
 | `pve cluster mapping dir set` | — | ✓ |  |
 | `pve cluster mapping pci create` | — | ✓ |  |
 | `pve cluster mapping pci delete` | — | ✓ |  |
 | `pve cluster mapping pci get` | — | ✓ |  |
-| `pve cluster mapping pci list` | — | — | **uncovered** |
+| `pve cluster mapping pci list` | ✓ | — |  |
 | `pve cluster mapping pci set` | — | ✓ |  |
 | `pve cluster mapping usb create` | — | ✓ |  |
 | `pve cluster mapping usb delete` | — | ✓ |  |
 | `pve cluster mapping usb get` | — | ✓ |  |
-| `pve cluster mapping usb list` | — | — | **uncovered** |
+| `pve cluster mapping usb list` | ✓ | — |  |
 | `pve cluster mapping usb set` | — | ✓ |  |
-| `pve cluster metrics export` | — | — | **uncovered** |
+| `pve cluster metrics export` | ◑ | — |  |
 | `pve cluster metrics server create` | — | ✓ |  |
 | `pve cluster metrics server delete` | — | ✓ |  |
 | `pve cluster metrics server get` | — | ✓ |  |
-| `pve cluster metrics server list` | — | ✓ |  |
+| `pve cluster metrics server list` | ✓ | ✓ |  |
 | `pve cluster metrics server set` | — | ✓ |  |
-| `pve cluster next-id` | — | — | **uncovered** |
-| `pve cluster notifications endpoints` | — | — | **uncovered** |
+| `pve cluster next-id` | ✓ | — |  |
+| `pve cluster notifications endpoints` | ✓ | — |  |
 | `pve cluster notifications gotify create` | — | ✓ |  |
 | `pve cluster notifications gotify delete` | — | ✓ |  |
 | `pve cluster notifications gotify get` | — | ✓ |  |
-| `pve cluster notifications gotify list` | — | ✓ |  |
+| `pve cluster notifications gotify list` | ✓ | ✓ |  |
 | `pve cluster notifications gotify set` | — | ✓ |  |
 | `pve cluster notifications matcher create` | — | ✓ |  |
 | `pve cluster notifications matcher delete` | — | ✓ |  |
 | `pve cluster notifications matcher get` | — | ✓ |  |
-| `pve cluster notifications matcher list` | — | — | **uncovered** |
+| `pve cluster notifications matcher list` | ✓ | — |  |
 | `pve cluster notifications matcher set` | — | ✓ |  |
-| `pve cluster notifications matcher-field-values` | — | — | **uncovered** |
-| `pve cluster notifications matcher-fields` | — | — | **uncovered** |
+| `pve cluster notifications matcher-field-values` | ✓ | — |  |
+| `pve cluster notifications matcher-fields` | ✓ | — |  |
 | `pve cluster notifications sendmail create` | — | ✓ |  |
 | `pve cluster notifications sendmail delete` | — | ✓ |  |
 | `pve cluster notifications sendmail get` | — | ✓ |  |
-| `pve cluster notifications sendmail list` | — | ✓ |  |
+| `pve cluster notifications sendmail list` | ✓ | ✓ |  |
 | `pve cluster notifications sendmail set` | — | ✓ |  |
 | `pve cluster notifications smtp create` | — | ✓ |  |
 | `pve cluster notifications smtp delete` | — | ✓ |  |
 | `pve cluster notifications smtp get` | — | ✓ |  |
-| `pve cluster notifications smtp list` | — | ✓ |  |
+| `pve cluster notifications smtp list` | ✓ | ✓ |  |
 | `pve cluster notifications smtp set` | — | ✓ |  |
-| `pve cluster notifications targets` | — | ✓ |  |
+| `pve cluster notifications targets` | ✓ | ✓ |  |
 | `pve cluster notifications targets-test` | — | ✓ |  |
 | `pve cluster notifications webhook create` | — | ✓ |  |
 | `pve cluster notifications webhook delete` | — | ✓ |  |
 | `pve cluster notifications webhook get` | — | ✓ |  |
-| `pve cluster notifications webhook list` | — | ✓ |  |
+| `pve cluster notifications webhook list` | ✓ | ✓ |  |
 | `pve cluster notifications webhook set` | — | ✓ |  |
-| `pve cluster options describe` | — | — | **uncovered** |
-| `pve cluster options get` | — | — | **uncovered** |
-| `pve cluster options set` | — | — | **uncovered** |
-| `pve cluster qemu cpu-flags` | — | — | **uncovered** |
+| `pve cluster options describe` | ✓ | — |  |
+| `pve cluster options get` | ✓ | ✓ |  |
+| `pve cluster options set` | — | ✓ |  |
+| `pve cluster qemu cpu-flags` | ✓ | — |  |
 | `pve cluster replication create` | — | · |  |
 | `pve cluster replication delete` | — | · |  |
 | `pve cluster replication get` | — | — | **uncovered** |
-| `pve cluster replication list` | — | — | **uncovered** |
+| `pve cluster replication list` | ✓ | ✓ |  |
 | `pve cluster replication set` | — | · |  |
-| `pve cluster resources` | — | — | **uncovered** |
-| `pve cluster status` | — | — | **uncovered** |
-| `pve cluster tasks` | — | — | **uncovered** |
-| `pve lxc clone` | — | — | **uncovered** |
-| `pve lxc config describe` | — | — | **uncovered** |
-| `pve lxc config get` | — | — | **uncovered** |
-| `pve lxc config pending` | — | — | **uncovered** |
-| `pve lxc config set` | — | — | **uncovered** |
-| `pve lxc console` | — | — | **uncovered** |
-| `pve lxc create` | — | — | **uncovered** |
-| `pve lxc delete` | — | — | **uncovered** |
-| `pve lxc disk move` | — | — | **uncovered** |
-| `pve lxc disk resize` | — | — | **uncovered** |
-| `pve lxc feature` | — | — | **uncovered** |
-| `pve lxc firewall alias create` | — | — | **uncovered** |
-| `pve lxc firewall alias delete` | — | — | **uncovered** |
-| `pve lxc firewall alias get` | — | — | **uncovered** |
-| `pve lxc firewall alias list` | — | — | **uncovered** |
-| `pve lxc firewall alias update` | — | — | **uncovered** |
-| `pve lxc firewall ipset add` | — | — | **uncovered** |
-| `pve lxc firewall ipset create` | — | — | **uncovered** |
-| `pve lxc firewall ipset delete` | — | — | **uncovered** |
-| `pve lxc firewall ipset get-member` | — | — | **uncovered** |
-| `pve lxc firewall ipset list` | — | — | **uncovered** |
-| `pve lxc firewall ipset remove` | — | — | **uncovered** |
-| `pve lxc firewall ipset update-member` | — | — | **uncovered** |
-| `pve lxc firewall log` | — | — | **uncovered** |
-| `pve lxc firewall options describe` | — | — | **uncovered** |
-| `pve lxc firewall options get` | — | — | **uncovered** |
-| `pve lxc firewall options set` | — | — | **uncovered** |
-| `pve lxc firewall refs` | — | — | **uncovered** |
-| `pve lxc firewall rules create` | — | — | **uncovered** |
-| `pve lxc firewall rules delete` | — | — | **uncovered** |
-| `pve lxc firewall rules get` | — | — | **uncovered** |
-| `pve lxc firewall rules list` | — | — | **uncovered** |
-| `pve lxc firewall rules update` | — | — | **uncovered** |
-| `pve lxc interfaces` | — | — | **uncovered** |
-| `pve lxc list` | — | — | **uncovered** |
-| `pve lxc metrics` | — | — | **uncovered** |
-| `pve lxc migrate check` | — | — | **uncovered** |
-| `pve lxc permissions effective` | — | — | **uncovered** |
-| `pve lxc permissions grant` | — | — | **uncovered** |
-| `pve lxc permissions list` | — | — | **uncovered** |
-| `pve lxc permissions revoke` | — | — | **uncovered** |
-| `pve lxc reboot` | — | — | **uncovered** |
-| `pve lxc remote-migrate` | — | — | **uncovered** |
-| `pve lxc resume` | — | — | **uncovered** |
-| `pve lxc rrd` | — | — | **uncovered** |
-| `pve lxc security caps add` | — | — | **uncovered** |
-| `pve lxc security caps describe` | — | — | **uncovered** |
-| `pve lxc security caps remove` | — | — | **uncovered** |
-| `pve lxc security caps reset` | — | — | **uncovered** |
-| `pve lxc security caps set` | — | — | **uncovered** |
-| `pve lxc security caps show` | — | — | **uncovered** |
-| `pve lxc security features set` | — | — | **uncovered** |
-| `pve lxc security features show` | — | — | **uncovered** |
-| `pve lxc security list` | — | — | **uncovered** |
-| `pve lxc security show` | — | — | **uncovered** |
-| `pve lxc shutdown` | — | — | **uncovered** |
-| `pve lxc snapshot create` | — | — | **uncovered** |
-| `pve lxc snapshot delete` | — | — | **uncovered** |
-| `pve lxc snapshot list` | — | — | **uncovered** |
-| `pve lxc snapshot rollback` | — | — | **uncovered** |
-| `pve lxc snapshot show` | — | — | **uncovered** |
-| `pve lxc snapshot update` | — | — | **uncovered** |
-| `pve lxc start` | — | — | **uncovered** |
-| `pve lxc status` | — | — | **uncovered** |
-| `pve lxc stop` | — | — | **uncovered** |
-| `pve lxc suspend` | — | — | **uncovered** |
+| `pve cluster resources` | ✓ | — |  |
+| `pve cluster status` | ✓ | — |  |
+| `pve cluster tasks` | ✓ | — |  |
+| `pve lxc clone` | — | ✓ |  |
+| `pve lxc config describe` | ✓ | — |  |
+| `pve lxc config get` | ◑ | — |  |
+| `pve lxc config pending` | ◑ | — |  |
+| `pve lxc config set` | — | ✓ |  |
+| `pve lxc console` | ◑ | ✓ |  |
+| `pve lxc create` | — | ✓ |  |
+| `pve lxc delete` | — | ✓ |  |
+| `pve lxc disk move` | — | ✓ |  |
+| `pve lxc disk resize` | — | ✓ |  |
+| `pve lxc feature` | ◑ | — |  |
+| `pve lxc firewall alias create` | — | ✓ |  |
+| `pve lxc firewall alias delete` | — | ✓ |  |
+| `pve lxc firewall alias get` | — | — | deferred — reads a single firewall alias by name — needs a pre-existing alias; not wired into the mutate phase; covered by unit tests |
+| `pve lxc firewall alias list` | — | ✓ |  |
+| `pve lxc firewall alias update` | — | ✓ |  |
+| `pve lxc firewall ipset add` | — | ✓ |  |
+| `pve lxc firewall ipset create` | — | ✓ |  |
+| `pve lxc firewall ipset delete` | — | ✓ |  |
+| `pve lxc firewall ipset get-member` | — | — | deferred — reads a single CIDR entry of an IP set — needs a pre-existing member; not wired into the mutate phase; covered by unit tests |
+| `pve lxc firewall ipset list` | — | ✓ |  |
+| `pve lxc firewall ipset remove` | — | ✓ |  |
+| `pve lxc firewall ipset update-member` | — | ✓ |  |
+| `pve lxc firewall log` | ◑ | — |  |
+| `pve lxc firewall options describe` | ✓ | — |  |
+| `pve lxc firewall options get` | ◑ | ✓ |  |
+| `pve lxc firewall options set` | — | ✓ |  |
+| `pve lxc firewall refs` | ◑ | — |  |
+| `pve lxc firewall rules create` | — | ✓ |  |
+| `pve lxc firewall rules delete` | — | ✓ |  |
+| `pve lxc firewall rules get` | — | ✓ |  |
+| `pve lxc firewall rules list` | ◑ | ✓ |  |
+| `pve lxc firewall rules update` | — | ✓ |  |
+| `pve lxc interfaces` | ◑ | ✓ |  |
+| `pve lxc list` | ✓ | — |  |
+| `pve lxc metrics` | ◑ | — |  |
+| `pve lxc migrate` | — | ✓ |  |
+| `pve lxc migrate check` | ◑ | — |  |
+| `pve lxc permissions effective` | ◑ | — |  |
+| `pve lxc permissions grant` | — | — | deferred — grants ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve lxc permissions list` | ◑ | — |  |
+| `pve lxc permissions revoke` | — | — | deferred — revokes ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve lxc reboot` | — | ✓ |  |
+| `pve lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
+| `pve lxc resume` | — | ✓ |  |
+| `pve lxc rrd` | ◑ | — |  |
+| `pve lxc security caps add` | — | — | deferred — grants a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `pve lxc security caps describe` | ✓ | — |  |
+| `pve lxc security caps remove` | — | — | deferred — revokes a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `pve lxc security caps reset` | — | — | deferred — clears the capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `pve lxc security caps set` | — | — | deferred — rewrites the container capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `pve lxc security caps show` | ◑ | — |  |
+| `pve lxc security features set` | — | — | deferred — mutates the container features= flags via the config API; not wired into the mutate phase; covered by unit tests |
+| `pve lxc security features show` | ◑ | — |  |
+| `pve lxc security list` | ◑ | — |  |
+| `pve lxc security show` | ◑ | — |  |
+| `pve lxc shutdown` | — | ✓ |  |
+| `pve lxc snapshot create` | — | ✓ |  |
+| `pve lxc snapshot delete` | — | ✓ |  |
+| `pve lxc snapshot list` | ◑ | ✓ |  |
+| `pve lxc snapshot rollback` | — | ✓ |  |
+| `pve lxc snapshot show` | ◑ | — |  |
+| `pve lxc snapshot update` | — | ✓ |  |
+| `pve lxc start` | — | ✓ |  |
+| `pve lxc status` | ◑ | ✓ |  |
+| `pve lxc stop` | — | ✓ |  |
+| `pve lxc suspend` | — | ✓ |  |
 | `pve lxc template download` | — | ✓ |  |
-| `pve lxc template list` | — | — | **uncovered** |
-| `pve lxc to-template` | — | — | **uncovered** |
-| `pve node apt changelog` | — | — | **uncovered** |
-| `pve node apt list` | — | — | **uncovered** |
-| `pve node apt repositories add` | — | — | **uncovered** |
-| `pve node apt repositories enable` | — | — | **uncovered** |
-| `pve node apt repositories list` | — | — | **uncovered** |
-| `pve node apt templates download` | — | — | **uncovered** |
-| `pve node apt templates list` | — | — | **uncovered** |
-| `pve node apt update` | — | — | **uncovered** |
-| `pve node apt versions` | — | — | **uncovered** |
-| `pve node capabilities qemu cpu` | — | — | **uncovered** |
-| `pve node capabilities qemu cpu-flags` | — | — | **uncovered** |
-| `pve node capabilities qemu machines` | — | — | **uncovered** |
-| `pve node capabilities qemu migration` | — | — | **uncovered** |
-| `pve node ceph cfg db` | — | — | **uncovered** |
-| `pve node ceph cfg index` | — | — | **uncovered** |
-| `pve node ceph cfg raw` | — | — | **uncovered** |
-| `pve node ceph cfg value` | — | — | **uncovered** |
-| `pve node ceph cmd-safety` | — | — | **uncovered** |
-| `pve node ceph crush` | — | — | **uncovered** |
-| `pve node ceph fs create` | — | — | **uncovered** |
-| `pve node ceph fs delete` | — | — | **uncovered** |
-| `pve node ceph fs list` | — | — | **uncovered** |
-| `pve node ceph init` | — | — | **uncovered** |
-| `pve node ceph log` | — | — | **uncovered** |
-| `pve node ceph mds create` | — | — | **uncovered** |
-| `pve node ceph mds delete` | — | — | **uncovered** |
-| `pve node ceph mds list` | — | — | **uncovered** |
-| `pve node ceph mgr create` | — | — | **uncovered** |
-| `pve node ceph mgr delete` | — | — | **uncovered** |
-| `pve node ceph mgr list` | — | — | **uncovered** |
-| `pve node ceph mon create` | — | — | **uncovered** |
-| `pve node ceph mon delete` | — | — | **uncovered** |
-| `pve node ceph mon list` | — | — | **uncovered** |
-| `pve node ceph osd create` | — | — | **uncovered** |
-| `pve node ceph osd delete` | — | — | **uncovered** |
-| `pve node ceph osd get` | — | — | **uncovered** |
-| `pve node ceph osd in` | — | — | **uncovered** |
-| `pve node ceph osd list` | — | — | **uncovered** |
-| `pve node ceph osd lv-info` | — | — | **uncovered** |
-| `pve node ceph osd metadata` | — | — | **uncovered** |
-| `pve node ceph osd out` | — | — | **uncovered** |
-| `pve node ceph osd scrub` | — | — | **uncovered** |
-| `pve node ceph pool create` | — | — | **uncovered** |
-| `pve node ceph pool delete` | — | — | **uncovered** |
-| `pve node ceph pool get` | — | — | **uncovered** |
-| `pve node ceph pool list` | — | — | **uncovered** |
-| `pve node ceph pool set` | — | — | **uncovered** |
-| `pve node ceph pool status` | — | — | **uncovered** |
-| `pve node ceph restart` | — | — | **uncovered** |
-| `pve node ceph rules` | — | — | **uncovered** |
-| `pve node ceph start` | — | — | **uncovered** |
-| `pve node ceph status` | — | — | **uncovered** |
-| `pve node ceph stop` | — | — | **uncovered** |
-| `pve node cert acme delete` | — | — | **uncovered** |
-| `pve node cert acme list` | — | — | **uncovered** |
-| `pve node cert acme order` | — | — | **uncovered** |
-| `pve node cert acme renew` | — | — | **uncovered** |
-| `pve node cert custom delete` | — | — | **uncovered** |
-| `pve node cert custom upload` | — | — | **uncovered** |
-| `pve node cert list` | — | — | **uncovered** |
-| `pve node config describe` | — | — | **uncovered** |
-| `pve node config get` | — | — | **uncovered** |
-| `pve node config set` | — | — | **uncovered** |
-| `pve node console` | — | — | **uncovered** |
+| `pve lxc template list` | ✓ | — |  |
+| `pve lxc to-template` | — | — | deferred — converts the discovered container into a template — irreversible for that instance and only sensible as the terminal step of a dedicated throwaway guest lifecycle; not exercised against a live container; covered by unit tests |
+| `pve node apt changelog` | ◑ | — |  |
+| `pve node apt list` | ◑ | — |  |
+| `pve node apt repositories add` | — | — | deferred — adds a standard APT repository to the node's sources; not exercised live |
+| `pve node apt repositories enable` | — | — | deferred — enables or disables a configured APT repository on the node; not exercised live |
+| `pve node apt repositories list` | ◑ | — |  |
+| `pve node apt templates download` | — | — | deferred — downloads a real appliance template tarball to a storage — bandwidth/storage-consuming; not exercised live; covered by unit tests |
+| `pve node apt templates list` | ◑ | — |  |
+| `pve node apt update` | — | ✓ |  |
+| `pve node apt versions` | ◑ | — |  |
+| `pve node capabilities qemu cpu` | ◑ | — |  |
+| `pve node capabilities qemu cpu-flags` | ◑ | — |  |
+| `pve node capabilities qemu machines` | ◑ | — |  |
+| `pve node capabilities qemu migration` | ◑ | — |  |
+| `pve node ceph cfg db` | ◑ | — |  |
+| `pve node ceph cfg index` | ◑ | — |  |
+| `pve node ceph cfg raw` | ◑ | — |  |
+| `pve node ceph cfg value` | ◑ | — |  |
+| `pve node ceph cmd-safety` | ◑ | — |  |
+| `pve node ceph crush` | ◑ | — |  |
+| `pve node ceph fs create` | — | — | deferred — creates a CephFS filesystem and its backing pools; not exercised live |
+| `pve node ceph fs delete` | — | — | deferred — destroys a CephFS filesystem and optionally its pools; not exercised live |
+| `pve node ceph fs list` | ◑ | — |  |
+| `pve node ceph init` | — | — | deferred — initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live |
+| `pve node ceph log` | ◑ | — |  |
+| `pve node ceph mds create` | — | — | deferred — provisions a Ceph metadata-server daemon on the node; not exercised live |
+| `pve node ceph mds delete` | — | — | deferred — destroys a Ceph metadata-server daemon on the node; not exercised live |
+| `pve node ceph mds list` | ◑ | — |  |
+| `pve node ceph mgr create` | — | — | deferred — provisions a Ceph manager daemon on the node; not exercised live |
+| `pve node ceph mgr delete` | — | — | deferred — destroys a Ceph manager daemon on the node; not exercised live |
+| `pve node ceph mgr list` | ◑ | — |  |
+| `pve node ceph mon create` | — | — | deferred — provisions a Ceph monitor daemon on the node; not exercised live |
+| `pve node ceph mon delete` | — | — | deferred — destroys a Ceph monitor daemon on the node; not exercised live |
+| `pve node ceph mon list` | ◑ | — |  |
+| `pve node ceph osd create` | — | — | deferred — creates an OSD by wiping and consuming a block device; not exercised live |
+| `pve node ceph osd delete` | — | — | deferred — destroys an OSD and optionally zaps its underlying volumes; not exercised live |
+| `pve node ceph osd get` | ◑ | — |  |
+| `pve node ceph osd in` | — | — | deferred — marks an OSD in, triggering cluster data movement; not exercised live |
+| `pve node ceph osd list` | ◑ | — |  |
+| `pve node ceph osd lv-info` | ◑ | — |  |
+| `pve node ceph osd metadata` | ◑ | — |  |
+| `pve node ceph osd out` | — | — | deferred — marks an OSD out, draining its data across the cluster; not exercised live |
+| `pve node ceph osd scrub` | — | — | deferred — triggers an OSD scrub that adds cluster I/O load; not exercised live |
+| `pve node ceph pool create` | — | — | deferred — creates a Ceph pool, consuming cluster capacity; not exercised live |
+| `pve node ceph pool delete` | — | — | deferred — destroys a Ceph pool and permanently loses its data; not exercised live |
+| `pve node ceph pool get` | ◑ | — |  |
+| `pve node ceph pool list` | ◑ | — |  |
+| `pve node ceph pool set` | — | — | deferred — reconfigures an existing Ceph pool's parameters; not exercised live |
+| `pve node ceph pool status` | ◑ | — |  |
+| `pve node ceph restart` | — | — | deferred — restarts Ceph services on the node — disruptive; not exercised live |
+| `pve node ceph rules` | ◑ | — |  |
+| `pve node ceph start` | — | — | deferred — starts Ceph services on the node — disruptive; not exercised live |
+| `pve node ceph status` | ◑ | — |  |
+| `pve node ceph stop` | — | — | deferred — stops Ceph services on the node — disruptive; not exercised live |
+| `pve node cert acme delete` | — | — | deferred — removes the node's ACME certificate; not exercised live |
+| `pve node cert acme list` | ◑ | — |  |
+| `pve node cert acme order` | — | — | deferred — orders the node's ACME certificate (contacts Let's Encrypt); not exercised live |
+| `pve node cert acme renew` | — | — | deferred — renews the node's ACME certificate (contacts Let's Encrypt); not exercised live |
+| `pve node cert custom delete` | — | — | deferred — removes the node's custom API TLS certificate — could break TLS to the node; not exercised live |
+| `pve node cert custom upload` | — | — | deferred — replaces the node's API TLS certificate — could break TLS to the node; not exercised live |
+| `pve node cert list` | ◑ | — |  |
+| `pve node config describe` | ✓ | — |  |
+| `pve node config get` | ◑ | — |  |
+| `pve node config set` | — | — | deferred — mutates node-level configuration (description, ACME, wake-on-LAN, ballooning target, startall delay); not exercised live; covered by unit tests |
+| `pve node console` | — | — | deferred — opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests |
 | `pve node disks create directory` | — | ✓ |  |
 | `pve node disks create lvm` | — | ✓ |  |
 | `pve node disks create lvmthin` | — | ✓ |  |
@@ -1029,230 +1015,233 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node disks delete lvm` | — | ✓ |  |
 | `pve node disks delete lvmthin` | — | ✓ |  |
 | `pve node disks delete zfs` | — | ✓ |  |
-| `pve node disks get zfs` | — | — | **uncovered** |
+| `pve node disks get zfs` | ◑ | — |  |
 | `pve node disks init-gpt` | — | ✓ |  |
-| `pve node disks list` | — | — | **uncovered** |
-| `pve node disks ls directory` | — | — | **uncovered** |
-| `pve node disks ls lvm` | — | — | **uncovered** |
-| `pve node disks ls lvmthin` | — | — | **uncovered** |
-| `pve node disks ls zfs` | — | — | **uncovered** |
-| `pve node disks smart` | — | — | **uncovered** |
-| `pve node disks wipe` | — | — | **uncovered** |
-| `pve node dns get` | — | — | **uncovered** |
-| `pve node dns set` | — | — | **uncovered** |
-| `pve node exec` | — | — | **uncovered** |
-| `pve node execute` | — | — | **uncovered** |
-| `pve node firewall log` | — | — | **uncovered** |
-| `pve node firewall options describe` | — | — | **uncovered** |
-| `pve node firewall options get` | — | — | **uncovered** |
-| `pve node firewall options set` | — | — | **uncovered** |
-| `pve node firewall rules create` | — | — | **uncovered** |
-| `pve node firewall rules delete` | — | — | **uncovered** |
-| `pve node firewall rules get` | — | — | **uncovered** |
-| `pve node firewall rules list` | — | — | **uncovered** |
-| `pve node firewall rules update` | — | — | **uncovered** |
-| `pve node hardware mdev` | — | — | **uncovered** |
-| `pve node hardware pci` | — | — | **uncovered** |
-| `pve node hardware usb` | — | — | **uncovered** |
-| `pve node hosts get` | — | ✓ |  |
+| `pve node disks list` | ◑ | — |  |
+| `pve node disks ls directory` | ◑ | — |  |
+| `pve node disks ls lvm` | ◑ | — |  |
+| `pve node disks ls lvmthin` | ◑ | — |  |
+| `pve node disks ls zfs` | ◑ | — |  |
+| `pve node disks smart` | ◑ | — |  |
+| `pve node disks wipe` | — | — | deferred — BLOCKED: /nodes/{node}/disks/wipedisk is root@pam-only and rejects the API token ('user != root@pam'), like storage volume copy and cluster acme account; not invokable by the suite |
+| `pve node dns get` | ◑ | ✓ |  |
+| `pve node dns set` | — | ✓ | live via mutate phase |
+| `pve node exec` | — | ✓ |  |
+| `pve node execute` | — | — | n/a — runs arbitrary commands on the real host via the PVE API — security-sensitive; out of scope for automated e2e regardless of guarding |
+| `pve node firewall log` | ◑ | — |  |
+| `pve node firewall options describe` | ✓ | — |  |
+| `pve node firewall options get` | ◑ | ✓ |  |
+| `pve node firewall options set` | — | — | deferred — changes the host firewall policy — could cut the node off the network; not exercised live |
+| `pve node firewall rules create` | — | ✓ |  |
+| `pve node firewall rules delete` | — | ✓ |  |
+| `pve node firewall rules get` | — | ✓ |  |
+| `pve node firewall rules list` | ◑ | ✓ |  |
+| `pve node firewall rules update` | — | ✓ |  |
+| `pve node hardware mdev` | ◑ | — |  |
+| `pve node hardware pci` | ◑ | — |  |
+| `pve node hardware usb` | ◑ | — |  |
+| `pve node hosts get` | ◑ | ✓ |  |
 | `pve node hosts set` | — | ✓ |  |
-| `pve node journal` | — | — | **uncovered** |
-| `pve node list` | — | — | **uncovered** |
-| `pve node migrateall` | — | — | **uncovered** |
-| `pve node netstat` | — | — | **uncovered** |
-| `pve node network apply` | — | — | **uncovered** |
-| `pve node network create` | — | — | **uncovered** |
-| `pve node network delete` | — | — | **uncovered** |
-| `pve node network get` | — | — | **uncovered** |
-| `pve node network list` | — | — | **uncovered** |
-| `pve node network revert` | — | — | **uncovered** |
+| `pve node journal` | ◑ | — |  |
+| `pve node list` | ✓ | — |  |
+| `pve node migrateall` | — | — | deferred — migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests |
+| `pve node netstat` | ◑ | — |  |
+| `pve node network apply` | — | — | deferred — reloads the staged host network configuration — could cut the node off the network; not exercised live |
+| `pve node network create` | — | ✓ |  |
+| `pve node network delete` | — | ✓ |  |
+| `pve node network get` | ◑ | — |  |
+| `pve node network list` | ◑ | — |  |
+| `pve node network revert` | — | ✓ |  |
 | `pve node network set` | — | ✓ |  |
 | `pve node oci pull` | — | ✓ |  |
 | `pve node oci tags` | — | ✓ |  |
-| `pve node permissions effective` | — | — | **uncovered** |
-| `pve node permissions grant` | — | — | **uncovered** |
-| `pve node permissions list` | — | — | **uncovered** |
-| `pve node permissions revoke` | — | — | **uncovered** |
+| `pve node permissions effective` | ◑ | — |  |
+| `pve node permissions grant` | — | — | deferred — grants ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve node permissions list` | ◑ | — |  |
+| `pve node permissions revoke` | — | — | deferred — revokes ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve node query-url-metadata` | — | ✓ |  |
-| `pve node reboot` | — | — | **uncovered** |
-| `pve node replication get` | — | — | **uncovered** |
-| `pve node replication list` | — | — | **uncovered** |
-| `pve node replication log` | — | — | **uncovered** |
-| `pve node replication run` | — | — | **uncovered** |
-| `pve node replication status` | — | — | **uncovered** |
-| `pve node report` | — | — | **uncovered** |
-| `pve node rrddata` | — | — | **uncovered** |
-| `pve node rsync` | — | — | **uncovered** |
+| `pve node reboot` | — | — | n/a — reboots the real host — would take the shared lab node offline; not automatable |
+| `pve node replication get` | ◑ | — |  |
+| `pve node replication list` | ◑ | — |  |
+| `pve node replication log` | ◑ | — |  |
+| `pve node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
+| `pve node replication status` | ◑ | — |  |
+| `pve node report` | ◑ | — |  |
+| `pve node rrddata` | ◑ | — |  |
+| `pve node rsync` | — | ✓ |  |
 | `pve node scan cifs` | — | ✓ |  |
 | `pve node scan iscsi` | — | ✓ |  |
-| `pve node scan lvm` | — | — | **uncovered** |
-| `pve node scan lvmthin` | — | — | **uncovered** |
+| `pve node scan lvm` | ◑ | — |  |
+| `pve node scan lvmthin` | ◑ | — |  |
 | `pve node scan nfs` | — | ✓ |  |
 | `pve node scan pbs` | — | ✓ |  |
-| `pve node scan zfs` | — | — | **uncovered** |
-| `pve node services get` | — | — | **uncovered** |
-| `pve node services list` | — | — | **uncovered** |
-| `pve node services reload` | — | — | **uncovered** |
-| `pve node services restart` | — | — | **uncovered** |
-| `pve node services start` | — | — | **uncovered** |
-| `pve node services state` | — | — | **uncovered** |
-| `pve node services stop` | — | — | **uncovered** |
-| `pve node shell` | — | — | **uncovered** |
-| `pve node shutdown` | — | — | **uncovered** |
-| `pve node spiceshell` | — | — | **uncovered** |
-| `pve node ssh` | — | — | **uncovered** |
+| `pve node scan zfs` | ◑ | — |  |
+| `pve node services get` | ◑ | — |  |
+| `pve node services list` | ◑ | — |  |
+| `pve node services reload` | — | ✓ |  |
+| `pve node services restart` | — | ✓ |  |
+| `pve node services start` | — | ✓ |  |
+| `pve node services state` | ◑ | — |  |
+| `pve node services stop` | — | ✓ |  |
+| `pve node shell` | — | — | deferred — opens a live SSH terminal on the node, so it cannot be driven head-less; not run live; covered by unit tests |
+| `pve node shutdown` | — | — | n/a — shuts down the real host — would take the shared lab node offline; not automatable |
+| `pve node spiceshell` | — | — | n/a — requests an interactive SPICE console-proxy ticket — not automatable head-less; covered by unit tests |
+| `pve node ssh` | — | ✓ |  |
 | `pve node startall` | — | ✓ |  |
-| `pve node status` | — | — | **uncovered** |
+| `pve node status` | ◑ | — |  |
 | `pve node stopall` | — | ✓ |  |
-| `pve node subscription delete` | — | — | **uncovered** |
-| `pve node subscription get` | — | — | **uncovered** |
-| `pve node subscription set` | — | — | **uncovered** |
-| `pve node subscription update` | — | — | **uncovered** |
+| `pve node subscription delete` | — | ✓ |  |
+| `pve node subscription get` | ◑ | — |  |
+| `pve node subscription set` | — | — | deferred — sets the node's subscription key (changes licensing state); not exercised live; covered by unit tests |
+| `pve node subscription update` | — | ✓ |  |
 | `pve node suspendall` | — | ✓ |  |
-| `pve node syslog` | — | — | **uncovered** |
-| `pve node task list` | — | — | **uncovered** |
-| `pve node task log` | — | — | **uncovered** |
-| `pve node task status` | — | — | **uncovered** |
-| `pve node task stop` | — | — | **uncovered** |
-| `pve node task wait` | — | — | **uncovered** |
-| `pve node termproxy` | — | — | **uncovered** |
-| `pve node time get` | — | ✓ |  |
+| `pve node syslog` | ◑ | — |  |
+| `pve node task list` | ◑ | — |  |
+| `pve node task log` | ◑ | — |  |
+| `pve node task status` | ◑ | — |  |
+| `pve node task stop` | — | ✓ |  |
+| `pve node task wait` | ◑ | — |  |
+| `pve node termproxy` | — | — | n/a — requests an interactive websocket terminal-proxy ticket — not automatable head-less; covered by unit tests |
+| `pve node time get` | ◑ | ✓ |  |
 | `pve node time set` | — | ✓ |  |
-| `pve node vncshell` | — | — | **uncovered** |
-| `pve node vzdump defaults` | — | — | **uncovered** |
-| `pve node vzdump extract-config` | — | — | **uncovered** |
-| `pve node wakeonlan` | — | — | **uncovered** |
-| `pve pool create` | — | — | **uncovered** |
-| `pve pool delete` | — | — | **uncovered** |
-| `pve pool get` | — | — | **uncovered** |
-| `pve pool list` | — | — | **uncovered** |
-| `pve pool permissions effective` | — | — | **uncovered** |
-| `pve pool permissions grant` | — | — | **uncovered** |
-| `pve pool permissions list` | — | — | **uncovered** |
-| `pve pool permissions revoke` | — | — | **uncovered** |
-| `pve pool set` | — | — | **uncovered** |
-| `pve pool show` | — | — | **uncovered** |
-| `pve qemu agent exec` | — | — | **uncovered** |
-| `pve qemu agent exec-status` | — | — | **uncovered** |
-| `pve qemu agent file-read` | — | — | **uncovered** |
-| `pve qemu agent file-write` | — | — | **uncovered** |
-| `pve qemu agent set-user-password` | — | — | **uncovered** |
-| `pve qemu clone` | — | — | **uncovered** |
+| `pve node vncshell` | — | — | n/a — requests an interactive VNC console-proxy ticket — not automatable head-less; covered by unit tests |
+| `pve node vzdump` | — | ✓ |  |
+| `pve node vzdump defaults` | ◑ | — |  |
+| `pve node vzdump extract-config` | ◑ | — |  |
+| `pve node wakeonlan` | — | — | deferred — sends a Wake-on-LAN packet to power on another node — the API rejects waking the local node, and this is a single-node cluster, so there is no remote target; not exercised live; covered by unit tests |
+| `pve pool create` | — | ✓ | error-contract checked |
+| `pve pool delete` | — | ✓ |  |
+| `pve pool get` | ◑ | — |  |
+| `pve pool list` | ✓ | — |  |
+| `pve pool permissions effective` | ◑ | — |  |
+| `pve pool permissions grant` | — | — | deferred — grants ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve pool permissions list` | ◑ | — |  |
+| `pve pool permissions revoke` | — | — | deferred — revokes ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve pool set` | — | ✓ |  |
+| `pve pool show` | ◑ | — |  |
+| `pve qemu agent` | — | ✓ |  |
+| `pve qemu agent exec` | — | ✓ |  |
+| `pve qemu agent exec-status` | — | ✓ |  |
+| `pve qemu agent file-read` | — | ✓ |  |
+| `pve qemu agent file-write` | — | ✓ |  |
+| `pve qemu agent set-user-password` | — | ✓ |  |
+| `pve qemu clone` | — | ✓ |  |
 | `pve qemu cloudinit dump` | — | ✓ |  |
-| `pve qemu cloudinit pending` | — | ✓ |  |
+| `pve qemu cloudinit pending` | ◑ | ✓ |  |
 | `pve qemu cloudinit update` | — | ✓ |  |
-| `pve qemu config describe` | — | — | **uncovered** |
-| `pve qemu config get` | — | — | **uncovered** |
-| `pve qemu config pending` | — | — | **uncovered** |
-| `pve qemu config set` | — | — | **uncovered** |
-| `pve qemu console` | — | — | **uncovered** |
-| `pve qemu cpu list` | — | — | **uncovered** |
-| `pve qemu cpu-flags` | — | — | **uncovered** |
-| `pve qemu create` | — | — | **uncovered** |
-| `pve qemu delete` | — | — | **uncovered** |
-| `pve qemu disk move` | — | — | **uncovered** |
-| `pve qemu disk resize` | — | — | **uncovered** |
+| `pve qemu config describe` | ✓ | — |  |
+| `pve qemu config get` | ◑ | ✓ |  |
+| `pve qemu config pending` | — | ✓ |  |
+| `pve qemu config set` | — | ✓ |  |
+| `pve qemu console` | ◑ | ✓ |  |
+| `pve qemu cpu list` | ✓ | — |  |
+| `pve qemu cpu-flags` | ✓ | — |  |
+| `pve qemu create` | — | ✓ |  |
+| `pve qemu delete` | — | ✓ |  |
+| `pve qemu disk move` | — | ✓ |  |
+| `pve qemu disk resize` | — | ✓ |  |
 | `pve qemu disk unlink` | — | ✓ |  |
-| `pve qemu feature` | — | — | **uncovered** |
-| `pve qemu firewall alias create` | — | — | **uncovered** |
-| `pve qemu firewall alias delete` | — | — | **uncovered** |
-| `pve qemu firewall alias get` | — | — | **uncovered** |
-| `pve qemu firewall alias list` | — | — | **uncovered** |
-| `pve qemu firewall alias update` | — | — | **uncovered** |
-| `pve qemu firewall ipset add` | — | — | **uncovered** |
-| `pve qemu firewall ipset create` | — | — | **uncovered** |
-| `pve qemu firewall ipset delete` | — | — | **uncovered** |
-| `pve qemu firewall ipset get-member` | — | — | **uncovered** |
-| `pve qemu firewall ipset list` | — | — | **uncovered** |
-| `pve qemu firewall ipset remove` | — | — | **uncovered** |
-| `pve qemu firewall ipset update-member` | — | — | **uncovered** |
-| `pve qemu firewall log` | — | — | **uncovered** |
-| `pve qemu firewall options describe` | — | — | **uncovered** |
-| `pve qemu firewall options get` | — | — | **uncovered** |
-| `pve qemu firewall options set` | — | — | **uncovered** |
-| `pve qemu firewall refs` | — | — | **uncovered** |
-| `pve qemu firewall rules create` | — | — | **uncovered** |
-| `pve qemu firewall rules delete` | — | — | **uncovered** |
-| `pve qemu firewall rules get` | — | — | **uncovered** |
-| `pve qemu firewall rules list` | — | — | **uncovered** |
-| `pve qemu firewall rules update` | — | — | **uncovered** |
-| `pve qemu list` | — | — | **uncovered** |
-| `pve qemu machine list` | — | — | **uncovered** |
-| `pve qemu metrics` | — | — | **uncovered** |
-| `pve qemu migrate capabilities` | — | — | **uncovered** |
-| `pve qemu migrate check` | — | — | **uncovered** |
+| `pve qemu feature` | ◑ | — |  |
+| `pve qemu firewall alias create` | — | ✓ |  |
+| `pve qemu firewall alias delete` | — | ✓ |  |
+| `pve qemu firewall alias get` | — | — | deferred — reads a single firewall alias by name — needs a pre-existing alias; not wired into the mutate phase; covered by unit tests |
+| `pve qemu firewall alias list` | — | ✓ |  |
+| `pve qemu firewall alias update` | — | ✓ |  |
+| `pve qemu firewall ipset add` | — | ✓ |  |
+| `pve qemu firewall ipset create` | — | ✓ |  |
+| `pve qemu firewall ipset delete` | — | ✓ |  |
+| `pve qemu firewall ipset get-member` | — | — | deferred — reads a single CIDR entry of an IP set — needs a pre-existing member; not wired into the mutate phase; covered by unit tests |
+| `pve qemu firewall ipset list` | — | ✓ |  |
+| `pve qemu firewall ipset remove` | — | ✓ |  |
+| `pve qemu firewall ipset update-member` | — | ✓ |  |
+| `pve qemu firewall log` | ◑ | — |  |
+| `pve qemu firewall options describe` | ✓ | — |  |
+| `pve qemu firewall options get` | ◑ | ✓ |  |
+| `pve qemu firewall options set` | — | ✓ |  |
+| `pve qemu firewall refs` | ◑ | — |  |
+| `pve qemu firewall rules create` | — | ✓ |  |
+| `pve qemu firewall rules delete` | — | ✓ |  |
+| `pve qemu firewall rules get` | — | ✓ |  |
+| `pve qemu firewall rules list` | ◑ | ✓ |  |
+| `pve qemu firewall rules update` | — | ✓ |  |
+| `pve qemu list` | ✓ | — |  |
+| `pve qemu machine list` | ✓ | — |  |
+| `pve qemu metrics` | ◑ | — |  |
+| `pve qemu migrate` | — | ✓ |  |
+| `pve qemu migrate capabilities` | ✓ | — |  |
+| `pve qemu migrate check` | ◑ | — |  |
 | `pve qemu monitor` | — | ✓ |  |
-| `pve qemu permissions effective` | — | — | **uncovered** |
-| `pve qemu permissions grant` | — | — | **uncovered** |
-| `pve qemu permissions list` | — | — | **uncovered** |
-| `pve qemu permissions revoke` | — | — | **uncovered** |
-| `pve qemu reboot` | — | — | **uncovered** |
-| `pve qemu remote-migrate` | — | — | **uncovered** |
-| `pve qemu reset` | — | — | **uncovered** |
-| `pve qemu resume` | — | — | **uncovered** |
-| `pve qemu rrd` | — | — | **uncovered** |
-| `pve qemu security agent set` | — | — | **uncovered** |
-| `pve qemu security agent show` | — | — | **uncovered** |
-| `pve qemu security confidential clear` | — | — | **uncovered** |
-| `pve qemu security confidential set` | — | — | **uncovered** |
-| `pve qemu security confidential show` | — | — | **uncovered** |
-| `pve qemu security cpu-flags describe` | — | — | **uncovered** |
-| `pve qemu security cpu-flags set` | — | — | **uncovered** |
-| `pve qemu security cpu-flags show` | — | — | **uncovered** |
-| `pve qemu security list` | — | — | **uncovered** |
-| `pve qemu security nic firewall` | — | — | **uncovered** |
-| `pve qemu security nic show` | — | — | **uncovered** |
-| `pve qemu security protection disable` | — | — | **uncovered** |
-| `pve qemu security protection enable` | — | — | **uncovered** |
-| `pve qemu security secureboot enable` | — | — | **uncovered** |
-| `pve qemu security secureboot show` | — | — | **uncovered** |
-| `pve qemu security show` | — | — | **uncovered** |
-| `pve qemu security tpm add` | — | — | **uncovered** |
-| `pve qemu security tpm remove` | — | — | **uncovered** |
-| `pve qemu security tpm show` | — | — | **uncovered** |
+| `pve qemu permissions effective` | ◑ | — |  |
+| `pve qemu permissions grant` | — | — | deferred — grants ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve qemu permissions list` | ◑ | — |  |
+| `pve qemu permissions revoke` | — | — | deferred — revokes ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve qemu reboot` | — | ✓ | live via mutate phase |
+| `pve qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live clusters with shared or compatible storage; no rollback without manual intervention; not exercised live |
+| `pve qemu reset` | — | ✓ |  |
+| `pve qemu resume` | — | ✓ |  |
+| `pve qemu rrd` | ◑ | — |  |
+| `pve qemu security agent set` | — | — | deferred — sets the guest-agent config option (agent=); not wired into the mutate phase; covered by unit tests |
+| `pve qemu security agent show` | ◑ | — |  |
+| `pve qemu security confidential clear` | — | — | deferred — removes the confidential-computing configuration; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security confidential set` | — | — | deferred — configures AMD SEV / Intel TDX memory encryption, which needs matching host CPU/firmware support; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security confidential show` | ◑ | — |  |
+| `pve qemu security cpu-flags describe` | ✓ | — |  |
+| `pve qemu security cpu-flags set` | — | — | deferred — edits the VM's security-relevant CPU flags; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security cpu-flags show` | ◑ | — |  |
+| `pve qemu security list` | ◑ | — |  |
+| `pve qemu security nic firewall` | — | — | deferred — toggles per-NIC firewall coverage; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security nic show` | ◑ | — |  |
+| `pve qemu security protection disable` | — | — | deferred — clears the VM protection flag; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security protection enable` | — | — | deferred — sets the VM protection flag; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security secureboot enable` | — | — | deferred — switches firmware to OVMF and allocates an EFI vars disk; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security secureboot show` | ◑ | — |  |
+| `pve qemu security show` | ◑ | — |  |
+| `pve qemu security tpm add` | — | — | deferred — allocates a TPM state disk; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security tpm remove` | — | — | deferred — destroys the TPM state device and every key sealed in it; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security tpm show` | ◑ | — |  |
 | `pve qemu sendkey` | — | ✓ |  |
-| `pve qemu shutdown` | — | — | **uncovered** |
-| `pve qemu snapshot create` | — | — | **uncovered** |
-| `pve qemu snapshot delete` | — | — | **uncovered** |
-| `pve qemu snapshot list` | — | — | **uncovered** |
-| `pve qemu snapshot rollback` | — | — | **uncovered** |
-| `pve qemu snapshot show` | — | — | **uncovered** |
-| `pve qemu snapshot update` | — | — | **uncovered** |
-| `pve qemu ssh` | — | — | **uncovered** |
-| `pve qemu start` | — | — | **uncovered** |
-| `pve qemu status` | — | — | **uncovered** |
-| `pve qemu stop` | — | — | **uncovered** |
-| `pve qemu suspend` | — | — | **uncovered** |
+| `pve qemu shutdown` | — | ✓ |  |
+| `pve qemu snapshot create` | — | ✓ | error-contract checked |
+| `pve qemu snapshot delete` | — | ✓ |  |
+| `pve qemu snapshot list` | ◑ | ✓ |  |
+| `pve qemu snapshot rollback` | — | ✓ |  |
+| `pve qemu snapshot show` | ◑ | — |  |
+| `pve qemu snapshot update` | — | ✓ |  |
+| `pve qemu ssh` | — | — | n/a — opens an interactive SSH tunnel into a guest — not automatable head-less, same class as `node shell`/`node console`; covered by unit tests |
+| `pve qemu start` | — | ✓ |  |
+| `pve qemu status` | ◑ | ✓ |  |
+| `pve qemu stop` | — | ✓ |  |
+| `pve qemu suspend` | — | ✓ |  |
 | `pve qemu template` | — | ✓ |  |
 | `pve sdn apply` | — | ✓ |  |
 | `pve sdn controller create` | — | ✓ |  |
 | `pve sdn controller delete` | — | ✓ |  |
 | `pve sdn controller get` | — | ✓ |  |
-| `pve sdn controller list` | — | — | **uncovered** |
+| `pve sdn controller list` | ✓ | — |  |
 | `pve sdn controller set` | — | ✓ |  |
 | `pve sdn dns create` | — | ✓ |  |
 | `pve sdn dns delete` | — | ✓ |  |
-| `pve sdn dns get` | — | — | **uncovered** |
-| `pve sdn dns list` | — | — | **uncovered** |
-| `pve sdn dns set` | — | — | **uncovered** |
-| `pve sdn dry-run` | — | — | **uncovered** |
+| `pve sdn dns get` | — | ✓ |  |
+| `pve sdn dns list` | ✓ | — |  |
+| `pve sdn dns set` | — | ✓ |  |
+| `pve sdn dry-run` | ◑ | — |  |
 | `pve sdn fabric create` | — | ✓ |  |
 | `pve sdn fabric delete` | — | ✓ |  |
 | `pve sdn fabric get` | — | ✓ |  |
-| `pve sdn fabric list` | — | — | **uncovered** |
-| `pve sdn fabric list-all` | — | — | **uncovered** |
+| `pve sdn fabric list` | ◑ | — |  |
+| `pve sdn fabric list-all` | ◑ | — |  |
 | `pve sdn fabric node create` | — | ✓ |  |
 | `pve sdn fabric node delete` | — | ✓ |  |
 | `pve sdn fabric node get` | — | ✓ |  |
-| `pve sdn fabric node list` | — | — | **uncovered** |
+| `pve sdn fabric node list` | ◑ | — |  |
 | `pve sdn fabric node set` | — | ✓ |  |
 | `pve sdn fabric set` | — | ✓ |  |
 | `pve sdn ipam create` | — | ✓ |  |
 | `pve sdn ipam delete` | — | ✓ |  |
 | `pve sdn ipam get` | — | ✓ |  |
-| `pve sdn ipam list` | — | ✓ |  |
-| `pve sdn ipam set` | — | — | **uncovered** |
-| `pve sdn ipam status` | — | — | **uncovered** |
+| `pve sdn ipam list` | ✓ | ✓ |  |
+| `pve sdn ipam set` | — | — | deferred — the pve IPAM exposes no settable properties; the netbox/phpipam types validate a reachable external backend on create — covered by unit tests |
+| `pve sdn ipam status` | ◑ | — |  |
 | `pve sdn lock acquire` | — | ✓ |  |
 | `pve sdn lock release` | — | ✓ |  |
 | `pve sdn prefix-list create` | — | ✓ |  |
@@ -1263,19 +1252,19 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve sdn prefix-list entry list` | — | ✓ |  |
 | `pve sdn prefix-list entry set` | — | ✓ |  |
 | `pve sdn prefix-list get` | — | ✓ |  |
-| `pve sdn prefix-list list` | — | — | **uncovered** |
+| `pve sdn prefix-list list` | ◑ | — |  |
 | `pve sdn prefix-list set` | — | ✓ |  |
-| `pve sdn rollback` | — | — | **uncovered** |
+| `pve sdn rollback` | — | — | deferred — discards ALL pending SDN changes cluster-wide; not exercised live; covered by unit tests |
 | `pve sdn route-map entry add` | — | ✓ |  |
 | `pve sdn route-map entry delete` | — | ✓ |  |
 | `pve sdn route-map entry get` | — | ✓ |  |
-| `pve sdn route-map entry list` | — | — | **uncovered** |
+| `pve sdn route-map entry list` | ◑ | — |  |
 | `pve sdn route-map entry set` | — | ✓ |  |
 | `pve sdn route-map get` | — | ✓ |  |
-| `pve sdn route-map list` | — | — | **uncovered** |
-| `pve sdn status fabrics interfaces` | — | — | **uncovered** |
-| `pve sdn status fabrics neighbors` | — | — | **uncovered** |
-| `pve sdn status fabrics routes` | — | — | **uncovered** |
+| `pve sdn route-map list` | ◑ | — |  |
+| `pve sdn status fabrics interfaces` | — | — | deferred — requires applied FRR fabric backend not present in lab |
+| `pve sdn status fabrics neighbors` | — | — | deferred — requires applied FRR fabric backend not present in lab |
+| `pve sdn status fabrics routes` | — | — | deferred — requires applied FRR fabric backend not present in lab |
 | `pve sdn status vnets mac-vrf` | — | ✓ |  |
 | `pve sdn status zones bridges` | — | ✓ |  |
 | `pve sdn status zones content` | — | ✓ |  |
@@ -1283,93 +1272,86 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve sdn status zones ip-vrf` | — | ✓ |  |
 | `pve sdn subnet create` | — | ✓ |  |
 | `pve sdn subnet delete` | — | ✓ |  |
-| `pve sdn subnet list` | — | — | **uncovered** |
+| `pve sdn subnet list` | ◑ | — |  |
 | `pve sdn subnet set` | — | ✓ |  |
-| `pve sdn subnet show` | — | — | **uncovered** |
+| `pve sdn subnet show` | ◑ | — |  |
 | `pve sdn vnet create` | — | ✓ |  |
 | `pve sdn vnet delete` | — | ✓ |  |
-| `pve sdn vnet firewall options describe` | — | — | **uncovered** |
-| `pve sdn vnet firewall options get` | — | — | **uncovered** |
-| `pve sdn vnet firewall options set` | — | — | **uncovered** |
-| `pve sdn vnet firewall rules create` | — | — | **uncovered** |
-| `pve sdn vnet firewall rules delete` | — | — | **uncovered** |
-| `pve sdn vnet firewall rules get` | — | — | **uncovered** |
-| `pve sdn vnet firewall rules list` | — | — | **uncovered** |
-| `pve sdn vnet firewall rules set` | — | — | **uncovered** |
+| `pve sdn vnet firewall options describe` | ✓ | — |  |
+| `pve sdn vnet firewall options get` | ◑ | ✓ |  |
+| `pve sdn vnet firewall options set` | — | ✓ |  |
+| `pve sdn vnet firewall rules create` | — | ✓ |  |
+| `pve sdn vnet firewall rules delete` | — | ✓ |  |
+| `pve sdn vnet firewall rules get` | — | ✓ |  |
+| `pve sdn vnet firewall rules list` | ◑ | ✓ |  |
+| `pve sdn vnet firewall rules set` | — | ✓ |  |
 | `pve sdn vnet ips create` | — | ✓ |  |
 | `pve sdn vnet ips delete` | — | ✓ |  |
 | `pve sdn vnet ips set` | — | ✓ |  |
-| `pve sdn vnet list` | — | — | **uncovered** |
-| `pve sdn vnet permissions effective` | — | — | **uncovered** |
-| `pve sdn vnet permissions grant` | — | — | **uncovered** |
-| `pve sdn vnet permissions list` | — | — | **uncovered** |
-| `pve sdn vnet permissions revoke` | — | — | **uncovered** |
+| `pve sdn vnet list` | ✓ | — |  |
+| `pve sdn vnet permissions effective` | ◑ | — |  |
+| `pve sdn vnet permissions grant` | — | — | deferred — grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve sdn vnet permissions list` | ◑ | — |  |
+| `pve sdn vnet permissions revoke` | — | — | deferred — revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve sdn vnet set` | — | ✓ |  |
-| `pve sdn vnet show` | — | — | **uncovered** |
+| `pve sdn vnet show` | ◑ | — |  |
 | `pve sdn zone create` | — | ✓ |  |
 | `pve sdn zone delete` | — | ✓ |  |
-| `pve sdn zone list` | — | — | **uncovered** |
-| `pve sdn zone permissions effective` | — | — | **uncovered** |
-| `pve sdn zone permissions grant` | — | — | **uncovered** |
-| `pve sdn zone permissions list` | — | — | **uncovered** |
-| `pve sdn zone permissions revoke` | — | — | **uncovered** |
+| `pve sdn zone list` | ✓ | — |  |
+| `pve sdn zone permissions effective` | ◑ | — |  |
+| `pve sdn zone permissions grant` | — | — | deferred — grants ACL roles on the zone's /sdn/zones/{zone} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve sdn zone permissions list` | ◑ | — |  |
+| `pve sdn zone permissions revoke` | — | — | deferred — revokes ACL roles on the zone's /sdn/zones/{zone} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve sdn zone set` | — | ✓ |  |
-| `pve sdn zone show` | — | — | **uncovered** |
-| `pve storage aplinfo download` | — | — | **uncovered** |
-| `pve storage aplinfo list` | — | — | **uncovered** |
-| `pve storage content` | — | — | **uncovered** |
-| `pve storage create` | — | — | **uncovered** |
-| `pve storage delete` | — | — | **uncovered** |
-| `pve storage describe` | — | — | **uncovered** |
+| `pve sdn zone show` | ◑ | — |  |
+| `pve storage aplinfo download` | — | — | deferred — downloads a real appliance template tarball to a storage — bandwidth/storage-consuming; not exercised live; covered by unit tests |
+| `pve storage aplinfo list` | ◑ | — |  |
+| `pve storage content` | ◑ | — |  |
+| `pve storage create` | — | ✓ |  |
+| `pve storage delete` | — | ✓ |  |
+| `pve storage describe` | ✓ | — |  |
 | `pve storage download-url` | — | ✓ |  |
-| `pve storage file-restore download` | — | — | **uncovered** |
-| `pve storage file-restore list` | — | — | **uncovered** |
-| `pve storage get` | — | — | **uncovered** |
-| `pve storage identity` | — | — | **uncovered** |
+| `pve storage file-restore download` | — | — | deferred — extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
+| `pve storage file-restore list` | — | — | deferred — browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
+| `pve storage get` | ◑ | ✓ |  |
+| `pve storage identity` | ◑ | — |  |
 | `pve storage import-metadata` | — | ✓ |  |
-| `pve storage list` | — | — | **uncovered** |
-| `pve storage node-list` | — | — | **uncovered** |
-| `pve storage oci-pull` | — | — | **uncovered** |
-| `pve storage permissions effective` | — | — | **uncovered** |
-| `pve storage permissions grant` | — | — | **uncovered** |
-| `pve storage permissions list` | — | — | **uncovered** |
-| `pve storage permissions revoke` | — | — | **uncovered** |
-| `pve storage prune` | — | ✓ |  |
-| `pve storage rrd` | — | — | **uncovered** |
-| `pve storage rrddata` | — | — | **uncovered** |
-| `pve storage set` | — | — | **uncovered** |
-| `pve storage status` | — | — | **uncovered** |
-| `pve storage upload` | — | — | **uncovered** |
+| `pve storage list` | ✓ | — |  |
+| `pve storage node-list` | ◑ | — |  |
+| `pve storage oci-pull` | — | — | deferred — pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests |
+| `pve storage permissions effective` | ◑ | — |  |
+| `pve storage permissions grant` | — | — | deferred — grants ACL roles on the storage's /storage/{storage} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve storage permissions list` | ◑ | — |  |
+| `pve storage permissions revoke` | — | — | deferred — revokes ACL roles on the storage's /storage/{storage} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve storage prune` | ◑ | ✓ |  |
+| `pve storage rrd` | ◑ | — |  |
+| `pve storage rrddata` | ◑ | — |  |
+| `pve storage set` | — | ✓ |  |
+| `pve storage status` | ◑ | — |  |
+| `pve storage upload` | — | ✓ |  |
 | `pve storage volume alloc` | — | ✓ |  |
-| `pve storage volume copy` | — | — | **uncovered** |
+| `pve storage volume copy` | — | — | deferred — copies a volume to a new target — the copy endpoint is restricted to root@pam and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests |
 | `pve storage volume delete` | — | ✓ |  |
-| `pve storage volume get` | — | ✓ |  |
+| `pve storage volume get` | ◑ | ✓ |  |
 | `pve storage volume set` | — | ✓ |  |
-| `pve task cluster-list` | — | — | **uncovered** |
-| `pve task list` | — | — | **uncovered** |
-| `pve task log` | — | — | **uncovered** |
-| `pve task status` | — | — | **uncovered** |
-| `pve task stop` | — | — | **uncovered** |
-| `pve task wait` | — | — | **uncovered** |
-
-## `qemu`
-
-| Leaf | e2e | mutate | Notes |
-|------|-----|--------|-------|
-| `qemu agent` | — | ✓ |  |
-| `qemu migrate` | ✓ | ✓ |  |
+| `pve task cluster-list` | ✓ | — |  |
+| `pve task list` | ✓ | — |  |
+| `pve task log` | ◑ | — |  |
+| `pve task status` | ◑ | — |  |
+| `pve task stop` | — | ✓ |  |
+| `pve task wait` | — | ✓ |  |
 
 ## `rsync`
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `rsync` | — | ✓ |  |
+| `rsync` | — | — | deferred — transfers files to/from a live node over SSH, so it cannot be driven head-less by the read-only sweep; shares the `pmx node rsync` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
 
 ## `ssh`
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `ssh` | — | ✓ |  |
+| `ssh` | — | — | deferred — opens a live SSH session on the resolved node, so it cannot be driven head-less by the read-only sweep; shares the `pmx node ssh` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
 
 ## `version`
 
@@ -1385,7 +1367,7 @@ Leaves exercised by neither suite. These are genuine coverage gaps — candidate
 
 **`pdm`** (145) — `pdm acl ls`, `pdm auto-install installation ls`, `pdm auto-install prepared show`, `pdm auto-install token ls`, `pdm auto-install token update`, `pdm ceph flags`, `pdm ceph fs`, `pdm ceph mds`, `pdm ceph mgr`, `pdm ceph mon`, `pdm ceph osd-tree`, `pdm ceph pools`, `pdm ceph status`, `pdm ceph summary`, `pdm config acme account ls`, `pdm config acme account show`, `pdm config acme challenge-schema ls`, `pdm config acme directories ls`, `pdm config acme plugin ls`, `pdm config acme plugin show`, `pdm config acme tos show`, `pdm config certificate show`, `pdm config notes show`, `pdm config view show`, `pdm config webauthn show`, `pdm node apt changelog`, `pdm node apt repositories`, `pdm node apt repository change`, `pdm node apt updates`, `pdm node apt versions`, `pdm node certificate info`, `pdm node config show`, `pdm node dns show`, `pdm node journal`, `pdm node network ls`, `pdm node network show`, `pdm node report`, `pdm node rrddata`, `pdm node sdn vnet mac-vrf`, `pdm node sdn zone ip-vrf`, `pdm node status`, `pdm node subscription show`, `pdm node syslog`, `pdm node task log`, `pdm node task ls`, `pdm node task status`, `pdm node time show`, `pdm pbs datastore ls`, `pdm pbs datastore namespaces`, `pdm pbs datastore rrddata`, `pdm pbs datastore snapshots`, `pdm pbs node apt changelog`, `pdm pbs node apt repositories`, `pdm pbs node apt update-database`, `pdm pbs node apt updates`, `pdm pbs node subscription`, `pdm pbs probe-tls`, `pdm pbs realms`, `pdm pbs rrddata`, `pdm pbs scan`, `pdm pbs status`, `pdm pbs task log`, `pdm pbs task ls`, `pdm pbs task status`, `pdm pbs task stop`, `pdm pve cluster next-id`, `pdm pve cluster resources`, `pdm pve cluster status`, `pdm pve firewall options show`, `pdm pve firewall rules`, `pdm pve firewall show`, `pdm pve lxc config`, `pdm pve lxc firewall options show`, `pdm pve lxc firewall options update`, `pdm pve lxc firewall rules`, `pdm pve lxc ls`, `pdm pve lxc pending`, `pdm pve lxc rrddata`, `pdm pve lxc snapshot ls`, `pdm pve lxc status`, `pdm pve node apt changelog`, `pdm pve node apt repositories`, `pdm pve node apt update-database`, `pdm pve node apt updates`, `pdm pve node config`, `pdm pve node firewall options show`, `pdm pve node firewall options update`, `pdm pve node firewall rules`, `pdm pve node firewall status`, `pdm pve node ls`, `pdm pve node network`, `pdm pve node rrddata`, `pdm pve node sdn vnet mac-vrf`, `pdm pve node sdn zone ip-vrf`, `pdm pve node status`, `pdm pve node subscription`, `pdm pve options`, `pdm pve qemu config`, `pdm pve qemu firewall options show`, `pdm pve qemu firewall options update`, `pdm pve qemu firewall rules`, `pdm pve qemu ls`, `pdm pve qemu migrate-preconditions`, `pdm pve qemu pending`, `pdm pve qemu rrddata`, `pdm pve qemu snapshot ls`, `pdm pve qemu status`, `pdm pve realms`, `pdm pve storage ls`, `pdm pve storage rrddata`, `pdm pve storage status`, `pdm pve task log`, `pdm pve task ls`, `pdm pve task status`, `pdm pve updates`, `pdm realm ad ls`, `pdm realm ad show`, `pdm realm ldap ls`, `pdm realm ldap show`, `pdm realm openid ls`, `pdm realm openid show`, `pdm realm pam show`, `pdm realm pdm show`, `pdm remote metric-collection status`, `pdm remote rrddata`, `pdm remote show`, `pdm remote task ls`, `pdm remote task refresh`, `pdm remote task statistics`, `pdm remote updates summary`, `pdm remote version`, `pdm resource subscription`, `pdm resource top-entities`, `pdm sdn controller ls`, `pdm sdn vnet add`, `pdm sdn vnet ls`, `pdm sdn zone add`, `pdm sdn zone ls`, `pdm subscription key show`, `pdm subscription node-status`, `pdm tfa ls`, `pdm tfa show`, `pdm token ls`, `pdm token show`, `pdm user show`
 
-**`pve`** (463) — `pve access acl list`, `pve access domain list`, `pve access group create`, `pve access group delete`, `pve access group get`, `pve access group list`, `pve access group set`, `pve access openid list`, `pve access password set`, `pve access permissions`, `pve access role list`, `pve access tfa delete`, `pve access tfa get`, `pve access tfa get-entry`, `pve access tfa list`, `pve access tfa types`, `pve access user delete`, `pve access user list`, `pve access user token delete`, `pve cluster acme account create`, `pve cluster acme account delete`, `pve cluster acme account get`, `pve cluster acme account list`, `pve cluster acme account set`, `pve cluster acme challenge-schema`, `pve cluster acme directories`, `pve cluster acme plugin delete`, `pve cluster backup included-volumes`, `pve cluster backup-info not-backed-up`, `pve cluster bulk migrate`, `pve cluster ceph flags get`, `pve cluster ceph flags list`, `pve cluster ceph flags set`, `pve cluster ceph flags set-all`, `pve cluster ceph metadata`, `pve cluster ceph status`, `pve cluster config apiversion`, `pve cluster config create`, `pve cluster config join add`, `pve cluster config join list`, `pve cluster config nodes add`, `pve cluster config nodes delete`, `pve cluster config nodes list`, `pve cluster config qdevice`, `pve cluster config totem`, `pve cluster firewall alias create`, `pve cluster firewall alias delete`, `pve cluster firewall alias get`, `pve cluster firewall alias list`, `pve cluster firewall alias update`, `pve cluster firewall group get`, `pve cluster firewall ipset add`, `pve cluster firewall ipset create`, `pve cluster firewall ipset delete`, `pve cluster firewall ipset get`, `pve cluster firewall ipset list`, `pve cluster firewall ipset remove`, `pve cluster firewall macros list`, `pve cluster firewall options describe`, `pve cluster firewall options get`, `pve cluster firewall options set`, `pve cluster firewall refs list`, `pve cluster firewall rules create`, `pve cluster firewall rules delete`, `pve cluster firewall rules get`, `pve cluster firewall rules list`, `pve cluster firewall rules update`, `pve cluster ha resource relocate`, `pve cluster ha status arm`, `pve cluster ha status current`, `pve cluster ha status disarm`, `pve cluster ha status manager`, `pve cluster jobs schedule-analyze`, `pve cluster log`, `pve cluster mapping pci list`, `pve cluster mapping usb list`, `pve cluster metrics export`, `pve cluster next-id`, `pve cluster notifications endpoints`, `pve cluster notifications matcher list`, `pve cluster notifications matcher-field-values`, `pve cluster notifications matcher-fields`, `pve cluster options describe`, `pve cluster options get`, `pve cluster options set`, `pve cluster qemu cpu-flags`, `pve cluster replication get`, `pve cluster replication list`, `pve cluster resources`, `pve cluster status`, `pve cluster tasks`, `pve lxc clone`, `pve lxc config describe`, `pve lxc config get`, `pve lxc config pending`, `pve lxc config set`, `pve lxc console`, `pve lxc create`, `pve lxc delete`, `pve lxc disk move`, `pve lxc disk resize`, `pve lxc feature`, `pve lxc firewall alias create`, `pve lxc firewall alias delete`, `pve lxc firewall alias get`, `pve lxc firewall alias list`, `pve lxc firewall alias update`, `pve lxc firewall ipset add`, `pve lxc firewall ipset create`, `pve lxc firewall ipset delete`, `pve lxc firewall ipset get-member`, `pve lxc firewall ipset list`, `pve lxc firewall ipset remove`, `pve lxc firewall ipset update-member`, `pve lxc firewall log`, `pve lxc firewall options describe`, `pve lxc firewall options get`, `pve lxc firewall options set`, `pve lxc firewall refs`, `pve lxc firewall rules create`, `pve lxc firewall rules delete`, `pve lxc firewall rules get`, `pve lxc firewall rules list`, `pve lxc firewall rules update`, `pve lxc interfaces`, `pve lxc list`, `pve lxc metrics`, `pve lxc migrate check`, `pve lxc permissions effective`, `pve lxc permissions grant`, `pve lxc permissions list`, `pve lxc permissions revoke`, `pve lxc reboot`, `pve lxc remote-migrate`, `pve lxc resume`, `pve lxc rrd`, `pve lxc security caps add`, `pve lxc security caps describe`, `pve lxc security caps remove`, `pve lxc security caps reset`, `pve lxc security caps set`, `pve lxc security caps show`, `pve lxc security features set`, `pve lxc security features show`, `pve lxc security list`, `pve lxc security show`, `pve lxc shutdown`, `pve lxc snapshot create`, `pve lxc snapshot delete`, `pve lxc snapshot list`, `pve lxc snapshot rollback`, `pve lxc snapshot show`, `pve lxc snapshot update`, `pve lxc start`, `pve lxc status`, `pve lxc stop`, `pve lxc suspend`, `pve lxc template list`, `pve lxc to-template`, `pve node apt changelog`, `pve node apt list`, `pve node apt repositories add`, `pve node apt repositories enable`, `pve node apt repositories list`, `pve node apt templates download`, `pve node apt templates list`, `pve node apt update`, `pve node apt versions`, `pve node capabilities qemu cpu`, `pve node capabilities qemu cpu-flags`, `pve node capabilities qemu machines`, `pve node capabilities qemu migration`, `pve node ceph cfg db`, `pve node ceph cfg index`, `pve node ceph cfg raw`, `pve node ceph cfg value`, `pve node ceph cmd-safety`, `pve node ceph crush`, `pve node ceph fs create`, `pve node ceph fs delete`, `pve node ceph fs list`, `pve node ceph init`, `pve node ceph log`, `pve node ceph mds create`, `pve node ceph mds delete`, `pve node ceph mds list`, `pve node ceph mgr create`, `pve node ceph mgr delete`, `pve node ceph mgr list`, `pve node ceph mon create`, `pve node ceph mon delete`, `pve node ceph mon list`, `pve node ceph osd create`, `pve node ceph osd delete`, `pve node ceph osd get`, `pve node ceph osd in`, `pve node ceph osd list`, `pve node ceph osd lv-info`, `pve node ceph osd metadata`, `pve node ceph osd out`, `pve node ceph osd scrub`, `pve node ceph pool create`, `pve node ceph pool delete`, `pve node ceph pool get`, `pve node ceph pool list`, `pve node ceph pool set`, `pve node ceph pool status`, `pve node ceph restart`, `pve node ceph rules`, `pve node ceph start`, `pve node ceph status`, `pve node ceph stop`, `pve node cert acme delete`, `pve node cert acme list`, `pve node cert acme order`, `pve node cert acme renew`, `pve node cert custom delete`, `pve node cert custom upload`, `pve node cert list`, `pve node config describe`, `pve node config get`, `pve node config set`, `pve node console`, `pve node disks get zfs`, `pve node disks list`, `pve node disks ls directory`, `pve node disks ls lvm`, `pve node disks ls lvmthin`, `pve node disks ls zfs`, `pve node disks smart`, `pve node disks wipe`, `pve node dns get`, `pve node dns set`, `pve node exec`, `pve node execute`, `pve node firewall log`, `pve node firewall options describe`, `pve node firewall options get`, `pve node firewall options set`, `pve node firewall rules create`, `pve node firewall rules delete`, `pve node firewall rules get`, `pve node firewall rules list`, `pve node firewall rules update`, `pve node hardware mdev`, `pve node hardware pci`, `pve node hardware usb`, `pve node journal`, `pve node list`, `pve node migrateall`, `pve node netstat`, `pve node network apply`, `pve node network create`, `pve node network delete`, `pve node network get`, `pve node network list`, `pve node network revert`, `pve node permissions effective`, `pve node permissions grant`, `pve node permissions list`, `pve node permissions revoke`, `pve node reboot`, `pve node replication get`, `pve node replication list`, `pve node replication log`, `pve node replication run`, `pve node replication status`, `pve node report`, `pve node rrddata`, `pve node rsync`, `pve node scan lvm`, `pve node scan lvmthin`, `pve node scan zfs`, `pve node services get`, `pve node services list`, `pve node services reload`, `pve node services restart`, `pve node services start`, `pve node services state`, `pve node services stop`, `pve node shell`, `pve node shutdown`, `pve node spiceshell`, `pve node ssh`, `pve node status`, `pve node subscription delete`, `pve node subscription get`, `pve node subscription set`, `pve node subscription update`, `pve node syslog`, `pve node task list`, `pve node task log`, `pve node task status`, `pve node task stop`, `pve node task wait`, `pve node termproxy`, `pve node vncshell`, `pve node vzdump defaults`, `pve node vzdump extract-config`, `pve node wakeonlan`, `pve pool create`, `pve pool delete`, `pve pool get`, `pve pool list`, `pve pool permissions effective`, `pve pool permissions grant`, `pve pool permissions list`, `pve pool permissions revoke`, `pve pool set`, `pve pool show`, `pve qemu agent exec`, `pve qemu agent exec-status`, `pve qemu agent file-read`, `pve qemu agent file-write`, `pve qemu agent set-user-password`, `pve qemu clone`, `pve qemu config describe`, `pve qemu config get`, `pve qemu config pending`, `pve qemu config set`, `pve qemu console`, `pve qemu cpu list`, `pve qemu cpu-flags`, `pve qemu create`, `pve qemu delete`, `pve qemu disk move`, `pve qemu disk resize`, `pve qemu feature`, `pve qemu firewall alias create`, `pve qemu firewall alias delete`, `pve qemu firewall alias get`, `pve qemu firewall alias list`, `pve qemu firewall alias update`, `pve qemu firewall ipset add`, `pve qemu firewall ipset create`, `pve qemu firewall ipset delete`, `pve qemu firewall ipset get-member`, `pve qemu firewall ipset list`, `pve qemu firewall ipset remove`, `pve qemu firewall ipset update-member`, `pve qemu firewall log`, `pve qemu firewall options describe`, `pve qemu firewall options get`, `pve qemu firewall options set`, `pve qemu firewall refs`, `pve qemu firewall rules create`, `pve qemu firewall rules delete`, `pve qemu firewall rules get`, `pve qemu firewall rules list`, `pve qemu firewall rules update`, `pve qemu list`, `pve qemu machine list`, `pve qemu metrics`, `pve qemu migrate capabilities`, `pve qemu migrate check`, `pve qemu permissions effective`, `pve qemu permissions grant`, `pve qemu permissions list`, `pve qemu permissions revoke`, `pve qemu reboot`, `pve qemu remote-migrate`, `pve qemu reset`, `pve qemu resume`, `pve qemu rrd`, `pve qemu security agent set`, `pve qemu security agent show`, `pve qemu security confidential clear`, `pve qemu security confidential set`, `pve qemu security confidential show`, `pve qemu security cpu-flags describe`, `pve qemu security cpu-flags set`, `pve qemu security cpu-flags show`, `pve qemu security list`, `pve qemu security nic firewall`, `pve qemu security nic show`, `pve qemu security protection disable`, `pve qemu security protection enable`, `pve qemu security secureboot enable`, `pve qemu security secureboot show`, `pve qemu security show`, `pve qemu security tpm add`, `pve qemu security tpm remove`, `pve qemu security tpm show`, `pve qemu shutdown`, `pve qemu snapshot create`, `pve qemu snapshot delete`, `pve qemu snapshot list`, `pve qemu snapshot rollback`, `pve qemu snapshot show`, `pve qemu snapshot update`, `pve qemu ssh`, `pve qemu start`, `pve qemu status`, `pve qemu stop`, `pve qemu suspend`, `pve sdn controller list`, `pve sdn dns get`, `pve sdn dns list`, `pve sdn dns set`, `pve sdn dry-run`, `pve sdn fabric list`, `pve sdn fabric list-all`, `pve sdn fabric node list`, `pve sdn ipam set`, `pve sdn ipam status`, `pve sdn prefix-list list`, `pve sdn rollback`, `pve sdn route-map entry list`, `pve sdn route-map list`, `pve sdn status fabrics interfaces`, `pve sdn status fabrics neighbors`, `pve sdn status fabrics routes`, `pve sdn subnet list`, `pve sdn subnet show`, `pve sdn vnet firewall options describe`, `pve sdn vnet firewall options get`, `pve sdn vnet firewall options set`, `pve sdn vnet firewall rules create`, `pve sdn vnet firewall rules delete`, `pve sdn vnet firewall rules get`, `pve sdn vnet firewall rules list`, `pve sdn vnet firewall rules set`, `pve sdn vnet list`, `pve sdn vnet permissions effective`, `pve sdn vnet permissions grant`, `pve sdn vnet permissions list`, `pve sdn vnet permissions revoke`, `pve sdn vnet show`, `pve sdn zone list`, `pve sdn zone permissions effective`, `pve sdn zone permissions grant`, `pve sdn zone permissions list`, `pve sdn zone permissions revoke`, `pve sdn zone show`, `pve storage aplinfo download`, `pve storage aplinfo list`, `pve storage content`, `pve storage create`, `pve storage delete`, `pve storage describe`, `pve storage file-restore download`, `pve storage file-restore list`, `pve storage get`, `pve storage identity`, `pve storage list`, `pve storage node-list`, `pve storage oci-pull`, `pve storage permissions effective`, `pve storage permissions grant`, `pve storage permissions list`, `pve storage permissions revoke`, `pve storage rrd`, `pve storage rrddata`, `pve storage set`, `pve storage status`, `pve storage upload`, `pve storage volume copy`, `pve task cluster-list`, `pve task list`, `pve task log`, `pve task status`, `pve task stop`, `pve task wait`
+**`pve`** (1) — `pve cluster replication get`
 
 ## Running the suites
 
