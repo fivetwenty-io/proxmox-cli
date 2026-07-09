@@ -18,7 +18,7 @@ def run(ctx: Ctx) -> None:
     def is_list(res: CmdResult) -> str | None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
 
-    lst = ctx.check("list", "pool", "list", validate=is_list)
+    lst = ctx.check("list", "pve", "pool", "list", validate=is_list)
 
     pid = None
     if lst.rc == 0:
@@ -33,10 +33,10 @@ def run(ctx: Ctx) -> None:
         ctx.skip("permissions list", "no pool defined")
         ctx.skip("permissions effective", "no pool defined")
     else:
-        ctx.check("get", "pool", "get", str(pid))
+        ctx.check("get", "pve", "pool", "get", str(pid))
         # show: the deprecated-but-still-live single-item endpoint
         # (GET /pools/{poolid}), distinct from `get`'s list-filtered endpoint.
-        ctx.check("show", "pool", "show", str(pid))
+        ctx.check("show", "pve", "pool", "show", str(pid))
 
         # permissions: ACL entries scoped to the pool's singular /pool/{poolid}
         # path (note: singular "pool", unlike the "pools" object tree noun).
@@ -44,9 +44,9 @@ def run(ctx: Ctx) -> None:
         def has_permissions_effective(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
-        ctx.check("permissions list", "pool", "permissions", "list", str(pid),
+        ctx.check("permissions list", "pve", "pool", "permissions", "list", str(pid),
                   validate=is_list)
-        ctx.check("permissions effective", "pool", "permissions", "effective", str(pid),
+        ctx.check("permissions effective", "pve", "pool", "permissions", "effective", str(pid),
                   validate=has_permissions_effective)
 
     # The mutate phase provisions the `pmx-cli` pool and deletes it in teardown,
@@ -54,12 +54,12 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "create",
         "creates a resource pool — covered live by `e2e --mutate`",
-        f"pmx pool create {Isolation.POOL}",
+        f"pmx pve pool create {Isolation.POOL}",
         isolation=True, live_covered=True,
     )
-    ctx.defer("set", "modifies pool members/comment", f"pmx pool set {Isolation.POOL} ...")
+    ctx.defer("set", "modifies pool members/comment", f"pmx pve pool set {Isolation.POOL} ...")
     ctx.defer("delete", "deletes a resource pool — covered live by `e2e --mutate`",
-              f"pmx pool delete {Isolation.POOL}", isolation=True, live_covered=True)
+              f"pmx pve pool delete {Isolation.POOL}", isolation=True, live_covered=True)
     # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
     # mutate phase. `permissions list`/`effective` above are read-only and
     # exercised live.
@@ -67,11 +67,11 @@ def run(ctx: Ctx) -> None:
         "permissions grant",
         "grants ACL roles on the pool's singular /pool/{poolid} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx pool permissions grant <poolid> --roles PVEPoolAdmin --users alice@pve",
+        "pmx pve pool permissions grant <poolid> --roles PVEPoolAdmin --users alice@pve",
     )
     ctx.defer(
         "permissions revoke",
         "revokes ACL roles on the pool's singular /pool/{poolid} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx pool permissions revoke <poolid> --roles PVEPoolAdmin --users alice@pve",
+        "pmx pve pool permissions revoke <poolid> --roles PVEPoolAdmin --users alice@pve",
     )

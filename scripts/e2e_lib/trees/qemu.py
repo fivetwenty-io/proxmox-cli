@@ -17,11 +17,11 @@ DESCRIPTION = "Manage QEMU virtual machines"
 def run(ctx: Ctx) -> None:
     # config/firewall-options describe: offline schema catalogs — no API call,
     # so they run even before node discovery.
-    ctx.check("config describe", "qemu", "config", "describe")
-    ctx.check("firewall options describe", "qemu", "firewall", "options", "describe")
+    ctx.check("config describe", "pve", "qemu", "config", "describe")
+    ctx.check("firewall options describe", "pve", "qemu", "firewall", "options", "describe")
     # security cpu-flags describe: offline mitigation-flag catalog — no API
     # call, so it runs alongside the other offline schema catalogs.
-    ctx.check("security cpu-flags describe", "qemu", "security", "cpu-flags", "describe")
+    ctx.check("security cpu-flags describe", "pve", "qemu", "security", "cpu-flags", "describe")
 
     n = ctx.node
     if not n:
@@ -31,7 +31,7 @@ def run(ctx: Ctx) -> None:
     def is_list(res: CmdResult) -> str | None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
 
-    lst = ctx.check("list", "qemu", "list", node=n, validate=is_list)
+    lst = ctx.check("list", "pve", "qemu", "list", node=n, validate=is_list)
 
     vmid = None
     if lst.rc == 0:
@@ -73,11 +73,11 @@ def run(ctx: Ctx) -> None:
         ctx.skip("cloudinit pending", "no VM on node")
     else:
         vid = str(vmid)
-        ctx.check("status", "qemu", "status", vid, node=n, validate=has_status)
-        ctx.check("config get", "qemu", "config", "get", vid, node=n)
+        ctx.check("status", "pve", "qemu", "status", vid, node=n, validate=has_status)
+        ctx.check("config get", "pve", "qemu", "config", "get", vid, node=n)
 
         # metrics: rrd timeseries for a guest; zero-row result is a valid list.
-        ctx.check("metrics", "qemu", "metrics", vid, "--timeframe", "hour",
+        ctx.check("metrics", "pve", "qemu", "metrics", vid, "--timeframe", "hour",
                   node=n, validate=is_list)
 
         # rrd: rrd PNG image reference; always returns a filename object.
@@ -89,7 +89,7 @@ def run(ctx: Ctx) -> None:
                 return "rrd response missing 'filename' key"
             return None
 
-        ctx.check("rrd", "qemu", "rrd", vid, "--ds", "cpu", "--timeframe", "hour",
+        ctx.check("rrd", "pve", "qemu", "rrd", vid, "--ds", "cpu", "--timeframe", "hour",
                   node=n, validate=has_filename)
 
         # feature: whether the guest supports a named feature (clone is always safe).
@@ -101,13 +101,13 @@ def run(ctx: Ctx) -> None:
                 return "feature response missing 'hasFeature' key"
             return None
 
-        ctx.check("feature", "qemu", "feature", vid, "--feature", "clone",
+        ctx.check("feature", "pve", "qemu", "feature", vid, "--feature", "clone",
                   node=n, validate=has_feature)
 
-        ctx.check("snapshot list", "qemu", "snapshot", "list", vid, node=n)
+        ctx.check("snapshot list", "pve", "qemu", "snapshot", "list", vid, node=n)
 
         # snapshot show: discover a real snapshot name, skip when none exists.
-        snap_res = ctx.run("qemu", "snapshot", "list", vid, node=n)
+        snap_res = ctx.run("pve", "qemu", "snapshot", "list", vid, node=n)
         snap_name = None
         if snap_res.rc == 0:
             try:
@@ -120,7 +120,7 @@ def run(ctx: Ctx) -> None:
             except (ValueError, KeyError):
                 snap_name = None
         if snap_name:
-            ctx.check("snapshot show", "qemu", "snapshot", "show", vid, snap_name, node=n)
+            ctx.check("snapshot show", "pve", "qemu", "snapshot", "show", vid, snap_name, node=n)
         else:
             ctx.skip("snapshot show", "no snapshot found on the discovered VM")
 
@@ -130,23 +130,23 @@ def run(ctx: Ctx) -> None:
         def is_migrate_check(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
-        ctx.check("migrate check", "qemu", "migrate", "check", vid,
+        ctx.check("migrate check", "pve", "qemu", "migrate", "check", vid,
                   node=n, validate=is_migrate_check)
 
         # Firewall reads are non-mutating: safe against any existing VM.
-        ctx.check("firewall rules list", "qemu", "firewall", "rules", "list", vid,
+        ctx.check("firewall rules list", "pve", "qemu", "firewall", "rules", "list", vid,
                   node=n, validate=is_list)
-        ctx.check("firewall options get", "qemu", "firewall", "options", "get", vid, node=n)
-        ctx.check("firewall log", "qemu", "firewall", "log", vid, node=n)
-        ctx.check("firewall refs", "qemu", "firewall", "refs", vid, node=n, validate=is_list)
+        ctx.check("firewall options get", "pve", "qemu", "firewall", "options", "get", vid, node=n)
+        ctx.check("firewall log", "pve", "qemu", "firewall", "log", vid, node=n)
+        ctx.check("firewall refs", "pve", "qemu", "firewall", "refs", vid, node=n, validate=is_list)
         # Requesting a VNC proxy ticket is non-disruptive — it spawns an
         # ephemeral proxy the same way the web GUI does and changes no VM state.
-        ctx.check("console vnc ticket", "qemu", "console", vid, "--type", "vnc",
+        ctx.check("console vnc ticket", "pve", "qemu", "console", vid, "--type", "vnc",
                   node=n, validate=has_ticket)
         # cloud-init pending reads the VM's current vs pending cloud-init config.
         # It is non-mutating and returns an array whether or not the VM carries a
         # cloud-init drive, so it is safe against any existing VM.
-        ctx.check("cloudinit pending", "qemu", "cloudinit", "pending", vid,
+        ctx.check("cloudinit pending", "pve", "qemu", "cloudinit", "pending", vid,
                   node=n, validate=is_list)
 
         # security posture reads: all API-only, gated on a discovered VM so the
@@ -194,22 +194,22 @@ def run(ctx: Ctx) -> None:
                 return "expected a JSON object"
             return None if "enabled" in data else "cpu-flags posture missing 'enabled' key"
 
-        ctx.check("security show", "qemu", "security", "show", vid,
+        ctx.check("security show", "pve", "qemu", "security", "show", vid,
                   node=n, validate=has_security_posture)
         # list is a cluster resources scan plus one config read per VM; an
         # empty cluster still returns a valid (possibly empty) array.
-        ctx.check("security list", "qemu", "security", "list", node=n, validate=is_list)
-        ctx.check("security agent show", "qemu", "security", "agent", "show", vid,
+        ctx.check("security list", "pve", "qemu", "security", "list", node=n, validate=is_list)
+        ctx.check("security agent show", "pve", "qemu", "security", "agent", "show", vid,
                   node=n, validate=has_agent_posture)
-        ctx.check("security secureboot show", "qemu", "security", "secureboot", "show", vid,
+        ctx.check("security secureboot show", "pve", "qemu", "security", "secureboot", "show", vid,
                   node=n, validate=has_boot_posture)
-        ctx.check("security tpm show", "qemu", "security", "tpm", "show", vid,
+        ctx.check("security tpm show", "pve", "qemu", "security", "tpm", "show", vid,
                   node=n, validate=has_tpm_posture)
-        ctx.check("security confidential show", "qemu", "security", "confidential", "show", vid,
+        ctx.check("security confidential show", "pve", "qemu", "security", "confidential", "show", vid,
                   node=n, validate=has_confidential_posture)
-        ctx.check("security cpu-flags show", "qemu", "security", "cpu-flags", "show", vid,
+        ctx.check("security cpu-flags show", "pve", "qemu", "security", "cpu-flags", "show", vid,
                   node=n, validate=has_cpuflags_posture)
-        ctx.check("security nic show", "qemu", "security", "nic", "show", vid,
+        ctx.check("security nic show", "pve", "qemu", "security", "nic", "show", vid,
                   node=n, validate=is_list)
 
         # permissions: ACL entries scoped to the VM's /vms/{vmid} path (shared
@@ -219,17 +219,17 @@ def run(ctx: Ctx) -> None:
         def has_permissions_effective(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
-        ctx.check("permissions list", "qemu", "permissions", "list", vid,
+        ctx.check("permissions list", "pve", "qemu", "permissions", "list", vid,
                   node=n, validate=is_list)
-        ctx.check("permissions effective", "qemu", "permissions", "effective", vid,
+        ctx.check("permissions effective", "pve", "qemu", "permissions", "effective", vid,
                   node=n, validate=has_permissions_effective)
 
     # QEMU capability queries are node-scoped and always safe: they report the
     # CPU models, CPU flags, and machine types the node's QEMU binary can offer
     # guests, independent of whether any VM exists.
-    ctx.check("cpu list", "qemu", "cpu", "list", node=n, validate=is_list)
-    ctx.check("cpu-flags", "qemu", "cpu-flags", node=n, validate=is_list)
-    ctx.check("machine list", "qemu", "machine", "list", node=n, validate=is_list)
+    ctx.check("cpu list", "pve", "qemu", "cpu", "list", node=n, validate=is_list)
+    ctx.check("cpu-flags", "pve", "qemu", "cpu-flags", node=n, validate=is_list)
+    ctx.check("machine list", "pve", "qemu", "machine", "list", node=n, validate=is_list)
 
     # migrate capabilities: node-scoped QEMU migration feature report,
     # independent of whether any VM exists (mirrors `pmx node capabilities
@@ -240,24 +240,24 @@ def run(ctx: Ctx) -> None:
             return "expected a JSON object"
         return None if "has-dbus-vmstate" in data else "capabilities response missing 'has-dbus-vmstate' key"
 
-    ctx.check("migrate capabilities", "qemu", "migrate", "capabilities",
+    ctx.check("migrate capabilities", "pve", "qemu", "migrate", "capabilities",
               node=n, validate=has_migrate_capabilities)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
-    ctx.check("clone --help", "qemu", "clone", "--help", fmt="")
-    ctx.check("migrate --help", "qemu", "migrate", "--help", fmt="")
-    ctx.check("disk resize --help", "qemu", "disk", "resize", "--help", fmt="")
-    ctx.check("disk move --help", "qemu", "disk", "move", "--help", fmt="")
-    ctx.check("disk unlink --help", "qemu", "disk", "unlink", "--help", fmt="")
-    ctx.check("firewall rules create --help", "qemu", "firewall", "rules", "create", "--help", fmt="")
-    ctx.check("firewall ipset add --help", "qemu", "firewall", "ipset", "add", "--help", fmt="")
-    ctx.check("firewall alias create --help", "qemu", "firewall", "alias", "create", "--help", fmt="")
-    ctx.check("firewall options set --help", "qemu", "firewall", "options", "set", "--help", fmt="")
-    ctx.check("console --help", "qemu", "console", "--help", fmt="")
-    ctx.check("agent --help", "qemu", "agent", "--help", fmt="")
-    ctx.check("cloudinit dump --help", "qemu", "cloudinit", "dump", "--help", fmt="")
-    ctx.check("cloudinit update --help", "qemu", "cloudinit", "update", "--help", fmt="")
-    ctx.check("template --help", "qemu", "template", "--help", fmt="")
+    ctx.check("clone --help", "pve", "qemu", "clone", "--help", fmt="")
+    ctx.check("migrate --help", "pve", "qemu", "migrate", "--help", fmt="")
+    ctx.check("disk resize --help", "pve", "qemu", "disk", "resize", "--help", fmt="")
+    ctx.check("disk move --help", "pve", "qemu", "disk", "move", "--help", fmt="")
+    ctx.check("disk unlink --help", "pve", "qemu", "disk", "unlink", "--help", fmt="")
+    ctx.check("firewall rules create --help", "pve", "qemu", "firewall", "rules", "create", "--help", fmt="")
+    ctx.check("firewall ipset add --help", "pve", "qemu", "firewall", "ipset", "add", "--help", fmt="")
+    ctx.check("firewall alias create --help", "pve", "qemu", "firewall", "alias", "create", "--help", fmt="")
+    ctx.check("firewall options set --help", "pve", "qemu", "firewall", "options", "set", "--help", fmt="")
+    ctx.check("console --help", "pve", "qemu", "console", "--help", fmt="")
+    ctx.check("agent --help", "pve", "qemu", "agent", "--help", fmt="")
+    ctx.check("cloudinit dump --help", "pve", "qemu", "cloudinit", "dump", "--help", fmt="")
+    ctx.check("cloudinit update --help", "pve", "qemu", "cloudinit", "update", "--help", fmt="")
+    ctx.check("template --help", "pve", "qemu", "template", "--help", fmt="")
 
     # The mutating verbs below are not run by the read-only sweep, but are all
     # exercised live on a purpose-built isolated VM by the mutate phase
@@ -267,61 +267,61 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "create",
         "creates a VM — covered live by `e2e --mutate`",
-        f"pmx qemu create ... --pool {Isolation.POOL} --tags {Isolation.TAG}",
+        f"pmx pve qemu create ... --pool {Isolation.POOL} --tags {Isolation.TAG}",
         isolation=True, live_covered=True,
     )
     ctx.defer("start/stop/shutdown/reset/suspend/resume",
               "changes VM power state — covered live by `e2e --mutate`",
-              "pmx qemu start <vmid> --node <node>", isolation=True, live_covered=True)
+              "pmx pve qemu start <vmid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("reboot", "graceful reboot needs a guest OS — covered on the lxc container",
-              "pmx qemu reboot <vmid> --node <node>", isolation=True, live_covered=True)
+              "pmx pve qemu reboot <vmid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("delete", "destroys a VM — covered live by `e2e --mutate`",
-              "pmx qemu delete <vmid> --node <node>", isolation=True, live_covered=True)
+              "pmx pve qemu delete <vmid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("snapshot create/rollback/delete",
               "mutates VM snapshots — covered live by `e2e --mutate`",
-              "pmx qemu snapshot create <vmid> <name>", isolation=True, live_covered=True)
+              "pmx pve qemu snapshot create <vmid> <name>", isolation=True, live_covered=True)
     ctx.defer(
         "clone",
         "clones a VM — covered live by `e2e --mutate`",
-        f"pmx qemu clone <vmid> --newid <id> --pool {Isolation.POOL} --name {Isolation.NAME_PREFIX}clone",
+        f"pmx pve qemu clone <vmid> --newid <id> --pool {Isolation.POOL} --name {Isolation.NAME_PREFIX}clone",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "migrate",
         "migrates a VM to another node — covered live by `e2e --mutate` on multi-node clusters",
-        "pmx qemu migrate <vmid> --target <node>",
+        "pmx pve qemu migrate <vmid> --target <node>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "disk resize/move/unlink",
         "grows, relocates, and detaches VM disks — covered live by `e2e --mutate`",
-        "pmx qemu disk resize <vmid> --disk scsi0 --size +1G",
+        "pmx pve qemu disk resize <vmid> --disk scsi0 --size +1G",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "firewall rules/ipset/alias create-delete + options set",
         "mutates a VM's firewall config — covered live by `e2e --mutate` on the isolated VM",
-        "pmx qemu firewall rules create <vmid> --type in --action ACCEPT --proto tcp --dport 22",
+        "pmx pve qemu firewall rules create <vmid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "console connect (websocket/spice viewer)",
         "opening the proxied console session needs an interactive viewer — the "
         "CLI only returns the ticket, which the read-only sweep validates",
-        "pmx qemu console <vmid> --type spice",
+        "pmx pve qemu console <vmid> --type spice",
     )
     ctx.defer(
         "monitor",
         "sends a raw QEMU monitor command to a running VM — covered live by "
         "`e2e --mutate` (soft-step: info status, which cannot change VM state)",
-        "pmx qemu monitor <vmid> --command 'info status' --yes",
+        "pmx pve qemu monitor <vmid> --command 'info status' --yes",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "sendkey",
         "injects a key event into a running VM's QEMU process (no guest OS "
         "needed) — covered live by `e2e --mutate` with a benign key (ret)",
-        "pmx qemu sendkey <vmid> --key ret",
+        "pmx pve qemu sendkey <vmid> --key ret",
         isolation=True, live_covered=True,
     )
     ctx.defer(
@@ -329,7 +329,7 @@ def run(ctx: Ctx) -> None:
         "migrates a VM to a different Proxmox VE cluster — requires two live "
         "clusters with shared or compatible storage; no rollback without manual "
         "intervention; not exercised live",
-        "pmx qemu remote-migrate <vmid> --yes --target-endpoint https://remote:8006 "
+        "pmx pve qemu remote-migrate <vmid> --yes --target-endpoint https://remote:8006 "
         "--target-storage local-lvm --target-bridge vmbr0",
         isolation=False, live_covered=False,
     )
@@ -337,7 +337,7 @@ def run(ctx: Ctx) -> None:
         "agent <command>",
         "runs guest-agent verbs (ping/get-*/fstrim/...) — requires a running "
         "guest agent; ping is exercised live (soft) on the isolated VM by `e2e --mutate`",
-        "pmx qemu agent <vmid> ping",
+        "pmx pve qemu agent <vmid> ping",
         isolation=True, live_covered=True,
     )
     # Parameterised guest-agent sub-commands. Each needs a guest running the
@@ -354,28 +354,28 @@ def run(ctx: Ctx) -> None:
         "runs an arbitrary command inside the guest — covered live by `e2e --mutate`, "
         "which boots an isolated VM from an image with qemu-guest-agent baked in and "
         "runs `agent exec id`",
-        "pmx qemu agent exec <vmid> --command 'id'",
+        "pmx pve qemu agent exec <vmid> --command 'id'",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent exec-status",
         "polls a guest exec PID — covered live by `e2e --mutate`, which polls the PID "
         "returned by the preceding `agent exec` on the baked-agent VM",
-        "pmx qemu agent exec-status <vmid> --pid <pid>",
+        "pmx pve qemu agent exec-status <vmid> --pid <pid>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent file-read",
         "reads a file from inside the guest — covered live by `e2e --mutate`, which "
         "reads back the file written by `agent file-write` on the baked-agent VM",
-        "pmx qemu agent file-read <vmid> --file /etc/hostname",
+        "pmx pve qemu agent file-read <vmid> --file /etc/hostname",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "agent file-write",
         "writes a file inside the guest filesystem — covered live by `e2e --mutate`, "
         "which writes a marker file on the baked-agent VM and reads it back",
-        "pmx qemu agent file-write <vmid> --file /tmp/probe --content x",
+        "pmx pve qemu agent file-write <vmid> --file /tmp/probe --content x",
         isolation=True, live_covered=True,
     )
     ctx.defer(
@@ -384,14 +384,14 @@ def run(ctx: Ctx) -> None:
         "echoed or logged), guarded by --yes; covered live by `e2e --mutate`, which "
         "sets root's password on the disposable baked-agent VM via a stdin-piped "
         "throwaway value",
-        "pmx qemu agent set-user-password <vmid> --username <user> --yes",
+        "pmx pve qemu agent set-user-password <vmid> --username <user> --yes",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "cloudinit dump/update",
         "dumps/regenerates the cloud-init drive — exercised live (soft) on the "
         "isolated VM by `e2e --mutate` (skips when the VM has no cloud-init drive)",
-        "pmx qemu cloudinit update <vmid>",
+        "pmx pve qemu cloudinit update <vmid>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
@@ -399,14 +399,14 @@ def run(ctx: Ctx) -> None:
         "converts a VM into a template — irreversible; covered live by `e2e "
         "--mutate` against a dedicated single-purpose isolated VM that is "
         "templated and then destroyed",
-        "pmx qemu template <vmid> --yes",
+        "pmx pve qemu template <vmid> --yes",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "ssh",
         "opens an interactive SSH tunnel into a guest — not automatable head-less, "
         "same class as `node shell`/`node console`; covered by unit tests",
-        "pmx qemu ssh <vmid>",
+        "pmx pve qemu ssh <vmid>",
     )
     # `security` mutations are pure PVE-API read-modify-write operations (no
     # ssh, unlike lxc's capability caps), but the mutate phase does not yet
@@ -416,62 +416,62 @@ def run(ctx: Ctx) -> None:
         "security agent set",
         "sets the guest-agent config option (agent=); not wired into the "
         "mutate phase; covered by unit tests",
-        "pmx qemu security agent set <vmid> --enabled --type virtio",
+        "pmx pve qemu security agent set <vmid> --enabled --type virtio",
     )
     ctx.defer(
         "security secureboot enable",
         "switches firmware to OVMF and allocates an EFI vars disk; not wired "
         "into the mutate phase; covered by unit tests",
-        "pmx qemu security secureboot enable <vmid> --storage local-lvm",
+        "pmx pve qemu security secureboot enable <vmid> --storage local-lvm",
     )
     ctx.defer(
         "security tpm add",
         "allocates a TPM state disk; not wired into the mutate phase; "
         "covered by unit tests",
-        "pmx qemu security tpm add <vmid> --storage local-lvm",
+        "pmx pve qemu security tpm add <vmid> --storage local-lvm",
     )
     ctx.defer(
         "security tpm remove",
         "destroys the TPM state device and every key sealed in it; not "
         "wired into the mutate phase; covered by unit tests",
-        "pmx qemu security tpm remove <vmid> --force",
+        "pmx pve qemu security tpm remove <vmid> --force",
     )
     ctx.defer(
         "security confidential set",
         "configures AMD SEV / Intel TDX memory encryption, which needs "
         "matching host CPU/firmware support; not wired into the mutate "
         "phase; covered by unit tests",
-        "pmx qemu security confidential set <vmid> --sev std",
+        "pmx pve qemu security confidential set <vmid> --sev std",
     )
     ctx.defer(
         "security confidential clear",
         "removes the confidential-computing configuration; not wired into "
         "the mutate phase; covered by unit tests",
-        "pmx qemu security confidential clear <vmid>",
+        "pmx pve qemu security confidential clear <vmid>",
     )
     ctx.defer(
         "security cpu-flags set",
         "edits the VM's security-relevant CPU flags; not wired into the "
         "mutate phase; covered by unit tests",
-        "pmx qemu security cpu-flags set <vmid> --enable spec-ctrl",
+        "pmx pve qemu security cpu-flags set <vmid> --enable spec-ctrl",
     )
     ctx.defer(
         "security nic firewall",
         "toggles per-NIC firewall coverage; not wired into the mutate "
         "phase; covered by unit tests",
-        "pmx qemu security nic firewall <vmid> --on --all",
+        "pmx pve qemu security nic firewall <vmid> --on --all",
     )
     ctx.defer(
         "security protection enable",
         "sets the VM protection flag; not wired into the mutate phase; "
         "covered by unit tests",
-        "pmx qemu security protection enable <vmid>",
+        "pmx pve qemu security protection enable <vmid>",
     )
     ctx.defer(
         "security protection disable",
         "clears the VM protection flag; not wired into the mutate phase; "
         "covered by unit tests",
-        "pmx qemu security protection disable <vmid>",
+        "pmx pve qemu security protection disable <vmid>",
     )
     # `permissions grant`/`revoke` mutate cluster-wide ACLs (not scoped to the
     # isolated VM's own resources), so they are not wired into the mutate
@@ -481,13 +481,13 @@ def run(ctx: Ctx) -> None:
         "permissions grant",
         "grants ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide "
         "ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx qemu permissions grant <vmid> --roles PVEVMAdmin --users alice@pve",
+        "pmx pve qemu permissions grant <vmid> --roles PVEVMAdmin --users alice@pve",
     )
     ctx.defer(
         "permissions revoke",
         "revokes ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide "
         "ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx qemu permissions revoke <vmid> --roles PVEVMAdmin --users alice@pve",
+        "pmx pve qemu permissions revoke <vmid> --roles PVEVMAdmin --users alice@pve",
     )
     # `firewall alias get` / `firewall ipset get-member` read a single
     # pre-existing entry by name. A fresh lab has none by default, and the
@@ -498,11 +498,11 @@ def run(ctx: Ctx) -> None:
         "firewall alias get",
         "reads a single firewall alias by name — needs a pre-existing alias; "
         "not wired into the mutate phase; covered by unit tests",
-        "pmx qemu firewall alias get <vmid> <name>",
+        "pmx pve qemu firewall alias get <vmid> <name>",
     )
     ctx.defer(
         "firewall ipset get-member",
         "reads a single CIDR entry of an IP set — needs a pre-existing "
         "member; not wired into the mutate phase; covered by unit tests",
-        "pmx qemu firewall ipset get-member <vmid> <name> <cidr>",
+        "pmx pve qemu firewall ipset get-member <vmid> <name> <cidr>",
     )

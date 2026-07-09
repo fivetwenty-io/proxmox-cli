@@ -16,11 +16,11 @@ DESCRIPTION = "Manage LXC containers"
 def run(ctx: Ctx) -> None:
     # config/firewall-options describe: offline schema catalogs — no API call,
     # so they run even before node discovery.
-    ctx.check("config describe", "lxc", "config", "describe")
-    ctx.check("firewall options describe", "lxc", "firewall", "options", "describe")
+    ctx.check("config describe", "pve", "lxc", "config", "describe")
+    ctx.check("firewall options describe", "pve", "lxc", "firewall", "options", "describe")
     # security caps describe: offline capability catalog + preset listing — no
     # API call, so it runs alongside the other offline schema catalogs.
-    ctx.check("security caps describe", "lxc", "security", "caps", "describe")
+    ctx.check("security caps describe", "pve", "lxc", "security", "caps", "describe")
 
     n = ctx.node
     if not n:
@@ -30,8 +30,8 @@ def run(ctx: Ctx) -> None:
     def is_list(res: CmdResult) -> str | None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
 
-    lst = ctx.check("list", "lxc", "list", node=n, validate=is_list)
-    ctx.check("template list", "lxc", "template", "list", node=n, validate=is_list)
+    lst = ctx.check("list", "pve", "lxc", "list", node=n, validate=is_list)
+    ctx.check("template list", "pve", "lxc", "template", "list", node=n, validate=is_list)
 
     ctid = None
     if lst.rc == 0:
@@ -73,16 +73,16 @@ def run(ctx: Ctx) -> None:
         ctx.skip("console vnc ticket", "no container on node")
     else:
         cid = str(ctid)
-        ctx.check("status", "lxc", "status", cid, node=n, validate=has_status)
-        ctx.check("config get", "lxc", "config", "get", cid, node=n)
+        ctx.check("status", "pve", "lxc", "status", cid, node=n, validate=has_status)
+        ctx.check("config get", "pve", "lxc", "config", "get", cid, node=n)
         # config pending reads the diff between current and pending config; it is
         # non-mutating and returns an array on any container (even if no change is
         # staged), so it is safe against any existing container.
-        ctx.check("config pending", "lxc", "config", "pending", cid,
+        ctx.check("config pending", "pve", "lxc", "config", "pending", cid,
                   node=n, validate=is_list)
 
         # metrics: rrd timeseries for a container; zero-row result is a valid list.
-        ctx.check("metrics", "lxc", "metrics", cid, "--timeframe", "hour",
+        ctx.check("metrics", "pve", "lxc", "metrics", cid, "--timeframe", "hour",
                   node=n, validate=is_list)
 
         # rrd: rrd PNG image reference; always returns a filename object.
@@ -94,7 +94,7 @@ def run(ctx: Ctx) -> None:
                 return "rrd response missing 'filename' key"
             return None
 
-        ctx.check("rrd", "lxc", "rrd", cid, "--ds", "cpu", "--timeframe", "hour",
+        ctx.check("rrd", "pve", "lxc", "rrd", cid, "--ds", "cpu", "--timeframe", "hour",
                   node=n, validate=has_filename)
 
         # feature: whether the container supports a named feature (clone is always safe).
@@ -106,13 +106,13 @@ def run(ctx: Ctx) -> None:
                 return "feature response missing 'hasFeature' key"
             return None
 
-        ctx.check("feature", "lxc", "feature", cid, "--feature", "clone",
+        ctx.check("feature", "pve", "lxc", "feature", cid, "--feature", "clone",
                   node=n, validate=has_feature)
 
-        ctx.check("snapshot list", "lxc", "snapshot", "list", cid, node=n)
+        ctx.check("snapshot list", "pve", "lxc", "snapshot", "list", cid, node=n)
 
         # snapshot show: discover a real snapshot name, skip when none exists.
-        snap_res = ctx.run("lxc", "snapshot", "list", cid, node=n)
+        snap_res = ctx.run("pve", "lxc", "snapshot", "list", cid, node=n)
         snap_name = None
         if snap_res.rc == 0:
             try:
@@ -125,7 +125,7 @@ def run(ctx: Ctx) -> None:
             except (ValueError, KeyError):
                 snap_name = None
         if snap_name:
-            ctx.check("snapshot show", "lxc", "snapshot", "show", cid, snap_name, node=n)
+            ctx.check("snapshot show", "pve", "lxc", "snapshot", "show", cid, snap_name, node=n)
         else:
             ctx.skip("snapshot show", "no snapshot found on the discovered container")
 
@@ -135,18 +135,18 @@ def run(ctx: Ctx) -> None:
         def is_migrate_check(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
-        ctx.check("migrate check", "lxc", "migrate", "check", cid,
+        ctx.check("migrate check", "pve", "lxc", "migrate", "check", cid,
                   node=n, validate=is_migrate_check)
         # Read-only firewall inspection: rules list returns an array, and the
         # options object is always present even when the firewall is disabled.
-        ctx.check("firewall rules list", "lxc", "firewall", "rules", "list", cid,
+        ctx.check("firewall rules list", "pve", "lxc", "firewall", "rules", "list", cid,
                   node=n, validate=is_list)
-        ctx.check("firewall options get", "lxc", "firewall", "options", "get", cid, node=n)
-        ctx.check("firewall log", "lxc", "firewall", "log", cid, node=n)
-        ctx.check("firewall refs", "lxc", "firewall", "refs", cid, node=n, validate=is_list)
+        ctx.check("firewall options get", "pve", "lxc", "firewall", "options", "get", cid, node=n)
+        ctx.check("firewall log", "pve", "lxc", "firewall", "log", cid, node=n)
+        ctx.check("firewall refs", "pve", "lxc", "firewall", "refs", cid, node=n, validate=is_list)
         # Requesting a VNC proxy ticket is non-disruptive — it spawns an
         # ephemeral proxy the same way the web GUI does and changes no CT state.
-        ctx.check("console vnc ticket", "lxc", "console", cid, "--type", "vnc",
+        ctx.check("console vnc ticket", "pve", "lxc", "console", cid, "--type", "vnc",
                   node=n, validate=has_ticket)
 
         # security posture reads: all API-only, gated on a discovered container
@@ -174,14 +174,14 @@ def run(ctx: Ctx) -> None:
                 return "expected a JSON object"
             return None if "nesting" in data else "features response missing 'nesting' key"
 
-        ctx.check("security show", "lxc", "security", "show", cid,
+        ctx.check("security show", "pve", "lxc", "security", "show", cid,
                   node=n, validate=has_posture)
         # list is a cluster resources scan plus one config read per container;
         # an empty cluster still returns a valid (possibly empty) array.
-        ctx.check("security list", "lxc", "security", "list", node=n, validate=is_list)
-        ctx.check("security caps show", "lxc", "security", "caps", "show", cid,
+        ctx.check("security list", "pve", "lxc", "security", "list", node=n, validate=is_list)
+        ctx.check("security caps show", "pve", "lxc", "security", "caps", "show", cid,
                   node=n, validate=has_caps_mode)
-        ctx.check("security features show", "lxc", "security", "features", "show", cid,
+        ctx.check("security features show", "pve", "lxc", "security", "features", "show", cid,
                   node=n, validate=has_features)
 
         # permissions: ACL entries scoped to the container's /vms/{vmid} path
@@ -191,9 +191,9 @@ def run(ctx: Ctx) -> None:
         def has_permissions_effective(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
-        ctx.check("permissions list", "lxc", "permissions", "list", cid,
+        ctx.check("permissions list", "pve", "lxc", "permissions", "list", cid,
                   node=n, validate=is_list)
-        ctx.check("permissions effective", "lxc", "permissions", "effective", cid,
+        ctx.check("permissions effective", "pve", "lxc", "permissions", "effective", cid,
                   node=n, validate=has_permissions_effective)
 
     # `interfaces` reads the container's live network namespace, so it only
@@ -209,20 +209,20 @@ def run(ctx: Ctx) -> None:
     if running_cid is None:
         ctx.skip("interfaces", "no running container on node")
     else:
-        ctx.check("interfaces", "lxc", "interfaces", running_cid,
+        ctx.check("interfaces", "pve", "lxc", "interfaces", running_cid,
                   node=n, validate=is_list)
 
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
-    ctx.check("clone --help", "lxc", "clone", "--help", fmt="")
-    ctx.check("migrate --help", "lxc", "migrate", "--help", fmt="")
-    ctx.check("disk resize --help", "lxc", "disk", "resize", "--help", fmt="")
-    ctx.check("disk move --help", "lxc", "disk", "move", "--help", fmt="")
-    ctx.check("firewall rules create --help", "lxc", "firewall", "rules", "create", "--help", fmt="")
-    ctx.check("firewall ipset add --help", "lxc", "firewall", "ipset", "add", "--help", fmt="")
-    ctx.check("firewall alias create --help", "lxc", "firewall", "alias", "create", "--help", fmt="")
-    ctx.check("firewall options set --help", "lxc", "firewall", "options", "set", "--help", fmt="")
-    ctx.check("console --help", "lxc", "console", "--help", fmt="")
-    ctx.check("interfaces --help", "lxc", "interfaces", "--help", fmt="")
+    ctx.check("clone --help", "pve", "lxc", "clone", "--help", fmt="")
+    ctx.check("migrate --help", "pve", "lxc", "migrate", "--help", fmt="")
+    ctx.check("disk resize --help", "pve", "lxc", "disk", "resize", "--help", fmt="")
+    ctx.check("disk move --help", "pve", "lxc", "disk", "move", "--help", fmt="")
+    ctx.check("firewall rules create --help", "pve", "lxc", "firewall", "rules", "create", "--help", fmt="")
+    ctx.check("firewall ipset add --help", "pve", "lxc", "firewall", "ipset", "add", "--help", fmt="")
+    ctx.check("firewall alias create --help", "pve", "lxc", "firewall", "alias", "create", "--help", fmt="")
+    ctx.check("firewall options set --help", "pve", "lxc", "firewall", "options", "set", "--help", fmt="")
+    ctx.check("console --help", "pve", "lxc", "console", "--help", fmt="")
+    ctx.check("interfaces --help", "pve", "lxc", "interfaces", "--help", fmt="")
 
     # Every mutating verb below — including the full power-state matrix and
     # snapshot create/rollback/delete — is exercised live on a purpose-built
@@ -231,58 +231,58 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "create",
         "creates a container — covered live by `e2e --mutate`",
-        f"pmx lxc create ... --pool {Isolation.POOL} --tags {Isolation.TAG}",
+        f"pmx pve lxc create ... --pool {Isolation.POOL} --tags {Isolation.TAG}",
         isolation=True, live_covered=True,
     )
     ctx.defer("start/stop/shutdown/reboot/suspend/resume",
               "changes CT power state — covered live by `e2e --mutate`",
-              "pmx lxc start <ctid> --node <node>", isolation=True, live_covered=True)
+              "pmx pve lxc start <ctid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("delete", "destroys a container — covered live by `e2e --mutate`",
-              "pmx lxc delete <ctid> --node <node>", isolation=True, live_covered=True)
+              "pmx pve lxc delete <ctid> --node <node>", isolation=True, live_covered=True)
     ctx.defer("snapshot create/rollback/delete",
               "mutates CT snapshots — covered live by `e2e --mutate`",
-              "pmx lxc snapshot create <ctid> <name>", isolation=True, live_covered=True)
+              "pmx pve lxc snapshot create <ctid> <name>", isolation=True, live_covered=True)
     ctx.defer(
         "clone",
         "clones a container — covered live by `e2e --mutate`",
-        f"pmx lxc clone <ctid> --newid <id> --pool {Isolation.POOL} --hostname {Isolation.NAME_PREFIX}ctclone",
+        f"pmx pve lxc clone <ctid> --newid <id> --pool {Isolation.POOL} --hostname {Isolation.NAME_PREFIX}ctclone",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "migrate",
         "migrates a container to another node — covered live by `e2e --mutate` on multi-node clusters",
-        "pmx lxc migrate <ctid> --target-node <node>",
+        "pmx pve lxc migrate <ctid> --target-node <node>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "disk resize",
         "grows a container volume — covered live by `e2e --mutate`",
-        "pmx lxc disk resize <ctid> --disk rootfs --size +1G",
+        "pmx pve lxc disk resize <ctid> --disk rootfs --size +1G",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "disk move",
         "relocates a container volume — covered live by `e2e --mutate` when a second rootdir storage exists",
-        "pmx lxc disk move <ctid> --volume rootfs --storage <other>",
+        "pmx pve lxc disk move <ctid> --volume rootfs --storage <other>",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "firewall rules/ipset/alias create-delete + options set",
         "mutates a CT's firewall config — covered live by `e2e --mutate` on the isolated container",
-        "pmx lxc firewall rules create <ctid> --type in --action ACCEPT --proto tcp --dport 22",
+        "pmx pve lxc firewall rules create <ctid> --type in --action ACCEPT --proto tcp --dport 22",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "console connect (websocket/spice viewer)",
         "opening the proxied console session needs an interactive viewer — the "
         "CLI only returns the ticket, which the read-only sweep validates",
-        "pmx lxc console <ctid> --type spice",
+        "pmx pve lxc console <ctid> --type spice",
     )
     ctx.defer(
         "remote-migrate",
         "migrates a container to a different Proxmox VE cluster — requires two "
         "live clusters; no rollback without manual intervention; not exercised live",
-        "pmx lxc remote-migrate <ctid> --yes --target-endpoint https://remote:8006 "
+        "pmx pve lxc remote-migrate <ctid> --yes --target-endpoint https://remote:8006 "
         "--target-storage local-lvm",
         isolation=False, live_covered=False,
     )
@@ -291,7 +291,7 @@ def run(ctx: Ctx) -> None:
         "converts the discovered container into a template — irreversible for that "
         "instance and only sensible as the terminal step of a dedicated throwaway "
         "guest lifecycle; not exercised against a live container; covered by unit tests",
-        "pmx lxc to-template <ctid> --node <node>",
+        "pmx pve lxc to-template <ctid> --node <node>",
         isolation=True, live_covered=False,
     )
     # `security` mutations have no read-only form and are not wired into the
@@ -304,34 +304,34 @@ def run(ctx: Ctx) -> None:
         "rewrites the container capability whitelist in /etc/pve/lxc/<vmid>.conf "
         "over root ssh, so it cannot be driven head-less by the read-only sweep; "
         "not wired into the mutate phase; covered by unit tests",
-        "pmx lxc security caps set <ctid> --preset minimal",
+        "pmx pve lxc security caps set <ctid> --preset minimal",
     )
     ctx.defer(
         "security caps add",
         "grants a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so "
         "it cannot be driven head-less by the read-only sweep; not wired into the "
         "mutate phase; covered by unit tests",
-        "pmx lxc security caps add <ctid> net_admin",
+        "pmx pve lxc security caps add <ctid> net_admin",
     )
     ctx.defer(
         "security caps remove",
         "revokes a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so "
         "it cannot be driven head-less by the read-only sweep; not wired into the "
         "mutate phase; covered by unit tests",
-        "pmx lxc security caps remove <ctid> net_admin",
+        "pmx pve lxc security caps remove <ctid> net_admin",
     )
     ctx.defer(
         "security caps reset",
         "clears the capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, "
         "so it cannot be driven head-less by the read-only sweep; not wired into "
         "the mutate phase; covered by unit tests",
-        "pmx lxc security caps reset <ctid>",
+        "pmx pve lxc security caps reset <ctid>",
     )
     ctx.defer(
         "security features set",
         "mutates the container features= flags via the config API; not wired into "
         "the mutate phase; covered by unit tests",
-        "pmx lxc security features set <ctid> --nesting",
+        "pmx pve lxc security features set <ctid> --nesting",
     )
     ctx.defer(
         "security caps show --effective",
@@ -339,7 +339,7 @@ def run(ctx: Ctx) -> None:
         "root ssh (the configured caps read is exercised by the sweep above); it "
         "needs a running container and root ssh, so it is not driven head-less; "
         "covered by unit tests",
-        "pmx lxc security caps show <ctid> --effective",
+        "pmx pve lxc security caps show <ctid> --effective",
     )
     # `permissions grant`/`revoke` mutate cluster-wide ACLs (not scoped to the
     # isolated container's own resources), so they are not wired into the
@@ -349,13 +349,13 @@ def run(ctx: Ctx) -> None:
         "permissions grant",
         "grants ACL roles on the container's /vms/{vmid} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx lxc permissions grant <ctid> --roles PVEVMAdmin --users alice@pve",
+        "pmx pve lxc permissions grant <ctid> --roles PVEVMAdmin --users alice@pve",
     )
     ctx.defer(
         "permissions revoke",
         "revokes ACL roles on the container's /vms/{vmid} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx lxc permissions revoke <ctid> --roles PVEVMAdmin --users alice@pve",
+        "pmx pve lxc permissions revoke <ctid> --roles PVEVMAdmin --users alice@pve",
     )
     # `firewall alias get` / `firewall ipset get-member` read a single
     # pre-existing entry by name. A fresh lab has none by default, and the
@@ -366,11 +366,11 @@ def run(ctx: Ctx) -> None:
         "firewall alias get",
         "reads a single firewall alias by name — needs a pre-existing alias; "
         "not wired into the mutate phase; covered by unit tests",
-        "pmx lxc firewall alias get <ctid> <name>",
+        "pmx pve lxc firewall alias get <ctid> <name>",
     )
     ctx.defer(
         "firewall ipset get-member",
         "reads a single CIDR entry of an IP set — needs a pre-existing "
         "member; not wired into the mutate phase; covered by unit tests",
-        "pmx lxc firewall ipset get-member <ctid> <name> <cidr>",
+        "pmx pve lxc firewall ipset get-member <ctid> <name> <cidr>",
     )

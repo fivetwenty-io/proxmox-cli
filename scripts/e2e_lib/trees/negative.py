@@ -28,18 +28,18 @@ def run(ctx: Ctx) -> None:
 
     # Missing required flag: `pool create` requires --poolid.
     ctx.expect_fail("pool create without --poolid",
-                    "pool", "create", must_contain="poolid")
+                    "pve", "pool", "create", must_contain="poolid")
 
     # Missing positional arg: `qemu status` requires a <vmid>.
-    ctx.expect_fail("qemu status without vmid", "qemu", "status")
+    ctx.expect_fail("qemu status without vmid", "pve", "qemu", "status")
 
     # Too few positional args: `qemu snapshot create` needs <vmid> <name>.
     ctx.expect_fail("qemu snapshot create missing name",
-                    "qemu", "snapshot", "create", MISSING_VMID)
+                    "pve", "qemu", "snapshot", "create", MISSING_VMID)
 
     # Invalid flag type: --max takes an integer.
     ctx.expect_fail("cluster log with non-numeric --max",
-                    "cluster", "log", "--max", "not-a-number")
+                    "pve", "cluster", "log", "--max", "not-a-number")
 
     # Unknown output format must be rejected by the renderer.
     ctx.expect_fail("unknown output format", "version", "-o", "bogus",
@@ -47,7 +47,7 @@ def run(ctx: Ctx) -> None:
 
     # Deleting without the required confirmation flag must refuse.
     ctx.expect_fail("group delete without --yes",
-                    "access", "group", "delete", MISSING_NAME)
+                    "pve", "access", "group", "delete", MISSING_NAME)
 
     # --- product guard (rejected before any API call) ------------------------
 
@@ -70,13 +70,13 @@ def run(ctx: Ctx) -> None:
     n = ctx.node
     if n:
         ctx.expect_fail("qemu status of missing VM",
-                        "qemu", "status", MISSING_VMID, node=n)
+                        "pve", "qemu", "status", MISSING_VMID, node=n)
     else:
         ctx.skip("qemu status of missing VM", "no node discovered")
 
     ctx.expect_fail("storage get of missing storage",
-                    "storage", "get", MISSING_NAME)
+                    "pve", "storage", "get", MISSING_NAME)
     ctx.expect_fail("access user get of missing user",
-                    "access", "user", "get", MISSING_NAME + "@pam")
+                    "pve", "access", "user", "get", MISSING_NAME + "@pam")
     ctx.expect_fail("pool get of missing pool",
-                    "pool", "get", MISSING_NAME)
+                    "pve", "pool", "get", MISSING_NAME)

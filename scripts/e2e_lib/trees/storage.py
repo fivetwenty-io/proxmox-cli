@@ -13,11 +13,11 @@ def run(ctx: Ctx) -> None:
     def is_list(res: CmdResult) -> str | None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
 
-    lst = ctx.check("list", "storage", "list", validate=is_list)
+    lst = ctx.check("list", "pve", "storage", "list", validate=is_list)
 
     # describe: offline schema catalog — no API call.
-    ctx.check("describe", "storage", "describe")
-    ctx.check("describe --type", "storage", "describe", "--type", "zfspool")
+    ctx.check("describe", "pve", "storage", "describe")
+    ctx.check("describe --type", "pve", "storage", "describe", "--type", "zfspool")
 
     sid = None
     if lst.rc == 0:
@@ -43,7 +43,7 @@ def run(ctx: Ctx) -> None:
         ctx.skip("rrddata", "no storage defined")
         ctx.skip("rrd", "no storage defined")
     else:
-        ctx.check("get", "storage", "get", str(sid), validate=has_storage_keys)
+        ctx.check("get", "pve", "storage", "get", str(sid), validate=has_storage_keys)
 
         # permissions: ACL entries scoped to the storage's /storage/{storage}
         # path. Both are cluster-wide ACL queries (no --node routing needed,
@@ -52,13 +52,13 @@ def run(ctx: Ctx) -> None:
         def has_permissions_effective(res: CmdResult) -> str | None:
             return None if isinstance(res.json(), dict) else "expected a JSON object"
 
-        ctx.check("permissions list", "storage", "permissions", "list", str(sid),
+        ctx.check("permissions list", "pve", "storage", "permissions", "list", str(sid),
                   validate=is_list)
-        ctx.check("permissions effective", "storage", "permissions", "effective", str(sid),
+        ctx.check("permissions effective", "pve", "storage", "permissions", "effective", str(sid),
                   validate=has_permissions_effective)
 
         if ctx.node:
-            ctx.check("content", "storage", "content", str(sid), node=ctx.node)
+            ctx.check("content", "pve", "storage", "content", str(sid), node=ctx.node)
             # status: per-storage usage summary; requires a node context.
             def has_usage_keys(res: CmdResult) -> str | None:
                 data = res.json()
@@ -69,19 +69,19 @@ def run(ctx: Ctx) -> None:
                     return "storage status missing usage keys (used/avail/total)"
                 return None
 
-            ctx.check("status", "storage", "status", str(sid),
+            ctx.check("status", "pve", "storage", "status", str(sid),
                       node=ctx.node, validate=has_usage_keys)
             # identity: backend identity (path/export/URL). Not every storage
             # plugin implements get_identity (e.g. ZFS), so skip gracefully when
             # the backend reports it as unsupported.
-            id_probe = ctx.run("storage", "identity", str(sid), node=ctx.node)
+            id_probe = ctx.run("pve", "storage", "identity", str(sid), node=ctx.node)
             if id_probe.rc == 0:
-                ctx.check("identity", "storage", "identity", str(sid), node=ctx.node)
+                ctx.check("identity", "pve", "storage", "identity", str(sid), node=ctx.node)
             else:
                 ctx.skip("identity", "storage plugin does not implement identity: "
                          f"{(id_probe.stderr.strip() or id_probe.stdout.strip())[:80]}")
             # rrddata: timeseries for storage metrics; zero-row result is valid.
-            ctx.check("rrddata", "storage", "rrddata", str(sid),
+            ctx.check("rrddata", "pve", "storage", "rrddata", str(sid),
                       "--timeframe", "hour", node=ctx.node, validate=is_list)
             # rrd: rrd PNG image reference. The RRD database may not exist yet for
             # a recently added storage, so skip gracefully when no data exists.
@@ -93,10 +93,10 @@ def run(ctx: Ctx) -> None:
                     return "rrd response missing 'filename' key"
                 return None
 
-            rrd_probe = ctx.run("storage", "rrd", str(sid),
+            rrd_probe = ctx.run("pve", "storage", "rrd", str(sid),
                                 "--ds", "used", "--timeframe", "hour", node=ctx.node)
             if rrd_probe.rc == 0:
-                ctx.check("rrd", "storage", "rrd", str(sid),
+                ctx.check("rrd", "pve", "storage", "rrd", str(sid),
                           "--ds", "used", "--timeframe", "hour",
                           node=ctx.node, validate=has_filename)
             else:
@@ -120,21 +120,21 @@ def run(ctx: Ctx) -> None:
         for cand in lst.json():
             if not isinstance(cand, dict) or not cand.get("storage"):
                 continue
-            cres = ctx.run("storage", "content", str(cand["storage"]), node=ctx.node)
+            cres = ctx.run("pve", "storage", "content", str(cand["storage"]), node=ctx.node)
             if cres.rc == 0 and isinstance(cres.json(), list) and cres.json():
                 v0 = cres.json()[0]
                 if isinstance(v0, dict) and v0.get("volid"):
                     vol = str(v0["volid"])
                     break
     if vol:
-        ctx.check("volume get", "storage", "volume", "get", vol, node=ctx.node, validate=has_format)
+        ctx.check("volume get", "pve", "storage", "volume", "get", vol, node=ctx.node, validate=has_format)
     else:
         ctx.skip("volume get", "no volume found on any storage" if ctx.node else "no node discovered")
 
     # node-list: runtime storage availability/usage as seen from a specific node
     # (distinct from `storage list`'s cluster-wide configuration). Needs a node.
     if ctx.node:
-        ctx.check("node-list", "storage", "node-list", node=ctx.node, validate=is_list)
+        ctx.check("node-list", "pve", "storage", "node-list", node=ctx.node, validate=is_list)
     else:
         ctx.skip("node-list", "no node discovered")
 
@@ -142,9 +142,9 @@ def run(ctx: Ctx) -> None:
     # Proxmox template repository; probe first and skip gracefully when the lab
     # has no reachable catalog rather than recording a failure.
     if ctx.node:
-        aplinfo_probe = ctx.run("storage", "aplinfo", "list", node=ctx.node)
+        aplinfo_probe = ctx.run("pve", "storage", "aplinfo", "list", node=ctx.node)
         if aplinfo_probe.rc == 0:
-            ctx.check("aplinfo list", "storage", "aplinfo", "list",
+            ctx.check("aplinfo list", "pve", "storage", "aplinfo", "list",
                       node=ctx.node, validate=is_list)
         else:
             ctx.skip("aplinfo list", "appliance template catalog not reachable from this node")
@@ -153,11 +153,11 @@ def run(ctx: Ctx) -> None:
 
     # The remaining browsing verbs need backends or sources the lab does not
     # provide, so they are checked read-only via --help here and gated below.
-    ctx.check("volume set --help", "storage", "volume", "set", "--help", fmt="")
-    ctx.check("volume copy --help", "storage", "volume", "copy", "--help", fmt="")
-    ctx.check("file-restore list --help", "storage", "file-restore", "list", "--help", fmt="")
-    ctx.check("file-restore download --help", "storage", "file-restore", "download", "--help", fmt="")
-    ctx.check("import-metadata --help", "storage", "import-metadata", "--help", fmt="")
+    ctx.check("volume set --help", "pve", "storage", "volume", "set", "--help", fmt="")
+    ctx.check("volume copy --help", "pve", "storage", "volume", "copy", "--help", fmt="")
+    ctx.check("file-restore list --help", "pve", "storage", "file-restore", "list", "--help", fmt="")
+    ctx.check("file-restore download --help", "pve", "storage", "file-restore", "download", "--help", fmt="")
+    ctx.check("import-metadata --help", "pve", "storage", "import-metadata", "--help", fmt="")
 
     # Prune preview: --dry-run queries the prunebackups endpoint, which reports
     # the keep/remove decision for each archive WITHOUT deleting anything, so it
@@ -170,26 +170,26 @@ def run(ctx: Ctx) -> None:
                 backup_sid = str(s.get("storage", ""))
                 break
     if backup_sid and ctx.node:
-        ctx.check("prune dry-run", "storage", "prune", backup_sid,
+        ctx.check("prune dry-run", "pve", "storage", "prune", backup_sid,
                   "--keep-last", "1", "--dry-run", node=ctx.node, validate=is_list)
     else:
         ctx.skip("prune dry-run", "no backup-capable storage or node discovered")
-    ctx.check("prune --help", "storage", "prune", "--help", fmt="")
+    ctx.check("prune --help", "pve", "storage", "prune", "--help", fmt="")
 
     # Transfer verbs move bytes onto a storage (upload pushes a local file;
     # download-url has the node pull a URL). Both create a real volume; the mutate
     # phase exercises each on `local` and removes the artifact with
     # `storage volume delete` in a finally block, so the help surface is checked
     # read-only here and the full transfer is covered live below.
-    ctx.check("upload --help", "storage", "upload", "--help", fmt="")
-    ctx.check("download-url --help", "storage", "download-url", "--help", fmt="")
+    ctx.check("upload --help", "pve", "storage", "upload", "--help", fmt="")
+    ctx.check("download-url --help", "pve", "storage", "download-url", "--help", fmt="")
 
     # The mutate phase backs up the isolated guest then prunes its own archive
     # (keep-last=0, scoped to that vmid) — covered live by `e2e --mutate`.
     ctx.defer(
         "prune (delete archives)",
         "deletes backup archives by retention policy — covered live by `e2e --mutate`",
-        f"pmx storage prune {Isolation.NAME_PREFIX}... --vmid <id> --keep-last 0 --yes",
+        f"pmx pve storage prune {Isolation.NAME_PREFIX}... --vmid <id> --keep-last 0 --yes",
         isolation=True, live_covered=True,
     )
 
@@ -198,14 +198,14 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "create",
         "adds a cluster storage definition — covered live by `e2e --mutate`",
-        f"pmx storage create --storage {Isolation.NAME_PREFIX}store --type dir ...",
+        f"pmx pve storage create --storage {Isolation.NAME_PREFIX}store --type dir ...",
         isolation=True, live_covered=True,
     )
     ctx.defer("set", "modifies a storage definition — covered live by `e2e --mutate`",
-              f"pmx storage set {Isolation.NAME_PREFIX}store --content iso,vztmpl",
+              f"pmx pve storage set {Isolation.NAME_PREFIX}store --content iso,vztmpl",
               isolation=True, live_covered=True)
     ctx.defer("delete", "removes a storage definition — covered live by `e2e --mutate`",
-              f"pmx storage delete {Isolation.NAME_PREFIX}store", isolation=True, live_covered=True)
+              f"pmx pve storage delete {Isolation.NAME_PREFIX}store", isolation=True, live_covered=True)
 
     # The mutate phase allocates a raw volume, uploads a small file, and pulls a
     # file by URL onto `local`, then removes each artifact with
@@ -214,19 +214,19 @@ def run(ctx: Ctx) -> None:
         "volume alloc/delete",
         "allocates a raw volume then deletes it — covered live by `e2e --mutate` "
         "(storage_volume_lifecycle: alloc on `local`, capture returned volid, delete in finally)",
-        "pmx storage volume alloc local --vmid 9999 --filename local:vm-9999-pmx-cli-test --size 1G",
+        "pmx pve storage volume alloc local --vmid 9999 --filename local:vm-9999-pmx-cli-test --size 1G",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "upload",
         "pushes a local file onto a storage then deletes the volume — covered live by `e2e --mutate`",
-        f"pmx storage upload local --file ./{Isolation.NAME_PREFIX}upload.iso --content iso",
+        f"pmx pve storage upload local --file ./{Isolation.NAME_PREFIX}upload.iso --content iso",
         isolation=True, live_covered=True,
     )
     ctx.defer(
         "download-url",
         "has the node pull a small Proxmox-hosted file then deletes the volume — covered live by `e2e --mutate`",
-        f"pmx storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}download.iso --content iso",
+        f"pmx pve storage download-url local --url <U> --filename {Isolation.NAME_PREFIX}download.iso --content iso",
         isolation=True, live_covered=True,
     )
 
@@ -235,7 +235,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "volume set",
         "updates a volume's notes/protected flag — covered live (reversibly) by `e2e --mutate`",
-        "pmx storage volume set local:backup/vzdump-...-<id>.vma.zst --notes <m>",
+        "pmx pve storage volume set local:backup/vzdump-...-<id>.vma.zst --notes <m>",
         isolation=True, live_covered=True,
     )
     # Volume copy hits POST .../content/{volume}, which the PVE API restricts to
@@ -246,7 +246,7 @@ def run(ctx: Ctx) -> None:
         "volume copy",
         "copies a volume to a new target — the copy endpoint is restricted to root@pam "
         "and rejects API-token auth; not exercisable by the e2e suite — covered by unit tests",
-        "pmx storage volume copy local:backup/... --target-volume <storage>:<vol>",
+        "pmx pve storage volume copy local:backup/... --target-volume <storage>:<vol>",
         isolation=True, live_covered=False,
     )
     # file-restore browses files inside a backup snapshot, but the backing
@@ -255,13 +255,13 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "file-restore list",
         "browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
-        "pmx storage file-restore list <pbs> --volume <snapshot>",
+        "pmx pve storage file-restore list <pbs> --volume <snapshot>",
         isolation=True, live_covered=False,
     )
     ctx.defer(
         "file-restore download",
         "extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
-        "pmx storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
+        "pmx pve storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
         isolation=True, live_covered=False,
     )
     # import-metadata inspects a foreign guest archive (OVA/ESXi). The API cannot
@@ -272,7 +272,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "import-metadata",
         "inspects an importable guest archive — covered live by `e2e --mutate`, which stages a crafted OVF on the node's import dir and reads its metadata",
-        "pmx storage import-metadata <import-storage> --volume <archive>",
+        "pmx pve storage import-metadata <import-storage> --volume <archive>",
         isolation=True, live_covered=True,
     )
     # Downloading a real appliance template consumes bandwidth and storage; not
@@ -280,7 +280,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "aplinfo download",
         "downloads a real appliance template tarball to a storage — bandwidth/storage-consuming; not exercised live; covered by unit tests",
-        "pmx storage aplinfo download --node <node> --storage local --template pmx-cli-template",
+        "pmx pve storage aplinfo download --node <node> --storage local --template pmx-cli-template",
         isolation=False, live_covered=False,
     )
     # Pulling an OCI image needs registry egress and consumes storage; not
@@ -289,7 +289,7 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "oci-pull",
         "pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests",
-        "pmx storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
+        "pmx pve storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
         isolation=False, live_covered=False,
     )
     # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
@@ -299,11 +299,11 @@ def run(ctx: Ctx) -> None:
         "permissions grant",
         "grants ACL roles on the storage's /storage/{storage} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx storage permissions grant local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+        "pmx pve storage permissions grant local-lvm --roles PVEDatastoreAdmin --users alice@pve",
     )
     ctx.defer(
         "permissions revoke",
         "revokes ACL roles on the storage's /storage/{storage} path; mutates "
         "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
-        "pmx storage permissions revoke local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+        "pmx pve storage permissions revoke local-lvm --roles PVEDatastoreAdmin --users alice@pve",
     )
