@@ -165,7 +165,7 @@ func newPveFirewallOptionsUpdateCmd() *cobra.Command {
 			fl := cmd.Flags()
 
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update cluster firewall options on PVE remote %q: no changes given: pass at least one flag",
+				return fmt.Errorf("update cluster firewall options on PVE remote %q: no changes requested: pass at least one flag",
 					remote)
 			}
 

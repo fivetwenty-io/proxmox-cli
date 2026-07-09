@@ -36,7 +36,7 @@ func TestNodeDNSUpdate_RequiresAFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeCmd(), "node", "dns", "update")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestNodeDNSUpdate_SendsAllFlags(t *testing.T) {
@@ -178,7 +178,7 @@ func TestNodeConfigUpdate_RequiresAFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeCmd(), "node", "config", "update")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestNodeConfigUpdate_AuditAllFlags(t *testing.T) {

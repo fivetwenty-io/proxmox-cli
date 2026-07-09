@@ -341,14 +341,19 @@ func indexedName(name string) bool {
 
 // productLabel names the API schema's product for the generated doc comment,
 // inferred from the apidoc source filename: "pbs-apidoc.json" (and any other
-// name starting with "pbs-") is Proxmox Backup Server; everything else,
-// including the default "apidoc.json", is Proxmox VE — preserving existing
-// PVE invocations' generated output byte-for-byte.
+// name starting with "pbs-") is Proxmox Backup Server, "pdm-apidoc.json"
+// (and any other name starting with "pdm-") is Proxmox Datacenter Manager,
+// and everything else, including the default "apidoc.json", is Proxmox VE —
+// preserving existing PVE invocations' generated output byte-for-byte.
 func productLabel(source string) string {
-	if strings.HasPrefix(source, "pbs-") {
+	switch {
+	case strings.HasPrefix(source, "pbs-"):
 		return "Proxmox Backup Server"
+	case strings.HasPrefix(source, "pdm-"):
+		return "Proxmox Datacenter Manager"
+	default:
+		return "PVE"
 	}
-	return "PVE"
 }
 
 // flagName maps an API parameter name to its CLI flag spelling: overrides

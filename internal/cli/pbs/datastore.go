@@ -413,7 +413,7 @@ func newDatastoreUpdateCmd() *cobra.Command {
 			name := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update datastore %q: no changes given: pass at least one flag", name)
+				return fmt.Errorf("update datastore %q: no changes requested: pass at least one flag", name)
 			}
 
 			params := &pbsconfig.UpdateDatastoreParams{}

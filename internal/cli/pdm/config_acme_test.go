@@ -186,7 +186,7 @@ func TestConfigAcmeAccountUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newConfigAcmeAccountCmd(), "account", "update", "prod")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestConfigAcmeAccountUpdate_SurfacesAPIError(t *testing.T) {
@@ -407,7 +407,7 @@ func TestConfigAcmePluginUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newConfigAcmePluginCmd(), "plugin", "update", "cfplugin")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestConfigAcmePluginUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

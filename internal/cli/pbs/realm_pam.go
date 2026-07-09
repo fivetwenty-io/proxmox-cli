@@ -78,7 +78,7 @@ func newRealmPamUpdateCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update PAM realm: no changes given: pass at least one flag")
+				return fmt.Errorf("update PAM realm: no changes requested: pass at least one flag")
 			}
 
 			if cmd.Flags().Changed("delete") {

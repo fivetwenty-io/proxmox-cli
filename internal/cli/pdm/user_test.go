@@ -85,7 +85,7 @@ func TestUserUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newUserUpdateCmd(), "update", "alpha@pam")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update user "alpha@pam": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update user "alpha@pam": no changes requested: pass at least one flag`)
 }
 
 // TestUserUpdate_SendsChangedFlagsOnly asserts that `user update` sends

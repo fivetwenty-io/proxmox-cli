@@ -188,7 +188,7 @@ func TestTapePoolUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTapePoolCmd(), "pool", "update", tapePoolName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestTapePoolUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

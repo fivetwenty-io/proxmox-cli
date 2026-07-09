@@ -247,7 +247,7 @@ func TestDatastoreUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	err := run(deps, &buf, newDatastoreUpdateCmd(), "update", "store1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestDatastoreUpdate_ServerError(t *testing.T) {

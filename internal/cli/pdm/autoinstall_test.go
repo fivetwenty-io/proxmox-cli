@@ -217,7 +217,7 @@ func TestAutoInstallPreparedUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAutoInstallPreparedUpdateCmd(), "update", "web01")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update prepared answer "web01": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update prepared answer "web01": no changes requested: pass at least one flag`)
 }
 
 // TestAutoInstallPreparedUpdate_SendsOnlyChangedFields asserts that
@@ -327,7 +327,7 @@ func TestAutoInstallTokenUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAutoInstallTokenUpdateCmd(), "update", "mytoken")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update token "mytoken": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update token "mytoken": no changes requested: pass at least one flag`)
 }
 
 // TestAutoInstallTokenUpdate_RegenerateDisplaysSecretOnce asserts that

@@ -376,7 +376,7 @@ func newRealmOpenidUpdateCmd() *cobra.Command {
 			realm := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update OpenID realm %q: no changes given: pass at least one flag", realm)
+				return fmt.Errorf("update OpenID realm %q: no changes requested: pass at least one flag", realm)
 			}
 
 			if cmd.Flags().Changed("delete") {

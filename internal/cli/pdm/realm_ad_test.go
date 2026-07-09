@@ -315,7 +315,7 @@ func TestRealmAdUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRealmAdCmd(), "ad", "update", realmAdName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestRealmAdUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

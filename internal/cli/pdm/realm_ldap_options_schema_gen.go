@@ -4,7 +4,7 @@ package pdm
 
 import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
-// realmLdapOptionSchemas describes every settable option from the PVE API schema for
+// realmLdapOptionSchemas describes every settable option from the Proxmox Datacenter Manager API schema for
 // POST /config/access/ldap, in lexical order by API key.
 var realmLdapOptionSchemas = []optionschema.Schema{
 	{

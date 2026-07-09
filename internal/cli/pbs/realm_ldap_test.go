@@ -349,7 +349,7 @@ func TestRealmLdapUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRealmLdapCmd(), "ldap", "update", realmLdapName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestRealmLdapUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

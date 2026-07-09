@@ -81,7 +81,7 @@ func TestTokenUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTokenUpdateCmd(), "update", "alpha@pam", "mytoken")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update token "mytoken" for user "alpha@pam": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update token "mytoken" for user "alpha@pam": no changes requested: pass at least one flag`)
 }
 
 // TestTokenUpdate_RegenerateDisplaysSecretOnce asserts that `token update

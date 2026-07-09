@@ -141,7 +141,7 @@ func TestConfigViewUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newConfigViewCmd(), "view", "update", "prod")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestConfigViewUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

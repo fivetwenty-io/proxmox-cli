@@ -724,7 +724,7 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 			id := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update prepared answer %q: no changes given: pass at least one flag", id)
+				return fmt.Errorf("update prepared answer %q: no changes requested: pass at least one flag", id)
 			}
 
 			if err := pf.validate(id, "update"); err != nil {
@@ -972,7 +972,7 @@ func newAutoInstallTokenUpdateCmd() *cobra.Command {
 			fl := cmd.Flags()
 
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update token %q: no changes given: pass at least one flag", id)
+				return fmt.Errorf("update token %q: no changes requested: pass at least one flag", id)
 			}
 
 			params := &pdmautoinstall.UpdateTokensParams{}

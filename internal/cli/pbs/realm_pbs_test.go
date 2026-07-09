@@ -94,7 +94,7 @@ func TestRealmPbsUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRealmPbsCmd(), "pbs", "update")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestRealmPbsUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

@@ -213,7 +213,7 @@ func newTfaUpdateCmd() *cobra.Command {
 			userid, id := args[0], args[1]
 
 			if !cmd.Flags().Changed("description") {
-				return fmt.Errorf("update tfa entry %q for user %q: no changes given: pass --description", id, userid)
+				return fmt.Errorf("update tfa entry %q for user %q: no changes requested: pass --description", id, userid)
 			}
 
 			params := &pdmaccess.UpdateTfaParams{Description: strPtr(description)}

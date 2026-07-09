@@ -69,7 +69,7 @@ func TestPveFirewallOptionsUpdate_RejectsNoFlags(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newPveFirewallOptionsUpdateCmd(), "update", "cluster1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes given: pass at least one flag")
+	require.ErrorContains(t, err, "no changes requested: pass at least one flag")
 }
 
 // TestPveFirewallOptionsUpdate_SendsChangedFlags asserts that `pve firewall

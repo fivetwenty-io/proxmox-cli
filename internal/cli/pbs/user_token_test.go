@@ -254,7 +254,7 @@ func TestUserTokenUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newUserCmd(), "user", "token", "update", testUserid, testTokenName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestUserTokenUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

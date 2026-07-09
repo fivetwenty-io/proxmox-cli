@@ -253,7 +253,7 @@ func newUserUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update user %q: no changes given: pass at least one flag", userid)
+				return fmt.Errorf("update user %q: no changes requested: pass at least one flag", userid)
 			}
 
 			params := &pdmaccess.UpdateUsersParams{}

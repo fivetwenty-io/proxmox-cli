@@ -320,7 +320,7 @@ func TestNotifEndpointGotifyUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNotifEndpointGotifyCmd(), "gotify", "update", "gotify-a")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestNotifEndpointGotifyUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

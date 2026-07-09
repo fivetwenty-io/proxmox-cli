@@ -495,7 +495,7 @@ func TestPveGuestFirewallOptionsUpdate_RequiresAChange(t *testing.T) {
 			err := run(deps, &buf, newPveGuestFirewallOptionsUpdateCmd(gf.kind, gf.ops.firewallUpdate),
 				"update", "cluster1", "104")
 			require.Error(t, err)
-			require.ErrorContains(t, err, "no changes given")
+			require.ErrorContains(t, err, "no changes requested")
 		})
 	}
 }

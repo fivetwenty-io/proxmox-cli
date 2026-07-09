@@ -150,7 +150,7 @@ func TestNodeConfigUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeConfigUpdateCmd(), "update", "pdm-host")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update config on node "pdm-host": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update config on node "pdm-host": no changes requested: pass at least one flag`)
 }
 
 // TestNodeConfigUpdate_SendsChangedFlagsOnly asserts that `node config
@@ -197,7 +197,7 @@ func TestNodeDNSUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeDNSUpdateCmd(), "update", "pdm-host")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update dns on node "pdm-host": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update dns on node "pdm-host": no changes requested: pass at least one flag`)
 }
 
 // TestNodeDNSUpdate_SendsChangedFlagsOnly asserts that `node dns update`

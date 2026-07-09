@@ -82,7 +82,7 @@ func TestNodeNetworkUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeNetworkUpdateCmd(), "update", "pdm-host", "eth0")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update network interface "eth0" on node "pdm-host": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update network interface "eth0" on node "pdm-host": no changes requested: pass at least one flag`)
 }
 
 // TestNodeNetworkUpdate_SendsChangedFlagsOnly asserts that `node network

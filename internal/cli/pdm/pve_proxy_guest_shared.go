@@ -659,7 +659,7 @@ func newPveGuestSnapshotUpdateCmd(kind pveGuestKind, update pveGuestSnapshotUpda
 
 			if !fl.Changed("description") {
 				return fmt.Errorf(
-					"update snapshot %q of %s %s on PVE remote %q: no changes given: pass --description",
+					"update snapshot %q of %s %s on PVE remote %q: no changes requested: pass --description",
 					snapname, kind.noun, vmid, remote)
 			}
 
@@ -857,7 +857,7 @@ func newPveGuestFirewallOptionsUpdateCmd(kind pveGuestKind, update pveGuestFirew
 			fl := cmd.Flags()
 
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update firewall options of %s %s on PVE remote %q: no changes given: pass at least one flag",
+				return fmt.Errorf("update firewall options of %s %s on PVE remote %q: no changes requested: pass at least one flag",
 					kind.noun, vmid, remote)
 			}
 

@@ -4,7 +4,7 @@ package pdm
 
 import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
-// realmOpenidOptionSchemas describes every settable option from the PVE API schema for
+// realmOpenidOptionSchemas describes every settable option from the Proxmox Datacenter Manager API schema for
 // POST /config/access/openid, in lexical order by API key.
 var realmOpenidOptionSchemas = []optionschema.Schema{
 	{

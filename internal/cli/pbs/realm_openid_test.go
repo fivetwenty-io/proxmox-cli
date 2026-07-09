@@ -317,7 +317,7 @@ func TestRealmOpenidUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRealmOpenidCmd(), "openid", "update", realmOpenidName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestRealmOpenidUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

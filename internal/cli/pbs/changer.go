@@ -247,7 +247,7 @@ func newTapeChangerUpdateCmd() *cobra.Command {
 			name := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update tape changer %q: no changes given: pass at least one flag", name)
+				return fmt.Errorf("update tape changer %q: no changes requested: pass at least one flag", name)
 			}
 
 			if cmd.Flags().Changed("delete") {

@@ -437,7 +437,7 @@ func newTapeJobUpdateCmd() *cobra.Command {
 			}
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update tape backup job %q: no changes given: pass at least one flag", id)
+				return fmt.Errorf("update tape backup job %q: no changes requested: pass at least one flag", id)
 			}
 
 			if cmd.Flags().Changed("delete") {

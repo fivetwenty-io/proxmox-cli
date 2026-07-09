@@ -126,7 +126,7 @@ func TestRemoteUpdate_RejectsNoChanges(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRemoteUpdateCmd(), "update", "alpha")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update remote "alpha": no changes given: pass at least one flag`)
+	require.ErrorContains(t, err, `update remote "alpha": no changes requested: pass at least one flag`)
 }
 
 // TestRemoteUpdate_SendsChangedFlagsOnly asserts that `remote update` sends

@@ -284,7 +284,7 @@ func newConfigAcmeAccountUpdateCmd() *cobra.Command {
 			name := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update acme account %q: no changes given: pass --contact", name)
+				return fmt.Errorf("update acme account %q: no changes requested: pass --contact", name)
 			}
 
 			params := &pdmconfig.UpdateAcmeAccountParams{}
@@ -594,7 +594,7 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update acme plugin %q: no changes given: pass at least one flag", id)
+				return fmt.Errorf("update acme plugin %q: no changes requested: pass at least one flag", id)
 			}
 
 			if fl.Changed("delete") {

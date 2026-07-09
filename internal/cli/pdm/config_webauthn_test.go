@@ -91,7 +91,7 @@ func TestConfigWebauthnUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newConfigWebauthnCmd(), "webauthn", "update")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestConfigWebauthnUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

@@ -130,10 +130,12 @@ func TestGenerate_PBSTree(t *testing.T) {
 }
 
 // TestProductLabel verifies the generated doc comment's product wording:
-// "pbs-"-prefixed sources are labelled Proxmox Backup Server, everything
-// else (including the default "apidoc.json") keeps the original "PVE"
-// wording so existing PVE invocations stay byte-identical.
+// "pbs-"-prefixed sources are labelled Proxmox Backup Server, "pdm-"-prefixed
+// sources are labelled Proxmox Datacenter Manager, and everything else
+// (including the default "apidoc.json") keeps the original "PVE" wording so
+// existing PVE invocations stay byte-identical.
 func TestProductLabel(t *testing.T) {
 	require.Equal(t, "PVE", productLabel("apidoc.json"))
 	require.Equal(t, "Proxmox Backup Server", productLabel("pbs-apidoc.json"))
+	require.Equal(t, "Proxmox Datacenter Manager", productLabel("pdm-apidoc.json"))
 }

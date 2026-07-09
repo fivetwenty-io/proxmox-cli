@@ -312,7 +312,7 @@ func TestNotifMatcherUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNotifMatcherCmd(), "matcher", "update", "matcher-a")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestNotifMatcherUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

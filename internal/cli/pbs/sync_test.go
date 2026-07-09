@@ -384,7 +384,7 @@ func TestSyncJobUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newSyncCmd(), "sync", "job", "update", syncJobID)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestSyncJobUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

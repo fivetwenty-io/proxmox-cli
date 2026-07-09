@@ -231,7 +231,7 @@ func TestAcmeAccountUpdate_NoChangesRejected(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmeAccountUpdateCmd(), "update", "myaccount")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes given")
+	require.ErrorContains(t, err, "no changes requested")
 }
 
 func TestAcmeAccountUpdate_EmptyNameRejected(t *testing.T) {
@@ -594,7 +594,7 @@ func TestAcmePluginUpdate_NoChangesRejected(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAcmePluginUpdateCmd(), "update", "dns1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes given")
+	require.ErrorContains(t, err, "no changes requested")
 }
 
 func TestAcmePluginUpdate_EmptyIDRejected(t *testing.T) {

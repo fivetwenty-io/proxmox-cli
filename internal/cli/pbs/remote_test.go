@@ -55,6 +55,32 @@ func TestRemoteLs_SurfacesAPIError(t *testing.T) {
 	require.Contains(t, err.Error(), "list remotes")
 }
 
+// TestRemoteLs_SortsByNameAndPairsRawWithRows asserts that `remote ls` sorts
+// entries by name and keeps each row's raw JSON attached to its sorted row,
+// mirroring the paired-sort convention used by every other discrete-entity
+// ls in this package.
+func TestRemoteLs_SortsByNameAndPairsRawWithRows(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET "+remoteConfigPath, []map[string]any{
+		{"name": "remote2", "host": "pbs2.example.com", "auth-id": "root@pam", "extra": "z-marker"},
+		{"name": "remote1", "host": "pbs1.example.com", "auth-id": "root@pam", "extra": "a-marker"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "ls")
+	require.NoError(t, err)
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2)
+	require.Equal(t, "remote1", got[0]["name"], "entries must sort by name")
+	require.Equal(t, "a-marker", got[0]["extra"], "raw entry must stay paired with its sorted row")
+	require.Equal(t, "remote2", got[1]["name"])
+	require.Equal(t, "z-marker", got[1]["extra"])
+}
+
 // --- remote show ---------------------------------------------------------------
 
 func TestRemoteShow_RendersSingle(t *testing.T) {
@@ -264,7 +290,7 @@ func TestRemoteUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRemoteCmd(), "remote", "update", remoteName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestRemoteUpdate_RejectsEmptyDeleteEntry(t *testing.T) {
@@ -373,6 +399,31 @@ func TestRemoteScanLs_SurfacesAPIError(t *testing.T) {
 	require.Contains(t, err.Error(), "scan remote")
 }
 
+// TestRemoteScanLs_SortsByStoreAndPairsRawWithRows asserts that `remote scan
+// ls` sorts entries by store name and keeps each row's raw JSON attached to
+// its sorted row.
+func TestRemoteScanLs_SortsByStoreAndPairsRawWithRows(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET "+remoteConfigPath+"/"+remoteName+"/scan", []map[string]any{
+		{"store": "store2", "backend-type": "filesystem", "mount-status": "mounted", "extra": "z-marker"},
+		{"store": "store1", "backend-type": "s3", "mount-status": "notmounted", "extra": "a-marker"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "scan", "ls", remoteName)
+	require.NoError(t, err)
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2)
+	require.Equal(t, "store1", got[0]["store"], "entries must sort by store")
+	require.Equal(t, "a-marker", got[0]["extra"], "raw entry must stay paired with its sorted row")
+	require.Equal(t, "store2", got[1]["store"])
+	require.Equal(t, "z-marker", got[1]["extra"])
+}
+
 // --- remote scan groups ---------------------------------------------------------------
 
 func TestRemoteScanGroups_RendersTable(t *testing.T) {
@@ -411,6 +462,31 @@ func TestRemoteScanGroups_SurfacesAPIError(t *testing.T) {
 	require.Contains(t, err.Error(), "scan groups on remote")
 }
 
+// TestRemoteScanGroups_SortsAndPairsRawWithRows asserts that `remote scan
+// groups` sorts entries by backup type then backup ID and keeps each row's
+// raw JSON attached to its sorted row.
+func TestRemoteScanGroups_SortsAndPairsRawWithRows(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET "+remoteConfigPath+"/"+remoteName+"/scan/store1/groups", []map[string]any{
+		{"backup-type": "vm", "backup-id": "200", "backup-count": 3, "last-backup": 1700000000, "extra": "z-marker"},
+		{"backup-type": "vm", "backup-id": "100", "backup-count": 5, "last-backup": 1690000000, "extra": "a-marker"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "scan", "groups", remoteName, "store1")
+	require.NoError(t, err)
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2)
+	require.Equal(t, "100", got[0]["backup-id"], "entries must sort by backup-type then backup-id")
+	require.Equal(t, "a-marker", got[0]["extra"], "raw entry must stay paired with its sorted row")
+	require.Equal(t, "200", got[1]["backup-id"])
+	require.Equal(t, "z-marker", got[1]["extra"])
+}
+
 // --- remote scan namespaces ---------------------------------------------------------------
 
 func TestRemoteScanNamespaces_RendersTable(t *testing.T) {
@@ -447,4 +523,29 @@ func TestRemoteScanNamespaces_SurfacesAPIError(t *testing.T) {
 	err := run(deps, &buf, newRemoteCmd(), "remote", "scan", "namespaces", remoteName, "store1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "scan namespaces on remote")
+}
+
+// TestRemoteScanNamespaces_SortsByNsAndPairsRawWithRows asserts that
+// `remote scan namespaces` sorts entries by namespace and keeps each row's
+// raw JSON attached to its sorted row.
+func TestRemoteScanNamespaces_SortsByNsAndPairsRawWithRows(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET "+remoteConfigPath+"/"+remoteName+"/scan/store1/namespaces", []map[string]any{
+		{"ns": "team-b", "extra": "z-marker"},
+		{"ns": "team-a", "extra": "a-marker"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteCmd(), "remote", "scan", "namespaces", remoteName, "store1")
+	require.NoError(t, err)
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2)
+	require.Equal(t, "team-a", got[0]["ns"], "entries must sort by ns")
+	require.Equal(t, "a-marker", got[0]["extra"], "raw entry must stay paired with its sorted row")
+	require.Equal(t, "team-b", got[1]["ns"])
+	require.Equal(t, "z-marker", got[1]["extra"])
 }

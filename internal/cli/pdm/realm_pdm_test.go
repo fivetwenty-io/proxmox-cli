@@ -94,7 +94,7 @@ func TestRealmPdmUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newRealmPdmCmd(), "pdm", "update")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestRealmPdmUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

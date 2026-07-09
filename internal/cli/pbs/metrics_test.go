@@ -373,7 +373,7 @@ func TestMetricsInfluxdbHTTPUpdate_NoChangesRejected(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newMetricsInfluxdbHTTPUpdateCmd(), "update", "srv1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes given")
+	require.ErrorContains(t, err, "no changes requested")
 }
 
 func TestMetricsInfluxdbHTTPUpdate_EmptyNameRejected(t *testing.T) {
@@ -774,7 +774,7 @@ func TestMetricsInfluxdbUDPUpdate_NoChangesRejected(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newMetricsInfluxdbUDPUpdateCmd(), "update", "srv1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no changes given")
+	require.ErrorContains(t, err, "no changes requested")
 }
 
 func TestMetricsInfluxdbUDPUpdate_EmptyNameRejected(t *testing.T) {

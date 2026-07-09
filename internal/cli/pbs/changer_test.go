@@ -199,7 +199,7 @@ func TestTapeChangerUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTapeChangerCmd(), "changer", "update", tapeChangerName)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestTapeChangerUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

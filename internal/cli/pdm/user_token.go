@@ -224,7 +224,7 @@ func newTokenUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update token %q for user %q: no changes given: pass at least one flag", name, userid)
+				return fmt.Errorf("update token %q for user %q: no changes requested: pass at least one flag", name, userid)
 			}
 
 			params := &pdmaccess.UpdateUsersTokenParams{}

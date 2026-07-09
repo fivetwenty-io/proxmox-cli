@@ -4,7 +4,7 @@ package pdm
 
 import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
-// remoteOptionSchemas describes every settable option from the PVE API schema for
+// remoteOptionSchemas describes every settable option from the Proxmox Datacenter Manager API schema for
 // POST /remotes/remote, in lexical order by API key.
 var remoteOptionSchemas = []optionschema.Schema{
 	{

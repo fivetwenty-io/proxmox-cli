@@ -271,7 +271,7 @@ func newNotifEndpointGotifyUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update gotify endpoint %q: no changes given: pass at least one flag", name)
+				return fmt.Errorf("update gotify endpoint %q: no changes requested: pass at least one flag", name)
 			}
 
 			if fl.Changed("delete") {

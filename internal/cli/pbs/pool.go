@@ -280,7 +280,7 @@ func newTapePoolUpdateCmd() *cobra.Command {
 			}
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update tape media pool %q: no changes given: pass at least one flag", name)
+				return fmt.Errorf("update tape media pool %q: no changes requested: pass at least one flag", name)
 			}
 
 			if cmd.Flags().Changed("delete") {

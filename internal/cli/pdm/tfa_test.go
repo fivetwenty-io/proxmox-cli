@@ -70,7 +70,7 @@ func TestTfaUpdate_RequiresDescription(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTfaUpdateCmd(), "update", "alpha@pam", "totp1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, `update tfa entry "totp1" for user "alpha@pam": no changes given: pass --description`)
+	require.ErrorContains(t, err, `update tfa entry "totp1" for user "alpha@pam": no changes requested: pass --description`)
 }
 
 // TestTfaUpdate_SendsDescriptionAndPassword asserts that `tfa update` sends

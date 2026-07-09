@@ -224,7 +224,7 @@ func TestTapeDriveUpdate_RequiresAtLeastOneFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newTapeDriveCmd(), "drive", "update", "drive1")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestTapeDriveUpdate_RejectsEmptyDeleteEntry(t *testing.T) {

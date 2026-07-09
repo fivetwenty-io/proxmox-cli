@@ -4,7 +4,7 @@ package pdm
 
 import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
 
-// nodeConfigOptionSchemas describes every settable option from the PVE API schema for
+// nodeConfigOptionSchemas describes every settable option from the Proxmox Datacenter Manager API schema for
 // PUT /nodes/{node}/config, in lexical order by API key.
 var nodeConfigOptionSchemas = []optionschema.Schema{
 	{

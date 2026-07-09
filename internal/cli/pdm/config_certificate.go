@@ -86,7 +86,7 @@ func newConfigCertificateUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl) {
-				return fmt.Errorf("update certificate configuration: no changes given: pass at least one flag")
+				return fmt.Errorf("update certificate configuration: no changes requested: pass at least one flag")
 			}
 
 			if fl.Changed("delete") {

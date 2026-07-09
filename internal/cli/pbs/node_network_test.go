@@ -122,7 +122,7 @@ func TestNodeNetworkUpdate_RequiresAFlag(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newNodeCmd(), "node", "network", "update", "eth0")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no changes given")
+	require.Contains(t, err.Error(), "no changes requested")
 }
 
 func TestNodeNetworkUpdate_SendsDeleteAndDigest(t *testing.T) {

@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -163,6 +164,33 @@ func TestRemoteMetricCollectionStatus_SortsByRemote(t *testing.T) {
 	out := buf.String()
 	require.Less(t, strings.Index(out, "alpha"), strings.Index(out, "zeta"),
 		"rows must sort by remote name")
+}
+
+// TestRemoteMetricCollectionStatus_SortsByRemoteAndPairsRawWithRows asserts
+// that `remote metric-collection status` sorts entries by remote name and
+// keeps each row's raw JSON attached to its sorted row, including fields not
+// captured by remoteMetricStatusEntry — mirroring the paired-sort convention
+// used by every other discrete-entity ls in this package.
+func TestRemoteMetricCollectionStatus_SortsByRemoteAndPairsRawWithRows(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatJSON, false)
+
+	f.HandleJSON("GET /api2/json/remotes/metric-collection/status", []map[string]any{
+		{"remote": "zeta", "extra": "z-marker"},
+		{"remote": "alpha", "last-collection": 1700000000, "extra": "a-marker"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newRemoteMetricCollectionStatusCmd(), "status")
+	require.NoError(t, err)
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2)
+	require.Equal(t, "alpha", got[0]["remote"], "entries must sort by remote name")
+	require.Equal(t, "a-marker", got[0]["extra"], "raw entry must stay paired with its sorted row")
+	require.Equal(t, "zeta", got[1]["remote"])
+	require.Equal(t, "z-marker", got[1]["extra"])
 }
 
 // TestRemoteMetricCollectionTrigger_SendsOptionalRemote asserts that

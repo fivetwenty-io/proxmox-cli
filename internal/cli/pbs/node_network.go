@@ -355,7 +355,7 @@ func newNodeNetworkUpdateCmd(nf *nodeFlags) *cobra.Command {
 			iface := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update network interface %q on node %q: no changes given: pass at least one flag",
+				return fmt.Errorf("update network interface %q on node %q: no changes requested: pass at least one flag",
 					iface, nf.node)
 			}
 

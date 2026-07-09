@@ -330,7 +330,7 @@ func newRemoteUpdateCmd() *cobra.Command {
 			id := args[0]
 
 			if !anyFlagChanged(cmd.Flags()) {
-				return fmt.Errorf("update remote %q: no changes given: pass at least one flag", id)
+				return fmt.Errorf("update remote %q: no changes requested: pass at least one flag", id)
 			}
 
 			params := &pdmremotes.UpdateRemoteParams{}
