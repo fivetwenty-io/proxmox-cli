@@ -43,7 +43,9 @@ OUT = os.path.join(ROOT, "docs", "test-coverage-matrix.md")
 # childless-leaf walk misses them. Determined by probing each has-children
 # parent against a live target (a pure group prints "Available Commands:" at
 # exit 0; a runnable parent errors on the missing required argument). Stable.
-RUNNABLE_PARENTS = {"version", "lxc migrate", "node vzdump", "qemu agent", "qemu migrate"}
+RUNNABLE_PARENTS = {
+    "version", "pve lxc migrate", "pve node vzdump", "pve qemu agent", "pve qemu migrate",
+}
 
 # Leaves with no automated coverage by design (interactive PTY or shared-host
 # daemon mutation). Detected from the deferred reason text, listed here too so
