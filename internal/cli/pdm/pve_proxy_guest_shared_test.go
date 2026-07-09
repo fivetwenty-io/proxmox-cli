@@ -79,11 +79,12 @@ func TestPveGuestLs_SendsNode(t *testing.T) {
 	}
 }
 
-// TestPveGuestConfig_RawBypassDoesNotFabricateFields asserts that `<kind>
-// config` recovers data via the raw-transport bypass and does not fabricate
-// the numbered per-slot fields (dev0, mp0, ...) the typed struct declares as
-// always-present.
-func TestPveGuestConfig_RawBypassDoesNotFabricateFields(t *testing.T) {
+// TestPveGuestConfig_DoesNotFabricateFields asserts that `<kind> config`
+// only renders the fields the server actually sent, not the numbered
+// per-slot fields (dev0, mp0, ...) the typed struct declares as
+// pointer/omitempty. "description" and "cores" are declared with the same
+// name and type on both the qemu and lxc config response structs.
+func TestPveGuestConfig_DoesNotFabricateFields(t *testing.T) {
 	for _, gf := range guestFixtures {
 		t.Run(gf.kind.noun, func(t *testing.T) {
 			f, pc := newFakeClient(t)
@@ -91,7 +92,7 @@ func TestPveGuestConfig_RawBypassDoesNotFabricateFields(t *testing.T) {
 
 			var rec recordedRequest
 			recordJSON(f, "GET /api2/json/pve/remotes/cluster1/"+gf.kind.noun+"/104/config", &rec,
-				map[string]any{"hostname": "ct1", "memory": 512})
+				map[string]any{"description": "test config", "cores": 4})
 
 			var buf bytes.Buffer
 			err := run(deps, &buf, newPveGuestConfigCmd(gf.kind), "config", "cluster1", "104")
@@ -100,7 +101,7 @@ func TestPveGuestConfig_RawBypassDoesNotFabricateFields(t *testing.T) {
 
 			var got map[string]any
 			require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
-			require.Equal(t, "ct1", got["hostname"])
+			require.Equal(t, "test config", got["description"])
 			_, hasDev0 := got["dev0"]
 			require.False(t, hasDev0, "config output must not fabricate unset numbered fields like dev0")
 		})
@@ -148,10 +149,9 @@ func TestPveGuestStatus_RendersSingle(t *testing.T) {
 	}
 }
 
-// TestPveGuestPending_UsesRawBypass asserts that `<kind> pending` recovers
-// data via the raw-transport bypass (the generated binding discards the
-// response body despite the endpoint being data-bearing).
-func TestPveGuestPending_UsesRawBypass(t *testing.T) {
+// TestPveGuestPending_RendersEntries asserts that `<kind> pending` renders
+// the pending-change entries.
+func TestPveGuestPending_RendersEntries(t *testing.T) {
 	for _, gf := range guestFixtures {
 		t.Run(gf.kind.noun, func(t *testing.T) {
 			f, pc := newFakeClient(t)

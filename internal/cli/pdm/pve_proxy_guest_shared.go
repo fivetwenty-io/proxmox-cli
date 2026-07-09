@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 
 	pveclient "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
+	pdmpve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/pve"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
@@ -140,21 +141,11 @@ func newPveGuestLsCmd(kind pveGuestKind, list pveGuestListFunc) *cobra.Command {
 
 // newPveGuestConfigCmd builds `pmx pdm pve <kind> config <remote> <vmid>` —
 // get the configuration of a guest from a remote (GET
-// /pve/remotes/{remote}/<kind>/{vmid}/config).
-//
-// ListRemotesLxcConfigResponse/ListRemotesQemuConfigResponse declare their
-// ~250 numbered per-slot properties (dev0..dev255, mp0..mp167, net0..31,
-// scsi0..30, etc.) without an "optional" flag in pdm-apidoc.json (verified
-// 2026-07-08 — e.g. lxc's config schema alone has 801 such "required"
-// properties), so the generator emitted them as plain non-pointer Go string
-// fields with no `omitempty`. Round-tripping the typed struct through
-// flattenToMap (marshal-then-unmarshal) would therefore fabricate hundreds of
-// `"dev0": ""`-style entries that were never present in the wire response —
-// a real guest config only carries the handful of slots actually configured.
-// This bypasses the generated binding via the shared raw transport
-// (pveRawGetFields, the same helper `pve options`/`pve node config` use for
-// the discard-body defect) to decode the wire JSON directly into a map,
-// preserving only the fields the server actually sent.
+// /pve/remotes/{remote}/<kind>/{vmid}/config). ListRemotesLxcConfigResponse/
+// ListRemotesQemuConfigResponse declare their ~250 numbered per-slot
+// properties (dev0..dev255, mp0..mp167, net0..31, scsi0..30, etc.) as
+// pointer fields with `omitempty`, so flattenToMap only surfaces the slots
+// the server actually populated.
 func newPveGuestConfigCmd(kind pveGuestKind) *cobra.Command {
 	var (
 		node, snapshot, state string
@@ -170,17 +161,36 @@ func newPveGuestConfigCmd(kind pveGuestKind) *cobra.Command {
 			remote, vmid := args[0], args[1]
 			fl := cmd.Flags()
 
-			query := map[string]any{"state": state}
+			var nodePtr, snapshotPtr *string
 			if fl.Changed("node") {
-				query["node"] = node
+				nodePtr = &node
 			}
 			if fl.Changed("snapshot") {
-				query["snapshot"] = snapshot
+				snapshotPtr = &snapshot
 			}
 
-			path := pveRemotePath(remote, fmt.Sprintf("/%s/%s/config", kind.noun, vmid))
-
-			fields, err := pveRawGetFields(deps, cmd.Context(), path, query)
+			var (
+				fields map[string]any
+				err    error
+			)
+			switch kind.noun {
+			case pveGuestQemu.noun:
+				params := &pdmpve.ListRemotesQemuConfigParams{State: state, Node: nodePtr, Snapshot: snapshotPtr}
+				var resp *pdmpve.ListRemotesQemuConfigResponse
+				resp, err = deps.PDM.Pve.ListRemotesQemuConfig(cmd.Context(), remote, vmid, params)
+				if err == nil {
+					fields, err = flattenToMap(resp)
+				}
+			case pveGuestLxc.noun:
+				params := &pdmpve.ListRemotesLxcConfigParams{State: state, Node: nodePtr, Snapshot: snapshotPtr}
+				var resp *pdmpve.ListRemotesLxcConfigResponse
+				resp, err = deps.PDM.Pve.ListRemotesLxcConfig(cmd.Context(), remote, vmid, params)
+				if err == nil {
+					fields, err = flattenToMap(resp)
+				}
+			default:
+				err = fmt.Errorf("unsupported guest kind %q", kind.noun)
+			}
 			if err != nil {
 				return fmt.Errorf("get configuration of %s %s on PVE remote %q: %w", kind.noun, vmid, remote, err)
 			}
@@ -236,14 +246,6 @@ func newPveGuestStatusCmd(kind pveGuestKind, status pveGuestStatusFunc) *cobra.C
 // newPveGuestPendingCmd builds `pmx pdm pve <kind> pending <remote> <vmid>`
 // — get the pending configuration of a guest from a remote (GET
 // /pve/remotes/{remote}/<kind>/{vmid}/pending).
-//
-// ListRemotesLxcPending/ListRemotesQemuPending discard their response body
-// (`_ = resp; return nil`, pve_gen.go:2873-2899 and :6157-6183, v3.6.0)
-// despite pdm-apidoc.json describing both endpoints as "Get the pending
-// configuration of a[n] lxc container/qemu VM from a remote." (verified
-// 2026-07-08; their declared returns.type is itself "null" — the same
-// under-declared-but-data-bearing schema shape as `pve options`/`pve node
-// config`). Raw bypass, same rationale.
 func newPveGuestPendingCmd(kind pveGuestKind) *cobra.Command {
 	var node string
 	cmd := &cobra.Command{
@@ -256,33 +258,31 @@ func newPveGuestPendingCmd(kind pveGuestKind) *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
 
-			var query map[string]any
+			var nodePtr *string
 			if cmd.Flags().Changed("node") {
-				query = map[string]any{"node": node}
+				nodePtr = &node
 			}
 
-			path := pveRemotePath(remote, fmt.Sprintf("/%s/%s/pending", kind.noun, vmid))
-
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), path, query)
+			var (
+				items []json.RawMessage
+				err   error
+			)
+			switch kind.noun {
+			case pveGuestQemu.noun:
+				var resp *pdmpve.ListRemotesQemuPendingResponse
+				resp, err = deps.PDM.Pve.ListRemotesQemuPending(cmd.Context(), remote, vmid,
+					&pdmpve.ListRemotesQemuPendingParams{Node: nodePtr})
+				items = rawItemsOf(resp)
+			case pveGuestLxc.noun:
+				var resp *pdmpve.ListRemotesLxcPendingResponse
+				resp, err = deps.PDM.Pve.ListRemotesLxcPending(cmd.Context(), remote, vmid,
+					&pdmpve.ListRemotesLxcPendingParams{Node: nodePtr})
+				items = rawItemsOf(resp)
+			default:
+				err = fmt.Errorf("unsupported guest kind %q", kind.noun)
+			}
 			if err != nil {
 				return fmt.Errorf("get pending configuration of %s %s on PVE remote %q: %w", kind.noun, vmid, remote, err)
-			}
-			if resp == nil {
-				return fmt.Errorf("get pending configuration of %s %s on PVE remote %q: empty response from server",
-					kind.noun, vmid, remote)
-			}
-
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("get pending configuration of %s %s on PVE remote %q: re-marshal data: %w",
-					kind.noun, vmid, remote, err)
-			}
-
-			var items []json.RawMessage
-
-			err = json.Unmarshal(raw, &items)
-			if err != nil {
-				return fmt.Errorf("decode pending configuration of %s %s on PVE remote %q: %w", kind.noun, vmid, remote, err)
 			}
 
 			entries := decodeRawList(items)

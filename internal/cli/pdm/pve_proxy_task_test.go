@@ -57,12 +57,9 @@ func TestPveTaskStatus_SendsWaitFlag(t *testing.T) {
 	require.Contains(t, buf.String(), "stopped")
 }
 
-// TestPveTaskLog_UsesRawBypassAndReadsLines asserts that `pve task log`
-// recovers the actual log-line array via the raw-transport bypass (the
-// generated binding's response struct is copy-pasted from the task status
-// schema and would silently drop the actual {n, t} line objects), and
-// forwards --start/--limit on the wire.
-func TestPveTaskLog_UsesRawBypassAndReadsLines(t *testing.T) {
+// TestPveTaskLog_ReadsLines asserts that `pve task log` decodes the
+// {n, t} log-line array and forwards --start/--limit on the wire.
+func TestPveTaskLog_ReadsLines(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 

@@ -1,11 +1,10 @@
 package pdm
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -326,48 +325,8 @@ func newPveRealmsCmd() *cobra.Command {
 	return cmd
 }
 
-// pveRawGetFields performs a raw GET against path (query parameters, if any,
-// passed via query) and decodes the response envelope's Data field into a
-// generic map. Used to bypass generated bindings that discard a data-bearing
-// endpoint's response body or carry a response type copy-pasted from an
-// unrelated endpoint's schema — see each call site's doc comment for which
-// defect applies and its pdm-apidoc.json/pve_gen.go citation.
-func pveRawGetFields(deps *cli.Deps, ctx context.Context, path string, query map[string]any) (map[string]any, error) {
-	resp, err := deps.PDM.Raw.GetRawCtx(ctx, path, query)
-	if err != nil {
-		return nil, err
-	}
-	if resp == nil {
-		return nil, fmt.Errorf("empty response from server")
-	}
-
-	raw, err := json.Marshal(resp.Data)
-	if err != nil {
-		return nil, fmt.Errorf("re-marshal response data: %w", err)
-	}
-
-	var fields map[string]any
-
-	err = json.Unmarshal(raw, &fields)
-	if err != nil {
-		return nil, fmt.Errorf("decode response data: %w", err)
-	}
-
-	return fields, nil
-}
-
 // newPveOptionsCmd builds `pmx pdm pve options <remote>` — return the
 // remote's cluster options (GET /pve/remotes/{remote}/options).
-//
-// ListRemotesOptions discards its response body (`_ = resp; return nil`,
-// pve_gen.go:4655-4671, v3.6.0) despite pdm-apidoc.json describing this
-// endpoint as "Return the remote's cluster options." (verified 2026-07-08,
-// though its declared returns.type is itself "null" — the schema
-// under-declares this endpoint the same way the PBS/PDM precedents this
-// pattern follows do). This bypasses the generated binding via the shared
-// raw transport (deps.PDM.Raw, the same *client.Client every generated
-// binding is itself built on) to recover the actual data, matching node.go's
-// `node ls` and pbs_proxy_node.go's `pbs node apt repositories`.
 func newPveOptionsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "options <remote>",
@@ -378,11 +337,14 @@ func newPveOptionsCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
 
-			path := fmt.Sprintf("/pve/remotes/%s/options", url.PathEscape(remote))
-
-			fields, err := pveRawGetFields(deps, cmd.Context(), path, nil)
+			resp, err := deps.PDM.Pve.ListRemotesOptions(cmd.Context(), remote)
 			if err != nil {
 				return fmt.Errorf("get cluster options for PVE remote %q: %w", remote, err)
+			}
+
+			fields, err := flattenToMap(resp)
+			if err != nil {
+				return fmt.Errorf("decode cluster options for PVE remote %q: %w", remote, err)
 			}
 
 			res := output.Result{Single: stringMap(fields), Raw: fields}
@@ -393,12 +355,9 @@ func newPveOptionsCmd() *cobra.Command {
 
 // newPveUpdatesCmd builds `pmx pdm pve updates <remote>` — return the cached
 // update information about a remote (GET /pve/remotes/{remote}/updates).
-//
-// ListRemotesUpdates discards its response body (`_ = resp; return nil`,
-// pve_gen.go:7292-7308, v3.6.0) despite pdm-apidoc.json describing this
-// endpoint as "Return the cached update information about a remote."
-// (verified 2026-07-08; same "null"-typed-but-data-bearing schema shape as
-// `pve options`). Raw bypass, same rationale.
+// The response is an array of opaque per-package update objects (the PDM
+// API schema does not declare their fields), so Single carries only the
+// entry count while Raw preserves every entry losslessly.
 func newPveUpdatesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "updates <remote>",
@@ -409,14 +368,16 @@ func newPveUpdatesCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
 
-			path := fmt.Sprintf("/pve/remotes/%s/updates", url.PathEscape(remote))
-
-			fields, err := pveRawGetFields(deps, cmd.Context(), path, nil)
+			resp, err := deps.PDM.Pve.ListRemotesUpdates(cmd.Context(), remote)
 			if err != nil {
 				return fmt.Errorf("get cached updates for PVE remote %q: %w", remote, err)
 			}
 
-			res := output.Result{Single: stringMap(fields), Raw: fields}
+			items := decodeRawList(rawItemsOf(resp))
+
+			single := map[string]string{"updates": strconv.Itoa(len(items))}
+
+			res := output.Result{Single: single, Raw: items}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -482,13 +443,6 @@ func newPveClusterStatusCmd() *cobra.Command {
 // newPveClusterNextIDCmd builds `pmx pdm pve cluster next-id <remote>` — get
 // the next free VMID on the (target) cluster (GET
 // /pve/remotes/{remote}/cluster-nextid).
-//
-// ListRemotesClusterNextid discards its response body (`_ = resp; return
-// nil`, pve_gen.go:554-583, v3.6.0) despite pdm-apidoc.json describing this
-// endpoint as "Get the next free VMID on the (target) cluster, e.g. to
-// prefill a migration target VMID." (verified 2026-07-08; same
-// "null"-typed-but-data-bearing schema shape as `pve options`). Raw bypass,
-// same rationale.
 func newPveClusterNextIDCmd() *cobra.Command {
 	var targetEndpoint string
 	cmd := &cobra.Command{
@@ -501,24 +455,26 @@ func newPveClusterNextIDCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
 
-			path := fmt.Sprintf("/pve/remotes/%s/cluster-nextid", url.PathEscape(remote))
-
-			var query map[string]any
+			params := &pdmpve.ListRemotesClusterNextidParams{}
 			if cmd.Flags().Changed("target-endpoint") {
-				query = map[string]any{"target-endpoint": targetEndpoint}
+				params.TargetEndpoint = &targetEndpoint
 			}
 
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), path, query)
+			resp, err := deps.PDM.Pve.ListRemotesClusterNextid(cmd.Context(), remote, params)
 			if err != nil {
 				return fmt.Errorf("get next free VMID for PVE remote %q: %w", remote, err)
 			}
-			if resp == nil {
-				return fmt.Errorf("get next free VMID for PVE remote %q: empty response from server", remote)
+
+			var data any
+			if resp != nil {
+				if err := json.Unmarshal(*resp, &data); err != nil {
+					return fmt.Errorf("decode next free VMID for PVE remote %q: %w", remote, err)
+				}
 			}
 
-			vmid := scalarString(resp.Data)
+			vmid := scalarString(data)
 
-			res := output.Result{Single: map[string]string{"vmid": vmid}, Raw: resp.Data, Message: vmid}
+			res := output.Result{Single: map[string]string{"vmid": vmid}, Raw: data, Message: vmid}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

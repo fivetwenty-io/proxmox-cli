@@ -3,7 +3,6 @@ package pdm
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 
@@ -14,18 +13,6 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
-
-// pveRemotePath builds a /pve/remotes/{remote}/... path with proper
-// escaping, shared by the raw-transport bypasses in this file.
-func pveRemotePath(remote, suffix string) string {
-	return fmt.Sprintf("/pve/remotes/%s%s", url.PathEscape(remote), suffix)
-}
-
-// pveRemoteNodePath builds a /pve/remotes/{remote}/nodes/{node}/... path
-// with proper escaping.
-func pveRemoteNodePath(remote, node, suffix string) string {
-	return fmt.Sprintf("/pve/remotes/%s/nodes/%s%s", url.PathEscape(remote), url.PathEscape(node), suffix)
-}
 
 // newPveNodeCmd builds `pmx pdm pve node` — inspect and manage a PVE
 // remote's node(s): status, config, network, RRD metrics, subscription,
@@ -158,15 +145,8 @@ func newPveNodeStatusCmd() *cobra.Command {
 
 // newPveNodeConfigCmd builds `pmx pdm pve node config <remote> <node>` —
 // get config for the node (GET /pve/remotes/{remote}/nodes/{node}/config).
-//
-// ListRemotesNodesConfig discards its response body (`_ = resp; return nil`,
-// pve_gen.go:3808-3824, v3.6.0) despite pdm-apidoc.json describing this
-// endpoint as "Get config for the node." (verified 2026-07-08; its declared
-// returns schema is bare `{"type": "null"}` with no properties at all,
-// stronger evidence of the same under-declared-but-data-bearing shape as
-// `pve options`/`pve updates`/`pve cluster next-id`). Raw bypass, same
-// rationale; there is no corresponding update method in the generated
-// Service interface, so this command is read-only.
+// There is no corresponding update method in the generated Service
+// interface, so this command is read-only.
 func newPveNodeConfigCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "config <remote> <node>",
@@ -177,9 +157,14 @@ func newPveNodeConfigCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
 
-			fields, err := pveRawGetFields(deps, cmd.Context(), pveRemoteNodePath(remote, node, "/config"), nil)
+			resp, err := deps.PDM.Pve.ListRemotesNodesConfig(cmd.Context(), remote, node)
 			if err != nil {
 				return fmt.Errorf("get config of node %q on PVE remote %q: %w", node, remote, err)
+			}
+
+			fields, err := flattenToMap(resp)
+			if err != nil {
+				return fmt.Errorf("decode config of node %q on PVE remote %q: %w", node, remote, err)
 			}
 
 			res := output.Result{Single: stringMap(fields), Raw: fields}
@@ -312,17 +297,6 @@ func newPveNodeRrddataCmd() *cobra.Command {
 // newPveNodeSubscriptionCmd builds `pmx pdm pve node subscription <remote>
 // <node>` — get subscription for the node (GET
 // /pve/remotes/{remote}/nodes/{node}/subscription).
-//
-// ListRemotesNodesSubscriptionResponse is byte-for-byte identical to
-// ListRemotesNodesStatusResponse (boot-info/cpu/cpuinfo/current-kernel/
-// loadavg/memory/pveversion/rootfs — pve_gen.go:4529-4548 vs :4301-4320,
-// v3.6.0), and pdm-apidoc.json's returns schema for this path is likewise
-// byte-for-byte identical to the node status endpoint's (verified
-// 2026-07-08) — a genuine upstream schema defect, not just a generator
-// quirk: decoding a real subscription response (status/key/checktime/etc.,
-// the same shape PDM's own /nodes/{node}/subscription and PBS's remote
-// subscription endpoint return) into this struct would silently drop every
-// field. Raw bypass to a generic map recovers the actual data instead.
 func newPveNodeSubscriptionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "subscription <remote> <node>",
@@ -333,9 +307,14 @@ func newPveNodeSubscriptionCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
 
-			fields, err := pveRawGetFields(deps, cmd.Context(), pveRemoteNodePath(remote, node, "/subscription"), nil)
+			resp, err := deps.PDM.Pve.ListRemotesNodesSubscription(cmd.Context(), remote, node)
 			if err != nil {
 				return fmt.Errorf("get subscription of node %q on PVE remote %q: %w", node, remote, err)
+			}
+
+			fields, err := flattenToMap(resp)
+			if err != nil {
+				return fmt.Errorf("decode subscription of node %q on PVE remote %q: %w", node, remote, err)
 			}
 
 			res := output.Result{Single: stringMap(fields), Raw: fields}
@@ -451,27 +430,6 @@ func newPveNodeAptUpdateDatabaseCmd() *cobra.Command {
 	}
 }
 
-// pveNodeAptRepositoriesResponse mirrors the shape PDM's own (non-proxied)
-// /nodes/{node}/apt/repositories endpoint returns (ListAptRepositoriesResponse,
-// nodes_gen.go:300-311, v3.6.0). The PVE-remote analog documents the same
-// "Get configured APT repositories" behavior, but its PDM API schema
-// declares returns.type "null" with no properties at all (pdm-apidoc.json,
-// verified 2026-07-08) and the generated binding is error-only —
-// `ListRemotesNodesAptRepositories(ctx, remote, node) error`
-// (pve_gen.go:3724-3743, v3.6.0) — discarding the body it reads (`_ = resp;
-// return nil`). This bypasses the generated binding via the shared raw
-// transport (deps.PDM.Raw, the same *client.Client every generated binding
-// is itself built on) to recover the actual data, the identical
-// discard-body workaround as pbs_proxy_node.go's `pbs node apt repositories`
-// (which proxies the same underlying PVE::API2::APT::Repositories code).
-type pveNodeAptRepositoriesResponse struct {
-	Digest        string            `json:"digest"`
-	Errors        []json.RawMessage `json:"errors"`
-	Files         []json.RawMessage `json:"files"`
-	Infos         []json.RawMessage `json:"infos"`
-	StandardRepos []json.RawMessage `json:"standard-repos"`
-}
-
 // newPveNodeAptRepositoriesCmd builds `pmx pdm pve node apt repositories
 // <remote> <node>` — get configured APT repositories on a remote node (GET
 // /pve/remotes/{remote}/nodes/{node}/apt/repositories). The response is
@@ -487,24 +445,12 @@ func newPveNodeAptRepositoriesCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
 
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), pveRemoteNodePath(remote, node, "/apt/repositories"), nil)
+			out, err := deps.PDM.Pve.ListRemotesNodesAptRepositories(cmd.Context(), remote, node)
 			if err != nil {
 				return fmt.Errorf("get apt repositories on node %q of PVE remote %q: %w", node, remote, err)
 			}
-			if resp == nil {
+			if out == nil {
 				return fmt.Errorf("get apt repositories on node %q of PVE remote %q: empty response from server", node, remote)
-			}
-
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("get apt repositories on node %q of PVE remote %q: re-marshal data: %w", node, remote, err)
-			}
-
-			var out pveNodeAptRepositoriesResponse
-
-			err = json.Unmarshal(raw, &out)
-			if err != nil {
-				return fmt.Errorf("decode apt repositories on node %q of PVE remote %q: %w", node, remote, err)
 			}
 
 			single := map[string]string{

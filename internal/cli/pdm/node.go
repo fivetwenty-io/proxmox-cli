@@ -3,7 +3,6 @@ package pdm
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -67,15 +66,6 @@ type nodeListEntry struct {
 // newNodeLsCmd builds `pmx pdm node ls` — list the node entries visible at
 // the compatibility cluster-node listing (GET /nodes), sorted by node name.
 //
-// The generated Nodes.ListNodes binding discards its response body: the PDM
-// API schema's returns.type for this "only for compatibility" endpoint is
-// "null" (pdm-apidoc.json, verified 2026-07-08), and nodes_gen.go emits
-// `ListNodes(ctx context.Context) error` — no response type at all
-// (nodes_gen.go:26-28,192-208, v3.6.0). This bypasses it via the shared raw
-// transport (the same *client.Client every generated binding is itself built
-// on) to recover the actual entries, matching the PBS analog's identical
-// workaround (internal/cli/pbs/node.go:70-117).
-//
 // Like every other discrete-entity ls in this package (remote.go, realm_ad.go,
 // etc.), entries are sorted by their identifying name with the Raw/Rows
 // pair kept together through the sort (remote.go's inline `type xRow
@@ -91,18 +81,12 @@ func newNodeLsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), "/nodes", nil)
+			resp, err := deps.PDM.Nodes.ListNodes(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("list nodes: %w", err)
-			}
-			if resp == nil {
-				return fmt.Errorf("list nodes: empty response from server")
 			}
 
-			items, err := nodeRawArrayItems(resp.Data)
-			if err != nil {
-				return fmt.Errorf("list nodes: %w", err)
-			}
+			items := rawItemsOf(resp)
 
 			type nodeListRow struct {
 				entry nodeListEntry
@@ -142,30 +126,6 @@ func newNodeLsCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-}
-
-// nodeRawArrayItems converts an arbitrary decoded JSON value (typically
-// *client.Response.Data from a raw-transport call) into a slice of
-// json.RawMessage elements. It errors if data is non-nil and not a JSON
-// array, rather than silently returning an empty list.
-func nodeRawArrayItems(data any) ([]json.RawMessage, error) {
-	if data == nil {
-		return []json.RawMessage{}, nil
-	}
-
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("marshal response data: %w", err)
-	}
-
-	var items []json.RawMessage
-
-	err = json.Unmarshal(raw, &items)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal response data as array: %w", err)
-	}
-
-	return items, nil
 }
 
 // nodeDecodeArray unmarshals each element of items into T, returning a hard
@@ -580,10 +540,4 @@ func newNodeTimeUpdateCmd() *cobra.Command {
 	cli.MustMarkRequired(cmd, "timezone")
 
 	return cmd
-}
-
-// path builds a /nodes/{node}/... path with proper escaping, shared by the
-// raw-transport bypasses in this command group.
-func nodePath(node string, suffix string) string {
-	return fmt.Sprintf("/nodes/%s%s", url.PathEscape(node), suffix)
 }

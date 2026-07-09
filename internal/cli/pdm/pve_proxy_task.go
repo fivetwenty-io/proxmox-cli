@@ -164,18 +164,6 @@ func newPveTaskStatusCmd() *cobra.Command {
 
 // newPveTaskLogCmd builds `pmx pdm pve task log <remote> <upid>` — read a
 // task log on a PVE remote (GET /pve/remotes/{remote}/tasks/{upid}/log).
-//
-// ListRemotesTasksLogResponse is byte-for-byte identical to
-// ListRemotesTasksStatusResponse (Exitstatus/Id/Node/Pid/Pstart/Starttime/
-// Status/Type/Upid/User — pve_gen.go:7156-7176 vs :7227-7247, v3.6.0), and
-// pdm-apidoc.json's returns schema for this path is likewise byte-for-byte
-// identical to the task status endpoint's (verified 2026-07-08) — a genuine
-// upstream schema defect, not just a generator quirk: a real task log
-// response is an array of {n, t} line objects (the same shape PBS's
-// structurally identical ListRemotesTasksLogResponse = []json.RawMessage
-// correctly declares, and nodeLogLine already decodes elsewhere in this
-// package), not a single status object. Raw bypass recovers the actual
-// array instead of silently decoding into the wrong struct shape.
 func newPveTaskLogCmd() *cobra.Command {
 	var (
 		start, limit int64
@@ -190,40 +178,23 @@ func newPveTaskLogCmd() *cobra.Command {
 			remote, upid := args[0], args[1]
 			fl := cmd.Flags()
 
-			query := map[string]any{}
+			params := &pdmpve.ListRemotesTasksLogParams{}
 			if fl.Changed("start") {
-				query["start"] = start
+				params.Start = &start
 			}
 			if fl.Changed("limit") {
-				query["limit"] = limit
+				params.Limit = &limit
 			}
 			if fl.Changed("download") {
-				query["download"] = download
+				params.Download = &download
 			}
 
-			path := pveRemotePath(remote, fmt.Sprintf("/tasks/%s/log", upid))
-
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), path, query)
+			resp, err := deps.PDM.Pve.ListRemotesTasksLog(cmd.Context(), remote, upid, params)
 			if err != nil {
 				return fmt.Errorf("read log of task %q on PVE remote %q: %w", upid, remote, err)
 			}
-			if resp == nil {
-				return fmt.Errorf("read log of task %q on PVE remote %q: empty response from server", upid, remote)
-			}
 
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("read log of task %q on PVE remote %q: re-marshal data: %w", upid, remote, err)
-			}
-
-			var items []json.RawMessage
-
-			err = json.Unmarshal(raw, &items)
-			if err != nil {
-				return fmt.Errorf("decode log of task %q on PVE remote %q: %w", upid, remote, err)
-			}
-
-			lines, err := nodeDecodeArray[nodeLogLine](items)
+			lines, err := nodeDecodeArray[nodeLogLine](rawItemsOf(resp))
 			if err != nil {
 				return fmt.Errorf("decode log of task %q on PVE remote %q: %w", upid, remote, err)
 			}

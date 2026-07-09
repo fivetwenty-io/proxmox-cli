@@ -108,10 +108,9 @@ func TestPveRealms_SortsByRealm(t *testing.T) {
 	require.Equal(t, "pve-zeta", got[1]["realm"])
 }
 
-// TestPveOptions_UsesRawBypass asserts that `pve options` recovers data via
-// the raw-transport bypass (the generated binding discards the response
-// body despite the endpoint being data-bearing).
-func TestPveOptions_UsesRawBypass(t *testing.T) {
+// TestPveOptions_RendersClusterOptions asserts that `pve options` renders
+// the remote's cluster options.
+func TestPveOptions_RendersClusterOptions(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
@@ -126,20 +125,21 @@ func TestPveOptions_UsesRawBypass(t *testing.T) {
 	require.Contains(t, buf.String(), "secure")
 }
 
-// TestPveUpdates_UsesRawBypass asserts that `pve updates` recovers data via
-// the raw-transport bypass.
-func TestPveUpdates_UsesRawBypass(t *testing.T) {
+// TestPveUpdates_RendersEntryCountAndRaw asserts that `pve updates` decodes
+// the array of cached update entries, preserving every entry in Raw.
+func TestPveUpdates_RendersEntryCountAndRaw(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/updates", map[string]any{
-		"last-updated": 1700000000,
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/updates", []map[string]any{
+		{"Package": "proxmox-ve", "Version": "8.2.0"},
 	})
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newPveUpdatesCmd(), "updates", "cluster1")
 	require.NoError(t, err)
-	require.Contains(t, buf.String(), "1700000000")
+	require.Contains(t, buf.String(), "proxmox-ve")
+	require.Contains(t, buf.String(), "8.2.0")
 }
 
 // TestPveClusterStatus_PreservesServerOrder asserts that `pve cluster
@@ -163,9 +163,9 @@ func TestPveClusterStatus_PreservesServerOrder(t *testing.T) {
 	require.Contains(t, buf.String(), "pve1")
 }
 
-// TestPveClusterNextID_UsesRawBypass asserts that `pve cluster next-id`
-// recovers the VMID via the raw-transport bypass.
-func TestPveClusterNextID_UsesRawBypass(t *testing.T) {
+// TestPveClusterNextID_RendersVMID asserts that `pve cluster next-id`
+// renders the next free VMID.
+func TestPveClusterNextID_RendersVMID(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 

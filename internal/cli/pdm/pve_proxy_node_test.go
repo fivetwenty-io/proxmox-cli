@@ -49,10 +49,9 @@ func TestPveNodeStatus_RendersSingle(t *testing.T) {
 	require.Contains(t, buf.String(), "pve-manager/8.2")
 }
 
-// TestPveNodeConfig_UsesRawBypass asserts that `pve node config` recovers
-// data via the raw-transport bypass (the generated binding discards the
-// response body).
-func TestPveNodeConfig_UsesRawBypass(t *testing.T) {
+// TestPveNodeConfig_RendersFields asserts that `pve node config` renders
+// the node's configuration fields.
+func TestPveNodeConfig_RendersFields(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
@@ -117,11 +116,10 @@ func TestPveNodeRrddata_ListsDataPoints(t *testing.T) {
 		"rrddata rows must preserve server order, not be sorted")
 }
 
-// TestPveNodeSubscription_UsesRawBypass asserts that `pve node subscription`
-// recovers the real subscription fields via the raw-transport bypass
-// (the generated binding's response struct is copy-pasted from the node
-// status schema and would silently drop the actual fields).
-func TestPveNodeSubscription_UsesRawBypass(t *testing.T) {
+// TestPveNodeSubscription_RendersFields asserts that `pve node subscription`
+// renders the node's real subscription fields (status/key/etc., not the
+// node-status shape).
+func TestPveNodeSubscription_RendersFields(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
@@ -192,10 +190,10 @@ func TestPveNodeAptUpdateDatabase_Async(t *testing.T) {
 	require.NotContains(t, buf.String(), "refreshed")
 }
 
-// TestPveNodeAptRepositories_UsesRawBypass asserts that `pve node apt
-// repositories` recovers data via the raw-transport bypass and renders
-// summary counts in Single while preserving the full structure in Raw.
-func TestPveNodeAptRepositories_UsesRawBypass(t *testing.T) {
+// TestPveNodeAptRepositories_RendersSummaryAndRaw asserts that `pve node apt
+// repositories` renders summary counts in Single while preserving the full
+// structure in Raw.
+func TestPveNodeAptRepositories_RendersSummaryAndRaw(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 

@@ -37,16 +37,8 @@ var validNodeRrdTimeframes = []string{"hour", "day", "week", "month", "year", "d
 var validNodeRrdConsolidations = []string{"MAX", "AVERAGE"}
 
 // newNodeJournalCmd builds `pmx pdm node journal <node>` — read raw systemd
-// journal lines (GET /nodes/{node}/journal).
-//
-// The generated Nodes.ListJournal binding discards its response body: the
-// PDM API schema's returns.type for this endpoint is "null"
-// (pdm-apidoc.json, verified 2026-07-08) and nodes_gen.go emits
-// `ListJournal(ctx, node string, params *ListJournalParams) error` — no
-// response type at all (nodes_gen.go:89-91,1017-1045, v3.6.0), unlike the
-// PBS analog whose ListJournal returns a typed `*ListJournalResponse`
-// ([]string alias, internal/cli/pbs/node_logs.go:94-159). This bypasses it
-// via the shared raw transport to recover the actual lines.
+// journal lines (GET /nodes/{node}/journal), matching the PBS analog
+// (internal/cli/pbs/node_logs.go's newNodeJournalCmd).
 func newNodeJournalCmd() *cobra.Command {
 	var (
 		lastentries  int64
@@ -66,39 +58,31 @@ func newNodeJournalCmd() *cobra.Command {
 			node := args[0]
 			fl := cmd.Flags()
 
-			body := map[string]interface{}{}
+			params := &pdmnodes.ListJournalParams{}
 			if fl.Changed("lastentries") {
-				body["lastentries"] = lastentries
+				params.Lastentries = &lastentries
 			}
 			if fl.Changed("since") {
-				body["since"] = since
+				params.Since = &since
 			}
 			if fl.Changed("until") {
-				body["until"] = until
+				params.Until = &until
 			}
 			if fl.Changed("startcursor") {
-				body["startcursor"] = startcursor
+				params.Startcursor = &startcursor
 			}
 			if fl.Changed("endcursor") {
-				body["endcursor"] = endcursor
+				params.Endcursor = &endcursor
 			}
 
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), nodePath(node, "/journal"), body)
-			if err != nil {
-				return fmt.Errorf("read journal on node %q: %w", node, err)
-			}
-			if resp == nil {
-				return fmt.Errorf("read journal on node %q: empty response from server", node)
-			}
-
-			items, err := nodeRawArrayItems(resp.Data)
+			resp, err := deps.PDM.Nodes.ListJournal(cmd.Context(), node, params)
 			if err != nil {
 				return fmt.Errorf("read journal on node %q: %w", node, err)
 			}
 
-			lines, err := nodeDecodeArray[string](items)
-			if err != nil {
-				return fmt.Errorf("decode journal on node %q: %w", node, err)
+			lines := make([]string, 0)
+			if resp != nil {
+				lines = []string(*resp)
 			}
 
 			headers := []string{"LINE"}

@@ -65,12 +65,10 @@ func TestPbsNodeAptUpdateDatabase_Async(t *testing.T) {
 	require.NotContains(t, buf.String(), "refreshed")
 }
 
-// TestPbsNodeAptRepositories_UsesRawBypass asserts that `pbs node apt
-// repositories` recovers data via the raw-transport bypass (the generated
-// binding discards the response body since the PDM API schema declares
-// returns.type "null" for this endpoint) and renders summary counts in
-// Single while preserving the full structure in Raw.
-func TestPbsNodeAptRepositories_UsesRawBypass(t *testing.T) {
+// TestPbsNodeAptRepositories_RendersSummaryAndRaw asserts that `pbs node apt
+// repositories` renders summary counts in Single while preserving the full
+// structure in Raw.
+func TestPbsNodeAptRepositories_RendersSummaryAndRaw(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatTable, false)
 

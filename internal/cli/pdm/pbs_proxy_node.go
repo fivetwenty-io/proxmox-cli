@@ -1,9 +1,7 @@
 package pdm
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/url"
 
 	"github.com/spf13/cobra"
 
@@ -128,26 +126,6 @@ func newPbsNodeAptUpdateDatabaseCmd() *cobra.Command {
 	}
 }
 
-// pbsNodeAptRepositoriesResponse mirrors the shape PDM's own (non-proxied)
-// /nodes/{node}/apt/repositories endpoint returns (ListAptRepositoriesResponse,
-// nodes_gen.go:300-311, v3.6.0). The PBS-remote analog documents the same
-// "Get configured APT repositories" behavior, but its PDM API schema
-// declares returns.type "null" (pdm-apidoc.json, verified 2026-07-08) and
-// the generated binding is error-only —
-// `ListRemotesNodesAptRepositories(ctx, remote, node) error`
-// (pbs_gen.go:580-596, v3.6.0) — discarding the body it reads (`_ = resp;
-// return nil`). This bypasses the generated binding via the shared raw
-// transport (deps.PDM.Raw, the same *client.Client every generated binding
-// is itself built on) to recover the actual data, the same discard-body
-// workaround as node.go's `node ls` (GET /nodes, also returns.type "null").
-type pbsNodeAptRepositoriesResponse struct {
-	Digest        string            `json:"digest"`
-	Errors        []json.RawMessage `json:"errors"`
-	Files         []json.RawMessage `json:"files"`
-	Infos         []json.RawMessage `json:"infos"`
-	StandardRepos []json.RawMessage `json:"standard-repos"`
-}
-
 // newPbsNodeAptRepositoriesCmd builds `pmx pdm pbs node apt repositories
 // <remote> <node>` — get configured APT repositories on a remote node (GET
 // /pbs/remotes/{remote}/nodes/{node}/apt/repositories). The response is
@@ -163,26 +141,12 @@ func newPbsNodeAptRepositoriesCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
 
-			path := fmt.Sprintf("/pbs/remotes/%s/nodes/%s/apt/repositories", url.PathEscape(remote), url.PathEscape(node))
-
-			resp, err := deps.PDM.Raw.GetRawCtx(cmd.Context(), path, nil)
+			out, err := deps.PDM.Pbs.ListRemotesNodesAptRepositories(cmd.Context(), remote, node)
 			if err != nil {
 				return fmt.Errorf("get apt repositories on node %q of PBS remote %q: %w", node, remote, err)
 			}
-			if resp == nil {
+			if out == nil {
 				return fmt.Errorf("get apt repositories on node %q of PBS remote %q: empty response from server", node, remote)
-			}
-
-			raw, err := json.Marshal(resp.Data)
-			if err != nil {
-				return fmt.Errorf("get apt repositories on node %q of PBS remote %q: re-marshal data: %w", node, remote, err)
-			}
-
-			var out pbsNodeAptRepositoriesResponse
-
-			err = json.Unmarshal(raw, &out)
-			if err != nil {
-				return fmt.Errorf("decode apt repositories on node %q of PBS remote %q: %w", node, remote, err)
 			}
 
 			single := map[string]string{
