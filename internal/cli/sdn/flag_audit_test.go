@@ -1,6 +1,7 @@
 package sdn
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -373,9 +374,11 @@ func TestFabricCreateRedistribute(t *testing.T) {
 		"--redistribute", "static")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
-	// The form captures the first repeated value; assert it equals the first element.
-	require.Equal(t, "connected", rec[0].body["redistribute"],
-		"first --redistribute value must reach API key \"redistribute\"")
+	// The API expects redistribute as a JSON array of the repeated values.
+	var got []string
+	require.NoError(t, json.Unmarshal([]byte(rec[0].body["redistribute"].(string)), &got))
+	require.Equal(t, []string{"connected", "static"}, got,
+		"every --redistribute value must reach API key \"redistribute\"")
 }
 
 // TestFabricCreateRedistributeAbsent verifies that when --redistribute is not
@@ -404,7 +407,9 @@ func TestFabricSetRedistribute(t *testing.T) {
 		"--redistribute", "bgp")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
-	require.Equal(t, "bgp", rec[0].body["redistribute"],
+	var got []string
+	require.NoError(t, json.Unmarshal([]byte(rec[0].body["redistribute"].(string)), &got))
+	require.Equal(t, []string{"bgp"}, got,
 		"--redistribute value must reach API key \"redistribute\" on set")
 }
 
@@ -437,8 +442,10 @@ func TestFabricNodeCreateInterface(t *testing.T) {
 		"--interface", "eth1")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
-	require.Equal(t, "eth0", rec[0].body["interfaces"],
-		"first --interface value must reach API key \"interfaces\"")
+	var got []string
+	require.NoError(t, json.Unmarshal([]byte(rec[0].body["interfaces"].(string)), &got))
+	require.Equal(t, []string{"eth0", "eth1"}, got,
+		"every --interface value must reach API key \"interfaces\"")
 }
 
 // TestFabricNodeCreateInterfaceAbsent verifies that when --interface is not
@@ -468,7 +475,9 @@ func TestFabricNodeSetInterface(t *testing.T) {
 		"--interface", "bond0")
 	require.NoError(t, err)
 	require.Len(t, rec, 1)
-	require.Equal(t, "bond0", rec[0].body["interfaces"],
+	var got []string
+	require.NoError(t, json.Unmarshal([]byte(rec[0].body["interfaces"].(string)), &got))
+	require.Equal(t, []string{"bond0"}, got,
 		"--interface value must reach API key \"interfaces\" on set")
 }
 
