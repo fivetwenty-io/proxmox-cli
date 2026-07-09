@@ -54,6 +54,20 @@ func decodeRawList(items []json.RawMessage) []map[string]any {
 	return out
 }
 
+// decodeRawString unmarshals a json.RawMessage that carries a plain JSON
+// string, the shape PDM uses for free-text endpoints such as
+// GET /config/acme/tos and GET /config/notes.
+func decodeRawString(raw json.RawMessage) (string, error) {
+	var text string
+
+	err := json.Unmarshal(raw, &text)
+	if err != nil {
+		return "", fmt.Errorf("unexpected non-string response: %w", err)
+	}
+
+	return text, nil
+}
+
 // flattenToMap re-marshals v (a typed API response struct) and unmarshals the
 // result into a generic map, so every populated field — including nested
 // json.RawMessage sub-objects — is available for Single/Raw rendering without
