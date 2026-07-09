@@ -57,6 +57,7 @@ func ChildFactories() []cli.GroupFactory {
 		wrap(newConfigCmd),
 		wrap(newNodeCmd),
 		wrap(newAutoInstallCmd),
+		wrap(newPbsCmd),
 	}
 }
 
