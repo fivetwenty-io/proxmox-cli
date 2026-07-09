@@ -630,7 +630,7 @@ pmx -c dcmgr pdm subscription auto-assign
 
 # Proxied PVE remote operations (through the PDM instance, not a direct PVE context).
 pmx -c dcmgr pdm pve remote ls
-pmx -c dcmgr pdm pve qemu list pve-remote-1
+pmx -c dcmgr pdm pve qemu ls pve-remote-1
 pmx -c dcmgr pdm pve node status pve-remote-1 node1
 
 # Proxied PBS remote operations.
