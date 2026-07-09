@@ -153,6 +153,7 @@ func TestAutoInstallPreparedAdd_SendsRequiredFieldsAndJSONFlags(t *testing.T) {
 		"--mailto", "admin@example.com",
 		"--timezone", "Europe/Berlin",
 		"--filesystem", `{"type":"ext4"}`,
+		"--gateway", "192.0.2.1",
 	)
 	require.NoError(t, err)
 
@@ -164,6 +165,7 @@ func TestAutoInstallPreparedAdd_SendsRequiredFieldsAndJSONFlags(t *testing.T) {
 	require.Equal(t, `{"type":"ext4"}`, rec.form.Get("filesystem"), "JSON-text flags must be sent unmangled")
 	require.Equal(t, "reboot", rec.form.Get("reboot-mode"), "reboot-mode default must always be sent")
 	require.Equal(t, "0", rec.form.Get("reboot-on-error"), "required booleans must always be sent")
+	require.Equal(t, "192.0.2.1", rec.form.Get("gateway"), "--gateway must reach the server")
 	require.Contains(t, buf.String(), `Prepared answer "web01" created.`)
 }
 
@@ -234,11 +236,13 @@ func TestAutoInstallPreparedUpdate_SendsOnlyChangedFields(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, newAutoInstallPreparedUpdateCmd(), "update", "web01",
 		"--target-filter", `{"/product":"pve*"}`,
+		"--gateway", "192.0.2.1",
 	)
 	require.NoError(t, err)
 
 	require.Equal(t, "PUT", rec.method)
 	require.Equal(t, `{"/product":"pve*"}`, rec.form.Get("target-filter"), "JSON-text flags must be sent unmangled")
+	require.Equal(t, "192.0.2.1", rec.form.Get("gateway"), "--gateway must reach the server")
 	require.Empty(t, rec.form.Get("country"), "unset fields must not be sent")
 	require.Contains(t, buf.String(), `Prepared answer "web01" updated.`)
 }

@@ -568,6 +568,9 @@ func (pf *autoInstallPreparedFlags) applyOptionalCreate(cmd *cobra.Command, para
 	if fl.Changed("dns") {
 		params.Dns = strPtr(pf.dns)
 	}
+	if fl.Changed("gateway") {
+		params.Gateway = strPtr(pf.gateway)
+	}
 	if fl.Changed("default") {
 		params.IsDefault = boolPtr(pf.isDefault)
 	}
@@ -621,6 +624,9 @@ func (pf *autoInstallPreparedFlags) applyOptionalUpdate(cmd *cobra.Command, para
 	}
 	if fl.Changed("dns") {
 		params.Dns = strPtr(pf.dns)
+	}
+	if fl.Changed("gateway") {
+		params.Gateway = strPtr(pf.gateway)
 	}
 	if fl.Changed("default") {
 		params.IsDefault = boolPtr(pf.isDefault)
