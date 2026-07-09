@@ -47,6 +47,12 @@ func ChildFactories() []cli.GroupFactory {
 		wrap(newSdnCmd),
 		wrap(newCephCmd),
 		wrap(newSubscriptionCmd),
+		wrap(newUserCmd),
+		wrap(newTokenCmd),
+		wrap(newACLCmd),
+		wrap(newRoleCmd),
+		wrap(newPermissionCmd),
+		wrap(newTfaCmd),
 	}
 }
 
