@@ -35,8 +35,7 @@ func stripPveScanSecrets(fields map[string]any) {
 // discovery (scan/probe-tls/realms), the PVE remote directory, cluster
 // options/updates/status/next-VMID/resources, cluster and node firewalls,
 // remote nodes (config, network, RRD metrics, APT, subscription, SDN VRF
-// lookups), storage, and remote tasks. Guest (qemu/lxc) operations live in a
-// separate command group.
+// lookups), storage, remote tasks, and guest (qemu/lxc) operations.
 //
 // ListPve, GetRemotes, ListFirewall, ListRemotesFirewall,
 // ListRemotesNodesApt, GetRemotesTasks, ListRemotesNodesFirewall,
@@ -55,8 +54,7 @@ func newPveCmd() *cobra.Command {
 			"Datacenter Manager instance manages: connection discovery, the PVE remote " +
 			"directory, cluster options/updates/status/next-VMID/resources, cluster and " +
 			"node firewalls, remote nodes (config, network, RRD metrics, APT, subscription, " +
-			"SDN VRF lookups), storage, and remote tasks. Guest (qemu/lxc) operations live " +
-			"in a separate command group.",
+			"SDN VRF lookups), storage, remote tasks, and guest (qemu/lxc) operations.",
 	}
 	cmd.AddCommand(
 		newPveRemoteCmd(),
@@ -70,6 +68,8 @@ func newPveCmd() *cobra.Command {
 		newPveNodeCmd(),
 		newPveStorageCmd(),
 		newPveTaskCmd(),
+		newPveQemuCmd(),
+		newPveLxcCmd(),
 	)
 	return cmd
 }
