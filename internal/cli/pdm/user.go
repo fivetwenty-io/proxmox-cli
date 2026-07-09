@@ -1,7 +1,6 @@
 package pdm
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -83,39 +82,20 @@ func newUserLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type userRow struct {
-				entry userListEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[userListEntry](items, "user")
+			if err != nil {
+				return err
 			}
-			table := make([]userRow, 0, len(items))
-
-			for _, raw := range items {
-				var e userListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode user entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode user entry: %w", err)
-				}
-
-				table = append(table, userRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Userid < table[j].entry.Userid })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Userid < table[j].Entry.Userid })
 
 			headers := []string{"USERID", "ENABLE", "EXPIRE", "FIRSTNAME", "LASTNAME", "EMAIL", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				m := t.raw
+				m := t.Raw
 				rows = append(rows, []string{
-					t.entry.Userid, userFormatEnable(m["enable"]), scalarString(m["expire"]),
+					t.Entry.Userid, userFormatEnable(m["enable"]), scalarString(m["expire"]),
 					scalarString(m["firstname"]), scalarString(m["lastname"]),
 					scalarString(m["email"]), scalarString(m["comment"]),
 				})

@@ -1,7 +1,7 @@
 package pdm
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -59,39 +59,20 @@ func newPbsDatastoreLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type dsRow struct {
-				entry pbsDatastoreEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pbsDatastoreEntry](items, "datastore")
+			if err != nil {
+				return fmt.Errorf("decode datastore entry on PBS remote %q: %w", remote, errors.Unwrap(err))
 			}
-			table := make([]dsRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pbsDatastoreEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode datastore entry on PBS remote %q: %w", remote, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode datastore entry on PBS remote %q: %w", remote, err)
-				}
-
-				table = append(table, dsRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "PATH", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Name, strPtrString(e.Path), strPtrString(e.Comment)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -138,39 +119,21 @@ func newPbsDatastoreNamespacesCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type nsRow struct {
-				entry pbsNamespaceEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pbsNamespaceEntry](items, "namespace")
+			if err != nil {
+				return fmt.Errorf("decode namespace entry of datastore %q on PBS remote %q: %w",
+					datastore, remote, errors.Unwrap(err))
 			}
-			table := make([]nsRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pbsNamespaceEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode namespace entry of datastore %q on PBS remote %q: %w", datastore, remote, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode namespace entry of datastore %q on PBS remote %q: %w", datastore, remote, err)
-				}
-
-				table = append(table, nsRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Ns < table[j].entry.Ns })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Ns < table[j].Entry.Ns })
 
 			headers := []string{"NS", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Ns, strPtrString(e.Comment)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -222,31 +185,13 @@ func newPbsDatastoreSnapshotsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type snapRow struct {
-				entry pbsSnapshotEntry
-				raw   map[string]any
-			}
-			table := make([]snapRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pbsSnapshotEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode snapshot entry of datastore %q on PBS remote %q: %w", datastore, remote, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode snapshot entry of datastore %q on PBS remote %q: %w", datastore, remote, err)
-				}
-
-				table = append(table, snapRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[pbsSnapshotEntry](items, "snapshot")
+			if err != nil {
+				return fmt.Errorf("decode snapshot entry of datastore %q on PBS remote %q: %w",
+					datastore, remote, errors.Unwrap(err))
 			}
 			sort.Slice(table, func(i, j int) bool {
-				a, b := table[i].entry, table[j].entry
+				a, b := table[i].Entry, table[j].Entry
 				if a.BackupType != b.BackupType {
 					return a.BackupType < b.BackupType
 				}
@@ -261,12 +206,12 @@ func newPbsDatastoreSnapshotsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.BackupType, e.BackupId, int64PtrString(&e.BackupTime), int64PtrString(e.Size),
 					strconv.FormatBool(e.Protected), strPtrString(e.Owner),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

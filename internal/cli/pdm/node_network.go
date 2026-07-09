@@ -1,7 +1,6 @@
 package pdm
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -63,42 +62,23 @@ func newNodeNetworkLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type networkRow struct {
-				entry nodeNetworkListEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[nodeNetworkListEntry](items, "network interface")
+			if err != nil {
+				return err
 			}
-			table := make([]networkRow, 0, len(items))
-
-			for _, raw := range items {
-				var e nodeNetworkListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode network interface entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode network interface entry: %w", err)
-				}
-
-				table = append(table, networkRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"IFACE", "TYPE", "ACTIVE", "AUTOSTART", "METHOD", "CIDR", "GATEWAY"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, e.Type, boolCellPVE(e.Active), boolCellPVE(e.Autostart),
 					strPtrString(e.Method), strPtrString(e.Cidr), strPtrString(e.Gateway),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

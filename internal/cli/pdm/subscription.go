@@ -108,30 +108,11 @@ func newSubscriptionKeyLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type keyRow struct {
-				entry subscriptionKeyEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[subscriptionKeyEntry](items, "subscription key")
+			if err != nil {
+				return err
 			}
-			table := make([]keyRow, 0, len(items))
-
-			for _, raw := range items {
-				var e subscriptionKeyEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode subscription key entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode subscription key entry: %w", err)
-				}
-
-				table = append(table, keyRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Key < table[j].entry.Key })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Key < table[j].Entry.Key })
 
 			headers := []string{
 				"KEY", "PRODUCT-TYPE", "PRODUCT-NAME", "STATUS", "LEVEL", "REMOTE",
@@ -141,14 +122,14 @@ func newSubscriptionKeyLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Key, e.ProductType, strPtrString(e.ProductName), strPtrString(e.Status),
 					strPtrString(e.Level), strPtrString(e.Remote), strPtrString(e.Node),
 					strPtrString(e.Source), boolPtrString(e.PendingClear), strPtrString(e.NextDueDate),
 					int64PtrString(e.CheckTime),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -401,34 +382,15 @@ func newSubscriptionNodeStatusCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type statusRow struct {
-				entry subscriptionNodeStatusEntry
-				raw   map[string]any
-			}
-			table := make([]statusRow, 0, len(items))
-
-			for _, raw := range items {
-				var e subscriptionNodeStatusEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode subscription node status entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode subscription node status entry: %w", err)
-				}
-
-				table = append(table, statusRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[subscriptionNodeStatusEntry](items, "subscription node status")
+			if err != nil {
+				return err
 			}
 			sort.Slice(table, func(i, j int) bool {
-				if table[i].entry.Remote != table[j].entry.Remote {
-					return table[i].entry.Remote < table[j].entry.Remote
+				if table[i].Entry.Remote != table[j].Entry.Remote {
+					return table[i].Entry.Remote < table[j].Entry.Remote
 				}
-				return table[i].entry.Node < table[j].entry.Node
+				return table[i].Entry.Node < table[j].Entry.Node
 			})
 
 			headers := []string{
@@ -439,14 +401,14 @@ func newSubscriptionNodeStatusCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Remote, e.Node, e.Type, e.Status, e.Level,
 					strPtrString(e.AssignedKey), strPtrString(e.CurrentKey),
 					strconv.FormatBool(e.PendingClear), int64PtrString(e.Sockets),
 					strPtrString(e.NextDueDate), int64PtrString(e.CheckTime),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

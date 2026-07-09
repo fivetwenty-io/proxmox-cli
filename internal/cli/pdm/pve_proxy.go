@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -104,38 +105,19 @@ func newPveRemoteLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type remoteRow struct {
-				entry pveRemoteEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pveRemoteEntry](items, "PVE remote")
+			if err != nil {
+				return err
 			}
-			table := make([]remoteRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pveRemoteEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode PVE remote entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode PVE remote entry: %w", err)
-				}
-
-				table = append(table, remoteRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Remote < table[j].entry.Remote })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Remote < table[j].Entry.Remote })
 
 			headers := []string{"REMOTE"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				rows = append(rows, []string{t.entry.Remote})
-				raws = append(raws, t.raw)
+				rows = append(rows, []string{t.Entry.Remote})
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -282,39 +264,20 @@ func newPveRealmsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type realmRow struct {
-				entry pveRealmEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pveRealmEntry](items, "realm")
+			if err != nil {
+				return fmt.Errorf("decode realm entry of PVE host %q: %w", hf.hostname, errors.Unwrap(err))
 			}
-			table := make([]realmRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pveRealmEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode realm entry of PVE host %q: %w", hf.hostname, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode realm entry of PVE host %q: %w", hf.hostname, err)
-				}
-
-				table = append(table, realmRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Realm < table[j].entry.Realm })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Realm < table[j].Entry.Realm })
 
 			headers := []string{"REALM", "TYPE", "DEFAULT", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Realm, e.Type, boolPtrString(e.Default), strPtrString(e.Comment)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

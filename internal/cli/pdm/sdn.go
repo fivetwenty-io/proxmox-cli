@@ -100,34 +100,15 @@ func newSdnControllerLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type controllerRow struct {
-				entry sdnControllerEntry
-				raw   map[string]any
-			}
-			table := make([]controllerRow, 0, len(items))
-
-			for _, raw := range items {
-				var e sdnControllerEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode sdn controller entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode sdn controller entry: %w", err)
-				}
-
-				table = append(table, controllerRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[sdnControllerEntry](items, "sdn controller")
+			if err != nil {
+				return err
 			}
 			sort.Slice(table, func(i, j int) bool {
-				if table[i].entry.Remote != table[j].entry.Remote {
-					return table[i].entry.Remote < table[j].entry.Remote
+				if table[i].Entry.Remote != table[j].Entry.Remote {
+					return table[i].Entry.Remote < table[j].Entry.Remote
 				}
-				return table[i].entry.Controller < table[j].entry.Controller
+				return table[i].Entry.Controller < table[j].Entry.Controller
 			})
 
 			headers := []string{"CONTROLLER", "TYPE", "REMOTE", "STATE", "NODE", "ASN"}
@@ -135,11 +116,11 @@ func newSdnControllerLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Controller, e.Type, e.Remote, strPtrString(e.State), strPtrString(e.Node), int64PtrString(e.Asn),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -210,34 +191,15 @@ func newSdnVnetLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type vnetRow struct {
-				entry sdnVnetEntry
-				raw   map[string]any
-			}
-			table := make([]vnetRow, 0, len(items))
-
-			for _, raw := range items {
-				var e sdnVnetEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode sdn vnet entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode sdn vnet entry: %w", err)
-				}
-
-				table = append(table, vnetRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[sdnVnetEntry](items, "sdn vnet")
+			if err != nil {
+				return err
 			}
 			sort.Slice(table, func(i, j int) bool {
-				if table[i].entry.Remote != table[j].entry.Remote {
-					return table[i].entry.Remote < table[j].entry.Remote
+				if table[i].Entry.Remote != table[j].Entry.Remote {
+					return table[i].Entry.Remote < table[j].Entry.Remote
 				}
-				return table[i].entry.Vnet < table[j].entry.Vnet
+				return table[i].Entry.Vnet < table[j].Entry.Vnet
 			})
 
 			headers := []string{"VNET", "ZONE", "REMOTE", "TYPE", "TAG", "STATE", "ALIAS"}
@@ -245,12 +207,12 @@ func newSdnVnetLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Vnet, strPtrString(e.Zone), e.Remote, e.Type,
 					int64PtrString(e.Tag), strPtrString(e.State), strPtrString(e.Alias),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -399,34 +361,15 @@ func newSdnZoneLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type zoneRow struct {
-				entry sdnZoneEntry
-				raw   map[string]any
-			}
-			table := make([]zoneRow, 0, len(items))
-
-			for _, raw := range items {
-				var e sdnZoneEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode sdn zone entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode sdn zone entry: %w", err)
-				}
-
-				table = append(table, zoneRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[sdnZoneEntry](items, "sdn zone")
+			if err != nil {
+				return err
 			}
 			sort.Slice(table, func(i, j int) bool {
-				if table[i].entry.Remote != table[j].entry.Remote {
-					return table[i].entry.Remote < table[j].entry.Remote
+				if table[i].Entry.Remote != table[j].Entry.Remote {
+					return table[i].Entry.Remote < table[j].Entry.Remote
 				}
-				return table[i].entry.Zone < table[j].entry.Zone
+				return table[i].Entry.Zone < table[j].Entry.Zone
 			})
 
 			headers := []string{"ZONE", "TYPE", "REMOTE", "STATE", "CONTROLLER", "NODES", "VRF-VXLAN"}
@@ -434,12 +377,12 @@ func newSdnZoneLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Zone, e.Type, e.Remote, strPtrString(e.State),
 					strPtrString(e.Controller), strPtrString(e.Nodes), int64PtrString(e.VrfVxlan),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

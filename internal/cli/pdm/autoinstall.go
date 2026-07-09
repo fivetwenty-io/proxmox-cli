@@ -131,42 +131,25 @@ func newAutoInstallInstallationLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type installationRow struct {
-				entry autoInstallInstallationEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[autoInstallInstallationEntry](items, "installation")
+			if err != nil {
+				return err
 			}
-			table := make([]installationRow, 0, len(items))
-
-			for _, raw := range items {
-				var e autoInstallInstallationEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode installation entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode installation entry: %w", err)
-				}
-				stripAutoInstallInstallationSecrets(m)
-
-				table = append(table, installationRow{entry: e, raw: m})
+			for i := range table {
+				stripAutoInstallInstallationSecrets(table[i].Raw)
 			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Uuid < table[j].entry.Uuid })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Uuid < table[j].Entry.Uuid })
 
 			headers := []string{"UUID", "STATUS", "RECEIVED-AT", "ANSWER-ID"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Uuid, e.Status, strconv.FormatInt(e.ReceivedAt, 10), strPtrString(e.AnswerId),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -259,41 +242,22 @@ func newAutoInstallPreparedLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type preparedRow struct {
-				entry autoInstallPreparedEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[autoInstallPreparedEntry](items, "prepared answer")
+			if err != nil {
+				return err
 			}
-			table := make([]preparedRow, 0, len(items))
-
-			for _, raw := range items {
-				var e autoInstallPreparedEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode prepared answer entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode prepared answer entry: %w", err)
-				}
-
-				table = append(table, preparedRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Id < table[j].entry.Id })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Id < table[j].Entry.Id })
 
 			headers := []string{"ID", "COUNTRY", "DISK-MODE", "FQDN", "REBOOT-MODE", "TIMEZONE", "DEFAULT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Id, e.Country, e.DiskMode, e.Fqdn, e.RebootMode, e.Timezone, boolPtrString(e.IsDefault),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -848,42 +812,25 @@ func newAutoInstallTokenLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type tokenRow struct {
-				entry autoInstallTokenEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[autoInstallTokenEntry](items, "token")
+			if err != nil {
+				return err
 			}
-			table := make([]tokenRow, 0, len(items))
-
-			for _, raw := range items {
-				var e autoInstallTokenEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode token entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode token entry: %w", err)
-				}
-				stripAutoInstallTokenSecrets(m)
-
-				table = append(table, tokenRow{entry: e, raw: m})
+			for i := range table {
+				stripAutoInstallTokenSecrets(table[i].Raw)
 			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Id < table[j].entry.Id })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Id < table[j].Entry.Id })
 
 			headers := []string{"ID", "CREATED-BY", "ENABLED", "EXPIRE-AT", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Id, e.CreatedBy, boolPtrString(e.Enabled), int64PtrString(e.ExpireAt), strPtrString(e.Comment),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

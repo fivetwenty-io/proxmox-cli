@@ -67,30 +67,11 @@ func newCephLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type clusterRow struct {
-				entry cephClusterEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephClusterEntry](items, "ceph cluster")
+			if err != nil {
+				return err
 			}
-			table := make([]clusterRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephClusterEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph cluster entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph cluster entry: %w", err)
-				}
-
-				table = append(table, clusterRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Cluster < table[j].entry.Cluster })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Cluster < table[j].Entry.Cluster })
 
 			headers := []string{
 				"CLUSTER", "DISPLAY-NAME", "STATE", "HEALTH", "MEMBER-COUNT",
@@ -100,7 +81,7 @@ func newCephLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e, m := t.entry, t.raw
+				e, m := t.Entry, t.Raw
 				rows = append(rows, []string{
 					e.Cluster, e.DisplayName, e.State,
 					scalarString(m["health"]), scalarString(m["member-count"]),
@@ -224,39 +205,20 @@ func newCephFlagsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type flagRow struct {
-				entry cephFlagEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephFlagEntry](items, "ceph flag")
+			if err != nil {
+				return err
 			}
-			table := make([]flagRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephFlagEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph flag entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph flag entry: %w", err)
-				}
-
-				table = append(table, flagRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "VALUE", "DESCRIPTION"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Name, strconv.FormatBool(e.Value), e.Description})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -292,39 +254,20 @@ func newCephFsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type fsRow struct {
-				entry cephFsEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephFsEntry](items, "ceph fs")
+			if err != nil {
+				return err
 			}
-			table := make([]fsRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephFsEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph fs entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph fs entry: %w", err)
-				}
-
-				table = append(table, fsRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "DATA-POOL", "METADATA-POOL", "METADATA-POOL-ID"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Name, e.DataPool, e.MetadataPool, int64PtrString(e.MetadataPoolId)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -361,41 +304,22 @@ func newCephMdsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type mdsRow struct {
-				entry cephMdsEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephMdsEntry](items, "ceph mds")
+			if err != nil {
+				return err
 			}
-			table := make([]mdsRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephMdsEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph mds entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph mds entry: %w", err)
-				}
-
-				table = append(table, mdsRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "STATE", "HOST", "RANK", "FS-NAME"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, e.State, strPtrString(e.Host), int64PtrString(e.Rank), strPtrString(e.FsName),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -430,39 +354,20 @@ func newCephMgrCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type mgrRow struct {
-				entry cephMgrEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephMgrEntry](items, "ceph mgr")
+			if err != nil {
+				return err
 			}
-			table := make([]mgrRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephMgrEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph mgr entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph mgr entry: %w", err)
-				}
-
-				table = append(table, mgrRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "STATE", "HOST"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Name, e.State, strPtrString(e.Host)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -499,41 +404,22 @@ func newCephMonCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type monRow struct {
-				entry cephMonEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephMonEntry](items, "ceph mon")
+			if err != nil {
+				return err
 			}
-			table := make([]monRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephMonEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph mon entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph mon entry: %w", err)
-				}
-
-				table = append(table, monRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "STATE", "HOST", "QUORUM", "RANK"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, strPtrString(e.State), strPtrString(e.Host), boolPtrString(e.Quorum), int64PtrString(e.Rank),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -608,43 +494,24 @@ func newCephPoolsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type poolRow struct {
-				entry cephPoolEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[cephPoolEntry](items, "ceph pool")
+			if err != nil {
+				return err
 			}
-			table := make([]poolRow, 0, len(items))
-
-			for _, raw := range items {
-				var e cephPoolEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode ceph pool entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode ceph pool entry: %w", err)
-				}
-
-				table = append(table, poolRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.PoolName < table[j].entry.PoolName })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.PoolName < table[j].Entry.PoolName })
 
 			headers := []string{"POOL-NAME", "POOL", "TYPE", "SIZE", "MIN-SIZE", "PG-NUM", "PERCENT-USED", "BYTES-USED"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.PoolName, strconv.FormatInt(e.Pool, 10), e.Type,
 					strconv.FormatInt(e.Size, 10), strconv.FormatInt(e.MinSize, 10), strconv.FormatInt(e.PgNum, 10),
 					float64PtrString(e.PercentUsed), int64PtrString(e.BytesUsed),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

@@ -1,7 +1,7 @@
 package pdm
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -83,37 +83,18 @@ func newTfaLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type tfaRow struct {
-				entry tfaUserEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[tfaUserEntry](items, "tfa")
+			if err != nil {
+				return err
 			}
-			table := make([]tfaRow, 0, len(items))
-
-			for _, raw := range items {
-				var e tfaUserEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tfa entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode tfa entry: %w", err)
-				}
-
-				table = append(table, tfaRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Userid < table[j].entry.Userid })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Userid < table[j].Entry.Userid })
 
 			headers := []string{"USERID", "TOTP-LOCKED", "TFA-LOCKED-UNTIL", "ENTRIES"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				ids := make([]string, 0, len(e.Entries))
 				for _, entry := range e.Entries {
 					ids = append(ids, entry.Type+":"+entry.Id)
@@ -121,7 +102,7 @@ func newTfaLsCmd() *cobra.Command {
 				rows = append(rows, []string{
 					e.Userid, strconv.FormatBool(e.TotpLocked), int64PtrString(e.TfaLockedUntil), strings.Join(ids, ","),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -149,41 +130,22 @@ func newTfaShowCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type tfaEntryRow struct {
-				entry tfaEntryItem
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[tfaEntryItem](items, "tfa")
+			if err != nil {
+				return fmt.Errorf("decode tfa entry for user %q: %w", userid, errors.Unwrap(err))
 			}
-			table := make([]tfaEntryRow, 0, len(items))
-
-			for _, raw := range items {
-				var e tfaEntryItem
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tfa entry for user %q: %w", userid, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode tfa entry for user %q: %w", userid, err)
-				}
-
-				table = append(table, tfaEntryRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Id < table[j].entry.Id })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Id < table[j].Entry.Id })
 
 			headers := []string{"ID", "TYPE", "DESCRIPTION", "ENABLE", "CREATED"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Id, e.Type, e.Description, strconv.FormatBool(e.Enable), strconv.FormatInt(e.Created, 10),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

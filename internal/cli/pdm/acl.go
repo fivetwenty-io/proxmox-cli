@@ -1,7 +1,6 @@
 package pdm
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -75,34 +74,15 @@ func newACLLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type aclRow struct {
-				entry aclListEntry
-				raw   map[string]any
-			}
-			table := make([]aclRow, 0, len(items))
-
-			for _, raw := range items {
-				var e aclListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode acl entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode acl entry: %w", err)
-				}
-
-				table = append(table, aclRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[aclListEntry](items, "acl")
+			if err != nil {
+				return err
 			}
 			sort.Slice(table, func(i, j int) bool {
-				if table[i].entry.Path != table[j].entry.Path {
-					return table[i].entry.Path < table[j].entry.Path
+				if table[i].Entry.Path != table[j].Entry.Path {
+					return table[i].Entry.Path < table[j].Entry.Path
 				}
-				return table[i].entry.Ugid < table[j].entry.Ugid
+				return table[i].Entry.Ugid < table[j].Entry.Ugid
 			})
 
 			headers := []string{"PATH", "UGID", "UGID-TYPE", "ROLEID", "PROPAGATE"}
@@ -110,9 +90,9 @@ func newACLLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Path, e.Ugid, e.UgidType, e.Roleid, boolPtrString(e.Propagate)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

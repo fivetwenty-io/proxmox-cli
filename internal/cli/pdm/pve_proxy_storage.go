@@ -1,7 +1,7 @@
 package pdm
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -103,42 +103,23 @@ func newPveStorageLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type storageRow struct {
-				entry pveStorageEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pveStorageEntry](items, "storage")
+			if err != nil {
+				return fmt.Errorf("decode storage entry on node %q of PVE remote %q: %w", node, remote, errors.Unwrap(err))
 			}
-			table := make([]storageRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pveStorageEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode storage entry on node %q of PVE remote %q: %w", node, remote, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode storage entry on node %q of PVE remote %q: %w", node, remote, err)
-				}
-
-				table = append(table, storageRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Storage < table[j].entry.Storage })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Storage < table[j].Entry.Storage })
 
 			headers := []string{"STORAGE", "TYPE", "CONTENT", "ACTIVE", "ENABLED", "SHARED", "TOTAL", "USED", "AVAIL"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Storage, e.Type, strPtrString(e.Content), pveBoolPtrString(e.Active), pveBoolPtrString(e.Enabled),
 					pveBoolPtrString(e.Shared), pveIntPtrString(e.Total), pveIntPtrString(e.Used), pveIntPtrString(e.Avail),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

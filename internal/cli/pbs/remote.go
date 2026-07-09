@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -63,41 +62,22 @@ func newRemoteLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type remoteListRow struct {
-				entry remoteListEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[remoteListEntry](items, "remote")
+			if err != nil {
+				return err
 			}
-			table := make([]remoteListRow, 0, len(items))
-
-			for _, raw := range items {
-				var e remoteListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode remote entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode remote entry: %w", err)
-				}
-
-				table = append(table, remoteListRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Name < table[j].entry.Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "HOST", "PORT", "AUTH-ID", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, e.Host, pbsFormatOptionalInt64(e.Port), e.AuthId, pbsFormatOptionalString(e.Comment),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -416,42 +396,23 @@ func newRemoteScanLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type remoteScanDatastoreRow struct {
-				entry remoteScanDatastoreEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[remoteScanDatastoreEntry](items, "remote datastore")
+			if err != nil {
+				return err
 			}
-			table := make([]remoteScanDatastoreRow, 0, len(items))
-
-			for _, raw := range items {
-				var e remoteScanDatastoreEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode remote datastore entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode remote datastore entry: %w", err)
-				}
-
-				table = append(table, remoteScanDatastoreRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Store < table[j].entry.Store })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Store < table[j].Entry.Store })
 
 			headers := []string{"STORE", "BACKEND-TYPE", "MOUNT-STATUS", "MAINTENANCE", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Store, e.BackendType, e.MountStatus,
 					pbsFormatOptionalString(e.Maintenance), pbsFormatOptionalString(e.Comment),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -501,34 +462,15 @@ func newRemoteScanGroupsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type remoteScanGroupRow struct {
-				entry remoteScanGroupEntry
-				raw   map[string]any
-			}
-			table := make([]remoteScanGroupRow, 0, len(items))
-
-			for _, raw := range items {
-				var e remoteScanGroupEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode remote group entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode remote group entry: %w", err)
-				}
-
-				table = append(table, remoteScanGroupRow{entry: e, raw: m})
+			table, err := cli.DecodePairedRows[remoteScanGroupEntry](items, "remote group")
+			if err != nil {
+				return err
 			}
 			sort.Slice(table, func(i, j int) bool {
-				if table[i].entry.BackupType != table[j].entry.BackupType {
-					return table[i].entry.BackupType < table[j].entry.BackupType
+				if table[i].Entry.BackupType != table[j].Entry.BackupType {
+					return table[i].Entry.BackupType < table[j].Entry.BackupType
 				}
-				return table[i].entry.BackupId < table[j].entry.BackupId
+				return table[i].Entry.BackupId < table[j].Entry.BackupId
 			})
 
 			headers := []string{"TYPE", "ID", "BACKUP-COUNT", "LAST-BACKUP", "OWNER", "COMMENT"}
@@ -536,13 +478,13 @@ func newRemoteScanGroupsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.BackupType, e.BackupId, pbsFormatOptionalInt64(&e.BackupCount),
 					pbsFormatOptionalInt64(&e.LastBackup), pbsFormatOptionalString(e.Owner),
 					pbsFormatOptionalString(e.Comment),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
@@ -581,38 +523,19 @@ func newRemoteScanNamespacesCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type remoteScanNamespaceRow struct {
-				entry remoteScanNamespaceEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[remoteScanNamespaceEntry](items, "remote namespace")
+			if err != nil {
+				return err
 			}
-			table := make([]remoteScanNamespaceRow, 0, len(items))
-
-			for _, raw := range items {
-				var e remoteScanNamespaceEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode remote namespace entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode remote namespace entry: %w", err)
-				}
-
-				table = append(table, remoteScanNamespaceRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Ns < table[j].entry.Ns })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Ns < table[j].Entry.Ns })
 
 			headers := []string{"NS", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				rows = append(rows, []string{t.entry.Ns, pbsFormatOptionalString(t.entry.Comment)})
-				raws = append(raws, t.raw)
+				rows = append(rows, []string{t.Entry.Ns, pbsFormatOptionalString(t.Entry.Comment)})
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

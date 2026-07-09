@@ -434,39 +434,20 @@ func newRemoteMetricCollectionStatusCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type remoteMetricStatusRow struct {
-				entry remoteMetricStatusEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[remoteMetricStatusEntry](items, "remote metric-collection status")
+			if err != nil {
+				return err
 			}
-			table := make([]remoteMetricStatusRow, 0, len(items))
-
-			for _, raw := range items {
-				var e remoteMetricStatusEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode remote metric-collection status entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode remote metric-collection status entry: %w", err)
-				}
-
-				table = append(table, remoteMetricStatusRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Remote < table[j].entry.Remote })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Remote < table[j].Entry.Remote })
 
 			headers := []string{"REMOTE", "LAST-COLLECTION", "ERROR"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{e.Remote, int64PtrString(e.LastCollection), strPtrString(e.Error)})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

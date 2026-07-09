@@ -88,38 +88,19 @@ func newNodeLsCmd() *cobra.Command {
 
 			items := rawItemsOf(resp)
 
-			type nodeListRow struct {
-				entry nodeListEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[nodeListEntry](items, "node")
+			if err != nil {
+				return err
 			}
-			table := make([]nodeListRow, 0, len(items))
-
-			for _, raw := range items {
-				var e nodeListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode node entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode node entry: %w", err)
-				}
-
-				table = append(table, nodeListRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Node < table[j].entry.Node })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Node < table[j].Entry.Node })
 
 			headers := []string{"NODE"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				rows = append(rows, []string{t.entry.Node})
-				raws = append(raws, t.raw)
+				rows = append(rows, []string{t.Entry.Node})
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

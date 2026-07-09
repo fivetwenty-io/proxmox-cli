@@ -1,7 +1,6 @@
 package pdm
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -65,41 +64,22 @@ func newConfigViewLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type viewRow struct {
-				entry viewEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[viewEntry](items, "view")
+			if err != nil {
+				return err
 			}
-			table := make([]viewRow, 0, len(items))
-
-			for _, raw := range items {
-				var e viewEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode view entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode view entry: %w", err)
-				}
-
-				table = append(table, viewRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Id < table[j].entry.Id })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Id < table[j].Entry.Id })
 
 			headers := []string{"ID", "INCLUDE-ALL", "INCLUDE", "EXCLUDE", "LAYOUT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Id, pveBoolPtrString(e.IncludeAll), strings.Join(e.Include, ","), strings.Join(e.Exclude, ","), strPtrString(e.Layout),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

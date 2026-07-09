@@ -3,6 +3,7 @@ package pdm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -92,43 +93,24 @@ func newPveGuestLsCmd(kind pveGuestKind, list pveGuestListFunc) *cobra.Command {
 				return fmt.Errorf("list %ss on PVE remote %q: %w", kind.noun, remote, err)
 			}
 
-			type guestRow struct {
-				entry pveGuestListEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pveGuestListEntry](items, kind.noun)
+			if err != nil {
+				return fmt.Errorf("decode %s entry on PVE remote %q: %w", kind.noun, remote, errors.Unwrap(err))
 			}
-			table := make([]guestRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pveGuestListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode %s entry on PVE remote %q: %w", kind.noun, remote, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode %s entry on PVE remote %q: %w", kind.noun, remote, err)
-				}
-
-				table = append(table, guestRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Vmid.Int() < table[j].entry.Vmid.Int() })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Vmid.Int() < table[j].Entry.Vmid.Int() })
 
 			headers := []string{"VMID", "NAME", "STATUS", "CPU", "MEM", "MAXMEM", "UPTIME", "TAGS"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					strconv.FormatInt(e.Vmid.Int(), 10), strPtrString(e.Name), e.Status,
 					float64PtrString(e.Cpu), pveIntPtrString(e.Mem), pveIntPtrString(e.Maxmem),
 					pveIntPtrString(e.Uptime), strPtrString(e.Tags),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}

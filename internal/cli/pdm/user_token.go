@@ -1,7 +1,6 @@
 package pdm
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -59,39 +58,20 @@ func newTokenLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type tokenRow struct {
-				entry tokenListEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[tokenListEntry](items, "token")
+			if err != nil {
+				return err
 			}
-			table := make([]tokenRow, 0, len(items))
-
-			for _, raw := range items {
-				var e tokenListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode token entry: %w", err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode token entry: %w", err)
-				}
-
-				table = append(table, tokenRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Tokenid < table[j].entry.Tokenid })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Tokenid < table[j].Entry.Tokenid })
 
 			headers := []string{"TOKENID", "ENABLE", "EXPIRE", "COMMENT"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				m := t.raw
+				m := t.Raw
 				rows = append(rows, []string{
-					t.entry.Tokenid, userFormatEnable(m["enable"]), scalarString(m["expire"]), scalarString(m["comment"]),
+					t.Entry.Tokenid, userFormatEnable(m["enable"]), scalarString(m["expire"]), scalarString(m["comment"]),
 				})
 				raws = append(raws, m)
 			}

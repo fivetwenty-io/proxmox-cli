@@ -1,7 +1,7 @@
 package pdm
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -68,42 +68,23 @@ func newPveNodeLsCmd() *cobra.Command {
 			}
 
 			items := rawItemsOf(resp)
-			type nodeRow struct {
-				entry pveNodeEntry
-				raw   map[string]any
+			table, err := cli.DecodePairedRows[pveNodeEntry](items, "node")
+			if err != nil {
+				return fmt.Errorf("decode node entry of PVE remote %q: %w", remote, errors.Unwrap(err))
 			}
-			table := make([]nodeRow, 0, len(items))
-
-			for _, raw := range items {
-				var e pveNodeEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode node entry of PVE remote %q: %w", remote, err)
-				}
-
-				var m map[string]any
-
-				err = json.Unmarshal(raw, &m)
-				if err != nil {
-					return fmt.Errorf("decode node entry of PVE remote %q: %w", remote, err)
-				}
-
-				table = append(table, nodeRow{entry: e, raw: m})
-			}
-			sort.Slice(table, func(i, j int) bool { return table[i].entry.Node < table[j].entry.Node })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Node < table[j].Entry.Node })
 
 			headers := []string{"NODE", "STATUS", "CPU", "MAXCPU", "MEM", "MAXMEM", "UPTIME", "LEVEL"}
 			rows := make([][]string, 0, len(table))
 			raws := make([]map[string]any, 0, len(table))
 
 			for _, t := range table {
-				e := t.entry
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Node, strPtrString(e.Status), float64PtrString(e.Cpu), int64PtrString(e.Maxcpu),
 					int64PtrString(e.Mem), int64PtrString(e.Maxmem), int64PtrString(e.Uptime), strPtrString(e.Level),
 				})
-				raws = append(raws, t.raw)
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
