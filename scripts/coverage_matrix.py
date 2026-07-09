@@ -449,10 +449,11 @@ across the two live suites:
 
 - **e2e** (`scripts/e2e`, `make test-e2e`) — a read-only, parallel happy-path
   sweep against a configured context. Mutating operations are never executed;
-  they are recorded as deferred. The `pbs` tree is opt-in: it runs only when
-  `--pbs-context` (or `make test-e2e PBS_CONTEXT=…`) names a configured
-  `product: pbs` context whose server is reachable, so all of its leaves are
-  prerequisite-gated (◑).
+  they are recorded as deferred. The `pbs` and `pdm` trees are opt-in: each
+  runs only when `--pbs-context`/`--pdm-context` (or
+  `make test-e2e PBS_CONTEXT=…`/`PDM_CONTEXT=…`) names a configured
+  `product: pbs`/`product: pdm` context whose server is reachable, so all of
+  their leaves are prerequisite-gated (◑).
 
 - **lifecycle / mutate** (`scripts/lifecycle`, `make test-lifecycle`, or
   `scripts/e2e --mutate`) — the destructive counterpart. It provisions an
@@ -510,6 +511,7 @@ make test-e2e                  # all trees, read-only, against the `lab` context
 make test-e2e TREES=qemu       # a subset
 make test-e2e CONTEXT=prod     # a different configured context
 make test-e2e PBS_CONTEXT=pbs-lab  # opt into the pbs tree (needs a `product: pbs` context)
+make test-e2e PDM_CONTEXT=pdm-lab  # opt into the pdm tree (needs a `product: pdm` context)
 scripts/e2e --list             # list trees and the isolation contract
 
 make test-e2e-mutate           # read-only sweep + the destructive verb matrix

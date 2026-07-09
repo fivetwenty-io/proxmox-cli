@@ -108,12 +108,12 @@ test-integration: ## Run integration tests (requires config/.env.test or PMX_TES
 	$(SCRIPTS)/test integration
 
 .PHONY: test-e2e
-test-e2e: ## Run end-to-end happy-path sweep of all command trees (CONTEXT=lab; PBS_CONTEXT=<pbs ctx> opts into the pbs tree)
-	$(SCRIPTS)/e2e $(if $(CONTEXT),--context $(CONTEXT),) $(if $(PBS_CONTEXT),--pbs-context $(PBS_CONTEXT),) $(TREES)
+test-e2e: ## Run end-to-end happy-path sweep of all command trees (CONTEXT=lab; PBS_CONTEXT=<pbs ctx> opts into the pbs tree; PDM_CONTEXT=<pdm ctx> opts into the pdm tree)
+	$(SCRIPTS)/e2e $(if $(CONTEXT),--context $(CONTEXT),) $(if $(PBS_CONTEXT),--pbs-context $(PBS_CONTEXT),) $(if $(PDM_CONTEXT),--pdm-context $(PDM_CONTEXT),) $(TREES)
 
 .PHONY: test-e2e-mutate
-test-e2e-mutate: ## Run the e2e sweep plus the destructive qemu/lxc verb matrix (CONTEXT=lab; PBS_CONTEXT=<pbs ctx> opts into the pbs tree)
-	$(SCRIPTS)/e2e --mutate $(if $(CONTEXT),--context $(CONTEXT),) $(if $(PBS_CONTEXT),--pbs-context $(PBS_CONTEXT),) $(TREES)
+test-e2e-mutate: ## Run the e2e sweep plus the destructive qemu/lxc verb matrix (CONTEXT=lab; PBS_CONTEXT=<pbs ctx> opts into the pbs tree; PDM_CONTEXT=<pdm ctx> opts into the pdm tree)
+	$(SCRIPTS)/e2e --mutate $(if $(CONTEXT),--context $(CONTEXT),) $(if $(PBS_CONTEXT),--pbs-context $(PBS_CONTEXT),) $(if $(PDM_CONTEXT),--pdm-context $(PDM_CONTEXT),) $(TREES)
 
 .PHONY: test-lifecycle
 test-lifecycle: ## Run destructive VM+CT lifecycle on an isolated SDN/pool (CONTEXT=lab)

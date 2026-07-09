@@ -19,6 +19,7 @@ Usage:
   scripts/e2e --mutate             # also run the destructive qemu/lxc verb matrix
   scripts/e2e --mutate --vm-only   # ... limited to the VM (skip the container)
   scripts/e2e --pbs-context pbs-lab  # also sweep `pmx pbs` against a PBS server
+  scripts/e2e --pdm-context pdm-lab  # also sweep `pmx pdm` against a PDM server
 """
 
 from __future__ import annotations
@@ -52,6 +53,9 @@ def main() -> None:
     parser.add_argument("--pbs-context", default=os.environ.get("PMX_E2E_PBS_CONTEXT", ""),
                         help="configured `product: pbs` context for the opt-in pbs tree "
                              "(default: $PMX_E2E_PBS_CONTEXT; empty = pbs tree skips)")
+    parser.add_argument("--pdm-context", default=os.environ.get("PMX_E2E_PDM_CONTEXT", ""),
+                        help="configured `product: pdm` context for the opt-in pdm tree "
+                             "(default: $PMX_E2E_PDM_CONTEXT; empty = pdm tree skips)")
     parser.add_argument("--binary", help="path to the pmx binary (default: ./dist/pmx)")
     parser.add_argument("--no-build", action="store_true",
                         help="do not auto-build the binary if ./dist/pmx is missing")
@@ -104,7 +108,8 @@ def main() -> None:
     env = Env(binary=binary, context=args.context, node=node, timeout_s=args.timeout)
 
     pbs_note = f" pbs-context={args.pbs_context}" if args.pbs_context else ""
-    print(runner.BOLD(f"e2e: context={args.context} node={node or '(none)'}{pbs_note} "
+    pdm_note = f" pdm-context={args.pdm_context}" if args.pdm_context else ""
+    print(runner.BOLD(f"e2e: context={args.context} node={node or '(none)'}{pbs_note}{pdm_note} "
                       f"trees={len(selected)} jobs={args.jobs}"))
     print()
 
@@ -125,7 +130,7 @@ def main() -> None:
         mutate_covers = frozenset(covered)
 
     reports = runner.run_trees(env, selected, args.jobs,
-                               pbs_context=args.pbs_context)
+                               pbs_context=args.pbs_context, pdm_context=args.pdm_context)
     rc = runner.print_reports(reports, show_deferred=not args.no_deferred,
                               mutate_covers=mutate_covers)
 

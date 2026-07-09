@@ -101,13 +101,17 @@ def discover_node(binary: str, target: str) -> str:
 # --- parallel execution -----------------------------------------------------
 
 
-def _run_tree(env: Env, name: str, pbs_context: str = "") -> TreeReport:
+def _run_tree(env: Env, name: str, pbs_context: str = "", pdm_context: str = "") -> TreeReport:
     report = TreeReport(name)
     module = TREES[name]
-    if getattr(module, "PRODUCT", "pve") == "pbs":
+    product = getattr(module, "PRODUCT", "pve")
+    if product == "pbs":
         # A PBS tree targets a different product: hand it the opt-in PBS
         # context (empty = tree skips itself) and drop the PVE node.
         env = replace(env, context=pbs_context, node="")
+    elif product == "pdm":
+        # Likewise for a PDM tree, via --pdm-context / $PMX_E2E_PDM_CONTEXT.
+        env = replace(env, context=pdm_context, node="")
     ctx = Ctx(env, name)
     try:
         module.run(ctx)
@@ -119,10 +123,10 @@ def _run_tree(env: Env, name: str, pbs_context: str = "") -> TreeReport:
 
 
 def run_trees(env: Env, names: list[str], jobs: int,
-              pbs_context: str = "") -> list[TreeReport]:
+              pbs_context: str = "", pdm_context: str = "") -> list[TreeReport]:
     reports: dict[str, TreeReport] = {}
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        futs = {pool.submit(_run_tree, env, n, pbs_context): n for n in names}
+        futs = {pool.submit(_run_tree, env, n, pbs_context, pdm_context): n for n in names}
         for fut in as_completed(futs):
             r = fut.result()
             reports[r.name] = r

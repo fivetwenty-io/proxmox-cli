@@ -60,6 +60,11 @@ def run(ctx: Ctx) -> None:
     ctx.expect_fail("pbs command against a PVE context",
                     "pbs", "datastore", "ls", must_contain="requires a PBS context")
 
+    # Likewise for a `pmx pdm` command against the PVE sweep context — reads
+    # only the local context config, no PDM server required.
+    ctx.expect_fail("pdm command against a PVE context",
+                    "pdm", "remote", "ls", must_contain="requires a PDM context")
+
     # --- not-found lookups (reads; never mutate) ----------------------------
 
     n = ctx.node
