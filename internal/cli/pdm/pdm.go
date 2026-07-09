@@ -56,6 +56,7 @@ func ChildFactories() []cli.GroupFactory {
 		wrap(newRealmCmd),
 		wrap(newConfigCmd),
 		wrap(newNodeCmd),
+		wrap(newAutoInstallCmd),
 	}
 }
 
