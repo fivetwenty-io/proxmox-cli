@@ -55,6 +55,7 @@ func ChildFactories() []cli.GroupFactory {
 		wrap(newTfaCmd),
 		wrap(newRealmCmd),
 		wrap(newConfigCmd),
+		wrap(newNodeCmd),
 	}
 }
 
