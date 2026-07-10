@@ -22,6 +22,8 @@ import (
 // edited YAML fails to parse, an error is returned and the tempfile is
 // preserved so the operator can recover their edits.
 func newEditCmd() *cobra.Command {
+	var productFlag string
+
 	cmd := &cobra.Command{
 		Use:         "edit [<name>]",
 		Short:       "Edit a named context in $EDITOR",
@@ -36,7 +38,11 @@ saved.  If the edited file contains invalid YAML or fails validation, an error
 is returned and the temp file path is printed so you can recover your edits.
 
 Note: the context name cannot be changed via edit; use 'context rename'.
-Note: config.Save rewrites the config file and does not preserve comments.`,
+Note: config.Save rewrites the config file and does not preserve comments.
+
+Passing --product <pve|pbs|pdm> edits that single field directly without
+opening $EDITOR; a port equal to the old product's default port is switched
+to the new product's default (8006 pve, 8007 pbs, 8443 pdm).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
@@ -62,6 +68,13 @@ Note: config.Save rewrites the config file and does not preserve comments.`,
 			ctx, ok := cfg.Contexts[name]
 			if !ok || ctx == nil {
 				return fmt.Errorf("context %q not found in config", name)
+			}
+
+			// --product performs a direct, non-interactive field edit: change
+			// the product, re-default the port when it was the old product's
+			// default, validate, save. $EDITOR is never launched on this path.
+			if cmd.Flags().Changed("product") {
+				return runProductEdit(cmd, deps, cfg, name, ctx, productFlag)
 			}
 
 			// Resolve the editor binary.
@@ -159,6 +172,61 @@ Note: config.Save rewrites the config file and does not preserve comments.`,
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.Flags().StringVar(&productFlag, "product", "",
+		fmt.Sprintf("change the context's product (%s) without opening $EDITOR; "+
+			"a port equal to the old product's default is re-defaulted to the new product's port",
+			strings.Join(config.Products(), "|")))
+	_ = cmd.RegisterFlagCompletionFunc("product", cli.ProductCompletion)
 	cmd.ValidArgsFunction = cli.FirstArgContextNames
 	return cmd
+}
+
+// runProductEdit implements `context edit <name> --product <p>`: a direct
+// field edit that never launches $EDITOR.
+//
+// Port rule: a port of 0 or exactly the OLD product's default port means the
+// operator never customized it, so it silently becomes the NEW product's
+// default. Any other port is preserved, with a stderr note naming the new
+// product's default so a wrong-port context is a conscious choice, not an
+// accident.
+func runProductEdit(
+	cmd *cobra.Command, deps *cli.Deps, cfg *config.Config, name string, ctx *config.Context, newProduct string,
+) error {
+	if !config.IsValidProduct(newProduct) {
+		return fmt.Errorf("--product must be one of: %s, got %q",
+			strings.Join(config.Products(), ", "), newProduct)
+	}
+
+	oldProduct := ctx.Product
+	if oldProduct == "" {
+		oldProduct = config.ProductPVE
+	}
+
+	oldDefault := config.DefaultPortForProduct(oldProduct)
+	newDefault := config.DefaultPortForProduct(newProduct)
+
+	switch {
+	case ctx.Port == 0 || ctx.Port == oldDefault:
+		ctx.Port = newDefault
+	case ctx.Port != newDefault:
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+			"note: port %d kept; %s default is %d\n", ctx.Port, newProduct, newDefault)
+	}
+	ctx.Product = newProduct
+
+	config.ApplyDefaults(ctx)
+	if strictErrs := config.StrictValidateContext(ctx); len(strictErrs) > 0 {
+		return fmt.Errorf("context %q fails validation after product change: %s",
+			name, strings.Join(strictErrs, "; "))
+	}
+
+	cfg.Contexts[name] = ctx
+
+	if err := config.Save(deps.ConfigPath, cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	res := output.Result{Message: fmt.Sprintf(
+		"Context %q updated (product: %s, port: %d).", name, newProduct, ctx.Port)}
+	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 }

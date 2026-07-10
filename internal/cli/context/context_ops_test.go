@@ -389,6 +389,67 @@ func TestContextEdit_NoCurrentContextErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "no current-context")
 }
 
+// ---- edit --product tests -----------------------------------------------------
+
+func TestContextEdit_Product_SwapsDefaultPort(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	p := scratchConfig(t, cfg)
+
+	// labContext has port 8006 (the pve default) — switching to pbs must
+	// re-default the port to 8007 without touching $EDITOR.
+	t.Setenv("EDITOR", "/nonexistent/editor-must-not-run")
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "edit", "lab", "--product", "pbs"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPBS, loaded.Contexts["lab"].Product)
+	require.Equal(t, 8007, loaded.Contexts["lab"].Port)
+}
+
+func TestContextEdit_Product_KeepsCustomPortWithNote(t *testing.T) {
+	src := labContext()
+	src.Port = 9006
+	cfg := &config.Config{Contexts: map[string]*config.Context{"lab": src}}
+	p := scratchConfig(t, cfg)
+
+	t.Setenv("EDITOR", "/nonexistent/editor-must-not-run")
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "edit", "lab", "--product", "pbs"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	require.Equal(t, config.ProductPBS, loaded.Contexts["lab"].Product)
+	require.Equal(t, 9006, loaded.Contexts["lab"].Port, "a custom port must survive a product change")
+	require.Contains(t, buf.String(), "port 9006 kept")
+	require.Contains(t, buf.String(), "8007")
+}
+
+func TestContextEdit_Product_ZeroPortGetsNewDefault(t *testing.T) {
+	src := labContext()
+	src.Port = 0
+	cfg := &config.Config{Contexts: map[string]*config.Context{"lab": src}}
+	p := scratchConfig(t, cfg)
+
+	t.Setenv("EDITOR", "/nonexistent/editor-must-not-run")
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "edit", "lab", "--product", "pdm"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	require.Equal(t, 8443, loaded.Contexts["lab"].Port)
+}
+
+func TestContextEdit_Product_Invalid(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	err := runOpsCmd(cfg, p, &buf, "edit", "lab", "--product", "bogus")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "pve, pbs, pdm")
+}
+
 // ---- validate tests ---------------------------------------------------------
 
 func TestContextValidate_ValidContext(t *testing.T) {

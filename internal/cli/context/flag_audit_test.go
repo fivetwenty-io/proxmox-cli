@@ -23,9 +23,11 @@ import (
 // --force behavior flags), copy (--force, --select), rm (--force, --yes/-y),
 // validate (--all), ls (--product, a display filter — it narrows which
 // contexts are printed and never persists to config.yml, unlike add's and
-// copy's persisted-field flags). edit, previous, select, and show carry zero
-// command-specific flags (only positional args and inherited global flags) —
-// this is a deliberate, confirmed omission, not a gap.
+// copy's persisted-field flags), edit (--product, a direct non-interactive
+// field edit that bypasses $EDITOR and re-defaults the port). previous,
+// select, and show carry zero command-specific flags (only positional args
+// and inherited global flags) — this is a deliberate, confirmed omission,
+// not a gap.
 
 // ---------------------------------------------------------------------------
 // context add
