@@ -75,7 +75,12 @@ func ResolveContext(cfg *Config, nameOverride string) (*Context, string, error) 
 
 	ctx, ok := cfg.Contexts[name]
 	if !ok {
-		return nil, "", fmt.Errorf("context %q not found in config", name)
+		available := ContextNamesWithProducts(cfg)
+		if len(available) == 0 {
+			return nil, "", fmt.Errorf("context %q not found: config has no contexts", name)
+		}
+		return nil, "", fmt.Errorf("context %q not found; available: %s",
+			name, strings.Join(available, ", "))
 	}
 	if ctx == nil {
 		return nil, "", fmt.Errorf("context %q is nil in config", name)

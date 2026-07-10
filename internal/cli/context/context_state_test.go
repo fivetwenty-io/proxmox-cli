@@ -412,6 +412,18 @@ func TestSelect_SwitchAlias_Works(t *testing.T) {
 	require.Equal(t, "beta", updated.CurrentContext)
 }
 
+func TestSelect_MissingContext_ListsProducts(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Product = config.ProductPBS
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "select", "nonexistent")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "alpha (pve)")
+	require.Contains(t, err.Error(), "beta (pbs)")
+}
+
 // ---------------------------------------------------------------------------
 // noClient annotation — full tree walk
 // ---------------------------------------------------------------------------

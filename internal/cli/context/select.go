@@ -131,28 +131,18 @@ func pickContext(cmd *cobra.Command, cfg *config.Config) (string, error) {
 		input, strings.Join(names, ", "))
 }
 
-// requireContextExists returns an error listing available context names when
-// name is not present in cfg.Contexts.
+// requireContextExists returns an error listing available context names (with
+// their products) when name is not present in cfg.Contexts.
 func requireContextExists(cfg *config.Config, name string) error {
 	if cfg.Contexts != nil {
 		if _, ok := cfg.Contexts[name]; ok {
 			return nil
 		}
 	}
-	available := availableNames(cfg)
+	available := config.ContextNamesWithProducts(cfg)
 	if len(available) == 0 {
 		return fmt.Errorf("context %q not found: no contexts defined in config", name)
 	}
 	return fmt.Errorf("context %q not found; available: %s",
 		name, strings.Join(available, ", "))
-}
-
-// availableNames returns a sorted slice of context names from cfg.
-func availableNames(cfg *config.Config) []string {
-	names := make([]string, 0, len(cfg.Contexts))
-	for k := range cfg.Contexts {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	return names
 }

@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -54,12 +55,12 @@ func newRmCmd() *cobra.Command {
 				return fmt.Errorf("context %q not found: config has no contexts", name)
 			}
 			if _, ok := cfg.Contexts[name]; !ok {
-				available := availableNames(cfg)
+				available := config.ContextNamesWithProducts(cfg)
 				if len(available) == 0 {
 					return fmt.Errorf("context %q not found: config has no contexts", name)
 				}
 				return fmt.Errorf("context %q not found; available: %s",
-					name, joinNames(available))
+					name, strings.Join(available, ", "))
 			}
 
 			// Guard against removing the active context without --force.
@@ -99,16 +100,4 @@ func newRmCmd() *cobra.Command {
 		"confirm destructive removal without prompting")
 
 	return cmd
-}
-
-// joinNames returns names joined by ", " for error messages.
-func joinNames(names []string) string {
-	result := ""
-	for i, n := range names {
-		if i > 0 {
-			result += ", "
-		}
-		result += n
-	}
-	return result
 }

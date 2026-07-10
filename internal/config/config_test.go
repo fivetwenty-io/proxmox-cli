@@ -1070,3 +1070,31 @@ func TestApplyDefaults_PDMPort8443(t *testing.T) {
 	config.ApplyDefaults(c)
 	require.Equal(t, 8443, c.Port, "pdm product must default port to 8443")
 }
+
+// ── ContextNamesWithProducts ──────────────────────────────────────────────────
+
+func TestContextNamesWithProducts(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{
+		"prod-pve": {Host: "a"},
+		"backup1":  {Host: "b", Product: config.ProductPBS},
+		"dc1":      {Host: "c", Product: config.ProductPDM},
+	}}
+	got := config.ContextNamesWithProducts(cfg)
+	require.Equal(t, []string{"backup1 (pbs)", "dc1 (pdm)", "prod-pve (pve)"}, got)
+}
+
+func TestContextNamesWithProducts_Empty(t *testing.T) {
+	require.Empty(t, config.ContextNamesWithProducts(&config.Config{}))
+}
+
+func TestResolveContext_NotFound_ListsAvailableWithProducts(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{
+		"lab": {Host: "a", Auth: config.AuthBlock{Type: "token", Secret: "s"}},
+		"dc1": {Host: "b", Product: config.ProductPDM, Auth: config.AuthBlock{Type: "token", Secret: "s"}},
+	}}
+	_, _, err := config.ResolveContext(cfg, "typo")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `context "typo" not found`)
+	require.Contains(t, err.Error(), "dc1 (pdm)")
+	require.Contains(t, err.Error(), "lab (pve)")
+}

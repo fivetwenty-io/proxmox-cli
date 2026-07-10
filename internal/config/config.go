@@ -2,7 +2,11 @@
 // for the pmx CLI configuration file (~/.config/pmx/config.yml).
 package config
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+	"sort"
+)
 
 // Product identifies which Proxmox product a context targets.
 const (
@@ -163,4 +167,21 @@ type Session struct {
 
 	// ExpiresAt is the session expiry as a Unix timestamp (seconds).
 	ExpiresAt int64 `yaml:"expires-at"`
+}
+
+// ContextNamesWithProducts returns sorted "name (product)" entries for every
+// context in cfg, for not-found error messages and other listings that must
+// tell the operator which product each candidate targets. An empty Product
+// (backward-compat configs) renders as ProductPVE.
+func ContextNamesWithProducts(cfg *Config) []string {
+	entries := make([]string, 0, len(cfg.Contexts))
+	for name, ctx := range cfg.Contexts {
+		product := ProductPVE
+		if ctx != nil && ctx.Product != "" {
+			product = ctx.Product
+		}
+		entries = append(entries, fmt.Sprintf("%s (%s)", name, product))
+	}
+	sort.Strings(entries)
+	return entries
 }
