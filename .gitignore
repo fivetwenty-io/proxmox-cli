@@ -16,3 +16,6 @@ coverage.html
 *.o
 *.a
 *.so
+
+/manpages/
+/completions/
