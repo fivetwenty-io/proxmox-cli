@@ -14,7 +14,20 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lxc",
 		Short: "Manage LXC containers",
-		Long:  "List, inspect, configure, and control the lifecycle of LXC containers on a node.",
+		Long: `Manage LXC containers on Proxmox VE: lifecycle (create, start, stop,
+migrate, clone, delete), configuration, disks, snapshots, network interfaces,
+firewall rules, and console access. Requires a configured Proxmox VE API
+connection.
+
+Commands take a container by numeric vmid or name; when the container's node
+cannot be resolved automatically from the cluster, pass --node. Actions that
+submit a PVE task (create, clone, migrate, delete, start, stop, and similar)
+block until the task completes; pass --async to print the task UPID
+immediately instead of waiting.`,
+		Example: `  pmx pve lxc list
+  pmx pve lxc start 200
+  pmx pve lxc migrate 200 --target-node pve2 --restart
+  pmx pve lxc snapshot create 200 pre-upgrade`,
 	}
 
 	cmd.AddCommand(

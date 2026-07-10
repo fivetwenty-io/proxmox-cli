@@ -23,7 +23,21 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "storage",
 		Short: "Manage cluster storage configuration",
-		Long:  "List, inspect, create, update, and delete Proxmox VE cluster storage definitions.",
+		Long: `Manage Proxmox VE cluster-wide storage definitions: list, inspect, create,
+update, and delete storage entries, prune backup retention, and pull OCI
+images. Requires a configured Proxmox VE API connection.
+
+The cluster-scoped commands (list, get, create, set, delete) take a storage
+ID and need no node. Node-scoped commands that inspect or write through a
+specific node's view of the storage (content, status, identity, node-list,
+upload, download-url, prune) additionally require --node, PMX_NODE, or the
+active context's default node. Storage type (dir, nfs, cifs, lvm, lvmthin,
+zfspool, rbd, pbs, and others) determines which create/set flags apply, for
+example --vgname for lvm or --server/--export for nfs.`,
+		Example: `  pmx pve storage list
+  pmx pve storage get local-lvm
+  pmx pve storage create --storage backup01 --type nfs --server 10.0.0.5 --export /export/backup
+  pmx pve storage content local-lvm --node pve1`,
 	}
 	cmd.AddCommand(
 		newListCmd(),

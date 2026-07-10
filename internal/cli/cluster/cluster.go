@@ -13,8 +13,22 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Inspect Proxmox VE cluster state",
-		Long: "Show cluster quorum status, list cluster-wide resources, read the cluster log, " +
-			"list recent tasks, and obtain the next free guest ID.",
+		Long: `Inspect and manage Proxmox VE cluster-wide state: quorum status, cluster
+resources, the cluster log, recent tasks, and the next free guest ID.
+Configure cluster-wide backup jobs, HA groups/rules/resources, firewall
+rules, resource mappings, replication jobs, metric servers, notification
+targets, ACME accounts, CPU models, and bulk guest actions across every node.
+Requires a configured Proxmox VE API connection.
+
+Sub-commands take whatever identifier the resource uses (an HA sid, mapping
+ID, job ID, or node name); no --node flag is needed since these operate
+cluster-wide. Actions that submit a PVE task (backup jobs, bulk start/
+shutdown/migrate) block until the task completes; pass the global --async
+flag to print the task UPID immediately instead of waiting.`,
+		Example: `  pmx pve cluster status
+  pmx pve cluster resources --type vm
+  pmx pve cluster next-id
+  pmx pve cluster log --max 20`,
 	}
 
 	cmd.AddCommand(

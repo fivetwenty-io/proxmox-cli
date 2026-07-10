@@ -21,8 +21,20 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "qemu",
 		Short: "Manage QEMU virtual machines",
-		Long: "List, inspect, configure, and control the lifecycle of QEMU virtual " +
-			"machines on a node, including snapshots.",
+		Long: `Manage QEMU/KVM virtual machines on Proxmox VE: lifecycle (create, start,
+stop, migrate, clone, delete), configuration, disks, snapshots, the guest
+agent, cloud-init, firewall rules, and console access. Requires a configured
+Proxmox VE API connection.
+
+Commands take a VM by numeric vmid or name; when the VM's node cannot be
+resolved automatically from the cluster, pass --node. Actions that submit a
+PVE task (create, clone, migrate, delete, start, stop, and similar) block
+until the task completes; pass --async to print the task UPID immediately
+instead of waiting.`,
+		Example: `  pmx pve qemu list
+  pmx pve qemu start 100
+  pmx pve qemu migrate 100 --target-node pve2 --online
+  pmx pve qemu snapshot create 100 pre-upgrade`,
 	}
 
 	cmd.AddCommand(
