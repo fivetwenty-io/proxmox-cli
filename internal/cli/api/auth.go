@@ -435,8 +435,24 @@ func newAuthStatusCmd() *cobra.Command {
 				resolved = "no (" + err.Error() + ")"
 			}
 
+			// Display values only — never mutate the stored context.
+			product := ctx.Product
+			if product == "" {
+				product = config.ProductPVE
+			}
+			port := ctx.Port
+			if port == 0 {
+				port = config.DefaultPortForProduct(product)
+			}
+			protocol := ctx.Protocol
+			if protocol == "" {
+				protocol = "https"
+			}
+
 			single := map[string]string{
 				"Context":       name,
+				"Host":          fmt.Sprintf("%s://%s:%d", protocol, ctx.Host, port),
+				"Product":       fmt.Sprintf("%s (%s)", cli.ProductDisplayName(product), product),
 				"Auth-type":     ctx.Auth.Type,
 				"Username":      ctx.Auth.Username,
 				"Token-ID":      ctx.Auth.TokenID,

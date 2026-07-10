@@ -775,6 +775,45 @@ func TestAuthStatus_NotFound(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAuthStatus_ShowsHostAndProduct(t *testing.T) {
+	t.Setenv("PMX_TOKEN", "resolvedsecret")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	writeConfig(t, path, seedCfg())
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "status", "--context", "prod")
+	require.NoError(t, err)
+	require.Contains(t, out, "https://pve.example.com:8006")
+	require.Contains(t, out, "Proxmox VE (pve)")
+}
+
+func TestAuthStatus_HostProduct_PBSDefaults(t *testing.T) {
+	t.Setenv("PBS_TOKEN", "resolvedsecret")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	cfg := seedCfg()
+	// Zero port and empty protocol must render with PBS defaults.
+	cfg.Contexts["backup"] = &config.Context{
+		Host:    "pbs.example.com",
+		Product: config.ProductPBS,
+		Auth: config.AuthBlock{
+			Type: "token", Username: "root@pam", TokenID: "cli", Secret: "${PBS_TOKEN}",
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "status", "--context", "backup")
+	require.NoError(t, err)
+	require.Contains(t, out, "https://pbs.example.com:8007")
+	require.Contains(t, out, "Proxmox Backup Server (pbs)")
+}
+
 // ---------------------------------------------------------------------------
 // auth refresh
 // ---------------------------------------------------------------------------
