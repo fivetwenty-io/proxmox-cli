@@ -17,8 +17,19 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "access",
 		Short: "Manage users, tokens, groups, roles, and access control",
-		Long: "Manage Proxmox VE access control: users and API tokens, groups, " +
-			"roles, ACL entries, effective permissions, and passwords.",
+		Long: `Manage Proxmox VE access control: users and their API tokens, groups,
+roles, ACL entries, authentication realms (domains, including OpenID Connect
+and LDAP/AD sync), TFA/two-factor device enrollment, effective permissions,
+and user passwords. Requires a configured Proxmox VE API connection.
+
+Sub-commands take the resource's own identifier: a full userid (name@realm),
+groupid, roleid, tokenid, or realm name. Destructive verbs (user delete,
+token delete, group delete, role delete, domain delete, tfa delete) require
+--yes/-y and otherwise refuse to run.`,
+		Example: `  pmx pve access user list
+  pmx pve access user create alice@pve --password secret123
+  pmx pve access user token create alice@pve ci-token
+  pmx pve access acl set --path /vms/100 --roles PVEVMAdmin --users alice@pve`,
 	}
 	cmd.AddCommand(
 		newUserCmd(),

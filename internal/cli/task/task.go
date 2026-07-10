@@ -23,8 +23,18 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and control Proxmox VE tasks",
-		Long: `Work with Proxmox VE tasks: list recent tasks on a node, read a task's
-log, wait for a task to finish, or stop a running task.`,
+		Long: `Work with Proxmox VE tasks: list recent tasks on a node or across the
+cluster, check a task's status, read its log, wait for it to finish, or stop
+a running task. Requires a configured Proxmox VE API connection.
+
+Tasks are identified by their UPID, which encodes the node they ran on; 'task
+status' and 'task wait' resolve the node from the UPID and need no --node
+flag. 'task list', 'task log', and 'task stop' operate on a single node,
+selected via --node, PMX_NODE, or the active context's default node.`,
+		Example: `  pmx pve task list --node pve1
+  pmx pve task status UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
+  pmx pve task wait UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
+  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --limit 50`,
 	}
 
 	cmd.AddCommand(

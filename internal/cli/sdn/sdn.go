@@ -25,8 +25,22 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sdn",
 		Short: "Manage software-defined networking (zones, vnets, subnets)",
-		Long: "List, create, and delete SDN zones, vnets, and subnets. Changes are " +
-			"staged until committed with `pmx sdn apply`.",
+		Long: `Manage Proxmox VE Software-Defined Networking: zones, vnets, subnets,
+controllers, IPAM providers, DNS providers, fabrics, and vnet firewall rules,
+plus SDN-wide status, prefix-lists, route-maps, and configuration locking.
+Requires a configured Proxmox VE API connection.
+
+Creating, updating, or deleting a zone, vnet, subnet, controller, IPAM, DNS
+provider, or fabric only edits the pending configuration; changes take effect
+on the nodes only after 'pmx sdn apply' reloads the network config ('pmx sdn
+dry-run' previews the reload, 'pmx sdn rollback' discards pending changes).
+Sub-commands take the resource's own identifier (zone name, vnet name,
+controller ID, and so on); destructive verbs require --yes/-y and otherwise
+refuse to run.`,
+		Example: `  pmx pve sdn zone create myzone --type simple
+  pmx pve sdn vnet create vnet1 --zone myzone
+  pmx pve sdn subnet create vnet1 10.0.0.0/24 --gateway 10.0.0.1
+  pmx pve sdn apply`,
 	}
 	cmd.AddCommand(
 		newApplyCmd(),

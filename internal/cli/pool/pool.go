@@ -22,7 +22,18 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pool",
 		Short: "Manage resource pools",
-		Long:  "List, inspect, create, update, and delete Proxmox VE resource pools.",
+		Long: `Manage Proxmox VE resource pools: list, inspect, create, update, and
+delete pools, add or remove member VMs and storage, and inspect a pool's
+effective permissions. Requires a configured Proxmox VE API connection.
+
+Sub-commands take a pool by its poolid. 'pool set' adds or removes members via
+--vms/--storage (pass --delete to remove instead of add); 'pool delete' does
+not accept member-destruction flags and prompts for confirmation unless
+--yes/-y is given.`,
+		Example: `  pmx pve pool create --poolid backups --comment "Backup targets"
+  pmx pve pool set backups --vms 100,101
+  pmx pve pool list
+  pmx pve pool get backups`,
 	}
 	cmd.AddCommand(
 		newListCmd(),
