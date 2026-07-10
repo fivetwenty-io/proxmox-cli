@@ -20,6 +20,11 @@ before:
   hooks:
     - go mod tidy
     - go mod download
+    - mkdir -p ./manpages ./completions
+    - go run ./cmd/docgen -out ./manpages -version {{ .Version }} -date {{ .CommitDate }}
+    - sh -c "go run ./cmd/pmx completion bash > ./completions/pmx.bash"
+    - sh -c "go run ./cmd/pmx completion zsh  > ./completions/_pmx"
+    - sh -c "go run ./cmd/pmx completion fish > ./completions/pmx.fish"
 
 builds:
   - id: pmx
@@ -67,10 +72,109 @@ archives:
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     files:
       - README.md
+      - LICENSE
+      - src: manpages/man1/*.1
+        dst: share/man/man1
+      - src: manpages/man5/*.5
+        dst: share/man/man5
+      # NB: these three need the full destination *file* path, not just the
+      # directory — a literal (non-glob) src with a directory-only dst drops
+      # the filename (goreleaser resolves dst="." relative to the src file
+      # itself for non-glob sources), collapsing the file to e.g.
+      # share/bash-completion/completions with no pmx.bash suffix. Verified
+      # empirically via `tar tzf`; see task-8-report.md.
+      - src: completions/pmx.bash
+        dst: share/bash-completion/completions/pmx.bash
+      - src: completions/_pmx
+        dst: share/zsh/site-functions/_pmx
+      - src: completions/pmx.fish
+        dst: share/fish/vendor_completions.d/pmx.fish
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
+
+nfpms:
+  - id: pmx
+    package_name: pmx
+    ids:
+      - pmx
+    vendor: FiveTwenty Inc.
+    homepage: https://github.com/fivetwenty-io/pmx-cli
+    maintainer: Wayne E. Seguin <wayneeseguin@fivetwenty.io>
+    description: Proxmox command-line interface (VE / PBS / PDM).
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: /usr/bin/pmx
+        dst: /usr/bin/pve
+        type: symlink
+      - src: /usr/bin/pmx
+        dst: /usr/bin/pbs
+        type: symlink
+      - src: /usr/bin/pmx
+        dst: /usr/bin/pdm
+        type: symlink
+      - src: ./manpages/man1/*.1
+        dst: /usr/share/man/man1/
+      - src: ./manpages/man5/*.5
+        dst: /usr/share/man/man5/
+      - src: ./completions/pmx.bash
+        dst: /usr/share/bash-completion/completions/pmx
+      - src: ./completions/_pmx
+        dst: /usr/share/zsh/site-functions/_pmx
+      - src: ./completions/pmx.fish
+        dst: /usr/share/fish/vendor_completions.d/pmx.fish
+      - src: LICENSE
+        dst: /usr/share/doc/pmx/LICENSE
+
+# NOTE: `brews:` is hard-deprecated as of the installed goreleaser (v2.17,
+# deprecated since v2.10/hard since v2.16) — `goreleaser check` fails on it.
+# `homebrew_casks:` is the maintained replacement; see
+# https://goreleaser.com/deprecations#brews. Casks don't have a Formula-style
+# `install` script, so the pve/pbs/pdm persona aliases are created/removed via
+# postflight/uninstall hooks instead of `bin.install_symlink`.
+homebrew_casks:
+  - name: pmx
+    ids:
+      - pmx
+    repository:
+      owner: fivetwenty-io
+      name: homebrew-tap
+      # envOrDefault (not `.Env.HOMEBREW_TAP_GITHUB_TOKEN` directly) so
+      # `goreleaser check`/local snapshots don't fail when the tap secret is
+      # unset — direct map access errors under missingkey=error.
+      token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
+    directory: Casks
+    homepage: https://github.com/fivetwenty-io/pmx-cli
+    description: Proxmox command-line interface (VE / PBS / PDM)
+    # Skip pushing the cask whenever the tap token is not configured, so a
+    # release without the HOMEBREW_TAP_GITHUB_TOKEN secret still succeeds
+    # (`index .Env` is nil-safe under missingkey=error, unlike direct access).
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
+    binaries:
+      - pmx
+    manpages:
+      - share/man/man1/*.1
+      - share/man/man5/*.5
+    completions:
+      bash: share/bash-completion/completions/pmx.bash
+      zsh: share/zsh/site-functions/_pmx
+      fish: share/fish/vendor_completions.d/pmx.fish
+    hooks:
+      post:
+        install: |
+          %w[pve pbs pdm].each do |persona|
+            (HOMEBREW_PREFIX/"bin"/persona).make_symlink("pmx")
+          end
+        uninstall: |
+          %w[pve pbs pdm].each do |persona|
+            link = HOMEBREW_PREFIX/"bin"/persona
+            link.delete if link.symlink?
+          end
 
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"

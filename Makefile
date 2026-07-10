@@ -203,6 +203,11 @@ release-check: ## Validate .goreleaser.yaml
 release-snapshot: ## Build a local cross-platform release into dist/ (no publish)
 	goreleaser release --snapshot --clean
 
+.PHONY: packages
+packages: ## Build .deb + .rpm packages (and archives) into dist/ via goreleaser snapshot
+	goreleaser release --snapshot --clean --skip=publish,announce
+	@ls -1 dist/*.deb dist/*.rpm
+
 .PHONY: release-publish
 release-publish: ## Publish the GitHub release for the current tag (requires a v* tag + GITHUB_TOKEN)
 	goreleaser release --clean
