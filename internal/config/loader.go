@@ -17,7 +17,7 @@ var strictFingerprintRE = regexp.MustCompile(`^(?i)[0-9a-f]{2}(?::[0-9a-f]{2}){3
 
 // DefaultPath returns the canonical config file path.
 // Uses $XDG_CONFIG_HOME if set, otherwise falls back to ~/.config.
-// Final path: <base>/pve/config.yml
+// Final path: <base>/pmx/config.yml
 func DefaultPath() string {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {

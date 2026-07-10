@@ -101,6 +101,15 @@ func TestRootPages_RequiredSections(t *testing.T) {
 	}
 }
 
+func TestConfigPage_Generated(t *testing.T) {
+	got := generateInto(t, t.TempDir())
+	page := string(got["pmx-config.5"])
+	require.Regexp(t, `(?m)^\.TH `, page)
+	for _, key := range []string{"current-context", "contexts", "host", "product", "auth", "tls"} {
+		require.Contains(t, page, key, "pmx-config.5 must document %q", key)
+	}
+}
+
 func TestExitStatus_MatchesExitcodeConsts(t *testing.T) {
 	page := string(generateInto(t, t.TempDir())["pmx.1"])
 	for _, code := range []int{

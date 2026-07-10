@@ -30,13 +30,13 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/persona"
 )
 
-// pages embeds the hand-authored roff fragments spliced into generated pages.
-// cobra/doc has no hook for ENVIRONMENT/FILES/EXIT STATUS, so these sections
-// are authored in markdown, rendered with the same md2man cobra uses
-// internally, and spliced into the four persona root pages by
-// injectRootSections.
+// pages embeds the hand-authored markdown rendered into man pages. cobra/doc
+// has no hook for ENVIRONMENT/FILES/EXIT STATUS, so root-sections.md is
+// rendered with the same md2man cobra uses internally and spliced into the
+// four persona root pages by injectRootSections. pmx-config.5.md is a
+// standalone man5 page documenting the config file format; see renderConfigPage.
 //
-//go:embed pages/root-sections.md
+//go:embed pages/*.md
 var pages embed.FS
 
 // fallbackDate keeps dev-box output byte-deterministic when no -date is given.
@@ -115,7 +115,44 @@ func run(opts runOpts) error {
 
 		log.Printf("persona %s -> %s", name, man1)
 	}
+
+	man5 := filepath.Join(opts.out, "man5")
+	if err := os.MkdirAll(man5, 0o755); err != nil {
+		return err
+	}
+	if err := renderConfigPage(man5, hdr); err != nil {
+		return err
+	}
+	log.Printf("pmx-config.5 -> %s", man5)
+
 	return nil
+}
+
+// renderConfigPage renders the hand-authored pages/pmx-config.5.md into
+// <man5>/pmx-config.5. The source markdown opens with a throwaway "# pmx-config.5"
+// heading for the same reason pages/root-sections.md does: md2man renders a
+// document's first heading as the .TH title-block preamble rather than a
+// .SH section, so that heading (and everything through the title block it
+// produces) is discarded here in favor of a hand-built .TH line whose
+// section, date, and version match the man1 pages exactly.
+func renderConfigPage(man5 string, hdr *doc.GenManHeader) error {
+	src, err := pages.ReadFile("pages/pmx-config.5.md")
+	if err != nil {
+		// Embedded at build time; a missing file is a programmer error, not a
+		// runtime condition callers can recover from.
+		panic(fmt.Sprintf("docgen: embedded pages/pmx-config.5.md missing: %v", err))
+	}
+	body := md2man.Render(src)
+	if i := bytes.Index(body, []byte(".SH ")); i >= 0 {
+		body = body[i:]
+	}
+	th := fmt.Sprintf(".nh\n.TH \"PMX-CONFIG\" \"5\" \"%s\" \"%s\" \"pmx Manual\"\n\n",
+		hdr.Date.Format("Jan 2006"), hdr.Source)
+	out := make([]byte, 0, len(th)+len(body))
+	out = append(out, th...)
+	out = append(out, body...)
+	//nolint:gosec // G306: man pages are world-readable by convention
+	return os.WriteFile(filepath.Join(man5, "pmx-config.5"), out, 0o644)
 }
 
 // buildRoot assembles the full command tree for a persona, mirroring the
