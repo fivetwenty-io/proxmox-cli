@@ -240,7 +240,7 @@ func TestSelect_Picker_NoContexts_Error(t *testing.T) {
 
 	_, err := run(t, deps, "", "select")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no contexts defined")
+	require.Contains(t, err.Error(), "config has no contexts")
 }
 
 // ---------------------------------------------------------------------------

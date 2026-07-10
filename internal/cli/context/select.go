@@ -85,7 +85,7 @@ func newSelectCmd() *cobra.Command {
 // (number or name) from cmd.InOrStdin(). Returns the selected context name.
 func pickContext(cmd *cobra.Command, cfg *config.Config) (string, error) {
 	if len(cfg.Contexts) == 0 {
-		return "", fmt.Errorf("no contexts defined in config; use 'pmx context add' first")
+		return "", fmt.Errorf("config has no contexts; use 'pmx context add' first")
 	}
 
 	names := make([]string, 0, len(cfg.Contexts))
@@ -144,7 +144,7 @@ func requireContextExists(cfg *config.Config, name string) error {
 	}
 	available := config.ContextNamesWithProducts(cfg)
 	if len(available) == 0 {
-		return fmt.Errorf("context %q not found: no contexts defined in config", name)
+		return fmt.Errorf("context %q not found: config has no contexts", name)
 	}
 	return fmt.Errorf("context %q not found; available: %s",
 		name, strings.Join(available, ", "))
