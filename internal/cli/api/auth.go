@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -457,17 +458,16 @@ func newAuthStatusCmd() *cobra.Command {
 // sub-commands it requires a live API client (built by the root from the
 // resolved context), so it is NOT annotated noClient: it calls
 // GET /access/permissions to confirm the stored credentials authenticate and
-// reports the effective identity plus the accessible ACL paths.
+// reports the effective identity plus the accessible ACL paths. The
+// ProductFromContext annotation lets the root build whichever of PVE, PBS,
+// or PDM the resolved context targets (see cli.ProductFromContext), and
+// RunE selects the client the root populated.
 func newAuthWhoamiCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "whoami",
-		Short: "Show the identity the current credentials authenticate as",
-		Args:  cobra.NoArgs,
-		// whoami calls the PVE-only Access.ListPermissions endpoint (see the
-		// doc comment above), so it must always require a PVE context — even
-		// hoisted directly onto a "pbs" persona root, which otherwise tags
-		// every unannotated command with config.ProductPBS.
-		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPVE},
+		Use:         "whoami",
+		Short:       "Show the identity the current credentials authenticate as",
+		Args:        cobra.NoArgs,
+		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -483,7 +483,15 @@ func newAuthWhoamiCmd() *cobra.Command {
 				return err
 			}
 
-			perms, err := deps.API.Access.ListPermissions(cmd.Context(), nil)
+			var perms *json.RawMessage
+			switch {
+			case deps.PBS != nil:
+				perms, err = deps.PBS.Access.ListPermissions(cmd.Context(), nil)
+			case deps.PDM != nil:
+				perms, err = deps.PDM.Access.ListPermissions(cmd.Context(), nil)
+			default:
+				perms, err = deps.API.Access.ListPermissions(cmd.Context(), nil)
+			}
 			if err != nil {
 				return fmt.Errorf("verify credentials for context %q: %w", name, err)
 			}

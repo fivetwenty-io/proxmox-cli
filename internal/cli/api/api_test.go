@@ -545,6 +545,71 @@ func TestAuthWhoami_AuthFailure(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestAuthWhoami_PBSContext_Success verifies that 'auth whoami' against a
+// product: pbs context calls the PBS Access.ListPermissions endpoint and
+// reports the resolved identity, mirroring TestAuthWhoami_Success for PVE.
+func TestAuthWhoami_PBSContext_Success(t *testing.T) {
+	f := testhelper.NewFakePBS(t)
+	f.HandleFunc("GET /api2/json/access/permissions", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"/": map[string]int{"Sys.Audit": 1}})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePBSHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "backup1",
+		Contexts: map[string]*config.Context{
+			"backup1": {
+				Product: config.ProductPBS,
+				Host:    host, Port: port, Protocol: "http", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "cli", Secret: "s3cr3t"},
+				TLS:  config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "whoami", "--context", "backup1")
+	require.NoError(t, err)
+	require.Contains(t, out, "root@pam!cli")
+}
+
+// TestAuthWhoami_PDMContext_Success mirrors TestAuthWhoami_PBSContext_Success
+// for Proxmox Datacenter Manager.
+func TestAuthWhoami_PDMContext_Success(t *testing.T) {
+	f := testhelper.NewFakePDM(t)
+	f.HandleFunc("GET /api2/json/access/permissions", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"/": map[string]int{"Sys.Audit": 1}})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePDMHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "dc1",
+		Contexts: map[string]*config.Context{
+			"dc1": {
+				Product: config.ProductPDM,
+				Host:    host, Port: port, Protocol: "http", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "cli", Secret: "s3cr3t"},
+				TLS:  config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "whoami", "--context", "dc1")
+	require.NoError(t, err)
+	require.Contains(t, out, "root@pam!cli")
+}
+
 // ---------------------------------------------------------------------------
 // auth logout
 // ---------------------------------------------------------------------------

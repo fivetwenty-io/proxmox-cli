@@ -1523,24 +1523,22 @@ func TestHoistedPDMChildrenRequirePDMProduct(t *testing.T) {
 		"pdm's proxied pbs subtree must resolve to pdm, not pbs, since it is a PDM API call")
 }
 
-// TestAuthWhoamiRequiresPVEProduct is the regression test for `auth whoami`
-// under the "pbs" persona: the persona root tags itself with ProductAnnotation
-// = config.ProductPBS (see NewRootCmd), and `auth whoami` is the one shared,
-// non-noClient command under the auth group that set no product annotation of
-// its own — so before the fix it silently inherited config.ProductPBS from the
-// persona root instead of requiring config.ProductPVE like the rest of the
-// auth group's live-client behavior (login/refresh/whoami currently only
-// support PVE contexts). Left unfixed, `pbs auth whoami` panics on a nil
-// deps.API (the root builds a PBS client for a PBS-tagged command, not a PVE
-// client) instead of cleanly rejecting a PBS context.
-func TestAuthWhoamiRequiresPVEProduct(t *testing.T) {
+// TestAuthWhoamiResolvesByContextUnderEveryPersona verifies that `auth
+// whoami` sets its own ProductAnnotation = cli.ProductFromContext (see
+// newAuthWhoamiCmd), so it always resolves against whichever product the
+// active *context* targets (PVE, PBS, or PDM) rather than inheriting the
+// persona root's own product tag (e.g. the "pbs" persona root tags itself
+// config.ProductPBS — see NewRootCmd). This holds under every persona,
+// including "pbs", since whoami now supports PVE, PBS, and PDM contexts
+// alike via deps.API/deps.PBS/deps.PDM selection in its RunE.
+func TestAuthWhoamiResolvesByContextUnderEveryPersona(t *testing.T) {
 	root, cleanup := cli.NewRootCmd("pbs")
 	defer cleanup()
 	cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{api.Auth})
 
 	whoami, _, err := root.Find([]string{"auth", "whoami"})
 	require.NoError(t, err)
-	require.Equal(t, config.ProductPVE, cli.RequiredProduct(whoami),
-		"auth whoami must require a PVE context under every persona, "+
-			"including pbs, since it is not yet implemented against the PBS API")
+	require.Equal(t, cli.ProductFromContext, cli.RequiredProduct(whoami),
+		"auth whoami must resolve by the active context's own product under every persona, "+
+			"including pbs, rather than inheriting the persona root's product tag")
 }
