@@ -84,6 +84,7 @@ func newPveRemoteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote",
 		Short: "View the PVE remotes registry",
+		Long:  "View the directory of PVE remotes this Proxmox Datacenter Manager manages.",
 	}
 	cmd.AddCommand(newPveRemoteLsCmd())
 	return cmd
@@ -93,9 +94,11 @@ func newPveRemoteCmd() *cobra.Command {
 // remotes (GET /pve/remotes), sorted by remote ID.
 func newPveRemoteLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls",
-		Short: "List the PVE remotes this Proxmox Datacenter Manager manages",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List the PVE remotes this Proxmox Datacenter Manager manages",
+		Long:    "Return the list of PVE remotes, sorted by remote ID (GET /pve/remotes).",
+		Example: "  pmx pdm pve remote ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -439,6 +442,7 @@ func newPveClusterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Inspect a PVE remote's cluster",
+		Long:  "Inspect a PVE remote's cluster: node status, the next free VMID, and cluster resources.",
 	}
 	cmd.AddCommand(newPveClusterStatusCmd(), newPveClusterNextIDCmd(), newPveClusterResourcesCmd())
 	return cmd

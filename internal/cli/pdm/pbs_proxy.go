@@ -78,6 +78,7 @@ func newPbsRemoteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote",
 		Short: "View the PBS remotes registry",
+		Long:  "View the directory of PBS remotes this Proxmox Datacenter Manager manages.",
 	}
 	cmd.AddCommand(newPbsRemoteLsCmd())
 	return cmd
@@ -87,9 +88,11 @@ func newPbsRemoteCmd() *cobra.Command {
 // remotes (GET /pbs/remotes), sorted by remote ID.
 func newPbsRemoteLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls",
-		Short: "List the PBS remotes this Proxmox Datacenter Manager manages",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List the PBS remotes this Proxmox Datacenter Manager manages",
+		Long:    "Return the list of PBS remotes, sorted by remote ID (GET /pbs/remotes).",
+		Example: "  pmx pdm pbs remote ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

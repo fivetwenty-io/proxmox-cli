@@ -23,6 +23,8 @@ func newNodeSdnCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sdn",
 		Short: "Read SDN VRF information for the node",
+		Long: "Read SDN VRF (virtual routing and forwarding) information for the node: EVPN " +
+			"vnet MAC-VRF and zone IP-VRF lookups.",
 	}
 	cmd.AddCommand(newNodeSdnVnetCmd(), newNodeSdnZoneCmd())
 	return cmd
@@ -34,6 +36,7 @@ func newNodeSdnVnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnet",
 		Short: "Read EVPN vnet MAC-VRF information",
+		Long:  "Read EVPN vnet MAC-VRF (MAC address to next-hop mapping) information for the node.",
 	}
 	cmd.AddCommand(newNodeSdnVnetMacVrfCmd())
 	return cmd
@@ -87,6 +90,7 @@ func newNodeSdnZoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zone",
 		Short: "Read EVPN zone IP-VRF information",
+		Long:  "Read EVPN zone IP-VRF (route table) information for the node.",
 	}
 	cmd.AddCommand(newNodeSdnZoneIPVrfCmd())
 	return cmd

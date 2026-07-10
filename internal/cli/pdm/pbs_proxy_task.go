@@ -17,6 +17,7 @@ func newPbsTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "List, inspect, and stop background tasks on a PBS remote",
+		Long:  "List, inspect, and stop the background tasks recorded on a PBS remote, and read a task's log.",
 	}
 	cmd.AddCommand(newPbsTaskLsCmd(), newPbsTaskStatusCmd(), newPbsTaskLogCmd(), newPbsTaskStopCmd())
 	return cmd
@@ -44,9 +45,11 @@ type pbsTaskEntry struct {
 // precedent — a task list is a log, not a set of named entities.
 func newPbsTaskLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls <remote>",
-		Short: "List background tasks on a PBS remote",
-		Args:  cobra.ExactArgs(1),
+		Use:     "ls <remote>",
+		Short:   "List background tasks on a PBS remote",
+		Long:    "List the background tasks recorded on a PBS remote (GET /pbs/remotes/{remote}/tasks).",
+		Example: "  pmx pdm pbs task ls pbs-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -84,7 +87,11 @@ func newPbsTaskStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <remote> <upid>",
 		Short: "Show the status of one task on a PBS remote",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show the status record of one task on a PBS remote identified by its UPID; " +
+			"pass --wait to block until the task finishes before returning its result (GET " +
+			"/pbs/remotes/{remote}/tasks/{upid}/status).",
+		Example: "  pmx pdm pbs task status pbs-main UPID:pbs1:00001234:...",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, upid := args[0], args[1]
@@ -125,7 +132,11 @@ func newPbsTaskLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <remote> <upid>",
 		Short: "Read a task's log on a PBS remote",
-		Args:  cobra.ExactArgs(2),
+		Long: "Read the log lines of a task on a PBS remote identified by its UPID. Use " +
+			"--start and --limit to page through a long log, or --download to fetch the raw " +
+			"log text (GET /pbs/remotes/{remote}/tasks/{upid}/log).",
+		Example: "  pmx pdm pbs task log pbs-main UPID:pbs1:00001234:...",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, upid := args[0], args[1]

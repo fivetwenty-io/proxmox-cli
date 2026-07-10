@@ -27,6 +27,8 @@ func newPveStorageCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "storage",
 		Short: "Inspect a PVE remote node's storage",
+		Long: "Inspect a PVE remote node's storage: list datastores, show a single " +
+			"datastore's status, and read RRD disk-usage metrics.",
 	}
 	cmd.AddCommand(newPveStorageLsCmd(), newPveStorageStatusCmd(), newPveStorageRrddataCmd())
 	return cmd

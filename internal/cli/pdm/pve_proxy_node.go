@@ -21,6 +21,8 @@ func newPveNodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Inspect and manage a PVE remote's node(s)",
+		Long: "Inspect and manage a PVE remote's node(s): status, configuration, network " +
+			"interfaces, RRD metrics, subscription, APT packages, firewall, and SDN VRF lookups.",
 	}
 	cmd.AddCommand(
 		newPveNodeLsCmd(),
@@ -312,6 +314,9 @@ func newPveNodeAptCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apt",
 		Short: "Inspect and manage APT packages and repositories on a PVE remote's node",
+		Long: "Inspect and manage APT packages and repositories on a PVE remote's node: " +
+			"available updates, the package index, configured repositories, and package " +
+			"changelogs.",
 	}
 	cmd.AddCommand(
 		newPveNodeAptUpdatesCmd(),
@@ -346,7 +351,10 @@ func newPveNodeAptUpdatesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "updates <remote> <node>",
 		Short: "List available APT package updates on a PVE remote's node",
-		Args:  cobra.ExactArgs(2),
+		Long: "List available APT package updates for a PVE remote's node (GET " +
+			"/pve/remotes/{remote}/nodes/{node}/apt/update).",
+		Example: "  pmx pdm pve node apt updates pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -421,7 +429,11 @@ func newPveNodeAptRepositoriesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "repositories <remote> <node>",
 		Short: "Show parsed APT repository information on a PVE remote's node",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show a PVE remote node's configured APT repositories, parsed from its sources " +
+			"files, including standard-repo status and any warnings (GET " +
+			"/pve/remotes/{remote}/nodes/{node}/apt/repositories).",
+		Example: "  pmx pdm pve node apt repositories pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -456,7 +468,10 @@ func newPveNodeAptChangelogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "changelog <remote> <node> <package>",
 		Short: "Show the changelog of an APT package on a PVE remote's node",
-		Args:  cobra.ExactArgs(3),
+		Long: "Retrieve the changelog of an APT package on a PVE remote's node, optionally " +
+			"at a specific --version (GET /pve/remotes/{remote}/nodes/{node}/apt/changelog).",
+		Example: "  pmx pdm pve node apt changelog pve-main pve1 pve-manager",
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node, pkg := args[0], args[1], args[2]
@@ -497,6 +512,7 @@ func newPveNodeFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "firewall",
 		Short: "Inspect and manage a PVE remote node's firewall",
+		Long:  "Inspect and manage a PVE remote node's firewall: options, rules, and status.",
 	}
 	cmd.AddCommand(newPveNodeFirewallOptionsCmd(), newPveNodeFirewallRulesCmd(), newPveNodeFirewallStatusCmd())
 	return cmd
@@ -509,6 +525,8 @@ func newPveNodeFirewallOptionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "options",
 		Short: "Show or update a PVE remote node's firewall options",
+		Long: "Show or update a PVE remote node's firewall options (GET/PUT " +
+			"/pve/remotes/{remote}/nodes/{node}/firewall/options).",
 	}
 	cmd.AddCommand(newPveNodeFirewallOptionsShowCmd(), newPveNodeFirewallOptionsUpdateCmd())
 	return cmd
@@ -521,7 +539,10 @@ func newPveNodeFirewallOptionsShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <remote> <node>",
 		Short: "Show a PVE remote node's firewall options",
-		Args:  cobra.ExactArgs(2),
+		Long: "Get firewall options for a PVE remote's node (GET " +
+			"/pve/remotes/{remote}/nodes/{node}/firewall/options).",
+		Example: "  pmx pdm pve node firewall options show pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -700,7 +721,10 @@ func newPveNodeFirewallRulesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rules <remote> <node>",
 		Short: "Show a PVE remote node's firewall rules",
-		Args:  cobra.ExactArgs(2),
+		Long: "Get firewall rules for a PVE remote's node (GET " +
+			"/pve/remotes/{remote}/nodes/{node}/firewall/rules).",
+		Example: "  pmx pdm pve node firewall rules pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -728,7 +752,10 @@ func newPveNodeFirewallStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <remote> <node>",
 		Short: "Show a PVE remote node's firewall status",
-		Args:  cobra.ExactArgs(2),
+		Long: "Get firewall status for a PVE remote's node (GET " +
+			"/pve/remotes/{remote}/nodes/{node}/firewall/status).",
+		Example: "  pmx pdm pve node firewall status pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -767,6 +794,8 @@ func newPveNodeSdnCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sdn",
 		Short: "Read SDN VRF information for a PVE remote's node",
+		Long: "Read SDN VRF (virtual routing and forwarding) information for a PVE remote's " +
+			"node: EVPN vnet MAC-VRF and zone IP-VRF lookups.",
 	}
 	cmd.AddCommand(newPveNodeSdnVnetCmd(), newPveNodeSdnZoneCmd())
 	return cmd
@@ -776,6 +805,7 @@ func newPveNodeSdnVnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnet",
 		Short: "Read EVPN vnet MAC-VRF information",
+		Long:  "Read EVPN vnet MAC-VRF (MAC address to next-hop mapping) information for a PVE remote's node.",
 	}
 	cmd.AddCommand(newPveNodeSdnVnetMacVrfCmd())
 	return cmd
@@ -819,6 +849,7 @@ func newPveNodeSdnZoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zone",
 		Short: "Read EVPN zone IP-VRF information",
+		Long:  "Read EVPN zone IP-VRF (route table) information for a PVE remote's node.",
 	}
 	cmd.AddCommand(newPveNodeSdnZoneIPVrfCmd())
 	return cmd

@@ -202,7 +202,11 @@ func newPveGuestStatusCmd(kind pveGuestKind, status pveGuestStatusFunc) *cobra.C
 	cmd := &cobra.Command{
 		Use:   "status <remote> <vmid>",
 		Short: fmt.Sprintf("Show a PVE remote %s's status", kind.label),
-		Args:  cobra.ExactArgs(2),
+		Long: fmt.Sprintf("Get the status of a %s from a remote, node determined "+
+			"automatically if not provided (GET /pve/remotes/{remote}/%s/{vmid}/status).",
+			kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s status pve-main 100", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -472,7 +476,11 @@ func newPveGuestSnapshotLsCmd(kind pveGuestKind, list pveGuestVmidListFunc) *cob
 	cmd := &cobra.Command{
 		Use:   "ls <remote> <vmid>",
 		Short: fmt.Sprintf("List a PVE remote %s's snapshots", kind.label),
-		Args:  cobra.ExactArgs(2),
+		Long: fmt.Sprintf("List the snapshots of a remote %s, including the current state "+
+			"as a synthetic \"current\" entry (GET /pve/remotes/{remote}/%s/{vmid}/snapshot).",
+			kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s snapshot ls pve-main 100", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -515,6 +523,17 @@ type pveGuestSnapshotCreateFunc func(
 	ctx context.Context, deps *cli.Deps, remote, vmid, snapname string, node, description *string, vmstate *bool,
 ) (*json.RawMessage, error)
 
+// snapshotAddLong builds the Long text for `<kind> snapshot add`, mentioning
+// --vmstate only for qemu (CreateRemotesLxcSnapshotParams has no such field).
+func snapshotAddLong(kind pveGuestKind) string {
+	long := fmt.Sprintf("Create a snapshot of a remote %s (POST /pve/remotes/{remote}/%s/{vmid}/snapshot).",
+		kind.label, kind.noun)
+	if kind == pveGuestQemu {
+		long += " Pass --vmstate to include the VM's RAM state."
+	}
+	return long
+}
+
 // newPveGuestSnapshotAddCmd builds `pmx pdm pve <kind> snapshot add <remote>
 // <vmid> <snapname>` — create a snapshot of a remote guest. --vmstate is only
 // registered for qemu (CreateRemotesLxcSnapshotParams has no such field).
@@ -524,9 +543,11 @@ func newPveGuestSnapshotAddCmd(kind pveGuestKind, create pveGuestSnapshotCreateF
 		vmstate           bool
 	)
 	cmd := &cobra.Command{
-		Use:   "add <remote> <vmid> <snapname>",
-		Short: fmt.Sprintf("Create a snapshot of a PVE remote %s", kind.label),
-		Args:  cobra.ExactArgs(3),
+		Use:     "add <remote> <vmid> <snapname>",
+		Short:   fmt.Sprintf("Create a snapshot of a PVE remote %s", kind.label),
+		Long:    snapshotAddLong(kind),
+		Example: fmt.Sprintf("  pmx pdm pve %s snapshot add pve-main 100 before-upgrade", kind.noun),
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid, snapname := args[0], args[1], args[2]
@@ -583,7 +604,11 @@ func newPveGuestSnapshotDeleteCmd(kind pveGuestKind, del pveGuestSnapshotDeleteF
 	cmd := &cobra.Command{
 		Use:   "delete <remote> <vmid> <snapname>",
 		Short: fmt.Sprintf("Delete a snapshot of a PVE remote %s", kind.label),
-		Args:  cobra.ExactArgs(3),
+		Long: fmt.Sprintf("Delete a snapshot of a remote %s (DELETE "+
+			"/pve/remotes/{remote}/%s/{vmid}/snapshot/{snapname}). This is destructive: "+
+			"pass --yes/-y to confirm.", kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s snapshot delete pve-main 100 before-upgrade --yes", kind.noun),
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid, snapname := args[0], args[1], args[2]
@@ -633,7 +658,12 @@ func newPveGuestSnapshotUpdateCmd(kind pveGuestKind, update pveGuestSnapshotUpda
 	cmd := &cobra.Command{
 		Use:   "update <remote> <vmid> <snapname>",
 		Short: fmt.Sprintf("Update a PVE remote %s snapshot's description", kind.label),
-		Args:  cobra.ExactArgs(3),
+		Long: fmt.Sprintf("Update a remote %s snapshot's description (PUT "+
+			"/pve/remotes/{remote}/%s/{vmid}/snapshot/{snapname}/config). Synchronous: no "+
+			"worker task is created.", kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s snapshot update pve-main 100 before-upgrade "+
+			"--description 'pre-upgrade state'", kind.noun),
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid, snapname := args[0], args[1], args[2]
@@ -685,7 +715,12 @@ func newPveGuestSnapshotRollbackCmd(kind pveGuestKind, rollback pveGuestSnapshot
 	cmd := &cobra.Command{
 		Use:   "rollback <remote> <vmid> <snapname>",
 		Short: fmt.Sprintf("Roll a PVE remote %s back to a snapshot", kind.label),
-		Args:  cobra.ExactArgs(3),
+		Long: fmt.Sprintf("Roll a remote %s back to a snapshot (POST "+
+			"/pve/remotes/{remote}/%s/{vmid}/snapshot/{snapname}/rollback). Pass --start to "+
+			"start the guest after a successful rollback. This is destructive: pass --yes/-y "+
+			"to confirm.", kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s snapshot rollback pve-main 100 before-upgrade --yes", kind.noun),
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid, snapname := args[0], args[1], args[2]
@@ -787,6 +822,8 @@ func newPveGuestFirewallOptionsCmd(
 	cmd := &cobra.Command{
 		Use:   "options",
 		Short: fmt.Sprintf("Show or update a PVE remote %s's firewall options", kind.label),
+		Long: fmt.Sprintf("Show or update a PVE remote %s's firewall options (GET/PUT "+
+			"/pve/remotes/{remote}/%s/{vmid}/firewall/options).", kind.label, kind.noun),
 	}
 	cmd.AddCommand(newPveGuestFirewallOptionsShowCmd(kind, show), newPveGuestFirewallOptionsUpdateCmd(kind, update))
 	return cmd
@@ -797,7 +834,10 @@ func newPveGuestFirewallOptionsShowCmd(kind pveGuestKind, show pveGuestFirewallO
 	cmd := &cobra.Command{
 		Use:   "show <remote> <vmid>",
 		Short: fmt.Sprintf("Show a PVE remote %s's firewall options", kind.label),
-		Args:  cobra.ExactArgs(2),
+		Long: fmt.Sprintf("Get a PVE remote %s's firewall options (GET "+
+			"/pve/remotes/{remote}/%s/{vmid}/firewall/options).", kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s firewall options show pve-main 100", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -832,7 +872,12 @@ func newPveGuestFirewallOptionsUpdateCmd(kind pveGuestKind, update pveGuestFirew
 	cmd := &cobra.Command{
 		Use:   "update <remote> <vmid>",
 		Short: fmt.Sprintf("Update a PVE remote %s's firewall options", kind.label),
-		Args:  cobra.ExactArgs(2),
+		Long: fmt.Sprintf("Update a PVE remote %s's firewall options (PUT "+
+			"/pve/remotes/{remote}/%s/{vmid}/firewall/options). Only flags explicitly set "+
+			"are sent; use --delete to reset properties to their default instead.",
+			kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s firewall options update pve-main 100 --enable", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -875,7 +920,10 @@ func newPveGuestFirewallRulesCmd(kind pveGuestKind, rules pveGuestVmidListFunc) 
 	cmd := &cobra.Command{
 		Use:   "rules <remote> <vmid>",
 		Short: fmt.Sprintf("Show a PVE remote %s's firewall rules", kind.label),
-		Args:  cobra.ExactArgs(2),
+		Long: fmt.Sprintf("Get firewall rules for a PVE remote %s (GET "+
+			"/pve/remotes/{remote}/%s/{vmid}/firewall/rules).", kind.label, kind.noun),
+		Example: fmt.Sprintf("  pmx pdm pve %s firewall rules pve-main 100", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -910,6 +958,7 @@ func newPveGuestFirewallCmd(
 	cmd := &cobra.Command{
 		Use:   "firewall",
 		Short: fmt.Sprintf("Inspect and manage a PVE remote %s's firewall", kind.label),
+		Long:  fmt.Sprintf("Inspect and manage a PVE remote %s's firewall: options and rules.", kind.label),
 	}
 	cmd.AddCommand(newPveGuestFirewallOptionsCmd(kind, show, update), newPveGuestFirewallRulesCmd(kind, rules))
 	return cmd
@@ -941,6 +990,8 @@ func newPveGuestSnapshotCmd(kind pveGuestKind, ops pveGuestOps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
 		Short: fmt.Sprintf("Manage a PVE remote %s's snapshots", kind.label),
+		Long: fmt.Sprintf("Manage a PVE remote %s's snapshots: list, create, delete, update "+
+			"the description, and roll back.", kind.label),
 	}
 	cmd.AddCommand(
 		newPveGuestSnapshotLsCmd(kind, ops.snapshotList),

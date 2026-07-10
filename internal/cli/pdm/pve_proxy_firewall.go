@@ -18,6 +18,9 @@ func newPveFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "firewall",
 		Short: "Inspect and manage a PVE remote's cluster-level firewall",
+		Long: "Inspect and manage a PVE remote's cluster-level firewall: status across all " +
+			"managed remotes, a single remote's status, cluster firewall options, and " +
+			"cluster firewall rules.",
 	}
 	cmd.AddCommand(newPveFirewallStatusCmd(), newPveFirewallShowCmd(), newPveFirewallOptionsCmd(), newPveFirewallRulesCmd())
 	return cmd
@@ -96,6 +99,8 @@ func newPveFirewallOptionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "options",
 		Short: "Show or update a PVE remote's cluster firewall options",
+		Long: "Show or update a PVE remote's cluster-level firewall options (GET/PUT " +
+			"/pve/remotes/{remote}/firewall/options).",
 	}
 	cmd.AddCommand(newPveFirewallOptionsShowCmd(), newPveFirewallOptionsUpdateCmd())
 	return cmd
@@ -106,9 +111,11 @@ func newPveFirewallOptionsCmd() *cobra.Command {
 // /pve/remotes/{remote}/firewall/options).
 func newPveFirewallOptionsShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <remote>",
-		Short: "Show a PVE remote's cluster firewall options",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <remote>",
+		Short:   "Show a PVE remote's cluster firewall options",
+		Long:    "Get cluster firewall options for a PVE remote (GET /pve/remotes/{remote}/firewall/options).",
+		Example: "  pmx pdm pve firewall options show pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]

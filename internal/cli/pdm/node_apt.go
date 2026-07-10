@@ -39,6 +39,9 @@ func newNodeAptCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apt",
 		Short: "Inspect and manage APT packages and repositories on the node",
+		Long: "Inspect and manage APT packages and repositories on this Proxmox Datacenter " +
+			"Manager's own node: available updates, the package index, configured " +
+			"repositories, and package changelogs.",
 	}
 	cmd.AddCommand(
 		newNodeAptUpdatesCmd(),
@@ -55,9 +58,11 @@ func newNodeAptCmd() *cobra.Command {
 // available package updates (GET /nodes/{node}/apt/update).
 func newNodeAptUpdatesCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "updates <node>",
-		Short: "List available APT package updates",
-		Args:  cobra.ExactArgs(1),
+		Use:     "updates <node>",
+		Short:   "List available APT package updates",
+		Long:    "List the APT package updates available on the node (GET /nodes/{node}/apt/update).",
+		Example: "  pmx pdm node apt updates pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -144,7 +149,10 @@ func newNodeAptRepositoriesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "repositories <node>",
 		Short: "Show parsed APT repository information",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the node's configured APT repositories, parsed from its sources files, " +
+			"including standard-repo status and any warnings (GET /nodes/{node}/apt/repositories).",
+		Example: "  pmx pdm node apt repositories pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -180,6 +188,8 @@ func newNodeAptRepositoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "repository",
 		Short: "Add or change an APT repository entry",
+		Long: "Add a standard APT repository by handle, or change the enabled state of an " +
+			"existing repository entry.",
 	}
 	cmd.AddCommand(newNodeAptRepositoryAddCmd(), newNodeAptRepositoryChangeCmd())
 	return cmd
@@ -296,9 +306,11 @@ func newNodeAptRepositoryChangeCmd() *cobra.Command {
 // /nodes/{node}/apt/versions).
 func newNodeAptVersionsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "versions <node>",
-		Short: "Show installed versions of important PDM packages",
-		Args:  cobra.ExactArgs(1),
+		Use:     "versions <node>",
+		Short:   "Show installed versions of important PDM packages",
+		Long:    "Show installed versions of important PDM packages (GET /nodes/{node}/apt/versions).",
+		Example: "  pmx pdm node apt versions pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -334,7 +346,10 @@ func newNodeAptChangelogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "changelog <node>",
 		Short: "Show the changelog of an APT package",
-		Args:  cobra.ExactArgs(1),
+		Long: "Retrieve the changelog of an APT package identified by --name, optionally at a " +
+			"specific --version (GET /nodes/{node}/apt/changelog).",
+		Example: "  pmx pdm node apt changelog pdm-01 --name proxmox-datacenter-manager",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

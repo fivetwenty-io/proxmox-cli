@@ -21,6 +21,7 @@ func newNodeSubscriptionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subscription",
 		Short: "Show or refresh the node's subscription status",
+		Long:  "Show or refresh the subscription status of this Proxmox Datacenter Manager's own node.",
 	}
 	cmd.AddCommand(newNodeSubscriptionShowCmd(), newNodeSubscriptionUpdateCmd())
 	return cmd
@@ -31,9 +32,11 @@ func newNodeSubscriptionCmd() *cobra.Command {
 // /nodes/{node}/subscription).
 func newNodeSubscriptionShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <node>",
-		Short: "Show the node's subscription info",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <node>",
+		Short:   "Show the node's subscription info",
+		Long:    "Show the node's subscription info (GET /nodes/{node}/subscription).",
+		Example: "  pmx pdm node subscription show pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -72,7 +75,11 @@ func newNodeSubscriptionUpdateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <node>",
 		Short: "Check and refresh the node's subscription status against the server",
-		Args:  cobra.ExactArgs(1),
+		Long: "Check and refresh the node's subscription status against the Proxmox " +
+			"subscription server (POST /nodes/{node}/subscription). Runs synchronously; " +
+			"takes no parameters.",
+		Example: "  pmx pdm node subscription update pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

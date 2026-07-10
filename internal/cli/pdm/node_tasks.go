@@ -45,6 +45,8 @@ func newNodeTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "List, inspect, and stop background tasks on the node",
+		Long: "List, inspect, and stop the background tasks recorded on this Proxmox " +
+			"Datacenter Manager's own node, and read a task's log.",
 	}
 	cmd.AddCommand(
 		newNodeTaskLsCmd(),
@@ -153,7 +155,10 @@ func newNodeTaskStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <node> <upid>",
 		Short: "Show the status of one task",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show the full status record of one task identified by its UPID (GET " +
+			"/nodes/{node}/tasks/{upid}/status).",
+		Example: "  pmx pdm node task status pdm-01 UPID:pdm-01:00001234:...",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, upid := args[0], args[1]
@@ -188,7 +193,11 @@ func newNodeTaskLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <node> <upid>",
 		Short: "Read a task's log",
-		Args:  cobra.ExactArgs(2),
+		Long: "Read the log lines of a task identified by its UPID. Use --start and --limit " +
+			"to page through a long log, or --download to fetch the raw log text instead of " +
+			"paginated lines (GET /nodes/{node}/tasks/{upid}/log).",
+		Example: "  pmx pdm node task log pdm-01 UPID:pdm-01:00001234:...",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, upid := args[0], args[1]

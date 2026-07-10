@@ -21,6 +21,8 @@ func newPbsDatastoreCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "datastore",
 		Short: "Inspect a PBS remote's datastores",
+		Long: "Inspect a PBS remote's datastores: list them, browse namespaces, list backup " +
+			"snapshots, and read RRD disk-usage metrics.",
 	}
 	cmd.AddCommand(
 		newPbsDatastoreLsCmd(),
@@ -46,9 +48,11 @@ type pbsDatastoreEntry struct {
 // datastore name.
 func newPbsDatastoreLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls <remote>",
-		Short: "List a PBS remote's datastores",
-		Args:  cobra.ExactArgs(1),
+		Use:     "ls <remote>",
+		Short:   "List a PBS remote's datastores",
+		Long:    "List a PBS remote's datastores, sorted by datastore name (GET /pbs/remotes/{remote}/datastore).",
+		Example: "  pmx pdm pbs datastore ls pbs-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -99,7 +103,11 @@ func newPbsDatastoreNamespacesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "namespaces <remote> <datastore>",
 		Short: "List a datastore's namespaces",
-		Args:  cobra.ExactArgs(2),
+		Long: "List the namespaces of a PBS remote's datastore, sorted by namespace, " +
+			"optionally scoped by --parent and --max-depth (GET " +
+			"/pbs/remotes/{remote}/datastore/{datastore}/namespaces).",
+		Example: "  pmx pdm pbs datastore namespaces pbs-main store1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, datastore := args[0], args[1]
@@ -169,7 +177,10 @@ func newPbsDatastoreSnapshotsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshots <remote> <datastore>",
 		Short: "List a datastore's backup snapshots",
-		Args:  cobra.ExactArgs(2),
+		Long: "List a datastore's backup snapshots, optionally scoped to --ns, sorted by " +
+			"type, ID, and backup time (GET /pbs/remotes/{remote}/datastore/{datastore}/snapshots).",
+		Example: "  pmx pdm pbs datastore snapshots pbs-main store1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, datastore := args[0], args[1]

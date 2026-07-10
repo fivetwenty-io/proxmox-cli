@@ -53,6 +53,7 @@ func newPveTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "List, inspect, and stop background tasks on a PVE remote",
+		Long:  "List, inspect, and stop the background tasks recorded on a PVE remote, and read a task's log.",
 	}
 	cmd.AddCommand(newPveTaskLsCmd(), newPveTaskStatusCmd(), newPveTaskLogCmd(), newPveTaskStopCmd())
 	return cmd
@@ -131,7 +132,11 @@ func newPveTaskStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <remote> <upid>",
 		Short: "Show the status of one task on a PVE remote",
-		Args:  cobra.ExactArgs(2),
+		Long: "Get the status of a task from a PVE remote identified by its UPID; pass " +
+			"--wait to block until the task finishes before returning its result (GET " +
+			"/pve/remotes/{remote}/tasks/{upid}/status).",
+		Example: "  pmx pdm pve task status pve-main UPID:pve1:00001234:...",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, upid := args[0], args[1]
@@ -172,7 +177,11 @@ func newPveTaskLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <remote> <upid>",
 		Short: "Read a task's log on a PVE remote",
-		Args:  cobra.ExactArgs(2),
+		Long: "Read the log lines of a task on a PVE remote identified by its UPID. Use " +
+			"--start and --limit to page through a long log, or --download to fetch the raw " +
+			"log text (GET /pve/remotes/{remote}/tasks/{upid}/log).",
+		Example: "  pmx pdm pve task log pve-main UPID:pve1:00001234:...",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, upid := args[0], args[1]

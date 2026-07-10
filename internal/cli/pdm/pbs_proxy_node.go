@@ -17,6 +17,7 @@ func newPbsNodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Inspect a PBS remote's node(s)",
+		Long:  "Inspect a PBS remote's node(s): APT packages and repositories, and subscription status.",
 	}
 	cmd.AddCommand(newPbsNodeAptCmd(), newPbsNodeSubscriptionCmd())
 	return cmd
@@ -28,6 +29,9 @@ func newPbsNodeAptCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apt",
 		Short: "Inspect and manage APT packages and repositories on a PBS remote's node",
+		Long: "Inspect and manage APT packages and repositories on a PBS remote's node: " +
+			"available updates, the package index, configured repositories, and package " +
+			"changelogs.",
 	}
 	cmd.AddCommand(
 		newPbsNodeAptUpdatesCmd(),
@@ -61,7 +65,10 @@ func newPbsNodeAptUpdatesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "updates <remote> <node>",
 		Short: "List available APT package updates on a PBS remote's node",
-		Args:  cobra.ExactArgs(2),
+		Long: "List available APT package updates for a PBS remote's node (GET " +
+			"/pbs/remotes/{remote}/nodes/{node}/apt/update).",
+		Example: "  pmx pdm pbs node apt updates pbs-main pbs1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -136,7 +143,11 @@ func newPbsNodeAptRepositoriesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "repositories <remote> <node>",
 		Short: "Show parsed APT repository information on a PBS remote's node",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show a PBS remote node's configured APT repositories, parsed from its sources " +
+			"files, including standard-repo status and any warnings (GET " +
+			"/pbs/remotes/{remote}/nodes/{node}/apt/repositories).",
+		Example: "  pmx pdm pbs node apt repositories pbs-main pbs1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -171,7 +182,10 @@ func newPbsNodeAptChangelogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "changelog <remote> <node> <package>",
 		Short: "Show the changelog of an APT package on a PBS remote's node",
-		Args:  cobra.ExactArgs(3),
+		Long: "Retrieve the changelog of an APT package on a PBS remote's node, optionally " +
+			"at a specific --version (GET /pbs/remotes/{remote}/nodes/{node}/apt/changelog).",
+		Example: "  pmx pdm pbs node apt changelog pbs-main pbs1 proxmox-backup-server",
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node, pkg := args[0], args[1], args[2]
@@ -212,7 +226,10 @@ func newPbsNodeSubscriptionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "subscription <remote> <node>",
 		Short: "Show a PBS remote node's subscription info",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show subscription info for a PBS remote's node (GET " +
+			"/pbs/remotes/{remote}/nodes/{node}/subscription).",
+		Example: "  pmx pdm pbs node subscription pbs-main pbs1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]

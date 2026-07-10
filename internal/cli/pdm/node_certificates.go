@@ -37,6 +37,8 @@ func newNodeCertificateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "certificate",
 		Short: "Inspect and manage the node's TLS certificates",
+		Long: "Inspect and manage the TLS certificates serving the node's API: view the " +
+			"chain, upload or remove a custom certificate, and order or renew an ACME certificate.",
 	}
 	cmd.AddCommand(
 		newNodeCertificateInfoCmd(),
@@ -209,6 +211,7 @@ func newNodeCertificateAcmeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acme",
 		Short: "Order or renew the node's ACME certificate",
+		Long:  "Order a new ACME (Let's Encrypt) certificate for the node, or renew the current one.",
 	}
 	cmd.AddCommand(newNodeCertificateAcmeOrderCmd(), newNodeCertificateAcmeRenewCmd())
 	return cmd

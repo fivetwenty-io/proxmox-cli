@@ -32,6 +32,9 @@ func newNodeNetworkCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "network",
 		Short: "Inspect and manage network interfaces on the node",
+		Long: "Inspect and manage network interfaces on this Proxmox Datacenter Manager's " +
+			"own node: list, show, create, update, and delete interfaces, and revert or " +
+			"apply staged changes.",
 	}
 	cmd.AddCommand(
 		newNodeNetworkLsCmd(),
@@ -49,9 +52,11 @@ func newNodeNetworkCmd() *cobra.Command {
 // network interfaces, sorted by interface name (GET /nodes/{node}/network).
 func newNodeNetworkLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls <node>",
-		Short: "List network interfaces on the node",
-		Args:  cobra.ExactArgs(1),
+		Use:     "ls <node>",
+		Short:   "List network interfaces on the node",
+		Long:    "List the network interfaces configured on the node, sorted by interface name (GET /nodes/{node}/network).",
+		Example: "  pmx pdm node network ls pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -99,9 +104,11 @@ func boolCellPVE(b pveclient.PVEBool) string {
 // read one interface's configuration (GET /nodes/{node}/network/{iface}).
 func newNodeNetworkShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <node> <iface>",
-		Short: "Show a single network interface's configuration",
-		Args:  cobra.ExactArgs(2),
+		Use:     "show <node> <iface>",
+		Short:   "Show a single network interface's configuration",
+		Long:    "Read one network interface's full configuration (GET /nodes/{node}/network/{iface}).",
+		Example: "  pmx pdm node network show pdm-01 vmbr0",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, iface := args[0], args[1]

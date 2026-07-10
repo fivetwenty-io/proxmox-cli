@@ -189,10 +189,18 @@ func newNodeStatusCmd() *cobra.Command {
 func newNodePowerCmd(verb, short string) *cobra.Command {
 	var yes bool
 
+	action := verb
+	if verb == "shutdown" {
+		action = "shut down"
+	}
+
 	cmd := &cobra.Command{
 		Use:   verb + " <node>",
 		Short: short,
-		Args:  cobra.ExactArgs(1),
+		Long: fmt.Sprintf("Immediately %s the node (POST /nodes/{node}/status). Destructive: "+
+			"pass --yes/-y to confirm.", action),
+		Example: fmt.Sprintf("  pmx pdm node %s pdm-01 --yes", verb),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -225,6 +233,7 @@ func newNodeConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Show or update the node configuration",
+		Long:  "Show or update this Proxmox Datacenter Manager's own node configuration (GET/PUT /nodes/{node}/config).",
 	}
 	cmd.AddCommand(newNodeConfigShowCmd(), newNodeConfigUpdateCmd())
 	return cmd
@@ -362,6 +371,8 @@ func newNodeDNSCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dns",
 		Short: "Show or update the node's DNS settings",
+		Long: "Show or update the node's DNS settings: name servers and search domain " +
+			"(GET/PUT /nodes/{node}/dns).",
 	}
 	cmd.AddCommand(newNodeDNSShowCmd(), newNodeDNSUpdateCmd())
 	return cmd
@@ -369,9 +380,11 @@ func newNodeDNSCmd() *cobra.Command {
 
 func newNodeDNSShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <node>",
-		Short: "Show the node's DNS settings",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <node>",
+		Short:   "Show the node's DNS settings",
+		Long:    "Show the node's configured name servers and search domain (GET /nodes/{node}/dns).",
+		Example: "  pmx pdm node dns show pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -404,7 +417,10 @@ func newNodeDNSUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <node>",
 		Short: "Update the node's DNS settings",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update the node's DNS settings (PUT /nodes/{node}/dns). Only flags " +
+			"explicitly set are sent; use --delete to reset properties to their default instead.",
+		Example: "  pmx pdm node dns update pdm-01 --dns1 192.0.2.53 --search example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -462,6 +478,7 @@ func newNodeTimeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "time",
 		Short: "Show or update the node's time zone",
+		Long:  "Show the node's server time and time zone, or set its time zone (GET/PUT /nodes/{node}/time).",
 	}
 	cmd.AddCommand(newNodeTimeShowCmd(), newNodeTimeUpdateCmd())
 	return cmd
@@ -471,7 +488,10 @@ func newNodeTimeShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <node>",
 		Short: "Show the node's server time and time zone",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the node's current server time (local and UTC) and configured time zone " +
+			"(GET /nodes/{node}/time).",
+		Example: "  pmx pdm node time show pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -499,9 +519,11 @@ func newNodeTimeUpdateCmd() *cobra.Command {
 	var timezone string
 
 	cmd := &cobra.Command{
-		Use:   "update <node>",
-		Short: "Set the node's time zone",
-		Args:  cobra.ExactArgs(1),
+		Use:     "update <node>",
+		Short:   "Set the node's time zone",
+		Long:    "Set the node's time zone (PUT /nodes/{node}/time).",
+		Example: "  pmx pdm node time update pdm-01 --timezone UTC",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
