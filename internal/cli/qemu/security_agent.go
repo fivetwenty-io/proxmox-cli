@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
 )
 
-// newSecurityAgentCmd builds `pmx qemu security agent` and its show/set
+// newSecurityAgentCmd builds `pmx pve qemu security agent` and its show/set
 // sub-commands.
 func newSecurityAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -20,15 +20,15 @@ func newSecurityAgentCmd() *cobra.Command {
 		Short: "Inspect and set the QEMU guest-agent configuration (the agent= config option)",
 		Long: "Inspect and set the agent= config option with structured per-field flags, merging " +
 			"with the current value. This configures the virtio/isa agent DEVICE and PVE's use " +
-			"of it; it is NOT 'pmx qemu agent', which runs operational guest-agent commands " +
-			"(exec, file-read, ...). The raw --agent string on 'pmx qemu create' and " +
-			"'pmx qemu config set' stays available as an escape hatch.",
+			"of it; it is NOT 'pmx pve qemu agent', which runs operational guest-agent commands " +
+			"(exec, file-read, ...). The raw --agent string on 'pmx pve qemu create' and " +
+			"'pmx pve qemu config set' stays available as an escape hatch.",
 	}
 	cmd.AddCommand(newSecurityAgentShowCmd(), newSecurityAgentSetCmd())
 	return cmd
 }
 
-// newSecurityAgentShowCmd builds `pmx qemu security agent show <vmid|name>`.
+// newSecurityAgentShowCmd builds `pmx pve qemu security agent show <vmid|name>`.
 func newSecurityAgentShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -66,7 +66,7 @@ func newSecurityAgentShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityAgentSetCmd builds `pmx qemu security agent set <vmid|name>`.
+// newSecurityAgentSetCmd builds `pmx pve qemu security agent set <vmid|name>`.
 func newSecurityAgentSetCmd() *cobra.Command {
 	var (
 		enabled   bool
@@ -86,7 +86,7 @@ func newSecurityAgentSetCmd() *cobra.Command {
 			"Security note: an enabled agent lets anyone with VM.GuestAgent.* privileges run " +
 			"commands and read/write files inside the guest; freeze-fs affects snapshot/backup " +
 			"consistency, not isolation.\n\n" +
-			"Example: pmx qemu security agent set web1 --enabled --type virtio",
+			"Example: pmx pve qemu security agent set web1 --enabled --type virtio",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

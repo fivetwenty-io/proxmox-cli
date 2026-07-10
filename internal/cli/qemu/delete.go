@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newDeleteCmd builds `pmx qemu delete <vmid>`.
+// newDeleteCmd builds `pmx pve qemu delete <vmid>`.
 func newDeleteCmd() *cobra.Command {
 	var (
 		async                    bool
@@ -22,7 +22,12 @@ func newDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name>",
 		Short: "Destroy a VM and its configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Permanently destroy a VM: its configuration and, unless it fails to remove, its " +
+			"disks. Refuses to run without --yes/-y. Submits a PVE task and blocks until it " +
+			"completes; pass --async to print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve qemu delete 100 --yes
+  pmx pve qemu delete web1 --yes --purge`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

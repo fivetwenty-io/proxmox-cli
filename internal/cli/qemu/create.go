@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newCreateCmd builds `pmx qemu create <vmid>`. The VM is created as an
+// newCreateCmd builds `pmx pve qemu create <vmid>`. The VM is created as an
 // asynchronous task; the command blocks until it completes unless --async is
 // set. Disk, network, and CD-ROM devices are passed as repeatable indexed
 // slots (for example --scsi 0=local-lvm:8 or --net 0=virtio,bridge=vmbr0).

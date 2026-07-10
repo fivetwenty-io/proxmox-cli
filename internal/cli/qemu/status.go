@@ -10,12 +10,17 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newStatusCmd builds `pmx qemu status <vmid>`.
+// newStatusCmd builds `pmx pve qemu status <vmid>`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <vmid|name>",
 		Short: "Show the current status of a VM",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the VM's current runtime status: power state, QMP status, CPU and memory " +
+			"usage, uptime, PID, and lock state (when set). Resolves the VM by numeric vmid " +
+			"or name.",
+		Example: `  pmx pve qemu status 100
+  pmx pve qemu status web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newConsoleCmd builds `pmx qemu console <vmid>`, which opens a console proxy to
+// newConsoleCmd builds `pmx pve qemu console <vmid>`, which opens a console proxy to
 // a VM and returns the connection ticket. Three console types are supported via
 // --type: vnc (default), term (serial/xterm.js), and spice. Each maps to a
 // distinct proxy endpoint and returns a short-lived ticket the caller hands to a

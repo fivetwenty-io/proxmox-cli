@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newSendkeyCmd builds `pmx qemu sendkey <vmid> --key KEY`.
+// newSendkeyCmd builds `pmx pve qemu sendkey <vmid> --key KEY`.
 // Injects a keypress into the VM console using QEMU monitor encoding.
 // Typical use: sending Ctrl-Alt-Del or navigating BIOS/boot menus.
 func newSendkeyCmd() *cobra.Command {

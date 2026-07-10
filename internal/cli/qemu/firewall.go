@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newFirewallCmd builds the `pmx qemu firewall` sub-tree: per-VM rules, IP sets,
+// newFirewallCmd builds the `pmx pve qemu firewall` sub-tree: per-VM rules, IP sets,
 // aliases, and options. Every operation is synchronous (no task UPID).
 func newFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -41,7 +41,7 @@ type fwLogEntry struct {
 	T string `json:"t"`
 }
 
-// newFirewallLogCmd builds `pmx qemu firewall log <vmid|name>` — the per-VM
+// newFirewallLogCmd builds `pmx pve qemu firewall log <vmid|name>` — the per-VM
 // firewall log (GET /nodes/{node}/qemu/{vmid}/firewall/log).
 func newFirewallLogCmd() *cobra.Command {
 	var (
@@ -112,14 +112,19 @@ type fwRefEntry struct {
 	Comment string `json:"comment"`
 }
 
-// newFirewallRefsCmd builds `pmx qemu firewall refs <vmid|name>` — the IP sets
+// newFirewallRefsCmd builds `pmx pve qemu firewall refs <vmid|name>` — the IP sets
 // and aliases a rule may reference (GET /nodes/{node}/qemu/{vmid}/firewall/refs).
 func newFirewallRefsCmd() *cobra.Command {
 	var refType string
 	cmd := &cobra.Command{
 		Use:   "refs <vmid|name>",
 		Short: "List IP sets and aliases rules can reference",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the IP sets and address aliases defined for a VM that its firewall rules " +
+			"may reference by name in --source/--dest. Pass --type to filter to only alias or " +
+			"only ipset entries.",
+		Example: `  pmx pve qemu firewall refs 100
+  pmx pve qemu firewall refs web1 --type ipset`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -196,6 +201,9 @@ func newFirewallRulesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rules",
 		Short: "Manage per-VM firewall rules",
+		Long: "List, inspect, create, update, and delete the ordered firewall rules of a VM. " +
+			"Rules are identified by their numeric position (--pos on create, positional " +
+			"<pos> elsewhere).",
 	}
 	cmd.AddCommand(
 		newFirewallRulesListCmd(),
@@ -211,7 +219,12 @@ func newFirewallRulesListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name>",
 		Short: "List a VM's firewall rules",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every firewall rule configured on the VM, in rule-evaluation order, with " +
+			"its position, direction, action, protocol, source/destination, port, enabled " +
+			"state, and comment.",
+		Example: `  pmx pve qemu firewall rules list 100
+  pmx pve qemu firewall rules list web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -251,7 +264,10 @@ func newFirewallRulesGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <vmid|name> <pos>",
 		Short: "Show a single firewall rule by position",
-		Args:  cobra.ExactArgs(2),
+		Long:  "Show the full field set of one firewall rule identified by its numeric position.",
+		Example: `  pmx pve qemu firewall rules get 100 0
+  pmx pve qemu firewall rules get web1 3`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -398,7 +414,13 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <vmid|name> <pos>",
 		Short: "Modify a firewall rule by position",
-		Args:  cobra.ExactArgs(2),
+		Long: "Update fields of an existing firewall rule identified by its numeric position. " +
+			"Only the flags you pass are changed; pass --delete with a comma-separated list " +
+			"to clear specific settings, or --moveto to reposition the rule (other flags are " +
+			"ignored when moving).",
+		Example: `  pmx pve qemu firewall rules update 100 0 --action DROP
+  pmx pve qemu firewall rules update web1 0 --moveto 2`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -482,7 +504,10 @@ func newFirewallRulesDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name> <pos>",
 		Short: "Delete a firewall rule by position",
-		Args:  cobra.ExactArgs(2),
+		Long: "Permanently remove a firewall rule identified by its numeric position. Refuses " +
+			"to run without --yes/-y.",
+		Example: `  pmx pve qemu firewall rules delete 100 0 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -520,6 +545,9 @@ func newFirewallIpsetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ipset",
 		Short: "Manage per-VM firewall IP sets",
+		Long: "Create, list, and delete named IP sets on a VM, and manage the CIDR entries " +
+			"(members) within each set. Rules reference an IP set by name via " +
+			"--source/--dest +setname.",
 	}
 	cmd.AddCommand(
 		newFirewallIpsetListCmd(),
@@ -534,7 +562,7 @@ func newFirewallIpsetCmd() *cobra.Command {
 }
 
 // newFirewallIpsetGetMemberCmd builds
-// `pmx qemu firewall ipset get-member <vmid|name> <name> <cidr>` — show a
+// `pmx pve qemu firewall ipset get-member <vmid|name> <name> <cidr>` — show a
 // single CIDR entry of an IP set (GET .../firewall/ipset/{name}/{cidr}).
 // Named get-member (not get) because `ipset list <vmid> [name]` already
 // overloads the name-scoped read, and update-member set the member-verb
@@ -543,7 +571,10 @@ func newFirewallIpsetGetMemberCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get-member <vmid|name> <name> <cidr>",
 		Short: "Show a single CIDR entry of an IP set",
-		Args:  cobra.ExactArgs(3),
+		Long:  "Show the full field set (comment, nomatch, digest) of one CIDR entry in an IP set.",
+		Example: `  pmx pve qemu firewall ipset get-member 100 web 10.0.0.0/24
+  pmx pve qemu firewall ipset get-member web1 web 10.0.0.0/24`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -574,7 +605,7 @@ func newFirewallIpsetGetMemberCmd() *cobra.Command {
 }
 
 // newFirewallIpsetUpdateMemberCmd builds
-// `pmx qemu firewall ipset update-member <vmid|name> <name> <cidr>` — update an
+// `pmx pve qemu firewall ipset update-member <vmid|name> <name> <cidr>` — update an
 // existing IP set entry (PUT .../firewall/ipset/{name}/{cidr}).
 func newFirewallIpsetUpdateMemberCmd() *cobra.Command {
 	var (
@@ -585,7 +616,11 @@ func newFirewallIpsetUpdateMemberCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-member <vmid|name> <name> <cidr>",
 		Short: "Update a CIDR entry of an IP set",
-		Args:  cobra.ExactArgs(3),
+		Long: "Update the comment or exclusion (nomatch) flag of an existing CIDR entry in an " +
+			"IP set. Only the flags you pass are changed.",
+		Example: `  pmx pve qemu firewall ipset update-member 100 web 10.0.0.0/24 --comment "web tier"
+  pmx pve qemu firewall ipset update-member web1 web 10.0.0.0/24 --nomatch`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -622,7 +657,11 @@ func newFirewallIpsetListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name> [name]",
 		Short: "List IP sets, or the members of one IP set",
-		Args:  cobra.RangeArgs(1, 2),
+		Long: "Without [name], list every IP set defined on the VM. With [name], list that " +
+			"IP set's CIDR entries (members) instead.",
+		Example: `  pmx pve qemu firewall ipset list 100
+  pmx pve qemu firewall ipset list web1 web`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -677,7 +716,10 @@ func newFirewallIpsetCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <vmid|name> <name>",
 		Short: "Create a firewall IP set",
-		Args:  cobra.ExactArgs(2),
+		Long:  "Create a new, empty named IP set on the VM. Add members afterward with 'ipset add'.",
+		Example: `  pmx pve qemu firewall ipset create 100 web
+  pmx pve qemu firewall ipset create web1 web --comment "web tier addresses"`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -709,7 +751,11 @@ func newFirewallIpsetDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name> <name>",
 		Short: "Delete a firewall IP set",
-		Args:  cobra.ExactArgs(2),
+		Long: "Permanently delete a named IP set. Refuses to run without --yes/-y; pass " +
+			"--force to also delete any remaining members instead of failing when the set is " +
+			"non-empty.",
+		Example: `  pmx pve qemu firewall ipset delete 100 web --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -745,7 +791,10 @@ func newFirewallIpsetAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <vmid|name> <name> <cidr>",
 		Short: "Add a CIDR entry to an IP set",
-		Args:  cobra.ExactArgs(3),
+		Long:  "Add a CIDR entry (an address or subnet) as a member of an existing IP set.",
+		Example: `  pmx pve qemu firewall ipset add 100 web 10.0.0.0/24
+  pmx pve qemu firewall ipset add web1 web 10.0.0.5/32 --nomatch`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -776,9 +825,11 @@ func newFirewallIpsetAddCmd() *cobra.Command {
 func newFirewallIpsetRemoveCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "remove <vmid|name> <name> <cidr>",
-		Short: "Remove a CIDR entry from an IP set",
-		Args:  cobra.ExactArgs(3),
+		Use:     "remove <vmid|name> <name> <cidr>",
+		Short:   "Remove a CIDR entry from an IP set",
+		Long:    "Remove a CIDR entry from an IP set. Refuses to run without --yes/-y.",
+		Example: `  pmx pve qemu firewall ipset remove 100 web 10.0.0.0/24 --yes`,
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -814,6 +865,8 @@ func newFirewallAliasCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "alias",
 		Short: "Manage per-VM firewall address aliases",
+		Long: "Create, list, update, and delete named address aliases on a VM. Rules " +
+			"reference an alias by name via --source/--dest.",
 	}
 	cmd.AddCommand(
 		newFirewallAliasListCmd(),
@@ -825,14 +878,17 @@ func newFirewallAliasCmd() *cobra.Command {
 	return cmd
 }
 
-// newFirewallAliasGetCmd builds `pmx qemu firewall alias get <vmid|name>
+// newFirewallAliasGetCmd builds `pmx pve qemu firewall alias get <vmid|name>
 // <name>` — show a single firewall alias by name
 // (GET .../firewall/aliases/{name}).
 func newFirewallAliasGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <vmid|name> <name>",
 		Short: "Show a single firewall alias by name",
-		Args:  cobra.ExactArgs(2),
+		Long:  "Show the CIDR value and comment of one address alias by name.",
+		Example: `  pmx pve qemu firewall alias get 100 web
+  pmx pve qemu firewall alias get web1 web`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -866,7 +922,10 @@ func newFirewallAliasListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name>",
 		Short: "List a VM's firewall aliases",
-		Args:  cobra.ExactArgs(1),
+		Long:  "List every address alias defined on the VM with its CIDR value and comment.",
+		Example: `  pmx pve qemu firewall alias list 100
+  pmx pve qemu firewall alias list web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -903,7 +962,10 @@ func newFirewallAliasCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <vmid|name> <name> <cidr>",
 		Short: "Create a firewall address alias",
-		Args:  cobra.ExactArgs(3),
+		Long:  "Create a named alias for a CIDR address or subnet, for use in firewall rules.",
+		Example: `  pmx pve qemu firewall alias create 100 web 10.0.0.5/32
+  pmx pve qemu firewall alias create web1 web 10.0.0.5/32 --comment "primary web host"`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -935,7 +997,11 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <vmid|name> <name> <cidr>",
 		Short: "Update a firewall address alias",
-		Args:  cobra.ExactArgs(3),
+		Long: "Update an existing alias's CIDR value; pass --comment to change its comment or " +
+			"--rename to give it a new name.",
+		Example: `  pmx pve qemu firewall alias update 100 web 10.0.0.6/32
+  pmx pve qemu firewall alias update web1 web 10.0.0.6/32 --rename web-primary`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -966,9 +1032,11 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 func newFirewallAliasDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <vmid|name> <name>",
-		Short: "Delete a firewall address alias",
-		Args:  cobra.ExactArgs(2),
+		Use:     "delete <vmid|name> <name>",
+		Short:   "Delete a firewall address alias",
+		Long:    "Permanently delete an address alias. Refuses to run without --yes/-y.",
+		Example: `  pmx pve qemu firewall alias delete 100 web --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -997,6 +1065,10 @@ func newFirewallOptionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "options",
 		Short: "Inspect and set per-VM firewall options",
+		Long: "Read and write the per-VM firewall options that govern overall policy and " +
+			"logging: whether the firewall is enabled, default input/output policy, log " +
+			"levels, DHCP/MAC/NDP/router-advertisement filtering, and default IP filters. " +
+			"'describe' lists every settable option offline.",
 	}
 	cmd.AddCommand(
 		newFirewallOptionsGetCmd(),
@@ -1006,7 +1078,7 @@ func newFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newFirewallOptionsDescribeCmd builds `pmx qemu firewall options describe`,
+// newFirewallOptionsDescribeCmd builds `pmx pve qemu firewall options describe`,
 // an offline catalog of every settable per-VM firewall option from the PVE
 // API schema (see firewall_options_schema_gen.go).
 func newFirewallOptionsDescribeCmd() *cobra.Command {

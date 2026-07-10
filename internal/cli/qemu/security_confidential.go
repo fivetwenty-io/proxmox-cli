@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
 )
 
-// newSecurityConfidentialCmd builds `pmx qemu security confidential` and its
+// newSecurityConfidentialCmd builds `pmx pve qemu security confidential` and its
 // show/set/clear sub-commands.
 func newSecurityConfidentialCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -29,12 +29,17 @@ func newSecurityConfidentialCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityConfidentialShowCmd builds `pmx qemu security confidential show <vmid|name>`.
+// newSecurityConfidentialShowCmd builds `pmx pve qemu security confidential show <vmid|name>`.
 func newSecurityConfidentialShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show confidential-computing configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show which confidential-computing platform (AMD SEV or Intel TDX), if any, the " +
+			"VM has configured, and its sub-options (type, attestation, vsock settings, and " +
+			"similar). A VM uses at most one platform at a time.",
+		Example: `  pmx pve qemu security confidential show 100
+  pmx pve qemu security confidential show web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -62,7 +67,7 @@ func newSecurityConfidentialShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityConfidentialSetCmd builds `pmx qemu security confidential set <vmid|name>`.
+// newSecurityConfidentialSetCmd builds `pmx pve qemu security confidential set <vmid|name>`.
 func newSecurityConfidentialSetCmd() *cobra.Command {
 	var (
 		sevType         string
@@ -88,7 +93,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 			"are passed to PVE unvalidated (upstream SEV types include std, es, and snp; the " +
 			"accepted set depends on the PVE version and host hardware). If the VM currently " +
 			"has the other platform configured, clear it first with 'confidential clear'.\n\n" +
-			"Example: pmx qemu security confidential set 100 --sev snp --sev-no-debug",
+			"Example: pmx pve qemu security confidential set 100 --sev snp --sev-no-debug",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -126,7 +131,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 				}
 				if fl.Changed("sev") && cp.Platform == "intel-tdx" {
 					return fmt.Errorf(
-						"VM %s currently has intel-tdx configured; run 'pmx qemu security confidential clear' "+
+						"VM %s currently has intel-tdx configured; run 'pmx pve qemu security confidential clear' "+
 							"first before switching to amd-sev", vmid)
 				}
 				raw, _ := rawStr(m, "amd-sev")
@@ -155,7 +160,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 				}
 				if fl.Changed("tdx") && cp.Platform == "amd-sev" {
 					return fmt.Errorf(
-						"VM %s currently has amd-sev configured; run 'pmx qemu security confidential clear' "+
+						"VM %s currently has amd-sev configured; run 'pmx pve qemu security confidential clear' "+
 							"first before switching to intel-tdx", vmid)
 				}
 				raw, _ := rawStr(m, "intel-tdx")
@@ -223,7 +228,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityConfidentialClearCmd builds `pmx qemu security confidential clear <vmid|name>`.
+// newSecurityConfidentialClearCmd builds `pmx pve qemu security confidential clear <vmid|name>`.
 func newSecurityConfidentialClearCmd() *cobra.Command {
 	var (
 		digest  string
@@ -233,7 +238,13 @@ func newSecurityConfidentialClearCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear <vmid|name>",
 		Short: "Remove the confidential-computing configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove whichever confidential-computing platform (amd-sev or intel-tdx) is " +
+			"currently configured on the VM. The guest will then boot with unencrypted " +
+			"memory; if none is configured this is a no-op. Applies immediately, unless " +
+			"--restart is passed to reboot the VM.",
+		Example: `  pmx pve qemu security confidential clear 100
+  pmx pve qemu security confidential clear web1 --restart`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

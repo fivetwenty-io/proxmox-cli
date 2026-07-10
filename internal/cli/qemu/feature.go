@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newFeatureCmd builds `pmx qemu feature <vmid> --feature FEAT [--snapname SNAP]`.
+// newFeatureCmd builds `pmx pve qemu feature <vmid> --feature FEAT [--snapname SNAP]`.
 func newFeatureCmd() *cobra.Command {
 	var (
 		feature  string

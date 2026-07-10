@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newDiskCmd builds the `pmx qemu disk` sub-tree (resize, move, unlink).
+// newDiskCmd builds the `pmx pve qemu disk` sub-tree (resize, move, unlink).
 func newDiskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "disk",
@@ -27,7 +27,7 @@ func newDiskCmd() *cobra.Command {
 	return cmd
 }
 
-// newDiskResizeCmd builds `pmx qemu disk resize <vmid> --disk scsi0 --size +10G`.
+// newDiskResizeCmd builds `pmx pve qemu disk resize <vmid> --disk scsi0 --size +10G`.
 //
 // Resize is normally a synchronous operation that returns no task; some storage
 // back-ends instead schedule a worker and return a UPID, in which case the
@@ -92,7 +92,7 @@ func newDiskResizeCmd() *cobra.Command {
 	return cmd
 }
 
-// newDiskMoveCmd builds `pmx qemu disk move <vmid> --disk scsi0 --storage X [--delete]`.
+// newDiskMoveCmd builds `pmx pve qemu disk move <vmid> --disk scsi0 --storage X [--delete]`.
 //
 // Moving a disk is an asynchronous PVE task (UPID); the command blocks until the
 // task completes unless --async is set. By default the source volume is retained
@@ -181,7 +181,7 @@ func newDiskMoveCmd() *cobra.Command {
 	return cmd
 }
 
-// newDiskUnlinkCmd builds `pmx qemu disk unlink <vmid> --disk scsi0 [--force]`.
+// newDiskUnlinkCmd builds `pmx pve qemu disk unlink <vmid> --disk scsi0 [--force]`.
 //
 // Without --force the disk is detached from the VM configuration and retained as
 // an `unused[n]` entry; with --force the underlying volume is physically removed.

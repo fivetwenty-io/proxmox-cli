@@ -168,7 +168,7 @@ func applyFlagChanges(tokens, enable, disable []string) []string {
 	return out
 }
 
-// newSecurityCpuFlagsCmd builds `pmx qemu security cpu-flags` and its
+// newSecurityCpuFlagsCmd builds `pmx pve qemu security cpu-flags` and its
 // show/set/describe sub-commands.
 func newSecurityCpuFlagsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -178,19 +178,25 @@ func newSecurityCpuFlagsCmd() *cobra.Command {
 			"flags. PVE restricts per-VM flags to a fixed security-relevant set (aes, " +
 			"amd-no-ssb, amd-ssbd, hv-evmcs, hv-tlbflush, ibpb, md-clear, nested-virt, pcid, " +
 			"pdpe1gb, spec-ctrl, ssbd, virt-ssbd). The cputype and other cpu= sub-options are " +
-			"preserved. This is NOT 'pmx qemu cpu-flags', which lists the flags a NODE's " +
+			"preserved. This is NOT 'pmx pve qemu cpu-flags', which lists the flags a NODE's " +
 			"hardware supports.",
 	}
 	cmd.AddCommand(newSecurityCpuFlagsShowCmd(), newSecurityCpuFlagsSetCmd(), newSecurityCpuFlagsDescribeCmd())
 	return cmd
 }
 
-// newSecurityCpuFlagsShowCmd builds `pmx qemu security cpu-flags show <vmid|name>`.
+// newSecurityCpuFlagsShowCmd builds `pmx pve qemu security cpu-flags show <vmid|name>`.
 func newSecurityCpuFlagsShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show the VM's security-relevant CPU flags",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every security-relevant CPU flag PVE allows per VM, whether it is " +
+			"currently enabled (+), disabled (-), or left at the default, and whether it is a " +
+			"speculative-execution mitigation. When cputype=host most of these flags are " +
+			"already implied by the passed-through host CPU.",
+		Example: `  pmx pve qemu security cpu-flags show 100
+  pmx pve qemu security cpu-flags show web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -242,7 +248,7 @@ func newSecurityCpuFlagsShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityCpuFlagsSetCmd builds `pmx qemu security cpu-flags set <vmid|name>`.
+// newSecurityCpuFlagsSetCmd builds `pmx pve qemu security cpu-flags set <vmid|name>`.
 func newSecurityCpuFlagsSetCmd() *cobra.Command {
 	var (
 		enable  []string
@@ -262,7 +268,7 @@ func newSecurityCpuFlagsSetCmd() *cobra.Command {
 			"Explicitly disabling a mitigation flag (spec-ctrl, ssbd, virt-ssbd, amd-ssbd, " +
 			"amd-no-ssb, ibpb, md-clear) exposes the guest to speculative-execution attacks and " +
 			"requires --force.\n\n" +
-			"Example: pmx qemu security cpu-flags set web1 --enable spec-ctrl,ssbd,md-clear",
+			"Example: pmx pve qemu security cpu-flags set web1 --enable spec-ctrl,ssbd,md-clear",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -389,7 +395,7 @@ func newSecurityCpuFlagsSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityCpuFlagsDescribeCmd builds `pmx qemu security cpu-flags describe`,
+// newSecurityCpuFlagsDescribeCmd builds `pmx pve qemu security cpu-flags describe`,
 // an offline catalog listing (Annotations noClient, mirrors lxc's caps describe).
 func newSecurityCpuFlagsDescribeCmd() *cobra.Command {
 	return &cobra.Command{
@@ -397,7 +403,7 @@ func newSecurityCpuFlagsDescribeCmd() *cobra.Command {
 		Short: "List the security-relevant CPU flags PVE allows per VM",
 		Long: "List every CPU flag settable per VM, what it mitigates or provides, and guidance " +
 			"on when to enable it. Runs entirely offline. To see which flags a node's hardware " +
-			"actually supports, use 'pmx qemu cpu-flags'.",
+			"actually supports, use 'pmx pve qemu cpu-flags'.",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {

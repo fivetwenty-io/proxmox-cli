@@ -89,7 +89,7 @@ type agentNodes interface {
 	CreateQemuAgentSuspendRam(ctx context.Context, node, vmid string) (*json.RawMessage, error)
 }
 
-// newAgentCmd builds `pmx qemu agent <vmid> <command>`, a dispatcher over the
+// newAgentCmd builds `pmx pve qemu agent <vmid> <command>`, a dispatcher over the
 // QEMU guest-agent endpoints. The command is named positionally (mirroring
 // `qm agent`) so that the full set of guest-agent verbs is reachable without a
 // sub-command per verb. All verbs require the guest agent to be installed and

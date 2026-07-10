@@ -27,7 +27,7 @@ type qemuListEntry struct {
 	Type     string `json:"type"`
 }
 
-// newListCmd builds `pmx qemu list`.
+// newListCmd builds `pmx pve qemu list`.
 //
 // Without --cluster the command lists VMs on the node resolved from --node /
 // PMX_NODE / config. With --cluster it calls the cluster-wide endpoint and

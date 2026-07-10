@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newMigrateCheckCmd builds `pmx qemu migrate check <vmid> [--target-node NODE]`.
+// newMigrateCheckCmd builds `pmx pve qemu migrate check <vmid> [--target-node NODE]`.
 // It calls the GET /nodes/{n}/qemu/{v}/migrate pre-flight endpoint and returns
 // feasibility information: allowed nodes, local resources, and local disks.
 func newMigrateCheckCmd() *cobra.Command {
@@ -63,7 +63,7 @@ func newMigrateCheckCmd() *cobra.Command {
 	return cmd
 }
 
-// newMigrateCmd builds `pmx qemu migrate <vmid> --target NODE [flags]`.
+// newMigrateCmd builds `pmx pve qemu migrate <vmid> --target NODE [flags]`.
 //
 // The migration is submitted as an asynchronous PVE task (UPID). The command
 // blocks until the task reaches a terminal state unless --async is given. Only
@@ -159,13 +159,13 @@ func newMigrateCmd() *cobra.Command {
 			"or '1' maps each source storage to itself")
 
 	// Add the pre-flight check and capabilities leaf as sub-commands so both
-	// `pmx qemu migrate 100 --target-node pve2` and `pmx qemu migrate check
-	// 100` / `pmx qemu migrate capabilities` are valid.
+	// `pmx pve qemu migrate 100 --target-node pve2` and `pmx pve qemu migrate check
+	// 100` / `pmx pve qemu migrate capabilities` are valid.
 	cmd.AddCommand(newMigrateCheckCmd(), newMigrateCapabilitiesCmd())
 	return cmd
 }
 
-// newMigrateCapabilitiesCmd builds `pmx qemu migrate capabilities`. It
+// newMigrateCapabilitiesCmd builds `pmx pve qemu migrate capabilities`. It
 // mirrors `pmx node capabilities qemu migration` exactly (same headers/Raw
 // shape) so the two spellings are interchangeable; `migrate check` already
 // reads this data internally, this leaf just surfaces it directly.

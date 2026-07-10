@@ -15,17 +15,21 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newConfigCmd builds the `pmx qemu config` sub-group.
+// newConfigCmd builds the `pmx pve qemu config` sub-group.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Inspect and modify VM configuration",
+		Long: "Read and write a VM's configuration: get the current or a snapshot's config, " +
+			"set values with a dedicated flag per common option (plus a --set KEY=VALUE " +
+			"escape hatch for anything without one), list pending changes, or browse the " +
+			"offline option catalog with 'describe'.",
 	}
 	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd(), newConfigDescribeCmd())
 	return cmd
 }
 
-// newConfigDescribeCmd builds `pmx qemu config describe`, an offline catalog
+// newConfigDescribeCmd builds `pmx pve qemu config describe`, an offline catalog
 // of every settable VM configuration option from the PVE API schema (see
 // config_schema_gen.go). The catalog view omits dict sub-key rows (the
 // ~13 indexed device families would otherwise explode the table); pass an
@@ -43,7 +47,7 @@ func newConfigDescribeCmd() *cobra.Command {
 	})
 }
 
-// newConfigGetCmd builds `pmx qemu config get <vmid>`.
+// newConfigGetCmd builds `pmx pve qemu config get <vmid>`.
 //
 // The raw API response is read directly (deps.API.Raw.GetCtx) instead of
 // through nodes.ListQemuConfig/ListQemuConfigResponse because that generated
@@ -150,7 +154,7 @@ func stringifyValue(v any) string {
 	}
 }
 
-// newConfigSetCmd builds `pmx qemu config set <vmid>`.
+// newConfigSetCmd builds `pmx pve qemu config set <vmid>`.
 func newConfigSetCmd() *cobra.Command {
 	var (
 		cores       int64
@@ -260,7 +264,16 @@ func newConfigSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
 		Short: "Update the configuration of a VM",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update one or more VM configuration options. Each supported option has a " +
+			"dedicated flag; indexed device families (net, scsi, ide, virtio, sata, " +
+			"ipconfig, hostpci, serial, usb, parallel, numa-node, virtiofs) take repeatable " +
+			"INDEX=VALUE slots. Pass --set KEY=VALUE for options without a dedicated flag; " +
+			"--delete removes keys and --revert discards pending changes. At least one change " +
+			"must be given. The update is applied synchronously (no task UPID).",
+		Example: `  pmx pve qemu config set 100 --cores 4 --memory 8192
+  pmx pve qemu config set web1 --net 0=virtio,bridge=vmbr0
+  pmx pve qemu config set 100 --set hugepages=1024`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -576,12 +589,17 @@ type pendingEntry struct {
 	Pending any    `json:"pending"`
 }
 
-// newConfigPendingCmd builds `pmx qemu config pending <vmid>`.
+// newConfigPendingCmd builds `pmx pve qemu config pending <vmid>`.
 func newConfigPendingCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pending <vmid|name>",
 		Short: "Show pending configuration changes for a VM",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every configuration key together with its current value and any pending " +
+			"(not-yet-applied) value; a key with no pending change shows the same value in " +
+			"both columns.",
+		Example: `  pmx pve qemu config pending 100
+  pmx pve qemu config pending web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

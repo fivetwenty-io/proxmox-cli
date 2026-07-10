@@ -11,13 +11,17 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newCloudinitCmd builds the `pmx qemu cloudinit` sub-group: inspect the pending
+// newCloudinitCmd builds the `pmx pve qemu cloudinit` sub-group: inspect the pending
 // cloud-init configuration, dump the generated config of a given type, and
 // regenerate the cloud-init drive from the VM configuration.
 func newCloudinitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cloudinit",
 		Short: "Inspect and regenerate VM cloud-init configuration",
+		Long: "Inspect the pending cloud-init configuration, dump the generated config of a " +
+			"given type, or regenerate the cloud-init drive from the VM's current " +
+			"configuration. Cloud-init scalars themselves (ciuser, sshkeys, ipconfig, and " +
+			"similar) are set via 'pmx pve qemu config set'.",
 	}
 	cmd.AddCommand(newCloudinitPendingCmd(), newCloudinitDumpCmd(), newCloudinitUpdateCmd())
 	return cmd
@@ -32,14 +36,18 @@ type cloudinitPendingEntry struct {
 	Delete  any    `json:"delete"`
 }
 
-// newCloudinitPendingCmd builds `pmx qemu cloudinit pending <vmid>`, listing the
+// newCloudinitPendingCmd builds `pmx pve qemu cloudinit pending <vmid>`, listing the
 // current and pending cloud-init configuration values
 // (GET /nodes/{node}/qemu/{vmid}/cloudinit).
 func newCloudinitPendingCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pending <vmid|name>",
 		Short: "Show pending cloud-init configuration changes",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every cloud-init key together with its current value and any pending " +
+			"(not-yet-applied) value. Resolves the VM by numeric vmid or name.",
+		Example: `  pmx pve qemu cloudinit pending 100
+  pmx pve qemu cloudinit pending web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -78,7 +86,7 @@ func newCloudinitPendingCmd() *cobra.Command {
 	return cmd
 }
 
-// newCloudinitDumpCmd builds `pmx qemu cloudinit dump <vmid> --type <type>`,
+// newCloudinitDumpCmd builds `pmx pve qemu cloudinit dump <vmid> --type <type>`,
 // returning the generated cloud-init configuration of the requested type
 // (GET /nodes/{node}/qemu/{vmid}/cloudinit/dump).
 func newCloudinitDumpCmd() *cobra.Command {
@@ -86,7 +94,11 @@ func newCloudinitDumpCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dump <vmid|name>",
 		Short: "Dump the generated cloud-init configuration of a given type",
-		Args:  cobra.ExactArgs(1),
+		Long: "Print the cloud-init config PVE generates for the VM, in the format cloud-init " +
+			"itself consumes. --type selects which document to dump: user, network, or meta.",
+		Example: `  pmx pve qemu cloudinit dump 100 --type user
+  pmx pve qemu cloudinit dump web1 --type network`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -117,7 +129,7 @@ func newCloudinitDumpCmd() *cobra.Command {
 	return cmd
 }
 
-// newCloudinitUpdateCmd builds `pmx qemu cloudinit update <vmid>`, regenerating
+// newCloudinitUpdateCmd builds `pmx pve qemu cloudinit update <vmid>`, regenerating
 // the cloud-init drive from the current VM configuration
 // (PUT /nodes/{node}/qemu/{vmid}/cloudinit). Only changed configuration is
 // applied to the running guest's drive.
@@ -125,7 +137,13 @@ func newCloudinitUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <vmid|name>",
 		Short: "Regenerate the cloud-init drive from the VM configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Regenerate the cloud-init drive so it reflects the VM's current configuration. " +
+			"Run this after changing cloud-init settings (via 'pmx pve qemu config set') on a " +
+			"running guest; only the changed configuration is applied to the drive. This call " +
+			"is synchronous and does not start a background task.",
+		Example: `  pmx pve qemu cloudinit update 100
+  pmx pve qemu cloudinit update web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

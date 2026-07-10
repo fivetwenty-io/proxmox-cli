@@ -15,7 +15,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
 )
 
-// newSecurityNicCmd builds `pmx qemu security nic` and its show/firewall
+// newSecurityNicCmd builds `pmx pve qemu security nic` and its show/firewall
 // sub-commands.
 func newSecurityNicCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -24,18 +24,24 @@ func newSecurityNicCmd() *cobra.Command {
 		Long: "Each VM network device opts into the PVE firewall individually via the firewall= " +
 			"sub-option of its net[n] entry. A NIC with firewall=0 bypasses every VM firewall " +
 			"rule even when the VM firewall is enabled. Rule and option management lives under " +
-			"'pmx qemu firewall'.",
+			"'pmx pve qemu firewall'.",
 	}
 	cmd.AddCommand(newSecurityNicShowCmd(), newSecurityNicFirewallCmd())
 	return cmd
 }
 
-// newSecurityNicShowCmd builds `pmx qemu security nic show <vmid|name>`.
+// newSecurityNicShowCmd builds `pmx pve qemu security nic show <vmid|name>`.
 func newSecurityNicShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show per-NIC firewall coverage and link state",
-		Args:  cobra.ExactArgs(1),
+		Long: "List each configured network device with its model, bridge, MAC, VLAN tag, " +
+			"whether the per-VM firewall covers it (firewall=1), and whether its link is " +
+			"forced down. In table/plain output, warns on stderr about any NIC that bypasses " +
+			"an enabled VM firewall.",
+		Example: `  pmx pve qemu security nic show 100
+  pmx pve qemu security nic show web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -100,7 +106,7 @@ func dedupInts(slots []int) []int {
 	return out
 }
 
-// newSecurityNicFirewallCmd builds `pmx qemu security nic firewall <vmid|name>`.
+// newSecurityNicFirewallCmd builds `pmx pve qemu security nic firewall <vmid|name>`.
 func newSecurityNicFirewallCmd() *cobra.Command {
 	var (
 		on      bool
@@ -117,7 +123,7 @@ func newSecurityNicFirewallCmd() *cobra.Command {
 		Long: "Flip the firewall= sub-option on one or more net[n] devices, preserving every " +
 			"other sub-option (model, bridge, MAC, VLAN, ...). With hotplug=network the change " +
 			"applies live; otherwise it is pending until restart.\n\n" +
-			"Example: pmx qemu security nic firewall web1 --on --all",
+			"Example: pmx pve qemu security nic firewall web1 --on --all",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

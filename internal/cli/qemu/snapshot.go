@@ -13,11 +13,13 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newSnapshotCmd builds the `pmx qemu snapshot` sub-group.
+// newSnapshotCmd builds the `pmx pve qemu snapshot` sub-group.
 func newSnapshotCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
 		Short: "Manage VM snapshots",
+		Long: "Create, list, inspect, update, roll back, and delete point-in-time snapshots of " +
+			"a VM's disks and, optionally, its RAM state.",
 	}
 	cmd.AddCommand(
 		newSnapshotListCmd(),
@@ -39,12 +41,16 @@ type snapshotEntry struct {
 	Parent      string `json:"parent"`
 }
 
-// newSnapshotListCmd builds `pmx qemu snapshot list <vmid>`.
+// newSnapshotListCmd builds `pmx pve qemu snapshot list <vmid>`.
 func newSnapshotListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name>",
 		Short: "List snapshots of a VM",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every snapshot of a VM with its description, creation time, whether it " +
+			"includes RAM state, and its parent snapshot.",
+		Example: `  pmx pve qemu snapshot list 100
+  pmx pve qemu snapshot list web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -87,7 +93,7 @@ func newSnapshotListCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotCreateCmd builds `pmx qemu snapshot create <vmid> <snapname>`.
+// newSnapshotCreateCmd builds `pmx pve qemu snapshot create <vmid> <snapname>`.
 func newSnapshotCreateCmd() *cobra.Command {
 	var (
 		async       bool
@@ -97,7 +103,13 @@ func newSnapshotCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <vmid|name> <snapname>",
 		Short: "Create a snapshot of a VM",
-		Args:  cobra.ExactArgs(2),
+		Long: "Create a new named snapshot of the VM's disks. Pass --vmstate to also include " +
+			"the VM's RAM state, allowing a later rollback to resume execution instead of " +
+			"just restoring disk contents. Submits a PVE task and blocks until it completes; " +
+			"pass --async to print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve qemu snapshot create 100 pre-upgrade
+  pmx pve qemu snapshot create web1 pre-upgrade --description "before kernel update" --vmstate`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -132,7 +144,7 @@ func newSnapshotCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotDeleteCmd builds `pmx qemu snapshot delete <vmid> <snapname>`.
+// newSnapshotDeleteCmd builds `pmx pve qemu snapshot delete <vmid> <snapname>`.
 func newSnapshotDeleteCmd() *cobra.Command {
 	var (
 		async bool
@@ -142,7 +154,13 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name> <snapname>",
 		Short: "Delete a snapshot of a VM",
-		Args:  cobra.ExactArgs(2),
+		Long: "Permanently delete a named snapshot. Refuses to run without --yes/-y; pass " +
+			"--force to remove it from the config even if removing its disk snapshots fails. " +
+			"Submits a PVE task and blocks until it completes; pass --async to print the task " +
+			"UPID immediately instead of waiting.",
+		Example: `  pmx pve qemu snapshot delete 100 pre-upgrade --yes
+  pmx pve qemu snapshot delete web1 pre-upgrade --yes --force`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -177,12 +195,17 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotShowCmd builds `pmx qemu snapshot show <vmid> <snapname>`.
+// newSnapshotShowCmd builds `pmx pve qemu snapshot show <vmid> <snapname>`.
 func newSnapshotShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name> <snapname>",
 		Short: "Show the configuration of a named snapshot",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show the VM configuration captured in a named snapshot (the config the VM had " +
+			"at snapshot time), or a message when the snapshot carries no additional " +
+			"configuration.",
+		Example: `  pmx pve qemu snapshot show 100 pre-upgrade
+  pmx pve qemu snapshot show web1 pre-upgrade`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -225,13 +248,15 @@ func newSnapshotShowCmd() *cobra.Command {
 	}
 }
 
-// newSnapshotUpdateCmd builds `pmx qemu snapshot update <vmid> <snapname> --description DESC`.
+// newSnapshotUpdateCmd builds `pmx pve qemu snapshot update <vmid> <snapname> --description DESC`.
 func newSnapshotUpdateCmd() *cobra.Command {
 	var description string
 	cmd := &cobra.Command{
-		Use:   "update <vmid|name> <snapname>",
-		Short: "Update the description of a snapshot",
-		Args:  cobra.ExactArgs(2),
+		Use:     "update <vmid|name> <snapname>",
+		Short:   "Update the description of a snapshot",
+		Long:    "Change the stored description of an existing snapshot. --description is required.",
+		Example: `  pmx pve qemu snapshot update 100 pre-upgrade --description "before kernel update"`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -262,7 +287,7 @@ func newSnapshotUpdateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSnapshotRollbackCmd builds `pmx qemu snapshot rollback <vmid> <snapname>`.
+// newSnapshotRollbackCmd builds `pmx pve qemu snapshot rollback <vmid> <snapname>`.
 func newSnapshotRollbackCmd() *cobra.Command {
 	var (
 		async bool
@@ -271,7 +296,14 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a VM back to a snapshot",
-		Args:  cobra.ExactArgs(2),
+		Long: "Restore the VM's disks (and RAM state, if the snapshot has one) to the state " +
+			"captured in the named snapshot, discarding any changes made since. Pass --start " +
+			"to start the VM immediately after a successful rollback. Submits a PVE task and " +
+			"blocks until it completes; pass --async to print the task UPID immediately " +
+			"instead of waiting.",
+		Example: `  pmx pve qemu snapshot rollback 100 pre-upgrade
+  pmx pve qemu snapshot rollback web1 pre-upgrade --start`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

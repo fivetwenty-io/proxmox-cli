@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newRemoteMigrateCmd builds `pmx qemu remote-migrate <vmid> --target-endpoint EP
+// newRemoteMigrateCmd builds `pmx pve qemu remote-migrate <vmid> --target-endpoint EP
 // --target-storage ST --target-bridge BR [flags]`.
 //
 // Remote migration crosses cluster boundaries; it is irreversible in the sense

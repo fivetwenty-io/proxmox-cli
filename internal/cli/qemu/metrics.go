@@ -11,9 +11,9 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newMetricsCmd builds `pmx qemu metrics <vmid> --timeframe FRAME [--cf AVG|MAX]`.
+// newMetricsCmd builds `pmx pve qemu metrics <vmid> --timeframe FRAME [--cf AVG|MAX]`.
 // It returns time-series data points from the PVE RRD store for cpu, mem,
-// disk, and network counters. Use `pmx qemu rrd` for the PNG-filename endpoint.
+// disk, and network counters. Use `pmx pve qemu rrd` for the PNG-filename endpoint.
 func newMetricsCmd() *cobra.Command {
 	var (
 		timeframe string

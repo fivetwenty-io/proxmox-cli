@@ -11,17 +11,20 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 )
 
-// newCpuCmd builds the `pmx qemu cpu` sub-group.
+// newCpuCmd builds the `pmx pve qemu cpu` sub-group.
 func newCpuCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cpu",
 		Short: "Inspect QEMU CPU capabilities",
+		Long: "Query which CPU models a node's QEMU installation can emulate. This lists what " +
+			"the node supports; it does not read or change a VM's configured cpu= type (see " +
+			"'pmx pve qemu config set --cpu').",
 	}
 	cmd.AddCommand(newCpuListCmd())
 	return cmd
 }
 
-// newCpuListCmd builds `pmx qemu cpu list`.
+// newCpuListCmd builds `pmx pve qemu cpu list`.
 // Calls nodes.ListCapabilitiesQemuCpu on the resolved node.
 func newCpuListCmd() *cobra.Command {
 	var arch string
@@ -59,17 +62,20 @@ func newCpuListCmd() *cobra.Command {
 	return cmd
 }
 
-// newMachineCmd builds the `pmx qemu machine` sub-group.
+// newMachineCmd builds the `pmx pve qemu machine` sub-group.
 func newMachineCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "machine",
 		Short: "Inspect QEMU machine type capabilities",
+		Long: "Query which QEMU machine types a node can emulate. This lists what the node " +
+			"supports; it does not read or change a VM's configured machine= type (see " +
+			"'pmx pve qemu config set --machine').",
 	}
 	cmd.AddCommand(newMachineListCmd())
 	return cmd
 }
 
-// newMachineListCmd builds `pmx qemu machine list`.
+// newMachineListCmd builds `pmx pve qemu machine list`.
 // Calls nodes.ListCapabilitiesQemuMachines on the resolved node.
 func newMachineListCmd() *cobra.Command {
 	var arch string
@@ -107,7 +113,7 @@ func newMachineListCmd() *cobra.Command {
 	return cmd
 }
 
-// newCpuFlagsCmd builds `pmx qemu cpu-flags`.
+// newCpuFlagsCmd builds `pmx pve qemu cpu-flags`.
 // Calls nodes.ListCapabilitiesQemuCpuFlags on the resolved node.
 func newCpuFlagsCmd() *cobra.Command {
 	var (

@@ -15,12 +15,16 @@ import (
 type lifecycleCall func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error)
 
 // newLifecycleCmd builds a standard lifecycle command with a --async flag.
-func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags func(*cobra.Command)) *cobra.Command {
+func newLifecycleCmd(
+	use, short, long, example, doneMsg string, call lifecycleCall, addFlags func(*cobra.Command),
+) *cobra.Command {
 	var async bool
 	cmd := &cobra.Command{
-		Use:   use + " <vmid|name>",
-		Short: short,
-		Args:  cobra.ExactArgs(1),
+		Use:     use + " <vmid|name>",
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -46,7 +50,7 @@ func newLifecycleCmd(use, short, doneMsg string, call lifecycleCall, addFlags fu
 	return cmd
 }
 
-// newStartCmd builds `pmx qemu start <vmid>`.
+// newStartCmd builds `pmx pve qemu start <vmid>`.
 func newStartCmd() *cobra.Command {
 	var (
 		timeout            int64
@@ -61,7 +65,13 @@ func newStartCmd() *cobra.Command {
 		netsHostMtu        string
 		withConntrackState bool
 	)
-	cmd := newLifecycleCmd("start", "Start a VM", "VM %s started.",
+	cmd := newLifecycleCmd("start", "Start a VM",
+		"Start a stopped VM. Resolves the target by numeric vmid or name. Submits a PVE "+
+			"task and blocks until it completes; pass --async to print the task UPID "+
+			"immediately instead of waiting.",
+		`  pmx pve qemu start 100
+  pmx pve qemu start web1 --async`,
+		"VM %s started.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusStartParams{}
 			if cmd.Flags().Changed("timeout") {
@@ -124,7 +134,7 @@ func newStartCmd() *cobra.Command {
 	return cmd
 }
 
-// newStopCmd builds `pmx qemu stop <vmid>`.
+// newStopCmd builds `pmx pve qemu stop <vmid>`.
 func newStopCmd() *cobra.Command {
 	var (
 		timeout          int64
@@ -133,7 +143,14 @@ func newStopCmd() *cobra.Command {
 		overruleShutdown bool
 		migratedfrom     string
 	)
-	cmd := newLifecycleCmd("stop", "Stop a VM (hard power off)", "VM %s stopped.",
+	cmd := newLifecycleCmd("stop", "Stop a VM (hard power off)",
+		"Immediately power off a running VM without asking the guest OS to shut down "+
+			"cleanly, similar to pulling the power. Prefer 'qemu shutdown' for a graceful "+
+			"stop. Submits a PVE task and blocks until it completes; pass --async to print "+
+			"the task UPID immediately instead of waiting.",
+		`  pmx pve qemu stop 100
+  pmx pve qemu stop web1 --timeout 30`,
+		"VM %s stopped.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusStopParams{}
 			if cmd.Flags().Changed("timeout") {
@@ -169,10 +186,16 @@ func newStopCmd() *cobra.Command {
 	return cmd
 }
 
-// newRebootCmd builds `pmx qemu reboot <vmid>`.
+// newRebootCmd builds `pmx pve qemu reboot <vmid>`.
 func newRebootCmd() *cobra.Command {
 	var timeout int64
-	cmd := newLifecycleCmd("reboot", "Reboot a VM (graceful)", "VM %s rebooted.",
+	cmd := newLifecycleCmd("reboot", "Reboot a VM (graceful)",
+		"Ask the guest OS to shut down and immediately start the VM again. Submits a PVE "+
+			"task and blocks until it completes; pass --async to print the task UPID "+
+			"immediately instead of waiting.",
+		`  pmx pve qemu reboot 100
+  pmx pve qemu reboot web1 --timeout 60`,
+		"VM %s rebooted.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusRebootParams{}
 			if cmd.Flags().Changed("timeout") {
@@ -190,7 +213,7 @@ func newRebootCmd() *cobra.Command {
 	return cmd
 }
 
-// newShutdownCmd builds `pmx qemu shutdown <vmid>`.
+// newShutdownCmd builds `pmx pve qemu shutdown <vmid>`.
 func newShutdownCmd() *cobra.Command {
 	var (
 		timeout    int64
@@ -198,7 +221,14 @@ func newShutdownCmd() *cobra.Command {
 		keepActive bool
 		skiplock   bool
 	)
-	cmd := newLifecycleCmd("shutdown", "Shut down a VM (graceful)", "VM %s shut down.",
+	cmd := newLifecycleCmd("shutdown", "Shut down a VM (graceful)",
+		"Ask the guest OS to power off cleanly via ACPI. Pass --force-stop to hard-stop the "+
+			"VM if it has not shut down within --timeout seconds. Submits a PVE task and "+
+			"blocks until it completes; pass --async to print the task UPID immediately "+
+			"instead of waiting.",
+		`  pmx pve qemu shutdown 100
+  pmx pve qemu shutdown web1 --timeout 60 --force-stop`,
+		"VM %s shut down.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusShutdownParams{}
 			if cmd.Flags().Changed("timeout") {
@@ -228,10 +258,17 @@ func newShutdownCmd() *cobra.Command {
 	return cmd
 }
 
-// newResetCmd builds `pmx qemu reset <vmid>`.
+// newResetCmd builds `pmx pve qemu reset <vmid>`.
 func newResetCmd() *cobra.Command {
 	var skiplock bool
-	cmd := newLifecycleCmd("reset", "Reset a VM (hard reset)", "VM %s reset.",
+	cmd := newLifecycleCmd("reset", "Reset a VM (hard reset)",
+		"Hard-reset the running VM, equivalent to pressing a physical reset button — the "+
+			"guest OS is not asked to shut down cleanly. Submits a PVE task and blocks until "+
+			"it completes; pass --async to print the task UPID immediately instead of "+
+			"waiting.",
+		`  pmx pve qemu reset 100
+  pmx pve qemu reset web1 --async`,
+		"VM %s reset.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusResetParams{}
 			if cmd.Flags().Changed("skiplock") {
@@ -249,14 +286,22 @@ func newResetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSuspendCmd builds `pmx qemu suspend <vmid>`.
+// newSuspendCmd builds `pmx pve qemu suspend <vmid>`.
 func newSuspendCmd() *cobra.Command {
 	var (
 		skiplock     bool
 		todisk       bool
 		statestorage string
 	)
-	cmd := newLifecycleCmd("suspend", "Suspend a VM", "VM %s suspended.",
+	cmd := newLifecycleCmd("suspend", "Suspend a VM",
+		"Pause the VM's execution and, by default, keep its state in memory. Pass --todisk "+
+			"to suspend to disk instead, freeing host memory (requires --statestorage on "+
+			"some PVE configurations); resume with 'qemu resume'. Submits a PVE task and "+
+			"blocks until it completes; pass --async to print the task UPID immediately "+
+			"instead of waiting.",
+		`  pmx pve qemu suspend 100
+  pmx pve qemu suspend web1 --todisk --statestorage local-lvm`,
+		"VM %s suspended.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusSuspendParams{}
 			if cmd.Flags().Changed("skiplock") {
@@ -283,13 +328,19 @@ func newSuspendCmd() *cobra.Command {
 	return cmd
 }
 
-// newResumeCmd builds `pmx qemu resume <vmid>`.
+// newResumeCmd builds `pmx pve qemu resume <vmid>`.
 func newResumeCmd() *cobra.Command {
 	var (
 		skiplock bool
 		nocheck  bool
 	)
-	cmd := newLifecycleCmd("resume", "Resume a suspended VM", "VM %s resumed.",
+	cmd := newLifecycleCmd("resume", "Resume a suspended VM",
+		"Resume a VM previously suspended with 'qemu suspend'. Pass --nocheck to skip the "+
+			"suspended-state file existence check. Submits a PVE task and blocks until it "+
+			"completes; pass --async to print the task UPID immediately instead of waiting.",
+		`  pmx pve qemu resume 100
+  pmx pve qemu resume web1`,
+		"VM %s resumed.",
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusResumeParams{}
 			if cmd.Flags().Changed("skiplock") {

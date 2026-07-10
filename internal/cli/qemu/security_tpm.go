@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newSecurityTpmCmd builds `pmx qemu security tpm` and its show/add/remove
+// newSecurityTpmCmd builds `pmx pve qemu security tpm` and its show/add/remove
 // sub-commands.
 func newSecurityTpmCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -27,12 +27,16 @@ func newSecurityTpmCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityTpmShowCmd builds `pmx qemu security tpm show <vmid|name>`.
+// newSecurityTpmShowCmd builds `pmx pve qemu security tpm show <vmid|name>`.
 func newSecurityTpmShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show TPM state device configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show whether the VM has a TPM state device (tpmstate0) and, if so, its volume, " +
+			"interface version (v1.2 or v2.0), and disk size.",
+		Example: `  pmx pve qemu security tpm show 100
+  pmx pve qemu security tpm show win11`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -62,7 +66,7 @@ func newSecurityTpmShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityTpmAddCmd builds `pmx qemu security tpm add <vmid|name>`.
+// newSecurityTpmAddCmd builds `pmx pve qemu security tpm add <vmid|name>`.
 func newSecurityTpmAddCmd() *cobra.Command {
 	var (
 		storage string
@@ -77,7 +81,7 @@ func newSecurityTpmAddCmd() *cobra.Command {
 		Long: "Allocate a TPM state disk (tpmstate0). The version defaults to v2.0 — the current, " +
 			"recommended interface (note: the PVE API's own default is the legacy v1.2; this " +
 			"command overrides that). The version is immutable after creation.\n\n" +
-			"Example: pmx qemu security tpm add win11 --storage local-lvm",
+			"Example: pmx pve qemu security tpm add win11 --storage local-lvm",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -106,7 +110,7 @@ func newSecurityTpmAddCmd() *cobra.Command {
 				}
 				return fmt.Errorf(
 					"VM %s already has a TPM state device (version %s); the version cannot be changed "+
-						"in place — remove it first with 'pmx qemu security tpm remove %s --force' "+
+						"in place — remove it first with 'pmx pve qemu security tpm remove %s --force' "+
 						"(this destroys all keys sealed in the TPM)", vmid, tp.Version, vmid)
 			}
 
@@ -137,7 +141,7 @@ func newSecurityTpmAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityTpmRemoveCmd builds `pmx qemu security tpm remove <vmid|name>`.
+// newSecurityTpmRemoveCmd builds `pmx pve qemu security tpm remove <vmid|name>`.
 func newSecurityTpmRemoveCmd() *cobra.Command {
 	var (
 		force   bool

@@ -21,7 +21,7 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
 )
 
-// newSecurityCmd builds `pmx qemu security` and its sub-commands: the
+// newSecurityCmd builds `pmx pve qemu security` and its sub-commands: the
 // umbrella for reading and hardening a VM's security posture.
 func newSecurityCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -33,7 +33,7 @@ func newSecurityCmd() *cobra.Command {
 			"per-NIC firewall coverage.\n\n" +
 			"All commands use only the PVE config and firewall APIs (no ssh). Reads need " +
 			"VM.Audit; mutations need the matching VM.Config.* privilege. Firewall *rules* " +
-			"management lives under 'pmx qemu firewall'; the security commands report firewall " +
+			"management lives under 'pmx pve qemu firewall'; the security commands report firewall " +
 			"posture but do not edit rules.",
 	}
 	cmd.AddCommand(
@@ -147,7 +147,7 @@ func mutationSuffix(cmd *cobra.Command, deps *cli.Deps, vmid, node string, resta
 	}
 	if !restart {
 		return fmt.Sprintf(" Change is pending until the next stop/start or reboot "+
-			"(see 'pmx qemu config pending %s', or pass --restart).", vmid), nil
+			"(see 'pmx pve qemu config pending %s', or pass --restart).", vmid), nil
 	}
 
 	resp, err := deps.API.Nodes.CreateQemuStatusReboot(cmd.Context(), node, vmid, &nodes.CreateQemuStatusRebootParams{})
@@ -518,7 +518,7 @@ type securityPosture struct {
 	Risks        []string               `json:"risks"`
 }
 
-// newSecurityShowCmd builds `pmx qemu security show <vmid|name>`.
+// newSecurityShowCmd builds `pmx pve qemu security show <vmid|name>`.
 func newSecurityShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -670,7 +670,7 @@ type securityListRow struct {
 	Err        string   `json:"error,omitempty"`
 }
 
-// newSecurityListCmd builds `pmx qemu security list`.
+// newSecurityListCmd builds `pmx pve qemu security list`.
 func newSecurityListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -810,11 +810,14 @@ func newSecurityListCmd() *cobra.Command {
 
 // ---- protection -------------------------------------------------------------
 
-// newSecurityProtectionCmd builds `pmx qemu security protection`.
+// newSecurityProtectionCmd builds `pmx pve qemu security protection`.
 func newSecurityProtectionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "protection",
 		Short: "Manage the VM protection flag (blocks destroy and disk removal)",
+		Long: "Enable or disable the VM protection flag. While set, PVE refuses 'qemu delete' " +
+			"and disk removal for this VM; the change applies immediately with no restart " +
+			"needed.",
 	}
 	cmd.AddCommand(newSecurityProtectionSetCmd(true), newSecurityProtectionSetCmd(false))
 	return cmd
