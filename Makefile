@@ -10,6 +10,24 @@ SCRIPTS := ./scripts
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 MAN_DATE ?= $(shell git log -1 --format=%cs 2>/dev/null || echo 1970-01-01)
 
+# --- Install locations (FHS / GNU coding standards) ---------------------------
+# Override any: `make install PREFIX=$$HOME/.local`, `make install DESTDIR=/tmp/stage`.
+PREFIX      ?= /usr/local
+DESTDIR     ?=
+BINDIR      ?= $(PREFIX)/bin
+DATAROOT    ?= $(PREFIX)/share
+MANDIR      ?= $(DATAROOT)/man
+BASHCOMPDIR ?= $(DATAROOT)/bash-completion/completions
+ZSHCOMPDIR  ?= $(DATAROOT)/zsh/site-functions
+FISHCOMPDIR ?= $(DATAROOT)/fish/vendor_completions.d
+# install(1) portable across BSD (macOS) and GNU. Never use -D (BSD lacks it).
+INSTALL         ?= install
+INSTALL_PROGRAM ?= $(INSTALL) -m 0755
+INSTALL_DATA    ?= $(INSTALL) -m 0644
+PERSONAS := pve pbs pdm
+# Man pages are gzipped on install (distro convention; -n strips name/mtime -> reproducible).
+GZIP ?= gzip -9n
+
 # ANSI color helpers — used in help awk block
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
@@ -62,17 +80,47 @@ check-docs: ## Smoke-test man page generation (CI gate; not part of `check`)
 		rm -rf "$$tmp" && echo "check-docs: man generation ok"
 
 .PHONY: install
-install: build ## Install pmx binary + pve/pbs/pdm persona symlinks to $GOPATH/bin (or ~/go/bin)
+install: build man completions ## Install pmx + personas, man pages, completions under $(DESTDIR)$(PREFIX) (default /usr/local; may need sudo)
+	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
+	$(INSTALL_PROGRAM) $(BINARY) "$(DESTDIR)$(BINDIR)/pmx"
+	@for p in $(PERSONAS); do ln -sf pmx "$(DESTDIR)$(BINDIR)/$$p"; done
+	@echo "install: pmx + personas -> $(DESTDIR)$(BINDIR)"
+	$(INSTALL) -d "$(DESTDIR)$(MANDIR)/man1" "$(DESTDIR)$(MANDIR)/man5"
+	@for m in ./dist/man/man1/*.1; do \
+		[ -e "$$m" ] || continue; \
+		$(GZIP) -c "$$m" > "$(DESTDIR)$(MANDIR)/man1/$$(basename $$m).gz"; \
+	done
+	@for m in ./dist/man/man5/*.5; do \
+		[ -e "$$m" ] || continue; \
+		$(GZIP) -c "$$m" > "$(DESTDIR)$(MANDIR)/man5/$$(basename $$m).gz"; \
+	done
+	@echo "install: man pages -> $(DESTDIR)$(MANDIR)"
+	$(INSTALL) -d "$(DESTDIR)$(BASHCOMPDIR)" "$(DESTDIR)$(ZSHCOMPDIR)" "$(DESTDIR)$(FISHCOMPDIR)"
+	$(INSTALL_DATA) ./dist/completions/pmx.bash "$(DESTDIR)$(BASHCOMPDIR)/pmx"
+	$(INSTALL_DATA) ./dist/completions/_pmx     "$(DESTDIR)$(ZSHCOMPDIR)/_pmx"
+	$(INSTALL_DATA) ./dist/completions/pmx.fish "$(DESTDIR)$(FISHCOMPDIR)/pmx.fish"
+	@echo "install: completions (bash/zsh/fish) -> $(DESTDIR)$(DATAROOT)"
+	@echo "install: done (prefix $(DESTDIR)$(PREFIX)). Permission denied? re-run: sudo make install"
+
+.PHONY: uninstall
+uninstall: ## Remove everything `make install` placed under $(DESTDIR)$(PREFIX)
+	rm -f "$(DESTDIR)$(BINDIR)/pmx"
+	@for p in $(PERSONAS); do rm -f "$(DESTDIR)$(BINDIR)/$$p"; done
+	rm -f "$(DESTDIR)$(MANDIR)"/man1/pmx.1.gz "$(DESTDIR)$(MANDIR)"/man1/pmx-*.1.gz
+	@for p in $(PERSONAS); do \
+		rm -f "$(DESTDIR)$(MANDIR)/man1/$$p.1.gz" "$(DESTDIR)$(MANDIR)"/man1/$$p-*.1.gz; \
+	done
+	rm -f "$(DESTDIR)$(MANDIR)/man5/pmx-config.5.gz"
+	rm -f "$(DESTDIR)$(BASHCOMPDIR)/pmx" "$(DESTDIR)$(ZSHCOMPDIR)/_pmx" "$(DESTDIR)$(FISHCOMPDIR)/pmx.fish"
+	@echo "uninstall: removed pmx artifacts from $(DESTDIR)$(PREFIX)"
+
+.PHONY: install-user
+install-user: build ## Install pmx + personas to $$GOPATH/bin (or ~/go/bin) — no sudo, no man pages
 	@BIN="$${GOPATH:-$$HOME/go}/bin"; \
 	mkdir -p "$$BIN"; \
 	cp $(BINARY) "$$BIN/pmx"; \
-	ln -sf pmx "$$BIN/pve"; \
-	ln -sf pmx "$$BIN/pbs"; \
-	ln -sf pmx "$$BIN/pdm"; \
-	echo "install: copied $(BINARY) -> $$BIN/pmx"; \
-	echo "install: linked $$BIN/pve -> pmx"; \
-	echo "install: linked $$BIN/pbs -> pmx"; \
-	echo "install: linked $$BIN/pdm -> pmx"
+	for p in $(PERSONAS); do ln -sf pmx "$$BIN/$$p"; done; \
+	echo "install-user: pmx + personas -> $$BIN"
 
 .PHONY: clean
 clean: ## Remove ./dist/ build artifacts
