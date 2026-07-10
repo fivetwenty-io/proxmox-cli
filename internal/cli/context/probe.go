@@ -38,6 +38,7 @@ func probeContext(ctx *config.Context, timeout time.Duration) probeResult {
 	client := &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
 			//nolint:gosec // G402: honors the context's explicit tls.insecure opt-in, mirroring the API clients
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: ctx.TLS.Insecure},
 		},
