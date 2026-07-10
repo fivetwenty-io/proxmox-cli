@@ -64,6 +64,9 @@ func newNodeDisksCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "disks",
 		Short: "Inspect and manage local disks on the node",
+		Long: "Inspect and manage local disks on the node: list block devices and their SMART " +
+			"health, initialize a GPT partition table, wipe a disk, and manage " +
+			"directory-backed and ZFS pool datastores.",
 	}
 	cmd.AddCommand(
 		newNodeDisksLsCmd(nf),
@@ -88,7 +91,11 @@ func newNodeDisksLsCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls",
 		Short: "List local disks on the node",
-		Args:  cobra.NoArgs,
+		Long: "List the node's local block devices with size, vendor, model, serial number, " +
+			"and SMART health. Pass --include-partitions to also list partitions, " +
+			"--skip-smart to skip SMART checks, or --usage-type to filter by usage.",
+		Example: "  pmx pbs node disks ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -148,7 +155,10 @@ func newNodeDisksSmartCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "smart",
 		Short: "Show SMART attributes and health for a disk",
-		Args:  cobra.NoArgs,
+		Long: "Show SMART health status, wearout (for SSDs), and attributes for --disk. Pass " +
+			"--healthonly to return only the overall health status.",
+		Example: "  pmx pbs node disks smart --disk sda",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -273,6 +283,8 @@ func newNodeDisksDirectoryCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "directory",
 		Short: "Manage directory-backed datastore mount units",
+		Long: "List, create, and remove systemd mount units that back a datastore with a " +
+			"filesystem created on a local disk.",
 	}
 	cmd.AddCommand(
 		newNodeDisksDirectoryLsCmd(nf),
@@ -286,7 +298,10 @@ func newNodeDisksDirectoryLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
 		Short: "List systemd datastore mount units",
-		Args:  cobra.NoArgs,
+		Long: "List the node's directory-backed datastore mount units, with mount path, " +
+			"backing device, filesystem type, status, and space usage.",
+		Example: "  pmx pbs node disks directory ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -418,6 +433,7 @@ func newNodeDisksZfsCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zfs",
 		Short: "Manage ZFS pool datastores",
+		Long:  "List existing ZFS pools, show a pool's detailed zpool status, or create a new ZFS pool on local disks.",
 	}
 	cmd.AddCommand(newNodeDisksZfsLsCmd(nf), newNodeDisksZfsShowCmd(nf), newNodeDisksZfsCreateCmd(nf))
 	return cmd
@@ -427,7 +443,10 @@ func newNodeDisksZfsLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
 		Short: "List ZFS pools",
-		Args:  cobra.NoArgs,
+		Long: "List the node's ZFS pools with health, size, allocated and free space, " +
+			"deduplication ratio, and fragmentation.",
+		Example: "  pmx pbs node disks zfs ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -459,9 +478,11 @@ func newNodeDisksZfsLsCmd(nf *nodeFlags) *cobra.Command {
 
 func newNodeDisksZfsShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <name>",
-		Short: "Show detailed zpool status for a ZFS pool",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <name>",
+		Short:   "Show detailed zpool status for a ZFS pool",
+		Long:    "Show the full `zpool status`-style report for the named ZFS pool.",
+		Example: "  pmx pbs node disks zfs show tank",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

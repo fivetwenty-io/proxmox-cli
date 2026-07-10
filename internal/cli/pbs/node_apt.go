@@ -39,6 +39,9 @@ func newNodeAptCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apt",
 		Short: "Inspect and manage APT packages and repositories on the node",
+		Long: "Inspect and manage APT packages and repositories on the node: list available " +
+			"updates, refresh the package index, view and edit repository entries, list " +
+			"installed package versions, and read a package's changelog.",
 	}
 	cmd.AddCommand(
 		newNodeAptLsCmd(nf),
@@ -58,7 +61,10 @@ func newNodeAptLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
 		Short: "List available APT package updates",
-		Args:  cobra.NoArgs,
+		Long: "List APT package updates available on the node, with each package's old and " +
+			"new version, priority, and section.",
+		Example: "  pmx pbs node apt ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -132,7 +138,11 @@ func newNodeAptRepositoriesCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "repositories",
 		Short: "Show parsed APT repository information",
-		Args:  cobra.NoArgs,
+		Long: "Show a summary of the node's parsed APT repository configuration: the config " +
+			"digest, and counts of configured files, standard repositories, errors, and " +
+			"informational notices.",
+		Example: "  pmx pbs node apt repositories",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -251,7 +261,10 @@ func newNodeAptVersionsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "versions",
 		Short: "Show installed versions of important PBS packages",
-		Args:  cobra.NoArgs,
+		Long: "List the installed version, candidate old version, and running kernel (where " +
+			"applicable) of every package the PBS installer considers important.",
+		Example: "  pmx pbs node apt versions",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -285,7 +298,10 @@ func newNodeAptChangelogCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "changelog",
 		Short: "Show the changelog of an APT package",
-		Args:  cobra.NoArgs,
+		Long: "Fetch the Debian changelog text for --name at --version, defaulting to the " +
+			"candidate version when --version is omitted.",
+		Example: "  pmx pbs node apt changelog --name proxmox-backup-server",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

@@ -38,6 +38,9 @@ func newNodeCertificatesCmd(nf *nodeFlags) *cobra.Command {
 		Use:     "certificates",
 		Aliases: []string{"cert"},
 		Short:   "Inspect and manage the node's TLS certificates",
+		Long: "Inspect and manage the TLS certificates serving the node's API: view the " +
+			"current certificate chain, order or renew an ACME certificate, or upload and " +
+			"remove a custom certificate.",
 	}
 	cmd.AddCommand(
 		newNodeCertificatesInfoCmd(nf),
@@ -95,6 +98,7 @@ func newNodeCertificatesAcmeCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acme",
 		Short: "Order or renew the node's ACME certificate",
+		Long:  "Order a new ACME certificate for the node, or renew its current ACME certificate.",
 	}
 	cmd.AddCommand(newNodeCertificatesAcmeOrderCmd(nf), newNodeCertificatesAcmeRenewCmd(nf))
 	return cmd
@@ -208,6 +212,7 @@ func newNodeCertificatesCustomCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "custom",
 		Short: "Upload or remove a custom certificate",
+		Long:  "Install a custom PEM-encoded certificate for the node's API, or remove the currently installed one.",
 	}
 	cmd.AddCommand(newNodeCertificatesCustomUploadCmd(nf), newNodeCertificatesCustomDeleteCmd(nf))
 	return cmd

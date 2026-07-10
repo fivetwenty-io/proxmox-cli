@@ -49,15 +49,21 @@ func newNodeServicesCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
 		Short: "Inspect and control node system services",
+		Long: "Inspect and control the systemd services backing the node: list every service, " +
+			"show a summary or the raw state of one, and start, stop, restart, or reload it.",
 	}
 	cmd.AddCommand(
 		newNodeServicesLsCmd(nf),
 		newNodeServicesShowCmd(nf),
 		newNodeServicesStateCmd(nf),
-		newNodeServiceActionCmd(nf, "start", "started", "Start a service on the node"),
-		newNodeServiceActionCmd(nf, "stop", "stopped", "Stop a service on the node"),
-		newNodeServiceActionCmd(nf, "restart", "restarted", "Restart a service on the node"),
-		newNodeServiceActionCmd(nf, "reload", "reloaded", "Reload a service on the node"),
+		newNodeServiceActionCmd(nf, "start", "started", "Start a service on the node",
+			"Start a stopped systemd service on the node."),
+		newNodeServiceActionCmd(nf, "stop", "stopped", "Stop a service on the node",
+			"Stop a running systemd service on the node."),
+		newNodeServiceActionCmd(nf, "restart", "restarted", "Restart a service on the node",
+			"Stop and start a systemd service on the node, dropping its current state."),
+		newNodeServiceActionCmd(nf, "reload", "reloaded", "Reload a service on the node",
+			"Ask a systemd service on the node to reload its configuration without stopping it."),
 	)
 	return cmd
 }
@@ -68,7 +74,10 @@ func newNodeServicesLsCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
 		Short: "List system services on the node",
-		Args:  cobra.NoArgs,
+		Long: "List the node's systemd services with description, state, and active-state, as " +
+			"reported by `proxmox-backup-manager` service management.",
+		Example: "  pmx pbs node services ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -124,7 +133,10 @@ func newNodeServicesShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <svc>",
 		Short: "Show a summary of a single service's state",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a friendly key/value summary of a single systemd service's name, state, " +
+			"description, and active-state.",
+		Example: "  pmx pbs node services show proxmox-backup",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			svc := args[0]
@@ -171,7 +183,10 @@ func newNodeServicesStateCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "state <svc>",
 		Short: "Show the raw systemd state for a single service",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every field systemd reports for a single service: name, state, " +
+			"description, active-state, and unit-state.",
+		Example: "  pmx pbs node services state proxmox-backup",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			svc := args[0]
@@ -201,11 +216,13 @@ func newNodeServicesStateCmd(nf *nodeFlags) *cobra.Command {
 // confirmed async, UPID-bearing — share the same lifecycle semantics. This
 // bypasses the discarding binding via the shared raw transport to recover
 // the task UPID and support --async like every other PBS lifecycle command.
-func newNodeServiceActionCmd(nf *nodeFlags, verb, pastTense, short string) *cobra.Command {
+func newNodeServiceActionCmd(nf *nodeFlags, verb, pastTense, short, long string) *cobra.Command {
 	return &cobra.Command{
-		Use:   fmt.Sprintf("%s <svc>", verb),
-		Short: short,
-		Args:  cobra.ExactArgs(1),
+		Use:     fmt.Sprintf("%s <svc>", verb),
+		Short:   short,
+		Long:    long,
+		Example: fmt.Sprintf("  pmx pbs node services %s proxmox-backup", verb),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			svc := args[0]

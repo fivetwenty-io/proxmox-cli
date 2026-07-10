@@ -45,8 +45,12 @@ func newNodeCmd() *cobra.Command {
 	cmd.AddCommand(
 		newNodeLsCmd(),
 		newNodeStatusCmd(nf),
-		newNodePowerCmd(nf, "reboot", "Reboot the node"),
-		newNodePowerCmd(nf, "shutdown", "Shut down the node"),
+		newNodePowerCmd(nf, "reboot", "Reboot the node",
+			"Reboot the node immediately. This is disruptive: pass --yes/-y to confirm.",
+			"  pmx pbs node reboot --yes"),
+		newNodePowerCmd(nf, "shutdown", "Shut down the node",
+			"Shut down the node immediately. This is disruptive: pass --yes/-y to confirm.",
+			"  pmx pbs node shutdown --yes"),
 		newNodeRrdCmd(nf),
 		newNodeReportCmd(nf),
 		newNodeSyslogCmd(nf),
@@ -149,13 +153,15 @@ func newNodeStatusCmd(nf *nodeFlags) *cobra.Command {
 // newNodePowerCmd builds a node power-control command (reboot or shutdown)
 // that wraps POST /nodes/{node}/status with the matching command. Both
 // actions are disruptive, so each is gated behind --yes/-y.
-func newNodePowerCmd(nf *nodeFlags, verb, short string) *cobra.Command {
+func newNodePowerCmd(nf *nodeFlags, verb, short, long, example string) *cobra.Command {
 	var yes bool
 
 	cmd := &cobra.Command{
-		Use:   verb,
-		Short: short,
-		Args:  cobra.NoArgs,
+		Use:     verb,
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {

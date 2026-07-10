@@ -39,6 +39,8 @@ func newNodeTasksCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tasks",
 		Short: "List, inspect, and stop background tasks on the node",
+		Long: "List, inspect, and stop the background tasks (backups, GC, sync, prune, verify, " +
+			"and more) recorded on the node, and read a task's log.",
 	}
 	cmd.AddCommand(
 		newNodeTasksLsCmd(nf),
@@ -161,9 +163,11 @@ func nodeTaskStatusCell(e nodeTaskEntry) string {
 // status (GET /nodes/{node}/tasks/{upid}/status).
 func newNodeTasksShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <upid>",
-		Short: "Show the status of one task",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <upid>",
+		Short:   "Show the status of one task",
+		Long:    "Show the full status record of one task identified by its UPID: type, user, status, and start/end time.",
+		Example: "  pmx pbs node tasks show UPID:pbs:00001234:...",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			upid := args[0]
@@ -202,7 +206,11 @@ func newNodeTasksLogCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <upid>",
 		Short: "Read a task's log",
-		Args:  cobra.ExactArgs(1),
+		Long: "Read the log lines of a task identified by its UPID. Use --start and --limit to " +
+			"page through a long log, or --download to fetch the raw log text instead of " +
+			"paginated lines.",
+		Example: "  pmx pbs node tasks log UPID:pbs:00001234:...",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			upid := args[0]
@@ -268,6 +276,8 @@ func newNodeTasksDeleteCmd(nf *nodeFlags) *cobra.Command {
 		Use:     "delete <upid>",
 		Aliases: []string{"stop"},
 		Short:   "Stop a running task",
+		Long:    "Try to stop the running task identified by its UPID. Has no effect on a task that has already finished.",
+		Example: "  pmx pbs node tasks delete UPID:pbs:00001234:...",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

@@ -20,6 +20,7 @@ func newNodeDNSCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dns",
 		Short: "Show or update the node's DNS settings",
+		Long:  "Show the node's configured name servers and search domain, or update them.",
 	}
 	cmd.AddCommand(newNodeDNSShowCmd(nf), newNodeDNSUpdateCmd(nf))
 	return cmd
@@ -27,9 +28,11 @@ func newNodeDNSCmd(nf *nodeFlags) *cobra.Command {
 
 func newNodeDNSShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "show",
-		Short: "Show the node's DNS settings",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the node's DNS settings",
+		Long:    "Show the node's configured name servers (dns1-dns3) and search domain.",
+		Example: "  pmx pbs node dns show",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -61,7 +64,11 @@ func newNodeDNSUpdateCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update the node's DNS settings",
-		Args:  cobra.NoArgs,
+		Long: "Update the node's name servers and/or search domain. Requires at least one " +
+			"flag; use --delete to reset a specific key to its default.",
+		Example: `  pmx pbs node dns update --dns1 1.1.1.1 --dns2 9.9.9.9
+  pmx pbs node dns update --search example.com`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -118,6 +125,7 @@ func newNodeTimeCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "time",
 		Short: "Show or update the node's time zone",
+		Long:  "Show the node's current server time and configured time zone, or change the time zone.",
 	}
 	cmd.AddCommand(newNodeTimeShowCmd(nf), newNodeTimeUpdateCmd(nf))
 	return cmd
@@ -125,9 +133,11 @@ func newNodeTimeCmd(nf *nodeFlags) *cobra.Command {
 
 func newNodeTimeShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "show",
-		Short: "Show the node's server time and time zone",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the node's server time and time zone",
+		Long:    "Show the node's current local time, UTC time, and configured time zone.",
+		Example: "  pmx pbs node time show",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -154,9 +164,11 @@ func newNodeTimeUpdateCmd(nf *nodeFlags) *cobra.Command {
 	var timezone string
 
 	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Set the node's time zone",
-		Args:  cobra.NoArgs,
+		Use:     "update",
+		Short:   "Set the node's time zone",
+		Long:    "Set the node's time zone to --timezone, e.g. UTC or a tz database name such as America/New_York.",
+		Example: "  pmx pbs node time update --timezone UTC",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -185,6 +197,8 @@ func newNodeConfigCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Show or update the node configuration",
+		Long: "Show the node's ACME, TLS cipher, e-mail, HTTP proxy, and task-log-retention " +
+			"configuration, or update it.",
 	}
 	cmd.AddCommand(newNodeConfigShowCmd(nf), newNodeConfigUpdateCmd(nf))
 	return cmd
@@ -253,7 +267,13 @@ func newNodeConfigUpdateCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update the node configuration",
-		Args:  cobra.NoArgs,
+		Long: "Update the node's ACME account, ACME domain slots, TLS cipher lists, consent " +
+			"text, default UI language, description, e-mail-from address, HTTP proxy, " +
+			"location, and/or task-log retention. Requires at least one flag; use --delete " +
+			"to reset a specific key to its default.",
+		Example: `  pmx pbs node config update --email-from backups@example.com
+  pmx pbs node config update --task-log-max-days 30`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -354,6 +374,9 @@ func newNodeSubscriptionCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subscription",
 		Short: "Show, set, refresh, or remove the node's subscription",
+		Long: "Show the node's subscription status, install or replace its subscription key, " +
+			"re-check subscription status against the Proxmox server, or remove the stored " +
+			"subscription info.",
 	}
 	cmd.AddCommand(
 		newNodeSubscriptionShowCmd(nf),
@@ -366,9 +389,11 @@ func newNodeSubscriptionCmd(nf *nodeFlags) *cobra.Command {
 
 func newNodeSubscriptionShowCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "show",
-		Short: "Show the node's subscription info",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the node's subscription info",
+		Long:    "Show the node's subscription status, level, and validity, as last checked against the Proxmox server.",
+		Example: "  pmx pbs node subscription show",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -395,9 +420,11 @@ func newNodeSubscriptionSetCmd(nf *nodeFlags) *cobra.Command {
 	var key string
 
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Set the node's subscription key and check it",
-		Args:  cobra.NoArgs,
+		Use:     "set",
+		Short:   "Set the node's subscription key and check it",
+		Long:    "Install --key as the node's subscription key and immediately check it against the Proxmox server.",
+		Example: "  pmx pbs node subscription set --key pbs4a-0123456789",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -424,7 +451,10 @@ func newNodeSubscriptionUpdateCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Check and refresh the node's subscription status against the server",
-		Args:  cobra.NoArgs,
+		Long: "Re-check the node's subscription status against the Proxmox server. Pass " +
+			"--force to always contact the server even if the local cache is still fresh.",
+		Example: "  pmx pbs node subscription update",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
