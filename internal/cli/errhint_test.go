@@ -1,14 +1,17 @@
 package cli_test
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"testing"
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
 func TestAuthHint_Unauthorized(t *testing.T) {
@@ -57,4 +60,57 @@ func TestAuthHint_NonAuthErrorsReturnEmpty(t *testing.T) {
 	for _, err := range cases {
 		require.Empty(t, cli.AuthHint(err))
 	}
+}
+
+func connCtx(product string, port int) *config.Context {
+	return &config.Context{Host: "h", Port: port, Product: product}
+}
+
+func TestPortConventionHint_Fires(t *testing.T) {
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+	wrapped := fmt.Errorf("GET /version: %w", dialErr)
+
+	hint := cli.PortConventionHint(wrapped, connCtx("pve", 8007), "foo", "pmx")
+
+	require.Contains(t, hint, "port 8007")
+	require.Contains(t, hint, "Proxmox Backup Server default")
+	require.Contains(t, hint, `context "foo" is set to product pve`)
+	require.Contains(t, hint, "'pmx context show foo'")
+}
+
+func TestPortConventionHint_PersonaPrefix(t *testing.T) {
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+
+	hint := cli.PortConventionHint(dialErr, connCtx("pdm", 8006), "dc1", "pdm")
+
+	require.Contains(t, hint, "'pdm context show dc1'")
+}
+
+func TestPortConventionHint_OwnDefaultPort_Silent(t *testing.T) {
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+
+	require.Empty(t, cli.PortConventionHint(dialErr, connCtx("pve", 8006), "foo", "pmx"))
+	require.Empty(t, cli.PortConventionHint(dialErr, connCtx("pbs", 8007), "foo", "pmx"))
+}
+
+func TestPortConventionHint_NonStandardPort_Silent(t *testing.T) {
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+
+	require.Empty(t, cli.PortConventionHint(dialErr, connCtx("pve", 9999), "foo", "pmx"))
+}
+
+func TestPortConventionHint_NonConnectionError_Silent(t *testing.T) {
+	require.Empty(t, cli.PortConventionHint(errors.New("HTTP 500"), connCtx("pve", 8007), "foo", "pmx"))
+	require.Empty(t, cli.PortConventionHint(nil, connCtx("pve", 8007), "foo", "pmx"))
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("refused")}
+	require.Empty(t, cli.PortConventionHint(dialErr, nil, "foo", "pmx"))
+}
+
+func TestPortConventionHint_TLSRecordError_Fires(t *testing.T) {
+	var recErr tls.RecordHeaderError
+	wrapped := fmt.Errorf("request: %w", recErr)
+
+	hint := cli.PortConventionHint(wrapped, connCtx("pbs", 8443), "b1", "pmx")
+
+	require.Contains(t, hint, "Proxmox Datacenter Manager default")
 }

@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"crypto/tls"
 	"errors"
+	"fmt"
+	"net"
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/config"
 	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
 )
 
@@ -54,4 +58,58 @@ func isForbidden(err error) bool {
 	var permErr *pveerrors.PermissionError
 
 	return errors.As(err, &permErr)
+}
+
+// PortConventionHint returns a one-line hint when err is a connection-level
+// failure (dial, TLS handshake, timeout — never an HTTP-status error) and the
+// resolved context's port is a DIFFERENT product's well-known default, the
+// classic symptom of "right host, wrong product". It returns "" in every
+// other case: hinting must never fire on an auth failure or an API error,
+// where the connection itself worked. cmdPrefix is the persona-aware command
+// prefix (see CommandPrefix) used to compose the follow-up command.
+func PortConventionHint(err error, ctx *config.Context, contextName, cmdPrefix string) string {
+	if err == nil || ctx == nil || !isConnectionError(err) {
+		return ""
+	}
+
+	product := ctx.Product
+	if product == "" {
+		product = config.ProductPVE
+	}
+	if ctx.Port == 0 || ctx.Port == config.DefaultPortForProduct(product) {
+		return ""
+	}
+
+	for _, other := range config.Products() {
+		if other == product {
+			continue
+		}
+		if ctx.Port == config.DefaultPortForProduct(other) {
+			return fmt.Sprintf(
+				"hint: port %d is the %s default; context %q is set to product %s — check '%s context show %s'",
+				ctx.Port, ProductDisplayName(other), contextName, product, cmdPrefix, contextName,
+			)
+		}
+	}
+
+	return ""
+}
+
+// isConnectionError reports whether err is a connection-level failure: a
+// dial/socket error, a TLS record-header failure (HTTPS spoken to a non-TLS
+// or wrong-protocol port), or a network timeout. HTTP-status errors are
+// deliberately excluded — they prove the connection worked.
+func isConnectionError(err error) bool {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	var recErr tls.RecordHeaderError
+	if errors.As(err, &recErr) {
+		return true
+	}
+
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }

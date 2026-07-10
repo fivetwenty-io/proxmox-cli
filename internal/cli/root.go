@@ -81,6 +81,11 @@ type Deps struct {
 	// runs before context resolution; such commands must nil-check before use.
 	Ctx *config.Context
 
+	// CtxName is the canonical name of the resolved context in Ctx (the
+	// --context/-c, $PMX_CONTEXT, or current-context value that won). Empty
+	// for noClient commands, matching Ctx.
+	CtxName string
+
 	// ConfigPath is the resolved --config file path. Config-mutating commands
 	// persist to this path via config.Save / config.SaveForce.
 	ConfigPath string
@@ -111,6 +116,18 @@ func GetDeps(cmd *cobra.Command) *Deps {
 // setDeps stashes deps into cmd's context.
 func setDeps(cmd *cobra.Command, deps *Deps) {
 	cmd.SetContext(context.WithValue(cmd.Context(), ctxKey, deps))
+}
+
+// peekDeps returns the *Deps stashed on cmd's context, or nil when absent.
+// Unlike GetDeps it never panics; Execute's error path uses it after the
+// command has run, where Deps may legitimately be missing (--help, early
+// flag errors).
+func peekDeps(cmd *cobra.Command) *Deps {
+	if cmd == nil || cmd.Context() == nil {
+		return nil
+	}
+	d, _ := cmd.Context().Value(ctxKey).(*Deps)
+	return d
 }
 
 // WithDeps returns ctx with deps attached so that GetDeps can later retrieve
@@ -443,6 +460,7 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		return logCloser, err
 	}
 	deps.Ctx = ctx
+	deps.CtxName = config.Resolve(pf.context, "PMX_CONTEXT", cfg.CurrentContext, "")
 
 	// Apply per-context defaults for --node and --output.
 	// Precedence: explicit flag > context default > existing global default.
@@ -928,7 +946,8 @@ func Execute(persona string, factories []GroupFactory) error {
 	// placeholder provided here.
 	AddGroups(root, &Deps{}, factories)
 
-	if err := root.Execute(); err != nil {
+	c, err := root.ExecuteC()
+	if err != nil {
 		// A child process (ssh, rsync) that exits non-zero has already written
 		// its own diagnostics to stderr; printing the wrapped *exec.ExitError
 		// here too would duplicate that output with a redundant second line.
@@ -938,6 +957,11 @@ func Execute(persona string, factories []GroupFactory) error {
 			fmt.Fprintln(os.Stderr, err)
 			if hint := AuthHint(err); hint != "" {
 				fmt.Fprintln(os.Stderr, hint)
+			}
+			if deps := peekDeps(c); deps != nil && deps.Ctx != nil {
+				if hint := PortConventionHint(err, deps.Ctx, deps.CtxName, CommandPrefix(c)); hint != "" {
+					fmt.Fprintln(os.Stderr, hint)
+				}
 			}
 		}
 		return err
