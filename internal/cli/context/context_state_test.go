@@ -951,7 +951,7 @@ func TestValidateConnect_Reachable(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "REACHABLE")
 	require.Contains(t, out, "yes")
-	require.Contains(t, out, "match")
+	require.Contains(t, out, "match (")
 }
 
 func TestValidateConnect_Unreachable_Fails(t *testing.T) {
