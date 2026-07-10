@@ -2,7 +2,6 @@ package api
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -18,7 +17,6 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
 
-	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
@@ -71,34 +69,6 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 	return c, nil
 }
 
-// oidcRequiresPVE returns an error when ctx targets Proxmox Backup Server or
-// Proxmox Datacenter Manager: OIDC login (--oidc) is not wired for those
-// products yet (tracked as follow-up work), so buildClientForOIDC fails fast
-// here rather than producing a confusing server-side authentication error.
-// Ticket-based login/refresh/logout support PBS and PDM contexts directly via
-// newAuthClientForContext (see authproducts.go); only the OIDC path retains
-// this PVE-only guard.
-func oidcRequiresPVE(ctx *config.Context, contextName string) error {
-	switch ctx.Product {
-	case config.ProductPVE, "":
-		return nil
-	case config.ProductPBS:
-		return fmt.Errorf(
-			"context %q targets Proxmox Backup Server (product: pbs); 'auth login --oidc' "+
-				"is only wired for PVE contexts today",
-			contextName,
-		)
-	case config.ProductPDM:
-		return fmt.Errorf(
-			"context %q targets Proxmox Datacenter Manager (product: pdm); 'auth login --oidc' "+
-				"is only wired for PVE contexts today",
-			contextName,
-		)
-	default:
-		return fmt.Errorf("unsupported product %q", ctx.Product)
-	}
-}
-
 // newAuthLoginCmd builds `pmx auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
@@ -126,7 +96,7 @@ func newAuthLoginCmd() *cobra.Command {
 			"Manager (PDM) contexts.\n\n" +
 			"--otp (one-time password for TOTP-based two-factor authentication) is PVE-only; " +
 			"PBS and PDM contexts use --tfa-challenge for second-factor login instead. " +
-			"--oidc is currently wired for PVE contexts only.",
+			"--oidc works with PVE, PBS, and PDM contexts.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -185,7 +155,7 @@ func newAuthLoginCmd() *cobra.Command {
 	cmd.Flags().StringVar(&verifyPrivs, "privs", "", "ticket-verification mode: privileges to verify on --path")
 	cmd.Flags().BoolVar(&oidc, "oidc", false, "authenticate via OpenID Connect instead of username/password")
 	cmd.Flags().StringVar(&redirectURL, "redirect-url", "",
-		"OIDC redirect URL sent to the identity provider (defaults to the configured PVE endpoint base URL; requires --oidc)")
+		"OIDC redirect URL sent to the identity provider (defaults to the context's endpoint base URL; requires --oidc)")
 	cmd.Flags().StringVar(&code, "code", "",
 		"OIDC authorization code for non-interactive login (requires --oidc and --state)")
 	cmd.Flags().StringVar(&state, "state", "",
@@ -194,11 +164,12 @@ func newAuthLoginCmd() *cobra.Command {
 }
 
 // performOIDCLogin carries out the OpenID Connect login flow for the given context.
-// It calls CreateOpenidAuthUrl to obtain the authorization URL, then either reads
+// It calls OpenidAuthUrl to obtain the authorization URL, then either reads
 // code+state from the supplied flags (non-interactive) or prompts the user to
 // authenticate in a browser and paste the redirect URL (interactive). On success it
-// unmarshals the login response into the CreateTicketResponse shape, persists the
-// session ticket via storeSession, and saves the config file.
+// persists the resulting ticketResult via storeSession and saves the config file.
+// Works with PVE, PBS, and PDM contexts via the authClient seam (see
+// buildClientForOIDC and authproducts.go).
 func performOIDCLogin(
 	cmd *cobra.Command,
 	deps *cli.Deps,
@@ -234,9 +205,10 @@ func performOIDCLogin(
 		return fmt.Errorf("OIDC login requires --realm or a realm configured in context %q", contextName)
 	}
 
-	// Build a client for the context. The OIDC auth-url and login endpoints are
-	// public (PVE marks them noauthentication), so any credential satisfies the
-	// HTTP transport — the server does not validate credentials on these paths.
+	// Build the product-appropriate auth client for the context. The OIDC
+	// auth-url and login endpoints are public on PVE, PBS, and PDM alike (all
+	// three mark them noauthentication), so any credential satisfies the HTTP
+	// transport — the server does not validate credentials on these paths.
 	// Prefer an existing session ticket; fall back to a placeholder token that
 	// passes the proxmox-apiclient-go options validator without real credentials.
 	ac, err := buildClientForOIDC(cmd, ctx, contextName)
@@ -250,20 +222,10 @@ func performOIDCLogin(
 		redir = fmt.Sprintf("%s://%s:%d", ctx.Protocol, ctx.Host, ctx.Port)
 	}
 
-	// Step 1: obtain the OIDC authorization URL from PVE.
-	authURLResp, err := ac.Access.CreateOpenidAuthUrl(cmd.Context(), &access.CreateOpenidAuthUrlParams{
-		Realm:       rlm,
-		RedirectUrl: redir,
-	})
+	// Step 1: obtain the OIDC authorization URL.
+	authURL, err := ac.OpenidAuthUrl(cmd.Context(), rlm, redir)
 	if err != nil {
 		return fmt.Errorf("get OIDC auth URL for realm %q: %w", rlm, err)
-	}
-	if authURLResp == nil {
-		return fmt.Errorf("get OIDC auth URL for realm %q: server returned no data", rlm)
-	}
-	var authURL string
-	if err := json.Unmarshal(*authURLResp, &authURL); err != nil {
-		return fmt.Errorf("parse OIDC auth URL response: %w", err)
 	}
 	if authURL == "" {
 		return fmt.Errorf("get OIDC auth URL for realm %q: server returned empty URL", rlm)
@@ -297,40 +259,25 @@ func performOIDCLogin(
 	}
 
 	// Step 3: complete the OIDC login. RedirectUrl must equal the one from step 1.
-	loginResp, err := ac.Access.CreateOpenidLogin(cmd.Context(), &access.CreateOpenidLoginParams{
-		Code:        oidcCode,
-		State:       oidcState,
-		RedirectUrl: redir,
-	})
+	result, err := ac.OpenidLogin(cmd.Context(), oidcCode, oidcState, redir)
 	if err != nil {
 		return fmt.Errorf("OIDC login for realm %q: %w", rlm, err)
 	}
-	if loginResp == nil {
-		return fmt.Errorf("OIDC login for realm %q: server returned no data", rlm)
-	}
-
-	// Unmarshal the raw JSON response into the ticket-response shape.
-	// The PVE OIDC login endpoint returns the same fields as POST /access/ticket:
-	// username, ticket, CSRFPreventionToken.
-	var ticketResp access.CreateTicketResponse
-	if err := json.Unmarshal(*loginResp, &ticketResp); err != nil {
-		return fmt.Errorf("parse OIDC login response: %w", err)
-	}
-	if ticketResp.Ticket == nil || *ticketResp.Ticket == "" {
+	if result.Ticket == "" {
 		return fmt.Errorf("OIDC login for realm %q: server returned no ticket", rlm)
 	}
-	if ticketResp.Username == "" {
+	if result.Username == "" {
 		return fmt.Errorf("OIDC login for realm %q: server returned no username", rlm)
 	}
 
 	// Persist the session identically to password login.
-	storeSession(ctx, ticketResultFromPVE(&ticketResp))
+	storeSession(ctx, result)
 	if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
 
 	expires := time.Now().Add(ticketLifetime).Format(time.RFC3339)
-	msg := fmt.Sprintf("Logged in as %s via OIDC. Session valid until %s.", ticketResp.Username, expires)
+	msg := fmt.Sprintf("Logged in as %s via OIDC. Session valid until %s.", result.Username, expires)
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 }
 
@@ -728,48 +675,30 @@ func serverLogout(cmd *cobra.Command, ctx *config.Context, contextName string) e
 	return nil
 }
 
-// buildClientForOIDC constructs a PVE API client suitable for calling the two
-// public OIDC endpoints (POST /access/openid/auth-url and
-// POST /access/openid/login). Both endpoints are marked noauthentication by
-// PVE, meaning the server does not validate credentials on those paths.
-// However, the proxmox-apiclient-go options validator requires at least one
-// credential to be set, so:
+// buildClientForOIDC constructs the product-appropriate authClient (see
+// authproducts.go) suitable for calling the two public OIDC endpoints
+// (auth-url and login). Those endpoints are marked noauthentication by PVE,
+// PBS, and PDM alike, meaning the server does not validate credentials on
+// those paths. However, the proxmox-apiclient-go options validator requires
+// at least one credential to be set, so:
 //   - If the context carries a live session ticket, that ticket is used.
 //   - Otherwise a placeholder API token is constructed to pass validation; the
 //     token value is never checked by the server on these public endpoints.
-//
-// OIDC login is only wired for PVE contexts today (see oidcRequiresPVE);
-// PBS/PDM OIDC support is tracked as follow-up work.
+//     The tolerant JSON decoding in proxmox-apiclient-go v3.8.1+ accepts this
+//     placeholder's "=" form on PBS/PDM contexts too.
 //
 // contextName is the resolved context name (see resolveContextName); it is used
 // only to derive the per-context TOFU fingerprint cache path (see
 // contextOptions) and has no bearing on which credential is selected.
-func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName string) (*apiclient.APIClient, error) {
-	if err := oidcRequiresPVE(ctx, contextName); err != nil {
-		return nil, err
-	}
-
-	flagInsecure := cli.GetDeps(cmd).Insecure
-	if flagInsecure || ctx.TLS.Insecure {
-		cli.WarnInsecureTLS(cmd.ErrOrStderr())
-	}
-
-	var opts pve.Options
+func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName string) (authClient, error) {
 	if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
-		opts = contextOptions(cmd, ctx, flagInsecure, contextName, "", "",
-			"", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
-	} else {
-		// No live session: build with a placeholder API token.
-		opts = contextOptions(cmd, ctx, flagInsecure, contextName, "", "",
-			"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
-			"", "", "")
+		return newAuthClientForContext(cmd, ctx, contextName, "", "", "", "",
+			ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	}
-
-	ac, err := apiclient.NewAPIClient(opts)
-	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
-	}
-	return ac, nil
+	// No live session: build with a placeholder API token.
+	return newAuthClientForContext(cmd, ctx, contextName, "", "", "",
+		"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
+		"", "")
 }
 
 // contextOptions builds the pve.Options for ctx, applying the same

@@ -189,70 +189,36 @@ func TestIsInteractiveInput_NonFileReader_ReturnsFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// oidcRequiresPVE — product guard on the OIDC client builder only
-// (newAuthClientForContext, used by login/refresh/logout, supports PBS and
-// PDM directly; see api_test.go's TestAuthLogin_PBSContext_Success and
-// TestAuthLogin_PDMContext_Success for the positive-path coverage of that.)
+// buildClientForOIDC — product dispatch (no network call; construction alone
+// proves the seam wired the matching adapter). See api_test.go's
+// TestAuthLogin_OIDC_PBSContext_Success and TestAuthLogin_OIDC_PDMContext_Success
+// for full end-to-end OIDC login coverage against fake PBS/PDM servers.
 // ---------------------------------------------------------------------------
 
-func TestOidcRequiresPVE_PBSProduct_Errors(t *testing.T) {
-	ctx := sampleAuthContext(false, false)
-	ctx.Product = config.ProductPBS
-
-	err := oidcRequiresPVE(ctx, "backup1")
-
-	require.Error(t, err, "OIDC login must reject PBS contexts until Task 5 wires it up")
-	require.Contains(t, err.Error(), "backup1", "error must name the offending context")
-	require.Contains(t, err.Error(), "Proxmox Backup Server")
-}
-
-func TestOidcRequiresPVE_PVEAndEmptyProduct_Allowed(t *testing.T) {
-	ctx := sampleAuthContext(false, false)
-	require.NoError(t, oidcRequiresPVE(ctx, "prod"), "empty product means PVE")
-
-	ctx.Product = config.ProductPVE
-	require.NoError(t, oidcRequiresPVE(ctx, "prod"))
-}
-
-func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
+func TestBuildClientForOIDC_DispatchesByProduct(t *testing.T) {
 	var stderr bytes.Buffer
 	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
-	ctx := sampleAuthContext(false, false)
-	ctx.Product = config.ProductPBS
 
-	ac, err := buildClientForOIDC(cmd, ctx, "backup1")
+	cases := []struct {
+		name    string
+		product string
+		want    any
+	}{
+		{"empty product defaults to PVE", "", &pveAuthClient{}},
+		{"pve", config.ProductPVE, &pveAuthClient{}},
+		{"pbs", config.ProductPBS, &pbsAuthClient{}},
+		{"pdm", config.ProductPDM, &pdmAuthClient{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := sampleAuthContext(false, false)
+			ctx.Product = tc.product
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Proxmox Backup Server")
-	require.Nil(t, ac)
-}
-
-// TestOidcRequiresPVE_PDMProduct_Errors mirrors
-// TestOidcRequiresPVE_PBSProduct_Errors for Proxmox Datacenter Manager: like
-// PBS, a PDM context's OIDC login is not wired yet, so oidcRequiresPVE must
-// reject it.
-func TestOidcRequiresPVE_PDMProduct_Errors(t *testing.T) {
-	ctx := sampleAuthContext(false, false)
-	ctx.Product = config.ProductPDM
-
-	err := oidcRequiresPVE(ctx, "dc1")
-
-	require.Error(t, err, "OIDC login must reject PDM contexts until Task 5 wires it up")
-	require.Contains(t, err.Error(), "dc1", "error must name the offending context")
-	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
-}
-
-func TestBuildClientForOIDC_RejectsPDMContext(t *testing.T) {
-	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
-	ctx := sampleAuthContext(false, false)
-	ctx.Product = config.ProductPDM
-
-	ac, err := buildClientForOIDC(cmd, ctx, "dc1")
-
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
-	require.Nil(t, ac)
+			ac, err := buildClientForOIDC(cmd, ctx, "prod")
+			require.NoError(t, err)
+			require.IsType(t, tc.want, ac)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

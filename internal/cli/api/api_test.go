@@ -1318,6 +1318,153 @@ func TestAuthLogin_OIDC_LoginServerError(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestAuthLogin_OIDC_PBSContext_Success verifies that 'auth login --oidc'
+// against a product: pbs context succeeds end-to-end: the auth-url and login
+// requests hit the PBS-specific endpoints, and the typed PBS
+// CreateOpenidLoginResponse (whose CSRFPreventionToken is a plain string,
+// unlike PVE's/PDM's pointer field) is mapped into the persisted session.
+func TestAuthLogin_OIDC_PBSContext_Success(t *testing.T) {
+	f := testhelper.NewFakePBS(t)
+
+	var gotAuthURLBody, gotLoginBody map[string]string
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotAuthURLBody = map[string]string{
+			"realm":        r.PostFormValue("realm"),
+			"redirect-url": r.PostFormValue("redirect-url"),
+		}
+		testhelper.WriteData(w, "https://idp.example.com/auth?response_type=code&client_id=pbs")
+	})
+	f.HandleFunc("POST /api2/json/access/openid/login", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotLoginBody = map[string]string{
+			"code":         r.PostFormValue("code"),
+			"state":        r.PostFormValue("state"),
+			"redirect-url": r.PostFormValue("redirect-url"),
+		}
+		testhelper.WriteData(w, map[string]any{
+			"username":            "u@myoidc",
+			"ticket":              "PBS:u@myoidc:OIDCTOKEN",
+			"CSRFPreventionToken": "csrf-pbs-oidc",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePBSHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "backup1",
+		Contexts: map[string]*config.Context{
+			"backup1": {
+				Product:  config.ProductPBS,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Auth:     config.AuthBlock{Type: "password", Username: "u", Secret: "unused"},
+				TLS:      config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path,
+		"auth", "login",
+		"--context", "backup1",
+		"--oidc",
+		"--realm", "myoidc",
+		"--code", "C",
+		"--state", "S",
+	)
+	require.NoError(t, err)
+	require.Contains(t, out, "u@myoidc")
+
+	require.Equal(t, "myoidc", gotAuthURLBody["realm"])
+	require.Equal(t, "C", gotLoginBody["code"])
+	require.Equal(t, "S", gotLoginBody["state"])
+	require.Equal(t, gotAuthURLBody["redirect-url"], gotLoginBody["redirect-url"])
+
+	saved := loadCfg(t, path)
+	require.NotNil(t, saved.Contexts["backup1"].Auth.Session)
+	require.Equal(t, "PBS:u@myoidc:OIDCTOKEN", saved.Contexts["backup1"].Auth.Session.Ticket)
+	require.Equal(t, "csrf-pbs-oidc", saved.Contexts["backup1"].Auth.Session.CSRF)
+}
+
+// TestAuthLogin_OIDC_PDMContext_Success mirrors
+// TestAuthLogin_OIDC_PBSContext_Success for Proxmox Datacenter Manager, whose
+// typed CreateOpenidLoginResponse.CSRFPreventionToken is *string (unlike
+// PBS's plain string).
+func TestAuthLogin_OIDC_PDMContext_Success(t *testing.T) {
+	f := testhelper.NewFakePDM(t)
+
+	var gotAuthURLBody, gotLoginBody map[string]string
+	f.HandleFunc("POST /api2/json/access/openid/auth-url", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotAuthURLBody = map[string]string{
+			"realm":        r.PostFormValue("realm"),
+			"redirect-url": r.PostFormValue("redirect-url"),
+		}
+		testhelper.WriteData(w, "https://idp.example.com/auth?response_type=code&client_id=pdm")
+	})
+	f.HandleFunc("POST /api2/json/access/openid/login", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotLoginBody = map[string]string{
+			"code":         r.PostFormValue("code"),
+			"state":        r.PostFormValue("state"),
+			"redirect-url": r.PostFormValue("redirect-url"),
+		}
+		testhelper.WriteData(w, map[string]any{
+			"username":            "u@myoidc",
+			"ticket":              "PDM:u@myoidc:OIDCTOKEN",
+			"CSRFPreventionToken": "csrf-pdm-oidc",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePDMHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "dc1",
+		Contexts: map[string]*config.Context{
+			"dc1": {
+				Product:  config.ProductPDM,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Auth:     config.AuthBlock{Type: "password", Username: "u", Secret: "unused"},
+				TLS:      config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path,
+		"auth", "login",
+		"--context", "dc1",
+		"--oidc",
+		"--realm", "myoidc",
+		"--code", "C",
+		"--state", "S",
+	)
+	require.NoError(t, err)
+	require.Contains(t, out, "u@myoidc")
+
+	require.Equal(t, "myoidc", gotAuthURLBody["realm"])
+	require.Equal(t, "C", gotLoginBody["code"])
+	require.Equal(t, "S", gotLoginBody["state"])
+	require.Equal(t, gotAuthURLBody["redirect-url"], gotLoginBody["redirect-url"])
+
+	saved := loadCfg(t, path)
+	require.NotNil(t, saved.Contexts["dc1"].Auth.Session)
+	require.Equal(t, "PDM:u@myoidc:OIDCTOKEN", saved.Contexts["dc1"].Auth.Session.Ticket)
+	require.Equal(t, "csrf-pdm-oidc", saved.Contexts["dc1"].Auth.Session.CSRF)
+}
+
 // ---------------------------------------------------------------------------
 // registration + annotations
 // ---------------------------------------------------------------------------
