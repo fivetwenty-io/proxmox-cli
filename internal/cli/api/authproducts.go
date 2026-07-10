@@ -26,7 +26,7 @@ type ticketResult struct {
 }
 
 // authClient abstracts the per-product access service surface the auth
-// sub-commands (login, refresh, logout, and eventually whoami/OIDC) need.
+// sub-commands (login, refresh, logout, and OIDC) need.
 // Implemented by pveAuthClient, pbsAuthClient, and pdmAuthClient below, each
 // wrapping the matching apiclient.*Client and translating that product's
 // request/response shapes to and from the neutral types here.
@@ -34,7 +34,6 @@ type authClient interface {
 	CreateTicket(ctx context.Context, user, realm, password string, opts ticketOptions) (*ticketResult, error)
 	OpenidAuthUrl(ctx context.Context, realm, redirectURL string) (string, error)
 	OpenidLogin(ctx context.Context, code, state, redirectURL string) (*ticketResult, error)
-	ListPermissions(ctx context.Context) (any, error) // raw JSON for whoami's Raw output
 	Logout() error
 }
 
@@ -181,10 +180,6 @@ func (c *pveAuthClient) OpenidLogin(ctx context.Context, code, state, redirectUR
 	return ticketResultFromPVE(&ticketResp), nil
 }
 
-func (c *pveAuthClient) ListPermissions(ctx context.Context) (any, error) {
-	return c.ac.Access.ListPermissions(ctx, nil)
-}
-
 func (c *pveAuthClient) Logout() error {
 	return c.ac.Raw.Logout()
 }
@@ -277,10 +272,6 @@ func (c *pbsAuthClient) OpenidLogin(ctx context.Context, code, state, redirectUR
 		tr.Ticket = *resp.Ticket
 	}
 	return tr, nil
-}
-
-func (c *pbsAuthClient) ListPermissions(ctx context.Context) (any, error) {
-	return c.ac.Access.ListPermissions(ctx, nil)
 }
 
 func (c *pbsAuthClient) Logout() error {
@@ -378,10 +369,6 @@ func (c *pdmAuthClient) OpenidLogin(ctx context.Context, code, state, redirectUR
 		tr.CSRF = *resp.CSRFPreventionToken
 	}
 	return tr, nil
-}
-
-func (c *pdmAuthClient) ListPermissions(ctx context.Context) (any, error) {
-	return c.ac.Access.ListPermissions(ctx, nil)
 }
 
 func (c *pdmAuthClient) Logout() error {
