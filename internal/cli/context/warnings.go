@@ -35,7 +35,8 @@ func warnAfterSwitch(cmd *cobra.Command, cfg *config.Config, name string) {
 	persona := cli.PersonaOf(cmd)
 	if persona != "pmx" && product != persona {
 		_, _ = fmt.Fprintf(errOut,
-			"warning: context %q targets %s (%s); this binary provides %s commands — use the '%s' binary or 'pmx %s' for %s commands\n",
+			"warning: context %q targets %s (%s); this binary provides %s commands — "+
+				"use the '%s' binary or 'pmx %s' for %s commands\n",
 			name, cli.ProductDisplayName(product), product, persona, product, product, product)
 	}
 
