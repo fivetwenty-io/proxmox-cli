@@ -25,7 +25,17 @@ func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Scaffold local CLI configuration",
-		Long:  "Scaffold local Proxmox CLI configuration files.",
+		Long: `Scaffold local pmx CLI configuration files. Currently provides one
+sub-command, 'init config', which writes a fully-commented config.yml
+template to the resolved config path (default ~/.config/pmx/config.yml)
+documenting every context field: host, port, protocol, realm, auth type,
+token or password secret, and TLS options.
+
+This group operates entirely on the local filesystem and never contacts a
+Proxmox API. After editing the generated template, add contexts with
+'pmx context add' or select one with 'pmx context select'.`,
+		Example: `  pmx init config
+  pmx init config --force`,
 	}
 	cmd.AddCommand(newConfigCmd())
 	return cmd

@@ -23,14 +23,22 @@ All context verbs operate on the local config file and never contact a
 Proxmox API; 'context validate --connect' is the one exception, probing the
 configured endpoint live.`
 
+// contextExample is the shared Example help for the context group and its
+// hidden ctx alias, extracted so the two cannot drift apart.
+const contextExample = `  pmx context add lab --host pve1.example.com --product pve
+  pmx context select lab
+  pmx context ls
+  pmx context validate --all --connect`
+
 // Group builds `pmx context` and attaches all sub-commands.
 // The passed *cli.Deps is a placeholder for command-tree assembly; live deps
 // are resolved per-invocation via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "context",
-		Short: "Manage named Proxmox contexts",
-		Long:  contextLong,
+		Use:     "context",
+		Short:   "Manage named Proxmox contexts",
+		Long:    contextLong,
+		Example: contextExample,
 	}
 	addSubcommands(cmd)
 	return cmd
@@ -39,10 +47,11 @@ func Group(_ *cli.Deps) *cobra.Command {
 // CtxAlias builds the hidden `pmx ctx` alias for the context group.
 func CtxAlias(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "ctx",
-		Short:  "Alias for 'pmx context'",
-		Long:   contextLong,
-		Hidden: true,
+		Use:     "ctx",
+		Short:   "Alias for 'pmx context'",
+		Long:    contextLong,
+		Example: contextExample,
+		Hidden:  true,
 	}
 	addSubcommands(cmd)
 	return cmd

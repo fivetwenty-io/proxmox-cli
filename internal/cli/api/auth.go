@@ -36,6 +36,10 @@ func newAuthCmd() *cobra.Command {
 			"refresh negotiate a session ticket with the server; --otp (one-time password for " +
 			"TOTP-based two-factor authentication) is PVE-only — PBS and PDM contexts use " +
 			"--tfa-challenge instead. whoami queries the server to verify the stored credentials.",
+		Example: `  pmx auth login --context lab
+  pmx auth login --context lab --oidc --realm sso
+  pmx auth whoami --context lab
+  pmx auth status --context lab`,
 	}
 	cmd.AddCommand(
 		newAuthLoginCmd(),

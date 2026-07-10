@@ -26,6 +26,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 			"groups, and prune, garbage-collection, and verification jobs. " +
 			"These commands require a context with product: pbs " +
 			"(create one with 'pmx context add <name> --product pbs ...').",
+		Example: `  pmx pbs datastore ls
+  pmx pbs snapshot ls --store backup-store vm/100
+  pbs sync ls`,
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPBS},
 	}
 

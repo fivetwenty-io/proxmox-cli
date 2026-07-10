@@ -50,6 +50,10 @@ The connection flags below (-l, -i, -p, -A, --no-strict) must precede
 since ssh's own option parser does not permute arguments on every platform,
 and the first token that is not an option starts the remote command. Use
 "--" to force the remote-command boundary explicitly.`,
+		Example: `  pmx ssh pve1
+  pmx ssh pve1 -l root -- uptime
+  pmx ssh --context backup
+  pmx ssh -i ~/.ssh/lab_ed25519 pve1`,
 		Args:        cobra.ArbitraryArgs,
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 		RunE: func(cmd *cobra.Command, args []string) error {

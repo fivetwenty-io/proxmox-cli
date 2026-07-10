@@ -39,6 +39,10 @@ func NewCommand() *cobra.Command {
 			"key/value table for a single JSON object, a table for an array of objects, and a " +
 			"plain value otherwise; every format always preserves the full response losslessly via " +
 			"--output json or --output yaml.",
+		Example: `  pmx api get /nodes
+  pmx api get /cluster/resources -d type=vm
+  pmx api post /nodes/pve1/qemu/100/status/start
+  pmx api put /nodes/pve1/qemu/100/config -d memory=4096`,
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 	}
 

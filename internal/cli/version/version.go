@@ -25,6 +25,10 @@ func Group(_ *cli.Deps) *cobra.Command {
 		Short: "Show the connected server's API version",
 		Long: "Show the API version reported by the active context's server (PVE cluster, PBS, or PDM).\n\n" +
 			"Use `pmx version client` to show this CLI's own build information.",
+		Example: `  pmx version
+  pmx version --context lab
+  pmx version client
+  pmx version ping --context backup`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 		RunE:        runServerVersion,

@@ -26,6 +26,9 @@ func Group(_ *cli.Deps) *cobra.Command {
 			"resources, access control, subscriptions, and per-remote PVE/PBS " +
 			"operations. Requires a context with product: pdm " +
 			"(create one with 'pmx context add <name> --product pdm ...').",
+		Example: `  pmx pdm remote ls
+  pmx pdm resource ls
+  pdm remote show lab-pve`,
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPDM},
 	}
 

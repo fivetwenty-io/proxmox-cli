@@ -58,6 +58,9 @@ long-only and must precede the rsync arguments: --ssh-user, --ssh-port,
 --insecure, and --debug are also recognised in that same leading position.
 
 Supplying your own -e/--rsh is rejected: pmx always injects its own.`,
+		Example: `  pmx rsync ./backup.tar pve1:/var/tmp/
+  pmx rsync -av pve1:/etc/pve/ ./pve-etc/
+  pmx rsync --ssh-user admin --context backup local.img backup:/tmp/`,
 		DisableFlagParsing: true,
 		Annotations:        map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
 		RunE: func(cmd *cobra.Command, _ []string) error {

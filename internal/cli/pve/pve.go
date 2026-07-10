@@ -31,9 +31,15 @@ func ChildFactories() []cli.GroupFactory {
 // and reject a non-PVE context for any command in this subtree.
 func Group(deps *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "pve",
-		Short:       "Manage a Proxmox VE cluster",
-		Long:        "Manage a Proxmox VE cluster: nodes, guests (QEMU/LXC), storage, SDN, pools, access control, and tasks. Invoke the binary as `pve` (symlink) to use these commands without the `pve` prefix.",
+		Use:   "pve",
+		Short: "Manage a Proxmox VE cluster",
+		Long: "Manage a Proxmox VE cluster: nodes, guests (QEMU/LXC), storage, SDN, pools, access control, " +
+			"and tasks. Requires a context with product: pve (the default when --product is omitted on " +
+			"'pmx context add'). Invoke the binary as `pve` (symlink) to use these commands without the " +
+			"`pve` prefix.",
+		Example: `  pmx pve cluster status
+  pmx pve qemu list
+  pve node list`,
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPVE},
 	}
 	for _, f := range ChildFactories() {
