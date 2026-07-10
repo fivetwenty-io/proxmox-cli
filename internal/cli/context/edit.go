@@ -35,7 +35,7 @@ config is updated.  If the editor exits with a non-zero status, no changes are
 saved.  If the edited file contains invalid YAML or fails validation, an error
 is returned and the temp file path is printed so you can recover your edits.
 
-Note: the context name cannot be changed via edit; rename is not supported.
+Note: the context name cannot be changed via edit; use 'context rename'.
 Note: config.Save rewrites the config file and does not preserve comments.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

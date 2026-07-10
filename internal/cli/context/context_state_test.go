@@ -462,7 +462,7 @@ func TestAnnotations_NoClient_AllVerbs(t *testing.T) {
 	}
 }
 
-// TestAnnotations_NoClient_ExpectedVerbCount confirms the expected 9 canonical
+// TestAnnotations_NoClient_ExpectedVerbCount confirms the expected 10 canonical
 // verbs are present so a deletion is caught as well as an addition.
 func TestAnnotations_NoClient_ExpectedVerbCount(t *testing.T) {
 	// Canonical verb names registered via addSubcommands (see context.go).
@@ -474,6 +474,7 @@ func TestAnnotations_NoClient_ExpectedVerbCount(t *testing.T) {
 		"previous": true,
 		"rm":       true,
 		"copy":     true,
+		"rename":   true,
 		"edit":     true,
 		"validate": true,
 	}

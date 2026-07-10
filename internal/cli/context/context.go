@@ -46,6 +46,7 @@ func addSubcommands(parent *cobra.Command) {
 		newPreviousCmd(),
 		newRmCmd(),
 		newCopyCmd(),
+		newRenameCmd(),
 		newEditCmd(),
 		newValidateCmd(),
 	)

@@ -653,6 +653,84 @@ func TestContextValidate_TokenMissingTokenIDInvalid(t *testing.T) {
 
 // ---- noClient annotation regression for copy/edit/validate -----------------
 
+// ---- rename tests -------------------------------------------------------------
+
+func TestContextRename_Happy_UpdatesPointers(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext:  "lab",
+		PreviousContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": labContext(),
+		},
+	}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "rename", "lab", "prod"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	require.NotContains(t, loaded.Contexts, "lab")
+	require.Contains(t, loaded.Contexts, "prod")
+	require.Equal(t, "10.0.0.1", loaded.Contexts["prod"].Host, "context body must survive rename")
+	require.Equal(t, "prod", loaded.CurrentContext, "current-context pointer must follow the rename")
+	require.Equal(t, "prod", loaded.PreviousContext, "previous-context pointer must follow the rename")
+}
+
+func TestContextRename_PointersToOtherContexts_Untouched(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext:  "other",
+		PreviousContext: "other",
+		Contexts: map[string]*config.Context{
+			"lab":   labContext(),
+			"other": labContext(),
+		},
+	}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	require.NoError(t, runOpsCmd(cfg, p, &buf, "rename", "lab", "prod"))
+
+	loaded, err := config.Load(p)
+	require.NoError(t, err)
+	require.Equal(t, "other", loaded.CurrentContext)
+	require.Equal(t, "other", loaded.PreviousContext)
+}
+
+func TestContextRename_MissingOld_ListsAvailable(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	err := runOpsCmd(cfg, p, &buf, "rename", "ghost", "prod")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `context "ghost" not found`)
+	require.Contains(t, err.Error(), "lab (pve)")
+}
+
+func TestContextRename_Collision(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{
+		"lab":  labContext(),
+		"prod": labContext(),
+	}}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	err := runOpsCmd(cfg, p, &buf, "rename", "lab", "prod")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `context "prod" already exists`)
+}
+
+func TestContextRename_SameName(t *testing.T) {
+	cfg := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	p := scratchConfig(t, cfg)
+
+	var buf bytes.Buffer
+	err := runOpsCmd(cfg, p, &buf, "rename", "lab", "lab")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must differ")
+}
+
 func TestContextCopyEditValidateAreNoClient(t *testing.T) {
 	for _, name := range []string{"copy", "edit", "validate"} {
 		t.Run(name, func(t *testing.T) {
