@@ -25,9 +25,17 @@ func newLsCmd() *cobra.Command {
 	var f lsFlags
 
 	cmd := &cobra.Command{
-		Use:         "ls",
-		Aliases:     []string{"list"},
-		Short:       "List all named contexts",
+		Use:     "ls",
+		Aliases: []string{"list"},
+		Short:   "List all named contexts",
+		Long: "List every named context recorded in the config file, sorted by name, with the " +
+			"active context marked by a leading asterisk. --product restricts the list to " +
+			"contexts targeting a single product (pve, pbs, or pdm). Under a persona binary " +
+			"(pve, pbs, pdm), rows whose product differs from the persona's are flagged " +
+			"\"(mismatch)\" in the table output; json/yaml output always reports the plain " +
+			"product value. Reads only the local config file; no API calls are made.",
+		Example: `  pmx context ls
+  pmx context ls --product pbs`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {

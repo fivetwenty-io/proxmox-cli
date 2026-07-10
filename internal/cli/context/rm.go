@@ -26,9 +26,16 @@ func newRmCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:         "rm <name>",
-		Aliases:     []string{"remove", "delete"},
-		Short:       "Remove a named context from the config file",
+		Use:     "rm <name>",
+		Aliases: []string{"remove", "delete"},
+		Short:   "Remove a named context from the config file",
+		Long: "Remove a named context from the config file. Requires --yes to confirm the " +
+			"destructive action. Removing the active (current-context) context requires " +
+			"--force, which also clears current-context; without --force the command refuses " +
+			"and points at 'context select' first. If the removed context was previous-context, " +
+			"that pointer is cleared as well.",
+		Example: `  pmx context rm lab --yes
+  pmx context rm lab --force --yes`,
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {

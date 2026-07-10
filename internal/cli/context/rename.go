@@ -20,9 +20,15 @@ import (
 // overwriting via rename would silently destroy a context, which is rm's job.
 func newRenameCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "rename <old> <new>",
-		Aliases:           []string{"mv"},
-		Short:             "Rename a named context, following current/previous pointers",
+		Use:     "rename <old> <new>",
+		Aliases: []string{"mv"},
+		Short:   "Rename a named context, following current/previous pointers",
+		Long: "Rename a named context from <old> to <new>, moving its configuration to the new " +
+			"map key. If <old> is the current-context or previous-context, that pointer is " +
+			"updated to <new> so an operator renaming the active context stays on it. Errors if " +
+			"<old> does not exist or if <new> already exists — rename never overwrites an " +
+			"existing context; remove it first with 'rm' if that is intended.",
+		Example:           `  pmx context rename lab lab-old`,
 		Args:              cobra.ExactArgs(2),
 		Annotations:       map[string]string{"noClient": "true"},
 		ValidArgsFunction: cli.FirstArgContextNames,

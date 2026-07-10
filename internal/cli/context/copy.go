@@ -21,9 +21,17 @@ func newCopyCmd() *cobra.Command {
 	var f copyFlags
 
 	cmd := &cobra.Command{
-		Use:         "copy <src> <dst>",
-		Aliases:     []string{"cp"},
-		Short:       "Copy a named context to a new name",
+		Use:     "copy <src> <dst>",
+		Aliases: []string{"cp"},
+		Short:   "Copy a named context to a new name",
+		Long: "Copy a named context's full configuration (host, auth, TLS, defaults) to a new " +
+			"name, deep-copying the source so subsequent edits to either context do not affect " +
+			"the other. Errors if <dst> already exists unless --force is passed. --select makes " +
+			"the newly copied context the active one, recording the previous current-context as " +
+			"previous-context.",
+		Example: `  pmx context copy lab lab-staging
+  pmx context copy lab lab-staging --select
+  pmx context copy lab lab-old --force`,
 		Args:        cobra.ExactArgs(2),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {

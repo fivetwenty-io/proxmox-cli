@@ -22,9 +22,19 @@ import (
 //   - No arg (TTY or piped stdin) → numbered-list picker: read from cmd.InOrStdin().
 func newSelectCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "select [<name>]",
-		Aliases:     []string{"use", "switch"},
-		Short:       "Select the active named context",
+		Use:     "select [<name>]",
+		Aliases: []string{"use", "switch"},
+		Short:   "Select the active named context",
+		Long: "Set the active named context, updating current-context in the config file and " +
+			"recording the prior value as previous-context so it can be restored with " +
+			"'pmx context previous'. Passing \"-\" switches back to the previous context (same " +
+			"as 'pmx context previous'). With no argument, prints a numbered list of configured " +
+			"contexts and prompts for a selection (number or name) on stdin. Prints a " +
+			"non-blocking warning to stderr if the selected context targets a different product " +
+			"than the current persona binary, or has no credentials configured.",
+		Example: `  pmx context select lab
+  pmx context select -
+  pmx context select`,
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {

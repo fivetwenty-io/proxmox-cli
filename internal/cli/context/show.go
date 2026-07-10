@@ -14,9 +14,17 @@ import (
 // When name is omitted it defaults to the current context; errors if none set.
 func newShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "show [<name>]",
-		Aliases:     []string{"info"},
-		Short:       "Show a named context (defaults to the current context)",
+		Use:     "show [<name>]",
+		Aliases: []string{"info"},
+		Short:   "Show a named context (defaults to the current context)",
+		Long: "Display the full configuration of a named context: host, port, protocol, realm, " +
+			"product, auth type, username, token id, TLS settings, and default node/output. " +
+			"Defaults to the current context when <name> is omitted, erroring if none is set. " +
+			"The secret value is always redacted to \"***\" for inline literals; " +
+			"environment-variable and keychain references are shown as-is since the reference " +
+			"itself is not sensitive.",
+		Example: `  pmx context show
+  pmx context show lab`,
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
