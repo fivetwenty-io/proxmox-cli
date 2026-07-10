@@ -68,6 +68,8 @@ func runPrevious(cmd *cobra.Command, cfg *config.Config, deps *cli.Deps) error {
 		return fmt.Errorf("save config: %w", err)
 	}
 
+	warnAfterSwitch(cmd, cfg, prev)
+
 	res := output.Result{Message: fmt.Sprintf("Switched to context %q (was %q).", prev, curr)}
 	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 }

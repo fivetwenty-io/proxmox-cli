@@ -71,6 +71,8 @@ func newSelectCmd() *cobra.Command {
 				return fmt.Errorf("save config: %w", err)
 			}
 
+			warnAfterSwitch(cmd, cfg, name)
+
 			res := output.Result{Message: fmt.Sprintf("Switched to context %q.", name)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},

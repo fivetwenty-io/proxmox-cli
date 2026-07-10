@@ -46,23 +46,23 @@ func newShowCmd() *cobra.Command {
 				return fmt.Errorf("context %q not found in config", name)
 			}
 
-			// Resolve display port (apply default 8006 for display only — do not
-			// mutate the stored config).
-			port := ctx.Port
-			if port == 0 {
-				port = 8006
-			}
-
-			// Redact the secret for all output formats to prevent accidental exposure
-			// in logs, shell history, or shared terminal output.
-			redactedSecret := redactSecret(ctx.Auth.Secret)
-
 			// Resolve display product (default "pve" for display only — do not
 			// mutate the stored config).
 			product := ctx.Product
 			if product == "" {
 				product = config.ProductPVE
 			}
+
+			// Resolve display port (apply the product-aware default for display
+			// only — do not mutate the stored config).
+			port := ctx.Port
+			if port == 0 {
+				port = config.DefaultPortForProduct(product)
+			}
+
+			// Redact the secret for all output formats to prevent accidental exposure
+			// in logs, shell history, or shared terminal output.
+			redactedSecret := redactSecret(ctx.Auth.Secret)
 
 			single := map[string]string{
 				"NAME":           name,

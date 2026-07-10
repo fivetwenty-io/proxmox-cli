@@ -749,3 +749,165 @@ func TestAdd_TofuFlag_DefaultsFalse(t *testing.T) {
 	require.True(t, ok)
 	require.False(t, ctx.TLS.Tofu, "omitting --tofu must default to tls.tofu: false")
 }
+
+// ---------------------------------------------------------------------------
+// persona mismatch and missing-credential warnings (select, previous)
+// ---------------------------------------------------------------------------
+
+// runUnderPersona executes a context sub-command mounted under a root named
+// persona, capturing stdout and stderr separately so warning assertions can
+// distinguish the two streams.
+func runUnderPersona(t *testing.T, persona string, deps *cli.Deps, args ...string) (string, string, error) {
+	t.Helper()
+	root := &cobra.Command{Use: persona}
+	root.AddCommand(Group(nil))
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+	var out, errBuf bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errBuf)
+	root.SetArgs(append([]string{"context"}, args...))
+	err := root.Execute()
+	return out.String(), errBuf.String(), err
+}
+
+func TestSelect_PersonaMismatch_WarnsButSwitches(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Product = config.ProductPDM
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	_, stderr, err := runUnderPersona(t, "pve", deps, "select", "beta")
+
+	require.NoError(t, err, "mismatch must warn, never block")
+	require.Contains(t, stderr, "warning:")
+	require.Contains(t, stderr, "Proxmox Datacenter Manager")
+	require.Equal(t, "beta", reloadCfg(t, path).CurrentContext)
+}
+
+func TestSelect_PersonaMatch_NoWarning(t *testing.T) {
+	path, cfg := makeConfig(t, twoContextCfg())
+	deps := makeDeps(t, path, cfg)
+
+	_, stderr, err := runUnderPersona(t, "pve", deps, "select", "beta")
+
+	require.NoError(t, err)
+	require.NotContains(t, stderr, "warning:")
+}
+
+func TestSelect_UnderPmx_NoPersonaWarning(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Product = config.ProductPBS
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	_, stderr, err := runUnderPersona(t, "pmx", deps, "select", "beta")
+
+	require.NoError(t, err)
+	require.NotContains(t, stderr, "warning:")
+}
+
+func TestSelect_MissingCredentials_Notes(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Auth.Secret = ""
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	_, stderr, err := runUnderPersona(t, "pmx", deps, "select", "beta")
+
+	require.NoError(t, err)
+	require.Contains(t, stderr, "no credentials")
+	require.Contains(t, stderr, "pmx auth")
+}
+
+func TestPrevious_PersonaMismatch_Warns(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.PreviousContext = "beta"
+	cfg.Contexts["beta"].Product = config.ProductPBS
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	_, stderr, err := runUnderPersona(t, "pve", deps, "previous")
+
+	require.NoError(t, err)
+	require.Contains(t, stderr, "warning:")
+	require.Contains(t, stderr, "Proxmox Backup Server")
+}
+
+func TestLs_ProductFilter(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Product = config.ProductPBS
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "ls", "--product", "pbs")
+
+	require.NoError(t, err)
+	require.Contains(t, out, "beta")
+	require.NotContains(t, out, "alpha")
+}
+
+func TestLs_ProductFilter_Invalid(t *testing.T) {
+	path, cfg := makeConfig(t, twoContextCfg())
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "ls", "--product", "bogus")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "pve, pbs, pdm")
+}
+
+func TestLs_PersonaMismatchMarker(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Product = config.ProductPBS
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, _, err := runUnderPersona(t, "pve", deps, "ls")
+
+	require.NoError(t, err)
+	require.Contains(t, out, "pbs (mismatch)")
+	require.NotContains(t, out, "pve (mismatch)")
+}
+
+func TestLs_UnderPmx_NoMarker(t *testing.T) {
+	cfg := twoContextCfg()
+	cfg.Contexts["beta"].Product = config.ProductPBS
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, _, err := runUnderPersona(t, "pmx", deps, "ls")
+
+	require.NoError(t, err)
+	require.NotContains(t, out, "(mismatch)")
+}
+
+// PDM round-trip: add with --product pdm must default the port to 8443 and
+// show/ls must render it, closing the PDM coverage gap in this package.
+func TestAdd_PDM_RoundTrip_DefaultPort(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "dcmgr",
+		"--product", "pdm",
+		"--host", "pdm.example.com",
+		"--username", "root@pam",
+		"--token-id", "automation",
+		"--secret", "${PDM_TOKEN}",
+	)
+	require.NoError(t, err)
+
+	saved := reloadCfg(t, path)
+	require.Equal(t, config.ProductPDM, saved.Contexts["dcmgr"].Product)
+	require.Equal(t, 8443, saved.Contexts["dcmgr"].Port,
+		"add --product pdm without --port must default to 8443")
+
+	deps = makeDeps(t, path, saved)
+	out, err := run(t, deps, "", "show", "dcmgr")
+	require.NoError(t, err)
+	require.Contains(t, out, "pdm")
+	require.Contains(t, out, "8443")
+
+	_, err = run(t, deps, "", "select", "dcmgr")
+	require.NoError(t, err)
+	require.Equal(t, "dcmgr", reloadCfg(t, path).CurrentContext)
+}

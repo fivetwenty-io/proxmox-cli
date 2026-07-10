@@ -3,6 +3,7 @@ package context
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,8 +12,18 @@ import (
 	"github.com/fivetwenty-io/pmx-cli/internal/output"
 )
 
-// newLsCmd builds `pmx context ls` (alias: list).
+// lsFlags holds the raw flag values for `pmx context ls`.
+type lsFlags struct {
+	product string
+}
+
+// newLsCmd builds `pmx context ls [--product <p>]` (alias: list).
+// Under a persona binary, rows whose product differs from the persona are
+// marked "(mismatch)" in the table PRODUCT column; json/yaml raw entries
+// always carry the plain product value.
 func newLsCmd() *cobra.Command {
+	var f lsFlags
+
 	cmd := &cobra.Command{
 		Use:         "ls",
 		Aliases:     []string{"list"},
@@ -22,6 +33,13 @@ func newLsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
+
+			if f.product != "" && !config.IsValidProduct(f.product) {
+				return fmt.Errorf("--product must be one of: %s, got %q",
+					strings.Join(config.Products(), ", "), f.product)
+			}
+
+			persona := cli.PersonaOf(cmd)
 
 			// Collect and sort context names for deterministic output.
 			names := make([]string, 0)
@@ -53,6 +71,13 @@ func newLsCmd() *cobra.Command {
 				if ctx == nil {
 					continue
 				}
+				product := ctx.Product
+				if product == "" {
+					product = config.ProductPVE
+				}
+				if f.product != "" && product != f.product {
+					continue
+				}
 				active := n == cfg.CurrentContext
 				marker := ""
 				if active {
@@ -61,17 +86,20 @@ func newLsCmd() *cobra.Command {
 				displayName := fmt.Sprintf("%s%s", marker, n)
 				port := ctx.Port
 				if port == 0 {
-					port = 8006
+					port = config.DefaultPortForProduct(product)
 				}
-				product := ctx.Product
-				if product == "" {
-					product = config.ProductPVE
+				// Under a persona binary, flag rows targeting another product
+				// so an operator scanning the table sees which contexts this
+				// binary's commands will reject.
+				displayProduct := product
+				if persona != "pmx" && product != persona {
+					displayProduct = product + " (mismatch)"
 				}
 				rows = append(rows, []string{
 					displayName,
 					ctx.Host,
 					fmt.Sprintf("%d", port),
-					product,
+					displayProduct,
 					ctx.Auth.Type,
 					ctx.Auth.Username,
 					ctx.DefaultNode,
@@ -98,5 +126,10 @@ func newLsCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+
+	cmd.Flags().StringVar(&f.product, "product", "",
+		fmt.Sprintf("only list contexts targeting this product: %s", strings.Join(config.Products(), "|")))
+	_ = cmd.RegisterFlagCompletionFunc("product", cli.ProductCompletion)
+
 	return cmd
 }
