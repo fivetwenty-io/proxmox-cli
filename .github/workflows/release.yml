@@ -3,6 +3,7 @@ name: release
 # Publish a GitHub Release with cross-platform binaries whenever a
 # semver tag (v1.2.3) is pushed. GoReleaser builds the matrix, archives
 # each target, generates SHA256SUMS, and uploads everything to the release.
+# Tests must pass before anything ships.
 on:
   push:
     tags:
@@ -12,9 +13,35 @@ permissions:
   contents: write # required to create the GitHub Release and upload assets
 
 jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          check-latest: true
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test ./...
+
+      - name: Man generation smoke
+        run: go run ./cmd/docgen -out "${RUNNER_TEMP}/man" -version dev -date 1970-01-01
+
   goreleaser:
     name: goreleaser
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,3 +63,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pushes the Homebrew cask formula to fivetwenty-io/homebrew-tap;
+          # the default GITHUB_TOKEN cannot write to another repo. Optional —
+          # homebrew_casks.skip_upload degrades gracefully when this secret
+          # is unset (an empty env value evaluates falsy in the goreleaser
+          # template, so the tap push is skipped rather than failing).
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
