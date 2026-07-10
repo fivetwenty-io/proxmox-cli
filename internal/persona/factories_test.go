@@ -1,4 +1,4 @@
-package main
+package persona_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/pmx-cli/internal/persona"
 )
 
 func topNames(factories []cli.GroupFactory) map[string]bool {
@@ -18,12 +19,12 @@ func topNames(factories []cli.GroupFactory) map[string]bool {
 }
 
 func TestFactoriesFor_Personas(t *testing.T) {
-	pmx := topNames(factoriesFor("pmx"))
+	pmx := topNames(persona.Factories("pmx"))
 	require.True(t, pmx["pve"] && pmx["pbs"] && pmx["pdm"])
 	require.True(t, pmx["context"] && pmx["auth"] && pmx["version"] && pmx["ssh"] && pmx["api"])
 	require.False(t, pmx["node"], "pmx must not expose flat pve commands")
 
-	pve := topNames(factoriesFor("pve"))
+	pve := topNames(persona.Factories("pve"))
 	require.True(t, pve["node"] && pve["cluster"] && pve["qemu"])
 	require.True(t, pve["context"] && pve["version"] && pve["ssh"])
 	require.False(t, pve["pbs"] || pve["datastore"], "pve persona hides pbs")
@@ -33,7 +34,7 @@ func TestFactoriesFor_Personas(t *testing.T) {
 	require.False(t, pve["subscription"] || pve["resource"] || pve["auto-install"],
 		"pve persona hides pdm")
 
-	pbs := topNames(factoriesFor("pbs"))
+	pbs := topNames(persona.Factories("pbs"))
 	require.True(t, pbs["datastore"] && pbs["snapshot"])
 	require.True(t, pbs["context"] && pbs["version"] && pbs["ssh"])
 	// pbs legitimately has its own "node" command (PBS host administration),
@@ -56,7 +57,7 @@ func TestFactoriesFor_Personas(t *testing.T) {
 // under them), not the native pve/pbs persona trees, so "qemu"/"datastore"
 // only ever appear nested one level deeper.
 func TestFactoriesFor_PDM_Hoist(t *testing.T) {
-	pdm := topNames(factoriesFor("pdm"))
+	pdm := topNames(persona.Factories("pdm"))
 
 	for _, name := range []string{
 		"remote", "resource", "sdn", "ceph", "subscription", "user", "token",
@@ -89,7 +90,7 @@ func TestFactoriesFor_PDM_Hoist(t *testing.T) {
 func TestFactoriesFor_PDM_ProxiedGroupsContainNativeChildren(t *testing.T) {
 	root, cleanup := cli.NewRootCmd("pdm")
 	defer cleanup()
-	cli.AddGroups(root, &cli.Deps{}, factoriesFor("pdm"))
+	cli.AddGroups(root, &cli.Deps{}, persona.Factories("pdm"))
 
 	pveProxy, _, err := root.Find([]string{"pve"})
 	require.NoError(t, err)
