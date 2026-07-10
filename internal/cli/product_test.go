@@ -207,6 +207,61 @@ func TestBuildContextPDMClient_AcceptsPDMContext(t *testing.T) {
 	require.Equal(t, config.ProductPDM, ctx.Product)
 }
 
+// personaTestCmd returns a command mounted under a root named persona, with
+// stdin/stderr wired the way the client builders expect.
+func personaTestCmd(persona string) *cobra.Command {
+	root := &cobra.Command{Use: persona}
+	child := &cobra.Command{Use: "test"}
+	root.AddCommand(child)
+	child.SetIn(strings.NewReader(""))
+	child.SetErr(&bytes.Buffer{})
+	return child
+}
+
+func TestBuildContextClient_PersonaAwareAdvice(t *testing.T) {
+	t.Setenv("PMX_CONTEXT", "")
+	cfgPath := makeProductConfig(t)
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	_, _, err = cli.BuildContextClient(personaTestCmd("pve"), cfg, cfgPath, "pbs1", false, neverTTY)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "'pve context select <name>'",
+		"advice under the pve binary must use the pve prefix")
+	require.NotContains(t, err.Error(), "pmx context select")
+	require.Contains(t, err.Error(), "'pbs' binary",
+		"advice must point at the product binary for the context's own product")
+}
+
+func TestBuildContextPDMClient_PmxAdvice(t *testing.T) {
+	t.Setenv("PMX_CONTEXT", "")
+	cfgPath := makeProductConfig(t)
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	_, _, err = cli.BuildContextPDMClient(productTestCmd(), cfg, cfgPath, "pve1", false, neverTTY)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "'pmx context select <name>'")
+	require.Contains(t, err.Error(), "--product pdm")
+	require.Contains(t, err.Error(), "'pmx pve'",
+		"under plain pmx, advice points at the pmx product group for the context's product")
+}
+
+func TestBuildContextOptions_NoContext_PersonaPrefix(t *testing.T) {
+	t.Setenv("PMX_CONTEXT", "")
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{}))
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	_, _, err = cli.BuildContextClient(personaTestCmd("pbs"), cfg, cfgPath, "", false, neverTTY)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "'pbs context select'")
+}
+
 // ---------------------------------------------------------------------------
 // PersistentPreRunE product dispatch (ProductAnnotation)
 // ---------------------------------------------------------------------------

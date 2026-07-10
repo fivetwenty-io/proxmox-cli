@@ -557,16 +557,8 @@ func BuildContextClient(
 	switch ctx.Product {
 	case config.ProductPVE, "":
 		// ok
-	case config.ProductPBS:
-		return nil, nil, fmt.Errorf(
-			"context %q targets Proxmox Backup Server (product: %s); this command requires a PVE context — use 'pmx pbs' commands or select a PVE context",
-			contextName, config.ProductPBS,
-		)
-	case config.ProductPDM:
-		return nil, nil, fmt.Errorf(
-			"context %q targets Proxmox Datacenter Manager (product: %s); this command requires a PVE context — use 'pmx pdm' commands or select a PVE context",
-			contextName, config.ProductPDM,
-		)
+	case config.ProductPBS, config.ProductPDM:
+		return nil, nil, productMismatchError(cmd, contextName, ctx.Product, config.ProductPVE)
 	default:
 		return nil, nil, fmt.Errorf("unsupported product %q", ctx.Product)
 	}
@@ -594,10 +586,7 @@ func BuildContextPBSClient(
 	}
 
 	if ctx.Product != config.ProductPBS {
-		return nil, nil, fmt.Errorf(
-			"context %q targets %s (product: %s); this command requires a PBS context — create one with 'pmx context add --product %s'",
-			contextName, productDisplayName(ctx.Product), normalizedProduct(ctx.Product), config.ProductPBS,
-		)
+		return nil, nil, productMismatchError(cmd, contextName, ctx.Product, config.ProductPBS)
 	}
 
 	pc, err := apiclient.NewPBSClient(opts)
@@ -623,10 +612,7 @@ func BuildContextPDMClient(
 	}
 
 	if ctx.Product != config.ProductPDM {
-		return nil, nil, fmt.Errorf(
-			"context %q targets %s (product: %s); this command requires a PDM context — create one with 'pmx context add --product %s'",
-			contextName, productDisplayName(ctx.Product), normalizedProduct(ctx.Product), config.ProductPDM,
-		)
+		return nil, nil, productMismatchError(cmd, contextName, ctx.Product, config.ProductPDM)
 	}
 
 	dc, err := apiclient.NewPDMClient(opts)
@@ -637,9 +623,37 @@ func BuildContextPDMClient(
 	return dc, ctx, nil
 }
 
-// productDisplayName returns the human-readable product name for an error
-// message, treating "" (backward-compat configs) the same as ProductPVE.
-func productDisplayName(product string) string {
+// productMismatchError builds the cross-product guard error for a command
+// that requires the `required` product but resolved a context targeting
+// ctxProduct. The advice is persona-aware: it composes commands with
+// CommandPrefix so it never suggests a command the current binary does not
+// provide, and it points at the right home for the context's own product
+// (the product binary under a persona, the `pmx <product>` group otherwise).
+func productMismatchError(cmd *cobra.Command, contextName, ctxProduct, required string) error {
+	prefix := CommandPrefix(cmd)
+	ctxProd := normalizedProduct(ctxProduct)
+
+	advice := fmt.Sprintf(
+		"select a %s context with '%s context select <name>' or create one with '%s context add <name> --product %s ...'",
+		strings.ToUpper(required), prefix, prefix, required,
+	)
+	if PersonaOf(cmd) == "pmx" {
+		advice += fmt.Sprintf("; %s commands for this context live under 'pmx %s'",
+			ProductDisplayName(ctxProduct), ctxProd)
+	} else {
+		advice += fmt.Sprintf("; or use the '%s' binary for %s commands",
+			ctxProd, ProductDisplayName(ctxProduct))
+	}
+
+	return fmt.Errorf(
+		"context %q targets %s (product: %s); this command requires a %s context — %s",
+		contextName, ProductDisplayName(ctxProduct), ctxProd, strings.ToUpper(required), advice,
+	)
+}
+
+// ProductDisplayName returns the human-readable product name for user-facing
+// messages, treating "" (backward-compat configs) the same as ProductPVE.
+func ProductDisplayName(product string) string {
 	switch product {
 	case config.ProductPBS:
 		return "Proxmox Backup Server"
@@ -725,9 +739,10 @@ func buildContextOptions(
 ) (pve.Options, *config.Context, string, error) {
 	contextName := config.Resolve(contextFlag, "PMX_CONTEXT", cfg.CurrentContext, "")
 	if contextName == "" {
+		prefix := CommandPrefix(cmd)
 		return pve.Options{}, nil, "", fmt.Errorf(
-			"no context specified: use --context/-c, set $PMX_CONTEXT, or run 'pmx context select' (config: %s)",
-			configPath,
+			"no context specified: use --context/-c, set $PMX_CONTEXT, or run '%s context select' (config: %s)",
+			prefix, configPath,
 		)
 	}
 
