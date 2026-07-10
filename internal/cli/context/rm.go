@@ -99,5 +99,7 @@ func newRmCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false,
 		"confirm destructive removal without prompting")
 
+	cmd.ValidArgsFunction = cli.FirstArgContextNames
+
 	return cmd
 }

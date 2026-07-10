@@ -93,6 +93,8 @@ func newCopyCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the dst name")
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the copied context the current context")
 
+	cmd.ValidArgsFunction = cli.FirstArgContextNames
+
 	return cmd
 }
 

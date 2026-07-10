@@ -159,5 +159,6 @@ Note: config.Save rewrites the config file and does not preserve comments.`,
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.ValidArgsFunction = cli.FirstArgContextNames
 	return cmd
 }

@@ -75,6 +75,7 @@ func newSelectCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
+	cmd.ValidArgsFunction = cli.FirstArgContextNames
 	return cmd
 }
 

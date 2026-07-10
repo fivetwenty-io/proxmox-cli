@@ -215,6 +215,7 @@ func newAddCmd() *cobra.Command {
 			strings.Join(config.Products(), "|"), config.ProductPBS))
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the same name")
+	_ = cmd.RegisterFlagCompletionFunc("product", cli.ProductCompletion)
 
 	cli.MustMarkRequired(cmd, "host")
 

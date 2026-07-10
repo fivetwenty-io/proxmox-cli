@@ -283,6 +283,7 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 
 	root.PersistentFlags().StringVarP(&pf.context, "context", "c", "",
 		"context name override (overrides $PMX_CONTEXT and current-context in config)")
+	_ = root.RegisterFlagCompletionFunc("context", ContextNamesCompletion)
 
 	root.PersistentFlags().StringVar(&pf.node, "node",
 		os.Getenv("PMX_NODE"),

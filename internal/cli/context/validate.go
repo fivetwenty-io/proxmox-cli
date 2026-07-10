@@ -157,5 +157,7 @@ Exit status: 0 if all validated contexts are valid; 1 if any are invalid.`,
 
 	cmd.Flags().BoolVar(&f.all, "all", false, "validate all contexts in the config")
 
+	cmd.ValidArgsFunction = cli.FirstArgContextNames
+
 	return cmd
 }
