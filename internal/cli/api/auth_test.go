@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
+	"github.com/fivetwenty-io/pmx-cli/internal/cli"
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
 )
 
@@ -22,12 +24,15 @@ import (
 // testCmdWithConfigPath returns a bare *cobra.Command carrying a --config
 // flag set to path, mirroring the flag the root command registers, with
 // stdin/stderr wired so contextOptions has somewhere to read/write a TOFU
-// prompt from/to if it ever activates during a test.
+// prompt from/to if it ever activates during a test. It also carries an empty
+// *cli.Deps in its context (cli.GetDeps requires this — see
+// newAuthClientForContext, which reads Deps.Insecure before any other work).
 func testCmdWithConfigPath(path, stdin string, stderr *bytes.Buffer) *cobra.Command {
 	cmd := &cobra.Command{Use: "test"}
 	cmd.Flags().String("config", path, "")
 	cmd.SetIn(strings.NewReader(stdin))
 	cmd.SetErr(stderr)
+	cmd.SetContext(cli.WithDeps(context.Background(), &cli.Deps{}))
 	return cmd
 }
 
@@ -184,39 +189,29 @@ func TestIsInteractiveInput_NonFileReader_ReturnsFalse(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// requirePVEContext — product guard on the auth client builders
+// oidcRequiresPVE — product guard on the OIDC client builder only
+// (newAuthClientForContext, used by login/refresh/logout, supports PBS and
+// PDM directly; see api_test.go's TestAuthLogin_PBSContext_Success and
+// TestAuthLogin_PDMContext_Success for the positive-path coverage of that.)
 // ---------------------------------------------------------------------------
 
-func TestRequirePVEContext_PBSProduct_Errors(t *testing.T) {
+func TestOidcRequiresPVE_PBSProduct_Errors(t *testing.T) {
 	ctx := sampleAuthContext(false, false)
 	ctx.Product = config.ProductPBS
 
-	err := requirePVEContext(ctx, "backup1")
+	err := oidcRequiresPVE(ctx, "backup1")
 
-	require.Error(t, err, "auth commands must reject PBS contexts")
+	require.Error(t, err, "OIDC login must reject PBS contexts until Task 5 wires it up")
 	require.Contains(t, err.Error(), "backup1", "error must name the offending context")
 	require.Contains(t, err.Error(), "Proxmox Backup Server")
 }
 
-func TestRequirePVEContext_PVEAndEmptyProduct_Allowed(t *testing.T) {
+func TestOidcRequiresPVE_PVEAndEmptyProduct_Allowed(t *testing.T) {
 	ctx := sampleAuthContext(false, false)
-	require.NoError(t, requirePVEContext(ctx, "prod"), "empty product means PVE")
+	require.NoError(t, oidcRequiresPVE(ctx, "prod"), "empty product means PVE")
 
 	ctx.Product = config.ProductPVE
-	require.NoError(t, requirePVEContext(ctx, "prod"))
-}
-
-func TestClientForContext_RejectsPBSContext(t *testing.T) {
-	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
-	ctx := sampleAuthContext(false, false)
-	ctx.Product = config.ProductPBS
-
-	ac, err := clientForContext(cmd, ctx, "backup1", "admin@pam", "pam", "secretpw", "", "")
-
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Proxmox Backup Server")
-	require.Nil(t, ac)
+	require.NoError(t, oidcRequiresPVE(ctx, "prod"))
 }
 
 func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
@@ -232,32 +227,19 @@ func TestBuildClientForOIDC_RejectsPBSContext(t *testing.T) {
 	require.Nil(t, ac)
 }
 
-// TestRequirePVEContext_PDMProduct_Errors mirrors
-// TestRequirePVEContext_PBSProduct_Errors for Proxmox Datacenter Manager: like
-// PBS, a PDM context's ticket-based login is not wired yet, so requirePVEContext
-// must reject it with guidance pointing at 'auth set-token'.
-func TestRequirePVEContext_PDMProduct_Errors(t *testing.T) {
+// TestOidcRequiresPVE_PDMProduct_Errors mirrors
+// TestOidcRequiresPVE_PBSProduct_Errors for Proxmox Datacenter Manager: like
+// PBS, a PDM context's OIDC login is not wired yet, so oidcRequiresPVE must
+// reject it.
+func TestOidcRequiresPVE_PDMProduct_Errors(t *testing.T) {
 	ctx := sampleAuthContext(false, false)
 	ctx.Product = config.ProductPDM
 
-	err := requirePVEContext(ctx, "dc1")
+	err := oidcRequiresPVE(ctx, "dc1")
 
-	require.Error(t, err, "auth commands must reject PDM contexts")
+	require.Error(t, err, "OIDC login must reject PDM contexts until Task 5 wires it up")
 	require.Contains(t, err.Error(), "dc1", "error must name the offending context")
 	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
-}
-
-func TestClientForContext_RejectsPDMContext(t *testing.T) {
-	var stderr bytes.Buffer
-	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
-	ctx := sampleAuthContext(false, false)
-	ctx.Product = config.ProductPDM
-
-	ac, err := clientForContext(cmd, ctx, "dc1", "admin@pam", "pam", "secretpw", "", "")
-
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
-	require.Nil(t, ac)
 }
 
 func TestBuildClientForOIDC_RejectsPDMContext(t *testing.T) {
@@ -270,5 +252,56 @@ func TestBuildClientForOIDC_RejectsPDMContext(t *testing.T) {
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Proxmox Datacenter Manager")
+	require.Nil(t, ac)
+}
+
+// ---------------------------------------------------------------------------
+// newAuthClientForContext — product dispatch
+// ---------------------------------------------------------------------------
+
+// TestNewAuthClientForContext_DispatchesByProduct verifies that
+// newAuthClientForContext wraps the constructed client in the adapter
+// matching ctx.Product, for every supported product plus the empty-Product
+// (pre-Product-field config) fallback to PVE. No network call is made:
+// client construction alone is enough to prove the switch dispatched
+// correctly.
+func TestNewAuthClientForContext_DispatchesByProduct(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
+
+	cases := []struct {
+		name    string
+		product string
+		want    any
+	}{
+		{"empty product defaults to PVE", "", &pveAuthClient{}},
+		{"pve", config.ProductPVE, &pveAuthClient{}},
+		{"pbs", config.ProductPBS, &pbsAuthClient{}},
+		{"pdm", config.ProductPDM, &pdmAuthClient{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := sampleAuthContext(false, false)
+			ctx.Product = tc.product
+
+			ac, err := newAuthClientForContext(cmd, ctx, "prod", "admin@pam", "pam", "secretpw", "", "", "")
+			require.NoError(t, err)
+			require.IsType(t, tc.want, ac)
+		})
+	}
+}
+
+// TestNewAuthClientForContext_UnsupportedProduct_Errors verifies the default
+// switch arm rejects a product string that is neither pve/pbs/pdm nor empty.
+func TestNewAuthClientForContext_UnsupportedProduct_Errors(t *testing.T) {
+	var stderr bytes.Buffer
+	cmd := testCmdWithConfigPath("/home/user/.config/pmx/config.yml", "", &stderr)
+	ctx := sampleAuthContext(false, false)
+	ctx.Product = "bogus"
+
+	ac, err := newAuthClientForContext(cmd, ctx, "prod", "admin@pam", "pam", "secretpw", "", "", "")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bogus")
 	require.Nil(t, ac)
 }

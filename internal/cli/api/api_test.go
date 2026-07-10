@@ -123,6 +123,26 @@ func fakeHostPort(t *testing.T, f *testhelper.FakePVE) (string, int) {
 	return host, port
 }
 
+// fakePBSHostPort is fakeHostPort for a FakePBS server.
+func fakePBSHostPort(t *testing.T, f *testhelper.FakePBS) (string, int) {
+	t.Helper()
+	host, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+	return host, port
+}
+
+// fakePDMHostPort is fakeHostPort for a FakePDM server.
+func fakePDMHostPort(t *testing.T, f *testhelper.FakePDM) (string, int) {
+	t.Helper()
+	host, portStr, err := net.SplitHostPort(f.Server.Listener.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+	return host, port
+}
+
 // ---------------------------------------------------------------------------
 // auth login
 // ---------------------------------------------------------------------------
@@ -311,6 +331,159 @@ func TestAuthLogin_GlobalInsecureFlag_WarnsAndSucceeds(t *testing.T) {
 	require.Contains(t, out, "admin@pam")
 }
 
+// TestAuthLogin_PBSContext_Success verifies that 'auth login' against a
+// product: pbs context succeeds, folding the realm into the username (PBS's
+// CreateTicketParams has no Realm field, unlike PVE's) rather than sending it
+// as a separate parameter.
+func TestAuthLogin_PBSContext_Success(t *testing.T) {
+	f := testhelper.NewFakePBS(t)
+
+	gotBody := map[string]string{}
+	f.HandleFunc("POST /api2/json/access/ticket", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotBody["username"] = r.PostFormValue("username")
+		gotBody["password"] = r.PostFormValue("password")
+		testhelper.WriteData(w, map[string]any{
+			"username":            "root@pam",
+			"ticket":              "PBS:root@pam:DEADBEEF",
+			"CSRFPreventionToken": "csrf-token-xyz",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePBSHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "backup1",
+		Contexts: map[string]*config.Context{
+			"backup1": {
+				Product:  config.ProductPBS,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "root",
+					Secret:   "secretpw",
+				},
+				TLS: config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "login", "--context", "backup1", "--password", "secretpw")
+	require.NoError(t, err)
+	require.Contains(t, out, "root@pam")
+
+	require.Equal(t, "root@pam", gotBody["username"], "PBS login must fold the realm into the username")
+	require.Equal(t, "secretpw", gotBody["password"])
+
+	saved := loadCfg(t, path)
+	require.NotNil(t, saved.Contexts["backup1"].Auth.Session)
+	require.Equal(t, "PBS:root@pam:DEADBEEF", saved.Contexts["backup1"].Auth.Session.Ticket)
+	require.Equal(t, "csrf-token-xyz", saved.Contexts["backup1"].Auth.Session.CSRF)
+}
+
+// TestAuthLogin_PDMContext_Success mirrors TestAuthLogin_PBSContext_Success
+// for Proxmox Datacenter Manager.
+func TestAuthLogin_PDMContext_Success(t *testing.T) {
+	f := testhelper.NewFakePDM(t)
+
+	gotBody := map[string]string{}
+	f.HandleFunc("POST /api2/json/access/ticket", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotBody["username"] = r.PostFormValue("username")
+		gotBody["password"] = r.PostFormValue("password")
+		testhelper.WriteData(w, map[string]any{
+			"username":            "root@pam",
+			"ticket":              "PDM:root@pam:DEADBEEF",
+			"CSRFPreventionToken": "csrf-token-xyz",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePDMHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "dc1",
+		Contexts: map[string]*config.Context{
+			"dc1": {
+				Product:  config.ProductPDM,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "root",
+					Secret:   "secretpw",
+				},
+				TLS: config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "login", "--context", "dc1", "--password", "secretpw")
+	require.NoError(t, err)
+	require.Contains(t, out, "root@pam")
+
+	require.Equal(t, "root@pam", gotBody["username"], "PDM login must fold the realm into the username")
+
+	saved := loadCfg(t, path)
+	require.NotNil(t, saved.Contexts["dc1"].Auth.Session)
+	require.Equal(t, "PDM:root@pam:DEADBEEF", saved.Contexts["dc1"].Auth.Session.Ticket)
+	require.Equal(t, "csrf-token-xyz", saved.Contexts["dc1"].Auth.Session.CSRF)
+}
+
+// TestAuthLogin_PBSContext_OTPRejected verifies that --otp is rejected before
+// any request is sent, since PBS's CreateTicketParams has no Otp field; PBS
+// and PDM use --tfa-challenge for second-factor login instead.
+func TestAuthLogin_PBSContext_OTPRejected(t *testing.T) {
+	f := testhelper.NewFakePBS(t)
+	f.HandleFunc("POST /api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("the ticket endpoint must not be called when --otp is rejected up front")
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePBSHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "backup1",
+		Contexts: map[string]*config.Context{
+			"backup1": {
+				Product:  config.ProductPBS,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "root",
+					Secret:   "pw",
+				},
+				TLS: config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	_, err := run(t, deps, path, "auth", "login", "--context", "backup1", "--password", "pw", "--otp", "123456")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--otp is not supported")
+}
+
 // ---------------------------------------------------------------------------
 // auth whoami
 // ---------------------------------------------------------------------------
@@ -420,6 +593,57 @@ func TestAuthLogout_WipesSession(t *testing.T) {
 
 	saved := loadCfg(t, path)
 	require.Nil(t, saved.Contexts["lab"].Auth.Session, "session must be wiped on logout")
+}
+
+// TestAuthLogout_PDMContext_WipesSession verifies that 'auth logout' with a
+// live session on a PDM context calls the server's DELETE /access/ticket and
+// clears the session from config, mirroring TestAuthLogout_WipesSession for
+// PVE.
+func TestAuthLogout_PDMContext_WipesSession(t *testing.T) {
+	f := testhelper.NewFakePDM(t)
+	logoutCalled := false
+	f.HandleFunc("DELETE /api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		logoutCalled = true
+		testhelper.WriteData(w, map[string]any{})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePDMHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "dc1",
+		Contexts: map[string]*config.Context{
+			"dc1": {
+				Product:  config.ProductPDM,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "root",
+					Secret:   "pw",
+					Session: &config.Session{
+						Ticket: "PDM:root@pam:OLD",
+						CSRF:   "old-csrf",
+					},
+				},
+				TLS: config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "logout", "--context", "dc1")
+	require.NoError(t, err)
+	require.True(t, logoutCalled, "logout must call DELETE /access/ticket to invalidate the server ticket")
+	require.Contains(t, out, "dc1")
+
+	saved := loadCfg(t, path)
+	require.Nil(t, saved.Contexts["dc1"].Auth.Session, "session must be wiped on logout")
 }
 
 func TestAuthLogout_NoSession(t *testing.T) {
@@ -532,6 +756,53 @@ func TestAuthRefresh_Success(t *testing.T) {
 	saved := loadCfg(t, path)
 	require.NotNil(t, saved.Contexts["lab"].Auth.Session)
 	require.Equal(t, "PVE:admin@pam:NEW", saved.Contexts["lab"].Auth.Session.Ticket)
+}
+
+// TestAuthRefresh_PBSContext_Success verifies that 'auth refresh' works for a
+// PBS password context, obtaining a fresh ticket the same way login does.
+func TestAuthRefresh_PBSContext_Success(t *testing.T) {
+	f := testhelper.NewFakePBS(t)
+	f.HandleFunc("POST /api2/json/access/ticket", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"username":            "root@pam",
+			"ticket":              "PBS:root@pam:NEW",
+			"CSRFPreventionToken": "new-csrf",
+		})
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	host, port := fakePBSHostPort(t, f)
+	cfg := &config.Config{
+		CurrentContext: "backup1",
+		Contexts: map[string]*config.Context{
+			"backup1": {
+				Product:  config.ProductPBS,
+				Host:     host,
+				Port:     port,
+				Protocol: "http",
+				Realm:    "pam",
+				Auth: config.AuthBlock{
+					Type:     "password",
+					Username: "root",
+					Secret:   "pw",
+				},
+				TLS: config.TLSBlock{Insecure: true},
+			},
+		},
+	}
+	writeConfig(t, path, cfg)
+
+	deps := newTestDeps(t)
+	deps.Cfg = loadCfg(t, path)
+
+	out, err := run(t, deps, path, "auth", "refresh", "--context", "backup1")
+	require.NoError(t, err)
+	require.Contains(t, out, "root@pam")
+
+	saved := loadCfg(t, path)
+	require.NotNil(t, saved.Contexts["backup1"].Auth.Session)
+	require.Equal(t, "PBS:root@pam:NEW", saved.Contexts["backup1"].Auth.Session.Ticket)
 }
 
 func TestAuthRefresh_TokenContextRejected(t *testing.T) {

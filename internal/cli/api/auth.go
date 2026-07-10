@@ -32,12 +32,11 @@ func newAuthCmd() *cobra.Command {
 		Use:   "auth",
 		Short: "Authenticate against a context",
 		Long: "Manage local credentials and session state for a context. status, set-token, " +
-			"set-password, and logout work with any context, Proxmox VE (PVE), Proxmox Backup " +
-			"Server (PBS), or Proxmox Datacenter Manager (PDM). login and refresh, which negotiate a session ticket with the server, " +
-			"currently support PVE contexts only; run 'auth login --help' for details on this " +
-			"limitation. whoami, which queries the server to verify credentials, also currently " +
-			"requires a PVE context; for local credential info on a PBS or PDM context use 'auth status' " +
-			"or 'context show'.",
+			"set-password, login, refresh, logout, and whoami all work with any context, Proxmox VE " +
+			"(PVE), Proxmox Backup Server (PBS), or Proxmox Datacenter Manager (PDM). login and " +
+			"refresh negotiate a session ticket with the server; --otp (one-time password for " +
+			"TOTP-based two-factor authentication) is PVE-only — PBS and PDM contexts use " +
+			"--tfa-challenge instead. whoami queries the server to verify the stored credentials.",
 	}
 	cmd.AddCommand(
 		newAuthLoginCmd(),
@@ -72,36 +71,27 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 	return c, nil
 }
 
-// requirePVEContext returns an error when ctx targets a single-host product
-// (Proxmox Backup Server or Proxmox Datacenter Manager) rather than Proxmox
-// VE. The auth commands drive PVE's ticket endpoints through a PVE-flavored
-// client (PVEAuthCookie / PVECSRFPreventionToken header names); PBS/PDM
-// session auth is not wired yet, so failing fast here beats a confusing
-// server-side authentication error. Called by every auth path that opens a
-// connection (clientForContext and buildClientForOIDC — the only two places
-// this package constructs an API client).
-//
-// PBS does expose a comparable ticket endpoint (pkg/pbs/access.Service's
-// CreateTicket, POST /access/ticket), and PDM likewise, but their
-// request/response shapes and client wiring (PBSAPIToken/PBSAuthCookie or
-// PDMAPIToken/PDMAuthCookie header names, separate apiclient.PBSClient /
-// apiclient.PDMClient constructions) differ enough from PVE's that
-// supporting them is tracked as follow-up work rather than bolted on here;
-// see newAuthLoginCmd's Long text.
-func requirePVEContext(ctx *config.Context, contextName string) error {
+// oidcRequiresPVE returns an error when ctx targets Proxmox Backup Server or
+// Proxmox Datacenter Manager: OIDC login (--oidc) is not wired for those
+// products yet (tracked as follow-up work), so buildClientForOIDC fails fast
+// here rather than producing a confusing server-side authentication error.
+// Ticket-based login/refresh/logout support PBS and PDM contexts directly via
+// newAuthClientForContext (see authproducts.go); only the OIDC path retains
+// this PVE-only guard.
+func oidcRequiresPVE(ctx *config.Context, contextName string) error {
 	switch ctx.Product {
 	case config.ProductPVE, "":
 		return nil
 	case config.ProductPBS:
 		return fmt.Errorf(
-			"context %q targets Proxmox Backup Server (product: pbs); 'auth login'/'auth refresh' "+
-				"support only PVE contexts today; use 'auth set-token' to configure PBS credentials instead",
+			"context %q targets Proxmox Backup Server (product: pbs); 'auth login --oidc' "+
+				"is only wired for PVE contexts today",
 			contextName,
 		)
 	case config.ProductPDM:
 		return fmt.Errorf(
-			"context %q targets Proxmox Datacenter Manager (product: pdm); 'auth login'/'auth refresh' "+
-				"support only PVE contexts today; use 'auth set-token' to configure PDM credentials instead",
+			"context %q targets Proxmox Datacenter Manager (product: pdm); 'auth login --oidc' "+
+				"is only wired for PVE contexts today",
 			contextName,
 		)
 	default:
@@ -131,15 +121,12 @@ func newAuthLoginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Obtain a session ticket and store it in the config",
 		Long: "Authenticate against a context's realm (password, TOTP/two-factor, or OpenID " +
-			"Connect via --oidc) and store the resulting session ticket in the config.\n\n" +
-			"Limitation: only Proxmox VE (PVE) contexts are supported. A context with " +
-			"product: pbs or product: pdm is rejected. Proxmox Backup Server and Proxmox " +
-			"Datacenter Manager expose comparable ticket endpoints (POST /access/ticket), but " +
-			"their request/response shapes and client wiring (PBSAPIToken/PBSAuthCookie or " +
-			"PDMAPIToken/PDMAuthCookie headers, separate client construction paths) differ " +
-			"enough from PVE's that wiring them into this command is tracked as follow-up work " +
-			"rather than done here. Until then, configure PBS and PDM contexts with " +
-			"'auth set-token' instead.",
+			"Connect via --oidc) and store the resulting session ticket in the config. " +
+			"Works with Proxmox VE (PVE), Proxmox Backup Server (PBS), and Proxmox Datacenter " +
+			"Manager (PDM) contexts.\n\n" +
+			"--otp (one-time password for TOTP-based two-factor authentication) is PVE-only; " +
+			"PBS and PDM contexts use --tfa-challenge for second-factor login instead. " +
+			"--oidc is currently wired for PVE contexts only.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -189,7 +176,7 @@ func newAuthLoginCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
-	cmd.Flags().StringVar(&username, "username", "", "PVE username (defaults to context's username)")
+	cmd.Flags().StringVar(&username, "username", "", "username (defaults to context's username)")
 	cmd.Flags().StringVar(&realm, "realm", "", "authentication realm (defaults to context's realm)")
 	cmd.Flags().StringVar(&password, "password", "", "password (defaults to the context's resolved secret)")
 	cmd.Flags().StringVar(&otp, "otp", "", "one-time password for TOTP-based two-factor authentication")
@@ -337,7 +324,7 @@ func performOIDCLogin(
 	}
 
 	// Persist the session identically to password login.
-	storeSession(ctx, &ticketResp)
+	storeSession(ctx, ticketResultFromPVE(&ticketResp))
 	if err := config.SaveForce(configPath(cmd), cfg); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
@@ -701,129 +688,83 @@ type ticketOptions struct {
 	verifyPrivs  string // ticket-verification: privileges to check on verifyPath
 }
 
-// createTicket builds a password-authenticated client for ctx and requests a
-// session ticket using the given user, realm, password, and optional 2FA /
-// ticket-verification inputs. contextName is the resolved context name (see
-// resolveContextName), used only to derive the per-context TOFU fingerprint
-// cache path (see contextOptions).
+// createTicket builds the product-appropriate auth client for ctx and
+// requests a session ticket using the given user, realm, password, and
+// optional 2FA / ticket-verification inputs. contextName is the resolved
+// context name (see resolveContextName), used only to derive the per-context
+// TOFU fingerprint cache path (see contextOptions).
 func createTicket(
 	cmd *cobra.Command,
 	ctx *config.Context,
 	contextName, user, realm, password string,
 	opts ticketOptions,
-) (*access.CreateTicketResponse, error) {
-	ac, err := clientForContext(cmd, ctx, contextName, user, realm, password, "", "")
+) (*ticketResult, error) {
+	ac, err := newAuthClientForContext(cmd, ctx, contextName, user, realm, password, "", "", "")
 	if err != nil {
 		return nil, err
 	}
 
-	params := &access.CreateTicketParams{
-		Username: user,
-		Password: password,
-	}
-	if realm != "" {
-		r := realm
-		params.Realm = &r
-	}
-	if opts.otp != "" {
-		params.Otp = &opts.otp
-	}
-	if opts.tfaChallenge != "" {
-		params.TfaChallenge = &opts.tfaChallenge
-	}
-	if opts.verifyPath != "" {
-		params.Path = &opts.verifyPath
-	}
-	if opts.verifyPrivs != "" {
-		params.Privs = &opts.verifyPrivs
-	}
-
-	resp, err := ac.Access.CreateTicket(cmd.Context(), params)
+	result, err := ac.CreateTicket(cmd.Context(), user, realm, password, opts)
 	if err != nil {
 		return nil, fmt.Errorf("login to %s: %w", ctx.Host, err)
 	}
-	return resp, nil
+	return result, nil
 }
 
 // serverLogout builds a ticket-authenticated client and invalidates the session
 // server-side. The session's CSRF token is supplied so the logout (a non-GET
-// request) carries the PVECSRFPreventionToken header Proxmox requires.
+// request) carries the required CSRF-prevention header.
 // contextName is the resolved context name (see resolveContextName), used only
 // to derive the per-context TOFU fingerprint cache path (see contextOptions).
 func serverLogout(cmd *cobra.Command, ctx *config.Context, contextName string) error {
-	ac, err := clientForContext(cmd, ctx, contextName, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
+	ac, err := newAuthClientForContext(cmd, ctx, contextName, "", "", "", "",
+		ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
 	if err != nil {
 		return err
 	}
-	if err := ac.Raw.Logout(); err != nil {
+	if err := ac.Logout(); err != nil {
 		return fmt.Errorf("logout from %s: %w", ctx.Host, err)
 	}
 	return nil
 }
 
-// buildClientForOIDC constructs an API client suitable for calling the two public
-// OIDC endpoints (POST /access/openid/auth-url and POST /access/openid/login).
-// Both endpoints are marked noauthentication by PVE, meaning the server does not
-// validate credentials on those paths. However, the proxmox-apiclient-go options
-// validator requires at least one credential to be set, so:
+// buildClientForOIDC constructs a PVE API client suitable for calling the two
+// public OIDC endpoints (POST /access/openid/auth-url and
+// POST /access/openid/login). Both endpoints are marked noauthentication by
+// PVE, meaning the server does not validate credentials on those paths.
+// However, the proxmox-apiclient-go options validator requires at least one
+// credential to be set, so:
 //   - If the context carries a live session ticket, that ticket is used.
 //   - Otherwise a placeholder API token is constructed to pass validation; the
 //     token value is never checked by the server on these public endpoints.
+//
+// OIDC login is only wired for PVE contexts today (see oidcRequiresPVE);
+// PBS/PDM OIDC support is tracked as follow-up work.
 //
 // contextName is the resolved context name (see resolveContextName); it is used
 // only to derive the per-context TOFU fingerprint cache path (see
 // contextOptions) and has no bearing on which credential is selected.
 func buildClientForOIDC(cmd *cobra.Command, ctx *config.Context, contextName string) (*apiclient.APIClient, error) {
-	err := requirePVEContext(ctx, contextName)
-	if err != nil {
+	if err := oidcRequiresPVE(ctx, contextName); err != nil {
 		return nil, err
 	}
-	if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
-		return clientForContext(cmd, ctx, contextName, "", "", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
-	}
-	// No live session: build with a placeholder API token.
-	flagInsecure := cli.GetDeps(cmd).Insecure
-	if flagInsecure || ctx.TLS.Insecure {
-		cli.WarnInsecureTLS(cmd.ErrOrStderr())
-	}
-	opts := contextOptions(cmd, ctx, flagInsecure, contextName, "", "",
-		"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
-		"", "", "")
-	ac, err := apiclient.NewAPIClient(opts)
-	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
-	}
-	return ac, nil
-}
 
-// clientForContext constructs an APIClient for the given context. Exactly one of
-// (user+password) or (ticket+csrf) should be supplied so the underlying client
-// has valid credentials. The csrf token is required alongside a ticket for
-// non-GET requests under session authentication.
-//
-// contextName is the resolved context name (see resolveContextName); it is used
-// only to derive the per-context TOFU fingerprint cache path (see
-// contextOptions).
-func clientForContext(
-	cmd *cobra.Command,
-	ctx *config.Context,
-	contextName, user, realm, password, ticket, csrf string,
-) (*apiclient.APIClient, error) {
-	err := requirePVEContext(ctx, contextName)
-	if err != nil {
-		return nil, err
-	}
 	flagInsecure := cli.GetDeps(cmd).Insecure
 	if flagInsecure || ctx.TLS.Insecure {
 		cli.WarnInsecureTLS(cmd.ErrOrStderr())
 	}
-	rlm := realm
-	if rlm == "" {
-		rlm = ctx.Realm
+
+	var opts pve.Options
+	if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
+		opts = contextOptions(cmd, ctx, flagInsecure, contextName, "", "",
+			"", "", ctx.Auth.Session.Ticket, ctx.Auth.Session.CSRF)
+	} else {
+		// No live session: build with a placeholder API token.
+		opts = contextOptions(cmd, ctx, flagInsecure, contextName, "", "",
+			"dummy@pam!oidc=00000000-0000-0000-0000-000000000000", // placeholder: satisfies validation only
+			"", "", "")
 	}
-	opts := contextOptions(cmd, ctx, flagInsecure, contextName, user, rlm,
-		"", // no token: login/logout use ticket or password
-		password, ticket, csrf)
+
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
@@ -903,18 +844,13 @@ func isInteractiveInput(in io.Reader) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
-// storeSession records the ticket, CSRF token, and expiry from resp on ctx.
-func storeSession(ctx *config.Context, resp *access.CreateTicketResponse) {
-	session := &config.Session{
+// storeSession records the ticket, CSRF token, and expiry from result on ctx.
+func storeSession(ctx *config.Context, result *ticketResult) {
+	ctx.Auth.Session = &config.Session{
 		ExpiresAt: time.Now().Add(ticketLifetime).Unix(),
+		Ticket:    result.Ticket,
+		CSRF:      result.CSRF,
 	}
-	if resp.Ticket != nil {
-		session.Ticket = *resp.Ticket
-	}
-	if resp.CSRFPreventionToken != nil {
-		session.CSRF = *resp.CSRFPreventionToken
-	}
-	ctx.Auth.Session = session
 }
 
 // resolvePassword returns the explicit password if provided, otherwise resolves
