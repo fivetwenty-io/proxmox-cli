@@ -101,7 +101,7 @@ func newPrefixListCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN prefix list %q created (run `pmx sdn apply` to commit).", id)}
+				"SDN prefix list %q created (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -167,7 +167,7 @@ func newPrefixListSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN prefix list %q updated (run `pmx sdn apply` to commit).", id)}
+				"SDN prefix list %q updated (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -206,7 +206,7 @@ func newPrefixListDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN prefix list %q deleted (run `pmx sdn apply` to commit).", id)}
+				"SDN prefix list %q deleted (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -289,7 +289,7 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 				return fmt.Errorf("add entry to SDN prefix list %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry added to SDN prefix list %q (run `pmx sdn apply` to commit).", id)}
+				"Entry added to SDN prefix list %q (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -377,7 +377,7 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 				return fmt.Errorf("update entry %q of SDN prefix list %q: %w", urlSeq, id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN prefix list %q updated (run `pmx sdn apply` to commit).", urlSeq, id)}
+				"Entry %q of SDN prefix list %q updated (run `pmx pve sdn apply` to commit).", urlSeq, id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -421,7 +421,7 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete entry %q of SDN prefix list %q: %w", seq, id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN prefix list %q deleted (run `pmx sdn apply` to commit).", seq, id)}
+				"Entry %q of SDN prefix list %q deleted (run `pmx pve sdn apply` to commit).", seq, id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -612,7 +612,7 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 				return fmt.Errorf("add entry to SDN route map %q: %w", routeMap, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry added to SDN route map %q (run `pmx sdn apply` to commit).", routeMap)}
+				"Entry added to SDN route map %q (run `pmx pve sdn apply` to commit).", routeMap)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -701,7 +701,7 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 				return fmt.Errorf("update entry %q of SDN route map %q: %w", order, routeMap, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN route map %q updated (run `pmx sdn apply` to commit).", order, routeMap)}
+				"Entry %q of SDN route map %q updated (run `pmx pve sdn apply` to commit).", order, routeMap)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -745,7 +745,7 @@ func newRouteMapEntryDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete entry %q of SDN route map %q: %w", order, routeMap, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Entry %q of SDN route map %q deleted (run `pmx sdn apply` to commit).", order, routeMap)}
+				"Entry %q of SDN route map %q deleted (run `pmx pve sdn apply` to commit).", order, routeMap)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

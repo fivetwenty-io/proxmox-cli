@@ -131,7 +131,7 @@ func newSubnetSetCmd() *cobra.Command {
 				return fmt.Errorf("update subnet %q on vnet %q: %w", subnet, vnet, err)
 			}
 			res := output.Result{
-				Message: fmt.Sprintf("Subnet %q on vnet %q updated (run `pmx sdn apply` to commit).", subnet, vnet),
+				Message: fmt.Sprintf("Subnet %q on vnet %q updated (run `pmx pve sdn apply` to commit).", subnet, vnet),
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
@@ -245,7 +245,7 @@ func newSubnetCreateCmd() *cobra.Command {
 			if err := deps.API.Cluster.CreateSdnVnetsSubnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("create subnet %q on vnet %q: %w", cidr, vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("Subnet %q created on vnet %q (run `pmx sdn apply` to commit).", cidr, vnet)}
+			res := output.Result{Message: fmt.Sprintf("Subnet %q created on vnet %q (run `pmx pve sdn apply` to commit).", cidr, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -286,7 +286,7 @@ func newSubnetDeleteCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("delete subnet %q on vnet %q: %w", subnet, vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("Subnet %q deleted from vnet %q (run `pmx sdn apply` to commit).", subnet, vnet)}
+			res := output.Result{Message: fmt.Sprintf("Subnet %q deleted from vnet %q (run `pmx pve sdn apply` to commit).", subnet, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

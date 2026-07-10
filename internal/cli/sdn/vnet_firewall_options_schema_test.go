@@ -101,7 +101,7 @@ func TestVnetFirewallOptionsDescribe(t *testing.T) {
 
 	_, err = run(t, f, "", "vnet", "firewall", "options", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx sdn vnet firewall options describe")
+	require.Contains(t, err.Error(), "pmx pve sdn vnet firewall options describe")
 	require.Empty(t, rec, "describe runs offline even for an unknown option")
 }
 

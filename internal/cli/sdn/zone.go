@@ -216,7 +216,7 @@ func newZoneSetCmd() *cobra.Command {
 			if err := deps.API.Cluster.UpdateSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("update SDN zone %q: %w", zone, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN zone %q updated (run `pmx sdn apply` to commit).", zone)}
+			res := output.Result{Message: fmt.Sprintf("SDN zone %q updated (run `pmx pve sdn apply` to commit).", zone)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -437,7 +437,7 @@ func newZoneCreateCmd() *cobra.Command {
 			if err := deps.API.Cluster.CreateSdnZones(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN zone %q: %w", zone, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN zone %q created (run `pmx sdn apply` to commit).", zone)}
+			res := output.Result{Message: fmt.Sprintf("SDN zone %q created (run `pmx pve sdn apply` to commit).", zone)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -498,7 +498,7 @@ func newZoneDeleteCmd() *cobra.Command {
 			if err := deps.API.Cluster.DeleteSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("delete SDN zone %q: %w", zone, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN zone %q deleted (run `pmx sdn apply` to commit).", zone)}
+			res := output.Result{Message: fmt.Sprintf("SDN zone %q deleted (run `pmx pve sdn apply` to commit).", zone)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

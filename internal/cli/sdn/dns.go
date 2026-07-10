@@ -119,7 +119,7 @@ func newDnsCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN DNS provider %q created (run `pmx sdn apply` to commit).", dns)}
+				"SDN DNS provider %q created (run `pmx pve sdn apply` to commit).", dns)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -213,7 +213,7 @@ func newDnsSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN DNS provider %q updated (run `pmx sdn apply` to commit).", dns)}
+				"SDN DNS provider %q updated (run `pmx pve sdn apply` to commit).", dns)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -255,7 +255,7 @@ func newDnsDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN DNS provider %q: %w", dns, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN DNS provider %q deleted (run `pmx sdn apply` to commit).", dns)}
+				"SDN DNS provider %q deleted (run `pmx pve sdn apply` to commit).", dns)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

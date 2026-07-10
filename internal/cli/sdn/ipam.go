@@ -117,7 +117,7 @@ func newIpamCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN IPAM %q created (run `pmx sdn apply` to commit).", ipam)}
+				"SDN IPAM %q created (run `pmx pve sdn apply` to commit).", ipam)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -203,7 +203,7 @@ func newIpamSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN IPAM %q updated (run `pmx sdn apply` to commit).", ipam)}
+				"SDN IPAM %q updated (run `pmx pve sdn apply` to commit).", ipam)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -244,7 +244,7 @@ func newIpamDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN IPAM %q: %w", ipam, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN IPAM %q deleted (run `pmx sdn apply` to commit).", ipam)}
+				"SDN IPAM %q deleted (run `pmx pve sdn apply` to commit).", ipam)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

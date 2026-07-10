@@ -235,7 +235,7 @@ func newFabricCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN fabric %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN fabric %q created (run `pmx sdn apply` to commit).", id)}
+				"SDN fabric %q created (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -293,7 +293,7 @@ func newFabricSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN fabric %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN fabric %q updated (run `pmx sdn apply` to commit).", id)}
+				"SDN fabric %q updated (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -324,7 +324,7 @@ func newFabricDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN fabric %q: %w", id, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN fabric %q deleted (run `pmx sdn apply` to commit).", id)}
+				"SDN fabric %q deleted (run `pmx pve sdn apply` to commit).", id)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -536,7 +536,7 @@ func newFabricNodeCreateCmd() *cobra.Command {
 				return fmt.Errorf("add node %q to SDN fabric %q: %w", node, fabric, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Node %q added to SDN fabric %q (run `pmx sdn apply` to commit).", node, fabric)}
+				"Node %q added to SDN fabric %q (run `pmx pve sdn apply` to commit).", node, fabric)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -574,7 +574,7 @@ func newFabricNodeSetCmd() *cobra.Command {
 				return fmt.Errorf("update node %q of SDN fabric %q: %w", node, fabric, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Node %q of SDN fabric %q updated (run `pmx sdn apply` to commit).", node, fabric)}
+				"Node %q of SDN fabric %q updated (run `pmx pve sdn apply` to commit).", node, fabric)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -606,7 +606,7 @@ func newFabricNodeDeleteCmd() *cobra.Command {
 				return fmt.Errorf("remove node %q from SDN fabric %q: %w", node, fabric, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Node %q removed from SDN fabric %q (run `pmx sdn apply` to commit).", node, fabric)}
+				"Node %q removed from SDN fabric %q (run `pmx pve sdn apply` to commit).", node, fabric)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

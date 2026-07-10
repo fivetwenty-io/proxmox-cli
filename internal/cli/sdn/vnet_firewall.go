@@ -301,7 +301,7 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 				return fmt.Errorf("create firewall rule for vnet %q: %w", vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall rule added to vnet %q (run `pmx sdn apply` to commit).", vnet)}
+				"Firewall rule added to vnet %q (run `pmx pve sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -330,7 +330,7 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 				return fmt.Errorf("update firewall rule %s for vnet %q: %w", pos, vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall rule %s in vnet %q updated (run `pmx sdn apply` to commit).", pos, vnet)}
+				"Firewall rule %s in vnet %q updated (run `pmx pve sdn apply` to commit).", pos, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -359,7 +359,7 @@ func newVnetFirewallRulesDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete firewall rule %s for vnet %q: %w", pos, vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall rule %s in vnet %q deleted (run `pmx sdn apply` to commit).", pos, vnet)}
+				"Firewall rule %s in vnet %q deleted (run `pmx pve sdn apply` to commit).", pos, vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -394,7 +394,7 @@ func newVnetFirewallOptionsDescribeCmd() *cobra.Command {
 		Short:   "Describe all settable vnet firewall options and their defaults",
 		Long: "List every settable vnet firewall option from the PVE API schema: type, " +
 			"built-in default, and allowed values. Runs offline.",
-		CommandHint:         "pmx sdn vnet firewall options describe",
+		CommandHint:         "pmx pve sdn vnet firewall options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }
@@ -473,7 +473,7 @@ func newVnetFirewallOptionsSetCmd() *cobra.Command {
 				return fmt.Errorf("set firewall options for vnet %q: %w", vnet, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"Firewall options for vnet %q updated (run `pmx sdn apply` to commit).", vnet)}
+				"Firewall options for vnet %q updated (run `pmx pve sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

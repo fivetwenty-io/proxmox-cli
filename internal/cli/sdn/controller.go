@@ -267,7 +267,7 @@ func newControllerCreateCmd() *cobra.Command {
 				return fmt.Errorf("create SDN controller %q: %w", controller, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN controller %q created (run `pmx sdn apply` to commit).", controller)}
+				"SDN controller %q created (run `pmx pve sdn apply` to commit).", controller)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -349,7 +349,7 @@ func newControllerSetCmd() *cobra.Command {
 				return fmt.Errorf("update SDN controller %q: %w", controller, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN controller %q updated (run `pmx sdn apply` to commit).", controller)}
+				"SDN controller %q updated (run `pmx pve sdn apply` to commit).", controller)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -387,7 +387,7 @@ func newControllerDeleteCmd() *cobra.Command {
 				return fmt.Errorf("delete SDN controller %q: %w", controller, err)
 			}
 			res := output.Result{Message: fmt.Sprintf(
-				"SDN controller %q deleted (run `pmx sdn apply` to commit).", controller)}
+				"SDN controller %q deleted (run `pmx pve sdn apply` to commit).", controller)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

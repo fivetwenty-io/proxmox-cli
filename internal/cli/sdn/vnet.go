@@ -275,7 +275,7 @@ func newVnetSetCmd() *cobra.Command {
 			if err := deps.API.Cluster.UpdateSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("update SDN vnet %q: %w", vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN vnet %q updated (run `pmx sdn apply` to commit).", vnet)}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q updated (run `pmx pve sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -391,7 +391,7 @@ func newVnetCreateCmd() *cobra.Command {
 			if err := deps.API.Cluster.CreateSdnVnets(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN vnet %q: %w", vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN vnet %q created (run `pmx sdn apply` to commit).", vnet)}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q created (run `pmx pve sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -433,7 +433,7 @@ func newVnetDeleteCmd() *cobra.Command {
 			if err := deps.API.Cluster.DeleteSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("delete SDN vnet %q: %w", vnet, err)
 			}
-			res := output.Result{Message: fmt.Sprintf("SDN vnet %q deleted (run `pmx sdn apply` to commit).", vnet)}
+			res := output.Result{Message: fmt.Sprintf("SDN vnet %q deleted (run `pmx pve sdn apply` to commit).", vnet)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
