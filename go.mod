@@ -3,6 +3,7 @@ module github.com/fivetwenty-io/pmx-cli
 go 1.26.4
 
 require (
+	github.com/cpuguy83/go-md2man/v2 v2.0.6
 	github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.8.1
 	github.com/goccy/go-yaml v1.19.2
 	github.com/olekukonko/tablewriter v1.1.4
@@ -16,7 +17,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/displaywidth v0.10.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

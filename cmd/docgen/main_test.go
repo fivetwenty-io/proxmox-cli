@@ -4,9 +4,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
 )
 
 // generateInto runs the generator for all personas into dir and returns
@@ -85,4 +88,25 @@ func TestNoPageLeaksHostPathOrEnv(t *testing.T) {
 func TestRun_UnknownPersonaErrors(t *testing.T) {
 	err := run(runOpts{out: t.TempDir(), personas: []string{"nope"}, version: "test", date: fallbackDate})
 	require.Error(t, err)
+}
+
+func TestRootPages_RequiredSections(t *testing.T) {
+	got := generateInto(t, t.TempDir())
+	for _, page := range []string{"pmx.1", "pve.1", "pbs.1", "pdm.1"} {
+		s := string(got[page])
+		for _, section := range []string{"NAME", "SYNOPSIS", "DESCRIPTION", "OPTIONS",
+			"ENVIRONMENT", "FILES", "EXIT STATUS", "SEE ALSO"} {
+			require.Regexp(t, `(?m)^\.SH "?`+section+`"?`, s, "%s missing section %s", page, section)
+		}
+	}
+}
+
+func TestExitStatus_MatchesExitcodeConsts(t *testing.T) {
+	page := string(generateInto(t, t.TempDir())["pmx.1"])
+	for _, code := range []int{
+		exitcode.OK, exitcode.Generic, exitcode.BadArgs, exitcode.Infra,
+		exitcode.Auth, exitcode.NotFound, exitcode.Conflict, exitcode.TFARequired,
+	} {
+		require.Contains(t, page, "\\fB"+strconv.Itoa(code)+"\\fP", "EXIT STATUS omits code %d", code)
+	}
 }
