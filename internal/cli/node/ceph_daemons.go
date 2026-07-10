@@ -26,6 +26,7 @@ func newCephMonListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List Ceph monitors",
+		Long:  "List the Ceph monitor (MON) daemons known to the cluster, as reported by the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -82,7 +83,12 @@ func newCephMonDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <monid>",
 		Short: "Destroy a Ceph monitor (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Destroy the Ceph monitor (MON) daemon with the given id on the resolved node. " +
+			"Refuses to run without --yes/-y. Submits a worker task and blocks until it " +
+			"completes; pass the global --async flag to print the task UPID immediately " +
+			"instead of waiting.",
+		Example: `  pmx pve node ceph mon delete pve1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -119,6 +125,7 @@ func newCephMdsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List Ceph metadata servers",
+		Long:  "List the Ceph metadata server (MDS) daemons known to the cluster, as reported by the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -175,7 +182,12 @@ func newCephMdsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Destroy a Ceph metadata server (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Destroy the Ceph metadata server (MDS) daemon with the given name on the " +
+			"resolved node. Refuses to run without --yes/-y. Submits a worker task and " +
+			"blocks until it completes; pass the global --async flag to print the task UPID " +
+			"immediately instead of waiting.",
+		Example: `  pmx pve node ceph mds delete pve1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -212,6 +224,7 @@ func newCephMgrListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List Ceph managers",
+		Long:  "List the Ceph manager (MGR) daemons known to the cluster, as reported by the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -259,7 +272,12 @@ func newCephMgrDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Destroy a Ceph manager (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Destroy the Ceph manager (MGR) daemon with the given id on the resolved node. " +
+			"Refuses to run without --yes/-y. Submits a worker task and blocks until it " +
+			"completes; pass the global --async flag to print the task UPID immediately " +
+			"instead of waiting.",
+		Example: `  pmx pve node ceph mgr delete pve1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -296,6 +314,7 @@ func newCephFsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List CephFS filesystems",
+		Long:  "List the CephFS filesystems known to the cluster, as reported by the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

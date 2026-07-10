@@ -28,7 +28,11 @@ func newInterfacesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "interfaces <vmid|name>",
 		Short: "List a container's network interfaces",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the network interfaces reported by the host for a running container: " +
+			"name, hardware address, and IPv4/IPv6 addresses. This is a read-only query.",
+		Example: `  pmx pve lxc interfaces 200
+  pmx pve lxc interfaces web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

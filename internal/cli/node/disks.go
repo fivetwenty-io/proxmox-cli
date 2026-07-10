@@ -131,7 +131,11 @@ func newDisksSmartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "smart",
 		Short: "Show the SMART health of a disk",
-		Args:  cobra.NoArgs,
+		Long: "Read the SMART health data of a single block device on the resolved node. " +
+			"--disk is required; pass --health-only to return just the overall health status.",
+		Example: `  pmx pve node disks smart --disk /dev/sda
+  pmx pve node disks smart --disk /dev/sda --health-only`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -198,7 +202,10 @@ func newDisksCreateLvmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lvm",
 		Short: "Create an LVM volume group on a disk (destructive)",
-		Args:  cobra.NoArgs,
+		Long: "Format --device and create an LVM volume group named --name on the resolved " +
+			"node. This is irreversible, so it requires --yes.",
+		Example: `  pmx pve node disks create lvm --device /dev/sdb --name data --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -239,7 +246,10 @@ func newDisksCreateLvmthinCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lvmthin",
 		Short: "Create an LVM-thin pool on a disk (destructive)",
-		Args:  cobra.NoArgs,
+		Long: "Format --device and create an LVM-thin pool named --name on the resolved " +
+			"node. This is irreversible, so it requires --yes.",
+		Example: `  pmx pve node disks create lvmthin --device /dev/sdb --name data --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -284,7 +294,10 @@ func newDisksCreateZfsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zfs",
 		Short: "Create a ZFS pool on one or more disks (destructive)",
-		Args:  cobra.NoArgs,
+		Long: "Format --devices and create a ZFS pool named --name at the given " +
+			"--raidlevel on the resolved node. This is irreversible, so it requires --yes.",
+		Example: `  pmx pve node disks create zfs --devices /dev/sdb,/dev/sdc --name tank --raidlevel mirror --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -342,7 +355,10 @@ func newDisksCreateDirectoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "directory",
 		Short: "Create a filesystem on a disk and mount it as directory storage (destructive)",
-		Args:  cobra.NoArgs,
+		Long: "Format --device with a filesystem and mount it as directory storage named " +
+			"--name on the resolved node. This is irreversible, so it requires --yes.",
+		Example: `  pmx pve node disks create directory --device /dev/sdb --name backups --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -402,6 +418,7 @@ func newDisksLsDirectoryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "directory",
 		Short: "List directory storage mounts on the node",
+		Long:  "List the directory-backed storage mounts already configured on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -421,6 +438,7 @@ func newDisksLsLvmCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "lvm",
 		Short: "List LVM volume groups on the node",
+		Long:  "List the LVM volume groups already configured on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -443,6 +461,7 @@ func newDisksLsLvmthinCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "lvmthin",
 		Short: "List LVM-thin pools on the node",
+		Long:  "List the LVM-thin pools already configured on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -462,6 +481,7 @@ func newDisksLsZfsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "zfs",
 		Short: "List ZFS pools on the node",
+		Long:  "List the ZFS pools already configured on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -492,9 +512,11 @@ func newDisksGetCmd() *cobra.Command {
 
 func newDisksGetZfsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "zfs <name>",
-		Short: "Show detailed information about a ZFS pool",
-		Args:  cobra.ExactArgs(1),
+		Use:     "zfs <name>",
+		Short:   "Show detailed information about a ZFS pool",
+		Long:    "Show detailed information about a single ZFS pool by name on the resolved node.",
+		Example: `  pmx pve node disks get zfs tank`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -539,7 +561,11 @@ func newDisksDeleteDirectoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "directory <name>",
 		Short: "Delete a directory storage mount (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove the named directory storage mount from the resolved node. Pass " +
+			"--cleanup-config to also remove its storage configuration, and " +
+			"--cleanup-disks to wipe the underlying disk. Refuses to run without --yes/-y.",
+		Example: `  pmx pve node disks delete directory backups --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -582,7 +608,11 @@ func newDisksDeleteLvmCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lvm <name>",
 		Short: "Delete an LVM volume group (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove the named LVM volume group from the resolved node. Pass " +
+			"--cleanup-config to also remove its storage configuration, and " +
+			"--cleanup-disks to wipe the underlying disks. Refuses to run without --yes/-y.",
+		Example: `  pmx pve node disks delete lvm data --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -626,7 +656,11 @@ func newDisksDeleteLvmthinCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lvmthin <name>",
 		Short: "Delete an LVM-thin pool (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove the named LVM-thin pool from --volume-group on the resolved node. " +
+			"Pass --cleanup-config to also remove its storage configuration, and " +
+			"--cleanup-disks to wipe the underlying disks. Refuses to run without --yes/-y.",
+		Example: `  pmx pve node disks delete lvmthin data --volume-group pve --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -671,7 +705,11 @@ func newDisksDeleteZfsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zfs <name>",
 		Short: "Delete a ZFS pool (destructive)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove the named ZFS pool from the resolved node. Pass --cleanup-config to " +
+			"also remove its storage configuration, and --cleanup-disks to wipe the " +
+			"underlying disks. Refuses to run without --yes/-y.",
+		Example: `  pmx pve node disks delete zfs tank --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -716,7 +754,10 @@ func newDisksInitGptCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init-gpt",
 		Short: "Write a fresh GPT partition table to a disk (destructive)",
-		Args:  cobra.NoArgs,
+		Long: "Write a new, empty GPT partition table to --disk on the resolved node, " +
+			"destroying its existing partition table. Refuses to run without --yes/-y.",
+		Example: `  pmx pve node disks init-gpt --disk /dev/sdb --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -755,7 +796,10 @@ func newDisksWipeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "wipe",
 		Short: "Wipe all data and partition tables from a disk (destructive)",
-		Args:  cobra.NoArgs,
+		Long: "Erase all data and partition tables from --disk on the resolved node. " +
+			"Refuses to run without --yes/-y.",
+		Example: `  pmx pve node disks wipe --disk /dev/sdb --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

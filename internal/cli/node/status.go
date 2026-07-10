@@ -38,7 +38,10 @@ func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <node>",
 		Short: "Show node status",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a cluster node's current status: CPU, load average, memory and disk " +
+			"usage, kernel, and Proxmox VE version.",
+		Example: `  pmx pve node status pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -81,13 +84,17 @@ func newStatusCmd() *cobra.Command {
 
 // newNodePowerCmd builds a node power-control command (reboot or shutdown) that
 // wraps POST /nodes/{node}/status with the matching command. Both actions are
-// disruptive, so each is gated behind --yes.
-func newNodePowerCmd(verb, short string) *cobra.Command {
+// disruptive, so each is gated behind --yes. long and example are threaded
+// per-verb by the caller since the two verbs share this builder but need
+// distinct docs.
+func newNodePowerCmd(verb, short, long, example string) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   verb,
-		Short: short,
-		Args:  cobra.NoArgs,
+		Use:     verb,
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -110,12 +117,20 @@ func newNodePowerCmd(verb, short string) *cobra.Command {
 
 // newRebootCmd builds `pmx node reboot`.
 func newRebootCmd() *cobra.Command {
-	return newNodePowerCmd("reboot", "Reboot the node")
+	return newNodePowerCmd("reboot", "Reboot the node",
+		"Reboot the resolved node. This disrupts every guest and service running on it, "+
+			"so it refuses to run without --yes/-y. The command returns once the reboot is "+
+			"initiated; it does not wait for the node to come back up.",
+		`  pmx pve node reboot --yes`)
 }
 
 // newShutdownCmd builds `pmx node shutdown`.
 func newShutdownCmd() *cobra.Command {
-	return newNodePowerCmd("shutdown", "Shut down the node")
+	return newNodePowerCmd("shutdown", "Shut down the node",
+		"Shut down the resolved node. This disrupts every guest and service running on "+
+			"it, so it refuses to run without --yes/-y. The command returns once the "+
+			"shutdown is initiated.",
+		`  pmx pve node shutdown --yes`)
 }
 
 // decodeMemUsage unmarshals a memory/rootfs total+used sub-object. It returns

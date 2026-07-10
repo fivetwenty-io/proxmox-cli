@@ -27,6 +27,8 @@ func newTemplateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "template",
 		Short: "List and download LXC container templates",
+		Long: "Browse the appliance templates available from the configured template " +
+			"repositories and download a selected template to a storage.",
 	}
 	cmd.AddCommand(newTemplateListCmd(), newTemplateDownloadCmd())
 	return cmd
@@ -39,7 +41,12 @@ func newTemplateListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List downloadable container templates",
-		Args:  cobra.NoArgs,
+		Long: "List the appliance templates available to download from the resolved node's " +
+			"configured template repositories. Pass --filter to only show templates whose " +
+			"name contains a substring.",
+		Example: `  pmx pve lxc template list
+  pmx pve lxc template list --filter debian`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -85,7 +92,12 @@ func newTemplateDownloadCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "download <storage> <template>",
 		Short: "Download a container template to a storage",
-		Args:  cobra.ExactArgs(2),
+		Long: "Download a template identifier (as listed by 'lxc template list') to the " +
+			"given storage on the resolved node. Submits a PVE task and blocks until it " +
+			"completes; pass --async or the global --async flag to print the task UPID " +
+			"immediately instead of waiting.",
+		Example: `  pmx pve lxc template download local debian-12-standard_12.7-1_amd64.tar.zst`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)

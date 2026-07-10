@@ -43,7 +43,12 @@ func newStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start <vmid|name>",
 		Short: "Start a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Start a stopped container. Resolves the target by numeric vmid or name. " +
+			"Submits a PVE task and blocks until it completes; pass the global --async flag " +
+			"to print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc start 200
+  pmx pve lxc start web1 --async`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -78,7 +83,13 @@ func newStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop <vmid|name>",
 		Short: "Stop a container immediately",
-		Args:  cobra.ExactArgs(1),
+		Long: "Immediately power off a running container without asking it to shut down " +
+			"cleanly, similar to pulling the power. Prefer 'lxc shutdown' for a graceful " +
+			"stop. Submits a PVE task and blocks until it completes; pass the global --async " +
+			"flag to print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc stop 200
+  pmx pve lxc stop web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -113,7 +124,13 @@ func newRebootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reboot <vmid|name>",
 		Short: "Reboot a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Shut the container down and immediately start it again. --timeout bounds how " +
+			"long to wait for the shutdown before the reboot proceeds. Submits a PVE task and " +
+			"blocks until it completes; pass the global --async flag to print the task UPID " +
+			"immediately instead of waiting.",
+		Example: `  pmx pve lxc reboot 200
+  pmx pve lxc reboot web1 --timeout 60`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -144,7 +161,13 @@ func newShutdownCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "shutdown <vmid|name>",
 		Short: "Gracefully shut down a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Ask the container to power off cleanly. Pass --force-stop to hard-stop it if " +
+			"it has not shut down within --timeout seconds. Submits a PVE task and blocks " +
+			"until it completes; pass the global --async flag to print the task UPID " +
+			"immediately instead of waiting.",
+		Example: `  pmx pve lxc shutdown 200
+  pmx pve lxc shutdown web1 --timeout 60 --force-stop`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -179,7 +202,13 @@ func newSuspendCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "suspend <vmid|name>",
 		Short: "Suspend a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Pause the container's execution, keeping its process state so it can be " +
+			"resumed later with 'lxc resume'. Submits a PVE task and blocks until it " +
+			"completes; pass the global --async flag to print the task UPID immediately " +
+			"instead of waiting.",
+		Example: `  pmx pve lxc suspend 200
+  pmx pve lxc suspend web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -202,7 +231,12 @@ func newResumeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resume <vmid|name>",
 		Short: "Resume a suspended container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Resume a container previously suspended with 'lxc suspend'. Submits a PVE " +
+			"task and blocks until it completes; pass the global --async flag to print the " +
+			"task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc resume 200
+  pmx pve lxc resume web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -225,7 +259,15 @@ func newDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name>",
 		Short: "Destroy a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Permanently destroy a container and its disks. Refuses to run without --yes; " +
+			"pass --force to destroy it even while running, --purge to also remove it from " +
+			"backup/replication/HA jobs and ACLs, and --destroy-unreferenced-disks to also " +
+			"remove disks with this VMID that are no longer referenced by the config. " +
+			"Submits a PVE task and blocks until it completes; pass the global --async flag " +
+			"to print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc delete 200 --yes
+  pmx pve lxc delete web1 --yes --purge`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

@@ -43,7 +43,9 @@ func newAptTemplatesListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List available container appliance templates",
-		Args:  cobra.NoArgs,
+		Long: "List the appliance templates available to download on the resolved node " +
+			"from its configured template repositories.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

@@ -49,7 +49,14 @@ func newSSHCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ssh <node> [ssh-option...] [command...]",
 		Short: "Open an SSH session to a node (optionally run a remote command)",
-		Args:  cobra.MinimumNArgs(1),
+		Long: "Resolve <node> to an SSH address and open an SSH session to it, passing " +
+			"through any trailing ssh-option/command tokens. With no remote command, opens " +
+			"an interactive session; with one, runs it and exits. A leading-dash token " +
+			"after <node> is treated as an ssh option or remote-command token, not a pmx " +
+			"flag; use \"--\" to disambiguate when needed.",
+		Example: `  pmx pve node ssh pve1
+  pmx pve node ssh pve1 -- uptime`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return remote.RunSSH(cmd, cli.GetDeps(cmd), &f, args[0], args[1:])
 		},
@@ -65,7 +72,10 @@ func newShellCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "shell <node>",
 		Short: "Open an interactive shell on a node over SSH",
-		Args:  cobra.ExactArgs(1),
+		Long: "Resolve <node> to an SSH address and open an interactive login shell on it, " +
+			"with no remote command.",
+		Example: `  pmx pve node shell pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runShell(cmd, &f, args[0])
 		},
@@ -79,9 +89,11 @@ func newShellCmd() *cobra.Command {
 func newConsoleCmd() *cobra.Command {
 	var f sshFlags
 	cmd := &cobra.Command{
-		Use:   "console <node>",
-		Short: "Open a node console (alias for shell)",
-		Args:  cobra.ExactArgs(1),
+		Use:     "console <node>",
+		Short:   "Open a node console (alias for shell)",
+		Long:    "Open an interactive SSH session on <node>. This is an alias for 'node shell'.",
+		Example: `  pmx pve node console pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runShell(cmd, &f, args[0])
 		},
@@ -114,7 +126,10 @@ func newExecCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "exec <node> -- <cmd>...",
 		Short: "Run a command on a node over SSH",
-		Args:  cobra.MinimumNArgs(2),
+		Long: "Resolve <node> to an SSH address and run <cmd> on it over SSH, passing " +
+			"through its output. Use \"--\" to separate the remote command from pmx flags.",
+		Example: `  pmx pve node exec pve1 -- uptime`,
+		Args:    cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

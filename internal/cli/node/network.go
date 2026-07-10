@@ -94,7 +94,11 @@ func newNetworkListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the host network interfaces",
-		Args:  cobra.NoArgs,
+		Long: "List the host network interfaces and bridges configured on the resolved " +
+			"node. Pass --type to restrict the listing to one interface type.",
+		Example: `  pmx pve node network list
+  pmx pve node network list --type bridge`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -133,9 +137,11 @@ func newNetworkListCmd() *cobra.Command {
 
 func newNetworkGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <iface>",
-		Short: "Show a single host network interface",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <iface>",
+		Short:   "Show a single host network interface",
+		Long:    "Show every configured field of a single host network interface on the resolved node.",
+		Example: `  pmx pve node network get vmbr0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

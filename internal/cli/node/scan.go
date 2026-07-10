@@ -99,6 +99,7 @@ func newScanLvmCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "lvm",
 		Short: "List local LVM volume groups",
+		Long:  "Probe the resolved node for local LVM volume groups it could use as storage.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -118,6 +119,7 @@ func newScanZfsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "zfs",
 		Short: "List local ZFS pools",
+		Long:  "Probe the resolved node for local ZFS pools it could use as storage.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -136,9 +138,11 @@ func newScanZfsCmd() *cobra.Command {
 func newScanLvmthinCmd() *cobra.Command {
 	var vg string
 	cmd := &cobra.Command{
-		Use:   "lvmthin",
-		Short: "List LVM-thin pools within a volume group",
-		Args:  cobra.NoArgs,
+		Use:     "lvmthin",
+		Short:   "List LVM-thin pools within a volume group",
+		Long:    "Probe the resolved node for LVM-thin pools within --vg it could use as storage.",
+		Example: `  pmx pve node scan lvmthin --vg pve`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -162,9 +166,11 @@ func newScanLvmthinCmd() *cobra.Command {
 func newScanNfsCmd() *cobra.Command {
 	var server string
 	cmd := &cobra.Command{
-		Use:   "nfs",
-		Short: "List NFS exports on a remote server",
-		Args:  cobra.NoArgs,
+		Use:     "nfs",
+		Short:   "List NFS exports on a remote server",
+		Long:    "Query --server, from the resolved node, for the NFS exports it offers.",
+		Example: `  pmx pve node scan nfs --server 10.0.0.5`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -193,7 +199,12 @@ func newScanCifsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cifs",
 		Short: "List CIFS/SMB shares on a remote server",
-		Args:  cobra.NoArgs,
+		Long: "Query --server, from the resolved node, for the CIFS/SMB shares it offers. " +
+			"Pass --username/--password for authenticated shares and --domain for the SMB " +
+			"workgroup.",
+		Example: `  pmx pve node scan cifs --server 10.0.0.5
+  pmx pve node scan cifs --server 10.0.0.5 --username backup --password ***`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -229,9 +240,11 @@ func newScanCifsCmd() *cobra.Command {
 func newScanIscsiCmd() *cobra.Command {
 	var portal string
 	cmd := &cobra.Command{
-		Use:   "iscsi",
-		Short: "List iSCSI targets on a portal",
-		Args:  cobra.NoArgs,
+		Use:     "iscsi",
+		Short:   "List iSCSI targets on a portal",
+		Long:    "Query --portal, from the resolved node, for the iSCSI targets it offers.",
+		Example: `  pmx pve node scan iscsi --portal 10.0.0.5`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -261,7 +274,10 @@ func newScanPbsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pbs",
 		Short: "List datastores on a Proxmox Backup Server",
-		Args:  cobra.NoArgs,
+		Long: "Query --server, from the resolved node, for the datastores a Proxmox Backup " +
+			"Server offers. --username and --password are required.",
+		Example: `  pmx pve node scan pbs --server pbs1.example.com --username backup@pbs --password ***`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

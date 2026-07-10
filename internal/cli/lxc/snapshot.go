@@ -26,6 +26,8 @@ func newSnapshotCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
 		Short: "Manage container snapshots",
+		Long: "Create, list, inspect, update, roll back, and delete point-in-time snapshots " +
+			"of a container's disks.",
 	}
 	cmd.AddCommand(
 		newSnapshotListCmd(),
@@ -47,7 +49,12 @@ func newSnapshotCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <vmid|name> <snapname>",
 		Short: "Create a snapshot of a container",
-		Args:  cobra.ExactArgs(2),
+		Long: "Create a new named snapshot of the container's disks. Submits a PVE task and " +
+			"blocks until it completes; pass --async or the global --async flag to print the " +
+			"task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc snapshot create 200 pre-upgrade
+  pmx pve lxc snapshot create web1 pre-upgrade --description "before kernel update"`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -86,7 +93,13 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name> <snapname>",
 		Short: "Delete a snapshot of a container",
-		Args:  cobra.ExactArgs(2),
+		Long: "Permanently delete a named snapshot. Pass --force to remove it from the config " +
+			"even if removing its disk snapshots fails. Submits a PVE task and blocks until it " +
+			"completes; pass --async or the global --async flag to print the task UPID " +
+			"immediately instead of waiting.",
+		Example: `  pmx pve lxc snapshot delete 200 pre-upgrade
+  pmx pve lxc snapshot delete web1 pre-upgrade --force`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -125,7 +138,14 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a container back to a snapshot",
-		Args:  cobra.ExactArgs(2),
+		Long: "Restore the container's disks to the state captured in the named snapshot, " +
+			"discarding any changes made since. Pass --start to start the container " +
+			"immediately after a successful rollback. Submits a PVE task and blocks until it " +
+			"completes; pass --async or the global --async flag to print the task UPID " +
+			"immediately instead of waiting.",
+		Example: `  pmx pve lxc snapshot rollback 200 pre-upgrade
+  pmx pve lxc snapshot rollback web1 pre-upgrade --start`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -160,7 +180,11 @@ func newSnapshotListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <vmid|name>",
 		Short: "List snapshots of a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every snapshot of a container with its description, creation time, and " +
+			"parent snapshot.",
+		Example: `  pmx pve lxc snapshot list 200
+  pmx pve lxc snapshot list web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -203,7 +227,11 @@ func newSnapshotShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name> <snapname>",
 		Short: "Show the configuration stored with a snapshot",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show the container configuration captured in a named snapshot (the config the " +
+			"container had at snapshot time).",
+		Example: `  pmx pve lxc snapshot show 200 pre-upgrade
+  pmx pve lxc snapshot show web1 pre-upgrade`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -250,7 +278,10 @@ func newSnapshotUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <vmid|name> <snapname>",
 		Short: "Update the description of a snapshot",
-		Args:  cobra.ExactArgs(2),
+		Long: "Change the stored description of an existing snapshot. --description is " +
+			"required.",
+		Example: `  pmx pve lxc snapshot update 200 pre-upgrade --description "before kernel update"`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

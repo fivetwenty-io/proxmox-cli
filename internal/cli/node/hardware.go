@@ -129,6 +129,7 @@ func newHardwareUsbCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "usb",
 		Short: "List USB devices on the node",
+		Long:  "List the USB devices attached to the resolved node. This is a read-only query.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

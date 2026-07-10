@@ -18,6 +18,8 @@ func newTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
 		Short: "Inspect and control node tasks",
+		Long: "List, read the log of, stop, wait for, and check the status of Proxmox VE " +
+			"tasks (asynchronous jobs identified by a UPID) on a node.",
 	}
 	cmd.AddCommand(
 		newTaskListCmd(),
@@ -54,7 +56,12 @@ func newTaskListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <node>",
 		Short: "List tasks on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List recent and running tasks on a node, most recent first. Filter by " +
+			"--vmid, --typefilter, --statusfilter, or a --since/--until time range; " +
+			"--limit caps how many are returned.",
+		Example: `  pmx pve node task list pve1
+  pmx pve node task list pve1 --statusfilter running`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -137,7 +144,10 @@ func newTaskLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <node> <upid>",
 		Short: "Show the log of a task",
-		Args:  cobra.ExactArgs(2),
+		Long: "Read the log lines of a task by its UPID on a node. --start and --limit " +
+			"page through the log.",
+		Example: `  pmx pve node task log pve1 UPID:pve1:00001234:...`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -184,9 +194,11 @@ func newTaskLogCmd() *cobra.Command {
 // newTaskStopCmd builds `pmx node task stop <node> <upid>`.
 func newTaskStopCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "stop <node> <upid>",
-		Short: "Stop a running task",
-		Args:  cobra.ExactArgs(2),
+		Use:     "stop <node> <upid>",
+		Short:   "Stop a running task",
+		Long:    "Stop the running task identified by its UPID on a node.",
+		Example: `  pmx pve node task stop pve1 UPID:pve1:00001234:...`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -249,7 +261,12 @@ func newTaskWaitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "wait <upid>",
 		Short: "Wait for a task to complete",
-		Args:  cobra.ExactArgs(1),
+		Long: "Poll a task by its UPID until it finishes or --timeout elapses, then report " +
+			"its final status. The node is parsed from the UPID, so no positional node is " +
+			"required.",
+		Example: `  pmx pve node task wait UPID:pve1:00001234:...
+  pmx pve node task wait UPID:pve1:00001234:... --timeout 600`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			upid := args[0]

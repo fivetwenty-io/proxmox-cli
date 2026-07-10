@@ -17,15 +17,33 @@ func newServicesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
 		Short: "Inspect and control node system services",
+		Long: "List and inspect a node's systemd services, and start, stop, restart, or " +
+			"reload a specific service.",
 	}
 	cmd.AddCommand(
 		newServicesListCmd(),
 		newServicesGetCmd(),
 		newServicesStateCmd(),
-		newServiceActionCmd("start", "started", "Start a service on a node", serviceStart),
-		newServiceActionCmd("stop", "stopped", "Stop a service on a node", serviceStop),
-		newServiceActionCmd("restart", "restarted", "Restart a service on a node", serviceRestart),
-		newServiceActionCmd("reload", "reloaded", "Reload a service on a node", serviceReload),
+		newServiceActionCmd("start", "started", "Start a service on a node",
+			"Start a systemd service on the given node. Submits a task and blocks until it "+
+				"completes; pass the global --async flag to print the task UPID immediately "+
+				"instead of waiting.",
+			`  pmx pve node services start pve1 pveproxy`, serviceStart),
+		newServiceActionCmd("stop", "stopped", "Stop a service on a node",
+			"Stop a systemd service on the given node. Submits a task and blocks until it "+
+				"completes; pass the global --async flag to print the task UPID immediately "+
+				"instead of waiting.",
+			`  pmx pve node services stop pve1 pveproxy`, serviceStop),
+		newServiceActionCmd("restart", "restarted", "Restart a service on a node",
+			"Restart a systemd service on the given node. Submits a task and blocks until "+
+				"it completes; pass the global --async flag to print the task UPID "+
+				"immediately instead of waiting.",
+			`  pmx pve node services restart pve1 pveproxy`, serviceRestart),
+		newServiceActionCmd("reload", "reloaded", "Reload a service on a node",
+			"Reload a systemd service's configuration on the given node without a full "+
+				"restart. Submits a task and blocks until it completes; pass the global "+
+				"--async flag to print the task UPID immediately instead of waiting.",
+			`  pmx pve node services reload pve1 pveproxy`, serviceReload),
 	)
 	return cmd
 }
@@ -42,9 +60,11 @@ type serviceEntry struct {
 // newServicesListCmd builds `pmx node services list <node>`.
 func newServicesListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list <node>",
-		Short: "List system services on a node",
-		Args:  cobra.ExactArgs(1),
+		Use:     "list <node>",
+		Short:   "List system services on a node",
+		Long:    "List the systemd services known to the given node, with their state and description.",
+		Example: `  pmx pve node services list pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -84,9 +104,11 @@ func newServicesListCmd() *cobra.Command {
 // start, stop, ...); the service detail lives at the state child endpoint.
 func newServicesGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <node> <svc>",
-		Short: "Show details for a single service",
-		Args:  cobra.ExactArgs(2),
+		Use:     "get <node> <svc>",
+		Short:   "Show details for a single service",
+		Long:    "Show a single systemd service's name, state, description, and active-state on the given node.",
+		Example: `  pmx pve node services get pve1 pveproxy`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -129,9 +151,11 @@ func newServicesGetCmd() *cobra.Command {
 // the raw systemd state details for a single service.
 func newServicesStateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "state <node> <svc>",
-		Short: "Show the raw systemd state for a single service",
-		Args:  cobra.ExactArgs(2),
+		Use:     "state <node> <svc>",
+		Short:   "Show the raw systemd state for a single service",
+		Long:    "Show the raw systemd unit-state fields for a single service on the given node.",
+		Example: `  pmx pve node services state pve1 pveproxy`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -192,12 +216,16 @@ func rawOrNil(resp *json.RawMessage) json.RawMessage {
 
 // newServiceActionCmd builds a `pmx node services <verb> <node> <svc>` command.
 // verb is the cobra verb (start/stop/restart/reload), pastTense is the message
-// participle, and action performs the API call.
-func newServiceActionCmd(verb, pastTense, short string, action serviceAction) *cobra.Command {
+// participle, and action performs the API call. long and example are threaded
+// per-verb by the caller since the four verbs share this builder but need
+// distinct docs.
+func newServiceActionCmd(verb, pastTense, short, long, example string, action serviceAction) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   fmt.Sprintf("%s <node> <svc>", verb),
-		Short: short,
-		Args:  cobra.ExactArgs(2),
+		Use:     fmt.Sprintf("%s <node> <svc>", verb),
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

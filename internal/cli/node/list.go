@@ -28,7 +28,9 @@ func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List cluster nodes",
-		Args:  cobra.NoArgs,
+		Long: "List every node in the Proxmox VE cluster with its status, CPU and memory " +
+			"usage, uptime, and SSL certificate fingerprint.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

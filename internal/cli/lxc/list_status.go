@@ -30,7 +30,9 @@ func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List LXC containers on a node",
-		Args:  cobra.NoArgs,
+		Long: "List the LXC containers on the node selected via --node, PMX_NODE, or the " +
+			"active context's default node, with their status, memory, disk, and uptime.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -78,7 +80,11 @@ func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <vmid|name>",
 		Short: "Show the current status of a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a container's current runtime status: state, CPU, memory, swap, disk " +
+			"usage, uptime, and any lock held on it.",
+		Example: `  pmx pve lxc status 200
+  pmx pve lxc status web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

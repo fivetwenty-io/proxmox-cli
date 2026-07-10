@@ -45,7 +45,9 @@ func newCapabilitiesQemuCpuCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cpu",
 		Short: "List supported QEMU CPU models",
-		Args:  cobra.NoArgs,
+		Long: "List the QEMU CPU models the resolved node can offer to VMs. --arch " +
+			"defaults to the host architecture.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -74,7 +76,9 @@ func newCapabilitiesQemuCpuFlagsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cpu-flags",
 		Short: "List supported QEMU CPU flags",
-		Args:  cobra.NoArgs,
+		Long: "List the QEMU CPU flags supported on the resolved node for the given " +
+			"--accel and --arch (both default to the host's).",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -105,7 +109,9 @@ func newCapabilitiesQemuMachinesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "machines",
 		Short: "List supported QEMU machine types",
-		Args:  cobra.NoArgs,
+		Long: "List the QEMU machine types the resolved node can offer to VMs. --arch " +
+			"defaults to the host architecture.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -130,6 +136,7 @@ func newCapabilitiesQemuMigrationCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "migration",
 		Short: "Show node live-migration capabilities",
+		Long:  "Show the live-migration capabilities (supported transports and options) of the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

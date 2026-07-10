@@ -49,6 +49,7 @@ func newDnsGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
 		Short: "Show the node's DNS configuration",
+		Long:  "Show the DNS search domain and configured name-server addresses on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -123,6 +124,7 @@ func newHostsGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
 		Short: "Show the node's /etc/hosts content",
+		Long:  "Show the current /etc/hosts file content on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -199,6 +201,7 @@ func newTimeGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
 		Short: "Show the node's time and time zone",
+		Long:  "Show the current local time, UTC time, and configured time zone on the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -401,6 +404,7 @@ func newSubscriptionGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
 		Short: "Show the node's subscription status",
+		Long:  "Show the Proxmox VE subscription status and product info of the resolved node.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

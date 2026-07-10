@@ -94,7 +94,9 @@ func newAptVersionsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "versions",
 		Short: "List installed versions of Proxmox-relevant packages",
-		Args:  cobra.NoArgs,
+		Long: "List the installed versions of the packages APT considers relevant to Proxmox " +
+			"on the resolved node, with their current state and priority.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -135,7 +137,11 @@ func newAptChangelogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "changelog",
 		Short: "Show the changelog of a package",
-		Args:  cobra.NoArgs,
+		Long: "Show the changelog text of a package on the resolved node. --name is " +
+			"required; --version defaults to the candidate (available update) version.",
+		Example: `  pmx pve node apt changelog --name pve-manager
+  pmx pve node apt changelog --name pve-manager --version 8.2.4`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -243,6 +249,8 @@ func newAptRepositoriesCmd() *cobra.Command {
 		Use:     "repositories",
 		Aliases: []string{"repos"},
 		Short:   "Manage configured APT repositories",
+		Long: "List the standard APT repositories and their status, add a standard " +
+			"repository, or enable/disable a configured repository on the resolved node.",
 	}
 	cmd.AddCommand(
 		newAptReposListCmd(),
@@ -275,7 +283,9 @@ func newAptReposListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List the standard APT repositories and their status",
-		Args:  cobra.NoArgs,
+		Long: "List the standard Proxmox APT repositories and, for each, whether it is " +
+			"enabled, disabled, or not configured on the resolved node.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -315,7 +325,10 @@ func newAptReposAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a standard repository to the configuration",
-		Args:  cobra.NoArgs,
+		Long: "Add a standard Proxmox repository, identified by --handle, to the resolved " +
+			"node's APT configuration. Refuses to run without --yes/-y.",
+		Example: `  pmx pve node apt repositories add --handle no-subscription --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

@@ -19,6 +19,8 @@ func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Get or set container configuration",
+		Long: "Read a container's current or pending configuration, apply changes to it, and " +
+			"browse the offline catalog of every settable option with 'describe'.",
 	}
 	cmd.AddCommand(newConfigGetCmd(), newConfigSetCmd(), newConfigPendingCmd(), newConfigDescribeCmd())
 	return cmd
@@ -142,7 +144,14 @@ func newConfigSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
 		Short: "Update the configuration of a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update one or more settings on a container's configuration. Only the flags you " +
+			"pass are changed; unspecified options keep their current value. Use --delete to " +
+			"reset options to their defaults, --revert to discard specific pending changes, " +
+			"and --set KEY=VALUE as an escape hatch for options with no dedicated flag. At " +
+			"least one field must be given.",
+		Example: `  pmx pve lxc config set 200 --memory 2048 --cores 4
+  pmx pve lxc config set web1 --hostname web1 --onboot --tags prod`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -444,7 +453,12 @@ func newConfigPendingCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "pending <vmid|name>",
 		Short: "Show pending configuration changes for a container",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the difference between a container's currently committed configuration " +
+			"and any changes staged to take effect after its next restart, as the current " +
+			"VALUE and PENDING-VALUE for each changed KEY.",
+		Example: `  pmx pve lxc config pending 200
+  pmx pve lxc config pending web1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

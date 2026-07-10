@@ -410,8 +410,10 @@ func newCephInitCmd() *cobra.Command {
 }
 
 // newCephCtlCmd builds a Ceph service-control verb (start/stop/restart). Each
-// targets an optional service and returns a worker UPID.
-func newCephCtlCmd(use, short, action string,
+// targets an optional service and returns a worker UPID. long and example are
+// threaded per-verb by the caller since the three verbs share this builder but
+// need distinct docs.
+func newCephCtlCmd(use, short, long, example, action string,
 	do func(deps *cli.Deps, ctx context.Context, service *string) (*json.RawMessage, error),
 ) *cobra.Command {
 	var (
@@ -419,9 +421,11 @@ func newCephCtlCmd(use, short, action string,
 		yes     bool
 	)
 	cmd := &cobra.Command{
-		Use:   use,
-		Short: short,
-		Args:  cobra.NoArgs,
+		Use:     use,
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -449,21 +453,45 @@ func newCephCtlCmd(use, short, action string,
 }
 
 func newCephStartCmd() *cobra.Command {
-	return newCephCtlCmd("start", "Start Ceph services on the node (destructive)", "start Ceph services",
+	return newCephCtlCmd("start", "Start Ceph services on the node (destructive)",
+		"Start Ceph services on the resolved node, optionally restricted to a single "+
+			"--service (for example osd.0 or mon.pve); with no --service, all Ceph services "+
+			"on the node are started. Refuses to run without --yes/-y. Submits a worker task "+
+			"and blocks until it completes; pass the global --async flag to print the task "+
+			"UPID immediately instead of waiting.",
+		`  pmx pve node ceph start --yes
+  pmx pve node ceph start --service osd.0 --yes`,
+		"start Ceph services",
 		func(deps *cli.Deps, ctx context.Context, service *string) (*json.RawMessage, error) {
 			return deps.API.Nodes.CreateCephStart(ctx, deps.Node, &nodes.CreateCephStartParams{Service: service})
 		})
 }
 
 func newCephStopCmd() *cobra.Command {
-	return newCephCtlCmd("stop", "Stop Ceph services on the node (destructive)", "stop Ceph services",
+	return newCephCtlCmd("stop", "Stop Ceph services on the node (destructive)",
+		"Stop Ceph services on the resolved node, optionally restricted to a single "+
+			"--service (for example osd.0 or mon.pve); with no --service, all Ceph services "+
+			"on the node are stopped. Refuses to run without --yes/-y. Submits a worker task "+
+			"and blocks until it completes; pass the global --async flag to print the task "+
+			"UPID immediately instead of waiting.",
+		`  pmx pve node ceph stop --yes
+  pmx pve node ceph stop --service osd.0 --yes`,
+		"stop Ceph services",
 		func(deps *cli.Deps, ctx context.Context, service *string) (*json.RawMessage, error) {
 			return deps.API.Nodes.CreateCephStop(ctx, deps.Node, &nodes.CreateCephStopParams{Service: service})
 		})
 }
 
 func newCephRestartCmd() *cobra.Command {
-	return newCephCtlCmd("restart", "Restart Ceph services on the node (destructive)", "restart Ceph services",
+	return newCephCtlCmd("restart", "Restart Ceph services on the node (destructive)",
+		"Restart Ceph services on the resolved node, optionally restricted to a single "+
+			"--service (for example osd.0 or mon.pve); with no --service, all Ceph services "+
+			"on the node are restarted. Refuses to run without --yes/-y. Submits a worker "+
+			"task and blocks until it completes; pass the global --async flag to print the "+
+			"task UPID immediately instead of waiting.",
+		`  pmx pve node ceph restart --yes
+  pmx pve node ceph restart --service osd.0 --yes`,
+		"restart Ceph services",
 		func(deps *cli.Deps, ctx context.Context, service *string) (*json.RawMessage, error) {
 			return deps.API.Nodes.CreateCephRestart(ctx, deps.Node, &nodes.CreateCephRestartParams{Service: service})
 		})

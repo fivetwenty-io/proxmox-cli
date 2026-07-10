@@ -191,6 +191,7 @@ func newNodeFirewallRulesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rules",
 		Short: "Manage the host firewall rules",
+		Long:  "List, inspect, create, update, and delete the firewall rules of the resolved node.",
 	}
 	cmd.AddCommand(
 		newNodeFirewallRulesListCmd(),
@@ -206,6 +207,7 @@ func newNodeFirewallRulesListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List the host firewall rules",
+		Long:  "List every firewall rule configured on the resolved node, in rule-evaluation order.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -232,9 +234,11 @@ func newNodeFirewallRulesListCmd() *cobra.Command {
 
 func newNodeFirewallRulesGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <pos>",
-		Short: "Show a single host firewall rule by position",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <pos>",
+		Short:   "Show a single host firewall rule by position",
+		Long:    "Show a single firewall rule of the resolved node by its position in the rule list.",
+		Example: `  pmx pve node firewall rules get 0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -341,7 +345,12 @@ func newNodeFirewallRulesUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <pos>",
 		Short: "Modify a host firewall rule by position",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update the host firewall rule at the given position. Only the flags you pass " +
+			"are changed; pass --moveto to relocate the rule to a different position instead " +
+			"(other flags are ignored when moving), or --delete to clear specific settings.",
+		Example: `  pmx pve node firewall rules update 0 --comment "allow ssh"
+  pmx pve node firewall rules update 0 --moveto 2`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -423,7 +432,10 @@ func newNodeFirewallRulesDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <pos>",
 		Short: "Delete a host firewall rule by position",
-		Args:  cobra.ExactArgs(1),
+		Long: "Permanently delete the host firewall rule at the given position. Refuses to " +
+			"run without --yes/-y.",
+		Example: `  pmx pve node firewall rules delete 0 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -456,6 +468,9 @@ func newNodeFirewallOptionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "options",
 		Short: "Inspect and set the host firewall options",
+		Long: "Show or update the firewall options that govern the resolved node's host " +
+			"protection and logging, and browse the offline catalog of every settable " +
+			"option with 'describe'.",
 	}
 	cmd.AddCommand(
 		newNodeFirewallOptionsGetCmd(),

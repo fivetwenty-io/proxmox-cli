@@ -30,7 +30,13 @@ func newRsyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rsync <node> <src> <dst>",
 		Short: "Synchronise files to or from a node over SSH",
-		Args:  cobra.ExactArgs(3),
+		Long: "Run rsync between the local machine and a cluster node over SSH. Prefix " +
+			"<src> or <dst> with \"<node>:\" to denote the remote side; that prefix is " +
+			"rewritten to \"<user>@<host>:\" using the node's resolved address before rsync " +
+			"runs.",
+		Example: `  pmx pve node rsync pve1 /local/path pve1:/remote/path
+  pmx pve node rsync pve1 pve1:/remote/path /local/path --delete`,
+		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
