@@ -5,6 +5,11 @@ MODULE  := github.com/fivetwenty-io/pmx-cli
 BINARY  := ./dist/pmx
 SCRIPTS := ./scripts
 
+# Version + date for man-page headers. Derived from git so `make man` is
+# reproducible and matches goreleaser ({{ .Version }} / {{ .CommitDate }}).
+VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+MAN_DATE ?= $(shell git log -1 --format=%cs 2>/dev/null || echo 1970-01-01)
+
 # ANSI color helpers — used in help awk block
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
@@ -46,6 +51,15 @@ build: ## Build ./dist/pmx binary (+ pve/pbs/pdm persona symlinks) with version 
 generate: ## Regenerate generated sources (cluster options schema from apidoc.json)
 	@echo "generate: running go generate ./..."
 	@go generate ./...
+
+.PHONY: man
+man: ## Generate roff man pages into dist/man/ (man1 + man5, all personas)
+	@go run ./cmd/docgen -out ./dist/man -version "$(VERSION)" -date "$(MAN_DATE)"
+
+.PHONY: check-docs
+check-docs: ## Smoke-test man page generation (CI gate; not part of `check`)
+	@tmp=$$(mktemp -d) && go run ./cmd/docgen -out "$$tmp/man" -version dev -date 1970-01-01 >/dev/null && \
+		rm -rf "$$tmp" && echo "check-docs: man generation ok"
 
 .PHONY: install
 install: build ## Install pmx binary + pve/pbs/pdm persona symlinks to $GOPATH/bin (or ~/go/bin)
@@ -151,7 +165,7 @@ release: ## (legacy) Cross-compile via scripts/release; prefer release-snapshot
 
 .PHONY: tag
 tag: ## Create and push a git tag (VERSION required, e.g. make tag VERSION=v1.2.3)
-	@if [ -z "$(VERSION)" ]; then \
+	@if [ "$(filter command%,$(origin VERSION))" = "" ]; then \
 		echo "usage: make tag VERSION=v1.2.3"; \
 		exit 1; \
 	fi
