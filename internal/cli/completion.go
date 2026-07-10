@@ -38,9 +38,7 @@ func ContextNamesCompletion(cmd *cobra.Command, _ []string, toComplete string) (
 		product := config.ProductPVE
 		host := ""
 		if ctx != nil {
-			if ctx.Product != "" {
-				product = ctx.Product
-			}
+			product = ctx.ProductOrDefault()
 			host = ctx.Host
 		}
 		entries = append(entries, fmt.Sprintf("%s\t%s@%s", name, product, host))

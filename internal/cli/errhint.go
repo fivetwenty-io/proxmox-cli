@@ -72,10 +72,7 @@ func PortConventionHint(err error, ctx *config.Context, contextName, cmdPrefix s
 		return ""
 	}
 
-	product := ctx.Product
-	if product == "" {
-		product = config.ProductPVE
-	}
+	product := ctx.ProductOrDefault()
 	if ctx.Port == 0 || ctx.Port == config.DefaultPortForProduct(product) {
 		return ""
 	}

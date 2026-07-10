@@ -436,10 +436,7 @@ func newAuthStatusCmd() *cobra.Command {
 			}
 
 			// Display values only — never mutate the stored context.
-			product := ctx.Product
-			if product == "" {
-				product = config.ProductPVE
-			}
+			product := ctx.ProductOrDefault()
 			port := ctx.Port
 			if port == 0 {
 				port = config.DefaultPortForProduct(product)

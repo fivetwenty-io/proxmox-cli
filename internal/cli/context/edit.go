@@ -197,10 +197,7 @@ func runProductEdit(
 			strings.Join(config.Products(), ", "), newProduct)
 	}
 
-	oldProduct := ctx.Product
-	if oldProduct == "" {
-		oldProduct = config.ProductPVE
-	}
+	oldProduct := ctx.ProductOrDefault()
 
 	oldDefault := config.DefaultPortForProduct(oldProduct)
 	newDefault := config.DefaultPortForProduct(newProduct)

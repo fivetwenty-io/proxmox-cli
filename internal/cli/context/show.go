@@ -46,12 +46,9 @@ func newShowCmd() *cobra.Command {
 				return fmt.Errorf("context %q not found in config", name)
 			}
 
-			// Resolve display product (default "pve" for display only — do not
+			// Resolve display product (default for display only — do not
 			// mutate the stored config).
-			product := ctx.Product
-			if product == "" {
-				product = config.ProductPVE
-			}
+			product := ctx.ProductOrDefault()
 
 			// Resolve display port (apply the product-aware default for display
 			// only — do not mutate the stored config).

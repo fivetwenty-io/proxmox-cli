@@ -64,9 +64,9 @@ type Context struct {
 	// SSH holds per-context defaults for the `pmx ssh` and `pmx rsync` commands.
 	SSH SSHBlock `yaml:"ssh,omitempty"`
 
-	// Product selects which Proxmox product this context targets: "pve" or
-	// "pbs". Empty means "pve" (backward compatible with configs written
-	// before Product existed).
+	// Product selects which Proxmox product this context targets: "pve",
+	// "pbs", or "pdm". Empty means "pve" (backward compatible with configs
+	// written before Product existed).
 	Product string `yaml:"product,omitempty"`
 }
 
@@ -74,6 +74,15 @@ type Context struct {
 // (backward-compat configs) is treated as ProductPVE, so IsPBS returns false.
 func (c *Context) IsPBS() bool {
 	return c.Product == ProductPBS
+}
+
+// ProductOrDefault returns the context's product, treating an empty Product
+// (backward-compat configs written before Product existed) as ProductPVE.
+func (c *Context) ProductOrDefault() string {
+	if c.Product == "" {
+		return ProductPVE
+	}
+	return c.Product
 }
 
 // Products enumerates every supported product identifier, in display order.
@@ -177,8 +186,8 @@ func ContextNamesWithProducts(cfg *Config) []string {
 	entries := make([]string, 0, len(cfg.Contexts))
 	for name, ctx := range cfg.Contexts {
 		product := ProductPVE
-		if ctx != nil && ctx.Product != "" {
-			product = ctx.Product
+		if ctx != nil {
+			product = ctx.ProductOrDefault()
 		}
 		entries = append(entries, fmt.Sprintf("%s (%s)", name, product))
 	}

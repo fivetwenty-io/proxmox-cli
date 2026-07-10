@@ -71,10 +71,7 @@ func newLsCmd() *cobra.Command {
 				if ctx == nil {
 					continue
 				}
-				product := ctx.Product
-				if product == "" {
-					product = config.ProductPVE
-				}
+				product := ctx.ProductOrDefault()
 				if f.product != "" && product != f.product {
 					continue
 				}

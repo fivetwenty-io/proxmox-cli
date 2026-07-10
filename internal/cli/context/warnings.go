@@ -27,10 +27,7 @@ func warnAfterSwitch(cmd *cobra.Command, cfg *config.Config, name string) {
 
 	errOut := cmd.ErrOrStderr()
 
-	product := ctx.Product
-	if product == "" {
-		product = config.ProductPVE
-	}
+	product := ctx.ProductOrDefault()
 
 	persona := cli.PersonaOf(cmd)
 	if persona != "pmx" && product != persona {
