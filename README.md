@@ -366,9 +366,13 @@ pmx auth login --oidc --realm myoidc
 pmx auth login --oidc --realm myoidc --code <auth-code> --state <state>
 ```
 
-`auth` is a shared, product-neutral command: `login`/`refresh`/`whoami`
-currently support PVE contexts only, while `status`/`set-token`/
-`set-password`/`logout` work against any context (PVE or PBS).
+`auth` is a shared, product-neutral command: `login`/`refresh`/`whoami` all work
+with any context targeting Proxmox VE (PVE), Proxmox Backup Server (PBS), or
+Proxmox Datacenter Manager (PDM). The `--otp` flag (one-time password for TOTP-based
+two-factor authentication) is PVE-only; PBS and PDM contexts use `--tfa-challenge`
+instead. OIDC login via `--oidc` works with all products. The client library handles
+per-product API token wire format differences (PVE uses `=` as separator, PBS/PDM use
+`:`) automatically — users configure tokens the same way for all products.
 
 ## Output and logging
 

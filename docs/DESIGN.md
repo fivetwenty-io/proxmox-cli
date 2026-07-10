@@ -37,8 +37,9 @@ internal/
 ## Contexts
 
 A **context** is a named bundle of connection and authentication settings for
-one Proxmox VE endpoint. The config file at `~/.config/pmx/config.yml` stores
-all contexts under the `contexts:` key.
+one Proxmox endpoint of a single product: Proxmox VE (PVE), Proxmox Backup Server
+(PBS), or Proxmox Datacenter Manager (PDM). The config file at `~/.config/pmx/config.yml`
+stores all contexts under the `contexts:` key.
 
 ```yaml
 current-context: lab
@@ -106,7 +107,7 @@ A value at a higher tier always wins. In particular, `$PMX_NODE` and
 ### Context validation
 
 `pmx context validate [<name>] [--all]` runs structural checks against one or
-all contexts without contacting the Proxmox VE API:
+all contexts without contacting any Proxmox API:
 
 - `host` is present.
 - `auth.type` is `token` or `password`; required sub-fields are set.
