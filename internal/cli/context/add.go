@@ -36,9 +36,26 @@ func newAddCmd() *cobra.Command {
 	var f addFlags
 
 	cmd := &cobra.Command{
-		Use:         "add <name>",
-		Aliases:     []string{"create"},
-		Short:       "Add a new named context to the config file",
+		Use:     "add <name>",
+		Aliases: []string{"create"},
+		Short:   "Add a new named context to the config file",
+		Long: `Add a new named context to the config file.
+
+The --product flag selects which Proxmox product the context targets and,
+unless --port is also given, its default API port.
+
+Examples:
+  # Proxmox VE (default product, port 8006)
+  pmx context add lab --host pve.example.com \
+    --username root@pam --token-id automation --secret ${PVE_TOKEN} --select
+
+  # Proxmox Backup Server (port 8007)
+  pmx context add backup --product pbs --host pbs.example.com \
+    --username root@pam --token-id automation --secret ${PBS_TOKEN}
+
+  # Proxmox Datacenter Manager (port 8443)
+  pmx context add dcmgr --product pdm --host pdm.example.com \
+    --username root@pam --token-id automation --secret ${PDM_TOKEN}`,
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -195,12 +212,14 @@ func newAddCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&f.host, "host", "", "Proxmox VE hostname or IP address (required)")
-	cmd.Flags().IntVar(&f.port, "port", 8006, "API port")
+	cmd.Flags().StringVar(&f.host, "host", "", "Proxmox hostname or IP address (required)")
+	cmd.Flags().IntVar(&f.port, "port", 8006,
+		"API port (defaults to the --product's standard port: 8006 pve, 8007 pbs, 8443 pdm)")
 	cmd.Flags().StringVar(&f.protocol, "protocol", "https", "connection scheme: https or http")
 	cmd.Flags().StringVar(&f.realm, "realm", "pam", "authentication realm")
 	cmd.Flags().StringVar(&f.authType, "auth-type", "token", "authentication type: token or password")
-	cmd.Flags().StringVar(&f.username, "username", "", "PVE username (e.g. root@pam); required for token and password auth")
+	cmd.Flags().StringVar(&f.username, "username", "",
+		"Proxmox username (e.g. root@pam); required for token and password auth")
 	cmd.Flags().StringVar(&f.tokenID, "token-id", "",
 		"API token name (e.g. mytoken), or the full user@realm!mytoken identifier; required for --auth-type=token")
 	cmd.Flags().StringVar(&f.secret, "secret", "", "token value or password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
@@ -211,8 +230,9 @@ func newAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
 	cmd.Flags().StringVar(&f.product, "product", config.ProductPVE,
-		fmt.Sprintf("Proxmox product this context targets: %s (%s defaults --port to 8007 unless --port is also given)",
-			strings.Join(config.Products(), "|"), config.ProductPBS))
+		"Proxmox product this context targets: pve (Proxmox VE, port "+
+			"8006), pbs (Proxmox Backup Server, 8007), or pdm (Proxmox "+
+			"Datacenter Manager, 8443)")
 	cmd.Flags().BoolVar(&f.selectCtx, "select", false, "make the new context the current context after adding")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing context with the same name")
 	_ = cmd.RegisterFlagCompletionFunc("product", cli.ProductCompletion)

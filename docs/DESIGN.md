@@ -49,6 +49,7 @@ contexts:
     host: pve.example.com
     port: 8006
     protocol: https
+    product: pve
     realm: pam
     default-node: pve1
     default-output: table
@@ -62,10 +63,15 @@ contexts:
       fingerprint: ""
       ca-cert: ""
   prod:
-    host: pve-prod.example.com
-    port: 8006
+    host: pbs.example.com
+    port: 8007
+    product: pbs
     ...
 ```
+
+Each context carries a `product:` field (`pve`, `pbs`, or `pdm`; empty means
+`pve`). The default port follows the product: 8006 (PVE), 8007 (PBS), 8443
+(PDM).
 
 ### Selection precedence
 

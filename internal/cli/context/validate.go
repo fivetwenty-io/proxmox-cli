@@ -40,7 +40,8 @@ func newValidateCmd() *cobra.Command {
   - auth type is "token" or "password"
   - token auth: token-id and secret are set
   - password auth: username and secret are set
-  - port is in range [1, 65535] (0 means "use default 8006"; accepted)
+  - port is in range [1, 65535] (0 means "use the product's default port:
+    8006 pve, 8007 pbs, 8443 pdm"; accepted)
   - protocol is "https" or "http" (empty means "use default https"; accepted)
   - default-output, if set, is one of: table, ascii, plain, json, yaml
   - fingerprint, if set, matches the XX:XX:...:XX hex pattern (32 pairs)

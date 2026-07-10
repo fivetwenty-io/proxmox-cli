@@ -111,6 +111,17 @@ pmx pve node list
 pmx pve --node pve1 qemu list
 ```
 
+The same flow works for the other products — pass `--product pbs` or
+`--product pdm` to `pmx context add` (the default port follows the product:
+8006 PVE, 8007 PBS, 8443 PDM) and use the matching command group or binary:
+
+```bash
+pmx context add backup --product pbs --host pbs.example.com \
+  --username root@pam --token-id automation
+pmx auth set-token --context backup --token-id automation --secret ${PBS_TOKEN}
+pmx pbs datastore list --context backup
+```
+
 ## Personas
 
 `pmx` inspects how it was invoked (`argv[0]`, with any `.exe` suffix
@@ -266,9 +277,11 @@ target; `pmx auth logout` wipes it.
 
 ## Contexts
 
-`pmx context` (alias: `pmx ctx`) manages the named Proxmox VE contexts stored
-in the config file. All verbs operate on the local config and never contact the
-Proxmox VE API.
+`pmx context` (alias: `pmx ctx`) manages the named Proxmox contexts stored in
+the config file — each targeting one product: Proxmox VE, Proxmox Backup
+Server, or Proxmox Datacenter Manager. All verbs operate on the local config
+and never contact a Proxmox API, except `validate --connect`, which probes
+the configured endpoint live.
 
 ```bash
 # Add a context. (Or paste the full token id: --token-id 'root@pam!automation')
@@ -292,15 +305,22 @@ pmx context previous
 # Copy a context to a new name.
 pmx context copy lab staging --select
 
+# Rename a context (current/previous pointers follow).
+pmx context rename lab lab-old
+
+# List only one product's contexts.
+pmx context ls --product pbs
+
 # Edit a context in $EDITOR.
 pmx context edit lab
 
 # Remove a context.
 pmx context rm old-lab
 
-# Validate one or all contexts (structural checks; no network connect).
+# Validate one or all contexts (structural checks; add --connect to probe live).
 pmx context validate lab
 pmx context validate --all
+pmx context validate lab --connect
 ```
 
 The active context is resolved in this order:
@@ -323,19 +343,23 @@ is given) and enables the `pmx pdm` command group for it — see
 [Proxmox Datacenter Manager](#proxmox-datacenter-manager-pmx-pdm) below.
 
 ```bash
-# Add a PBS context (defaults to port 8007).
+# Add a PBS context (defaults to port 8007), then attach the token secret.
 pmx context add backup \
   --product pbs \
   --host pbs.example.com --username root@pam \
-  --token-id automation --secret ${PBS_TOKEN} --select
+  --token-id automation --select
+pmx auth set-token --context backup --token-id automation --secret ${PBS_TOKEN}
 
-# Add a PDM context (--port 8443 is the default; shown explicitly here),
-# then attach the token secret with 'auth set-token' instead of --secret.
+# Add a PDM context (defaults to port 8443).
 pmx context add dcmgr \
-  --product pdm --host pdm.example.com --port 8443 \
+  --product pdm --host pdm.example.com \
   --username root@pam --token-id automation --select
 pmx auth set-token --context dcmgr --token-id automation --secret ${PDM_TOKEN}
 ```
+
+Passing `--secret ${VAR}` directly to `context add` also works; prefer an
+env or `keychain:` reference over a literal, which lands in shell history
+and the config file in plaintext.
 
 Per-context `ssh.user`, `ssh.port`, and `ssh.identity` fields supply defaults
 for `pmx ssh`/`pmx rsync` (and `pmx pve node ssh`/`pmx pve node rsync`):
