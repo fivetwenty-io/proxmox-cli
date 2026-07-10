@@ -45,27 +45,62 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
 
 ## Installation
 
-### Download a release binary
+### Homebrew (macOS and Linux)
 
-Pre-built binaries are published on the [Releases page](https://github.com/fivetwenty-io/pmx-cli/releases)
-for `darwin/arm64`, `linux/amd64`, `linux/arm64`, and `windows/amd64`.
+```bash
+brew install --cask fivetwenty-io/tap/pmx
+```
+
+This installs `pmx` plus the `pve`/`pbs`/`pdm` persona symlinks and the man
+pages and shell completions from the `share/` tree below. Maintainers: the
+tap lives in a separate `fivetwenty-io/homebrew-tap` GitHub repository, and
+releasing depends on a `HOMEBREW_TAP_GITHUB_TOKEN` repository secret on
+`pmx-cli` with write access to that tap — both are one-time, manual setup
+steps that must exist before the first release publishes the cask.
+
+### Download a release archive
+
+Pre-built archives are published on the [Releases page](https://github.com/fivetwenty-io/pmx-cli/releases)
+for `darwin/arm64`, `linux/amd64`, `linux/arm64`, `freebsd/amd64`,
+`freebsd/arm64`, and `windows/amd64`.
 
 ```bash
 # Pick your platform; example: macOS Apple Silicon.
 VERSION=1.0.0
-PLATFORM=darwin_arm64   # or linux_amd64, linux_arm64, windows_amd64
+PLATFORM=darwin_arm64   # or linux_amd64, linux_arm64, freebsd_amd64, freebsd_arm64
 BASE="https://github.com/fivetwenty-io/pmx-cli/releases/download/v${VERSION}"
 
-curl -fsSLO "${BASE}/pmx__${PLATFORM}.tar.gz"
-curl -fsSLO "${BASE}/pmx__SHA256SUMS"
+curl -fsSLO "${BASE}/pmx_${VERSION}_${PLATFORM}.tar.gz"
+curl -fsSLO "${BASE}/pmx_${VERSION}_SHA256SUMS"
 
-# Verify the checksum, then extract and install.
-shasum -a 256 -c pmx__SHA256SUMS --ignore-missing
-tar -xzf "pmx__${PLATFORM}.tar.gz"
-sudo install pmx /usr/local/bin/pmx
+# Verify the checksum, then extract.
+shasum -a 256 -c "pmx_${VERSION}_SHA256SUMS" --ignore-missing
+tar -xzf "pmx_${VERSION}_${PLATFORM}.tar.gz"
 ```
 
-Windows users download `pmx__windows_amd64.zip`, verify against the
+Each archive contains the `pmx` binary, `README.md`, `LICENSE`, and a
+`share/` tree with man pages and shell completions (mirroring what `make
+install` lays down under a prefix — see below):
+
+```
+pmx
+README.md
+LICENSE
+share/man/man1/*.1
+share/man/man5/*.5
+share/bash-completion/completions/pmx.bash
+share/zsh/site-functions/_pmx
+share/fish/vendor_completions.d/pmx.fish
+```
+
+Install the binary and, optionally, the `share/` tree:
+
+```bash
+sudo install pmx /usr/local/bin/pmx
+sudo cp -r share /usr/local/   # man pages + completions (optional)
+```
+
+Windows users download `pmx_${VERSION}_windows_amd64.zip`, verify against the
 `SHA256SUMS` file, and place `pmx.exe` on their `PATH`.
 
 Release archives ship only the `pmx` binary; create the `pve`/`pbs`/`pdm`
@@ -77,20 +112,76 @@ sudo ln -s pmx /usr/local/bin/pbs
 sudo ln -s pmx /usr/local/bin/pdm
 ```
 
+### Download a `.deb` or `.rpm` package
+
+Debian/Ubuntu and Fedora/RHEL packages are published alongside the archives
+on the [Releases page](https://github.com/fivetwenty-io/pmx-cli/releases)
+for `linux/amd64` and `linux/arm64`, named
+`pmx_<version>_linux_<arch>.deb`/`.rpm`. Each package installs `pmx` to
+`/usr/bin/pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages under
+`/usr/share/man/`, shell completions under `/usr/share/{bash-completion,zsh,fish}/`,
+and `LICENSE` under `/usr/share/doc/pmx/` — no separate symlink or `share/`
+setup step needed.
+
+```bash
+# Debian/Ubuntu
+curl -fsSLO "https://github.com/fivetwenty-io/pmx-cli/releases/download/v${VERSION}/pmx_${VERSION}_linux_amd64.deb"
+sudo apt install ./pmx_${VERSION}_linux_amd64.deb
+
+# Fedora/RHEL
+curl -fsSLO "https://github.com/fivetwenty-io/pmx-cli/releases/download/v${VERSION}/pmx_${VERSION}_linux_amd64.rpm"
+sudo dnf install ./pmx_${VERSION}_linux_amd64.rpm
+```
+
 ### Install with `go install`
 
 ```bash
 go install github.com/fivetwenty-io/pmx-cli/cmd/pmx@latest
 ```
 
+`go install` places only the `pmx` binary; it does not create persona
+symlinks, man pages, or shell completions.
+
 ### Build from source
 
 ```bash
 make build      # builds ./dist/pmx (+ pve/pbs/pdm symlinks) with version ldflags
-make install    # installs pmx + pve/pbs/pdm symlinks to $GOPATH/bin (or ~/go/bin)
+make install    # installs pmx + pve/pbs/pdm symlinks, man pages, and completions
 ```
 
 Requires Go 1.26 or newer.
+
+`make install` follows FHS/GNU conventions and defaults to `PREFIX=/usr/local`
+(so it typically needs `sudo`):
+
+```bash
+sudo make install                        # /usr/local/{bin,share/man,share/*-completion*}
+make install PREFIX=$HOME/.local         # per-user prefix, no sudo
+make install DESTDIR=/stage PREFIX=/usr  # staged install, for packagers
+make uninstall                           # remove everything the matching install placed
+```
+
+`DESTDIR` and `PREFIX` combine (`$(DESTDIR)$(PREFIX)/...`) and both `make
+install` and `make uninstall` must be run with the same values to stay in
+sync. For a quick local dev loop with no `sudo` and no man pages, use:
+
+```bash
+make install-user   # copies pmx + pve/pbs/pdm symlinks to $GOPATH/bin (or ~/go/bin)
+```
+
+### Man pages
+
+Every command tree ships a man page, generated from the same command
+metadata as `--help`: `man pmx` (root, and the same page for every subcommand
+prefixed with `pmx-`, e.g. `man pmx-pve-qemu-start`), `man pve` (the `pve`
+persona tree, e.g. `man pve-qemu-start`), and likewise for `pbs`/`pdm`, plus
+`man pmx-config` (the `~/.config/pmx/config.yml` format, man section 5).
+`make install` installs and gzips all of them; to generate them locally
+without installing:
+
+```bash
+make man   # writes roff pages to ./dist/man/man1 and ./dist/man/man5
+```
 
 ## Quick start
 
