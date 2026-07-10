@@ -81,7 +81,7 @@ func TestQemuConfig_Describe(t *testing.T) {
 	buf.Reset()
 	err := run(deps, &buf, "config", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx qemu config describe")
+	require.Contains(t, err.Error(), "pmx pve qemu config describe")
 }
 
 // TestQemuConfig_DescribeOffline verifies describe never contacts the

@@ -75,7 +75,7 @@ func TestQemuFirewallOptions_Describe(t *testing.T) {
 	buf.Reset()
 	err := run(deps, &buf, "firewall", "options", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx qemu firewall options describe")
+	require.Contains(t, err.Error(), "pmx pve qemu firewall options describe")
 }
 
 // TestQemuFirewallOptions_DescribeOffline verifies describe never contacts
