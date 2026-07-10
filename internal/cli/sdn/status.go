@@ -41,7 +41,11 @@ func newStatusZonesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zones",
 		Short: "List SDN zone status on a node",
-		Args:  cobra.NoArgs,
+		Long: "List the live, applied status of every SDN zone on a node: whether it is up " +
+			"and any per-zone status details reported by the node itself. Requires a node " +
+			"via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status zones --node pve1`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -73,7 +77,10 @@ func newStatusZonesGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <zone>",
 		Short: "Show a zone's live status on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show one zone's live status entry on a node, filtered client-side from the " +
+			"full zone status list. Requires a node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status zones get myzone --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -106,7 +113,10 @@ func newStatusZonesBridgesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "bridges <zone>",
 		Short: "List bridges for a zone on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the Linux bridges backing an SDN zone on a node. Requires a node via " +
+			"--node or PMX_NODE.",
+		Example: `  pmx pve sdn status zones bridges myzone --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -126,7 +136,10 @@ func newStatusZonesContentCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "content <zone>",
 		Short: "List content for a zone on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the vnets and other objects an SDN zone contains on a node. Requires a " +
+			"node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status zones content myzone --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -146,7 +159,10 @@ func newStatusZonesIpVrfCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ip-vrf <zone>",
 		Short: "List IP-VRF entries for a zone on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the live IP-VRF routing entries for an SDN zone on a node. Requires a " +
+			"node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status zones ip-vrf myzone --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -169,6 +185,8 @@ func newStatusVnetsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnets",
 		Short: "Show SDN vnet status on a node",
+		Long: "Show live SDN vnet state on a node. There is no per-vnet status summary; " +
+			"`mac-vrf` is the vnet-level live view.",
 	}
 	cmd.AddCommand(
 		newStatusVnetsMacVrfCmd(),
@@ -180,7 +198,10 @@ func newStatusVnetsMacVrfCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mac-vrf <vnet>",
 		Short: "List MAC-VRF entries for a vnet on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the live MAC-VRF (EVPN) entries for an SDN vnet on a node. Requires a " +
+			"node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status vnets mac-vrf vnet1 --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -204,6 +225,8 @@ func newStatusFabricsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fabrics",
 		Short: "Show SDN fabric status on a node",
+		Long: "Show live SDN fabric state on a node: interfaces, neighbors, and routes. " +
+			"There is no per-fabric status summary; use the sub-commands for each view.",
 	}
 	cmd.AddCommand(
 		newStatusFabricsInterfacesCmd(),
@@ -217,7 +240,10 @@ func newStatusFabricsInterfacesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "interfaces <fabric>",
 		Short: "List interfaces for a fabric on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the live network interfaces participating in an SDN fabric on a node. " +
+			"Requires a node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status fabrics interfaces fab1 --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -237,7 +263,10 @@ func newStatusFabricsNeighborsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "neighbors <fabric>",
 		Short: "List neighbors for a fabric on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the live routing-protocol neighbors of an SDN fabric on a node. Requires " +
+			"a node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status fabrics neighbors fab1 --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -257,7 +286,10 @@ func newStatusFabricsRoutesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "routes <fabric>",
 		Short: "List routes for a fabric on a node",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the live routing table entries an SDN fabric has installed on a node. " +
+			"Requires a node via --node or PMX_NODE.",
+		Example: `  pmx pve sdn status fabrics routes fab1 --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)

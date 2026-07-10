@@ -41,7 +41,11 @@ func newTokenListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <userid>",
 		Short: "List a user's API tokens",
-		Args:  cobra.ExactArgs(1),
+		Long: "List a user's API tokens with their expiration, privilege-separation flag, " +
+			"and comment. Token secret values are never included; they are shown only once, " +
+			"at creation (or regeneration) time.",
+		Example: `  pmx pve access user token list alice@pve`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -75,7 +79,11 @@ func newTokenGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <userid> <tokenid>",
 		Short: "Show an API token's details",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show one API token's expiration, privilege-separation flag, and comment. The " +
+			"token secret value is never returned here; it was shown only once, when the " +
+			"token was created (or last regenerated).",
+		Example: `  pmx pve access user token get alice@pve ci-token`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
@@ -108,7 +116,14 @@ func newTokenCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <userid> <tokenid>",
 		Short: "Create an API token",
-		Args:  cobra.ExactArgs(2),
+		Long: "Create a new API token for a user. The token secret is generated server-side " +
+			"and returned exactly once in this command's output — save it now, since it " +
+			"cannot be retrieved again afterward (only `--regenerate` on `token set` can " +
+			"issue a new one). --privsep is on by default, meaning the token needs its own " +
+			"ACL entries independent of the user's own permissions.",
+		Example: `  pmx pve access user token create alice@pve ci-token --comment "CI pipeline"
+  pmx pve access user token create alice@pve ci-token --expire 1735689600 --privsep=false`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
@@ -155,7 +170,13 @@ func newTokenSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <userid> <tokenid>",
 		Short: "Update an API token",
-		Args:  cobra.ExactArgs(2),
+		Long: "Update an API token's expiration, privilege-separation flag, or comment. " +
+			"Pass --regenerate to issue a new token secret, invalidating the old one; the " +
+			"new value is printed once in this command's output and cannot be retrieved " +
+			"again afterward. Pass --delete to clear specific settings instead.",
+		Example: `  pmx pve access user token set alice@pve ci-token --comment "Rotated quarterly"
+  pmx pve access user token set alice@pve ci-token --regenerate`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]
@@ -208,9 +229,11 @@ func newTokenSetCmd() *cobra.Command {
 func newTokenDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <userid> <tokenid>",
-		Short: "Delete an API token",
-		Args:  cobra.ExactArgs(2),
+		Use:     "delete <userid> <tokenid>",
+		Short:   "Delete an API token",
+		Long:    "Permanently revoke an API token. Refuses to run without --yes/-y.",
+		Example: `  pmx pve access user token delete alice@pve ci-token --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, tokenid := args[0], args[1]

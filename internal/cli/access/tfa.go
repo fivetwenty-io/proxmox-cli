@@ -57,7 +57,11 @@ func newTfaListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List users with two-factor authentication entries",
-		Args:  cobra.NoArgs,
+		Long: "List every user that has at least one two-factor authentication entry " +
+			"registered, with the count of entries. Use `pmx pve access tfa get <userid>` " +
+			"to see a user's individual entries.",
+		Example: `  pmx pve access tfa list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -99,7 +103,10 @@ func newTfaGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <userid>",
 		Short: "List a user's two-factor authentication entries",
-		Args:  cobra.ExactArgs(1),
+		Long: "List one user's registered two-factor authentication entries: ID, type, " +
+			"description, enable state, and creation time.",
+		Example: `  pmx pve access tfa get alice@pve`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -139,7 +146,11 @@ func newTfaDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <userid> <id>",
 		Short: "Delete a user's two-factor authentication entry",
-		Args:  cobra.ExactArgs(2),
+		Long: "Permanently remove one TFA entry by its entry ID. Refuses to run without " +
+			"--yes/-y. Pass --password if the PVE API requires the operator's current " +
+			"password to confirm the change.",
+		Example: `  pmx pve access tfa delete alice@pve totp-a1b2c3 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]
@@ -171,7 +182,10 @@ func newTfaUnlockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlock <userid>",
 		Short: "Unlock a user locked out of two-factor authentication",
-		Args:  cobra.ExactArgs(1),
+		Long: "Clear the second-factor lockout a user incurs after repeated failed TFA " +
+			"attempts, letting them try again. Refuses to run without --yes/-y.",
+		Example: `  pmx pve access tfa unlock alice@pve --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -198,7 +212,10 @@ func newTfaGetEntryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get-entry <userid> <id>",
 		Short: "Get a single two-factor authentication entry",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show one TFA entry by its entry ID: type, description, enable state, and " +
+			"creation time.",
+		Example: `  pmx pve access tfa get-entry alice@pve totp-a1b2c3`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]
@@ -330,7 +347,13 @@ func newTfaSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <userid> <id>",
 		Short: "Update a two-factor authentication entry",
-		Args:  cobra.ExactArgs(2),
+		Long: "Update a TFA entry's description or enable state. At least one of " +
+			"--description, --enable, or --password must be specified. The operator's own " +
+			"current password is required by the PVE API to modify TFA; when --password is " +
+			"omitted, the command prompts for it interactively.",
+		Example: `  pmx pve access tfa set alice@pve totp-a1b2c3 --description "Work phone"
+  pmx pve access tfa set alice@pve totp-a1b2c3 --enable=false`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]

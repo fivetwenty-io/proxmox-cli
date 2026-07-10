@@ -31,8 +31,8 @@ func newZonePermissionsCmd() *cobra.Command {
 		Short: "Manage ACL entries and view effective permissions on an SDN zone",
 		Long: "List, grant, and revoke ACL entries on an SDN zone's own access-control path " +
 			"(/sdn/zones/{zone}), and view the effective permission set a user or token holds " +
-			"there. This is a thin, path-deriving wrapper over `pmx access acl` and " +
-			"`pmx access permissions`; use those directly for any path outside a single zone.",
+			"there. This is a thin, path-deriving wrapper over `pmx pve access acl` and " +
+			"`pmx pve access permissions`; use those directly for any path outside a single zone.",
 	}
 	cmd.AddCommand(
 		newZonePermListCmd(),
@@ -52,7 +52,7 @@ func newZonePermListCmd() *cobra.Command {
 		Long: "List ACL entries whose path exactly matches the zone's own ACL path " +
 			"(/sdn/zones/{zone}). Pass --inherited to also include entries inherited from the " +
 			"zone's ancestor paths (/, /sdn, /sdn/zones); this walks the path client-side and " +
-			"issues no extra API calls. Needs the same privilege as `pmx access acl list`.",
+			"issues no extra API calls. Needs the same privilege as `pmx pve access acl list`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -186,7 +186,7 @@ func newVnetPermissionsCmd() *cobra.Command {
 			"holds there. Vnets have no independent ACL identity: their path nests under their " +
 			"zone. Pass --zone to skip the extra GET /cluster/sdn/vnets/{vnet} lookup this command " +
 			"otherwise performs to resolve the vnet's zone automatically. This is a thin, " +
-			"path-deriving wrapper over `pmx access acl` and `pmx access permissions`; use those " +
+			"path-deriving wrapper over `pmx pve access acl` and `pmx pve access permissions`; use those " +
 			"directly for any path outside a single vnet.",
 	}
 	cmd.AddCommand(
@@ -212,7 +212,7 @@ func newVnetPermListCmd() *cobra.Command {
 			"the vnet's ancestor paths (/, /sdn, /sdn/zones, /sdn/zones/{zone}); this walks the " +
 			"path client-side and issues no extra API calls beyond the zone lookup below. Pass " +
 			"--zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves " +
-			"the vnet's zone. Needs the same privilege as `pmx access acl list`.",
+			"the vnet's zone. Needs the same privilege as `pmx pve access acl list`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

@@ -30,7 +30,7 @@ func newDnsCmd() *cobra.Command {
 		Use:   "dns",
 		Short: "Manage SDN DNS providers",
 		Long: "List, create, inspect, update, and delete SDN DNS providers (e.g. PowerDNS). " +
-			"Changes are staged until committed with `pmx sdn apply`.",
+			"Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newDnsListCmd(),
@@ -47,7 +47,11 @@ func newDnsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN DNS providers",
-		Args:  cobra.NoArgs,
+		Long: "List SDN DNS providers (e.g. PowerDNS) with their type and API URL. Pass " +
+			"--type to filter by provider type.",
+		Example: `  pmx pve sdn dns list
+  pmx pve sdn dns list --type powerdns`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnDnsParams{}
@@ -89,7 +93,7 @@ func newDnsCreateCmd() *cobra.Command {
 		Use:   "create <dns> --type <type> --url <url> --key <key>",
 		Short: "Create an SDN DNS provider",
 		Long: "Create an SDN DNS provider (e.g. PowerDNS). The change is staged until " +
-			"`pmx sdn apply`. The --key value is a provider API key and is never echoed.",
+			"`pmx pve sdn apply`. The --key value is a provider API key and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -138,7 +142,10 @@ func newDnsGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <dns>",
 		Short: "Show an SDN DNS provider's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of one SDN DNS provider. The provider API key is " +
+			"scrubbed from the output before rendering; it cannot be retrieved this way.",
+		Example: `  pmx pve sdn dns get powerdns1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			dns := args[0]
@@ -167,7 +174,7 @@ func newDnsSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <dns>",
 		Short: "Update an SDN DNS provider",
-		Long: "Update an SDN DNS provider. The change is staged until `pmx sdn apply`. " +
+		Long: "Update an SDN DNS provider. The change is staged until `pmx pve sdn apply`. " +
 			"The --key value is a provider API key and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -230,7 +237,10 @@ func newDnsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <dns>",
 		Short: "Delete an SDN DNS provider",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN DNS provider. Refuses to run without --yes. The change is staged " +
+			"until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn dns delete powerdns1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			dns := args[0]

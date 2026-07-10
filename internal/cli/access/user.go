@@ -48,7 +48,12 @@ func newUserListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List users",
-		Args:  cobra.NoArgs,
+		Long: "List every Proxmox VE user with their enable state, expiration, name, and " +
+			"group membership. Pass --enabled to show only enabled users, or --full to " +
+			"include group and token information in the raw output.",
+		Example: `  pmx pve access user list
+  pmx pve access user list --enabled`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -93,9 +98,11 @@ func newUserListCmd() *cobra.Command {
 // newUserGetCmd builds `pmx access user get <userid>`.
 func newUserGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <userid>",
-		Short: "Show a user's details",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <userid>",
+		Short:   "Show a user's details",
+		Long:    "Show one user's enable state, expiration, name, email, comment, and groups.",
+		Example: `  pmx pve access user get alice@pve`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -136,7 +143,11 @@ func newUserCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <userid>",
 		Short: "Create a user",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a new user in the given userid's realm (name@realm). The account is " +
+			"enabled by default; pass --enable=false to create it disabled.",
+		Example: `  pmx pve access user create alice@pve --email alice@example.com
+  pmx pve access user create bob@pve --groups admins,ops --comment "Ops team"`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -186,7 +197,13 @@ func newUserSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <userid>",
 		Short: "Update a user",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update a user's profile fields. Only the flags you pass are changed. " +
+			"--groups replaces the user's group membership unless --append is also passed, " +
+			"which merges the given groups into the existing membership instead.",
+		Example: `  pmx pve access user set alice@pve --email alice@newdomain.example
+  pmx pve access user set alice@pve --groups ops --append
+  pmx pve access user set alice@pve --enable=false`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -232,9 +249,11 @@ func newUserSetCmd() *cobra.Command {
 func newUserDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <userid>",
-		Short: "Delete a user",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <userid>",
+		Short:   "Delete a user",
+		Long:    "Delete a user account. Refuses to run without --yes/-y.",
+		Example: `  pmx pve access user delete alice@pve --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]

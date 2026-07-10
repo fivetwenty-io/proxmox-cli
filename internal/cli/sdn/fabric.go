@@ -123,7 +123,7 @@ func newFabricCmd() *cobra.Command {
 		Use:   "fabric",
 		Short: "Manage SDN fabrics (BGP/OpenFabric/OSPF routing underlays)",
 		Long: "List, create, inspect, update, and delete SDN fabrics and their member " +
-			"nodes. Changes are staged until committed with `pmx sdn apply`.",
+			"nodes. Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newFabricListCmd(),
@@ -184,7 +184,13 @@ func newFabricListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN fabrics",
-		Args:  cobra.NoArgs,
+		Long: "List SDN fabric definitions (BGP, OpenFabric, or OSPF routing underlays). " +
+			"Pass --pending or --running to view the staged or active configuration instead " +
+			"of the merged default view. Use `pmx pve sdn fabric node list` for the member " +
+			"nodes.",
+		Example: `  pmx pve sdn fabric list
+  pmx pve sdn fabric list --running`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			// GET /cluster/sdn/fabrics is only a directory index (fabric, node,
@@ -218,7 +224,7 @@ func newFabricCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <id> --protocol <protocol>",
 		Short: "Create an SDN fabric",
-		Long:  "Create an SDN fabric. The change is staged until `pmx sdn apply`.",
+		Long:  "Create an SDN fabric. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -241,9 +247,11 @@ func newFabricCreateCmd() *cobra.Command {
 
 func newFabricGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <id>",
-		Short: "Show an SDN fabric's configuration",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <id>",
+		Short:   "Show an SDN fabric's configuration",
+		Long:    "Show the full configuration of one SDN fabric.",
+		Example: `  pmx pve sdn fabric get fab1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -267,7 +275,7 @@ func newFabricSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id> --protocol <protocol>",
 		Short: "Update an SDN fabric",
-		Long:  "Update an SDN fabric. The change is staged until `pmx sdn apply`.",
+		Long:  "Update an SDN fabric. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -302,7 +310,10 @@ func newFabricDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete an SDN fabric",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN fabric. Refuses to run without --yes. The change is staged " +
+			"until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn fabric delete fab1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -417,7 +428,7 @@ func newFabricNodeCmd() *cobra.Command {
 		Use:   "node",
 		Short: "Manage member nodes of SDN fabrics",
 		Long: "List, create, inspect, update, and delete the nodes that participate in " +
-			"SDN fabrics. Changes are staged until committed with `pmx sdn apply`.",
+			"SDN fabrics. Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newFabricNodeListCmd(),
@@ -438,7 +449,13 @@ func newFabricNodeListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list [--fabric <id>]",
 		Short: "List fabric nodes (across all fabrics, or within one fabric)",
-		Args:  cobra.NoArgs,
+		Long: "List the nodes that participate in SDN fabrics. Without --fabric, lists nodes " +
+			"across every fabric; with --fabric, lists only the nodes of that fabric. Pass " +
+			"--pending or --running to view the staged or active configuration instead of the " +
+			"merged default view.",
+		Example: `  pmx pve sdn fabric node list
+  pmx pve sdn fabric node list --fabric fab1`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -482,9 +499,11 @@ func newFabricNodeListCmd() *cobra.Command {
 
 func newFabricNodeGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <fabric> <node>",
-		Short: "Show a fabric node's configuration",
-		Args:  cobra.ExactArgs(2),
+		Use:     "get <fabric> <node>",
+		Short:   "Show a fabric node's configuration",
+		Long:    "Show the full configuration of one node within an SDN fabric.",
+		Example: `  pmx pve sdn fabric node get fab1 node1`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fabric, node := args[0], args[1]
@@ -506,7 +525,7 @@ func newFabricNodeCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <fabric> <node> --protocol <protocol>",
 		Short: "Add a node to an SDN fabric",
-		Long:  "Add a node to an SDN fabric. The change is staged until `pmx sdn apply`.",
+		Long:  "Add a node to an SDN fabric. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -537,7 +556,7 @@ func newFabricNodeSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <fabric> <node> --protocol <protocol>",
 		Short: "Update a node in an SDN fabric",
-		Long:  "Update a node in an SDN fabric. The change is staged until `pmx sdn apply`.",
+		Long:  "Update a node in an SDN fabric. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -572,7 +591,10 @@ func newFabricNodeDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <fabric> <node>",
 		Short: "Remove a node from an SDN fabric",
-		Args:  cobra.ExactArgs(2),
+		Long: "Remove a node from an SDN fabric. Refuses to run without --yes. The change is " +
+			"staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn fabric node delete fab1 node1 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fabric, node := args[0], args[1]

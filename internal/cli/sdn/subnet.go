@@ -31,6 +31,8 @@ func newSubnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subnet",
 		Short: "Manage SDN subnets",
+		Long: "List, show, create, update, and delete IP subnets attached to SDN vnets. " +
+			"Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newSubnetListCmd(), newSubnetShowCmd(), newSubnetCreateCmd(), newSubnetSetCmd(), newSubnetDeleteCmd(),
@@ -47,7 +49,11 @@ func newSubnetShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <vnet> <subnet>",
 		Short: "Show a subnet's configuration",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show the configuration of a subnet on a vnet (CIDR, gateway, DHCP settings). " +
+			"Pass --pending or --running to view the staged or active configuration instead " +
+			"of the merged default view.",
+		Example: `  pmx pve sdn subnet show vnet1 10.241.0.0-24`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, subnet := args[0], args[1]
@@ -87,7 +93,7 @@ func newSubnetSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet> <subnet>",
 		Short: "Update a subnet on a vnet",
-		Long:  "Update a subnet on a vnet. The change is staged until `pmx sdn apply`.",
+		Long:  "Update a subnet on a vnet. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -151,7 +157,11 @@ func newSubnetListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <vnet>",
 		Short: "List subnets of a vnet",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the subnets attached to a vnet, with their CIDR, gateway, and zone. Pass " +
+			"--pending or --running to view the staged or active configuration instead of " +
+			"the merged default view.",
+		Example: `  pmx pve sdn subnet list vnet1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -205,7 +215,7 @@ func newSubnetCreateCmd() *cobra.Command {
 		Use:   "create <vnet> <cidr>",
 		Short: "Create a subnet on a vnet",
 		Long: "Create a subnet (given as a CIDR, e.g. 10.241.0.0/24) on a vnet. " +
-			"The change is staged until `pmx sdn apply`.",
+			"The change is staged until `pmx pve sdn apply`.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -258,7 +268,10 @@ func newSubnetDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vnet> <subnet>",
 		Short: "Delete a subnet from a vnet",
-		Args:  cobra.ExactArgs(2),
+		Long: "Delete a subnet from a vnet. Refuses to run without --yes. The change is " +
+			"staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn subnet delete vnet1 10.241.0.0-24 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, subnet := args[0], args[1]

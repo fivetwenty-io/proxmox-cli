@@ -20,7 +20,7 @@ func newPrefixListCmd() *cobra.Command {
 		Aliases: []string{"prefix-lists"},
 		Short:   "Manage SDN prefix lists (route-filtering rule sets)",
 		Long: "List, create, inspect, update, and delete SDN prefix lists and their " +
-			"entries. Changes are staged until committed with `pmx sdn apply`.",
+			"entries. Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newPrefixListListCmd(),
@@ -42,7 +42,13 @@ func newPrefixListListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN prefix lists",
-		Args:  cobra.NoArgs,
+		Long: "List SDN prefix lists (route-filtering rule sets used by BGP controllers and " +
+			"fabrics). Pass --pending or --running to view the staged or active configuration " +
+			"instead of the merged default view, or --verbose to return every property " +
+			"instead of just identifiers.",
+		Example: `  pmx pve sdn prefix-list list
+  pmx pve sdn prefix-list list --verbose`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnPrefixListsParams{}
@@ -78,7 +84,7 @@ func newPrefixListCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <id>",
 		Short: "Create an SDN prefix list",
-		Long:  "Create an SDN prefix list. The change is staged until `pmx sdn apply`.",
+		Long:  "Create an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -107,9 +113,11 @@ func newPrefixListCreateCmd() *cobra.Command {
 
 func newPrefixListGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <id>",
-		Short: "Show an SDN prefix list's configuration",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <id>",
+		Short:   "Show an SDN prefix list's configuration",
+		Long:    "Show the configuration of one SDN prefix list, including its entries.",
+		Example: `  pmx pve sdn prefix-list get pfx1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -133,7 +141,7 @@ func newPrefixListSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id>",
 		Short: "Update an SDN prefix list",
-		Long:  "Update an SDN prefix list. The change is staged until `pmx sdn apply`.",
+		Long:  "Update an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -179,7 +187,10 @@ func newPrefixListDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete an SDN prefix list",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN prefix list and all of its entries. Refuses to run without " +
+			"--yes. The change is staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn prefix-list delete pfx1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -209,6 +220,9 @@ func newPrefixListEntryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "entry",
 		Short: "Manage individual entries of an SDN prefix list",
+		Long: "List, add, inspect, update, and delete the individual match/permit-or-deny " +
+			"entries of an SDN prefix list. Changes are staged until committed with " +
+			"`pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newPrefixListEntryListCmd(),
@@ -222,9 +236,11 @@ func newPrefixListEntryCmd() *cobra.Command {
 
 func newPrefixListEntryListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list <id>",
-		Short: "List the entries of an SDN prefix list",
-		Args:  cobra.ExactArgs(1),
+		Use:     "list <id>",
+		Short:   "List the entries of an SDN prefix list",
+		Long:    "List every match entry of one SDN prefix list, in sequence order.",
+		Example: `  pmx pve sdn prefix-list entry list pfx1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -250,7 +266,7 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <id> --action <permit|deny> --prefix <cidr>",
 		Short: "Add an entry to an SDN prefix list",
-		Long:  "Add an entry to an SDN prefix list. The change is staged until `pmx sdn apply`.",
+		Long:  "Add an entry to an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -291,9 +307,11 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 
 func newPrefixListEntryGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <id> <seq>",
-		Short: "Show a single entry of an SDN prefix list",
-		Args:  cobra.ExactArgs(2),
+		Use:     "get <id> <seq>",
+		Short:   "Show a single entry of an SDN prefix list",
+		Long:    "Show a single entry of an SDN prefix list by its sequence number.",
+		Example: `  pmx pve sdn prefix-list entry get pfx1 10`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id, seq := args[0], args[1]
@@ -321,7 +339,7 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id> <seq>",
 		Short: "Update a single entry of an SDN prefix list",
-		Long:  "Update a single entry of an SDN prefix list. The change is staged until `pmx sdn apply`.",
+		Long:  "Update a single entry of an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -383,7 +401,10 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id> <seq>",
 		Short: "Delete a single entry of an SDN prefix list",
-		Args:  cobra.ExactArgs(2),
+		Long: "Delete a single entry of an SDN prefix list by its sequence number. Refuses to " +
+			"run without --yes. The change is staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn prefix-list entry delete pfx1 10 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id, seq := args[0], args[1]
@@ -420,7 +441,7 @@ func newRouteMapCmd() *cobra.Command {
 		Aliases: []string{"route-maps"},
 		Short:   "Manage SDN route maps (BGP route policy)",
 		Long: "List route maps, show their entries, and manage individual entries. " +
-			"Changes are staged until committed with `pmx sdn apply`.",
+			"Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newRouteMapListCmd(),
@@ -435,7 +456,10 @@ func newRouteMapListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN route maps",
-		Args:  cobra.NoArgs,
+		Long: "List the SDN route maps (BGP route policy) that currently have entries. Pass " +
+			"--running to view the active configuration instead of the merged default view.",
+		Example: `  pmx pve sdn route-map list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnRouteMapsParams{}
@@ -461,7 +485,10 @@ func newRouteMapGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <route-map>",
 		Short: "Show the entries of an SDN route map",
-		Args:  cobra.ExactArgs(1),
+		Long: "List every entry of one SDN route map, in order. Pass --pending or --running " +
+			"to view the staged or active configuration instead of the merged default view.",
+		Example: `  pmx pve sdn route-map get rm1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			routeMap := args[0]
@@ -491,6 +518,10 @@ func newRouteMapEntryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "entry",
 		Short: "Manage individual entries of SDN route maps",
+		Long: "List, add, inspect, update, and delete the individual match/set entries of SDN " +
+			"route maps. A route map has no standalone object of its own — it comes into " +
+			"existence when its first entry is added. Changes are staged until committed " +
+			"with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newRouteMapEntryListCmd(),
@@ -510,7 +541,11 @@ func newRouteMapEntryListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List route map entries across all route maps",
-		Args:  cobra.NoArgs,
+		Long: "List every route map entry across every SDN route map. Pass --pending or " +
+			"--running to view the staged or active configuration instead of the merged " +
+			"default view.",
+		Example: `  pmx pve sdn route-map entry list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnRouteMapsEntriesParams{}
@@ -547,7 +582,7 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <route-map> --order <n> --action <permit|deny>",
 		Short: "Add an entry to an SDN route map",
-		Long:  "Add an entry to an SDN route map. The change is staged until `pmx sdn apply`.",
+		Long:  "Add an entry to an SDN route map. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -596,9 +631,11 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 
 func newRouteMapEntryGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <route-map> <order>",
-		Short: "Show a single entry of an SDN route map",
-		Args:  cobra.ExactArgs(2),
+		Use:     "get <route-map> <order>",
+		Short:   "Show a single entry of an SDN route map",
+		Long:    "Show a single entry of an SDN route map by its order index.",
+		Example: `  pmx pve sdn route-map entry get rm1 10`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			routeMap, order := args[0], args[1]
@@ -626,7 +663,7 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <route-map> <order>",
 		Short: "Update a single entry of an SDN route map",
-		Long:  "Update a single entry of an SDN route map. The change is staged until `pmx sdn apply`.",
+		Long:  "Update a single entry of an SDN route map. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -688,7 +725,10 @@ func newRouteMapEntryDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <route-map> <order>",
 		Short: "Delete a single entry of an SDN route map",
-		Args:  cobra.ExactArgs(2),
+		Long: "Delete a single entry of an SDN route map by its order index. Refuses to run " +
+			"without --yes. The change is staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn route-map entry delete rm1 10 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			routeMap, order := args[0], args[1]

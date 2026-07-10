@@ -38,9 +38,11 @@ type groupListEntry struct {
 // newGroupListCmd builds `pmx access group list`.
 func newGroupListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List groups",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List groups",
+		Long:    "List every user group with its comment and comma-separated member list.",
+		Example: `  pmx pve access group list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -71,9 +73,11 @@ func newGroupListCmd() *cobra.Command {
 // newGroupGetCmd builds `pmx access group get <groupid>`.
 func newGroupGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <groupid>",
-		Short: "Show a group's details",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <groupid>",
+		Short:   "Show a group's details",
+		Long:    "Show a group's comment and its member user IDs.",
+		Example: `  pmx pve access group get admins`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			groupid := args[0]
@@ -98,9 +102,11 @@ func newGroupGetCmd() *cobra.Command {
 func newGroupCreateCmd() *cobra.Command {
 	var comment string
 	cmd := &cobra.Command{
-		Use:   "create <groupid>",
-		Short: "Create a group",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <groupid>",
+		Short:   "Create a group",
+		Long:    "Create a new, empty user group. Add members with `pmx pve access user set`.",
+		Example: `  pmx pve access group create admins --comment "Cluster administrators"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			groupid := args[0]
@@ -124,9 +130,11 @@ func newGroupCreateCmd() *cobra.Command {
 func newGroupSetCmd() *cobra.Command {
 	var comment string
 	cmd := &cobra.Command{
-		Use:   "set <groupid>",
-		Short: "Update a group",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <groupid>",
+		Short:   "Update a group",
+		Long:    "Update a group's comment. Membership is managed via `pmx pve access user set`.",
+		Example: `  pmx pve access group set admins --comment "Cluster administrators"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			groupid := args[0]
@@ -150,9 +158,11 @@ func newGroupSetCmd() *cobra.Command {
 func newGroupDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <groupid>",
-		Short: "Delete a group",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <groupid>",
+		Short:   "Delete a group",
+		Long:    "Delete a group. Refuses to run without --yes/-y.",
+		Example: `  pmx pve access group delete admins --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			groupid := args[0]

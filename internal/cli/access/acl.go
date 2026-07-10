@@ -38,7 +38,12 @@ func newACLListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List ACL entries",
-		Args:  cobra.NoArgs,
+		Long: "List every ACL entry (path, subject, role, propagate flag). Pass --path to " +
+			"restrict to entries under a path (prefix match by default; pass --exact to " +
+			"require an exact match).",
+		Example: `  pmx pve access acl list
+  pmx pve access acl list --path /vms/100 --exact`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -93,7 +98,13 @@ func newACLSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Grant or revoke roles on a path",
-		Args:  cobra.NoArgs,
+		Long: "Grant one or more roles on a path to the given users, groups, and/or tokens. " +
+			"--path and --roles are required. Roles propagate to nested paths by default; " +
+			"pass --propagate=false to grant non-propagating access. Pass --delete to remove " +
+			"the listed permissions instead of adding them.",
+		Example: `  pmx pve access acl set --path /vms/100 --roles PVEVMAdmin --users alice@pve
+  pmx pve access acl set --path /vms/100 --roles PVEVMAdmin --users alice@pve --delete`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

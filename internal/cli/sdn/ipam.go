@@ -29,7 +29,7 @@ func newIpamCmd() *cobra.Command {
 		Use:   "ipam",
 		Short: "Manage SDN IP address management (IPAM) backends",
 		Long: "List, create, inspect, update, and delete SDN IPAM backends, and show " +
-			"their address allocations. Changes are staged until committed with `pmx sdn apply`.",
+			"their address allocations. Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newIpamListCmd(),
@@ -47,7 +47,11 @@ func newIpamListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN IPAM backends",
-		Args:  cobra.NoArgs,
+		Long: "List SDN IPAM backends (pve, netbox, or phpipam) with their type. Pass --type " +
+			"to filter by backend type.",
+		Example: `  pmx pve sdn ipam list
+  pmx pve sdn ipam list --type netbox`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnIpamsParams{}
@@ -87,7 +91,7 @@ func newIpamCreateCmd() *cobra.Command {
 		Use:   "create <ipam> --type <type>",
 		Short: "Create an SDN IPAM backend",
 		Long: "Create an SDN IPAM backend (pve, netbox, or phpipam). The change is staged " +
-			"until `pmx sdn apply`. The --token value is a provider API token and is never echoed.",
+			"until `pmx pve sdn apply`. The --token value is a provider API token and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -132,7 +136,10 @@ func newIpamGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <ipam>",
 		Short: "Show an SDN IPAM backend's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of one SDN IPAM backend. The provider API token is " +
+			"scrubbed from the output before rendering; it cannot be retrieved this way.",
+		Example: `  pmx pve sdn ipam get netbox1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			ipam := args[0]
@@ -160,7 +167,7 @@ func newIpamSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <ipam>",
 		Short: "Update an SDN IPAM backend",
-		Long: "Update an SDN IPAM backend. The change is staged until `pmx sdn apply`. " +
+		Long: "Update an SDN IPAM backend. The change is staged until `pmx pve sdn apply`. " +
 			"The --token value is a provider API token and is never echoed.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -219,7 +226,10 @@ func newIpamDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <ipam>",
 		Short: "Delete an SDN IPAM backend",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN IPAM backend. Refuses to run without --yes. The change is staged " +
+			"until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn ipam delete netbox1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			ipam := args[0]
@@ -247,7 +257,10 @@ func newIpamStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <ipam>",
 		Short: "Show address allocations recorded by an IPAM backend",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the IP address allocations an IPAM backend currently tracks, including " +
+			"the owning subnet, VM/CT, and hostname where recorded.",
+		Example: `  pmx pve sdn ipam status pve`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			ipam := args[0]

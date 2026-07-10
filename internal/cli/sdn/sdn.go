@@ -32,8 +32,8 @@ Requires a configured Proxmox VE API connection.
 
 Creating, updating, or deleting a zone, vnet, subnet, controller, IPAM, DNS
 provider, or fabric only edits the pending configuration; changes take effect
-on the nodes only after 'pmx sdn apply' reloads the network config ('pmx sdn
-dry-run' previews the reload, 'pmx sdn rollback' discards pending changes).
+on the nodes only after 'pmx pve sdn apply' reloads the network config ('pmx sdn
+dry-run' previews the reload, 'pmx pve sdn rollback' discards pending changes).
 Sub-commands take the resource's own identifier (zone name, vnet name,
 controller ID, and so on); destructive verbs require --yes/-y and otherwise
 refuse to run.`,

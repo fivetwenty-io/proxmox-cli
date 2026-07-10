@@ -77,7 +77,13 @@ func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List recent tasks on a node",
-		Args:  cobra.NoArgs,
+		Long: "List recent tasks on a single node, selected via --node, PMX_NODE, or the " +
+			"active context's default node. Supports filtering by VM ID, task type, status, " +
+			"user, time range, and source (archive, active, or all), plus --limit/--start " +
+			"pagination.",
+		Example: `  pmx pve task list --node pve1
+  pmx pve task list --node pve1 --statusfilter error --limit 20`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -206,7 +212,10 @@ func newClusterListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster-list",
 		Short: "List recent tasks across the whole cluster",
-		Args:  cobra.NoArgs,
+		Long: "List recent tasks across every node in the cluster, not just one. Needs no " +
+			"--node; unlike `pmx pve task list`, it takes no filter flags.",
+		Example: `  pmx pve task cluster-list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -251,7 +260,13 @@ func newLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <upid>",
 		Short: "Read the log of a task",
-		Args:  cobra.ExactArgs(1),
+		Long: "Read a task's log lines from the node the task ran on, selected via --node, " +
+			"PMX_NODE, or the active context's default node. --limit and --start page " +
+			"through the log; --download instead fetches the full log file and cannot be " +
+			"combined with --limit or --start.",
+		Example: `  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --node pve1
+  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --node pve1 --limit 50 --start 100`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -332,7 +347,11 @@ func newStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop <upid>",
 		Short: "Stop a running task",
-		Args:  cobra.ExactArgs(1),
+		Long: "Request that a running task be stopped, on the node selected via --node, " +
+			"PMX_NODE, or the active context's default node. Returns as soon as the stop " +
+			"request is accepted; it does not wait for the task to actually finish exiting.",
+		Example: `  pmx pve task stop UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -366,7 +385,13 @@ func newWaitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "wait <upid>",
 		Short: "Wait for a task to finish",
-		Args:  cobra.ExactArgs(1),
+		Long: "Poll a task until it finishes or --timeout elapses, then print its final " +
+			"status. The node is resolved from the UPID, so --node is not required. Pass " +
+			"--backoff to exponentially increase the polling interval up to --max-interval " +
+			"instead of polling at a fixed --interval.",
+		Example: `  pmx pve task wait UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
+  pmx pve task wait UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --timeout 600 --backoff`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 

@@ -23,7 +23,15 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Show effective permissions for a user or token",
-		Args:  cobra.NoArgs,
+		Long: "Show the effective privilege set after role and ACL propagation is resolved " +
+			"server-side, as a path-to-privilege-list table. Without --userid, shows the " +
+			"calling user's own effective permissions; pass --userid to query a different " +
+			"user or token (requires Sys.Audit on /access). Pass --path to restrict the " +
+			"result to a single path.",
+		Example: `  pmx pve access permissions
+  pmx pve access permissions --path /vms/100
+  pmx pve access permissions --userid alice@pve`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -89,7 +97,12 @@ func newPasswordSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Change a user's password",
-		Args:  cobra.NoArgs,
+		Long: "Change the password of a Proxmox VE user. --userid is required. When " +
+			"--password is omitted, prompts for it interactively (hidden input on a " +
+			"terminal, or a single line read from stdin otherwise); the new password is " +
+			"never accepted as a positional argument or echoed back.",
+		Example: `  pmx pve access password set --userid alice@pve`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

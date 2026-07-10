@@ -179,7 +179,7 @@ func newControllerCmd() *cobra.Command {
 		Use:   "controller",
 		Short: "Manage SDN routing controllers (BGP, EVPN, IS-IS)",
 		Long: "List, create, inspect, update, and delete SDN controllers. Changes are " +
-			"staged until committed with `pmx sdn apply`.",
+			"staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newControllerListCmd(),
@@ -200,7 +200,13 @@ func newControllerListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN controllers",
-		Args:  cobra.NoArgs,
+		Long: "List SDN controllers (BGP, EVPN, or IS-IS) with their type. Pass --type to " +
+			"filter by controller type, or --pending/--running to view the staged or active " +
+			"configuration instead of the merged default view.",
+		Example: `  pmx pve sdn controller list
+  pmx pve sdn controller list --type bgp
+  pmx pve sdn controller list --pending`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnControllersParams{}
@@ -246,7 +252,7 @@ func newControllerCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <controller> --type <type>",
 		Short: "Create an SDN controller",
-		Long:  "Create an SDN controller. The change is staged until `pmx sdn apply`.",
+		Long:  "Create an SDN controller. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -280,7 +286,11 @@ func newControllerGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <controller>",
 		Short: "Show an SDN controller's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full configuration of one SDN controller. Pass --pending or --running " +
+			"to view the staged or active configuration instead of the merged default view.",
+		Example: `  pmx pve sdn controller get evpn-ctl1
+  pmx pve sdn controller get evpn-ctl1 --pending`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			controller := args[0]
@@ -315,7 +325,7 @@ func newControllerSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <controller>",
 		Short: "Update an SDN controller",
-		Long:  "Update an SDN controller. The change is staged until `pmx sdn apply`.",
+		Long:  "Update an SDN controller. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -358,7 +368,10 @@ func newControllerDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <controller>",
 		Short: "Delete an SDN controller",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN controller. Refuses to run without --yes. The change is staged " +
+			"until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn controller delete evpn-ctl1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			controller := args[0]

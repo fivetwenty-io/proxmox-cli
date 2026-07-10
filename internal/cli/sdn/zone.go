@@ -35,6 +35,10 @@ func newZoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zone",
 		Short: "Manage SDN zones",
+		Long: "List, show, create, update, and delete SDN zones, plus their ACL " +
+			"permissions. A zone is the top-level SDN construct: simple, VLAN, QinQ, " +
+			"VXLAN, and EVPN zones each isolate a segment of the network differently. " +
+			"Changes are staged until committed with `pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newZoneListCmd(), newZoneShowCmd(), newZoneCreateCmd(), newZoneSetCmd(), newZoneDeleteCmd(),
@@ -52,7 +56,10 @@ func newZoneShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <zone>",
 		Short: "Show an SDN zone's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of one SDN zone. Pass --pending or --running to view " +
+			"the staged or active configuration instead of the merged default view.",
+		Example: `  pmx pve sdn zone show myzone`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			zone := args[0]
@@ -112,7 +119,7 @@ func newZoneSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <zone>",
 		Short: "Update an SDN zone",
-		Long:  "Update an SDN zone. The change is staged until `pmx sdn apply`.",
+		Long:  "Update an SDN zone. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -255,7 +262,12 @@ func newZoneListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN zones",
-		Args:  cobra.NoArgs,
+		Long: "List SDN zones with their type, member nodes, and IPAM backend. Pass --type " +
+			"to filter by zone type, or --pending/--running to view the staged or active " +
+			"configuration instead of the merged default view.",
+		Example: `  pmx pve sdn zone list
+  pmx pve sdn zone list --type vxlan`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnZonesParams{}
@@ -332,7 +344,7 @@ func newZoneCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <zone>",
 		Short: "Create an SDN zone",
-		Long: "Create an SDN zone. The change is staged until `pmx sdn apply`. " +
+		Long: "Create an SDN zone. The change is staged until `pmx pve sdn apply`. " +
 			"A simple zone needs no bridge or uplink and provides an isolated L2 segment. " +
 			"VLAN/QinQ zones need a --bridge; VXLAN zones need --peers (or a --fabric); " +
 			"EVPN zones need a --controller and --vrf-vxlan.",
@@ -469,7 +481,10 @@ func newZoneDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <zone>",
 		Short: "Delete an SDN zone",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN zone. Refuses to run without --yes. The change is staged until " +
+			"`pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn zone delete myzone --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			zone := args[0]

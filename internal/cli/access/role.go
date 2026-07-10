@@ -41,7 +41,10 @@ func newRoleListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List roles",
-		Args:  cobra.NoArgs,
+		Long: "List every role, including the built-in special roles, with their granted " +
+			"privileges.",
+		Example: `  pmx pve access role list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -73,9 +76,11 @@ func newRoleListCmd() *cobra.Command {
 // privilege name to a boolean flag; enabled privileges are listed.
 func newRoleGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <roleid>",
-		Short: "Show the privileges granted by a role",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <roleid>",
+		Short:   "Show the privileges granted by a role",
+		Long:    "List the privileges a role grants, one row per enabled privilege.",
+		Example: `  pmx pve access role get PVEVMAdmin`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			roleid := args[0]
@@ -107,7 +112,10 @@ func newRoleCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <roleid>",
 		Short: "Create a role",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a custom role. Omitting --privs creates a role with no privileges, " +
+			"useful as a starting point for `pmx pve access role set --append`.",
+		Example: `  pmx pve access role create Custom-Auditor --privs "VM.Audit,Sys.Audit"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			roleid := args[0]
@@ -135,7 +143,12 @@ func newRoleSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <roleid> --privs <csv>",
 		Short: "Update a role's privileges",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update a role's privilege list. --privs is required and replaces the role's " +
+			"existing privileges unless --append is also passed, which adds the given " +
+			"privileges instead.",
+		Example: `  pmx pve access role set Custom-Auditor --privs "VM.Audit,Sys.Audit,Datastore.Audit"
+  pmx pve access role set Custom-Auditor --privs "Pool.Audit" --append`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			roleid := args[0]
@@ -165,9 +178,11 @@ func newRoleSetCmd() *cobra.Command {
 func newRoleDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <roleid>",
-		Short: "Delete a role",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <roleid>",
+		Short:   "Delete a role",
+		Long:    "Delete a custom role. Refuses to run without --yes/-y.",
+		Example: `  pmx pve access role delete Custom-Auditor --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			roleid := args[0]

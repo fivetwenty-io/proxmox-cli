@@ -25,6 +25,9 @@ func newVnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnet",
 		Short: "Manage SDN vnets",
+		Long: "List, show, create, update, and delete SDN vnets, plus their IP mappings, " +
+			"firewall, and ACL permissions. Changes are staged until committed with " +
+			"`pmx pve sdn apply`.",
 	}
 	cmd.AddCommand(
 		newVnetListCmd(),
@@ -48,7 +51,11 @@ func newVnetShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <vnet>",
 		Short: "Show an SDN vnet's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of one SDN vnet (zone, VLAN tag/VXLAN VNI, alias). " +
+			"Pass --pending or --running to view the staged or active configuration instead " +
+			"of the merged default view.",
+		Example: `  pmx pve sdn vnet show vnet1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -78,6 +85,9 @@ func newVnetIpsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ips",
 		Short: "Manage IP mappings in an SDN vnet (IPAM)",
+		Long: "Create, update, and delete IP-to-MAC/VMID mappings recorded by a vnet's IPAM " +
+			"zone. There is no list sub-command; use `pmx pve sdn ipam status <ipam>` to " +
+			"see recorded allocations.",
 	}
 	cmd.AddCommand(newVnetIpsCreateCmd(), newVnetIpsSetCmd(), newVnetIpsDeleteCmd())
 	return cmd
@@ -177,7 +187,10 @@ func newVnetIpsDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vnet>",
 		Short: "Remove an IP mapping from a vnet",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove an IP-to-MAC mapping from a vnet's IPAM zone. --ip and --zone are " +
+			"required to identify the mapping. Refuses to run without --yes.",
+		Example: `  pmx pve sdn vnet ips delete vnet1 --ip 10.0.0.5 --zone myzone --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -225,7 +238,7 @@ func newVnetSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet>",
 		Short: "Update an SDN vnet",
-		Long:  "Update an SDN vnet. The change is staged until `pmx sdn apply`.",
+		Long:  "Update an SDN vnet. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -287,7 +300,11 @@ func newVnetListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN vnets",
-		Args:  cobra.NoArgs,
+		Long: "List SDN vnets with their zone, VLAN tag/VXLAN VNI, and alias. Pass --pending " +
+			"or --running to view the staged or active configuration instead of the merged " +
+			"default view.",
+		Example: `  pmx pve sdn vnet list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnVnetsParams{}
@@ -344,7 +361,7 @@ func newVnetCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <vnet>",
 		Short: "Create an SDN vnet",
-		Long:  "Create an SDN vnet in a zone. The change is staged until `pmx sdn apply`.",
+		Long:  "Create an SDN vnet in a zone. The change is staged until `pmx pve sdn apply`.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -399,7 +416,10 @@ func newVnetDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vnet>",
 		Short: "Delete an SDN vnet",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an SDN vnet and its subnets. Refuses to run without --yes. The change " +
+			"is staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn vnet delete vnet1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]

@@ -36,7 +36,11 @@ func newOpenidListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List OpenID Connect realms",
-		Args:  cobra.NoArgs,
+		Long: "List every configured OpenID Connect authentication realm, filtered " +
+			"client-side from the full realm list. Use `pmx pve access domain get <realm>` " +
+			"for a realm's full configuration.",
+		Example: `  pmx pve access openid list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

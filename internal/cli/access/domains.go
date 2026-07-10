@@ -50,7 +50,10 @@ func newDomainListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List authentication realms",
-		Args:  cobra.NoArgs,
+		Long: "List every configured authentication realm (pam, pve, ldap, ad, openid) " +
+			"with its type, default flag, TFA configuration, and comment.",
+		Example: `  pmx pve access domain list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -85,7 +88,12 @@ func newDomainGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <realm>",
 		Short: "Show a realm's configuration",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full configuration of one authentication realm. The set of returned " +
+			"keys varies by realm type (ldap/ad expose bind settings, openid exposes issuer " +
+			"and client settings, and so on).",
+		Example: `  pmx pve access domain get pve
+  pmx pve access domain get corp-ldap`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -294,7 +302,12 @@ func newDomainCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <realm> --type <type>",
 		Short: "Create an authentication realm",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create an authentication realm. --type selects which flags apply: ldap/ad " +
+			"realms need --server1 and a bind configuration, openid realms need --issuer-url " +
+			"and --client-id. pam and pve realms take no realm-specific flags.",
+		Example: `  pmx pve access domain create corp-ldap --type ldap --server1 ldap.example.com --base-dn "dc=example,dc=com"
+  pmx pve access domain create corp-oidc --type openid --issuer-url https://idp.example.com --client-id pmx-cli`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -328,7 +341,11 @@ func newDomainSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <realm>",
 		Short: "Update an authentication realm",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an authentication realm's configuration. Only the flags you pass are " +
+			"changed. Pass --delete to clear specific settings instead.",
+		Example: `  pmx pve access domain set corp-ldap --server1 ldap2.example.com
+  pmx pve access domain set corp-ldap --delete server2`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -356,9 +373,11 @@ func newDomainSetCmd() *cobra.Command {
 func newDomainDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <realm>",
-		Short: "Delete an authentication realm",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <realm>",
+		Short:   "Delete an authentication realm",
+		Long:    "Delete an authentication realm. Refuses to run without --yes/-y.",
+		Example: `  pmx pve access domain delete corp-ldap --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -388,7 +407,13 @@ func newDomainSyncCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync <realm>",
 		Short: "Synchronize users and groups from an ldap/ad realm",
-		Args:  cobra.ExactArgs(1),
+		Long: "Trigger a user/group synchronization from an ldap or ad realm; the server " +
+			"rejects this for other realm types. Starts an asynchronous task and prints its " +
+			"UPID (or a confirmation message on older servers that return no UPID). Pass " +
+			"--dry-run to preview the sync without writing anything.",
+		Example: `  pmx pve access domain sync corp-ldap
+  pmx pve access domain sync corp-ldap --dry-run --scope both`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]

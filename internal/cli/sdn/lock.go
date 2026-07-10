@@ -30,7 +30,7 @@ func newLockAcquireCmd() *cobra.Command {
 		Use:   "acquire",
 		Short: "Acquire the global SDN configuration lock",
 		Long: "Acquire the global SDN configuration lock. Returns a lock token that must " +
-			"be passed to `pmx sdn lock release` (or via --lock-token on other commands) " +
+			"be passed to `pmx pve sdn lock release` (or via --lock-token on other commands) " +
 			"to release the lock.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -69,7 +69,7 @@ func newLockReleaseCmd() *cobra.Command {
 		Use:   "release",
 		Short: "Release the global SDN configuration lock",
 		Long: "Release the global SDN configuration lock. Pass the token returned by " +
-			"`pmx sdn lock acquire` via --lock-token, or use --force to release without " +
+			"`pmx pve sdn lock acquire` via --lock-token, or use --force to release without " +
 			"a token (requires --yes).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
