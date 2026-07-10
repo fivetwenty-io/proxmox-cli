@@ -119,7 +119,7 @@ The same flow works for the other products — pass `--product pbs` or
 pmx context add backup --product pbs --host pbs.example.com \
   --username root@pam --token-id automation
 pmx auth set-token --context backup --token-id automation --secret ${PBS_TOKEN}
-pmx pbs datastore list --context backup
+pmx pbs datastore ls --context backup
 ```
 
 ## Personas
