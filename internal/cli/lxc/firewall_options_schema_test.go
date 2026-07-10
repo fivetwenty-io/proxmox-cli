@@ -68,7 +68,7 @@ func TestLxcFirewallOptions_Describe(t *testing.T) {
 	run = newTestCmd(t, deps, &buf, "firewall", "options", "describe", "bogus")
 	err := run()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx lxc firewall options describe")
+	require.Contains(t, err.Error(), "pmx pve lxc firewall options describe")
 }
 
 // TestLxcFirewallOptions_GetDefaults verifies `get --defaults` merges built-in

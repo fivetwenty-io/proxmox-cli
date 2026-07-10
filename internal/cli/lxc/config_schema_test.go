@@ -85,7 +85,7 @@ func TestLxcConfig_Describe(t *testing.T) {
 	run = newTestCmd(t, deps, &buf, "config", "describe", "bogus")
 	err := run()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx lxc config describe")
+	require.Contains(t, err.Error(), "pmx pve lxc config describe")
 }
 
 // TestLxcConfig_GetDefaults verifies `get --defaults` merges built-in

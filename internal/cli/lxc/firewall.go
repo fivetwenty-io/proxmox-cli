@@ -1066,7 +1066,7 @@ func newFirewallOptionsDescribeCmd() *cobra.Command {
 			"type, built-in default, allowed values, and the sub-keys of dict-encoded " +
 			"options. Runs offline. Pass an option name to show only that option with " +
 			"full descriptions.",
-		CommandHint:         "pmx lxc firewall options describe",
+		CommandHint:         "pmx pve lxc firewall options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }
