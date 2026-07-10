@@ -35,7 +35,13 @@ func newResourcesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resources",
 		Short: "List cluster-wide resources",
-		Args:  cobra.NoArgs,
+		Long: "List every resource known to the cluster, including virtual machines, " +
+			"containers, storage, nodes, and SDN objects, with each entry's type, id, " +
+			"node, name, and status alongside its CPU, memory, disk, and uptime usage. " +
+			"Pass --type to limit the output to a single resource kind.",
+		Example: `  pmx pve cluster resources
+  pmx pve cluster resources --type vm`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

@@ -57,7 +57,11 @@ func newHaResourceListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List HA resources",
-		Args:  cobra.NoArgs,
+		Long: "List HA-managed resources with their requested state, HA group, restart and " +
+			"relocate limits, and comment. Filter with --type to show only VMs or containers.",
+		Example: `  pmx pve cluster ha resource list
+  pmx pve cluster ha resource list --type vm`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -105,7 +109,10 @@ func newHaResourceGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <sid>",
 		Short: "Show a single HA resource",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show one HA resource's full configuration. The SID is a type and guest ID " +
+			"separated by a colon, for example vm:100 or ct:101.",
+		Example: `  pmx pve cluster ha resource get vm:100`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			sid := args[0]
@@ -214,7 +221,11 @@ func newHaResourceSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <sid>",
 		Short: "Update an HA resource",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an HA resource's requested state, group, comment, or restart and relocate " +
+			"limits. Only the flags you pass are changed; --delete resets named settings to their default.",
+		Example: `  pmx pve cluster ha resource set vm:100 --state stopped
+  pmx pve cluster ha resource set vm:100 --group preferred-nodes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			sid := args[0]
@@ -271,7 +282,11 @@ func newHaResourceDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <sid>",
 		Short: "Remove a resource from HA management",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a resource from HA management. Pass --purge to also drop it from any HA " +
+			"rules that reference it. Refuses to run without --yes.",
+		Example: `  pmx pve cluster ha resource delete vm:100 --yes
+  pmx pve cluster ha resource delete vm:100 --purge --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			sid := args[0]

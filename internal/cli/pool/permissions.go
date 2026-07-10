@@ -29,7 +29,7 @@ func newPermissionsCmd() *cobra.Command {
 		Long: "List, grant, and revoke ACL entries on a pool's ACL path (/pool/{poolid}), and " +
 			"inspect the resulting effective permissions. This manages who may administer the " +
 			"pool object itself (ACL entries granting roles such as PVEPoolAdmin), which is " +
-			"distinct from pool membership: use `pmx pool set --vms/--storage` to add or remove " +
+			"distinct from pool membership: use `pmx pve pool set --vms/--storage` to add or remove " +
 			"the guests and storage that belong to the pool.",
 	}
 	cmd.AddCommand(
@@ -138,7 +138,7 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 		Use:   verb + " <poolid>",
 		Short: short,
 		Long: short + " (/pool/{poolid}). This grants administrative access to the pool object " +
-			"itself, not pool membership; use `pmx pool set --vms/--storage` to change which " +
+			"itself, not pool membership; use `pmx pve pool set --vms/--storage` to change which " +
 			"guests and storage belong to the pool. Mutating ACL entries requires " +
 			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
 			"silently, matching PVE server behavior. This command does not block self-lockout; " +

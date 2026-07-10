@@ -60,7 +60,13 @@ func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List resource pools",
-		Args:  cobra.NoArgs,
+		Long: "List the resource pools defined on the cluster, showing each pool's " +
+			"identifier, comment, and member count. Use --type to list only pools that " +
+			"contain a given member kind (qemu, lxc, or storage), or --poolid to show a " +
+			"single pool.",
+		Example: `  pmx pve pool list
+  pmx pve pool list --type qemu`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -118,7 +124,13 @@ func newGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <poolid>",
 		Short: "Show a resource pool's configuration and members",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a resource pool's comment and member count by its poolid, read through " +
+			"the current list-based pools endpoint. Pass --type to restrict the members " +
+			"counted to a kind (qemu, lxc, or storage). See 'pool show' for the equivalent " +
+			"that reads the older single-pool endpoint.",
+		Example: `  pmx pve pool get backups
+  pmx pve pool get backups --type qemu`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]
@@ -174,7 +186,13 @@ func newShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <poolid>",
 		Short: "Show a resource pool's configuration and members (single-item endpoint)",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a resource pool's comment and member count by its poolid using the older " +
+			"single-pool endpoint, kept for parity with the API surface and for scripts that " +
+			"target it directly. The output matches 'pool get'; pass --type to restrict the " +
+			"members counted to a kind (qemu, lxc, or storage).",
+		Example: `  pmx pve pool show backups
+  pmx pve pool show backups --type storage`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]
@@ -216,7 +234,12 @@ func newCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new resource pool",
-		Args:  cobra.NoArgs,
+		Long: "Create a new, empty resource pool. --poolid is required and becomes the pool's " +
+			"identifier; --comment sets an optional description. Members are added afterward " +
+			"with 'pool set'.",
+		Example: `  pmx pve pool create --poolid backups
+  pmx pve pool create --poolid backups --comment "Backup targets"`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -247,7 +270,14 @@ func newSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <poolid>",
 		Short: "Update a resource pool's members or comment",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update a resource pool: change its --comment or add members with --vms and " +
+			"--storage (comma-separated guest VMIDs and storage IDs). Pass --delete to remove " +
+			"the listed members instead of adding them, and --allow-move to add a guest that " +
+			"already belongs to another pool, moving it out of its current pool.",
+		Example: `  pmx pve pool set backups --vms 100,101
+  pmx pve pool set backups --storage local,local-lvm
+  pmx pve pool set backups --vms 100 --delete`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]
@@ -293,7 +323,13 @@ func newDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <poolid>",
 		Short: "Delete a resource pool",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete a resource pool by its poolid. Prompts for confirmation unless --yes/-y " +
+			"is passed. This removes the pool definition only and never destroys member " +
+			"guests or storage; the --destroy-vms and --destroy-storage flags are rejected " +
+			"because the Proxmox VE pool delete API does not support member destruction.",
+		Example: `  pmx pve pool delete backups
+  pmx pve pool delete backups --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			poolid := args[0]

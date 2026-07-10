@@ -49,7 +49,11 @@ func newLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log",
 		Short: "Read cluster log entries",
-		Args:  cobra.NoArgs,
+		Long: "Read recent cluster log entries with their timestamp, node, PID, UID, tag, and " +
+			"message. --max limits how many entries are returned (default 50).",
+		Example: `  pmx pve cluster log
+  pmx pve cluster log --max 200`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

@@ -50,7 +50,13 @@ func newVolumeGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <volume>",
 		Short: "Show a single volume's attributes",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a single volume's attributes (size, format, used space, and similar) by " +
+			"its full volume identifier in the <storage>:<path> form. The storage is derived " +
+			"from the identifier's prefix; the node is taken from --node, PMX_NODE, or the " +
+			"active context's default node and is required.",
+		Example: `  pmx pve storage volume get local:iso/debian-12.iso --node pve1
+  pmx pve storage volume get local:backup/vzdump-qemu-100-2026_01_01.vma.zst --node pve1`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {

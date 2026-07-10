@@ -138,7 +138,10 @@ func newCephFlagsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all cluster-wide Ceph flags and their state",
-		Args:  cobra.NoArgs,
+		Long: "List all cluster-wide Ceph OSD flags and whether each is currently set. " +
+			"Requires a configured Ceph cluster.",
+		Example: `  pmx pve cluster ceph flags list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListCephFlags(cmd.Context())
@@ -158,7 +161,10 @@ func newCephFlagsGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <flag>",
 		Short: "Show the state of a single Ceph flag",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show whether a single cluster-wide Ceph OSD flag is currently set, for " +
+			"example noout or noscrub. Requires a configured Ceph cluster.",
+		Example: `  pmx pve cluster ceph flags get noout`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			flag := args[0]

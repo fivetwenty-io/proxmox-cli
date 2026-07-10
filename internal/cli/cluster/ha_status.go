@@ -55,6 +55,9 @@ func newHaStatusCurrentCmd() *cobra.Command {
 		Use:     "current",
 		Aliases: []string{"list", "ls"},
 		Short:   "Show the current HA status of resources and nodes",
+		Long: "Show the current HA status of every resource and node as reported by the HA " +
+			"stack. Also available as 'list' or 'ls'.",
+		Example: `  pmx pve cluster ha status current`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -77,6 +80,9 @@ func newHaStatusManagerCmd() *cobra.Command {
 		Use:     "manager",
 		Aliases: []string{"manager-status"},
 		Short:   "Show the raw HA manager status",
+		Long: "Show the raw HA manager status object, including the elected manager node and " +
+			"its internal service state.",
+		Example: `  pmx pve cluster ha status manager`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

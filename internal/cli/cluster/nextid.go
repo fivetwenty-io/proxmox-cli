@@ -20,7 +20,11 @@ func newNextIDCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "next-id",
 		Short: "Return the next free VM/CT ID",
-		Args:  cobra.NoArgs,
+		Long: "Return the next free VM or container ID in the cluster. Pass --vmid to validate " +
+			"that a specific ID is available instead.",
+		Example: `  pmx pve cluster next-id
+  pmx pve cluster next-id --vmid 200`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

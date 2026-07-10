@@ -44,7 +44,11 @@ func newNotificationsTargetsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "targets",
 		Short: "List all notification targets",
-		Args:  cobra.NoArgs,
+		Long: "List every notification target known to the cluster, spanning all endpoint " +
+			"types (Gotify, Sendmail, SMTP, and Webhook) as well as the built-in mail-to-root " +
+			"target. Each row shows the target name, type, and whether it is currently enabled.",
+		Example: "  pmx pve cluster notifications targets",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsTargets(cmd.Context())
@@ -222,16 +226,29 @@ func requireDeleteYes(yes bool, what, name string) error {
 // --- gotify ------------------------------------------------------------------
 
 func newGotifyCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "gotify", Short: "Manage Gotify notification endpoints"}
-	cmd.AddCommand(
-		simpleRawList("list", "List Gotify endpoints", func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
+	cmd := &cobra.Command{
+		Use:   "gotify",
+		Short: "Manage Gotify notification endpoints",
+		Long: "List, inspect, create, update, and delete Gotify notification endpoints, which " +
+			"deliver notifications to a Gotify server using an application token.",
+	}
+	gotifyList := simpleRawList("list", "List Gotify endpoints",
+		func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
 			resp, err := deps.API.Cluster.ListNotificationsEndpointsGotify(cmd.Context())
 			return derefRawList(resp), err
-		}),
+		})
+	gotifyList.Long = "List every configured Gotify notification endpoint, showing each endpoint's " +
+		"name, server URL, comment, and whether it is enabled. Application tokens are not returned."
+	gotifyDelete := newDeleteEndpointCmd("Gotify endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
+		return deps.API.Cluster.DeleteNotificationsEndpointsGotify(cmd.Context(), name)
+	})
+	gotifyDelete.Long = "Permanently delete a Gotify notification endpoint by name. Refuses to run " +
+		"without --yes/-y."
+	gotifyDelete.Example = "  pmx pve cluster notifications gotify delete my-gotify --yes"
+	cmd.AddCommand(
+		gotifyList,
 		newGotifyGetCmd(), newGotifyCreateCmd(), newGotifySetCmd(),
-		newDeleteEndpointCmd("Gotify endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
-			return deps.API.Cluster.DeleteNotificationsEndpointsGotify(cmd.Context(), name)
-		}),
+		gotifyDelete,
 	)
 	return cmd
 }
@@ -240,7 +257,10 @@ func newGotifyGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a Gotify endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of a single Gotify notification endpoint, including its " +
+			"server URL, comment, and enabled state. The application token is never returned.",
+		Example: "  pmx pve cluster notifications gotify get my-gotify",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsGotify(cmd.Context(), args[0])
@@ -260,7 +280,12 @@ func newGotifyCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a Gotify endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a Gotify notification endpoint. --server (the Gotify server URL) and " +
+			"--token (the application token) are required; pass --comment to annotate it and " +
+			"--disable to create it in a disabled state.",
+		Example: "  pmx pve cluster notifications gotify create my-gotify " +
+			"--server https://gotify.example.com --token abc123",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -299,7 +324,12 @@ func newGotifySetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update a Gotify endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an existing Gotify notification endpoint. Pass at least one of --server, " +
+			"--token, --comment, or --disable to change those fields; use --delete to reset a " +
+			"setting to its default and --digest to reject the change if the config has been " +
+			"modified since it was read.",
+		Example: "  pmx pve cluster notifications gotify set my-gotify --comment \"prod alerts\"",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -344,16 +374,30 @@ func newGotifySetCmd() *cobra.Command {
 // --- sendmail ----------------------------------------------------------------
 
 func newSendmailCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "sendmail", Short: "Manage Sendmail notification endpoints"}
-	cmd.AddCommand(
-		simpleRawList("list", "List Sendmail endpoints", func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
+	cmd := &cobra.Command{
+		Use:   "sendmail",
+		Short: "Manage Sendmail notification endpoints",
+		Long: "List, inspect, create, update, and delete Sendmail notification endpoints, which " +
+			"deliver notifications as email using the local sendmail binary.",
+	}
+	sendmailList := simpleRawList("list", "List Sendmail endpoints",
+		func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
 			resp, err := deps.API.Cluster.ListNotificationsEndpointsSendmail(cmd.Context())
 			return derefRawList(resp), err
-		}),
-		newSendmailGetCmd(), newSendmailCreateCmd(), newSendmailSetCmd(),
-		newDeleteEndpointCmd("Sendmail endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
+		})
+	sendmailList.Long = "List every configured Sendmail notification endpoint, showing each endpoint's " +
+		"name, recipients, From address, author, comment, and whether it is enabled."
+	sendmailDelete := newDeleteEndpointCmd("Sendmail endpoint",
+		func(cmd *cobra.Command, deps *cli.Deps, name string) error {
 			return deps.API.Cluster.DeleteNotificationsEndpointsSendmail(cmd.Context(), name)
-		}),
+		})
+	sendmailDelete.Long = "Permanently delete a Sendmail notification endpoint by name. Refuses to " +
+		"run without --yes/-y."
+	sendmailDelete.Example = "  pmx pve cluster notifications sendmail delete my-sendmail --yes"
+	cmd.AddCommand(
+		sendmailList,
+		newSendmailGetCmd(), newSendmailCreateCmd(), newSendmailSetCmd(),
+		sendmailDelete,
 	)
 	return cmd
 }
@@ -362,7 +406,10 @@ func newSendmailGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a Sendmail endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of a single Sendmail notification endpoint, including its " +
+			"recipients, From address, author, comment, and enabled state.",
+		Example: "  pmx pve cluster notifications sendmail get my-sendmail",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsSendmail(cmd.Context(), args[0])
@@ -383,7 +430,13 @@ func newSendmailCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a Sendmail endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a Sendmail notification endpoint that sends email via the local sendmail " +
+			"binary. Add recipients with repeatable --mailto (email addresses) and --mailto-user " +
+			"(PVE users); optionally set --from-address, --author, and --comment, or pass --disable " +
+			"to create it disabled.",
+		Example: "  pmx pve cluster notifications sendmail create my-sendmail " +
+			"--mailto ops@example.com --from-address pve@example.com",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -433,7 +486,12 @@ func newSendmailSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update a Sendmail endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an existing Sendmail notification endpoint. Pass at least one of --mailto, " +
+			"--mailto-user, --from-address, --author, --comment, or --disable to change those " +
+			"fields; use --delete to reset a setting to its default and --digest to reject the " +
+			"change if the config has been modified since it was read.",
+		Example: "  pmx pve cluster notifications sendmail set my-sendmail --mailto ops@example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -486,16 +544,30 @@ func newSendmailSetCmd() *cobra.Command {
 // --- smtp --------------------------------------------------------------------
 
 func newSMTPCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "smtp", Short: "Manage SMTP notification endpoints"}
-	cmd.AddCommand(
-		simpleRawList("list", "List SMTP endpoints", func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
+	cmd := &cobra.Command{
+		Use:   "smtp",
+		Short: "Manage SMTP notification endpoints",
+		Long: "List, inspect, create, update, and delete SMTP notification endpoints, which " +
+			"deliver notifications as email through an external SMTP server.",
+	}
+	smtpList := simpleRawList("list", "List SMTP endpoints",
+		func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
 			resp, err := deps.API.Cluster.ListNotificationsEndpointsSmtp(cmd.Context())
 			return derefRawList(resp), err
-		}),
+		})
+	smtpList.Long = "List every configured SMTP notification endpoint, showing each endpoint's " +
+		"name, server, port, recipients, From address, and whether it is enabled. Passwords are " +
+		"not returned."
+	smtpDelete := newDeleteEndpointCmd("SMTP endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
+		return deps.API.Cluster.DeleteNotificationsEndpointsSmtp(cmd.Context(), name)
+	})
+	smtpDelete.Long = "Permanently delete an SMTP notification endpoint by name. Refuses to run " +
+		"without --yes/-y."
+	smtpDelete.Example = "  pmx pve cluster notifications smtp delete my-smtp --yes"
+	cmd.AddCommand(
+		smtpList,
 		newSMTPGetCmd(), newSMTPCreateCmd(), newSMTPSetCmd(),
-		newDeleteEndpointCmd("SMTP endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
-			return deps.API.Cluster.DeleteNotificationsEndpointsSmtp(cmd.Context(), name)
-		}),
+		smtpDelete,
 	)
 	return cmd
 }
@@ -504,7 +576,11 @@ func newSMTPGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show an SMTP endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of a single SMTP notification endpoint, including its " +
+			"server, port, recipients, From address, encryption mode, and enabled state. The " +
+			"password is never returned.",
+		Example: "  pmx pve cluster notifications smtp get my-smtp",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsSmtp(cmd.Context(), args[0])
@@ -528,7 +604,13 @@ func newSMTPCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create an SMTP endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create an SMTP notification endpoint that sends email through an external SMTP " +
+			"server. --server and --from-address are required; add recipients with repeatable " +
+			"--mailto and --mailto-user, and optionally set --username, --password, --mode " +
+			"(insecure, starttls, or tls), --port, --author, --comment, or --disable.",
+		Example: "  pmx pve cluster notifications smtp create my-smtp " +
+			"--server smtp.example.com --from-address pve@example.com --mailto ops@example.com",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -599,7 +681,12 @@ func newSMTPSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update an SMTP endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an existing SMTP notification endpoint. Pass at least one of --server, " +
+			"--from-address, --mailto, --mailto-user, --username, --password, --mode, --port, " +
+			"--author, --comment, or --disable to change those fields; use --delete to reset a " +
+			"setting to its default and --digest to reject the change if the config has changed.",
+		Example: "  pmx pve cluster notifications smtp set my-smtp --mode starttls --port 587",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -673,16 +760,29 @@ func newSMTPSetCmd() *cobra.Command {
 // --- webhook -----------------------------------------------------------------
 
 func newWebhookCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "webhook", Short: "Manage Webhook notification endpoints"}
-	cmd.AddCommand(
-		simpleRawList("list", "List Webhook endpoints", func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
+	cmd := &cobra.Command{
+		Use:   "webhook",
+		Short: "Manage Webhook notification endpoints",
+		Long: "List, inspect, create, update, and delete Webhook notification endpoints, which " +
+			"deliver notifications by issuing an HTTP request to a configured URL.",
+	}
+	webhookList := simpleRawList("list", "List Webhook endpoints",
+		func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
 			resp, err := deps.API.Cluster.ListNotificationsEndpointsWebhook(cmd.Context())
 			return derefRawList(resp), err
-		}),
+		})
+	webhookList.Long = "List every configured Webhook notification endpoint, showing each endpoint's " +
+		"name, URL, HTTP method, comment, and whether it is enabled. Secret values are not returned."
+	webhookDelete := newDeleteEndpointCmd("Webhook endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
+		return deps.API.Cluster.DeleteNotificationsEndpointsWebhook(cmd.Context(), name)
+	})
+	webhookDelete.Long = "Permanently delete a Webhook notification endpoint by name. Refuses to run " +
+		"without --yes/-y."
+	webhookDelete.Example = "  pmx pve cluster notifications webhook delete my-webhook --yes"
+	cmd.AddCommand(
+		webhookList,
 		newWebhookGetCmd(), newWebhookCreateCmd(), newWebhookSetCmd(),
-		newDeleteEndpointCmd("Webhook endpoint", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
-			return deps.API.Cluster.DeleteNotificationsEndpointsWebhook(cmd.Context(), name)
-		}),
+		webhookDelete,
 	)
 	return cmd
 }
@@ -691,7 +791,11 @@ func newWebhookGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a Webhook endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of a single Webhook notification endpoint, including its " +
+			"URL, HTTP method, headers, body, comment, and enabled state. Secret values are " +
+			"returned only as masked names, never as their plaintext values.",
+		Example: "  pmx pve cluster notifications webhook get my-webhook",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsEndpointsWebhook(cmd.Context(), args[0])
@@ -712,8 +816,13 @@ func newWebhookCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a Webhook endpoint",
-		Long: "Create a webhook endpoint. --header and --secret take property strings of " +
-			"the form name=<name>,value=<base64 of value>.",
+		Long: "Create a Webhook notification endpoint that issues an HTTP request on each " +
+			"notification. --url and --method (post, put, or get) are required. Repeatable " +
+			"--header and --secret take property strings of the form name=<name>,value=<base64 " +
+			"of value>; --body is the base64-encoded request body. Pass --comment to annotate it " +
+			"or --disable to create it disabled.",
+		Example: "  pmx pve cluster notifications webhook create my-webhook " +
+			"--url https://hooks.example.com/notify --method post",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -766,7 +875,13 @@ func newWebhookSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update a Webhook endpoint",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an existing Webhook notification endpoint. Pass at least one of --url, " +
+			"--method, --header, --secret, --body, --comment, or --disable to change those " +
+			"fields; --header and --secret take property strings of the form " +
+			"name=<name>,value=<base64 of value>. Use --delete to reset a setting to its default " +
+			"and --digest to reject the change if the config has been modified since it was read.",
+		Example: "  pmx pve cluster notifications webhook set my-webhook --method put",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -823,16 +938,29 @@ func newWebhookSetCmd() *cobra.Command {
 // --- matcher -----------------------------------------------------------------
 
 func newMatcherCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "matcher", Short: "Manage notification matchers"}
-	cmd.AddCommand(
-		simpleRawList("list", "List matchers", func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
+	cmd := &cobra.Command{
+		Use:   "matcher",
+		Short: "Manage notification matchers",
+		Long: "List, inspect, create, update, and delete notification matchers, which decide " +
+			"which notifications are routed to which target endpoints based on match rules.",
+	}
+	matcherList := simpleRawList("list", "List matchers",
+		func(cmd *cobra.Command, deps *cli.Deps) ([]json.RawMessage, error) {
 			resp, err := deps.API.Cluster.ListNotificationsMatchers(cmd.Context())
 			return derefRawList(resp), err
-		}),
+		})
+	matcherList.Long = "List every configured notification matcher, showing each matcher's name, " +
+		"match rules, target endpoints, comment, and whether it is enabled."
+	matcherDelete := newDeleteEndpointCmd("matcher", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
+		return deps.API.Cluster.DeleteNotificationsMatchers(cmd.Context(), name)
+	})
+	matcherDelete.Long = "Permanently delete a notification matcher by name. Refuses to run without " +
+		"--yes/-y."
+	matcherDelete.Example = "  pmx pve cluster notifications matcher delete my-matcher --yes"
+	cmd.AddCommand(
+		matcherList,
 		newMatcherGetCmd(), newMatcherCreateCmd(), newMatcherSetCmd(),
-		newDeleteEndpointCmd("matcher", func(cmd *cobra.Command, deps *cli.Deps, name string) error {
-			return deps.API.Cluster.DeleteNotificationsMatchers(cmd.Context(), name)
-		}),
+		matcherDelete,
 	)
 	return cmd
 }
@@ -841,7 +969,10 @@ func newMatcherGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a matcher",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the configuration of a single notification matcher, including its match " +
+			"rules, target endpoints, mode, comment, and enabled state.",
+		Example: "  pmx pve cluster notifications matcher get my-matcher",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetNotificationsMatchers(cmd.Context(), args[0])
@@ -862,8 +993,14 @@ func newMatcherCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a matcher",
-		Long: "Create a matcher that routes matching notifications to targets. --match-field " +
-			"takes (regex|exact):<field>=<value>.",
+		Long: "Create a notification matcher that routes matching notifications to target " +
+			"endpoints. Repeatable --match-field takes (regex|exact):<field>=<value>, " +
+			"--match-severity and --match-calendar add severity and systemd-calendar rules, and " +
+			"--notify-target names the targets to notify. Use --mode (all or any) to combine " +
+			"rules, --invert-match to negate the whole matcher, and --comment or --disable as " +
+			"needed.",
+		Example: "  pmx pve cluster notifications matcher create my-matcher " +
+			"--match-severity error --notify-target my-gotify",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -894,7 +1031,13 @@ func newMatcherSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update a matcher",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an existing notification matcher. Pass at least one of --match-field, " +
+			"--match-severity, --match-calendar, --notify-target, --mode, --comment, " +
+			"--invert-match, or --disable to change those fields; use --delete to reset a setting " +
+			"to its default and --digest to reject the change if the config has been modified " +
+			"since it was read.",
+		Example: "  pmx pve cluster notifications matcher set my-matcher --notify-target my-smtp",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

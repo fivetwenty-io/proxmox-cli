@@ -98,7 +98,13 @@ func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured cluster storage",
-		Args:  cobra.NoArgs,
+		Long: "List every storage definition configured in the cluster with its type, allowed " +
+			"content types, path or server, node restrictions, shared flag, and enabled state. " +
+			"Pass --type to only list storage of one type. This reads the cluster-wide " +
+			"configuration and needs no --node.",
+		Example: `  pmx pve storage list
+  pmx pve storage list --type nfs`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &clusterstorage.ListStorageParams{}
@@ -156,6 +162,8 @@ func newGetCmd() *cobra.Command {
 		Long: "Show a single storage definition. The PVE API omits options left at their " +
 			"built-in defaults; pass --defaults to also list those the storage's type " +
 			"accepts, with the value they effectively have.",
+		Example: `  pmx pve storage get local-lvm
+  pmx pve storage get local-lvm --defaults`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -520,7 +528,14 @@ func newCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new storage definition",
-		Args:  cobra.NoArgs,
+		Long: "Create a cluster-wide storage definition. --storage and --type are required; " +
+			"the type (dir, nfs, cifs, rbd, lvm, lvmthin, zfspool, btrfs, pbs, and others) " +
+			"determines which of the remaining flags apply, for example --path for dir, " +
+			"--server/--export for nfs, or --vgname for lvm. Credential flags such as " +
+			"--password and --keyring are forwarded to the API but never echoed back.",
+		Example: `  pmx pve storage create --storage backup01 --type nfs --server 10.0.0.5 --export /export/backup
+  pmx pve storage create --storage images01 --type dir --path /var/lib/images --content images,iso`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &clusterstorage.CreateStorageParams{
@@ -551,7 +566,15 @@ func newSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <storage>",
 		Short: "Update an existing storage definition",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an existing storage definition. Only the flags you pass are changed; " +
+			"identity fields fixed at create time (path, export, vgname, and similar) cannot " +
+			"be updated. Pass --delete with a comma-separated list of option names to reset " +
+			"them to their defaults, and --digest to abort if the configuration changed since " +
+			"you read it.",
+		Example: `  pmx pve storage set backup01 --content backup,iso
+  pmx pve storage set backup01 --enabled=false
+  pmx pve storage set backup01 --delete bwlimit,options`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			storageID := args[0]
@@ -578,7 +601,11 @@ func newDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <storage>",
 		Short: "Delete a storage definition",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove a storage definition from the cluster configuration. This does not " +
+			"delete any data on the underlying backend; it only removes the storage entry. " +
+			"Refuses to run without --yes/-y.",
+		Example: `  pmx pve storage delete backup01 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			storageID := args[0]

@@ -64,6 +64,9 @@ func newAcmeAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "account",
 		Short: "Manage ACME accounts",
+		Long: "Manage the ACME certificate-authority accounts used to issue node " +
+			"certificates. Registering, updating, and deregistering an account contacts " +
+			"the ACME CA and runs asynchronously.",
 	}
 	cmd.AddCommand(
 		newAcmeAccountListCmd(),
@@ -77,9 +80,11 @@ func newAcmeAccountCmd() *cobra.Command {
 
 func newAcmeAccountListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List registered ACME accounts",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List registered ACME accounts",
+		Long:    "List the ACME accounts registered on the cluster by name.",
+		Example: `  pmx pve cluster acme account list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListAcmeAccount(cmd.Context())
@@ -99,7 +104,10 @@ func newAcmeAccountGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a single ACME account",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full registration details of a single ACME account, including its " +
+			"contact address, directory URL, and terms-of-service status.",
+		Example: `  pmx pve cluster acme account get default`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -250,6 +258,9 @@ func newAcmePluginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plugin",
 		Short: "Manage ACME challenge plugins",
+		Long: "Manage ACME challenge plugins, which tell the ACME client how to answer " +
+			"domain-validation challenges, for example dns-01 through a DNS provider API. " +
+			"Plugin definitions are stored in the cluster configuration.",
 	}
 	cmd.AddCommand(
 		newAcmePluginListCmd(),
@@ -266,7 +277,11 @@ func newAcmePluginListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List ACME challenge plugins",
-		Args:  cobra.NoArgs,
+		Long: "List the configured ACME challenge plugins with their type and DNS API " +
+			"provider. Pass --type to show only plugins of a given challenge type.",
+		Example: `  pmx pve cluster acme plugin list
+  pmx pve cluster acme plugin list --type dns`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &pvecluster.ListAcmePluginsParams{}
@@ -290,9 +305,11 @@ func newAcmePluginListCmd() *cobra.Command {
 
 func newAcmePluginGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <id>",
-		Short: "Show a single ACME plugin",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <id>",
+		Short:   "Show a single ACME plugin",
+		Long:    "Show the full configuration of a single ACME challenge plugin by its id.",
+		Example: `  pmx pve cluster acme plugin get my-dns`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -430,7 +447,10 @@ func newAcmePluginDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete an ACME challenge plugin",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an ACME challenge plugin from the cluster configuration. Requires " +
+			"--yes/-y to confirm; without it the command refuses to delete.",
+		Example: `  pmx pve cluster acme plugin delete my-dns --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -454,7 +474,10 @@ func newAcmeDirectoriesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "directories",
 		Short: "List known ACME CA directory endpoints",
-		Args:  cobra.NoArgs,
+		Long: "List the well-known ACME certificate-authority directory endpoints that " +
+			"Proxmox VE ships, such as the Let's Encrypt production and staging URLs.",
+		Example: `  pmx pve cluster acme directories`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListAcmeDirectories(cmd.Context())
@@ -474,7 +497,11 @@ func newAcmeChallengeSchemaCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "challenge-schema",
 		Short: "List available ACME challenge plugin schemas",
-		Args:  cobra.NoArgs,
+		Long: "List the available ACME challenge plugin schemas, describing the DNS API " +
+			"providers and the fields each one expects. Use this to discover valid --api " +
+			"values and plugin data when creating a dns-01 plugin.",
+		Example: `  pmx pve cluster acme challenge-schema`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListAcmeChallengeSchema(cmd.Context())

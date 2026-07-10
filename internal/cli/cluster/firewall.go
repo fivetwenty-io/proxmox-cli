@@ -120,6 +120,9 @@ func newClusterFirewallRulesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rules",
 		Short: "Manage cluster-wide firewall rules",
+		Long: "Manage the ordered list of cluster-wide firewall rules that apply across " +
+			"the whole datacenter. Rules are addressed by their integer position and " +
+			"evaluated from top to bottom.",
 	}
 	cmd.AddCommand(
 		newClusterFirewallRulesListCmd(),
@@ -135,7 +138,11 @@ func newClusterFirewallRulesListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List the cluster firewall rules",
-		Args:  cobra.NoArgs,
+		Long: "List the cluster-wide firewall rules in evaluation order, showing each " +
+			"rule's position, direction, action, protocol, source, destination, " +
+			"destination port, enabled flag, and comment.",
+		Example: `  pmx pve cluster firewall rules list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallRules(cmd.Context())
@@ -160,7 +167,10 @@ func newClusterFirewallRulesGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <pos>",
 		Short: "Show a single cluster firewall rule by position",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show every configured field of a single cluster firewall rule, identified " +
+			"by its integer position in the rule list.",
+		Example: `  pmx pve cluster firewall rules get 0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			pos := args[0]
@@ -188,7 +198,10 @@ func newClusterFirewallRulesCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Append a rule to the cluster firewall",
 		Long: "Create a new cluster firewall rule. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required.",
+			"(ACCEPT|DROP|REJECT or a security group name) are required. Use --pos to " +
+			"insert the rule at a specific position instead of appending it.",
+		Example: `  pmx pve cluster firewall rules create --type in --action ACCEPT --proto tcp --dport 22
+  pmx pve cluster firewall rules create --type in --action DROP --source 10.0.0.0/8`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -261,7 +274,12 @@ func newClusterFirewallRulesUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <pos>",
 		Short: "Modify a cluster firewall rule by position",
-		Args:  cobra.ExactArgs(1),
+		Long: "Modify an existing cluster firewall rule identified by its integer " +
+			"position. Only the flags you pass are changed. Use --moveto to reposition " +
+			"the rule and --delete to clear a comma-separated list of settings.",
+		Example: `  pmx pve cluster firewall rules update 0 --action DROP
+  pmx pve cluster firewall rules update 0 --moveto 2`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			pos := args[0]
@@ -337,7 +355,10 @@ func newClusterFirewallRulesDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <pos>",
 		Short: "Delete a cluster firewall rule by position",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete a cluster firewall rule identified by its integer position. " +
+			"Refuses to run without --yes/-y.",
+		Example: `  pmx pve cluster firewall rules delete 0 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			pos := args[0]
@@ -388,7 +409,10 @@ func newClusterFirewallGroupGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <group> <pos>",
 		Short: "Show a single rule from a security group by position",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show every configured field of a single rule within a security group, " +
+			"identified by the group name and the rule's integer position.",
+		Example: `  pmx pve cluster firewall group get webservers 0`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group, pos := args[0], args[1]
@@ -410,7 +434,10 @@ func newClusterFirewallGroupListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List security groups",
-		Args:  cobra.NoArgs,
+		Long: "List the defined firewall security groups, showing each group's name, " +
+			"comment, and configuration digest.",
+		Example: `  pmx pve cluster firewall group list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallGroups(cmd.Context())
@@ -444,7 +471,12 @@ func newClusterFirewallGroupCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <group>",
 		Short: "Create or rename a security group",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a new security group, or rename an existing one with --rename. " +
+			"Pass --comment to set a description; set --rename equal to the current " +
+			"name to update only the comment.",
+		Example: `  pmx pve cluster firewall group create webservers --comment "Web tier"
+  pmx pve cluster firewall group create webservers --rename web`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -470,9 +502,11 @@ func newClusterFirewallGroupCreateCmd() *cobra.Command {
 func newClusterFirewallGroupDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <group>",
-		Short: "Delete a security group",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <group>",
+		Short:   "Delete a security group",
+		Long:    "Delete a security group by name. Refuses to run without --yes/-y.",
+		Example: `  pmx pve cluster firewall group delete webservers --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -494,7 +528,11 @@ func newClusterFirewallGroupRulesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rules <group>",
 		Short: "List the rules in a security group",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the rules contained in a security group in evaluation order, showing " +
+			"each rule's position, direction, action, protocol, source, destination, " +
+			"destination port, enabled flag, and comment.",
+		Example: `  pmx pve cluster firewall group rules webservers`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -522,8 +560,10 @@ func newClusterFirewallGroupRuleAddCmd() *cobra.Command {
 		Use:   "rule-add <group>",
 		Short: "Append a rule to a security group",
 		Long: "Add a rule to a security group. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required.",
-		Args: cobra.ExactArgs(1),
+			"(ACCEPT|DROP|REJECT or a security group name) are required. Use --pos to " +
+			"insert the rule at a specific position instead of appending it.",
+		Example: `  pmx pve cluster firewall group rule-add webservers --type in --action ACCEPT --proto tcp --dport 443`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -596,7 +636,12 @@ func newClusterFirewallGroupRuleUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rule-update <group> <pos>",
 		Short: "Modify a rule in a security group by position",
-		Args:  cobra.ExactArgs(2),
+		Long: "Modify a rule within a security group, identified by the group name and " +
+			"the rule's integer position. Only the flags you pass are changed. Use " +
+			"--moveto to reposition the rule and --delete to clear a comma-separated " +
+			"list of settings.",
+		Example: `  pmx pve cluster firewall group rule-update webservers 0 --action DROP`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group, pos := args[0], args[1]
@@ -672,7 +717,10 @@ func newClusterFirewallGroupRuleDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rule-delete <group> <pos>",
 		Short: "Delete a rule from a security group by position",
-		Args:  cobra.ExactArgs(2),
+		Long: "Delete a rule from a security group, identified by the group name and the " +
+			"rule's integer position. Refuses to run without --yes/-y.",
+		Example: `  pmx pve cluster firewall group rule-delete webservers 0 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group, pos := args[0], args[1]
@@ -705,6 +753,8 @@ func newClusterFirewallIpsetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ipset",
 		Short: "Manage cluster firewall IP sets",
+		Long: "Manage named IP sets: reusable collections of CIDR entries that firewall " +
+			"rules can reference as a source or destination through a +name reference.",
 	}
 	cmd.AddCommand(
 		newClusterFirewallIpsetListCmd(),
@@ -722,7 +772,10 @@ func newClusterFirewallIpsetGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name> <cidr>",
 		Short: "Show a single CIDR entry from an IP set",
-		Args:  cobra.ExactArgs(2),
+		Long: "Show a single CIDR entry from an IP set, identified by the set name and " +
+			"the CIDR value, including its nomatch flag and comment.",
+		Example: `  pmx pve cluster firewall ipset get blocklist 10.0.0.0/8`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
@@ -744,7 +797,12 @@ func newClusterFirewallIpsetListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list [name]",
 		Short: "List IP sets, or the members of one IP set",
-		Args:  cobra.RangeArgs(0, 1),
+		Long: "Without an argument, list the defined IP sets and their comments. With a " +
+			"set name, list that set's CIDR members, showing each entry's CIDR, nomatch " +
+			"flag, and comment.",
+		Example: `  pmx pve cluster firewall ipset list
+  pmx pve cluster firewall ipset list blocklist`,
+		Args: cobra.RangeArgs(0, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -799,7 +857,12 @@ func newClusterFirewallIpsetCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create or rename a firewall IP set",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a new IP set, or rename an existing one with --rename. Pass " +
+			"--comment to set a description; set --rename equal to the current name to " +
+			"update only the comment.",
+		Example: `  pmx pve cluster firewall ipset create blocklist --comment "Blocked networks"
+  pmx pve cluster firewall ipset create blocklist --rename denylist`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -830,7 +893,11 @@ func newClusterFirewallIpsetDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a firewall IP set",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete an IP set by name. Refuses to run without --yes/-y; pass --force " +
+			"to delete the set even if it still has members.",
+		Example: `  pmx pve cluster firewall ipset delete blocklist --yes
+  pmx pve cluster firewall ipset delete blocklist --yes --force`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -861,7 +928,11 @@ func newClusterFirewallIpsetAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <name> <cidr>",
 		Short: "Add a CIDR entry to an IP set",
-		Args:  cobra.ExactArgs(2),
+		Long: "Add a CIDR entry to an IP set. Pass --nomatch to make the entry an " +
+			"exclusion and --comment to describe it.",
+		Example: `  pmx pve cluster firewall ipset add blocklist 10.0.0.0/8
+  pmx pve cluster firewall ipset add blocklist 10.1.0.0/16 --nomatch`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
@@ -894,7 +965,10 @@ func newClusterFirewallIpsetUpdateCmd() *cobra.Command {
 		Use:   "update <name> <cidr>",
 		Short: "Update a CIDR entry in an IP set",
 		Long: "Update the comment or nomatch flag of an existing CIDR entry in an IP set, " +
-			"without deleting and re-adding it.",
+			"without deleting and re-adding it. Pass at least one of --comment, " +
+			"--nomatch, or --digest.",
+		Example: `  pmx pve cluster firewall ipset update blocklist 10.0.0.0/8 --comment "Corp range"
+  pmx pve cluster firewall ipset update blocklist 10.0.0.0/8 --nomatch`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -932,7 +1006,10 @@ func newClusterFirewallIpsetRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <name> <cidr>",
 		Short: "Remove a CIDR entry from an IP set",
-		Args:  cobra.ExactArgs(2),
+		Long: "Remove a CIDR entry from an IP set, identified by the set name and the " +
+			"CIDR value. Refuses to run without --yes/-y.",
+		Example: `  pmx pve cluster firewall ipset remove blocklist 10.0.0.0/8 --yes`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
@@ -963,6 +1040,8 @@ func newClusterFirewallAliasCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "alias",
 		Short: "Manage cluster firewall address aliases",
+		Long: "Manage firewall address aliases: named shortcuts for an IP address or " +
+			"CIDR that firewall rules can reference as a source or destination.",
 	}
 	cmd.AddCommand(
 		newClusterFirewallAliasListCmd(),
@@ -978,7 +1057,10 @@ func newClusterFirewallAliasGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <name>",
 		Short: "Show a single firewall address alias",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a single firewall address alias by name, including its CIDR value " +
+			"and comment.",
+		Example: `  pmx pve cluster firewall alias get dns-server`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -1000,7 +1082,10 @@ func newClusterFirewallAliasListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List the cluster firewall aliases",
-		Args:  cobra.NoArgs,
+		Long: "List the defined firewall address aliases, showing each alias's name, " +
+			"CIDR value, and comment.",
+		Example: `  pmx pve cluster firewall alias list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallAliases(cmd.Context())
@@ -1031,7 +1116,10 @@ func newClusterFirewallAliasCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name> <cidr>",
 		Short: "Create a firewall address alias",
-		Args:  cobra.ExactArgs(2),
+		Long: "Create a firewall address alias that maps a name to an IP address or " +
+			"CIDR. Pass --comment to describe it.",
+		Example: `  pmx pve cluster firewall alias create dns-server 10.0.0.53`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
@@ -1058,7 +1146,12 @@ func newClusterFirewallAliasUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <name> <cidr>",
 		Short: "Update a firewall address alias",
-		Args:  cobra.ExactArgs(2),
+		Long: "Update a firewall address alias, setting its CIDR value to <cidr>. Pass " +
+			"--rename to give the alias a new name and --comment to change its " +
+			"description.",
+		Example: `  pmx pve cluster firewall alias update dns-server 10.0.0.54
+  pmx pve cluster firewall alias update dns-server 10.0.0.54 --rename dns`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name, cidr := args[0], args[1]
@@ -1084,9 +1177,11 @@ func newClusterFirewallAliasUpdateCmd() *cobra.Command {
 func newClusterFirewallAliasDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <name>",
-		Short: "Delete a firewall address alias",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <name>",
+		Short:   "Delete a firewall address alias",
+		Long:    "Delete a firewall address alias by name. Refuses to run without --yes/-y.",
+		Example: `  pmx pve cluster firewall alias delete dns-server --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -1110,6 +1205,9 @@ func newClusterFirewallOptionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "options",
 		Short: "Inspect and set the datacenter firewall options",
+		Long: "Inspect and change the datacenter-wide firewall options that govern the " +
+			"default input, output, and forward policies, logging, and whether the " +
+			"cluster firewall and ebtables are enabled.",
 	}
 	cmd.AddCommand(
 		newClusterFirewallOptionsGetCmd(),
@@ -1181,7 +1279,9 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 		Use:   "set",
 		Short: "Set the datacenter firewall options",
 		Long:  "Update the cluster-wide firewall options. Only the flags you pass are changed.",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pve cluster firewall options set --enable 1
+  pmx pve cluster firewall options set --policy-in DROP --policy-out ACCEPT`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -1246,6 +1346,8 @@ func newClusterFirewallMacrosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "macros",
 		Short: "List built-in firewall macros",
+		Long: "List the built-in firewall macros provided by the PVE server, which can be " +
+			"referenced by name from a rule's --macro flag when authoring rules.",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
@@ -1285,6 +1387,8 @@ func newClusterFirewallRefsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "refs",
 		Short: "List valid IP set and alias references for firewall rules",
+		Long: "List the IP set and alias references that can be used as a rule's source " +
+			"or destination.",
 	}
 	var refType string
 	listCmd := &cobra.Command{

@@ -47,7 +47,12 @@ func newMappingListCmd(call func(*cli.Deps, context.Context, *string) ([]json.Ra
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List mappings",
-		Args:  cobra.NoArgs,
+		Long: "List the configured mappings of this type with their ID, description, and per-node " +
+			"entries. Pass --check-node to validate each mapping against a node and include diagnostics.",
+		Example: `  pmx pve cluster mapping pci list
+  pmx pve cluster mapping usb list
+  pmx pve cluster mapping dir list`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			var cn *string
@@ -75,7 +80,12 @@ func newMappingGetCmd(kind string, call func(*cli.Deps, context.Context, string)
 	return &cobra.Command{
 		Use:   "get <id>",
 		Short: "Show a single mapping",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show one mapping's full configuration by ID, including every per-node device or " +
+			"path entry.",
+		Example: `  pmx pve cluster mapping pci get gpu0
+  pmx pve cluster mapping usb get scanner
+  pmx pve cluster mapping dir get shared-data`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -99,7 +109,11 @@ func newMappingDeleteCmd(kind string, call func(*cli.Deps, context.Context, stri
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a mapping",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Delete a mapping by ID. Refuses to run without --yes.",
+		Example: `  pmx pve cluster mapping pci delete gpu0 --yes
+  pmx pve cluster mapping usb delete scanner --yes
+  pmx pve cluster mapping dir delete shared-data --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -123,6 +137,8 @@ func newMappingPciCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pci",
 		Short: "Manage PCI device mappings",
+		Long: "List, inspect, create, update, and delete PCI device mappings. Each mapping names " +
+			"a set of per-node PCI devices so guests can reference the name instead of node-specific hardware.",
 	}
 	cmd.AddCommand(
 		newMappingListCmd(func(d *cli.Deps, ctx context.Context, cn *string) ([]json.RawMessage, error) {
@@ -243,6 +259,8 @@ func newMappingUsbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "usb",
 		Short: "Manage USB device mappings",
+		Long: "List, inspect, create, update, and delete USB device mappings. Each mapping names " +
+			"a set of per-node USB devices so guests can reference the name instead of node-specific hardware.",
 	}
 	cmd.AddCommand(
 		newMappingListCmd(func(d *cli.Deps, ctx context.Context, cn *string) ([]json.RawMessage, error) {
@@ -342,6 +360,8 @@ func newMappingDirCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dir",
 		Short: "Manage host directory mappings",
+		Long: "List, inspect, create, update, and delete host directory mappings. Each mapping names " +
+			"a set of per-node host paths so guests can reference the name instead of a node-specific directory.",
 	}
 	cmd.AddCommand(
 		newMappingListCmd(func(d *cli.Deps, ctx context.Context, cn *string) ([]json.RawMessage, error) {

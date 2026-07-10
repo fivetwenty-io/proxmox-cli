@@ -31,6 +31,8 @@ func newMetricsServerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Manage external metric server targets",
+		Long: "List, inspect, create, update, and delete external metric server targets " +
+			"(Graphite, InfluxDB, OpenTelemetry) that Proxmox VE pushes statistics to.",
 	}
 	cmd.AddCommand(
 		newMetricsServerListCmd(),
@@ -65,7 +67,10 @@ func newMetricsServerListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List configured metric servers",
-		Args:  cobra.NoArgs,
+		Long: "List configured metric servers with their type, address, port, disabled state, " +
+			"and comment. Stored access tokens are never shown.",
+		Example: `  pmx pve cluster metrics server list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListMetricsServer(cmd.Context())
@@ -99,7 +104,10 @@ func newMetricsServerGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <id>",
 		Short: "Show a single metric server",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a single metric server's configuration by ID. The stored access token is " +
+			"never shown.",
+		Example: `  pmx pve cluster metrics server get influx-prod`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -389,9 +397,11 @@ func newMetricsServerSetCmd() *cobra.Command {
 func newMetricsServerDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <id>",
-		Short: "Delete a metric server",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <id>",
+		Short:   "Delete a metric server",
+		Long:    "Delete a metric server by ID. Refuses to run without --yes.",
+		Example: `  pmx pve cluster metrics server delete influx-prod --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

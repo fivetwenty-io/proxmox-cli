@@ -49,7 +49,14 @@ func newFileRestoreListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <storage>",
 		Short: "List directory entries inside a backup snapshot",
-		Args:  cobra.ExactArgs(1),
+		Long: "List the directory entries inside a backup snapshot at a given path. Requires a " +
+			"node via --node, PMX_NODE, or the active context's default, and the backup to " +
+			"browse via --volume. --filepath selects the directory within the backup and " +
+			"defaults to the archive root. Currently only Proxmox Backup Server snapshots " +
+			"are supported.",
+		Example: `  pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z
+  pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
@@ -150,7 +157,12 @@ func newImportMetadataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import-metadata <storage>",
 		Short: "Show the import parameters detected for a guest archive",
-		Args:  cobra.ExactArgs(1),
+		Long: "Inspect the guest-creation parameters Proxmox VE detects for a foreign guest " +
+			"archive, such as an OVA or an ESXi import, without importing it. Requires a node " +
+			"via --node, PMX_NODE, or the active context's default, and the archive to " +
+			"inspect via --volume. The detected settings are rendered as a single object.",
+		Example: `  pmx pve storage import-metadata esxi-store --node pve1 --volume esxi-store:import/vm.ova`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {

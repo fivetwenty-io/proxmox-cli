@@ -28,7 +28,10 @@ func newTasksCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "tasks",
 		Short: "List recent cluster-wide tasks",
-		Args:  cobra.NoArgs,
+		Long: "List recent tasks from across the cluster with their UPID, node, type, target ID, " +
+			"start time, status, and initiating user.",
+		Example: `  pmx pve cluster tasks`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

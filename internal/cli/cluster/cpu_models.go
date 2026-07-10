@@ -36,9 +36,11 @@ func newCpuModelCmd() *cobra.Command {
 
 func newCpuModelListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List custom CPU models",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List custom CPU models",
+		Long:    "List the datacenter-wide custom QEMU CPU models defined on the cluster.",
+		Example: `  pmx pve cluster cpu-model list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListQemuCustomCpuModels(cmd.Context())
@@ -59,7 +61,10 @@ func newCpuModelGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <cputype>",
 		Short: "Show a single custom CPU model",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show the full definition of a single custom CPU model, including its reported " +
+			"model, extra CPU flags, and CPUID tuning.",
+		Example: `  pmx pve cluster cpu-model get custom-x86-64-v3`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cputype := args[0]
@@ -205,7 +210,10 @@ func newCpuModelDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <cputype>",
 		Short: "Delete a custom CPU model",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete a custom CPU model from the datacenter configuration. Requires --yes " +
+			"to confirm; without it the command refuses to delete.",
+		Example: `  pmx pve cluster cpu-model delete custom-x86-64-v3 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cputype := args[0]

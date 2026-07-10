@@ -21,7 +21,7 @@ func newBackupCmd() *cobra.Command {
 		Use:   "backup",
 		Short: "Manage cluster-wide backup schedules",
 		Long: "List, create, inspect, update, and delete scheduled vzdump backup jobs. " +
-			"To audit which guests no backup schedule covers, use `pmx cluster backup-info not-backed-up`.",
+			"To audit which guests no backup schedule covers, use `pmx pve cluster backup-info not-backed-up`.",
 	}
 	cmd.AddCommand(
 		newBackupListCmd(),
@@ -75,7 +75,10 @@ func newBackupListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List scheduled backup jobs",
-		Args:  cobra.NoArgs,
+		Long: "List every scheduled vzdump backup job with its schedule, target storage, " +
+			"mode, enabled state, guest selection, and comment.",
+		Example: `  pmx pve cluster backup list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -115,9 +118,11 @@ func newBackupListCmd() *cobra.Command {
 // newBackupGetCmd builds `pmx cluster backup get <id>`.
 func newBackupGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <id>",
-		Short: "Show a single backup job",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <id>",
+		Short:   "Show a single backup job",
+		Long:    "Show the full configuration of a single scheduled backup job by its job ID.",
+		Example: `  pmx pve cluster backup get backup-abc123`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -473,7 +478,11 @@ func newBackupSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id>",
 		Short: "Update a scheduled backup job",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update a scheduled vzdump backup job by its job ID. Only the attributes you " +
+			"pass are changed; use --delete to reset specific settings to their defaults.",
+		Example: `  pmx pve cluster backup set backup-abc123 --schedule "sat 03:00"
+  pmx pve cluster backup set backup-abc123 --enabled=false`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -502,7 +511,10 @@ func newBackupDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a scheduled backup job",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete a scheduled backup job by its job ID. Requires --yes to confirm; " +
+			"without it the command refuses to delete.",
+		Example: `  pmx pve cluster backup delete backup-abc123 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

@@ -130,6 +130,8 @@ func newConfigJoinCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "join",
 		Short: "Inspect join information or join this node to a cluster",
+		Long: "Inspect the information a new node needs to join this cluster, or join the " +
+			"local node to an existing cluster. Joining changes cluster membership and quorum.",
 	}
 	cmd.AddCommand(
 		newConfigJoinListCmd(),
@@ -142,7 +144,10 @@ func newConfigJoinListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "Show the information needed to join this cluster",
-		Args:  cobra.NoArgs,
+		Long: "Show the information a new node needs to join this cluster, including the " +
+			"corosync configuration, node list, and certificate fingerprints.",
+		Example: `  pmx pve cluster config join list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigJoin(cmd.Context(), &pvecluster.ListConfigJoinParams{})
@@ -232,6 +237,9 @@ func newConfigNodesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "nodes",
 		Short: "List, add, or remove cluster members",
+		Long: "List the corosync cluster members, or add and remove nodes from the cluster " +
+			"configuration. Adding or removing nodes changes membership and quorum and is " +
+			"gated behind --yes.",
 	}
 	cmd.AddCommand(
 		newConfigNodesListCmd(),
@@ -243,9 +251,11 @@ func newConfigNodesCmd() *cobra.Command {
 
 func newConfigNodesListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List the corosync cluster members",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List the corosync cluster members",
+		Long:    "List the corosync cluster members with their node IDs and link addresses.",
+		Example: `  pmx pve cluster config nodes list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigNodes(cmd.Context())

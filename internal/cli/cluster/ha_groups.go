@@ -37,7 +37,10 @@ func newHaGroupListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List HA groups",
-		Args:  cobra.NoArgs,
+		Long: "List every HA group with its member nodes, restricted and nofailback flags, " +
+			"type, and comment.",
+		Example: `  pmx pve cluster ha group list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -78,7 +81,10 @@ func newHaGroupGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <group>",
 		Short: "Show a single HA group",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show one HA group's full configuration: its member nodes and priorities, " +
+			"restricted and nofailback flags, and comment.",
+		Example: `  pmx pve cluster ha group get preferred-nodes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -174,7 +180,11 @@ func newHaGroupSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <group>",
 		Short: "Update an HA group",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update an HA group's member nodes, comment, or failback and restricted behavior. " +
+			"Only the flags you pass are changed; --delete resets named settings to their default.",
+		Example: `  pmx pve cluster ha group set preferred-nodes --nodes node1:2,node2:1
+  pmx pve cluster ha group set preferred-nodes --nofailback`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -217,9 +227,11 @@ func newHaGroupSetCmd() *cobra.Command {
 func newHaGroupDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <group>",
-		Short: "Delete an HA group",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <group>",
+		Short:   "Delete an HA group",
+		Long:    "Delete an HA group. Refuses to run without --yes.",
+		Example: `  pmx pve cluster ha group delete preferred-nodes --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -268,7 +280,13 @@ func newHaRuleListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List HA rules",
-		Args:  cobra.NoArgs,
+		Long: "List HA rules with their type, affinity, resources, nodes, and enabled state. " +
+			"Filter with --resource to show only rules affecting a resource, or --type to show " +
+			"only node-affinity or resource-affinity rules.",
+		Example: `  pmx pve cluster ha rule list
+  pmx pve cluster ha rule list --type node-affinity
+  pmx pve cluster ha rule list --resource vm:100`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -324,7 +342,10 @@ func newHaRuleGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <rule>",
 		Short: "Show a single HA rule",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show one HA rule's full configuration, including every field the rule sets " +
+			"(resources, nodes, affinity, strict, and disable).",
+		Example: `  pmx pve cluster ha rule get keep-web-together`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			rule := args[0]
@@ -490,9 +511,11 @@ func newHaRuleSetCmd() *cobra.Command {
 func newHaRuleDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <rule>",
-		Short: "Delete an HA rule",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <rule>",
+		Short:   "Delete an HA rule",
+		Long:    "Delete an HA rule. Refuses to run without --yes.",
+		Example: `  pmx pve cluster ha rule delete keep-web-together --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			rule := args[0]

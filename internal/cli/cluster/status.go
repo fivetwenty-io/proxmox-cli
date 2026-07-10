@@ -31,7 +31,10 @@ func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show cluster and node membership status",
-		Args:  cobra.NoArgs,
+		Long: "Show cluster-wide quorum status and per-node membership: each node's online state, " +
+			"node ID, and the cluster's quorate flag.",
+		Example: `  pmx pve cluster status`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

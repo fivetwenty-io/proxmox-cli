@@ -28,7 +28,7 @@ func newBulkCmd() *cobra.Command {
 		Long: "Start, shut down, suspend, or migrate guests across the whole cluster. " +
 			"Without --vmids every guest is affected, so each action requires --yes. " +
 			"Actions run as asynchronous tasks; pass --async to return the UPID immediately. " +
-			"Use `pmx cluster resources --type vm` to preview which guests exist.",
+			"Use `pmx pve cluster resources --type vm` to preview which guests exist.",
 	}
 	cmd.AddCommand(
 		newBulkStartCmd(),

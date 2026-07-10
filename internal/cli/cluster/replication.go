@@ -40,7 +40,10 @@ func newReplicationListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List storage replication jobs",
-		Args:  cobra.NoArgs,
+		Long: "List storage replication jobs with their guest, type, target node, schedule, " +
+			"rate limit, disabled state, and comment.",
+		Example: `  pmx pve cluster replication list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListReplication(cmd.Context())
@@ -92,6 +95,8 @@ func newReplicationCreateCmd() *cobra.Command {
 		Short: "Create a storage replication job",
 		Long: "Create a replication job. The job ID is '<GUEST>-<JOBNUM>' (for example " +
 			"'101-0'); --target-node is the node to replicate to.",
+		Example: `  pmx pve cluster replication create --id 101-0 --target-node pve2
+  pmx pve cluster replication create --id 101-0 --target-node pve2 --schedule "*/15" --rate 50`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -142,7 +147,10 @@ func newReplicationGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <id>",
 		Short: "Show a single replication job",
-		Args:  cobra.ExactArgs(1),
+		Long: "Show a single replication job's full configuration by job ID (the " +
+			"'<GUEST>-<JOBNUM>' form, for example 101-0).",
+		Example: `  pmx pve cluster replication get 101-0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -172,8 +180,11 @@ func newReplicationSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <id>",
 		Short: "Update a replication job",
-		Long:  "Update a replication job. Only the flags you pass are changed.",
-		Args:  cobra.ExactArgs(1),
+		Long: "Update a replication job. Only the flags you pass are changed; pass --delete " +
+			"with a comma-separated list of setting names to reset them to their defaults.",
+		Example: `  pmx pve cluster replication set 101-0 --schedule "*/30"
+  pmx pve cluster replication set 101-0 --disable`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -227,7 +238,12 @@ func newReplicationDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <id>",
 		Short: "Delete a replication job",
-		Args:  cobra.ExactArgs(1),
+		Long: "Delete a replication job by ID. Pass --keep to leave replicated data on the target " +
+			"node, or --force to remove the job configuration without cleaning up replicated data. " +
+			"Refuses to run without --yes.",
+		Example: `  pmx pve cluster replication delete 101-0 --yes
+  pmx pve cluster replication delete 101-0 --keep --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

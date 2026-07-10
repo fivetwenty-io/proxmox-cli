@@ -52,7 +52,10 @@ func newJobsRealmSyncListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List realm-sync jobs",
-		Args:  cobra.NoArgs,
+		Long: "List every realm-sync job with its realm, schedule, enabled state, sync scope, " +
+			"and comment.",
+		Example: `  pmx pve cluster jobs realm-sync list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListJobsRealmSync(cmd.Context())
@@ -70,9 +73,11 @@ func newJobsRealmSyncListCmd() *cobra.Command {
 
 func newJobsRealmSyncGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <id>",
-		Short: "Show a single realm-sync job",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <id>",
+		Short:   "Show a single realm-sync job",
+		Long:    "Show a single realm-sync job's full configuration by job ID.",
+		Example: `  pmx pve cluster jobs realm-sync get ldap-daily`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -211,9 +216,11 @@ func newJobsRealmSyncSetCmd() *cobra.Command {
 func newJobsRealmSyncDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete <id>",
-		Short: "Delete a realm-sync job",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <id>",
+		Short:   "Delete a realm-sync job",
+		Long:    "Delete a realm-sync job by ID. Refuses to run without --yes.",
+		Example: `  pmx pve cluster jobs realm-sync delete ldap-daily --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
