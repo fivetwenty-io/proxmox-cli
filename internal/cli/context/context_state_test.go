@@ -3,9 +3,13 @@ package context
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -74,9 +78,9 @@ func twoContextCfg() *config.Config {
 		CurrentContext: "alpha",
 		Contexts: map[string]*config.Context{
 			"alpha": {Host: "alpha.example.com", Port: 8006, Protocol: "https",
-				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${A}"}},
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t1", Secret: "${A}"}},
 			"beta": {Host: "beta.example.com", Port: 8006, Protocol: "https",
-				Auth: config.AuthBlock{Type: "token", TokenID: "t2", Secret: "${B}"}},
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t2", Secret: "${B}"}},
 		},
 	}
 }
@@ -911,4 +915,81 @@ func TestAdd_PDM_RoundTrip_DefaultPort(t *testing.T) {
 	_, err = run(t, deps, "", "select", "dcmgr")
 	require.NoError(t, err)
 	require.Equal(t, "dcmgr", reloadCfg(t, path).CurrentContext)
+}
+
+// validateConnectCfg returns a config whose single context points at ts.
+func validateConnectCfg(t *testing.T, ts *httptest.Server) *config.Config {
+	t.Helper()
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	port, err := strconv.Atoi(u.Port())
+	require.NoError(t, err)
+	return &config.Config{
+		CurrentContext: "live",
+		Contexts: map[string]*config.Context{
+			"live": {
+				Host: u.Hostname(), Port: port, Protocol: u.Scheme,
+				TLS:  config.TLSBlock{Insecure: true},
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t", Secret: "s"},
+			},
+		},
+	}
+}
+
+func TestValidateConnect_Reachable(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Server", "pve-api-daemon/3.0")
+		_, _ = w.Write([]byte(`{"data":{}}`))
+	}))
+	defer ts.Close()
+
+	path, cfg := makeConfig(t, validateConnectCfg(t, ts))
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "validate", "live", "--connect")
+
+	require.NoError(t, err)
+	require.Contains(t, out, "REACHABLE")
+	require.Contains(t, out, "yes")
+	require.Contains(t, out, "match")
+}
+
+func TestValidateConnect_Unreachable_Fails(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	cfg := validateConnectCfg(t, ts)
+	ts.Close()
+
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "validate", "live", "--connect")
+
+	require.Error(t, err, "an unreachable context must exit non-zero under --connect")
+}
+
+func TestValidateConnect_ProductMismatch_WarnsNotFails(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Server", "proxmox-backup-proxy/3.3")
+		_, _ = w.Write([]byte(`{"data":{}}`))
+	}))
+	defer ts.Close()
+
+	path, cfg := makeConfig(t, validateConnectCfg(t, ts))
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "validate", "live", "--connect")
+
+	require.NoError(t, err, "a product mismatch is a warning, never a failure")
+	require.Contains(t, out, "mismatch")
+	require.Contains(t, out, "pbs")
+}
+
+func TestValidate_WithoutConnect_Unchanged(t *testing.T) {
+	path, cfg := makeConfig(t, twoContextCfg())
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "validate", "alpha")
+
+	require.NoError(t, err)
+	require.NotContains(t, out, "REACHABLE", "without --connect the output shape must not change")
 }
