@@ -305,7 +305,8 @@ func newDomainCreateCmd() *cobra.Command {
 		Long: "Create an authentication realm. --type selects which flags apply: ldap/ad " +
 			"realms need --server1 and a bind configuration, openid realms need --issuer-url " +
 			"and --client-id. pam and pve realms take no realm-specific flags.",
-		Example: `  pmx pve access domain create corp-ldap --type ldap --server1 ldap.example.com --base-dn "dc=example,dc=com"
+		Example: `  pmx pve access domain create corp-ldap --type ldap --server1 ldap.example.com \
+      --base-dn "dc=example,dc=com"
   pmx pve access domain create corp-oidc --type openid --issuer-url https://idp.example.com --client-id pmx-cli`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

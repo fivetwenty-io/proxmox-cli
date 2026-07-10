@@ -316,8 +316,9 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet> <pos>",
 		Short: "Modify a vnet firewall rule by position",
-		Long:  "Update a vnet firewall rule. Only the flags you pass are changed. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(2),
+		Long: "Update a vnet firewall rule. Only the flags you pass are changed. " +
+			"The change is staged until `pmx pve sdn apply`.",
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, pos := args[0], args[1]
