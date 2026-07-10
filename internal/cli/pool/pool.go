@@ -339,7 +339,7 @@ func newDeleteCmd() *cobra.Command {
 			if destroyVMs || destroyStorage {
 				return fmt.Errorf(
 					"--destroy-vms/--destroy-storage are not supported: the Proxmox VE pool delete API " +
-						"does not accept member-destruction options; remove members first with `pmx pool set`")
+						"does not accept member-destruction options; remove members first with `pmx pve pool set`")
 			}
 
 			if !yes {

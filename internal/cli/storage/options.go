@@ -22,7 +22,7 @@ func newDescribeCmd() *cobra.Command {
 			"type-polymorphic; pass --type to see exactly what one storage type accepts, " +
 			"including its required and create-only options. Runs offline. Pass an option " +
 			"name to show only that option with full descriptions and sub-keys.",
-		CommandHint:         "pmx storage describe",
+		CommandHint:         "pmx pve storage describe",
 		SubKeyRowsInCatalog: false,
 		TypeSets:            storageTypeOptions,
 	})

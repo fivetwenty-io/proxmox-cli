@@ -61,7 +61,7 @@ func TestClusterFirewallOptions_Describe(t *testing.T) {
 	buf.Reset()
 	err := run(deps, &buf, "firewall", "options", "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx cluster firewall options describe")
+	require.Contains(t, err.Error(), "pmx pve cluster firewall options describe")
 }
 
 // TestClusterFirewallOptions_GetDefaults verifies `get --defaults` merges

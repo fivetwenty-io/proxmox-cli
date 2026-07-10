@@ -169,7 +169,7 @@ func uploadSnippetSSH(
 	}
 	if !contentListHas(scfg.Content, "snippets") {
 		return fmt.Errorf("snippets content is not enabled on storage %q: enable it first, e.g. "+
-			"`pmx storage set %s --content %s`", storage, storage,
+			"`pmx pve storage set %s --content %s`", storage, storage,
 			strings.Join(append(splitContentList(scfg.Content), "snippets"), ","))
 	}
 

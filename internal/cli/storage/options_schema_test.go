@@ -84,7 +84,7 @@ func TestStorageDescribe_Catalog(t *testing.T) {
 
 	_, err = run(t, f, "describe", "bogus")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx storage describe")
+	require.Contains(t, err.Error(), "pmx pve storage describe")
 }
 
 // TestStorageDescribe_TypeFilter verifies --type filtering and usage markers.

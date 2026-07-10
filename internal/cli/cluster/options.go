@@ -41,7 +41,7 @@ func newOptionsDescribeCmd() *cobra.Command {
 		Long: "List every settable datacenter option from the PVE API schema: type, " +
 			"built-in default, allowed values, and the sub-keys of dict-encoded options. " +
 			"Runs offline. Pass an option name to show only that option with full descriptions.",
-		CommandHint:         "pmx cluster options describe",
+		CommandHint:         "pmx pve cluster options describe",
 		SubKeyRowsInCatalog: true,
 	})
 }
