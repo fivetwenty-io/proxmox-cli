@@ -3,6 +3,7 @@ package sdn
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -40,6 +41,33 @@ func newSubnetCmd() *cobra.Command {
 	return cmd
 }
 
+// resolveSubnetArg maps a CIDR argument (e.g. 10.241.0.0/24) to the full
+// subnet ID the single-subnet endpoints require (e.g. pmxcli-10.241.0.0-24)
+// by matching it against the vnet's subnet list. An argument without a "/"
+// is assumed to already be a subnet ID and is returned unchanged.
+func resolveSubnetArg(cmd *cobra.Command, vnet, arg string) (string, error) {
+	if !strings.Contains(arg, "/") {
+		return arg, nil
+	}
+	deps := cli.GetDeps(cmd)
+	resp, err := deps.API.Cluster.ListSdnVnetsSubnets(cmd.Context(), vnet, &cluster.ListSdnVnetsSubnetsParams{})
+	if err != nil {
+		return "", fmt.Errorf("resolve subnet %q on vnet %q: %w", arg, vnet, err)
+	}
+	if resp != nil {
+		for _, raw := range *resp {
+			var e subnetEntry
+			if err := json.Unmarshal(raw, &e); err != nil {
+				continue
+			}
+			if e.Cidr == arg {
+				return e.Subnet, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("subnet %q not found on vnet %q", arg, vnet)
+}
+
 // newSubnetShowCmd builds `pmx sdn subnet show <vnet> <subnet>`.
 func newSubnetShowCmd() *cobra.Command {
 	var (
@@ -50,13 +78,18 @@ func newSubnetShowCmd() *cobra.Command {
 		Use:   "show <vnet> <subnet>",
 		Short: "Show a subnet's configuration",
 		Long: "Show the configuration of a subnet on a vnet (CIDR, gateway, DHCP settings). " +
-			"Pass --pending or --running to view the staged or active configuration instead " +
-			"of the merged default view.",
-		Example: `  pmx pve sdn subnet show vnet1 10.241.0.0-24`,
+			"The subnet may be given as its CIDR (10.241.0.0/24) or its full subnet ID " +
+			"(zone-10.241.0.0-24). Pass --pending or --running to view the staged or active " +
+			"configuration instead of the merged default view.",
+		Example: `  pmx pve sdn subnet show vnet1 10.241.0.0/24`,
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, subnet := args[0], args[1]
+			subnet, err := resolveSubnetArg(cmd, vnet, subnet)
+			if err != nil {
+				return fmt.Errorf("get subnet %q on vnet %q: %w", args[1], vnet, err)
+			}
 			params := &cluster.GetSdnVnetsSubnetsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
@@ -93,11 +126,17 @@ func newSubnetSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vnet> <subnet>",
 		Short: "Update a subnet on a vnet",
-		Long:  "Update a subnet on a vnet. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(2),
+		Long: "Update a subnet on a vnet. The subnet may be given as its CIDR (10.241.0.0/24) " +
+			"or its full subnet ID (zone-10.241.0.0-24). The change is staged until " +
+			"`pmx pve sdn apply`.",
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, subnet := args[0], args[1]
+			subnet, err := resolveSubnetArg(cmd, vnet, subnet)
+			if err != nil {
+				return fmt.Errorf("update subnet %q on vnet %q: %w", args[1], vnet, err)
+			}
 			fl := cmd.Flags()
 			if !anyFlagChanged(fl, append(subnetSetFlagNames, "delete")...) {
 				return fmt.Errorf("no changes requested: pass at least one field flag")
@@ -269,9 +308,10 @@ func newSubnetDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vnet> <subnet>",
 		Short: "Delete a subnet from a vnet",
-		Long: "Delete a subnet from a vnet. Refuses to run without --yes. The change is " +
-			"staged until `pmx pve sdn apply` commits it.",
-		Example: `  pmx pve sdn subnet delete vnet1 10.241.0.0-24 --yes`,
+		Long: "Delete a subnet from a vnet. The subnet may be given as its CIDR " +
+			"(10.241.0.0/24) or its full subnet ID (zone-10.241.0.0-24). Refuses to run " +
+			"without --yes. The change is staged until `pmx pve sdn apply` commits it.",
+		Example: `  pmx pve sdn subnet delete vnet1 10.241.0.0/24 --yes`,
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -279,11 +319,15 @@ func newSubnetDeleteCmd() *cobra.Command {
 			if !yes {
 				return fmt.Errorf("refusing to delete subnet %q without confirmation: pass --yes", subnet)
 			}
+			subnet, err := resolveSubnetArg(cmd, vnet, subnet)
+			if err != nil {
+				return fmt.Errorf("delete subnet %q on vnet %q: %w", args[1], vnet, err)
+			}
 			params := &cluster.DeleteSdnVnetsSubnetsParams{}
 			if cmd.Flags().Changed("lock-token") {
 				params.LockToken = strPtr(lockToken)
 			}
-			err := deps.API.Cluster.DeleteSdnVnetsSubnets(cmd.Context(), vnet, subnet, params)
+			err = deps.API.Cluster.DeleteSdnVnetsSubnets(cmd.Context(), vnet, subnet, params)
 			if err != nil {
 				return fmt.Errorf("delete subnet %q on vnet %q: %w", subnet, vnet, err)
 			}
