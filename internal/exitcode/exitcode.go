@@ -8,7 +8,8 @@ import (
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 )
 
-// Exit code constants. Values match the A-02 decision in the design document.
+// Exit code constants. The values are a stable CLI contract: scripts branch
+// on them, so they must never be renumbered.
 const (
 	// OK indicates successful execution.
 	OK = 0
