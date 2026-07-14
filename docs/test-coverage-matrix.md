@@ -72,17 +72,18 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `api` | 4 | 0 | 1 | 0 | 0 | 0 | 3 | 0 |
 | `auth` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `context` | 9 | 8 | 0 | 0 | 0 | 0 | 1 | 0 |
+| `context` | 10 | 8 | 0 | 0 | 0 | 0 | 1 | 1 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `lab` | 12 | 4 | 1 | 0 | 0 | 6 | 1 | 0 |
 | `pbs` | 270 | 0 | 122 | 0 | 0 | 132 | 16 | 0 |
 | `pdm` | 260 | 0 | 15 | 0 | 0 | 97 | 3 | 145 |
 | `pve` | 671 | 80 | 179 | 354 | 4 | 97 | 7 | 1 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1227** | **94** | **319** | **357** | **4** | **328** | **30** | **146** |
+| **Total** | **1240** | **98** | **320** | **357** | **4** | **334** | **31** | **147** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1227** leaves, **723** are exercised by at least one live suite, **328** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **30** are n/a by design, and **146** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1240** leaves, **728** are exercised by at least one live suite, **334** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **31** are n/a by design, and **147** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -114,6 +115,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `context edit` | — | — | n/a — requires $EDITOR / interactive TTY — not safe to drive in headless e2e; covered in unit tests via EDITOR=true trick (test-strategy §4.2) |
 | `context ls` | ✓ | — |  |
 | `context previous` | ✓ | — |  |
+| `context rename` | — | — | **uncovered** |
 | `context rm` | ✓ | — |  |
 | `context select` | ✓ | — |  |
 | `context show` | ✓ | — |  |
@@ -124,6 +126,23 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `init config` | ✓ | — |  |
+
+## `lab`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `lab access grant` | — | — | deferred — creates a pve user and grants pool ACLs cluster-wide; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab config add` | ✓ | — |  |
+| `lab config init` | ✓ | — |  |
+| `lab config show` | ✓ | — |  |
+| `lab create` | — | — | deferred — provisions SDN zone/vnet/subnet, storage, pool, and a VM on the cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab destroy` | — | — | deferred — deletes a lab's VM, pool, storage, and SDN resources; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab list` | ✓ | — |  |
+| `lab net apply` | — | — | deferred — reconciles and commits cluster-wide SDN configuration; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab quota set` | — | — | n/a — runs `zfs set refquota` over ssh on the real host's dataset; no PVE API endpoint exists for it |
+| `lab start` | — | — | deferred — powers on a lab VM; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab status` | ◑ | — |  |
+| `lab stop` | — | — | deferred — hard powers off a lab VM; needs the dedicated lab-pmx destructive test lab as the standing target |
 
 ## `pbs`
 
@@ -1364,6 +1383,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 ## Uncovered leaves
 
 Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
+
+**`context`** (1) — `context rename`
 
 **`pdm`** (145) — `pdm acl ls`, `pdm auto-install installation ls`, `pdm auto-install prepared show`, `pdm auto-install token ls`, `pdm auto-install token update`, `pdm ceph flags`, `pdm ceph fs`, `pdm ceph mds`, `pdm ceph mgr`, `pdm ceph mon`, `pdm ceph osd-tree`, `pdm ceph pools`, `pdm ceph status`, `pdm ceph summary`, `pdm config acme account ls`, `pdm config acme account show`, `pdm config acme challenge-schema ls`, `pdm config acme directories ls`, `pdm config acme plugin ls`, `pdm config acme plugin show`, `pdm config acme tos show`, `pdm config certificate show`, `pdm config notes show`, `pdm config view show`, `pdm config webauthn show`, `pdm node apt changelog`, `pdm node apt repositories`, `pdm node apt repository change`, `pdm node apt updates`, `pdm node apt versions`, `pdm node certificate info`, `pdm node config show`, `pdm node dns show`, `pdm node journal`, `pdm node network ls`, `pdm node network show`, `pdm node report`, `pdm node rrddata`, `pdm node sdn vnet mac-vrf`, `pdm node sdn zone ip-vrf`, `pdm node status`, `pdm node subscription show`, `pdm node syslog`, `pdm node task log`, `pdm node task ls`, `pdm node task status`, `pdm node time show`, `pdm pbs datastore ls`, `pdm pbs datastore namespaces`, `pdm pbs datastore rrddata`, `pdm pbs datastore snapshots`, `pdm pbs node apt changelog`, `pdm pbs node apt repositories`, `pdm pbs node apt update-database`, `pdm pbs node apt updates`, `pdm pbs node subscription`, `pdm pbs probe-tls`, `pdm pbs realms`, `pdm pbs rrddata`, `pdm pbs scan`, `pdm pbs status`, `pdm pbs task log`, `pdm pbs task ls`, `pdm pbs task status`, `pdm pbs task stop`, `pdm pve cluster next-id`, `pdm pve cluster resources`, `pdm pve cluster status`, `pdm pve firewall options show`, `pdm pve firewall rules`, `pdm pve firewall show`, `pdm pve lxc config`, `pdm pve lxc firewall options show`, `pdm pve lxc firewall options update`, `pdm pve lxc firewall rules`, `pdm pve lxc ls`, `pdm pve lxc pending`, `pdm pve lxc rrddata`, `pdm pve lxc snapshot ls`, `pdm pve lxc status`, `pdm pve node apt changelog`, `pdm pve node apt repositories`, `pdm pve node apt update-database`, `pdm pve node apt updates`, `pdm pve node config`, `pdm pve node firewall options show`, `pdm pve node firewall options update`, `pdm pve node firewall rules`, `pdm pve node firewall status`, `pdm pve node ls`, `pdm pve node network`, `pdm pve node rrddata`, `pdm pve node sdn vnet mac-vrf`, `pdm pve node sdn zone ip-vrf`, `pdm pve node status`, `pdm pve node subscription`, `pdm pve options`, `pdm pve qemu config`, `pdm pve qemu firewall options show`, `pdm pve qemu firewall options update`, `pdm pve qemu firewall rules`, `pdm pve qemu ls`, `pdm pve qemu migrate-preconditions`, `pdm pve qemu pending`, `pdm pve qemu rrddata`, `pdm pve qemu snapshot ls`, `pdm pve qemu status`, `pdm pve realms`, `pdm pve storage ls`, `pdm pve storage rrddata`, `pdm pve storage status`, `pdm pve task log`, `pdm pve task ls`, `pdm pve task status`, `pdm pve updates`, `pdm realm ad ls`, `pdm realm ad show`, `pdm realm ldap ls`, `pdm realm ldap show`, `pdm realm openid ls`, `pdm realm openid show`, `pdm realm pam show`, `pdm realm pdm show`, `pdm remote metric-collection status`, `pdm remote rrddata`, `pdm remote show`, `pdm remote task ls`, `pdm remote task refresh`, `pdm remote task statistics`, `pdm remote updates summary`, `pdm remote version`, `pdm resource subscription`, `pdm resource top-entities`, `pdm sdn controller ls`, `pdm sdn vnet add`, `pdm sdn vnet ls`, `pdm sdn zone add`, `pdm sdn zone ls`, `pdm subscription key show`, `pdm subscription node-status`, `pdm tfa ls`, `pdm tfa show`, `pdm token ls`, `pdm token show`, `pdm user show`
 

@@ -953,6 +953,98 @@ against `pct`'s own config lock, guarded by an optimistic checksum, and validate
 with `pct config`, rolling back automatically if the result would not parse. The
 read verbs above need only the API.
 
+## Lab environments (`pmx lab`)
+
+`pmx lab` manages per-member nested lab environments running inside a
+Proxmox VE cluster. Each lab is a self-contained slice of the cluster: its
+own SDN vnet and subnet (carved out of a single shared VXLAN zone,
+`labsvxlan`), a VM, storage derived from that VM's disks, a resource pool,
+a pve-realm user's access grant on that pool, and a ZFS `refquota` on the
+lab's dataset. `pmx lab` is only available when the binary runs as `pmx`
+(or an unrecognized `argv[0]`) — it is not hoisted onto the `pve`, `pbs`,
+or `pdm` persona roots the way `pve`'s own groups are (see
+[Personas](#personas)).
+
+Labs are config-driven, resolved from three keys in `~/.config/pmx/config.yml`:
+an inline `labs:` map, an `include:` list of glob patterns, and a `labs_dir:`
+directory of one-lab-per-file YAML (sugar for one more `include:` glob).
+Every mutating verb accepts flags that override individual resolved fields
+for that single invocation, without touching the underlying config.
+
+```yaml
+labs_dir: labs.d/
+default_user_password: changeme-example   # bootstrap password for new grantees; setting it requires config.yml to be mode 0600
+
+labs:
+  wayne:
+    network:
+      vnet_id: wayne
+      vxlan_tag: 5001
+      cidr: 10.108.0.0/16
+      mgmt:
+        gateway: 10.108.0.1
+    compute:
+      vcpu: 16
+      memory:
+        min_gb: 32
+        max_gb: 96
+    storage:
+      data_disk_gb: 400
+      refquota_gb: 480
+    access:
+      pool: lab-wayne
+      role: PVEVMUser
+```
+
+`drgao`'s lab would instead live as its own file under `labs_dir` (e.g.
+`labs.d/drgao.yaml`), written with:
+
+```bash
+pmx lab config init                                          # scaffold labs_dir/ with a commented example.yaml
+pmx lab config add drgao --vxlan-tag 5002 --cidr 10.109.0.0/16
+pmx lab config show drgao                                    # resolved lab + provenance (which file it came from)
+```
+
+`pmx lab config add` never rewrites `config.yml`; it only ever writes a new
+file under `labs_dir`, so hand-written comments in `config.yml` are never
+lost to a struct-marshal round trip. See `man 5 pmx-config` for the full
+lab schema.
+
+### Command walkthrough
+
+```bash
+# Create the lab: SDN zone/vnet/subnet, storage, resource pool, and VM, in
+# that order, skipping anything already in place. This stages the SDN
+# changes but does not commit them — pending zone/vnet/subnet changes are
+# only committed by `pmx lab net apply` (or `pmx pve sdn apply`).
+pmx lab create wayne --node sm-0
+pmx lab net apply wayne             # always previews the pending SDN changeset first, then commits it
+
+# Inspect it.
+pmx lab status wayne
+pmx lab list
+
+# Grant wayne@pve access to their own lab's pool (creates the pool, the
+# user, and the role along the way if any of them is missing).
+pmx lab access grant wayne wayne@pve
+
+# There is no Proxmox VE API for ZFS dataset properties, so quota set runs
+# `zfs set refquota=...` on the lab host over ssh instead.
+pmx lab quota set wayne --refquota-gb 600
+
+# Tear it down. --purge additionally removes the resource pool and storage
+# definition; without it only the VM is stopped and deleted.
+pmx lab destroy wayne --yes
+```
+
+Every mutating verb (`create`, `destroy`, `net apply`, `access grant`,
+`quota set`, `start`, `stop`) supports `--dry-run` to preview its effect
+without mutating anything, and every one of them refuses to act on a
+lab whose resolved identifiers collide with a protected production
+resource. `pmx lab list`/`status`/`start`/`stop` join each configured lab
+against its live VM by resource-pool membership, since labs carry no
+stored VMID in config.
+
 ## Exit codes
 
 | Code | Meaning |

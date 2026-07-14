@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	yaml "github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/pmx-cli/internal/config"
@@ -1097,4 +1098,177 @@ func TestResolveContext_NotFound_ListsAvailableWithProducts(t *testing.T) {
 	require.Contains(t, err.Error(), `context "typo" not found`)
 	require.Contains(t, err.Error(), "dc1 (pdm)")
 	require.Contains(t, err.Error(), "lab (pve)")
+}
+
+// ── Lab* structs / top-level Config fields ───────────────────────────────────
+
+// sampleLabConfig returns a fully populated Config with one inline lab
+// ("wayne") covering every Lab* field, for round-trip tests.
+func sampleLabConfig() *config.Config {
+	return &config.Config{
+		CurrentContext:      "prod",
+		DefaultOutput:       "table",
+		DefaultUserPassword: "s3cret-test!",
+		LabsDir:             "/etc/pmx/labs.d",
+		Include:             []string{"/etc/pmx/labs.d/*.yaml"},
+		Labs: map[string]*config.Lab{
+			"wayne": {
+				Name:  "wayne",
+				Mode:  "nested",
+				Owner: "wayne@pve",
+				Network: config.LabNetwork{
+					VnetID:    "wayne",
+					VnetAlias: "wayne-lab",
+					VxlanTag:  5001,
+					CIDR:      "10.108.0.0/16",
+					Mgmt: config.LabMgmt{
+						Subnet:  "10.108.0.0/24",
+						HostIP:  "10.108.0.10",
+						Gateway: "10.108.0.1",
+					},
+					BoshBloc: "10.108.16.0/20",
+					MTU:      1450,
+				},
+				Compute: config.LabCompute{
+					VCPU:     16,
+					CPUType:  "host",
+					NUMA:     true,
+					Machine:  "q35",
+					Firmware: "ovmf",
+					Memory: config.LabMemory{
+						MinGB: 32,
+						MaxGB: 96,
+					},
+				},
+				Storage: config.LabStorage{
+					Pool:       "tank-lab-wayne",
+					OSDiskGB:   64,
+					DataDiskGB: 400,
+					RefquotaGB: 480,
+					Controller: "virtio-scsi-single",
+					IOThread:   true,
+					Discard:    true,
+					SSD:        true,
+				},
+				DNS: config.LabDNS{
+					Zone: "wayne.lab.fivetwenty.io",
+				},
+				Provisioning: config.LabProvisioning{
+					Mode:           "cloud-init",
+					AnswerTemplate: "/etc/pmx/labs.d/answer.tmpl",
+					SSHKeys:        []string{"ssh-ed25519 AAAAC3test wayne@example.com"},
+				},
+				Access: config.LabAccess{
+					Realm: "pve",
+					Pool:  "lab-wayne",
+					Role:  "PMXAdmin",
+				},
+			},
+		},
+	}
+}
+
+// TestLabConfig_RoundTrip verifies every Lab* field survives a save/load
+// cycle unchanged, exercising the design-shaped yaml (a labs map with one
+// fully populated lab entry) end to end.
+func TestLabConfig_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	original := sampleLabConfig()
+	require.NoError(t, config.Save(path, original))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+
+	require.Equal(t, original.DefaultUserPassword, loaded.DefaultUserPassword)
+	require.Equal(t, original.LabsDir, loaded.LabsDir)
+	require.Equal(t, original.Include, loaded.Include)
+	require.Len(t, loaded.Labs, 1)
+
+	lab := loaded.Labs["wayne"]
+	require.NotNil(t, lab)
+	require.Equal(t, "wayne", lab.Name)
+	require.Equal(t, "nested", lab.Mode)
+	require.Equal(t, "wayne@pve", lab.Owner)
+
+	require.Equal(t, "wayne", lab.Network.VnetID)
+	require.Equal(t, "wayne-lab", lab.Network.VnetAlias)
+	require.Equal(t, 5001, lab.Network.VxlanTag)
+	require.Equal(t, "10.108.0.0/16", lab.Network.CIDR)
+	require.Equal(t, "10.108.0.0/24", lab.Network.Mgmt.Subnet)
+	require.Equal(t, "10.108.0.10", lab.Network.Mgmt.HostIP)
+	require.Equal(t, "10.108.0.1", lab.Network.Mgmt.Gateway)
+	require.Equal(t, "10.108.16.0/20", lab.Network.BoshBloc)
+	require.Equal(t, 1450, lab.Network.MTU)
+
+	require.Equal(t, 16, lab.Compute.VCPU)
+	require.Equal(t, "host", lab.Compute.CPUType)
+	require.True(t, lab.Compute.NUMA)
+	require.Equal(t, "q35", lab.Compute.Machine)
+	require.Equal(t, "ovmf", lab.Compute.Firmware)
+	require.Equal(t, 32, lab.Compute.Memory.MinGB)
+	require.Equal(t, 96, lab.Compute.Memory.MaxGB)
+
+	require.Equal(t, "tank-lab-wayne", lab.Storage.Pool)
+	require.Equal(t, 64, lab.Storage.OSDiskGB)
+	require.Equal(t, 400, lab.Storage.DataDiskGB)
+	require.Equal(t, 480, lab.Storage.RefquotaGB)
+	require.Equal(t, "virtio-scsi-single", lab.Storage.Controller)
+	require.True(t, lab.Storage.IOThread)
+	require.True(t, lab.Storage.Discard)
+	require.True(t, lab.Storage.SSD)
+
+	require.Equal(t, "wayne.lab.fivetwenty.io", lab.DNS.Zone)
+
+	require.Equal(t, "cloud-init", lab.Provisioning.Mode)
+	require.Equal(t, "/etc/pmx/labs.d/answer.tmpl", lab.Provisioning.AnswerTemplate)
+	require.Equal(t, []string{"ssh-ed25519 AAAAC3test wayne@example.com"}, lab.Provisioning.SSHKeys)
+
+	require.Equal(t, "pve", lab.Access.Realm)
+	require.Equal(t, "lab-wayne", lab.Access.Pool)
+	require.Equal(t, "PMXAdmin", lab.Access.Role)
+}
+
+// TestLabConfig_MarshalUnmarshal_Equality verifies a direct yaml.Marshal /
+// yaml.Unmarshal cycle (no filesystem involved) preserves deep equality of a
+// fully populated Lab tree.
+func TestLabConfig_MarshalUnmarshal_Equality(t *testing.T) {
+	original := sampleLabConfig()
+
+	raw, err := yaml.Marshal(original)
+	require.NoError(t, err)
+
+	var loaded config.Config
+	require.NoError(t, yaml.Unmarshal(raw, &loaded))
+
+	require.Equal(t, original.DefaultUserPassword, loaded.DefaultUserPassword)
+	require.Equal(t, original.LabsDir, loaded.LabsDir)
+	require.Equal(t, original.Include, loaded.Include)
+	require.Equal(t, original.Labs, loaded.Labs)
+}
+
+// TestLabConfig_EmptyConfig_StillLoads is the omitempty regression: a config
+// file with none of the four new top-level keys must still load cleanly,
+// with Labs, LabsDir, Include, and DefaultUserPassword left at zero value.
+func TestLabConfig_EmptyConfig_StillLoads(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	require.NoError(t, config.Save(path, sampleConfig()))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "default_user_password:")
+	require.NotContains(t, string(raw), "labs_dir:")
+	require.NotContains(t, string(raw), "include:")
+	require.NotContains(t, string(raw), "labs:")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Empty(t, loaded.DefaultUserPassword)
+	require.Empty(t, loaded.LabsDir)
+	require.Nil(t, loaded.Include)
+	require.Nil(t, loaded.Labs)
 }

@@ -26,6 +26,9 @@ internal/
     task/          — pmx pve task subtree
     version/       — pmx version subtree
     initcmd/       — pmx init subtree
+    lab/           — pmx lab subtree: config-driven nested lab lifecycle
+                     (create/destroy/list/status/start/stop/net/access/quota/config);
+                     available only under the pmx persona, not pve/pbs/pdm
   apiclient/       — thin wrapper: service handles, UPID extraction, task-wait
   config/          — Config types, loader, atomic writer, secret resolver
   output/          — table/plain/json/yaml renderer

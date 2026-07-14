@@ -33,6 +33,23 @@ type Config struct {
 
 	// Contexts is the named map of PVE endpoint configurations.
 	Contexts map[string]*Context `yaml:"contexts"`
+
+	// DefaultUserPassword is the password assigned to a lab's owner user when
+	// `pmx lab access grant` creates it. It lives only on this top-level key
+	// so a written lab file (Config.Labs entries persisted via the lab-config
+	// writer) can never carry the secret.
+	DefaultUserPassword string `yaml:"default_user_password,omitempty"`
+
+	// LabsDir is a directory of `<name>.yaml` files, each holding one Lab,
+	// merged into Labs at load time alongside any inline or Include entries.
+	LabsDir string `yaml:"labs_dir,omitempty"`
+
+	// Include lists glob patterns for additional lab YAML files to merge
+	// into Labs at load time.
+	Include []string `yaml:"include,omitempty"`
+
+	// Labs is the named map of inline lab environment configurations.
+	Labs map[string]*Lab `yaml:"labs,omitempty"`
 }
 
 // Context represents one named Proxmox VE API endpoint.

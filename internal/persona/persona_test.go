@@ -43,6 +43,21 @@ func TestFactories_PveHoistsProduct(t *testing.T) {
 	require.Error(t, err, "pve persona must not expose the pbs group")
 }
 
+func TestFactories_PmxHasLab(t *testing.T) {
+	root := buildRoot(t, "pmx")
+	c, _, err := root.Find([]string{"lab"})
+	require.NoError(t, err)
+	require.Equal(t, "lab", c.Name(), "pmx persona must expose the lab group")
+}
+
+func TestFactories_ProductPersonasLackLab(t *testing.T) {
+	for _, name := range []string{"pve", "pbs", "pdm"} {
+		root := buildRoot(t, name)
+		_, _, err := root.Find([]string{"lab"})
+		require.Error(t, err, "%s persona must not expose the lab group", name)
+	}
+}
+
 func TestFactories_SharedPresentEverywhere(t *testing.T) {
 	for _, name := range persona.Names() {
 		root := buildRoot(t, name)

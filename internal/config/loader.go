@@ -267,3 +267,175 @@ func validateContext(c *Context) error {
 
 	return nil
 }
+
+// inlineLabProvenance is the provenance label recorded for a lab defined
+// directly under cfg.Labs, as opposed to one loaded from an included file.
+const inlineLabProvenance = "config.yml (inline)"
+
+// ResolveLabs merges cfg's inline Labs map with the labs loaded from
+// cfg.Include globs and cfg.LabsDir (sugar for one more include glob) into a
+// single flat map keyed by lab name. configPath is the config file's own
+// path: relative globs are resolved against its directory, and it is the
+// file stat'd for the 0600 enforcement below.
+//
+// Resolution order:
+//  1. Inline cfg.Labs seeds the result; an entry's Name defaults to its map
+//     key when empty.
+//  2. cfg.LabsDir, when non-empty, becomes one more include glob
+//     (filepath.Join(cfg.LabsDir, "*.yaml")) — pure sugar, same code path as
+//     an explicit entry in cfg.Include.
+//  3. Every glob (relative ones resolved against configPath's directory,
+//     absolute ones used as-is) is expanded with filepath.Glob; a glob
+//     matching zero files is not an error. Each matched file is parsed as a
+//     bare single-lab YAML document — the file body IS the Lab, not a
+//     wrapping Config — and named from an explicit top-level `name:` key
+//     in the file, else the filename stem.
+//  4. Every lab from every source is merged into one flat map keyed by
+//     name. A file matched by more than one glob (e.g. labs_dir overlapping
+//     an include entry) is loaded once — same-file matches are deduplicated
+//     by canonical path, not treated as duplicates. A duplicate name across
+//     ANY pair of distinct sources (inline vs file, file vs file) is a hard
+//     error naming both provenances; the merge never silently keeps the
+//     last-seen definition.
+//
+// Finally, if cfg.DefaultUserPassword is non-empty, configPath is stat'd: a
+// mode with any group or other bit set is a hard error telling the operator
+// to chmod 0600 the file. When no secret is configured, no stat is
+// performed and no error or warning is produced — this is a library
+// function, not a place to print to the terminal.
+func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
+	if cfg == nil {
+		return nil, errors.New("resolve labs: config is nil")
+	}
+
+	result := make(map[string]*Lab, len(cfg.Labs))
+	provenance := make(map[string]string, len(cfg.Labs))
+
+	for key, lab := range cfg.Labs {
+		if lab == nil {
+			return nil, fmt.Errorf("inline lab %q is nil in config.yml", key)
+		}
+
+		name := lab.Name
+		if name == "" {
+			name = key
+		}
+
+		if existing, ok := provenance[name]; ok {
+			return nil, fmt.Errorf("duplicate lab %q in %s and %s", name, existing, inlineLabProvenance)
+		}
+
+		// Copy so callers that keep a reference to cfg.Labs after this call
+		// never observe a Name we defaulted on their behalf.
+		labCopy := *lab
+		labCopy.Name = name
+		result[name] = &labCopy
+		provenance[name] = inlineLabProvenance
+	}
+
+	globs := make([]string, 0, len(cfg.Include)+1)
+	globs = append(globs, cfg.Include...)
+	if cfg.LabsDir != "" {
+		globs = append(globs, filepath.Join(cfg.LabsDir, "*.yaml"))
+	}
+
+	baseDir := filepath.Dir(configPath)
+
+	// One file can match several globs (labs_dir is sugar for an include
+	// entry, so an explicit include of the same directory overlaps it);
+	// load each distinct file exactly once.
+	seenFiles := make(map[string]bool)
+
+	for _, pattern := range globs {
+		resolvedPattern := pattern
+		if !filepath.IsAbs(resolvedPattern) {
+			resolvedPattern = filepath.Join(baseDir, resolvedPattern)
+		}
+
+		matches, err := filepath.Glob(resolvedPattern)
+		if err != nil {
+			return nil, fmt.Errorf("expand lab include glob %q: %w", pattern, err)
+		}
+
+		for _, file := range matches {
+			canonical := file
+			if abs, absErr := filepath.Abs(file); absErr == nil {
+				canonical = abs
+			}
+			if seenFiles[canonical] {
+				continue
+			}
+			seenFiles[canonical] = true
+
+			lab, err := loadLabFile(file)
+			if err != nil {
+				return nil, err
+			}
+
+			name := lab.Name
+			if name == "" {
+				name = strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+			}
+			lab.Name = name
+
+			if existing, ok := provenance[name]; ok {
+				return nil, fmt.Errorf("duplicate lab %q in %s and %s", name, existing, file)
+			}
+			result[name] = lab
+			provenance[name] = file
+		}
+	}
+
+	if cfg.DefaultUserPassword != "" {
+		info, err := os.Stat(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("stat config %s: %w", configPath, err)
+		}
+		// groupWorldDirMask (writer.go) is the same group/other rwx mask
+		// regardless of whether the target is a directory or, as here, the
+		// config file itself.
+		if info.Mode().Perm()&groupWorldDirMask != 0 {
+			return nil, fmt.Errorf(
+				"config file %s is group- or world-accessible (%04o) but sets default_user_password; chmod 0600 %s",
+				configPath, info.Mode().Perm(), configPath)
+		}
+	}
+
+	return result, nil
+}
+
+// loadLabFile reads and parses path as a bare single-lab YAML document: the
+// file body is one Lab, not a Config wrapping a labs map.
+//
+// Two checks guard against a silently-accepted phantom lab:
+//   - The document must decode to a non-empty mapping. An empty file, a
+//     whitespace- or comment-only file, and an explicit "{}" all decode
+//     without error into a hollow map; each is rejected here rather than
+//     handed back as a zero-value Lab named after the filename stem.
+//   - The mapping is decoded into Lab with yaml.Strict(), so an unknown
+//     top-level key errors by name instead of being silently dropped. This
+//     catches both a typo'd field (e.g. "vxlan_tg") and a Config-shaped
+//     file — a "labs:" wrapper map plausibly copy-pasted from config.yml —
+//     which would otherwise unmarshal into an empty Lab with every field
+//     at its zero value.
+func loadLabFile(path string) (*Lab, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // G304: path comes from a caller-configured include glob resolved above, not untrusted input
+	if err != nil {
+		return nil, fmt.Errorf("read lab file %s: %w", path, err)
+	}
+
+	var probe map[string]any
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("parse lab file %s: %w", path, err)
+	}
+	if len(probe) == 0 {
+		return nil, fmt.Errorf("lab file %s is empty: expected a lab definition with at least one field", path)
+	}
+
+	var lab Lab
+	if err := yaml.UnmarshalWithOptions(data, &lab, yaml.Strict()); err != nil {
+		return nil, fmt.Errorf("parse lab file %s: %w", path, err)
+	}
+
+	return &lab, nil
+}
