@@ -51,10 +51,11 @@ func newNodeSdnVnetMacVrfCmd() *cobra.Command {
 	var remote string
 
 	cmd := &cobra.Command{
-		Use:   "mac-vrf <node> <vnet>",
-		Short: "Show the MAC-VRF for an EVPN vnet",
-		Long:  "Get the MAC-VRF (MAC address to next-hop mapping) for an EVPN vnet, for a node on a given remote.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "mac-vrf <node> <vnet>",
+		Short:   "Show the MAC-VRF for an EVPN vnet",
+		Long:    "Get the MAC-VRF (MAC address to next-hop mapping) for an EVPN vnet, for a node on a given remote.",
+		Example: "  pmx pdm node sdn vnet mac-vrf pdm-01 vnet1 --remote pve-main",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, vnet := args[0], args[1]
@@ -104,10 +105,11 @@ func newNodeSdnZoneIPVrfCmd() *cobra.Command {
 	var remote string
 
 	cmd := &cobra.Command{
-		Use:   "ip-vrf <node> <zone>",
-		Short: "Show the IP-VRF for an EVPN zone",
-		Long:  "Get the IP-VRF (route table) for an EVPN zone, for a node on a given remote.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "ip-vrf <node> <zone>",
+		Short:   "Show the IP-VRF for an EVPN zone",
+		Long:    "Get the IP-VRF (route table) for an EVPN zone, for a node on a given remote.",
+		Example: "  pmx pdm node sdn zone ip-vrf pdm-01 zone1 --remote pve-main",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, zone := args[0], args[1]

@@ -78,7 +78,8 @@ func newPveGuestLsCmd(kind pveGuestKind, list pveGuestListFunc) *cobra.Command {
 		Short: fmt.Sprintf("List a PVE remote's %ss", kind.noun),
 		Long: fmt.Sprintf("Query the remote's list of %s %ss; if no node is provided, all nodes are queried "+
 			"(GET /pve/remotes/{remote}/%s).", kind.label, kind.noun, kind.noun),
-		Args: cobra.ExactArgs(1),
+		Example: fmt.Sprintf("  pmx pdm pve %s ls pve-main", kind.noun),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -137,7 +138,8 @@ func newPveGuestConfigCmd(kind pveGuestKind) *cobra.Command {
 		Short: fmt.Sprintf("Show a PVE remote %s's configuration", kind.label),
 		Long: fmt.Sprintf("Get the configuration of a %s from a remote (node determined automatically if not "+
 			"provided) (GET /pve/remotes/{remote}/%s/{vmid}/config).", kind.label, kind.noun),
-		Args: cobra.ExactArgs(2),
+		Example: fmt.Sprintf("  pmx pdm pve %s config pve-main 100", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -239,7 +241,8 @@ func newPveGuestPendingCmd(kind pveGuestKind) *cobra.Command {
 		Short: fmt.Sprintf("Show a PVE remote %s's pending configuration", kind.label),
 		Long: fmt.Sprintf("Get the pending configuration of a %s from a remote (GET "+
 			"/pve/remotes/{remote}/%s/{vmid}/pending).", kind.label, kind.noun),
-		Args: cobra.ExactArgs(2),
+		Example: fmt.Sprintf("  pmx pdm pve %s pending pve-main 100", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -328,7 +331,8 @@ func newPveGuestRrddataCmd(kind pveGuestKind, rrd pveGuestRrdFunc) *cobra.Comman
 		Short: fmt.Sprintf("Read a PVE remote %s's RRD metrics", kind.label),
 		Long: fmt.Sprintf("Read RRD (round-robin database) %s stats over the given time frame and "+
 			"consolidation function (GET /pve/remotes/{remote}/%s/{vmid}/rrddata).", kind.label, kind.noun),
-		Args: cobra.ExactArgs(2),
+		Example: fmt.Sprintf("  pmx pdm pve %s rrddata pve-main 100 --timeframe day", kind.noun),
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -392,12 +396,17 @@ func newPveGuestLifecycleCmd(
 		node string
 		yes  bool
 	)
+	example := fmt.Sprintf("  pmx pdm pve %s %s pve-main 100", kind.noun, verb)
+	if gated {
+		example += " --yes"
+	}
 	cmd := &cobra.Command{
 		Use:   verb + " <remote> <vmid>",
 		Short: fmt.Sprintf("%s a PVE remote %s", capitalize(verb), kind.label),
 		Long: fmt.Sprintf("%s a remote %s (POST /pve/remotes/{remote}/%s/{vmid}/%s).", capitalize(verb), kind.label,
 			kind.noun, verb),
-		Args: cobra.ExactArgs(2),
+		Example: example,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]

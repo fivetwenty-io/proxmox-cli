@@ -51,10 +51,11 @@ type viewEntry struct {
 // resource view (GET /config/views).
 func newConfigViewLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List saved resource views",
-		Long:  "List every saved resource view configured on this Proxmox Datacenter Manager (GET /config/views).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List saved resource views",
+		Long:    "List every saved resource view configured on this Proxmox Datacenter Manager (GET /config/views).",
+		Example: `  pmx pdm config view ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -93,10 +94,11 @@ func newConfigViewLsCmd() *cobra.Command {
 // single saved resource view (GET /config/views/{id}).
 func newConfigViewShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <id>",
-		Short: "Show a single saved resource view",
-		Long:  "Show every field of a single saved resource view (GET /config/views/{id}).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <id>",
+		Short:   "Show a single saved resource view",
+		Long:    "Show every field of a single saved resource view (GET /config/views/{id}).",
+		Example: `  pmx pdm config view show production`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -133,7 +135,8 @@ func newConfigViewAddCmd() *cobra.Command {
 		Long: "Create a new saved resource view (POST /config/views). --include and " +
 			"--exclude accept repeatable filter-rule strings, e.g. " +
 			"'resource-type=qemu' or 'tag=production'.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config view add production --include "tag=production"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -189,7 +192,8 @@ func newConfigViewUpdateCmd() *cobra.Command {
 		Long: "Update an existing saved resource view (PUT /config/views/{id}). Only " +
 			"flags explicitly set are sent; use --delete to reset properties to their " +
 			"default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config view update production --exclude "tag=staging"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -258,7 +262,8 @@ func newConfigViewDeleteCmd() *cobra.Command {
 		Short: "Delete a saved resource view",
 		Long: "Remove a saved resource view (DELETE /config/views/{id}). This is " +
 			"destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config view delete production --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

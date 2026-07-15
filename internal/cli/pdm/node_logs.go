@@ -52,6 +52,8 @@ func newNodeJournalCmd() *cobra.Command {
 		Short: "Read the node's systemd journal",
 		Long: "Read raw lines from the node's systemd journal, optionally limited to the " +
 			"last N entries or bounded by a Unix-epoch time range or cursor.",
+		Example: `  pmx pdm node journal pdm-01
+  pmx pdm node journal pdm-01 --lastentries 100`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -118,7 +120,9 @@ func newNodeSyslogCmd() *cobra.Command {
 		Use:   "syslog <node>",
 		Short: "Read the node's system log",
 		Long:  "Read entries from the node's system log, optionally filtered by service or time range.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pdm node syslog pdm-01
+  pmx pdm node syslog pdm-01 --service pdm-api`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -180,7 +184,8 @@ func newNodeReportCmd() *cobra.Command {
 		Short: "Generate a full system report for the node",
 		Long: "Generate a diagnostic report covering system, network, and storage " +
 			"configuration for the node.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node report pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -231,7 +236,8 @@ func newNodeRrddataCmd() *cobra.Command {
 		Short: "Read RRD usage statistics for the node",
 		Long: "Read RRD (round-robin database) usage statistics for the node over the " +
 			"given time frame and consolidation function.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node rrddata pdm-01 --timeframe day",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

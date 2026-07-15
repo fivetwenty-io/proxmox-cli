@@ -32,10 +32,11 @@ func newConfigNotesCmd() *cobra.Command {
 // dashboard notes (GET /config/notes).
 func newConfigNotesShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show the dashboard welcome notes",
-		Long:  "Show the free-text notes shown on this instance's dashboard (GET /config/notes).",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the dashboard welcome notes",
+		Long:    "Show the free-text notes shown on this instance's dashboard (GET /config/notes).",
+		Example: `  pmx pdm config notes show`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -79,7 +80,8 @@ func newConfigNotesUpdateCmd() *cobra.Command {
 		Short: "Replace the dashboard welcome notes",
 		Long: "Replace the free-text notes shown on this instance's dashboard (PUT " +
 			"/config/notes). --notes is required; pass an empty string to clear it.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pdm config notes update --notes "Managed by the platform team"`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

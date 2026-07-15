@@ -37,6 +37,8 @@ func newPermissionLsCmd() *cobra.Command {
 		Long: "List the effective permissions for a user or API token, optionally " +
 			"restricted to one access control path (GET /access/permissions). " +
 			"--auth-id defaults to the currently authenticated identity when omitted.",
+		Example: `  pmx pdm permission ls
+  pmx pdm permission ls --auth-id alice@pdm --path /remote/pve-main`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

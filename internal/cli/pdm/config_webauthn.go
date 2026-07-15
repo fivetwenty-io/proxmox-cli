@@ -38,10 +38,11 @@ func newConfigWebauthnCmd() *cobra.Command {
 // WebAuthn configuration (GET /config/access/tfa/webauthn).
 func newConfigWebauthnShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show the WebAuthn relying-party configuration",
-		Long:  "Show the WebAuthn relying-party configuration (GET /config/access/tfa/webauthn).",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the WebAuthn relying-party configuration",
+		Long:    "Show the WebAuthn relying-party configuration (GET /config/access/tfa/webauthn).",
+		Example: `  pmx pdm config webauthn show`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -83,7 +84,8 @@ func newConfigWebauthnUpdateCmd() *cobra.Command {
 			"--delete to reset properties to their default instead. Changing --id " +
 			"*will* break existing WebAuthn credentials; changing --origin or --rp " +
 			"*may* break them.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pdm config webauthn update --origin https://pdm.example.com`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

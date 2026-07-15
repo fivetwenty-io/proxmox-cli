@@ -38,10 +38,11 @@ func newConfigCertificateCmd() *cobra.Command {
 // show the certificate/ACME-domain configuration (GET /config/certificate).
 func newConfigCertificateShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show the certificate/ACME-domain configuration",
-		Long:  "Show the ACME account and per-domain configuration used to issue this instance's own TLS certificate (GET /config/certificate).",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the certificate/ACME-domain configuration",
+		Long:    "Show the ACME account and per-domain configuration used to issue this instance's own TLS certificate (GET /config/certificate).",
+		Example: `  pmx pdm config certificate show`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -80,6 +81,8 @@ func newConfigCertificateUpdateCmd() *cobra.Command {
 			"this instance's own TLS certificate (PUT /config/certificate). Only " +
 			"flags explicitly set are sent; use --delete to reset properties to " +
 			"their default instead.",
+		Example: `  pmx pdm config certificate update --acme default
+  pmx pdm config certificate update --acmedomain0 "domain=pve1.example.com"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

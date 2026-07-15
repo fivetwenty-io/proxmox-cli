@@ -107,7 +107,8 @@ func newNodeAptUpdateDatabaseCmd() *cobra.Command {
 		Long: "Refresh the local APT package database from the configured repositories " +
 			"(POST /nodes/{node}/apt/update). Runs as an asynchronous task; the command " +
 			"blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node apt update-database pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -219,7 +220,8 @@ func newNodeAptRepositoryAddCmd() *cobra.Command {
 		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Add the standard repository identified by --handle. If the repository is " +
 			"already configured, it is set to enabled (PUT /nodes/{node}/apt/repositories).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node apt repository add pdm-01 --handle no-subscription",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -268,7 +270,8 @@ func newNodeAptRepositoryChangeCmd() *cobra.Command {
 		Long: "Change the properties (currently: enabled) of the repository entry at " +
 			"--index within --path, the containing sources file (POST " +
 			"/nodes/{node}/apt/repositories).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node apt repository change pdm-01 --path /etc/apt/sources.list --index 0 --enabled=false",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

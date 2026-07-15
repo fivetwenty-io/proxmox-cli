@@ -77,7 +77,9 @@ func newNodeTaskLsCmd() *cobra.Command {
 		Use:   "ls <node>",
 		Short: "List background tasks on the node",
 		Long:  "List background tasks recorded on the node, optionally filtered by status, time range, type, or user.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pdm node task ls pdm-01
+  pmx pdm node task ls pdm-01 --running`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -256,10 +258,11 @@ func newNodeTaskStopCmd() *cobra.Command {
 	var yes bool
 
 	cmd := &cobra.Command{
-		Use:   "stop <node> <upid>",
-		Short: "Stop a running task",
-		Long:  "Try to stop a running background task. This is destructive: pass --yes/-y to confirm.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "stop <node> <upid>",
+		Short:   "Stop a running task",
+		Long:    "Try to stop a running background task. This is destructive: pass --yes/-y to confirm.",
+		Example: "  pmx pdm node task stop pdm-01 UPID:pdm-01:00001234:... --yes",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node, upid := args[0], args[1]

@@ -54,10 +54,11 @@ type cephClusterEntry struct {
 // instance can audit (GET /ceph/clusters).
 func newCephLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List registered Ceph clusters",
-		Long:  "List the Ceph clusters this instance can audit (GET /ceph/clusters).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List registered Ceph clusters",
+		Long:    "List the Ceph clusters this instance can audit (GET /ceph/clusters).",
+		Example: `  pmx pdm ceph ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -110,6 +111,8 @@ func newCephStatusCmd() *cobra.Command {
 			"cache within --max-age seconds or fetched fresh and cached (GET " +
 			"/ceph/clusters/{cluster}/status). The response shape is dynamic, so it is rendered " +
 			"as raw JSON.",
+		Example: `  pmx pdm ceph status fsid1
+  pmx pdm ceph status fsid1 --max-age 30`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -152,7 +155,8 @@ func newCephSummaryCmd() *cobra.Command {
 		Short: "Show a Ceph cluster's typed status summary",
 		Long: "Show a typed, summarized Ceph cluster status (health, capacity, OSD/MON/MGR/PG " +
 			"counts) for the dashboard (GET /ceph/clusters/{cluster}/summary).",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm ceph summary fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -191,10 +195,11 @@ type cephFlagEntry struct {
 // Ceph flags (GET /ceph/clusters/{cluster}/flags).
 func newCephFlagsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "flags <cluster>",
-		Short: "Show a Ceph cluster's cluster-wide flags",
-		Long:  "Show cluster-wide Ceph flags and their state (GET /ceph/clusters/{cluster}/flags).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "flags <cluster>",
+		Short:   "Show a Ceph cluster's cluster-wide flags",
+		Long:    "Show cluster-wide Ceph flags and their state (GET /ceph/clusters/{cluster}/flags).",
+		Example: `  pmx pdm ceph flags fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -240,10 +245,11 @@ type cephFsEntry struct {
 // file systems (GET /ceph/clusters/{cluster}/fs).
 func newCephFsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "fs <cluster>",
-		Short: "List a Ceph cluster's CephFS file systems",
-		Long:  "List the cluster's CephFS file systems (GET /ceph/clusters/{cluster}/fs).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "fs <cluster>",
+		Short:   "List a Ceph cluster's CephFS file systems",
+		Long:    "List the cluster's CephFS file systems (GET /ceph/clusters/{cluster}/fs).",
+		Example: `  pmx pdm ceph fs fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -290,10 +296,11 @@ type cephMdsEntry struct {
 // metadata servers (GET /ceph/clusters/{cluster}/mds).
 func newCephMdsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mds <cluster>",
-		Short: "List a Ceph cluster's metadata servers",
-		Long:  "List the cluster's Ceph metadata servers (MDS) (GET /ceph/clusters/{cluster}/mds).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "mds <cluster>",
+		Short:   "List a Ceph cluster's metadata servers",
+		Long:    "List the cluster's Ceph metadata servers (MDS) (GET /ceph/clusters/{cluster}/mds).",
+		Example: `  pmx pdm ceph mds fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -340,10 +347,11 @@ type cephMgrEntry struct {
 // managers (GET /ceph/clusters/{cluster}/mgr).
 func newCephMgrCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mgr <cluster>",
-		Short: "List a Ceph cluster's managers",
-		Long:  "List the cluster's Ceph managers (GET /ceph/clusters/{cluster}/mgr).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "mgr <cluster>",
+		Short:   "List a Ceph cluster's managers",
+		Long:    "List the cluster's Ceph managers (GET /ceph/clusters/{cluster}/mgr).",
+		Example: `  pmx pdm ceph mgr fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -390,10 +398,11 @@ type cephMonEntry struct {
 // monitors (GET /ceph/clusters/{cluster}/mon).
 func newCephMonCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mon <cluster>",
-		Short: "List a Ceph cluster's monitors",
-		Long:  "List the cluster's Ceph monitors (GET /ceph/clusters/{cluster}/mon).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "mon <cluster>",
+		Short:   "List a Ceph cluster's monitors",
+		Long:    "List the cluster's Ceph monitors (GET /ceph/clusters/{cluster}/mon).",
+		Example: `  pmx pdm ceph mon fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -437,7 +446,8 @@ func newCephOsdTreeCmd() *cobra.Command {
 		Short: "Show a Ceph cluster's OSD (CRUSH) tree",
 		Long: "Show the cluster's OSD (CRUSH) tree (GET /ceph/clusters/{cluster}/osd-tree). The " +
 			"response shape is dynamic, so it is rendered as raw JSON.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm ceph osd-tree fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]
@@ -480,10 +490,11 @@ type cephPoolEntry struct {
 // Ceph pools (GET /ceph/clusters/{cluster}/pools).
 func newCephPoolsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pools <cluster>",
-		Short: "List a Ceph cluster's pools",
-		Long:  "List the cluster's Ceph pools (GET /ceph/clusters/{cluster}/pools).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "pools <cluster>",
+		Short:   "List a Ceph cluster's pools",
+		Long:    "List the cluster's Ceph pools (GET /ceph/clusters/{cluster}/pools).",
+		Example: `  pmx pdm ceph pools fsid1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cluster := args[0]

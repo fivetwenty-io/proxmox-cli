@@ -49,6 +49,8 @@ func newACLLsCmd() *cobra.Command {
 			"to entries at or under a path (prefix match by default; pass --exact to " +
 			"require an exact match). --all-for-authid returns every ACL entry for the " +
 			"caller's own authid as user-type entries, ignoring group membership.",
+		Example: `  pmx pdm acl ls
+  pmx pdm acl ls --path /remote/pve-main`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -121,6 +123,8 @@ func newACLUpdateCmd() *cobra.Command {
 			"(PUT /access/acl). --path and --role are required, and exactly one of " +
 			"--auth-id or --group identifies the subject. Pass --delete to remove the " +
 			"role instead of granting it.",
+		Example: `  pmx pdm acl update --path /remote/pve-main --role Administrator --auth-id alice@pdm
+  pmx pdm acl update --path /remote/pve-main --role Administrator --auth-id alice@pdm --delete`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

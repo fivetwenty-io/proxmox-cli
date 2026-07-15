@@ -112,10 +112,11 @@ type acmeAccountListEntry struct {
 // every registered ACME account (GET /config/acme/account).
 func newConfigAcmeAccountLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List ACME accounts",
-		Long:  "List every ACME account registered on this Proxmox Datacenter Manager (GET /config/acme/account).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List ACME accounts",
+		Long:    "List every ACME account registered on this Proxmox Datacenter Manager (GET /config/acme/account).",
+		Example: `  pmx pdm config acme account ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -159,7 +160,8 @@ func newConfigAcmeAccountShowCmd() *cobra.Command {
 		Long: "Show the directory URL, account location, agreed Terms of Service, and " +
 			"the ACME provider's own account data for one registered account " +
 			"(GET /config/acme/account/{name}).",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme account show default`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -202,7 +204,8 @@ func newConfigAcmeAccountAddCmd() *cobra.Command {
 			"Terms of Service (see 'pmx pdm config acme tos show'). Runs as an " +
 			"asynchronous task; the command blocks until it finishes unless --async " +
 			"(persistent flag) is set.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme account add default --contact admin@example.com`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -259,7 +262,8 @@ func newConfigAcmeAccountUpdateCmd() *cobra.Command {
 		Long: "Update the contact email addresses registered with an ACME account (PUT " +
 			"/config/acme/account/{name}). Runs as an asynchronous task; the command " +
 			"blocks until it finishes unless --async (persistent flag) is set.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme account update default --contact admin@example.com`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -306,7 +310,8 @@ func newConfigAcmeAccountDeleteCmd() *cobra.Command {
 			"request. Runs as an asynchronous task; the command blocks until it " +
 			"finishes unless --async (persistent flag) is set. This is destructive: " +
 			"pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme account delete default --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -389,10 +394,11 @@ type acmePluginEntry struct {
 // Raw output (see acmePluginSecretKeys).
 func newConfigAcmePluginLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List ACME challenge plugins",
-		Long:  "List every configured ACME challenge plugin (GET /config/acme/plugins).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List ACME challenge plugins",
+		Long:    "List every configured ACME challenge plugin (GET /config/acme/plugins).",
+		Example: `  pmx pdm config acme plugin ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -441,7 +447,8 @@ func newConfigAcmePluginShowCmd() *cobra.Command {
 		Long: "Show the configuration of one ACME challenge plugin " +
 			"(GET /config/acme/plugins/{id}). The DNS API configuration data is " +
 			"credential material and is never rendered.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme plugin show cf-dns`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -498,7 +505,8 @@ func newConfigAcmePluginAddCmd() *cobra.Command {
 		Short: "Create an ACME challenge plugin",
 		Long: "Create a new ACME DNS challenge-plugin configuration (POST " +
 			"/config/acme/plugins). --type, --api, and --data are required.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme plugin add cf-dns --type dns --api cf --data '${ACME_PLUGIN_DATA}'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -551,6 +559,8 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 			"/config/acme/plugins/{id}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead. The plugin's " +
 			"--type cannot be changed after creation.",
+		Example: `  pmx pdm config acme plugin update cf-dns --validation-delay 30
+  pmx pdm config acme plugin update cf-dns --disable`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -615,7 +625,8 @@ func newConfigAcmePluginDeleteCmd() *cobra.Command {
 		Short: "Delete an ACME challenge plugin",
 		Long: "Remove an ACME DNS challenge-plugin configuration (DELETE " +
 			"/config/acme/plugins/{id}). This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm config acme plugin delete cf-dns --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -665,10 +676,11 @@ type acmeDirectoryEntry struct {
 // — list the known ACME directory endpoints (GET /config/acme/directories).
 func newConfigAcmeDirectoriesLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List known ACME directory endpoints",
-		Long:  "List every named ACME directory endpoint PDM ships (GET /config/acme/directories).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List known ACME directory endpoints",
+		Long:    "List every named ACME directory endpoint PDM ships (GET /config/acme/directories).",
+		Example: `  pmx pdm config acme directories ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -738,7 +750,8 @@ func newConfigAcmeChallengeSchemaLsCmd() *cobra.Command {
 		Short: "List ACME challenge-plugin schemas",
 		Long: "List every known ACME challenge-plugin type together with its parameter " +
 			"schema (GET /config/acme/challenge-schema).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pdm config acme challenge-schema ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -801,6 +814,8 @@ func newConfigAcmeTosShowCmd() *cobra.Command {
 		Long: "Get the Terms of Service URL for an ACME directory (GET /config/acme/tos). " +
 			"Without --directory, PDM returns the ToS for its default ACME directory " +
 			"(Let's Encrypt).",
+		Example: `  pmx pdm config acme tos show
+  pmx pdm config acme tos show --directory https://acme-v02.api.letsencrypt.org/directory`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

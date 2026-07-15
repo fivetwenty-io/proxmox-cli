@@ -56,10 +56,11 @@ type pveNodeEntry struct {
 // like every other discrete-entity ls in this package.
 func newPveNodeLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls <remote>",
-		Short: "List a PVE remote's nodes",
-		Long:  "Query the remote's version/node list (GET /pve/remotes/{remote}/nodes).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "ls <remote>",
+		Short:   "List a PVE remote's nodes",
+		Long:    "Query the remote's version/node list (GET /pve/remotes/{remote}/nodes).",
+		Example: "  pmx pdm pve node ls pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -99,10 +100,11 @@ func newPveNodeLsCmd() *cobra.Command {
 // get status for the node (GET /pve/remotes/{remote}/nodes/{node}/status).
 func newPveNodeStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <remote> <node>",
-		Short: "Show a PVE remote node's status",
-		Long:  "Get status for the node (GET /pve/remotes/{remote}/nodes/{node}/status).",
-		Args:  cobra.ExactArgs(2),
+		Use:     "status <remote> <node>",
+		Short:   "Show a PVE remote node's status",
+		Long:    "Get status for the node (GET /pve/remotes/{remote}/nodes/{node}/status).",
+		Example: "  pmx pdm pve node status pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -132,10 +134,11 @@ func newPveNodeStatusCmd() *cobra.Command {
 // interface, so this command is read-only.
 func newPveNodeConfigCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "config <remote> <node>",
-		Short: "Show a PVE remote node's configuration",
-		Long:  "Get config for the node (GET /pve/remotes/{remote}/nodes/{node}/config).",
-		Args:  cobra.ExactArgs(2),
+		Use:     "config <remote> <node>",
+		Short:   "Show a PVE remote node's configuration",
+		Long:    "Get config for the node (GET /pve/remotes/{remote}/nodes/{node}/config).",
+		Example: "  pmx pdm pve node config pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -162,10 +165,11 @@ func newPveNodeConfigCmd() *cobra.Command {
 func newPveNodeNetworkCmd() *cobra.Command {
 	var interfaceType string
 	cmd := &cobra.Command{
-		Use:   "network <remote> <node>",
-		Short: "List a PVE remote node's network interfaces",
-		Long:  "Get network interfaces from PVE node (GET /pve/remotes/{remote}/nodes/{node}/network).",
-		Args:  cobra.ExactArgs(2),
+		Use:     "network <remote> <node>",
+		Short:   "List a PVE remote node's network interfaces",
+		Long:    "Get network interfaces from PVE node (GET /pve/remotes/{remote}/nodes/{node}/network).",
+		Example: "  pmx pdm pve node network pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -229,7 +233,8 @@ func newPveNodeRrddataCmd() *cobra.Command {
 		Short: "Read a PVE remote node's RRD metrics",
 		Long: "Read RRD (round-robin database) node stats for a PVE remote's node over the " +
 			"given time frame and consolidation function (GET /pve/remotes/{remote}/nodes/{node}/rrddata).",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm pve node rrddata pve-main pve1 --timeframe day",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -282,10 +287,11 @@ func newPveNodeRrddataCmd() *cobra.Command {
 // /pve/remotes/{remote}/nodes/{node}/subscription).
 func newPveNodeSubscriptionCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "subscription <remote> <node>",
-		Short: "Show a PVE remote node's subscription info",
-		Long:  "Get subscription for the node (GET /pve/remotes/{remote}/nodes/{node}/subscription).",
-		Args:  cobra.ExactArgs(2),
+		Use:     "subscription <remote> <node>",
+		Short:   "Show a PVE remote node's subscription info",
+		Long:    "Get subscription for the node (GET /pve/remotes/{remote}/nodes/{node}/subscription).",
+		Example: "  pmx pdm pve node subscription pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -400,7 +406,8 @@ func newPveNodeAptUpdateDatabaseCmd() *cobra.Command {
 			"on a PVE remote's node (POST /pve/remotes/{remote}/nodes/{node}/apt/update). " +
 			"Runs as an asynchronous task on the remote; the command blocks until it " +
 			"finishes unless --async (persistent flag) is set.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm pve node apt update-database pve-main pve1",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -597,7 +604,8 @@ func newPveNodeFirewallOptionsUpdateCmd() *cobra.Command {
 		Long: "Update a node's firewall configuration (PUT " +
 			"/pve/remotes/{remote}/nodes/{node}/firewall/options). Only flags explicitly " +
 			"set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm pve node firewall options update pve-main pve1 --enable",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -817,10 +825,11 @@ func newPveNodeSdnVnetCmd() *cobra.Command {
 // /pve/remotes/{remote}/nodes/{node}/sdn/vnets/{vnet}/mac-vrf).
 func newPveNodeSdnVnetMacVrfCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "mac-vrf <remote> <node> <vnet>",
-		Short: "Show the MAC-VRF for an EVPN vnet",
-		Long:  "Get the MAC-VRF (MAC address to next-hop mapping) for an EVPN vnet, for a node on a given remote.",
-		Args:  cobra.ExactArgs(3),
+		Use:     "mac-vrf <remote> <node> <vnet>",
+		Short:   "Show the MAC-VRF for an EVPN vnet",
+		Long:    "Get the MAC-VRF (MAC address to next-hop mapping) for an EVPN vnet, for a node on a given remote.",
+		Example: "  pmx pdm pve node sdn vnet mac-vrf pve-main pve1 vnet1",
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node, vnet := args[0], args[1], args[2]
@@ -861,10 +870,11 @@ func newPveNodeSdnZoneCmd() *cobra.Command {
 // /pve/remotes/{remote}/nodes/{node}/sdn/zones/{zone}/ip-vrf).
 func newPveNodeSdnZoneIPVrfCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ip-vrf <remote> <node> <zone>",
-		Short: "Show the IP-VRF for an EVPN zone",
-		Long:  "Get the IP-VRF (route table) for an EVPN zone, for a node on a given remote.",
-		Args:  cobra.ExactArgs(3),
+		Use:     "ip-vrf <remote> <node> <zone>",
+		Short:   "Show the IP-VRF for an EVPN zone",
+		Long:    "Get the IP-VRF (route table) for an EVPN zone, for a node on a given remote.",
+		Example: "  pmx pdm pve node sdn zone ip-vrf pve-main pve1 zone1",
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node, zone := args[0], args[1], args[2]

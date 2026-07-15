@@ -262,7 +262,8 @@ func newPbsDatastoreRrddataCmd() *cobra.Command {
 		Long: "Read RRD (round-robin database) disk-usage stats for a PBS remote's " +
 			"datastore over the given time frame and consolidation function (GET " +
 			"/pbs/remotes/{remote}/datastore/{datastore}/rrddata).",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm pbs datastore rrddata pbs-main tank --timeframe day",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, datastore := args[0], args[1]

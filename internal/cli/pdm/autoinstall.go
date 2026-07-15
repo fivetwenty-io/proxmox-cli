@@ -121,7 +121,8 @@ func newAutoInstallInstallationLsCmd() *cobra.Command {
 		Short: "List automated installation records",
 		Long: "List every automated installation record received by this Proxmox " +
 			"Datacenter Manager (GET /auto-install/installations).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pdm auto-install installation ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -169,7 +170,8 @@ func newAutoInstallInstallationDeleteCmd() *cobra.Command {
 		Short: "Remove an automated installation record",
 		Long: "Remove an automated installation record (DELETE " +
 			"/auto-install/installations/{uuid}). This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm auto-install installation delete 3fa4c1e2-8b0a-4b5a-9c1e-2f6a7d8e9f01 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			uuid := args[0]
@@ -229,10 +231,11 @@ type autoInstallPreparedEntry struct {
 // /auto-install/prepared).
 func newAutoInstallPreparedLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List prepared auto-installer answer configurations",
-		Long:  "List every prepared auto-installer answer configuration (GET /auto-install/prepared).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List prepared auto-installer answer configurations",
+		Long:    "List every prepared auto-installer answer configuration (GET /auto-install/prepared).",
+		Example: `  pmx pdm auto-install prepared ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -276,7 +279,8 @@ func newAutoInstallPreparedShowCmd() *cobra.Command {
 		Short: "Show a prepared auto-installer answer configuration",
 		Long: "Show every populated field of a single prepared auto-installer answer " +
 			"configuration (GET /auto-install/prepared/{id}).",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm auto-install prepared show default`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -638,6 +642,9 @@ func newAutoInstallPreparedAddCmd() *cobra.Command {
 			"/auto-install/prepared). --filesystem, --disk-filter, --netdev-filter, " +
 			"--target-filter, and --template-counters each take literal JSON text for " +
 			"their respective nested object; --filesystem is required.",
+		Example: `  pmx pdm auto-install prepared add default --country us --disk-mode disk_list \
+  --fqdn pve1.example.com --keyboard en-us --mailto admin@example.com --timezone UTC \
+  --filesystem '{"type":"zfs","zfs":{"raid":"raid1"}}'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -688,6 +695,8 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 			"--delete to reset properties to their default instead. --filesystem, " +
 			"--disk-filter, --netdev-filter, --target-filter, and --template-counters " +
 			"each take literal JSON text for their respective nested object.",
+		Example: `  pmx pdm auto-install prepared update default --timezone America/New_York
+  pmx pdm auto-install prepared update default --delete mailto`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -740,7 +749,8 @@ func newAutoInstallPreparedDeleteCmd() *cobra.Command {
 		Short: "Delete a prepared auto-installer answer configuration",
 		Long: "Delete a prepared auto-installer answer configuration (DELETE " +
 			"/auto-install/prepared/{id}). This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm auto-install prepared delete default --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -802,7 +812,8 @@ func newAutoInstallTokenLsCmd() *cobra.Command {
 		Short: "List automated-installation authentication tokens",
 		Long: "List every token used to authenticate automated installation requests " +
 			"(GET /auto-install/tokens). The token secret is never returned by this endpoint.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pdm auto-install token ls`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -854,7 +865,8 @@ func newAutoInstallTokenAddCmd() *cobra.Command {
 		Long: "Create a new token for authenticating automated installation requests " +
 			"(POST /auto-install/tokens). The response's SECRET column carries the " +
 			"token secret; it is shown only once here and is never retrievable again.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm auto-install token add ci-installer --comment "CI provisioning"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -918,6 +930,8 @@ func newAutoInstallTokenUpdateCmd() *cobra.Command {
 			"sent; use --delete to reset properties to their default, or --regenerate " +
 			"to issue a new secret — the new secret is printed once in the response " +
 			"and is never retrievable again.",
+		Example: `  pmx pdm auto-install token update ci-installer --enabled=false
+  pmx pdm auto-install token update ci-installer --regenerate`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -991,7 +1005,8 @@ func newAutoInstallTokenDeleteCmd() *cobra.Command {
 		Long: "Delete a token used to authenticate automated installation requests " +
 			"(DELETE /auto-install/tokens/{id}). Fails if the token is currently in use " +
 			"by any prepared answer configuration. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm auto-install token delete ci-installer --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

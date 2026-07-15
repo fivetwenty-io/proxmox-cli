@@ -308,7 +308,8 @@ func newPveLxcMigrateCmd() *cobra.Command {
 		Long: "Perform an in-cluster migration of an lxc container (POST " +
 			"/pve/remotes/{remote}/lxc/{vmid}/migrate). --target-node is required. " +
 			"Pass --yes/-y to confirm this destructive operation.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm pve lxc migrate pve-main 100 --target-node pve2 --yes",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -390,6 +391,8 @@ func newPveLxcRemoteMigrateCmd() *cobra.Command {
 			"/pve/remotes/{remote}/lxc/{vmid}/remote-migrate). --target-remote, " +
 			"--target-bridge, and --target-storage are required. Pass --yes/-y to confirm " +
 			"this destructive, cross-cluster operation.",
+		Example: `  pmx pdm pve lxc remote-migrate pve-main 100 --target-remote pve-dr \
+  --target-bridge vmbr0 --target-storage local-zfs --yes`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

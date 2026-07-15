@@ -190,10 +190,11 @@ func newPbsTaskLogCmd() *cobra.Command {
 func newPbsTaskStopCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "stop <remote> <upid>",
-		Short: "Stop a running task on a PBS remote",
-		Long:  "Try to stop a running background task on a PBS remote. This is destructive: pass --yes/-y to confirm.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "stop <remote> <upid>",
+		Short:   "Stop a running task on a PBS remote",
+		Long:    "Try to stop a running background task on a PBS remote. This is destructive: pass --yes/-y to confirm.",
+		Example: "  pmx pdm pbs task stop pbs-main UPID:pbs1:00001234:... --yes",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, upid := args[0], args[1]

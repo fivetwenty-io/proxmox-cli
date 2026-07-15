@@ -154,7 +154,8 @@ func newPbsScanCmd() *cobra.Command {
 		Long: "Scan the given connection info for PBS host information, checking login " +
 			"with the provided credentials (POST /pbs/scan). The access token/password " +
 			"is never rendered by this command, even though the API echoes it back.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pdm pbs scan --hostname pbs-main.example.com --authid root@pam --token '${PBS_TOKEN}'`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -204,7 +205,8 @@ func newPbsProbeTLSCmd() *cobra.Command {
 		Long: "Probe the given host's TLS certificate. If the certificate is not " +
 			"trusted with the given fingerprint, the server reports the certificate " +
 			"information (POST /pbs/probe-tls).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm pbs probe-tls --hostname pbs-main.example.com",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -239,10 +241,11 @@ type pbsRealmEntry struct {
 func newPbsRealmsCmd() *cobra.Command {
 	var hf pbsHostFlags
 	cmd := &cobra.Command{
-		Use:   "realms",
-		Short: "List a PBS host's authentication realms",
-		Long:  "List the authentication realms available on a PBS host (GET /pbs/realms).",
-		Args:  cobra.NoArgs,
+		Use:     "realms",
+		Short:   "List a PBS host's authentication realms",
+		Long:    "List the authentication realms available on a PBS host (GET /pbs/realms).",
+		Example: "  pmx pdm pbs realms --hostname pbs-main.example.com",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -285,10 +288,11 @@ func newPbsRealmsCmd() *cobra.Command {
 // managed PBS remote (GET /pbs/remotes/{remote}/status).
 func newPbsStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <remote>",
-		Short: "Show a PBS remote's status",
-		Long:  "Get status for a managed PBS remote (GET /pbs/remotes/{remote}/status).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <remote>",
+		Short:   "Show a PBS remote's status",
+		Long:    "Get status for a managed PBS remote (GET /pbs/remotes/{remote}/status).",
+		Example: "  pmx pdm pbs status pbs-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -343,7 +347,8 @@ func newPbsRrddataCmd() *cobra.Command {
 		Short: "Read a PBS remote's node RRD metrics",
 		Long: "Read RRD (round-robin database) node stats for a PBS remote over the " +
 			"given time frame and consolidation function (GET /pbs/remotes/{remote}/rrddata).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm pbs rrddata pbs-main --timeframe day",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]

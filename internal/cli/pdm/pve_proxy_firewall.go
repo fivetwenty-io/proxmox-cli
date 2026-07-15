@@ -34,10 +34,11 @@ func newPveFirewallCmd() *cobra.Command {
 // other "status of all remotes" listing in this package.
 func newPveFirewallStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status",
-		Short: "Show firewall status of every managed PVE remote",
-		Long:  "Get firewall status of every managed PVE remote (GET /pve/firewall/status).",
-		Args:  cobra.NoArgs,
+		Use:     "status",
+		Short:   "Show firewall status of every managed PVE remote",
+		Long:    "Get firewall status of every managed PVE remote (GET /pve/firewall/status).",
+		Example: "  pmx pdm pve firewall status",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -66,10 +67,11 @@ func newPveFirewallStatusCmd() *cobra.Command {
 // /pve/remotes/{remote}/firewall/status).
 func newPveFirewallShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <remote>",
-		Short: "Show firewall status of a PVE remote",
-		Long:  "Get firewall status of a specific PVE remote (GET /pve/remotes/{remote}/firewall/status).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <remote>",
+		Short:   "Show firewall status of a PVE remote",
+		Long:    "Get firewall status of a specific PVE remote (GET /pve/remotes/{remote}/firewall/status).",
+		Example: "  pmx pdm pve firewall show pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -165,7 +167,8 @@ func newPveFirewallOptionsUpdateCmd() *cobra.Command {
 		Short: "Update a PVE remote's cluster firewall options",
 		Long: "Update cluster firewall configuration (PUT /pve/remotes/{remote}/firewall/options). " +
 			"Only flags explicitly set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm pve firewall options update pve-main --enable",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -251,10 +254,11 @@ type pveFirewallRuleEntry struct {
 // than being sorted, unlike every discrete-entity ls in this package.
 func newPveFirewallRulesCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "rules <remote>",
-		Short: "Show a PVE remote's cluster firewall rules",
-		Long:  "Get cluster firewall rules (GET /pve/remotes/{remote}/firewall/rules).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "rules <remote>",
+		Short:   "Show a PVE remote's cluster firewall rules",
+		Long:    "Get cluster firewall rules (GET /pve/remotes/{remote}/firewall/rules).",
+		Example: "  pmx pdm pve firewall rules pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]

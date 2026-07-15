@@ -53,10 +53,11 @@ func newNodeCertificateCmd() *cobra.Command {
 // the node's certificate chain (GET /nodes/{node}/certificates/info).
 func newNodeCertificateInfoCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "info <node>",
-		Short: "Show the node's certificate chain",
-		Long:  "Show every certificate currently serving the node's API, including subject, issuer, fingerprint, and validity window.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "info <node>",
+		Short:   "Show the node's certificate chain",
+		Long:    "Show every certificate currently serving the node's API, including subject, issuer, fingerprint, and validity window.",
+		Example: "  pmx pdm node certificate info pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -114,7 +115,8 @@ func newNodeCertificateUploadCmd() *cobra.Command {
 			"the node's API certificate. The private key is sent to the API but never echoed " +
 			"back. Use --restart to reload the API proxy so the new certificate takes effect " +
 			"immediately.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pdm node certificate upload pdm-01 --certificates '${PDM_CERT_PEM}' --key '${PDM_KEY_PEM}' --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -173,7 +175,8 @@ func newNodeCertificateDeleteCustomCmd() *cobra.Command {
 		Short: "Remove the node's custom certificate",
 		Long: "Delete the custom certificate from the node, regenerating a self-signed " +
 			"certificate in its place. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node certificate delete-custom pdm-01 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -240,7 +243,8 @@ func newNodeCertificateAcmeOrderCmd() *cobra.Command {
 		Long: "Request a new ACME (Let's Encrypt) certificate for the node and install it. " +
 			"Runs as an asynchronous task; the command blocks until it finishes unless " +
 			"--async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node certificate acme order pdm-01 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -295,6 +299,8 @@ func newNodeCertificateAcmeRenewCmd() *cobra.Command {
 			"renews when expiry is within its renewal lead time; pass --force to renew " +
 			"regardless. Runs as an asynchronous task; the command blocks until it finishes " +
 			"unless --async is set.",
+		Example: `  pmx pdm node certificate acme renew pdm-01 --yes
+  pmx pdm node certificate acme renew pdm-01 --force --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

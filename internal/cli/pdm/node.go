@@ -74,10 +74,11 @@ type nodeListEntry struct {
 // list of nodes has no other meaningful order.
 func newNodeLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls",
-		Short: "List node entries visible to this Proxmox Datacenter Manager",
-		Long:  "List the node entries returned by the compatibility cluster-node listing (GET /nodes).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List node entries visible to this Proxmox Datacenter Manager",
+		Long:    "List the node entries returned by the compatibility cluster-node listing (GET /nodes).",
+		Example: "  pmx pdm node ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -147,10 +148,11 @@ func nodeDecodeText(raw json.RawMessage) (string, error) {
 // CPU, and root-disk usage (GET /nodes/{node}/status).
 func newNodeStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <node>",
-		Short: "Show node memory, CPU, and root-disk usage",
-		Long:  "Show node memory, CPU, load average, kernel, and root-filesystem usage (GET /nodes/{node}/status).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <node>",
+		Short:   "Show node memory, CPU, and root-disk usage",
+		Long:    "Show node memory, CPU, load average, kernel, and root-filesystem usage (GET /nodes/{node}/status).",
+		Example: "  pmx pdm node status pdm-01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -254,7 +256,8 @@ func newNodeConfigShowCmd() *cobra.Command {
 		Long: "Show the node configuration (GET /nodes/{node}/config). The API omits " +
 			"options left at their built-in defaults; pass --defaults to also list " +
 			"those, with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node config show pdm-01\n  pmx pdm node config show pdm-01 --defaults",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -309,7 +312,8 @@ func newNodeConfigUpdateCmd() *cobra.Command {
 		Long: "Update the node configuration (PUT /nodes/{node}/config). Only flags " +
 			"explicitly set are sent; use --delete to reset properties to their " +
 			"default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm node config update pdm-01 --default-lang en",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
