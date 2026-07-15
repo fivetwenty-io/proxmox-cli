@@ -137,7 +137,7 @@ func TestNodeConfigOptions_Describe(t *testing.T) {
 	root2.SetArgs(append(prefix2, "node", "config", "describe", "bogus"))
 	err := root2.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx node config describe")
+	require.Contains(t, err.Error(), "pmx pve node config describe")
 }
 
 // TestNodeConfigOptions_GetDefaults verifies `get --defaults` merges built-in

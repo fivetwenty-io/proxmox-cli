@@ -92,7 +92,7 @@ func newSecurityShowCmd() *cobra.Command {
 			"Privilege level cannot be safely flipped in place: the API accepts unprivileged on " +
 			"update but does not remap the rootfs UIDs, and PVE documents it as \"should not be " +
 			"modified manually.\" The supported path is to back up and restore with an explicit " +
-			"privilege choice (see 'pmx lxc create --restore --force --unprivileged ...').",
+			"privilege choice (see 'pmx pve lxc create --restore --force --unprivileged ...').",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -448,7 +448,7 @@ func runCapsMutation(
 func restartSuffix(cmd *cobra.Command, deps *cli.Deps, vmid, node string, restart bool) (string, error) {
 	if !restart {
 		return fmt.Sprintf(
-			" Changes apply on next start (restart with 'pmx lxc reboot %s' or pass --restart)", vmid), nil
+			" Changes apply on next start (restart with 'pmx pve lxc reboot %s' or pass --restart)", vmid), nil
 	}
 
 	st, err := deps.API.Nodes.ListLxcStatusCurrent(cmd.Context(), node, vmid)

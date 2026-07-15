@@ -27,12 +27,12 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Inspect and manage ACL entries scoped to a VM",
-		Long: "Scope the global 'pmx access acl' and 'pmx access permissions' commands to a single " +
+		Long: "Scope the global 'pmx pve access acl' and 'pmx pve access permissions' commands to a single " +
 			"VM's ACL path, /vms/{vmid} (the same path grammar shared by LXC containers under " +
-			"'pmx lxc permissions'), so operators never have to hand-type it. 'list' and " +
+			"'pmx pve lxc permissions'), so operators never have to hand-type it. 'list' and " +
 			"'effective' are read-only views; 'grant' and 'revoke' are thin wrappers over the " +
 			"underlying access.acl update call. For any ACL path other than a single VM's, use " +
-			"'pmx access acl'/'pmx access permissions' directly.",
+			"'pmx pve access acl'/'pmx pve access permissions' directly.",
 	}
 	cmd.AddCommand(
 		newPermissionsListCmd(),

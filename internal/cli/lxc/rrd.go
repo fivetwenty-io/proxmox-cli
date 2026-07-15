@@ -21,7 +21,7 @@ func newRrdCmd() *cobra.Command {
 		Use:   "rrd <vmid|name>",
 		Short: "Get the RRD PNG filename for a container",
 		Long: "Return the path to a server-side RRD graph PNG for a container. " +
-			"--ds and --timeframe are required. For time-series data points use `pmx lxc metrics` instead.",
+			"--ds and --timeframe are required. For time-series data points use `pmx pve lxc metrics` instead.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

@@ -249,7 +249,7 @@ func newNetworkCreateCmd() *cobra.Command {
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf(
-					"Network interface %q staged on node %q. Run `pmx node network apply` to make it live.",
+					"Network interface %q staged on node %q. Run `pmx pve node network apply` to make it live.",
 					iface, deps.Node)}, deps.Format)
 		},
 	}
@@ -372,7 +372,7 @@ func newNetworkUpdateCmd() *cobra.Command {
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf(
-					"Network interface %q updated on node %q. Run `pmx node network apply` to make it live.",
+					"Network interface %q updated on node %q. Run `pmx pve node network apply` to make it live.",
 					iface, deps.Node)}, deps.Format)
 		},
 	}
@@ -490,7 +490,7 @@ func newNetworkDeleteCmd() *cobra.Command {
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf(
-					"Network interface %q deleted on node %q. Run `pmx node network apply` to make it live.",
+					"Network interface %q deleted on node %q. Run `pmx pve node network apply` to make it live.",
 					iface, deps.Node)}, deps.Format)
 		},
 	}

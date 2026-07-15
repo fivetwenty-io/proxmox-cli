@@ -35,7 +35,7 @@ func newMigrateCmd() *cobra.Command {
 			"--target-node is required. A running container cannot be live-migrated; " +
 			"pass --restart to migrate it by briefly restarting it on the target node. " +
 			"The command blocks until the migration task completes unless --async is set. " +
-			"Use `pmx lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
+			"Use `pmx pve lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

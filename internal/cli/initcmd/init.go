@@ -119,7 +119,7 @@ func newConfigCmd() *cobra.Command {
 			}
 
 			msg := fmt.Sprintf(
-				"Wrote config template to %s. Edit it, then run `pmx cluster status` to test.",
+				"Wrote config template to %s. Edit it, then run `pmx pve cluster status` to test.",
 				path)
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: msg}, deps.Format)

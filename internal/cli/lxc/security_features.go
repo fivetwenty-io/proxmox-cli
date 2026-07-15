@@ -124,9 +124,9 @@ func newSecurityFeaturesCmd() *cobra.Command {
 		Use:   "features",
 		Short: "Inspect and set container feature flags (nesting, keyctl, fuse, mknod, force_rw_sys, mount)",
 		Long: "Inspect and set the features= config option of an LXC container with structured " +
-			"per-feature flags, using the PVE config API (no ssh). This is NOT the 'pmx lxc feature' " +
+			"per-feature flags, using the PVE config API (no ssh). This is NOT the 'pmx pve lxc feature' " +
 			"command, which is an unrelated snapshot/clone/copy support probe.\n\n" +
-			"The raw --features string on 'pmx lxc create' and 'pmx lxc config set' stays available " +
+			"The raw --features string on 'pmx pve lxc create' and 'pmx pve lxc config set' stays available " +
 			"as an escape hatch.",
 	}
 	cmd.AddCommand(newSecurityFeaturesShowCmd(), newSecurityFeaturesSetCmd())
@@ -195,7 +195,7 @@ func newSecurityFeaturesSetCmd() *cobra.Command {
 			"but breaks systemd-networkd; mknod is experimental and needs a recent kernel; mount " +
 			"loop and NFS filesystems widen the attack surface. Feature changes apply on the next " +
 			"container start.\n\n" +
-			"Example: pmx lxc security features set web1 --nesting --keyctl",
+			"Example: pmx pve lxc security features set web1 --nesting --keyctl",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -275,7 +275,7 @@ func newSecurityFeaturesSetCmd() *cobra.Command {
 			}
 
 			res := output.Result{
-				Message: msg + fmt.Sprintf(" Changes apply on next start (restart with 'pmx lxc reboot %s').", vmid),
+				Message: msg + fmt.Sprintf(" Changes apply on next start (restart with 'pmx pve lxc reboot %s').", vmid),
 				Raw:     map[string]any{"vmid": vmid, "node": node},
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

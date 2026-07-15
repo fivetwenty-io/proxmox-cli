@@ -43,7 +43,7 @@ func newReplicationCmd() *cobra.Command {
 		Short:   "Inspect and trigger storage replication on the node",
 		Long: "View the state of the storage-replication jobs whose source is the resolved node, read a " +
 			"job's status and log, and trigger an immediate run. Replication jobs themselves are defined " +
-			"cluster-wide via `pmx cluster replication`.",
+			"cluster-wide via `pmx pve cluster replication`.",
 	}
 	cmd.AddCommand(newReplicationListCmd(), newReplicationGetCmd(), newReplicationStatusCmd(), newReplicationLogCmd(), newReplicationRunCmd())
 	return cmd
@@ -60,7 +60,7 @@ func newReplicationGetCmd() *cobra.Command {
 		Short: "Show the configuration of a replication job",
 		Long: "Show the full configuration of a single storage-replication job, including its target, " +
 			"schedule, rate limit, remove-job setting, and comment. Job configuration is cluster-wide; " +
-			"this is equivalent to `pmx cluster replication get`.",
+			"this is equivalent to `pmx pve cluster replication get`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

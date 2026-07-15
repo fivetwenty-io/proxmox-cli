@@ -175,7 +175,7 @@ func newMigrateCapabilitiesCmd() *cobra.Command {
 		Short: "List QEMU migration capabilities of a node",
 		Long: "Show which migration features the node's QEMU build supports (e.g. " +
 			"dbus-vmstate for switchover of attached daemons). Node-scoped: uses --node. " +
-			"Same data as 'pmx node capabilities qemu migration'.",
+			"Same data as 'pmx pve node capabilities qemu migration'.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

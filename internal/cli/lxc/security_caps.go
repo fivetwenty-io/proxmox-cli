@@ -339,7 +339,7 @@ func newSecurityCapsSetCmd() *cobra.Command {
 			"allowlist (and removes any drop line); --drop writes an lxc.cap.drop blocklist (and " +
 			"removes any keep line); --preset writes a named keep-mode whitelist. Exactly one is " +
 			"required. Granting a dangerous capability requires --force.\n\n" +
-			"Example: pmx lxc security caps set web1 --keep chown,net_bind_service,setuid,setgid,kill",
+			"Example: pmx pve lxc security caps set web1 --keep chown,net_bind_service,setuid,setgid,kill",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -442,7 +442,7 @@ func newSecurityCapsAddCmd() *cobra.Command {
 				case lxcconf.ModeDefault:
 					return "", "", false, fmt.Errorf(
 						"container has no capability whitelist configured; start one with " +
-							"'pmx lxc security caps set --keep ...' (PVE defaults already grant most capabilities)")
+							"'pmx pve lxc security caps set --keep ...' (PVE defaults already grant most capabilities)")
 				case lxcconf.ModeKeep:
 					out, err := lxcconf.SetCaps(content, lxcconf.ModeKeep, appendCaps(state.Keep, norm))
 					if err != nil {
@@ -512,7 +512,7 @@ func newSecurityCapsRemoveCmd() *cobra.Command {
 					if len(newKeep) == 0 {
 						return "", "", false, fmt.Errorf(
 							"removing %s would leave an empty keep list; use "+
-								"'pmx lxc security caps reset' to restore PVE defaults", strings.Join(norm, ", "))
+								"'pmx pve lxc security caps reset' to restore PVE defaults", strings.Join(norm, ", "))
 					}
 					out, err := lxcconf.SetCaps(content, lxcconf.ModeKeep, newKeep)
 					if err != nil {

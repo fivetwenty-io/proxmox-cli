@@ -142,7 +142,7 @@ func TestNodeFirewallOptions_Describe(t *testing.T) {
 	root2.SetArgs(append(prefix2, "node", "firewall", "options", "describe", "bogus"))
 	err := root2.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pmx node firewall options describe")
+	require.Contains(t, err.Error(), "pmx pve node firewall options describe")
 }
 
 // TestNodeFirewallOptions_GetDefaults verifies `get --defaults` merges
