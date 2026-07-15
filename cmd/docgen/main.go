@@ -72,7 +72,7 @@ func main() {
 
 func run(opts runOpts) error {
 	for _, k := range []string{"PMX_CONTEXT", "PMX_NODE", "PMX_OUTPUT", "PMX_TOKEN", "PMX_TOKEN_SECRET"} {
-		os.Unsetenv(k)
+		_ = os.Unsetenv(k)
 	}
 
 	known := map[string]bool{}
