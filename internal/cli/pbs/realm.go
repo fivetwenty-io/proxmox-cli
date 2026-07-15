@@ -71,10 +71,11 @@ func realmFormatOptionalPVEBool(b *pve.PVEBool) string {
 // requires a configured context to reach it.
 func newRealmLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List authentication realms",
-		Long:  "List every authentication realm configured on this server, with its type (GET /access/domains).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List authentication realms",
+		Long:    "List every authentication realm configured on this server, with its type (GET /access/domains).",
+		Example: "  pmx pbs realm ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -135,7 +136,8 @@ func newRealmSyncCmd() *cobra.Command {
 		Long: "Synchronize the users of an LDAP/AD/OpenID realm from its backing " +
 			"directory service (POST /access/domains/{realm}/sync). Runs as an " +
 			"asynchronous task; the command blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm sync company --enable-new",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]

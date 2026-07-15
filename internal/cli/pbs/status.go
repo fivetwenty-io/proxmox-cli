@@ -78,7 +78,8 @@ func newPbsStatusDatastoreUsageCmd() *cobra.Command {
 		Long: "List disk usage, mount status, and a linear-regression estimate of when " +
 			"each datastore will run out of space, based on the last month of RRD data " +
 			"(GET /status/datastore-usage).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs status datastore-usage",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

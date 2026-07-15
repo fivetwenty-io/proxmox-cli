@@ -52,10 +52,11 @@ type notifSendmailEntry struct {
 // (GET /config/notifications/endpoints/sendmail).
 func newNotifEndpointSendmailLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List sendmail notification endpoints",
-		Long:  "List every configured sendmail notification endpoint (GET /config/notifications/endpoints/sendmail).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List sendmail notification endpoints",
+		Long:    "List every configured sendmail notification endpoint (GET /config/notifications/endpoints/sendmail).",
+		Example: "  pmx pbs notification endpoint sendmail ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -109,7 +110,8 @@ func newNotifEndpointSendmailShowCmd() *cobra.Command {
 			"/config/notifications/endpoints/sendmail/{name}). The API omits options " +
 			"left at their built-in defaults; pass --defaults to also list those, " +
 			"with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint sendmail show sendmail-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -202,6 +204,8 @@ func newNotifEndpointSendmailAddCmd() *cobra.Command {
 		Long: "Create a new sendmail notification endpoint (POST " +
 			"/config/notifications/endpoints/sendmail). Every option is optional " +
 			"and only forwarded when explicitly set.",
+		Example: `  pmx pbs notification endpoint sendmail add sendmail-main \
+  --mailto ops@example.com`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -270,7 +274,8 @@ func newNotifEndpointSendmailUpdateCmd() *cobra.Command {
 		Long: "Update an existing sendmail notification endpoint (PUT " +
 			"/config/notifications/endpoints/sendmail/{name}). Only flags explicitly " +
 			"set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint sendmail update sendmail-main --mailto ops@example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -350,7 +355,8 @@ func newNotifEndpointSendmailDeleteCmd() *cobra.Command {
 		Short: "Delete a sendmail notification endpoint",
 		Long: "Remove a sendmail notification endpoint (DELETE /config/notifications/endpoints/sendmail/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint sendmail delete sendmail-main --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

@@ -75,7 +75,8 @@ func newUserLsCmd() *cobra.Command {
 		Long: "List the users configured on this Proxmox Backup Server (GET " +
 			"/access/users). Pass --include-tokens to include each user's API tokens " +
 			"in the raw (JSON/YAML) output; the table view never shows token details.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs user ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -127,10 +128,11 @@ func newUserLsCmd() *cobra.Command {
 // configuration (GET /access/users/{userid}).
 func newUserShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <userid>",
-		Short: "Show a user's configuration",
-		Long:  "Show every populated field of a single user's configuration (GET /access/users/{userid}).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <userid>",
+		Short:   "Show a user's configuration",
+		Long:    "Show every populated field of a single user's configuration (GET /access/users/{userid}).",
+		Example: "  pmx pbs user show alice@pbs",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -166,7 +168,8 @@ func newUserAddCmd() *cobra.Command {
 		Long: "Create a new Proxmox Backup Server user (POST /access/users). Every " +
 			"flag beside the userid argument is optional and only forwarded when " +
 			"explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs user add alice@pbs --email alice@example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -237,7 +240,8 @@ func newUserUpdateCmd() *cobra.Command {
 			"Only flags explicitly set are sent; use --delete to reset properties to their " +
 			"default instead. --password is accepted by the API but ignored server-side; " +
 			"use 'pmx pbs user passwd' to change a password.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs user update alice@pbs --comment backup-operator",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -325,7 +329,8 @@ func newUserDeleteCmd() *cobra.Command {
 		Short: "Delete a user",
 		Long: "Remove a user from the configuration file (DELETE /access/users/{userid}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs user delete alice@pbs --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -362,7 +367,8 @@ func newUserUnlockTfaCmd() *cobra.Command {
 		Short: "Unlock a user's two-factor authentication",
 		Long: "Clear a user's two-factor authentication lockout after too many failed " +
 			"attempts (PUT /access/users/{userid}/unlock-tfa).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs user unlock-tfa alice@pbs",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -406,7 +412,8 @@ func newUserPasswdCmd() *cobra.Command {
 			"their own password; the superuser may change any password. --password is " +
 			"required. --confirmation-password supplies the operator's current " +
 			"password, required unless logged in as root@pam.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs user passwd alice@pbs --password '${NEW_PASSWORD}'",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]

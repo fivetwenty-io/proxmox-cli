@@ -56,10 +56,11 @@ type notifMatcherEntry struct {
 // every configured matcher (GET /config/notifications/matchers).
 func newNotifMatcherLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List notification matchers",
-		Long:  "List every configured notification matcher (GET /config/notifications/matchers).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List notification matchers",
+		Long:    "List every configured notification matcher (GET /config/notifications/matchers).",
+		Example: "  pmx pbs notification matcher ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -113,7 +114,8 @@ func newNotifMatcherShowCmd() *cobra.Command {
 			"/config/notifications/matchers/{name}). The API omits options left at " +
 			"their built-in defaults; pass --defaults to also list those, with the " +
 			"value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification matcher show storage-alerts",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -208,6 +210,8 @@ func newNotifMatcherAddCmd() *cobra.Command {
 		Short: "Create a notification matcher",
 		Long: "Create a new notification matcher (POST /config/notifications/matchers). " +
 			"Every option is optional and only forwarded when explicitly set.",
+		Example: `  pmx pbs notification matcher add storage-alerts \
+  --match-severity error --target smtp-main`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -280,7 +284,8 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 		Long: "Update an existing notification matcher (PUT " +
 			"/config/notifications/matchers/{name}). Only flags explicitly set " +
 			"are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification matcher update storage-alerts --target smtp-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -368,7 +373,8 @@ func newNotifMatcherDeleteCmd() *cobra.Command {
 		Short: "Delete a notification matcher",
 		Long: "Remove a notification matcher (DELETE /config/notifications/matchers/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification matcher delete storage-alerts --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -416,10 +422,11 @@ func newNotifMatcherFieldsCmd() *cobra.Command {
 // (GET /config/notifications/matcher-fields).
 func newNotifMatcherFieldsLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List matchable metadata field names",
-		Long:  "List every known matchable metadata field name (GET /config/notifications/matcher-fields).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List matchable metadata field names",
+		Long:    "List every known matchable metadata field name (GET /config/notifications/matcher-fields).",
+		Example: "  pmx pbs notification matcher fields ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -484,10 +491,11 @@ func newNotifMatcherFieldValuesCmd() *cobra.Command {
 // (GET /config/notifications/matcher-field-values).
 func newNotifMatcherFieldValuesLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List known metadata field values",
-		Long:  "List every known matchable metadata field value (GET /config/notifications/matcher-field-values).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List known metadata field values",
+		Long:    "List every known matchable metadata field value (GET /config/notifications/matcher-field-values).",
+		Example: "  pmx pbs notification matcher field-values ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

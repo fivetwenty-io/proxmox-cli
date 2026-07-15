@@ -54,7 +54,8 @@ func newVerifyRunCmd() *cobra.Command {
 			"(--ns) or a single snapshot (--backup-type/--backup-id/--backup-time). " +
 			"Runs as an asynchronous task; the command blocks until it finishes " +
 			"unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs verify run --store tank",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -201,7 +202,8 @@ func newVerifyJobLsCmd() *cobra.Command {
 		Short: "List scheduled verification jobs and their run status",
 		Long: "List every verification job configuration visible to the caller " +
 			"along with its most recent run state (GET /admin/verify).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs verify job ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -241,7 +243,8 @@ func newVerifyJobShowCmd() *cobra.Command {
 			"/config/verify/{id}). The PBS API omits options left at their built-in " +
 			"defaults; pass --defaults to also list those, with the value they " +
 			"effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs verify job show weekly-verify",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -328,7 +331,8 @@ func newVerifyJobAddCmd() *cobra.Command {
 		Long: "Create a new verification job configuration (POST " +
 			"/config/verify). --store is required; every other option is " +
 			"optional and only forwarded when explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs verify job add weekly-verify --store tank --schedule weekly",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -425,7 +429,8 @@ func newVerifyJobUpdateCmd() *cobra.Command {
 		Long: "Update an existing verification job configuration (PUT " +
 			"/config/verify/{id}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs verify job update weekly-verify --schedule weekly",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -522,7 +527,8 @@ func newVerifyJobDeleteCmd() *cobra.Command {
 		Short: "Delete a scheduled verification job",
 		Long: "Remove a verification job configuration (DELETE /config/verify/{id}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs verify job delete weekly-verify --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -562,7 +568,8 @@ func newVerifyJobRunCmd() *cobra.Command {
 			"/admin/verify/{id}/run). This endpoint reports only success or " +
 			"failure, not a task UPID, so the command always completes " +
 			"synchronously and --async has no effect here.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs verify job run weekly-verify",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

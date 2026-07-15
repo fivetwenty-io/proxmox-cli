@@ -70,10 +70,11 @@ func decodeTapePoolEntries(resp *pbsconfig.ListMediaPoolResponse) []tapePoolEntr
 // configuration (GET /config/media-pool).
 func newTapePoolLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List tape media pool configurations",
-		Long:  "List every tape media pool configuration visible to the caller (GET /config/media-pool).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List tape media pool configurations",
+		Long:    "List every tape media pool configuration visible to the caller (GET /config/media-pool).",
+		Example: "  pmx pbs tape pool ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -111,7 +112,8 @@ func newTapePoolShowCmd() *cobra.Command {
 		Short: "Show one tape media pool's configuration",
 		Long: "Show every populated field of a single tape media pool configuration " +
 			"(GET /config/media-pool/{name}).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape pool show weekly-tapes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -236,7 +238,8 @@ func newTapePoolAddCmd() *cobra.Command {
 		Short: "Create a tape media pool",
 		Long: "Create a new tape media pool configuration (POST /config/media-pool). " +
 			"Every attribute is optional and only forwarded when explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pbs tape pool add weekly-tapes --allocation continue --retention keep`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -271,7 +274,8 @@ func newTapePoolUpdateCmd() *cobra.Command {
 		Long: "Update an existing tape media pool configuration (PUT " +
 			"/config/media-pool/{name}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape pool update weekly-tapes --retention keep",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -318,7 +322,8 @@ func newTapePoolDeleteCmd() *cobra.Command {
 		Short: "Delete a tape media pool",
 		Long: "Remove a tape media pool configuration (DELETE /config/media-pool/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape pool delete weekly-tapes --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

@@ -33,6 +33,8 @@ func newTapeRestoreCmd() *cobra.Command {
 			"/tape/restore). Namespaces are automatically created if necessary. --drive, " +
 			"--media-set, and --store are required. Runs as an asynchronous task; the " +
 			"command blocks until it finishes unless --async is set.",
+		Example: `  pmx pbs tape restore --drive drive0 --media-set MEDIA-SET-UUID \
+  --store tank`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

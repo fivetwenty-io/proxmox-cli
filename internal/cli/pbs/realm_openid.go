@@ -59,10 +59,11 @@ type realmOpenidListEntry struct {
 // OpenID realms (GET /config/access/openid).
 func newRealmOpenidLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List OpenID Connect realm configurations",
-		Long:  "List the OpenID Connect authentication realms configured on this server (GET /config/access/openid).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List OpenID Connect realm configurations",
+		Long:    "List the OpenID Connect authentication realms configured on this server (GET /config/access/openid).",
+		Example: "  pmx pbs realm openid ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -114,7 +115,8 @@ func newRealmOpenidShowCmd() *cobra.Command {
 			"is never returned by the API. The API also omits options left at their " +
 			"built-in defaults; pass --defaults to also list those, with the value " +
 			"they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm openid show company",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -281,6 +283,8 @@ func newRealmOpenidAddCmd() *cobra.Command {
 			"(POST /config/access/openid). --client-id and --issuer-url are " +
 			"required; every other option is optional and only forwarded when " +
 			"explicitly set.",
+		Example: `  pmx pbs realm openid add company --client-id pbs-cli \
+  --issuer-url https://idp.example.com/realms/company`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -335,7 +339,8 @@ func newRealmOpenidUpdateCmd() *cobra.Command {
 			"/config/access/openid/{realm}). Only flags explicitly set are sent; " +
 			"use --delete to reset properties to their default instead. " +
 			"username-claim cannot be changed after realm creation.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm openid update company --comment corp-oidc",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -380,7 +385,8 @@ func newRealmOpenidDeleteCmd() *cobra.Command {
 		Short: "Delete an OpenID Connect realm configuration",
 		Long: "Remove an OpenID Connect realm configuration (DELETE /config/access/openid/{realm}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm openid delete company --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]

@@ -135,7 +135,8 @@ func newPruneRunCmd() *cobra.Command {
 			"that fall outside the --keep-* retention window across every group " +
 			"under --ns, or the whole datastore. Runs as an asynchronous task; " +
 			"the command blocks until it finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs prune run --store tank --keep-daily 7",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -209,7 +210,8 @@ func newPruneSimulateCmd() *cobra.Command {
 			"given --keep-* retention window. This always runs as a dry run; " +
 			"nothing is deleted, and there is no --async flag since the API " +
 			"returns the plan synchronously.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs prune simulate vm/100 --store tank --keep-daily 7",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -367,7 +369,8 @@ func newPruneJobLsCmd() *cobra.Command {
 		Short: "List scheduled prune jobs and their run status",
 		Long: "List every prune job configuration visible to the caller along " +
 			"with its most recent run state (GET /admin/prune).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs prune job ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -407,7 +410,8 @@ func newPruneJobShowCmd() *cobra.Command {
 		Long: "Show the full configuration of one prune job (GET /config/prune/{id}). " +
 			"The PBS API omits options left at their built-in defaults; pass " +
 			"--defaults to also list those, with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs prune job show daily-prune",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -501,6 +505,8 @@ func newPruneJobAddCmd() *cobra.Command {
 		Long: "Create a new prune job configuration (POST /config/prune). " +
 			"--store and --schedule are required; every --keep-* option is " +
 			"optional and only forwarded when explicitly set.",
+		Example: `  pmx pbs prune job add daily-prune --store tank --schedule daily \
+  --keep-daily 7`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -586,7 +592,8 @@ func newPruneJobUpdateCmd() *cobra.Command {
 		Long: "Update an existing prune job configuration (PUT " +
 			"/config/prune/{id}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs prune job update daily-prune --keep-daily 14",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -671,7 +678,8 @@ func newPruneJobDeleteCmd() *cobra.Command {
 		Short: "Delete a scheduled prune job",
 		Long: "Remove a prune job configuration (DELETE /config/prune/{id}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs prune job delete daily-prune --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -710,7 +718,8 @@ func newPruneJobRunCmd() *cobra.Command {
 		Long: "Immediately run a configured prune job (POST /admin/prune/{id}/run). " +
 			"This endpoint reports only success or failure, not a task UPID, so the " +
 			"command always completes synchronously and --async has no effect here.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs prune job run daily-prune",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

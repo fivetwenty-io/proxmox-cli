@@ -48,10 +48,11 @@ type notifGotifyEntry struct {
 // (GET /config/notifications/endpoints/gotify).
 func newNotifEndpointGotifyLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List gotify notification endpoints",
-		Long:  "List every configured gotify notification endpoint (GET /config/notifications/endpoints/gotify).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List gotify notification endpoints",
+		Long:    "List every configured gotify notification endpoint (GET /config/notifications/endpoints/gotify).",
+		Example: "  pmx pbs notification endpoint gotify ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -106,7 +107,8 @@ func newNotifEndpointGotifyShowCmd() *cobra.Command {
 			"is write-only and is never returned by the API. The API also omits " +
 			"options left at their built-in defaults; pass --defaults to also list " +
 			"those, with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint gotify show gotify-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -195,6 +197,8 @@ func newNotifEndpointGotifyAddCmd() *cobra.Command {
 			"/config/notifications/endpoints/gotify). --server and --token are " +
 			"required; every other option is optional and only forwarded when " +
 			"explicitly set.",
+		Example: `  pmx pbs notification endpoint gotify add gotify-main \
+  --server https://gotify.example.com --token '${GOTIFY_TOKEN}'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -261,7 +265,8 @@ func newNotifEndpointGotifyUpdateCmd() *cobra.Command {
 		Long: "Update an existing gotify notification endpoint (PUT " +
 			"/config/notifications/endpoints/gotify/{name}). Only flags explicitly " +
 			"set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint gotify update gotify-main --comment alerts",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -333,7 +338,8 @@ func newNotifEndpointGotifyDeleteCmd() *cobra.Command {
 		Short: "Delete a gotify notification endpoint",
 		Long: "Remove a gotify notification endpoint (DELETE /config/notifications/endpoints/gotify/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint gotify delete gotify-main --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

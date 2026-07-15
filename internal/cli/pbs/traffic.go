@@ -131,10 +131,11 @@ func decodeTrafficRuleEntries(resp *pbsconfig.ListTrafficControlResponse) []traf
 // traffic-control rule (GET /config/traffic-control).
 func newTrafficLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List traffic-control rules",
-		Long:  "List every configured traffic-control rule (GET /config/traffic-control).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List traffic-control rules",
+		Long:    "List every configured traffic-control rule (GET /config/traffic-control).",
+		Example: "  pmx pbs traffic ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -183,7 +184,8 @@ func newTrafficShowCmd() *cobra.Command {
 			"/config/traffic-control/{name}). The PBS API omits options left at " +
 			"their built-in defaults; pass --defaults to also list those, with the " +
 			"value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs traffic show backup-window",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -262,6 +264,8 @@ func newTrafficAddCmd() *cobra.Command {
 		Long: "Create a new traffic-control rule (POST /config/traffic-control). " +
 			"--network is required and repeatable; every other flag is optional and " +
 			"only forwarded when explicitly set.",
+		Example: `  pmx pbs traffic add backup-window --network 10.0.0.0/24 \
+  --rate-in 100MB`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -337,7 +341,8 @@ func newTrafficUpdateCmd() *cobra.Command {
 		Long: "Update an existing traffic-control rule (PUT /config/traffic-control/{name}). " +
 			"Only flags explicitly set are sent; use --delete to reset properties to their " +
 			"default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs traffic update backup-window --rate-in 200MB",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -420,7 +425,8 @@ func newTrafficDeleteCmd() *cobra.Command {
 		Short: "Delete a traffic-control rule",
 		Long: "Remove a traffic-control rule (DELETE /config/traffic-control/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs traffic delete backup-window --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -498,7 +504,8 @@ func newTrafficCurrentCmd() *cobra.Command {
 		Short: "Show configured rules with their current measured rate",
 		Long: "Show every traffic-control rule's configuration together with its " +
 			"currently measured ingress/egress rate in bytes/second (GET /admin/traffic-control).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs traffic current",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

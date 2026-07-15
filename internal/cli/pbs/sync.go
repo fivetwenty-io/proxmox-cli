@@ -91,7 +91,8 @@ func newSyncLsCmd() *cobra.Command {
 		Long: "List every sync job configuration visible to the caller together with " +
 			"its most recent run state (GET /admin/sync). Scope the results with " +
 			"--store and/or --sync-direction.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs sync ls --store tank",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -207,7 +208,8 @@ func newSyncJobLsCmd() *cobra.Command {
 		Long: "List every sync job configuration visible to the caller (GET " +
 			"/config/sync), scoped with --sync-direction. This is the plain " +
 			"configuration listing; use `pmx pbs sync ls` for run-status fields.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs sync job ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -259,7 +261,8 @@ func newSyncJobShowCmd() *cobra.Command {
 			"/config/sync/{id}). The PBS API omits options left at their built-in " +
 			"defaults; pass --defaults to also list those, with the value they " +
 			"effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs sync job show offsite-pull",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -551,6 +554,8 @@ func newSyncJobAddCmd() *cobra.Command {
 		Long: "Create a new sync job configuration (POST /config/sync). --store and " +
 			"--remote-store are required; every other option is optional and only " +
 			"forwarded when explicitly set.",
+		Example: `  pmx pbs sync job add offsite-pull --store tank --remote-store tank \
+  --remote pbs-main --schedule daily`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -600,7 +605,8 @@ func newSyncJobUpdateCmd() *cobra.Command {
 		Long: "Update an existing sync job configuration (PUT /config/sync/{id}). " +
 			"Only flags explicitly set are sent; use --delete to reset properties to " +
 			"their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs sync job update offsite-pull --schedule daily",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -646,7 +652,8 @@ func newSyncJobDeleteCmd() *cobra.Command {
 		Short: "Delete a scheduled sync job",
 		Long: "Remove a sync job configuration (DELETE /config/sync/{id}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs sync job delete offsite-pull --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -693,7 +700,8 @@ func newSyncJobRunCmd() *cobra.Command {
 		Long: "Immediately run a configured sync job (POST /admin/sync/{id}/run). " +
 			"Runs as an asynchronous task; the command blocks until it finishes " +
 			"unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs sync job run offsite-pull",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -759,7 +767,8 @@ func newSyncPullCmd() *cobra.Command {
 			"required; omitting --remote pulls from another datastore on this " +
 			"server. Runs as an asynchronous task; the command blocks until it " +
 			"finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pbs sync pull --remote pbs-main --remote-store tank --store tank`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if remoteStore == "" {
@@ -906,7 +915,8 @@ func newSyncPushCmd() *cobra.Command {
 			"local datastore to a remote one. --remote, --remote-store, and --store " +
 			"are required. Runs as an asynchronous task; the command blocks until it " +
 			"finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pbs sync push --remote pbs-main --remote-store tank --store tank`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if remote == "" {

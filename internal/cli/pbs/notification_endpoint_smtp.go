@@ -55,10 +55,11 @@ type notifSmtpEntry struct {
 // (GET /config/notifications/endpoints/smtp).
 func newNotifEndpointSmtpLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List smtp notification endpoints",
-		Long:  "List every configured smtp notification endpoint (GET /config/notifications/endpoints/smtp).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List smtp notification endpoints",
+		Long:    "List every configured smtp notification endpoint (GET /config/notifications/endpoints/smtp).",
+		Example: "  pmx pbs notification endpoint smtp ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -114,7 +115,8 @@ func newNotifEndpointSmtpShowCmd() *cobra.Command {
 			"write-only and is never returned by the API. The API also omits " +
 			"options left at their built-in defaults; pass --defaults to also list " +
 			"those, with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint smtp show smtp-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -222,6 +224,8 @@ func newNotifEndpointSmtpAddCmd() *cobra.Command {
 			"/config/notifications/endpoints/smtp). --server and --from-address " +
 			"are required; every other option is optional and only forwarded " +
 			"when explicitly set.",
+		Example: `  pmx pbs notification endpoint smtp add smtp-main --server smtp.example.com \
+  --from-address backups@example.com --mailto ops@example.com`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -312,7 +316,8 @@ func newNotifEndpointSmtpUpdateCmd() *cobra.Command {
 		Long: "Update an existing smtp notification endpoint (PUT " +
 			"/config/notifications/endpoints/smtp/{name}). Only flags explicitly " +
 			"set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint smtp update smtp-main --mailto ops@example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -412,7 +417,8 @@ func newNotifEndpointSmtpDeleteCmd() *cobra.Command {
 		Short: "Delete an smtp notification endpoint",
 		Long: "Remove an smtp notification endpoint (DELETE /config/notifications/endpoints/smtp/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint smtp delete smtp-main --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

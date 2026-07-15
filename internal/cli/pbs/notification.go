@@ -91,10 +91,11 @@ func newNotifTargetCmd() *cobra.Command {
 // notification target (GET /config/notifications/targets).
 func newNotifTargetLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List notification targets",
-		Long:  "List every entity usable as a notification-matcher target (GET /config/notifications/targets).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List notification targets",
+		Long:    "List every entity usable as a notification-matcher target (GET /config/notifications/targets).",
+		Example: "  pmx pbs notification target ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -142,10 +143,11 @@ func newNotifTargetLsCmd() *cobra.Command {
 // prints a success message rather than waiting on a task.
 func newNotifTargetTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "test <name>",
-		Short: "Send a test notification to a target",
-		Long:  "Send a test notification to a named target (POST /config/notifications/targets/{name}/test).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "test <name>",
+		Short:   "Send a test notification to a target",
+		Long:    "Send a test notification to a named target (POST /config/notifications/targets/{name}/test).",
+		Example: "  pmx pbs notification target test smtp-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

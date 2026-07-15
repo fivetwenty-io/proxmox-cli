@@ -52,10 +52,11 @@ type notifWebhookEntry struct {
 // (GET /config/notifications/endpoints/webhook).
 func newNotifEndpointWebhookLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List webhook notification endpoints",
-		Long:  "List every configured webhook notification endpoint (GET /config/notifications/endpoints/webhook).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List webhook notification endpoints",
+		Long:    "List every configured webhook notification endpoint (GET /config/notifications/endpoints/webhook).",
+		Example: "  pmx pbs notification endpoint webhook ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -109,7 +110,8 @@ func newNotifEndpointWebhookShowCmd() *cobra.Command {
 			"write-only; only secret names are ever returned by the API. The API " +
 			"also omits options left at their built-in defaults; pass --defaults to " +
 			"also list those, with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint webhook show webhook-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -211,6 +213,8 @@ func newNotifEndpointWebhookAddCmd() *cobra.Command {
 			"/config/notifications/endpoints/webhook). --method and --url are " +
 			"required; every other option is optional and only forwarded when " +
 			"explicitly set.",
+		Example: `  pmx pbs notification endpoint webhook add webhook-main --method post \
+  --url https://hooks.example.com/backup`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -285,7 +289,8 @@ func newNotifEndpointWebhookUpdateCmd() *cobra.Command {
 		Long: "Update an existing webhook notification endpoint (PUT " +
 			"/config/notifications/endpoints/webhook/{name}). Only flags explicitly " +
 			"set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint webhook update webhook-main --url https://hooks.example.com/backup",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -369,7 +374,8 @@ func newNotifEndpointWebhookDeleteCmd() *cobra.Command {
 		Short: "Delete a webhook notification endpoint",
 		Long: "Remove a webhook notification endpoint (DELETE /config/notifications/endpoints/webhook/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs notification endpoint webhook delete webhook-main --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

@@ -49,10 +49,11 @@ type remoteListEntry struct {
 // (GET /config/remote).
 func newRemoteLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List configured remotes",
-		Long:  "List the remote Proxmox Backup Server connections configured on this server.",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List configured remotes",
+		Long:    "List the remote Proxmox Backup Server connections configured on this server.",
+		Example: "  pmx pbs remote ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -98,7 +99,8 @@ func newRemoteShowCmd() *cobra.Command {
 			"/config/remote/{name}). The PBS API omits options left at their built-in " +
 			"defaults; pass --defaults to also list those, with the value they " +
 			"effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs remote show pbs-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -209,6 +211,8 @@ func newRemoteAddCmd() *cobra.Command {
 		Long: "Create a new remote Proxmox Backup Server connection (POST " +
 			"/config/remote). --host, --auth-id, and --password are required; " +
 			"every other option is optional and only forwarded when explicitly set.",
+		Example: `  pmx pbs remote add pbs-main --host pbs-main.example.com \
+  --auth-id root@pam --password '${REMOTE_PASSWORD}'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -274,7 +278,8 @@ func newRemoteUpdateCmd() *cobra.Command {
 		Long: "Update an existing remote Proxmox Backup Server connection (PUT " +
 			"/config/remote/{name}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs remote update pbs-main --comment offsite",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -319,7 +324,8 @@ func newRemoteDeleteCmd() *cobra.Command {
 		Short: "Delete a remote connection",
 		Long: "Remove a remote Proxmox Backup Server connection (DELETE /config/remote/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs remote delete pbs-main --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -382,10 +388,11 @@ type remoteScanDatastoreEntry struct {
 // datastores accessible on a remote (GET /config/remote/{name}/scan).
 func newRemoteScanLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls <remote>",
-		Short: "List a remote's accessible datastores",
-		Long:  "List the datastores accessible on a remote connection (GET /config/remote/{name}/scan).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "ls <remote>",
+		Short:   "List a remote's accessible datastores",
+		Long:    "List the datastores accessible on a remote connection (GET /config/remote/{name}/scan).",
+		Example: "  pmx pbs remote scan ls pbs-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -445,7 +452,8 @@ func newRemoteScanGroupsCmd() *cobra.Command {
 		Short: "List backup groups in a remote's datastore",
 		Long: "List the backup groups accessible in a datastore on a remote (GET " +
 			"/config/remote/{name}/scan/{store}/groups), scoped to a namespace with --namespace.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pbs remote scan groups pbs-main tank",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -511,7 +519,8 @@ func newRemoteScanNamespacesCmd() *cobra.Command {
 		Short: "List namespaces in a remote's datastore",
 		Long: "List the namespaces accessible in a datastore on a remote (GET " +
 			"/config/remote/{name}/scan/{store}/namespaces).",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pbs remote scan namespaces pbs-main tank",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

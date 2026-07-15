@@ -34,10 +34,11 @@ func newRealmPbsCmd() *cobra.Command {
 // realm's configuration (GET /config/access/pbs).
 func newRealmPbsShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show the built-in PBS realm's configuration",
-		Long:  "Show the built-in Proxmox Backup Server realm's configuration (GET /config/access/pbs).",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the built-in PBS realm's configuration",
+		Long:    "Show the built-in Proxmox Backup Server realm's configuration (GET /config/access/pbs).",
+		Example: "  pmx pbs realm pbs show",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -75,7 +76,8 @@ func newRealmPbsUpdateCmd() *cobra.Command {
 		Long: "Update the built-in Proxmox Backup Server realm's comment and " +
 			"default-realm flag (PUT /config/access/pbs). Only flags explicitly " +
 			"set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs realm pbs update --default",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

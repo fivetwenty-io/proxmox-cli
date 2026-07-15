@@ -281,6 +281,8 @@ func newSnapshotLsCmd() *cobra.Command {
 		Short: "List backup snapshots in a datastore",
 		Long: "List backup snapshots in a datastore, optionally filtered to a single " +
 			"backup group given as <type>/<id>.",
+		Example: `  pmx pbs snapshot ls --store tank
+  pmx pbs snapshot ls --store tank vm/100`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -341,7 +343,8 @@ func newSnapshotShowCmd() *cobra.Command {
 		Long: "Look up a single backup snapshot by its full reference and render every " +
 			"populated field. PBS has no per-snapshot GET endpoint, so this filters the " +
 			"datastore's snapshot list to the matching group and time.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs snapshot show --store tank vm/100/2026-07-01T02:00:00Z",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -425,10 +428,11 @@ func newSnapshotFilesCmd() *cobra.Command {
 	var df storeFlags
 
 	cmd := &cobra.Command{
-		Use:   "files <type>/<id>/<time>",
-		Short: "List the archive files contained in a backup snapshot",
-		Long:  "List the archive files (index/blob archives, client log) stored in one backup snapshot.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "files <type>/<id>/<time>",
+		Short:   "List the archive files contained in a backup snapshot",
+		Long:    "List the archive files (index/blob archives, client log) stored in one backup snapshot.",
+		Example: "  pmx pbs snapshot files --store tank vm/100/2026-07-01T02:00:00Z",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -483,7 +487,8 @@ func newSnapshotDeleteCmd() *cobra.Command {
 		Short: "Delete a backup snapshot",
 		Long: "Permanently remove one backup snapshot and all its archive files from a " +
 			"datastore. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs snapshot delete --store tank vm/100/2026-07-01T02:00:00Z --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -525,10 +530,11 @@ func newSnapshotProtectCmd() *cobra.Command {
 	var df storeFlags
 
 	cmd := &cobra.Command{
-		Use:   "protect <type>/<id>/<time>",
-		Short: "Protect a backup snapshot from pruning and deletion",
-		Long:  "Mark a backup snapshot as protected so prune and garbage-collection jobs never remove it.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "protect <type>/<id>/<time>",
+		Short:   "Protect a backup snapshot from pruning and deletion",
+		Long:    "Mark a backup snapshot as protected so prune and garbage-collection jobs never remove it.",
+		Example: "  pmx pbs snapshot protect --store tank vm/100/2026-07-01T02:00:00Z",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setSnapshotProtected(cmd, &df, args[0], true)
 		},
@@ -546,10 +552,11 @@ func newSnapshotUnprotectCmd() *cobra.Command {
 	var df storeFlags
 
 	cmd := &cobra.Command{
-		Use:   "unprotect <type>/<id>/<time>",
-		Short: "Remove protection from a backup snapshot",
-		Long:  "Clear the protected flag on a backup snapshot so prune and garbage-collection jobs may remove it again.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "unprotect <type>/<id>/<time>",
+		Short:   "Remove protection from a backup snapshot",
+		Long:    "Clear the protected flag on a backup snapshot so prune and garbage-collection jobs may remove it again.",
+		Example: "  pmx pbs snapshot unprotect --store tank vm/100/2026-07-01T02:00:00Z",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setSnapshotProtected(cmd, &df, args[0], false)
 		},
@@ -611,6 +618,8 @@ func newSnapshotNotesCmd() *cobra.Command {
 		Short: "Get or set the notes attached to a backup snapshot",
 		Long: "Without --set, print the free-text notes attached to a backup snapshot. " +
 			"With --set TEXT, replace the notes with the given text.",
+		Example: `  pmx pbs snapshot notes --store tank vm/100/2026-07-01T02:00:00Z \
+  --set 'verified good'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

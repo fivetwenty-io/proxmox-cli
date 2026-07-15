@@ -59,10 +59,11 @@ type realmLdapListEntry struct {
 // realms (GET /config/access/ldap).
 func newRealmLdapLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List LDAP realm configurations",
-		Long:  "List the LDAP authentication realms configured on this server (GET /config/access/ldap).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List LDAP realm configurations",
+		Long:    "List the LDAP authentication realms configured on this server (GET /config/access/ldap).",
+		Example: "  pmx pbs realm ldap ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -115,7 +116,8 @@ func newRealmLdapShowCmd() *cobra.Command {
 			"never returned by the API. The API also omits options left at their " +
 			"built-in defaults; pass --defaults to also list those, with the value " +
 			"they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm ldap show company",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -321,6 +323,8 @@ func newRealmLdapAddCmd() *cobra.Command {
 			"/config/access/ldap). --base-dn, --server1, and --user-attr are " +
 			"required; every other option is optional and only forwarded when " +
 			"explicitly set.",
+		Example: `  pmx pbs realm ldap add company --server1 ldap.example.com \
+  --base-dn 'DC=example,DC=com' --user-attr uid`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -377,7 +381,8 @@ func newRealmLdapUpdateCmd() *cobra.Command {
 		Long: "Update an existing LDAP realm configuration (PUT " +
 			"/config/access/ldap/{realm}). Only flags explicitly set are sent; " +
 			"use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm ldap update company --comment corp-ldap",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -422,7 +427,8 @@ func newRealmLdapDeleteCmd() *cobra.Command {
 		Short: "Delete an LDAP realm configuration",
 		Long: "Remove an LDAP realm configuration (DELETE /config/access/ldap/{realm}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs realm ldap delete company --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
