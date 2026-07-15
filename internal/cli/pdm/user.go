@@ -67,7 +67,8 @@ func newUserLsCmd() *cobra.Command {
 		Long: "List the users configured on this Proxmox Datacenter Manager instance " +
 			"(GET /access/users). Pass --include-tokens to include each user's API " +
 			"tokens in the raw (JSON/YAML) output; the table view never shows token details.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm user ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -119,7 +120,8 @@ func newUserShowCmd() *cobra.Command {
 		Long: "Show every populated field of a single user's configuration (GET " +
 			"/access/users/{userid}). This endpoint never returns password material, " +
 			"so there is no secret field to strip.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm user show alice@pdm",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -155,7 +157,8 @@ func newUserAddCmd() *cobra.Command {
 		Long: "Create a new Proxmox Datacenter Manager user (POST /access/users). " +
 			"Every flag beside the userid argument is optional and only forwarded " +
 			"when explicitly set. --password is never echoed back by any command.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm user add alice@pdm --email alice@example.com --firstname Alice",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -226,7 +229,8 @@ func newUserUpdateCmd() *cobra.Command {
 		Long: "Update an existing Proxmox Datacenter Manager user (PUT " +
 			"/access/users/{userid}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm user update alice@pdm --comment 'platform team'",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -307,7 +311,8 @@ func newUserDeleteCmd() *cobra.Command {
 		Short: "Delete a user",
 		Long: "Remove a user from the configuration file (DELETE /access/users/{userid}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm user delete alice@pdm --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]

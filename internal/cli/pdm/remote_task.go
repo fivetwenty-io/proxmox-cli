@@ -177,7 +177,9 @@ func newRemoteTaskLsCmd() *cobra.Command {
 		Use:   "ls",
 		Short: "List cached remote tasks",
 		Long:  "List background tasks collected from every managed remote (GET /remotes/tasks/list).",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pdm remote task ls
+  pmx pdm remote task ls --remote pve-main --running`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -239,7 +241,8 @@ func newRemoteTaskRefreshCmd() *cobra.Command {
 			"remotes are refreshed. This is an asynchronous task: by default the " +
 			"command blocks until it completes; pass --async (persistent flag) to " +
 			"return the UPID immediately instead.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm remote task refresh --remote pve-main",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -268,10 +271,11 @@ func newRemoteTaskRefreshCmd() *cobra.Command {
 func newRemoteTaskStatisticsCmd() *cobra.Command {
 	var tf remoteTaskListFlags
 	cmd := &cobra.Command{
-		Use:   "statistics",
-		Short: "Show aggregate remote task statistics",
-		Long:  "Show task counts by remote and by worker type for the given filters (GET /remotes/tasks/statistics).",
-		Args:  cobra.NoArgs,
+		Use:     "statistics",
+		Short:   "Show aggregate remote task statistics",
+		Long:    "Show task counts by remote and by worker type for the given filters (GET /remotes/tasks/statistics).",
+		Example: "  pmx pdm remote task statistics --remote pve-main",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -326,7 +330,8 @@ func newRemoteUpdatesSummaryCmd() *cobra.Command {
 		Short: "Show the cached update summary for every managed remote",
 		Long: "Show the cached available-package update summary for every managed " +
 			"remote (GET /remotes/updates/summary).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm remote updates summary",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -403,7 +408,8 @@ func newRemoteUpdatesRefreshCmd() *cobra.Command {
 			"managed remote (POST /remotes/updates/refresh). This is an asynchronous " +
 			"task: by default the command blocks until it completes; pass --async " +
 			"(persistent flag) to return the UPID immediately instead.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm remote updates refresh",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -450,7 +456,8 @@ func newRemoteMetricCollectionStatusCmd() *cobra.Command {
 		Short: "Show metric-collection status for every managed remote",
 		Long: "Show the last metric-collection outcome for every managed remote " +
 			"(GET /remotes/metric-collection/status).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm remote metric-collection status",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -494,7 +501,8 @@ func newRemoteMetricCollectionTriggerCmd() *cobra.Command {
 		Short: "Trigger metric collection",
 		Long: "Trigger metric collection for one remote, or for every managed " +
 			"remote when --remote is omitted (POST /remotes/metric-collection/trigger).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm remote metric-collection trigger --remote pve-main",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

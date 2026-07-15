@@ -35,10 +35,11 @@ func newRealmPdmCmd() *cobra.Command {
 // realm's configuration (GET /config/access/pdm).
 func newRealmPdmShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show the built-in PDM realm's configuration",
-		Long:  "Show the built-in Proxmox Datacenter Manager authentication server realm's configuration (GET /config/access/pdm).",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the built-in PDM realm's configuration",
+		Long:    "Show the built-in Proxmox Datacenter Manager authentication server realm's configuration (GET /config/access/pdm).",
+		Example: "  pmx pdm realm pdm show",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -77,7 +78,8 @@ func newRealmPdmUpdateCmd() *cobra.Command {
 			"realm's comment and default-realm flag (PUT /config/access/pdm). Only " +
 			"flags explicitly set are sent; use --delete to reset properties to " +
 			"their default instead.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm realm pdm update --comment 'built-in PDM accounts'",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

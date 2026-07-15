@@ -73,7 +73,8 @@ func newTfaLsCmd() *cobra.Command {
 		Long: "List every user's two-factor authentication configuration (GET " +
 			"/access/tfa): lockout state and a summary of their TFA entries. Use " +
 			"'tfa show <userid>' for the full per-entry detail of a single user.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm tfa ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -116,10 +117,11 @@ func newTfaLsCmd() *cobra.Command {
 // TFA entries (GET /access/tfa/{userid}).
 func newTfaShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <userid>",
-		Short: "List a user's TFA entries",
-		Long:  "List every two-factor authentication entry configured for a user (GET /access/tfa/{userid}).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <userid>",
+		Short:   "List a user's TFA entries",
+		Long:    "List every two-factor authentication entry configured for a user (GET /access/tfa/{userid}).",
+		Example: "  pmx pdm tfa show alice@pdm",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -169,7 +171,8 @@ func newTfaUpdateCmd() *cobra.Command {
 		Long: "Update the description of a user's two-factor authentication entry " +
 			"(PUT /access/tfa/{userid}/{id}). --password supplies the operator's own " +
 			"password for re-authentication, if the server requires it for this change.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm tfa update alice@pdm totp-1 --description 'work phone'",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]
@@ -210,7 +213,8 @@ func newTfaDeleteCmd() *cobra.Command {
 		Short: "Delete a TFA entry",
 		Long: "Remove a single two-factor authentication entry from a user (DELETE " +
 			"/access/tfa/{userid}/{id}). This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm tfa delete alice@pdm totp-1 --yes",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, id := args[0], args[1]

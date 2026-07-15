@@ -69,7 +69,9 @@ func newPveStorageLsCmd() *cobra.Command {
 		Use:   "ls <remote> <node>",
 		Short: "List a PVE remote node's storage",
 		Long:  "Get status for all datastores (GET /pve/remotes/{remote}/nodes/{node}/storage).",
-		Args:  cobra.ExactArgs(2),
+		Example: `  pmx pdm pve storage ls pve-main pve1
+  pmx pdm pve storage ls pve-main pve1 --enabled`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node := args[0], args[1]
@@ -142,10 +144,11 @@ func newPveStorageLsCmd() *cobra.Command {
 // /pve/remotes/{remote}/nodes/{node}/storage/{storage}/status).
 func newPveStorageStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <remote> <node> <storage>",
-		Short: "Show a PVE remote node's storage status",
-		Long:  "Get status for a specific datastore (GET /pve/remotes/{remote}/nodes/{node}/storage/{storage}/status).",
-		Args:  cobra.ExactArgs(3),
+		Use:     "status <remote> <node> <storage>",
+		Short:   "Show a PVE remote node's storage status",
+		Long:    "Get status for a specific datastore (GET /pve/remotes/{remote}/nodes/{node}/storage/{storage}/status).",
+		Example: "  pmx pdm pve storage status pve-main pve1 local-lvm",
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node, storage := args[0], args[1], args[2]
@@ -194,7 +197,8 @@ func newPveStorageRrddataCmd() *cobra.Command {
 		Short: "Read a PVE remote node storage's RRD metrics",
 		Long: "Read RRD (round-robin database) storage stats over the given time frame and " +
 			"consolidation function (GET /pve/remotes/{remote}/nodes/{node}/storage/{storage}/rrddata).",
-		Args: cobra.ExactArgs(3),
+		Example: "  pmx pdm pve storage rrddata pve-main pve1 local-lvm --timeframe day",
+		Args:    cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, node, storage := args[0], args[1], args[2]

@@ -321,7 +321,8 @@ func newPveQemuMigratePreconditionsCmd() *cobra.Command {
 		Short: "Query a PVE remote VM's migration preconditions",
 		Long: "Qemu (local) migrate preconditions: allowed target nodes, local resources/disks " +
 			"that block migration, and mapped resources (GET /pve/remotes/{remote}/qemu/{vmid}/migrate).",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm pve qemu migrate-preconditions pve-main 100",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, vmid := args[0], args[1]
@@ -376,6 +377,8 @@ func newPveQemuMigrateCmd() *cobra.Command {
 		Long: "Perform an in-cluster migration of a qemu VM (POST " +
 			"/pve/remotes/{remote}/qemu/{vmid}/migrate). --target-node is required. " +
 			"Pass --yes/-y to confirm this destructive operation.",
+		Example: `  pmx pdm pve qemu migrate pve-main 100 --target-node pve2 --yes
+  pmx pdm pve qemu migrate pve-main 100 --target-node pve2 --online --yes`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -463,6 +466,8 @@ func newPveQemuRemoteMigrateCmd() *cobra.Command {
 			"/pve/remotes/{remote}/qemu/{vmid}/remote-migrate). --target-remote, " +
 			"--target-bridge, and --target-storage are required. Pass --yes/-y to confirm " +
 			"this destructive, cross-cluster operation.",
+		Example: `  pmx pdm pve qemu remote-migrate pve-main 100 --target-remote pve-secondary \
+    --target-bridge vmbr0=vmbr0 --target-storage local-lvm=local-lvm --yes`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

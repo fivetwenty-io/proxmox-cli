@@ -71,6 +71,8 @@ func newResourceLsCmd() *cobra.Command {
 		Long: "List PVE/PBS resources collected from every managed remote (GET /resources/list). " +
 			"Each row is one resource; a remote that failed to respond renders as a single " +
 			"\"error\" row instead of being silently dropped.",
+		Example: `  pmx pdm resource ls
+  pmx pdm resource ls --resource-type qemu --search web`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -194,7 +196,8 @@ func newResourceLocationInfoCmd() *cobra.Command {
 			"--view is omitted (GET /resources/location-info). The endpoint carries no response " +
 			"data of its own (its API schema declares a \"null\" return type); it only reports " +
 			"whether the request succeeded.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm resource location-info",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -235,10 +238,11 @@ func newResourceStatusCmd() *cobra.Command {
 		view   string
 	)
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show the amount of configured/seen resources by type",
-		Long:  "Show the amount of configured/seen resources by type (GET /resources/status).",
-		Args:  cobra.NoArgs,
+		Use:     "status",
+		Short:   "Show the amount of configured/seen resources by type",
+		Long:    "Show the amount of configured/seen resources by type (GET /resources/status).",
+		Example: "  pmx pdm resource status",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -288,10 +292,11 @@ func newResourceSubscriptionCmd() *cobra.Command {
 		view    string
 	)
 	cmd := &cobra.Command{
-		Use:   "subscription",
-		Short: "Show the subscription status of every managed remote",
-		Long:  "Show the subscription status of every managed remote (GET /resources/subscription).",
-		Args:  cobra.NoArgs,
+		Use:     "subscription",
+		Short:   "Show the subscription status of every managed remote",
+		Long:    "Show the subscription status of every managed remote (GET /resources/subscription).",
+		Example: "  pmx pdm resource subscription --verbose",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -354,7 +359,8 @@ func newResourceTopEntitiesCmd() *cobra.Command {
 		Long: "Show the top guest-CPU, node-CPU, and node-memory entities across every managed " +
 			"remote (GET /resources/top-entities). Each list is already ranked by the server; " +
 			"rows preserve that order and are not re-sorted.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm resource top-entities --timeframe day",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

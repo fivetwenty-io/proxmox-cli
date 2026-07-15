@@ -98,7 +98,8 @@ func newSubscriptionKeyLsCmd() *cobra.Command {
 		Short: "List subscription pool keys",
 		Long: "List every subscription key in the pool the caller has audit access to " +
 			"(GET /subscriptions/keys).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription key ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -143,10 +144,11 @@ func newSubscriptionKeyLsCmd() *cobra.Command {
 // show a single pool key's details (GET /subscriptions/keys/{key}).
 func newSubscriptionKeyShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <key>",
-		Short: "Show a single subscription pool key",
-		Long:  "Show details for a single subscription key in the pool (GET /subscriptions/keys/{key}).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <key>",
+		Short:   "Show a single subscription pool key",
+		Long:    "Show details for a single subscription key in the pool (GET /subscriptions/keys/{key}).",
+		Example: "  pmx pdm subscription key show pve4c-1234567890",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			key := args[0]
@@ -184,7 +186,8 @@ func newSubscriptionKeyAddCmd() *cobra.Command {
 		Long: "Add one or more subscription keys to the pool (POST /subscriptions/keys). " +
 			"Duplicate keys within the input are silently collapsed; a key already present " +
 			"in the pool fails the whole call and leaves the pool untouched.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription key add --key pve4c-1234567890 --key pve4c-0987654321",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -228,7 +231,8 @@ func newSubscriptionKeyDeleteCmd() *cobra.Command {
 		Long: "Remove a subscription key from the pool (DELETE /subscriptions/keys/{key}). " +
 			"Refused if the key is currently the live active key on its bound node; run " +
 			"'subscription queue-clear' first. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm subscription key delete pve4c-1234567890 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			key := args[0]
@@ -270,7 +274,8 @@ func newSubscriptionKeyAssignCmd() *cobra.Command {
 		Short: "Bind a pool key to a remote node",
 		Long: "Bind a subscription pool key to a remote node (POST " +
 			"/subscriptions/keys/{key}/assignment).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm subscription key assign pve4c-1234567890 --remote pve-main --node pve1",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			key := args[0]
@@ -315,7 +320,8 @@ func newSubscriptionKeyUnassignCmd() *cobra.Command {
 			"/subscriptions/keys/{key}/assignment). Refused when the binding is currently " +
 			"synced (the assigned key is the live active key on its remote); run " +
 			"'subscription queue-clear' first. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm subscription key unassign pve4c-1234567890 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			key := args[0]
@@ -370,7 +376,8 @@ func newSubscriptionNodeStatusCmd() *cobra.Command {
 		Short: "Show subscription status for every auditable remote node",
 		Long: "Show the subscription status of every remote node the caller can audit, " +
 			"combined with key pool assignment information (GET /subscriptions/node-status).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription node-status",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -432,7 +439,8 @@ func newSubscriptionCheckCmd() *cobra.Command {
 		Short: "Trigger a fresh subscription check on a remote node",
 		Long: "Trigger a fresh shop-side subscription check on a remote node (POST " +
 			"/subscriptions/check). Mirrors the per-product \"Check\" button on PVE/PBS.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription check --remote pve-main --node pve1",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -468,7 +476,8 @@ func newSubscriptionAdoptKeyCmd() *cobra.Command {
 		Long: "Adopt the live subscription on a remote node into the pool without " +
 			"touching the remote (no DELETE / push) (POST /subscriptions/adopt-key). " +
 			"Refused if a pool entry is already bound to the remote/node.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription adopt-key --remote pve-main --node pve1",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -519,7 +528,8 @@ func newSubscriptionAdoptAllCmd() *cobra.Command {
 		Long: "Adopt every foreign live subscription in one bulk transaction (POST " +
 			"/subscriptions/adopt-all), importing every unbound live key on a remote the " +
 			"caller may manage. This is a bulk transaction: pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription adopt-all --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -605,7 +615,8 @@ func newSubscriptionAutoAssignCmd() *cobra.Command {
 			"subscription (POST /subscriptions/auto-assign). This is a read-only preview: " +
 			"apply the plan with 'subscription bulk-assign --proposal <json>', using the " +
 			"full JSON/YAML output of this command as the proposal.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription auto-assign",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -663,6 +674,8 @@ func newSubscriptionBulkAssignCmd() *cobra.Command {
 			"proposal JSON via --proposal, or '-' to read it from stdin. The server rejects " +
 			"the call if the pool or node-status digests embedded in the proposal no " +
 			"longer match the live state. This applies the assignments: pass --yes/-y to confirm.",
+		Example: `  pmx pdm subscription bulk-assign --proposal '{"assignments":[]}' --yes
+  pmx pdm subscription bulk-assign --proposal - --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -754,7 +767,8 @@ func newSubscriptionApplyPendingCmd() *cobra.Command {
 			"there is something to apply: by default the command blocks until it " +
 			"completes; pass --async (persistent flag) to return the UPID immediately " +
 			"instead. This pushes changes to remotes: pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription apply-pending --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -803,7 +817,8 @@ func newSubscriptionClearPendingCmd() *cobra.Command {
 		Long: "Drop every queued pending subscription pool change in one bulk " +
 			"transaction (POST /subscriptions/clear-pending), without touching the " +
 			"remotes. This drops queued changes: pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription clear-pending --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -849,7 +864,8 @@ func newSubscriptionQueueClearCmd() *cobra.Command {
 			"the pool key bound to it can be reassigned elsewhere (POST " +
 			"/subscriptions/queue-clear). Refused if no pool entry is bound to the " +
 			"remote/node. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription queue-clear --remote pve-main --node pve1 --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -893,7 +909,8 @@ func newSubscriptionRevertPendingClearCmd() *cobra.Command {
 		Long: "Drop a queued Clear Key on a remote node while keeping the pool binding " +
 			"intact (POST /subscriptions/revert-pending-clear). Backs out a single " +
 			"'subscription queue-clear' without discarding every other pending change.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm subscription revert-pending-clear --remote pve-main --node pve1",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

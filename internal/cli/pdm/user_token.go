@@ -44,10 +44,11 @@ type tokenListEntry struct {
 // tokens (GET /access/users/{userid}/token).
 func newTokenLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls <userid>",
-		Short: "List a user's API tokens",
-		Long:  "List the API tokens belonging to a user (GET /access/users/{userid}/token).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "ls <userid>",
+		Short:   "List a user's API tokens",
+		Long:    "List the API tokens belonging to a user (GET /access/users/{userid}/token).",
+		Example: "  pmx pdm token ls alice@pdm",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -94,7 +95,8 @@ func newTokenShowCmd() *cobra.Command {
 		Long: "Show every populated field of one API token's metadata (GET " +
 			"/access/users/{userid}/token/{token-name}). The token secret is never " +
 			"returned by this endpoint.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm token show alice@pdm ci",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, name := args[0], args[1]
@@ -131,7 +133,8 @@ func newTokenAddCmd() *cobra.Command {
 			"/access/users/{userid}/token/{token-name}). The response's VALUE column " +
 			"carries the token secret; it is shown only once here and is never " +
 			"retrievable again.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm token add alice@pdm ci --comment 'CI automation'",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, name := args[0], args[1]
@@ -197,6 +200,8 @@ func newTokenUpdateCmd() *cobra.Command {
 			"sent; use --delete to reset properties to their default, or --regenerate " +
 			"to issue a new secret while keeping the token's permissions — the new " +
 			"secret is printed once in the response and is never retrievable again.",
+		Example: `  pmx pdm token update alice@pdm ci --comment 'CI automation (rotated)'
+  pmx pdm token update alice@pdm ci --regenerate`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -275,7 +280,8 @@ func newTokenDeleteCmd() *cobra.Command {
 		Long: "Remove an API token from a user (DELETE " +
 			"/access/users/{userid}/token/{token-name}). This is destructive: pass " +
 			"--yes/-y to confirm.",
-		Args: cobra.ExactArgs(2),
+		Example: "  pmx pdm token delete alice@pdm ci --yes",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid, name := args[0], args[1]

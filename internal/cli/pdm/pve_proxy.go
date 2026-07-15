@@ -162,7 +162,8 @@ func newPveScanCmd() *cobra.Command {
 			"with the provided credentials and probing TLS on each returned node to check " +
 			"if a fingerprint is necessary (POST /pve/scan). The access token/password is " +
 			"never rendered by this command, even though the API echoes it back.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm pve scan --hostname pve1.example.com --authid root@pam --token '${PVE_TOKEN_SECRET}'",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -214,7 +215,8 @@ func newPveProbeTLSCmd() *cobra.Command {
 		Long: "Probe the given host's TLS certificate. If the certificate is not " +
 			"trusted with the given fingerprint, the server reports the certificate " +
 			"information (POST /pve/probe-tls).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm pve probe-tls --hostname pve1.example.com",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -249,10 +251,11 @@ type pveRealmEntry struct {
 func newPveRealmsCmd() *cobra.Command {
 	var hf pveHostFlags
 	cmd := &cobra.Command{
-		Use:   "realms",
-		Short: "List a PVE host's authentication realms",
-		Long:  "List the authentication realms available on a PVE host (GET /pve/realms).",
-		Args:  cobra.NoArgs,
+		Use:     "realms",
+		Short:   "List a PVE host's authentication realms",
+		Long:    "List the authentication realms available on a PVE host (GET /pve/realms).",
+		Example: "  pmx pdm pve realms --hostname pve1.example.com",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -295,10 +298,11 @@ func newPveRealmsCmd() *cobra.Command {
 // remote's cluster options (GET /pve/remotes/{remote}/options).
 func newPveOptionsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "options <remote>",
-		Short: "Show a PVE remote's cluster options",
-		Long:  "Return the remote's cluster options (GET /pve/remotes/{remote}/options).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "options <remote>",
+		Short:   "Show a PVE remote's cluster options",
+		Long:    "Return the remote's cluster options (GET /pve/remotes/{remote}/options).",
+		Example: "  pmx pdm pve options pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -359,10 +363,11 @@ type pdmRemoteUpdateSummary struct {
 // of which of Single/Rows also renders.
 func newPveUpdatesCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "updates <remote>",
-		Short: "Show a PVE remote's cached update information",
-		Long:  "Return the cached update information about a remote (GET /pve/remotes/{remote}/updates).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "updates <remote>",
+		Short:   "Show a PVE remote's cached update information",
+		Long:    "Return the cached update information about a remote (GET /pve/remotes/{remote}/updates).",
+		Example: "  pmx pdm pve updates pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -457,10 +462,11 @@ func newPveClusterCmd() *cobra.Command {
 func newPveClusterStatusCmd() *cobra.Command {
 	var targetEndpoint string
 	cmd := &cobra.Command{
-		Use:   "status <remote>",
-		Short: "Query a PVE remote's cluster nodes status",
-		Long:  "Query the cluster nodes status (GET /pve/remotes/{remote}/cluster-status).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <remote>",
+		Short:   "Query a PVE remote's cluster nodes status",
+		Long:    "Query the cluster nodes status (GET /pve/remotes/{remote}/cluster-status).",
+		Example: "  pmx pdm pve cluster status pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -504,7 +510,8 @@ func newPveClusterNextIDCmd() *cobra.Command {
 		Short: "Get the next free VMID on a PVE remote's (target) cluster",
 		Long: "Get the next free VMID on the (target) cluster, e.g. to prefill a " +
 			"migration target VMID (GET /pve/remotes/{remote}/cluster-nextid).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm pve cluster next-id pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -574,7 +581,9 @@ func newPveClusterResourcesCmd() *cobra.Command {
 		Use:   "resources <remote>",
 		Short: "Query a PVE remote's cluster resources",
 		Long:  "Query the cluster's resources (GET /pve/remotes/{remote}/resources).",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pdm pve cluster resources pve-main
+  pmx pdm pve cluster resources pve-main --kind vm`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]

@@ -39,10 +39,11 @@ type roleListEntry struct {
 // newRoleLsCmd builds `pmx pdm role ls` — list roles (GET /access/roles).
 func newRoleLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List roles",
-		Long:  "List the available roles and the privileges each one grants (GET /access/roles).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List roles",
+		Long:    "List the available roles and the privileges each one grants (GET /access/roles).",
+		Example: "  pmx pdm role ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

@@ -34,10 +34,11 @@ func newRealmPamCmd() *cobra.Command {
 // configuration (GET /config/access/pam).
 func newRealmPamShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show the PAM realm's configuration",
-		Long:  "Show the built-in PAM realm's configuration (GET /config/access/pam).",
-		Args:  cobra.NoArgs,
+		Use:     "show",
+		Short:   "Show the PAM realm's configuration",
+		Long:    "Show the built-in PAM realm's configuration (GET /config/access/pam).",
+		Example: "  pmx pdm realm pam show",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -74,7 +75,8 @@ func newRealmPamUpdateCmd() *cobra.Command {
 		Long: "Update the built-in PAM realm's comment and default-realm flag " +
 			"(PUT /config/access/pam). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pdm realm pam update --comment 'local Linux PAM accounts'",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

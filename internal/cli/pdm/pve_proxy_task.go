@@ -87,7 +87,8 @@ func newPveTaskLsCmd() *cobra.Command {
 		Short: "List background tasks on a PVE remote",
 		Long: "Get the list of tasks either for a specific node, or query all at once " +
 			"(GET /pve/remotes/{remote}/tasks).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm pve task ls pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote := args[0]
@@ -236,10 +237,11 @@ func newPveTaskLogCmd() *cobra.Command {
 func newPveTaskStopCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "stop <remote> <upid>",
-		Short: "Stop a running task on a PVE remote",
-		Long:  "Try to stop/cancel a running background task on a PVE remote. This is destructive: pass --yes/-y to confirm.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "stop <remote> <upid>",
+		Short:   "Stop a running task on a PVE remote",
+		Long:    "Try to stop/cancel a running background task on a PVE remote. This is destructive: pass --yes/-y to confirm.",
+		Example: "  pmx pdm pve task stop pve-main UPID:pve1:00001234:... --yes",
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			remote, upid := args[0], args[1]

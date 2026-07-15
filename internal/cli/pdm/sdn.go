@@ -67,10 +67,11 @@ func newSdnControllerLsCmd() *cobra.Command {
 		remotes []string
 	)
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List SDN controllers across managed remotes",
-		Long:  "List SDN controllers of every managed remote, or the given remotes (GET /sdn/controllers).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List SDN controllers across managed remotes",
+		Long:    "List SDN controllers of every managed remote, or the given remotes (GET /sdn/controllers).",
+		Example: "  pmx pdm sdn controller ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -166,10 +167,11 @@ func newSdnVnetLsCmd() *cobra.Command {
 		remotes []string
 	)
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List SDN VNets across managed remotes",
-		Long:  "List SDN VNets of every managed remote, or the given remotes (GET /sdn/vnets).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List SDN VNets across managed remotes",
+		Long:    "List SDN VNets of every managed remote, or the given remotes (GET /sdn/vnets).",
+		Example: "  pmx pdm sdn vnet ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -261,7 +263,8 @@ func newSdnVnetAddCmd() *cobra.Command {
 			"should be created in on that remote. This is an asynchronous task: by default the " +
 			"command blocks until it completes; pass --async (persistent flag) to return the " +
 			"UPID immediately instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm sdn vnet add vnet1 --remote pve-main=zone1 --remote pve-secondary=zone1",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -328,10 +331,11 @@ func newSdnZoneLsCmd() *cobra.Command {
 		remotes []string
 	)
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List SDN zones across managed remotes",
-		Long:  "List SDN zones of every managed remote, or the given remotes (GET /sdn/zones).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List SDN zones across managed remotes",
+		Long:    "List SDN zones of every managed remote, or the given remotes (GET /sdn/zones).",
+		Example: "  pmx pdm sdn zone ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -439,7 +443,8 @@ func newSdnZoneAddCmd() *cobra.Command {
 			"needed for zone types that use one (evpn); simple/vlan/vxlan/qinq zones omit it. " +
 			"This is an asynchronous task: by default the command blocks until it completes; pass " +
 			"--async (persistent flag) to return the UPID immediately instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm sdn zone add zone1 --remote pve-main --remote pve-secondary",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			zone := args[0]

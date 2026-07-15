@@ -60,10 +60,11 @@ type realmAdListEntry struct {
 // (GET /config/access/ad).
 func newRealmAdLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List Active Directory realm configurations",
-		Long:  "List the Active Directory authentication realms configured on this Proxmox Datacenter Manager (GET /config/access/ad).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List Active Directory realm configurations",
+		Long:    "List the Active Directory authentication realms configured on this Proxmox Datacenter Manager (GET /config/access/ad).",
+		Example: "  pmx pdm realm ad ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -111,7 +112,8 @@ func newRealmAdShowCmd() *cobra.Command {
 			"never returned by the API. The API also omits options left at their " +
 			"built-in defaults; pass --defaults to also list those, with the value " +
 			"they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm realm ad show company",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -312,6 +314,8 @@ func newRealmAdAddCmd() *cobra.Command {
 		Long: "Create a new Active Directory authentication realm configuration " +
 			"(POST /config/access/ad). --server1 is required; every other option " +
 			"is optional and only forwarded when explicitly set.",
+		Example: `  pmx pdm realm ad add company --server1 ad1.example.com \
+    --base-dn "dc=example,dc=com" --bind-dn "cn=svc,dc=example,dc=com" --password '${AD_BIND_PASSWORD}'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -353,7 +357,8 @@ func newRealmAdUpdateCmd() *cobra.Command {
 		Long: "Update an existing Active Directory realm configuration (PUT " +
 			"/config/access/ad/{realm}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm realm ad update company --server2 ad2.example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
@@ -401,7 +406,8 @@ func newRealmAdDeleteCmd() *cobra.Command {
 		Short: "Delete an AD realm configuration",
 		Long: "Remove an Active Directory realm configuration (DELETE /config/access/ad/{realm}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm realm ad delete company --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]

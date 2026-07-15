@@ -85,10 +85,11 @@ type remoteListEntry struct {
 // (GET /remotes/remote).
 func newRemoteLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List managed remotes",
-		Long:  "List every PVE/PBS remote this Proxmox Datacenter Manager instance is managing.",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List managed remotes",
+		Long:    "List every PVE/PBS remote this Proxmox Datacenter Manager instance is managing.",
+		Example: "  pmx pdm remote ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -138,7 +139,8 @@ func newRemoteShowCmd() *cobra.Command {
 			"never rendered. The API also omits options left at their built-in " +
 			"defaults; pass --defaults to also list those, with the value they " +
 			"effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm remote show pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -251,6 +253,8 @@ func newRemoteAddCmd() *cobra.Command {
 			"at least one --node are required. If --create-token is set, a new API " +
 			"token is minted on the remote with that name and used instead of the " +
 			"authentication details given here.",
+		Example: `  pmx pdm remote add pve-main --type pve --authid root@pam --token '${PVE_TOKEN_SECRET}' --node pve1
+  pmx pdm remote add pbs-main --type pbs --authid root@pam --token '${PBS_TOKEN_SECRET}' --node pbs1`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -307,7 +311,8 @@ func newRemoteUpdateCmd() *cobra.Command {
 		Long: "Update an existing managed remote (PUT /remotes/remote/{id}). Only " +
 			"flags explicitly set are sent; use --delete to reset properties to their " +
 			"default instead. The remote's type cannot be changed after creation.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm remote update pve-main --node pve1 --node pve2",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -345,7 +350,8 @@ func newRemoteDeleteCmd() *cobra.Command {
 		Long: "Remove a remote this instance is managing (DELETE /remotes/remote/{id}). " +
 			"Pass --delete-token to also delete the API token on the remote. This is " +
 			"destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm remote delete pve-main --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -378,10 +384,11 @@ func newRemoteDeleteCmd() *cobra.Command {
 // remote's Proxmox version (GET /remotes/remote/{id}/version).
 func newRemoteVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "version <id>",
-		Short: "Query a remote's version",
-		Long:  "Query the Proxmox version running on a managed remote (GET /remotes/remote/{id}/version).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "version <id>",
+		Short:   "Query a remote's version",
+		Long:    "Query the Proxmox version running on a managed remote (GET /remotes/remote/{id}/version).",
+		Example: "  pmx pdm remote version pve-main",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -418,7 +425,8 @@ func newRemoteProbeCertificateCmd() *cobra.Command {
 			"fingerprint, to detect a rotated certificate (POST " +
 			"/remotes/remote/{id}/probe-certificate). This never modifies the remote's " +
 			"stored configuration; it only reports whether the probe succeeded.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm remote probe-certificate pve-main --node pve1",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -462,7 +470,8 @@ func newRemoteRrddataCmd() *cobra.Command {
 		Long: "Read RRD (round-robin database) metric-collection data points for a " +
 			"remote over the given time frame and consolidation function (GET " +
 			"/remotes/remote/{id}/rrddata).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pdm remote rrddata pve-main --timeframe day",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
