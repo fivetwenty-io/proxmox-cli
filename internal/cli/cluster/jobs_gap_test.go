@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestJobsScheduleAnalyze_Success verifies `pmx cluster jobs schedule-analyze --schedule daily`
+// TestJobsScheduleAnalyze_Success verifies `pmx pve cluster jobs schedule-analyze --schedule daily`
 // queries GET /cluster/jobs/schedule-analyze with the schedule parameter and renders results.
 func TestJobsScheduleAnalyze_Success(t *testing.T) {
 	f, ac := newFakeClient(t)

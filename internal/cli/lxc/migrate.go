@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newMigrateCmd builds the `pmx lxc migrate` group.
+// newMigrateCmd builds the `pmx pve lxc migrate` group.
 //
 // Subcommands:
 //   - (no subcommand) migrate <vmid> --target-node NODE: live/restart migration (POST)
@@ -90,7 +90,7 @@ func newMigrateCmd() *cobra.Command {
 	return cmd
 }
 
-// newMigrateCheckCmd builds `pmx lxc migrate check <vmid> [--target-node NODE]`.
+// newMigrateCheckCmd builds `pmx pve lxc migrate check <vmid> [--target-node NODE]`.
 //
 // Performs the GET pre-flight check against the PVE migration endpoint. Returns
 // feasibility information, allowed nodes, and local resource dependencies.

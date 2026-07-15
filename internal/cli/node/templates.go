@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newAptTemplatesCmd builds `pmx node apt templates`: list the available
+// newAptTemplatesCmd builds `pmx pve node apt templates`: list the available
 // appliance/container templates (aplinfo) and download one to a storage.
 func newAptTemplatesCmd() *cobra.Command {
 	cmd := &cobra.Command{

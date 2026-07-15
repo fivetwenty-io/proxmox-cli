@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestCephFlags_List verifies `pmx cluster ceph flags list` reads
+// TestCephFlags_List verifies `pmx pve cluster ceph flags list` reads
 // GET /cluster/ceph/flags and renders the returned flags.
 func TestCephFlags_List(t *testing.T) {
 	f, ac := newFakeClient(t)

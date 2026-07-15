@@ -1,9 +1,9 @@
-// Package sdn implements the `pmx sdn` command group: software-defined network
+// Package sdn implements the `pmx pve sdn` command group: software-defined network
 // zones, vnets, and subnets, plus the apply step that commits pending changes.
 //
 // PVE SDN configuration is staged: creating or deleting a zone, vnet, or subnet
 // only edits the pending config. The changes take effect on the nodes only
-// after `pmx sdn apply` (PUT /cluster/sdn) reloads the network configuration.
+// after `pmx pve sdn apply` (PUT /cluster/sdn) reloads the network configuration.
 package sdn
 
 import (
@@ -18,7 +18,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// Group builds the `pmx sdn` command and all of its sub-commands. The
+// Group builds the `pmx pve sdn` command and all of its sub-commands. The
 // passed *cli.Deps is a placeholder used only so cobra can assemble the command
 // tree; live dependencies are resolved per-invocation via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {

@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// Group builds the `pmx lxc` command and all of its sub-commands.
+// Group builds the `pmx pve lxc` command and all of its sub-commands.
 func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lxc",

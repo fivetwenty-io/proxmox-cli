@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newHaCmd builds the `pmx cluster ha` sub-tree: high-availability management.
+// newHaCmd builds the `pmx pve cluster ha` sub-tree: high-availability management.
 // It exposes HA resources, groups, rules, and the cluster-wide manager status.
 func newHaCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -30,7 +30,7 @@ func newHaCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceCmd builds the `pmx cluster ha resource` sub-tree.
+// newHaResourceCmd builds the `pmx pve cluster ha resource` sub-tree.
 func newHaResourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "resource",
@@ -51,7 +51,7 @@ func newHaResourceCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceListCmd builds `pmx cluster ha resource list`.
+// newHaResourceListCmd builds `pmx pve cluster ha resource list`.
 func newHaResourceListCmd() *cobra.Command {
 	var typ string
 	cmd := &cobra.Command{
@@ -104,7 +104,7 @@ func newHaResourceListCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceGetCmd builds `pmx cluster ha resource get <sid>`.
+// newHaResourceGetCmd builds `pmx pve cluster ha resource get <sid>`.
 func newHaResourceGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <sid>",
@@ -156,7 +156,7 @@ func (hf *haResourceFlags) register(cmd *cobra.Command) {
 	fl.BoolVar(&hf.autoRebalance, "auto-rebalance", false, "allow migration during automatic rebalancing")
 }
 
-// newHaResourceCreateCmd builds `pmx cluster ha resource create <sid>`.
+// newHaResourceCreateCmd builds `pmx pve cluster ha resource create <sid>`.
 func newHaResourceCreateCmd() *cobra.Command {
 	var (
 		hf  haResourceFlags
@@ -211,7 +211,7 @@ func newHaResourceCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceSetCmd builds `pmx cluster ha resource set <sid>`.
+// newHaResourceSetCmd builds `pmx pve cluster ha resource set <sid>`.
 func newHaResourceSetCmd() *cobra.Command {
 	var (
 		hf     haResourceFlags
@@ -273,7 +273,7 @@ func newHaResourceSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceDeleteCmd builds `pmx cluster ha resource delete <sid>`.
+// newHaResourceDeleteCmd builds `pmx pve cluster ha resource delete <sid>`.
 func newHaResourceDeleteCmd() *cobra.Command {
 	var (
 		yes   bool
@@ -311,7 +311,7 @@ func newHaResourceDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceMigrateCmd builds `pmx cluster ha resource migrate <sid>`.
+// newHaResourceMigrateCmd builds `pmx pve cluster ha resource migrate <sid>`.
 func newHaResourceMigrateCmd() *cobra.Command {
 	var node string
 	cmd := &cobra.Command{
@@ -346,7 +346,7 @@ func newHaResourceMigrateCmd() *cobra.Command {
 	return cmd
 }
 
-// newHaResourceRelocateCmd builds `pmx cluster ha resource relocate <sid>`.
+// newHaResourceRelocateCmd builds `pmx pve cluster ha resource relocate <sid>`.
 func newHaResourceRelocateCmd() *cobra.Command {
 	var node string
 	cmd := &cobra.Command{

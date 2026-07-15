@@ -22,7 +22,7 @@ func TestStorage_OciPullCommandTree(t *testing.T) {
 	require.True(t, names["oci-pull"], "storage group must expose the oci-pull command")
 }
 
-// TestOciPull_Success verifies `pmx storage oci-pull <storage>` issues a POST
+// TestOciPull_Success verifies `pmx pve storage oci-pull <storage>` issues a POST
 // to the correct path, forwards the reference form field, waits on the task,
 // and reports success.
 func TestOciPull_Success(t *testing.T) {

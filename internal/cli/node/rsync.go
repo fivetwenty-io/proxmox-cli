@@ -21,7 +21,7 @@ type rsyncFlags struct {
 	exclude  []string
 }
 
-// newRsyncCmd builds `pmx node <node> rsync <src> <dst>`.
+// newRsyncCmd builds `pmx pve node <node> rsync <src> <dst>`.
 //
 // Either <src> or <dst> may carry a "node:" prefix to denote the remote side;
 // that prefix is rewritten to "<user>@<host>:" using the resolved node address.

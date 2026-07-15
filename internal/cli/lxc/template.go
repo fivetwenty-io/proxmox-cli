@@ -22,7 +22,7 @@ type aplinfoEntry struct {
 	Headline string `json:"headline"`
 }
 
-// newTemplateCmd builds `pmx lxc template` and its sub-commands.
+// newTemplateCmd builds `pmx pve lxc template` and its sub-commands.
 func newTemplateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "template",
@@ -34,7 +34,7 @@ func newTemplateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTemplateListCmd builds `pmx lxc template list` — the appliance templates
+// newTemplateListCmd builds `pmx pve lxc template list` — the appliance templates
 // available to download (GET /nodes/{node}/aplinfo).
 func newTemplateListCmd() *cobra.Command {
 	var filter string
@@ -85,7 +85,7 @@ func newTemplateListCmd() *cobra.Command {
 	return cmd
 }
 
-// newTemplateDownloadCmd builds `pmx lxc template download <storage> <template>`
+// newTemplateDownloadCmd builds `pmx pve lxc template download <storage> <template>`
 // (POST /nodes/{node}/aplinfo). The download runs as an asynchronous task.
 func newTemplateDownloadCmd() *cobra.Command {
 	var async bool

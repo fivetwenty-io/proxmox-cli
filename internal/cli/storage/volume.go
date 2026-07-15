@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newVolumeCmd builds `pmx storage volume` — inspect and manage individual
+// newVolumeCmd builds `pmx pve storage volume` — inspect and manage individual
 // volumes (a backup, disk image, ISO, or template) stored on a storage.
 func newVolumeCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -45,7 +45,7 @@ func storageOfVolume(volume string) (string, error) {
 	return storage, nil
 }
 
-// newVolumeGetCmd builds `pmx storage volume get <volume>`.
+// newVolumeGetCmd builds `pmx pve storage volume get <volume>`.
 func newVolumeGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <volume>",
@@ -89,7 +89,7 @@ func newVolumeGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeSetCmd builds `pmx storage volume set <volume>`.
+// newVolumeSetCmd builds `pmx pve storage volume set <volume>`.
 func newVolumeSetCmd() *cobra.Command {
 	var (
 		notes     string
@@ -138,7 +138,7 @@ func newVolumeSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeDeleteCmd builds `pmx storage volume delete <volume>`.
+// newVolumeDeleteCmd builds `pmx pve storage volume delete <volume>`.
 func newVolumeDeleteCmd() *cobra.Command {
 	var (
 		yes   bool
@@ -200,7 +200,7 @@ func newVolumeDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeAllocCmd builds `pmx storage volume alloc`.
+// newVolumeAllocCmd builds `pmx pve storage volume alloc`.
 func newVolumeAllocCmd() *cobra.Command {
 	var (
 		vmid     int64
@@ -274,7 +274,7 @@ func newVolumeAllocCmd() *cobra.Command {
 	return cmd
 }
 
-// newVolumeCopyCmd builds `pmx storage volume copy <volume>`.
+// newVolumeCopyCmd builds `pmx pve storage volume copy <volume>`.
 func newVolumeCopyCmd() *cobra.Command {
 	var (
 		target     string

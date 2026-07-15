@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestCephMetadata_Success verifies `pmx cluster ceph metadata` queries
+// TestCephMetadata_Success verifies `pmx pve cluster ceph metadata` queries
 // GET /cluster/ceph/metadata without a scope param by default.
 func TestCephMetadata_Success(t *testing.T) {
 	f, ac := newFakeClient(t)

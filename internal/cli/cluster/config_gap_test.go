@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestConfigApiversion_Success verifies `pmx cluster config apiversion`
+// TestConfigApiversion_Success verifies `pmx pve cluster config apiversion`
 // queries GET /cluster/config/apiversion and renders the result.
 func TestConfigApiversion_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -46,7 +46,7 @@ func TestConfigApiversion_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "config", "apiversion"))
 }
 
-// TestConfigQdevice_Success verifies `pmx cluster config qdevice` queries
+// TestConfigQdevice_Success verifies `pmx pve cluster config qdevice` queries
 // GET /cluster/config/qdevice and renders the result.
 func TestConfigQdevice_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -83,7 +83,7 @@ func TestConfigQdevice_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "config", "qdevice"))
 }
 
-// TestConfigTotem_Success verifies `pmx cluster config totem` queries
+// TestConfigTotem_Success verifies `pmx pve cluster config totem` queries
 // GET /cluster/config/totem and renders the result.
 func TestConfigTotem_Success(t *testing.T) {
 	f, ac := newFakeClient(t)

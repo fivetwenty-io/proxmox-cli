@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newACLCmd builds `pmx access acl` and its sub-commands.
+// newACLCmd builds `pmx pve access acl` and its sub-commands.
 func newACLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "acl",
@@ -31,7 +31,7 @@ type aclEntry struct {
 	Propagate pveBool `json:"propagate,omitempty"`
 }
 
-// newACLListCmd builds `pmx access acl list`.
+// newACLListCmd builds `pmx pve access acl list`.
 func newACLListCmd() *cobra.Command {
 	var path string
 	var exact bool
@@ -89,7 +89,7 @@ func aclMatch(entryPath, filter string, exact bool) bool {
 	return len(entryPath) >= len(filter) && entryPath[:len(filter)] == filter
 }
 
-// newACLSetCmd builds `pmx access acl set`.
+// newACLSetCmd builds `pmx pve access acl set`.
 func newACLSetCmd() *cobra.Command {
 	var (
 		path, roles, users, groups, tokens string

@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newOciCmd builds the `pmx node oci` sub-tree for working with OCI container
+// newOciCmd builds the `pmx pve node oci` sub-tree for working with OCI container
 // images: querying the tags published for a repository and pulling an image
 // into a node storage.
 func newOciCmd() *cobra.Command {

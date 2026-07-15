@@ -20,7 +20,7 @@ type vnetEntry struct {
 	Alias string `json:"alias"`
 }
 
-// newVnetCmd builds `pmx sdn vnet` and its sub-commands.
+// newVnetCmd builds `pmx pve sdn vnet` and its sub-commands.
 func newVnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vnet",
@@ -42,7 +42,7 @@ func newVnetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetShowCmd builds `pmx sdn vnet show <vnet>`.
+// newVnetShowCmd builds `pmx pve sdn vnet show <vnet>`.
 func newVnetShowCmd() *cobra.Command {
 	var (
 		pending bool
@@ -80,7 +80,7 @@ func newVnetShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetIpsCmd builds `pmx sdn vnet ips` and its sub-commands.
+// newVnetIpsCmd builds `pmx pve sdn vnet ips` and its sub-commands.
 func newVnetIpsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ips",
@@ -93,7 +93,7 @@ func newVnetIpsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetIpsCreateCmd builds `pmx sdn vnet ips create <vnet> --ip <ip> --zone <zone>`.
+// newVnetIpsCreateCmd builds `pmx pve sdn vnet ips create <vnet> --ip <ip> --zone <zone>`.
 func newVnetIpsCreateCmd() *cobra.Command {
 	var (
 		ip   string
@@ -132,7 +132,7 @@ func newVnetIpsCreateCmd() *cobra.Command {
 // vnetIpsSetFlagNames lists the optional editable vnet-ips flags.
 var vnetIpsSetFlagNames = []string{"mac", "vmid"}
 
-// newVnetIpsSetCmd builds `pmx sdn vnet ips set <vnet> --ip <ip> --zone <zone>`.
+// newVnetIpsSetCmd builds `pmx pve sdn vnet ips set <vnet> --ip <ip> --zone <zone>`.
 func newVnetIpsSetCmd() *cobra.Command {
 	var (
 		ip   string
@@ -176,7 +176,7 @@ func newVnetIpsSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetIpsDeleteCmd builds `pmx sdn vnet ips delete <vnet> --ip <ip> --zone <zone>`.
+// newVnetIpsDeleteCmd builds `pmx pve sdn vnet ips delete <vnet> --ip <ip> --zone <zone>`.
 func newVnetIpsDeleteCmd() *cobra.Command {
 	var (
 		ip   string
@@ -223,7 +223,7 @@ func newVnetIpsDeleteCmd() *cobra.Command {
 // detect a no-op update.
 var vnetSetFlagNames = []string{"zone", "tag", "alias", "vlanaware", "isolate-ports"}
 
-// newVnetSetCmd builds `pmx sdn vnet set <vnet>`.
+// newVnetSetCmd builds `pmx pve sdn vnet set <vnet>`.
 func newVnetSetCmd() *cobra.Command {
 	var (
 		zone         string
@@ -291,7 +291,7 @@ func newVnetSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetListCmd builds `pmx sdn vnet list`.
+// newVnetListCmd builds `pmx pve sdn vnet list`.
 func newVnetListCmd() *cobra.Command {
 	var (
 		pending bool
@@ -347,7 +347,7 @@ func newVnetListCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetCreateCmd builds `pmx sdn vnet create <vnet> --zone <zone>`.
+// newVnetCreateCmd builds `pmx pve sdn vnet create <vnet> --zone <zone>`.
 func newVnetCreateCmd() *cobra.Command {
 	var (
 		zone         string
@@ -407,7 +407,7 @@ func newVnetCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetDeleteCmd builds `pmx sdn vnet delete <vnet>`.
+// newVnetDeleteCmd builds `pmx pve sdn vnet delete <vnet>`.
 func newVnetDeleteCmd() *cobra.Command {
 	var (
 		yes       bool

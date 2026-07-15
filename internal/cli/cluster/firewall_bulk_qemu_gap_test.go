@@ -18,7 +18,7 @@ import (
 // firewall get-single commands
 // ---------------------------------------------------------------------------
 
-// TestClusterFirewallAliasGet_Success verifies `pmx cluster firewall alias get <name>`
+// TestClusterFirewallAliasGet_Success verifies `pmx pve cluster firewall alias get <name>`
 // queries GET /cluster/firewall/aliases/{name} and renders a single-object result.
 func TestClusterFirewallAliasGet_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -54,7 +54,7 @@ func TestClusterFirewallAliasGet_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "firewall", "alias", "get", "missing"))
 }
 
-// TestClusterFirewallGroupGet_Success verifies `pmx cluster firewall group get <group> <pos>`
+// TestClusterFirewallGroupGet_Success verifies `pmx pve cluster firewall group get <group> <pos>`
 // queries GET /cluster/firewall/groups/{group}/{pos} and renders a single-object result.
 func TestClusterFirewallGroupGet_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -90,7 +90,7 @@ func TestClusterFirewallGroupGet_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "firewall", "group", "get", "nogroup", "99"))
 }
 
-// TestClusterFirewallIpsetGet_Success verifies `pmx cluster firewall ipset get <name> <cidr>`
+// TestClusterFirewallIpsetGet_Success verifies `pmx pve cluster firewall ipset get <name> <cidr>`
 // queries GET /cluster/firewall/ipset/{name}/{cidr} and renders a single-object result.
 func TestClusterFirewallIpsetGet_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -159,7 +159,7 @@ func TestClusterFirewallGetSubcommands(t *testing.T) {
 // cluster bulk-action guest
 // ---------------------------------------------------------------------------
 
-// TestClusterBulkGuest_Removed pins the removal of `pmx cluster bulk guest`:
+// TestClusterBulkGuest_Removed pins the removal of `pmx pve cluster bulk guest`:
 // GET /cluster/bulk-action/guest is only a directory index of the bulk POST
 // actions (start, shutdown, suspend, migrate), so no guest-preview command can
 // exist over it.
@@ -182,7 +182,7 @@ func TestClusterBulkGuest_Removed(t *testing.T) {
 // cluster qemu cpu-flags
 // ---------------------------------------------------------------------------
 
-// TestClusterQemuCpuFlags_List verifies `pmx cluster qemu cpu-flags` queries
+// TestClusterQemuCpuFlags_List verifies `pmx pve cluster qemu cpu-flags` queries
 // GET /cluster/qemu/cpu-flags without params when none are set.
 func TestClusterQemuCpuFlags_List(t *testing.T) {
 	f, ac := newFakeClient(t)

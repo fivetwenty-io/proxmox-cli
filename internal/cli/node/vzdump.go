@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newVzdumpCmd builds `pmx node vzdump` — an on-demand backup of one or more
+// newVzdumpCmd builds `pmx pve node vzdump` — an on-demand backup of one or more
 // guests on the resolved node, plus read-only sub-commands for defaults and
 // config extraction. The command itself backs up guests; sub-commands provide
 // additional functionality without conflicting.
@@ -238,7 +238,7 @@ func newVzdumpCmd() *cobra.Command {
 	return cmd
 }
 
-// newVzdumpDefaultsCmd builds `pmx node vzdump defaults` — shows the effective
+// newVzdumpDefaultsCmd builds `pmx pve node vzdump defaults` — shows the effective
 // backup defaults configured in the datacenter configuration for the resolved
 // node.
 func newVzdumpDefaultsCmd() *cobra.Command {
@@ -278,7 +278,7 @@ func newVzdumpDefaultsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVzdumpExtractConfigCmd builds `pmx node vzdump extract-config` — reads the
+// newVzdumpExtractConfigCmd builds `pmx pve node vzdump extract-config` — reads the
 // guest configuration embedded in a backup archive. The --volume flag is required.
 func newVzdumpExtractConfigCmd() *cobra.Command {
 	var volume string

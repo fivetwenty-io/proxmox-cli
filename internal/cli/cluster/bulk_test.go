@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestClusterBulk_StartForwardsFields verifies `pmx cluster bulk start` posts the
+// TestClusterBulk_StartForwardsFields verifies `pmx pve cluster bulk start` posts the
 // VMID list and changed optional flags and omits unset ones.
 func TestClusterBulk_StartForwardsFields(t *testing.T) {
 	f, ac := newFakeClient(t)

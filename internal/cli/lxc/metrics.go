@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newMetricsCmd builds `pmx lxc metrics <vmid> --timeframe FRAME [--cf CF]`.
+// newMetricsCmd builds `pmx pve lxc metrics <vmid> --timeframe FRAME [--cf CF]`.
 //
 // The endpoint returns a time-series array of RRD data points (cpu, mem, disk,
 // net). Each data point is a free-form JSON object; the command renders the

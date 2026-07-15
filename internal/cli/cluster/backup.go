@@ -13,8 +13,8 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newBackupCmd builds the `pmx cluster backup` sub-tree: scheduled vzdump backup
-// job management. Use `pmx cluster backup-info not-backed-up` to audit which
+// newBackupCmd builds the `pmx pve cluster backup` sub-tree: scheduled vzdump backup
+// job management. Use `pmx pve cluster backup-info not-backed-up` to audit which
 // guests no schedule covers.
 func newBackupCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -34,7 +34,7 @@ func newBackupCmd() *cobra.Command {
 	return cmd
 }
 
-// newBackupIncludedVolumesCmd builds `pmx cluster backup included-volumes <id>`.
+// newBackupIncludedVolumesCmd builds `pmx pve cluster backup included-volumes <id>`.
 // It shows which disks and volumes a backup job covers, which is essential for
 // auditing backup scope before a maintenance window.
 func newBackupIncludedVolumesCmd() *cobra.Command {
@@ -70,7 +70,7 @@ func newBackupIncludedVolumesCmd() *cobra.Command {
 	}
 }
 
-// newBackupListCmd builds `pmx cluster backup list`.
+// newBackupListCmd builds `pmx pve cluster backup list`.
 func newBackupListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -115,7 +115,7 @@ func newBackupListCmd() *cobra.Command {
 	}
 }
 
-// newBackupGetCmd builds `pmx cluster backup get <id>`.
+// newBackupGetCmd builds `pmx pve cluster backup get <id>`.
 func newBackupGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "get <id>",
@@ -431,7 +431,7 @@ func (bf *backupFlags) applySet(cmd *cobra.Command, p *pvecluster.UpdateBackupPa
 	}
 }
 
-// newBackupCreateCmd builds `pmx cluster backup create`.
+// newBackupCreateCmd builds `pmx pve cluster backup create`.
 func newBackupCreateCmd() *cobra.Command {
 	var (
 		id string
@@ -469,7 +469,7 @@ func newBackupCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newBackupSetCmd builds `pmx cluster backup set <id>`.
+// newBackupSetCmd builds `pmx pve cluster backup set <id>`.
 func newBackupSetCmd() *cobra.Command {
 	var (
 		bf     backupFlags
@@ -505,7 +505,7 @@ func newBackupSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newBackupDeleteCmd builds `pmx cluster backup delete <id>`.
+// newBackupDeleteCmd builds `pmx pve cluster backup delete <id>`.
 func newBackupDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

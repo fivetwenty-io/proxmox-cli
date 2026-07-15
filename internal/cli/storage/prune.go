@@ -72,7 +72,7 @@ func (kf *keepFlags) pruneBackupsString(cmd *cobra.Command) string {
 	return strings.Join(parts, ",")
 }
 
-// newPruneCmd builds `pmx storage prune <storage>` — prune backup archives on a
+// newPruneCmd builds `pmx pve storage prune <storage>` — prune backup archives on a
 // storage according to the given retention options. With --dry-run the command
 // previews which archives would be removed without deleting anything.
 func newPruneCmd() *cobra.Command {

@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newScanCmd builds the `pmx node scan` sub-tree: storage discovery probes that
+// newScanCmd builds the `pmx pve node scan` sub-tree: storage discovery probes that
 // enumerate the LVM volume groups, LVM-thin pools, ZFS pools, and remote NFS,
 // CIFS, iSCSI, and Proxmox Backup Server exports reachable from the node.
 func newScanCmd() *cobra.Command {

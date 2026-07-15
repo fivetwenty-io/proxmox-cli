@@ -33,7 +33,7 @@ type nodeKernel struct {
 	Machine string `json:"machine"`
 }
 
-// newStatusCmd builds `pmx node <node> status`.
+// newStatusCmd builds `pmx pve node <node> status`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <node>",
@@ -115,7 +115,7 @@ func newNodePowerCmd(verb, short, long, example string) *cobra.Command {
 	return cmd
 }
 
-// newRebootCmd builds `pmx node reboot`.
+// newRebootCmd builds `pmx pve node reboot`.
 func newRebootCmd() *cobra.Command {
 	return newNodePowerCmd("reboot", "Reboot the node",
 		"Reboot the resolved node. This disrupts every guest and service running on it, "+
@@ -124,7 +124,7 @@ func newRebootCmd() *cobra.Command {
 		`  pmx pve node reboot --yes`)
 }
 
-// newShutdownCmd builds `pmx node shutdown`.
+// newShutdownCmd builds `pmx pve node shutdown`.
 func newShutdownCmd() *cobra.Command {
 	return newNodePowerCmd("shutdown", "Shut down the node",
 		"Shut down the resolved node. This disrupts every guest and service running on "+

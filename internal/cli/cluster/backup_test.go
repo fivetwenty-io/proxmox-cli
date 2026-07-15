@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestBackupList_Table verifies `pmx cluster backup list` queries GET
+// TestBackupList_Table verifies `pmx pve cluster backup list` queries GET
 // /cluster/backup and renders the curated columns.
 func TestBackupList_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -53,7 +53,7 @@ func TestBackupList_Table(t *testing.T) {
 	require.Contains(t, out, "no")
 }
 
-// TestBackupGet_Single verifies `pmx cluster backup get <id>` reads the per-job
+// TestBackupGet_Single verifies `pmx pve cluster backup get <id>` reads the per-job
 // path and surfaces the job fields.
 func TestBackupGet_Single(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -77,7 +77,7 @@ func TestBackupGet_Single(t *testing.T) {
 	require.Contains(t, out, "02:30")
 }
 
-// TestBackupCreate_PostsFields verifies `pmx cluster backup create` POSTs the
+// TestBackupCreate_PostsFields verifies `pmx pve cluster backup create` POSTs the
 // job attributes, including a caller-supplied id.
 func TestBackupCreate_PostsFields(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -107,7 +107,7 @@ func TestBackupCreate_PostsFields(t *testing.T) {
 	require.Contains(t, buf.String(), "backup-pmxcli")
 }
 
-// TestBackupSet_PutsChangedFields verifies `pmx cluster backup set <id>` issues a
+// TestBackupSet_PutsChangedFields verifies `pmx pve cluster backup set <id>` issues a
 // PUT carrying only the changed fields plus --delete.
 func TestBackupSet_PutsChangedFields(t *testing.T) {
 	f, ac := newFakeClient(t)

@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newDownloadURLCmd builds `pmx storage download-url <storage>` — instruct the
+// newDownloadURLCmd builds `pmx pve storage download-url <storage>` — instruct the
 // resolved node to fetch a file from a URL directly onto a storage
 // (POST /nodes/{node}/storage/{storage}/download-url). The download runs as an
 // asynchronous task; by default the command blocks until it completes, or with

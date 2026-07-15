@@ -20,7 +20,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
-// newUploadCmd builds `pmx storage upload <storage>` — push a local file to a
+// newUploadCmd builds `pmx pve storage upload <storage>` — push a local file to a
 // storage on the resolved node (POST /nodes/{node}/storage/{storage}/upload).
 // The file is streamed as a multipart part; the operation is asynchronous, so by
 // default the command blocks until the import task completes, or with --async it

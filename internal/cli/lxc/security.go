@@ -25,7 +25,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
-// newSecurityCmd builds `pmx lxc security` and its show/list/caps/features
+// newSecurityCmd builds `pmx pve lxc security` and its show/list/caps/features
 // sub-commands: the umbrella for reading and hardening a container's security
 // posture (privilege level, feature flags, and the raw capability whitelist).
 func newSecurityCmd() *cobra.Command {
@@ -81,7 +81,7 @@ type securityPosture struct {
 	Raw          [][]string     `json:"raw"`
 }
 
-// newSecurityShowCmd builds `pmx lxc security show <vmid|name>`.
+// newSecurityShowCmd builds `pmx pve lxc security show <vmid|name>`.
 func newSecurityShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -196,7 +196,7 @@ type securityRow struct {
 	protection   bool
 }
 
-// newSecurityListCmd builds `pmx lxc security list`.
+// newSecurityListCmd builds `pmx pve lxc security list`.
 func newSecurityListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",

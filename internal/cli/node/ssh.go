@@ -36,13 +36,13 @@ func resolveHost(cmd *cobra.Command, deps *cli.Deps, node string) (string, error
 	return host, nil
 }
 
-// newSSHCmd builds `pmx node <node> ssh [ssh-option...] [command...]`. It
+// newSSHCmd builds `pmx pve node <node> ssh [ssh-option...] [command...]`. It
 // shares its passthrough splitting and connection logic with the top-level
 // `pmx ssh` command via remote.RunSSH; SetInterspersed(false) applies the
 // same "flags before <node>, ssh-option/command passthrough after" grammar
 // (see remote.SSH's Long help for the full contract), so a leading-dash
 // token after <node> is now treated as an ssh option/remote-command token
-// rather than rejected — "pmx node ssh <node> -- <cmd>..." still works
+// rather than rejected — "pmx pve node ssh <node> -- <cmd>..." still works
 // exactly as before via the explicit "--" boundary.
 func newSSHCmd() *cobra.Command {
 	var f sshFlags
@@ -66,7 +66,7 @@ func newSSHCmd() *cobra.Command {
 	return cmd
 }
 
-// newShellCmd builds `pmx node <node> shell`.
+// newShellCmd builds `pmx pve node <node> shell`.
 func newShellCmd() *cobra.Command {
 	var f sshFlags
 	cmd := &cobra.Command{
@@ -84,7 +84,7 @@ func newShellCmd() *cobra.Command {
 	return cmd
 }
 
-// newConsoleCmd builds `pmx node <node> console`. In v1 this is an alias for
+// newConsoleCmd builds `pmx pve node <node> console`. In v1 this is an alias for
 // shell (an interactive SSH session).
 func newConsoleCmd() *cobra.Command {
 	var f sshFlags
@@ -119,7 +119,7 @@ func runShell(cmd *cobra.Command, f *sshFlags, node string) error {
 	return nil
 }
 
-// newExecCmd builds `pmx node <node> exec -- <cmd...>`. It runs a remote command
+// newExecCmd builds `pmx pve node <node> exec -- <cmd...>`. It runs a remote command
 // over SSH and passes through its output.
 func newExecCmd() *cobra.Command {
 	var f sshFlags

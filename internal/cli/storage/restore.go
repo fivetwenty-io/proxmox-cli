@@ -16,7 +16,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newFileRestoreCmd builds `pmx storage file-restore` — browse and extract
+// newFileRestoreCmd builds `pmx pve storage file-restore` — browse and extract
 // individual files from a backup snapshot without a full restore. The backing
 // endpoints currently support Proxmox Backup Server snapshots only.
 func newFileRestoreCmd() *cobra.Command {
@@ -40,7 +40,7 @@ func encodeFilepath(p string) string {
 	return base64.StdEncoding.EncodeToString([]byte(p))
 }
 
-// newFileRestoreListCmd builds `pmx storage file-restore list <storage>`.
+// newFileRestoreListCmd builds `pmx pve storage file-restore list <storage>`.
 func newFileRestoreListCmd() *cobra.Command {
 	var (
 		volume   string
@@ -88,7 +88,7 @@ func newFileRestoreListCmd() *cobra.Command {
 	return cmd
 }
 
-// newFileRestoreDownloadCmd builds `pmx storage file-restore download <storage>`.
+// newFileRestoreDownloadCmd builds `pmx pve storage file-restore download <storage>`.
 func newFileRestoreDownloadCmd() *cobra.Command {
 	var (
 		volume     string
@@ -149,7 +149,7 @@ func newFileRestoreDownloadCmd() *cobra.Command {
 	return cmd
 }
 
-// newImportMetadataCmd builds `pmx storage import-metadata <storage>` — inspect
+// newImportMetadataCmd builds `pmx pve storage import-metadata <storage>` — inspect
 // the create parameters a foreign guest archive (e.g. an OVA or ESXi import)
 // would map to before actually importing it.
 func newImportMetadataCmd() *cobra.Command {

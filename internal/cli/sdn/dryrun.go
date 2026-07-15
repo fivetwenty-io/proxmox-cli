@@ -10,9 +10,9 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newDryRunCmd builds `pmx sdn dry-run` — preview the difference between the
+// newDryRunCmd builds `pmx pve sdn dry-run` — preview the difference between the
 // running and pending SDN configuration for a node before committing it with
-// `pmx sdn apply`. It is read-only: the diffs are computed without changing any
+// `pmx pve sdn apply`. It is read-only: the diffs are computed without changing any
 // configuration. Requires a node (--node, PMX_NODE, or a configured default).
 func newDryRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -40,9 +40,9 @@ func newDryRunCmd() *cobra.Command {
 	return cmd
 }
 
-// newRollbackCmd builds `pmx sdn rollback` — discard all pending (staged) SDN
+// newRollbackCmd builds `pmx pve sdn rollback` — discard all pending (staged) SDN
 // configuration changes cluster-wide, reverting to the running configuration.
-// It is the inverse of `pmx sdn apply` and drops every staged SDN edit, so it
+// It is the inverse of `pmx pve sdn apply` and drops every staged SDN edit, so it
 // requires confirmation.
 func newRollbackCmd() *cobra.Command {
 	var (

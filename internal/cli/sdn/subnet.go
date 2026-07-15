@@ -27,7 +27,7 @@ var subnetSetFlagNames = []string{
 	"dhcp-dns-server", "dhcp-range", "dnszoneprefix", "gateway", "lock-token", "snat",
 }
 
-// newSubnetCmd builds `pmx sdn subnet` and its sub-commands.
+// newSubnetCmd builds `pmx pve sdn subnet` and its sub-commands.
 func newSubnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subnet",
@@ -68,7 +68,7 @@ func resolveSubnetArg(cmd *cobra.Command, vnet, arg string) (string, error) {
 	return "", fmt.Errorf("subnet %q not found on vnet %q", arg, vnet)
 }
 
-// newSubnetShowCmd builds `pmx sdn subnet show <vnet> <subnet>`.
+// newSubnetShowCmd builds `pmx pve sdn subnet show <vnet> <subnet>`.
 func newSubnetShowCmd() *cobra.Command {
 	var (
 		pending bool
@@ -111,7 +111,7 @@ func newSubnetShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetSetCmd builds `pmx sdn subnet set <vnet> <subnet>`.
+// newSubnetSetCmd builds `pmx pve sdn subnet set <vnet> <subnet>`.
 func newSubnetSetCmd() *cobra.Command {
 	var (
 		del           string
@@ -187,7 +187,7 @@ func newSubnetSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetListCmd builds `pmx sdn subnet list <vnet>`.
+// newSubnetListCmd builds `pmx pve sdn subnet list <vnet>`.
 func newSubnetListCmd() *cobra.Command {
 	var (
 		pending bool
@@ -240,7 +240,7 @@ func newSubnetListCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetCreateCmd builds `pmx sdn subnet create <vnet> <cidr>`.
+// newSubnetCreateCmd builds `pmx pve sdn subnet create <vnet> <cidr>`.
 func newSubnetCreateCmd() *cobra.Command {
 	var (
 		gateway       string
@@ -299,7 +299,7 @@ func newSubnetCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSubnetDeleteCmd builds `pmx sdn subnet delete <vnet> <subnet>`.
+// newSubnetDeleteCmd builds `pmx pve sdn subnet delete <vnet> <subnet>`.
 func newSubnetDeleteCmd() *cobra.Command {
 	var (
 		yes       bool

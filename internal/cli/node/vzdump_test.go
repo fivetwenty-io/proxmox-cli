@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestNodeVzdump_BlocksUntilTaskDone verifies `pmx node vzdump` POSTs the backup
+// TestNodeVzdump_BlocksUntilTaskDone verifies `pmx pve node vzdump` POSTs the backup
 // request with the selected guest and storage, then blocks until the task ends.
 func TestNodeVzdump_BlocksUntilTaskDone(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

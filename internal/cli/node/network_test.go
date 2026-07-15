@@ -304,7 +304,7 @@ func TestNodeNetwork_RequiresNode(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestNodeNetwork_CommandTree asserts the network sub-tree exposes the expected
-// verb set under `pmx node network`.
+// verb set under `pmx pve node network`.
 func TestNodeNetwork_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()

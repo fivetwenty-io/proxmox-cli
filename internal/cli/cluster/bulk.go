@@ -15,7 +15,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newBulkCmd builds the `pmx cluster bulk` sub-tree: cluster-wide guest power
+// newBulkCmd builds the `pmx pve cluster bulk` sub-tree: cluster-wide guest power
 // and migration actions. Each verb acts on every guest in the cluster unless
 // narrowed with --vmids, so all of them require --yes and run as asynchronous
 // tasks. By default the command blocks until the task completes; with --async

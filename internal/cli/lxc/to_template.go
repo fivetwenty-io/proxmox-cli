@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newToTemplateCmd builds `pmx lxc to-template <vmid|name>`.
+// newToTemplateCmd builds `pmx pve lxc to-template <vmid|name>`.
 //
 // Converts an existing, stopped container into a template via
 // POST /nodes/{node}/lxc/{vmid}/template. The operation is synchronous —

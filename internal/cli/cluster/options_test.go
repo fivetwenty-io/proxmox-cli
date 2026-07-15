@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestClusterOptions_Get verifies `pmx cluster options get` reads
+// TestClusterOptions_Get verifies `pmx pve cluster options get` reads
 // GET /cluster/options and renders the datacenter settings.
 func TestClusterOptions_Get(t *testing.T) {
 	f, ac := newFakeClient(t)

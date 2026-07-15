@@ -8,7 +8,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 )
 
-// newDescribeCmd builds `pmx storage describe`, an offline catalog of every
+// newDescribeCmd builds `pmx pve storage describe`, an offline catalog of every
 // storage option from the PVE API schema (see options_schema_gen.go). The
 // schema is type-polymorphic — which options a storage accepts depends on its
 // type — so the catalog carries a TYPES column and a --type filter backed by

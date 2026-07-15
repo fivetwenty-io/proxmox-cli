@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newServicesCmd builds the `pmx node services` sub-group.
+// newServicesCmd builds the `pmx pve node services` sub-group.
 func newServicesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
@@ -57,7 +57,7 @@ type serviceEntry struct {
 	ActiveState string `json:"active-state"`
 }
 
-// newServicesListCmd builds `pmx node services list <node>`.
+// newServicesListCmd builds `pmx pve node services list <node>`.
 func newServicesListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "list <node>",
@@ -98,7 +98,7 @@ func newServicesListCmd() *cobra.Command {
 	}
 }
 
-// newServicesGetCmd builds `pmx node services get <node> <svc>`.
+// newServicesGetCmd builds `pmx pve node services get <node> <svc>`.
 //
 // GET /nodes/{node}/services/{service} is only a directory index (state,
 // start, stop, ...); the service detail lives at the state child endpoint.
@@ -147,7 +147,7 @@ func newServicesGetCmd() *cobra.Command {
 	}
 }
 
-// newServicesStateCmd builds `pmx node services state <node> <svc>` — returns
+// newServicesStateCmd builds `pmx pve node services state <node> <svc>` — returns
 // the raw systemd state details for a single service.
 func newServicesStateCmd() *cobra.Command {
 	return &cobra.Command{
@@ -214,7 +214,7 @@ func rawOrNil(resp *json.RawMessage) json.RawMessage {
 	return *resp
 }
 
-// newServiceActionCmd builds a `pmx node services <verb> <node> <svc>` command.
+// newServiceActionCmd builds a `pmx pve node services <verb> <node> <svc>` command.
 // verb is the cobra verb (start/stop/restart/reload), pastTense is the message
 // participle, and action performs the API call. long and example are threaded
 // per-verb by the caller since the four verbs share this builder but need

@@ -117,7 +117,7 @@ func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabric
 	}
 }
 
-// newFabricCmd builds `pmx sdn fabric` and its sub-commands.
+// newFabricCmd builds `pmx pve sdn fabric` and its sub-commands.
 func newFabricCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fabric",
@@ -137,7 +137,7 @@ func newFabricCmd() *cobra.Command {
 	return cmd
 }
 
-// newFabricListAllCmd builds `pmx sdn fabric list-all`.
+// newFabricListAllCmd builds `pmx pve sdn fabric list-all`.
 func newFabricListAllCmd() *cobra.Command {
 	var (
 		pending bool
@@ -422,7 +422,7 @@ func (nf *nodeFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsN
 	}
 }
 
-// newFabricNodeCmd builds `pmx sdn fabric node` and its sub-commands.
+// newFabricNodeCmd builds `pmx pve sdn fabric node` and its sub-commands.
 func newFabricNodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",

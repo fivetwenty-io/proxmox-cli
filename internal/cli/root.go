@@ -860,7 +860,7 @@ func WarnInsecureTLS(w io.Writer) {
 // commandLabels extracts the command and subcommand names from the full cobra
 // chain for use as log attributes.
 //
-// Given a command chain like "pmx qemu start", it returns ("qemu", "start").
+// Given a command chain like "pmx pve qemu start", it returns ("qemu", "start").
 // For a top-level command like "pmx version" it returns ("version", "").
 func commandLabels(cmd *cobra.Command) (cmdName, subName string) {
 	// Build the full name chain.
@@ -943,8 +943,8 @@ func setNoClient(cmd *cobra.Command) {
 // rejects stray positional arguments.
 //
 // Without it cobra treats an unknown or extra positional on a non-runnable
-// grouping command (for example `pmx qemu config 100`, `pmx access token list`,
-// or a mistyped `pmx qemu bogus`) as arguments to the parent, prints help, and
+// grouping command (for example `pmx pve qemu config 100`, `pmx pve access token list`,
+// or a mistyped `pmx pve qemu bogus`) as arguments to the parent, prints help, and
 // exits 0 — a silent success that is unsafe in scripts. cobra.NoArgs alone does
 // not help here: a non-runnable command short-circuits to help before argument
 // validation runs. Installing a RunE makes the command runnable, so the same

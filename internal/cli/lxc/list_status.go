@@ -25,7 +25,7 @@ type lxcListEntry struct {
 	Uptime  int64       `json:"uptime"`
 }
 
-// newListCmd builds `pmx lxc list`.
+// newListCmd builds `pmx pve lxc list`.
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -75,7 +75,7 @@ func newListCmd() *cobra.Command {
 	}
 }
 
-// newStatusCmd builds `pmx lxc status <vmid|name>`.
+// newStatusCmd builds `pmx pve lxc status <vmid|name>`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <vmid|name>",

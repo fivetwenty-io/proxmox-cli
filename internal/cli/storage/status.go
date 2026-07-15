@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newStorageStatusCmd builds `pmx storage status <storage>` — report used/total/avail
+// newStorageStatusCmd builds `pmx pve storage status <storage>` — report used/total/avail
 // space and current active/enabled flags for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/status).
 func newStorageStatusCmd() *cobra.Command {
@@ -65,7 +65,7 @@ func newStorageStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// newStorageIdentityCmd builds `pmx storage identity <storage>` — return the
+// newStorageIdentityCmd builds `pmx pve storage identity <storage>` — return the
 // low-level backend identity descriptor for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/identity).
 func newStorageIdentityCmd() *cobra.Command {

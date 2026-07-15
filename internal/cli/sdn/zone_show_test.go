@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestZoneShow verifies `pmx sdn zone show` issues a GET to the single-zone
+// TestZoneShow verifies `pmx pve sdn zone show` issues a GET to the single-zone
 // endpoint and renders the returned fields.
 func TestZoneShow(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// Group builds the `pmx access` command and all of its sub-commands for
+// Group builds the `pmx pve access` command and all of its sub-commands for
 // managing users, API tokens, groups, roles, ACLs, permissions, and passwords.
 func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{

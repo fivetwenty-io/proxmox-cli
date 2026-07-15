@@ -18,7 +18,7 @@ func nodeACLPath(node string) string {
 	return fmt.Sprintf("/nodes/%s", node)
 }
 
-// newPermissionsCmd builds `pmx node permissions` and its sub-commands.
+// newPermissionsCmd builds `pmx pve node permissions` and its sub-commands.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
@@ -39,7 +39,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pmx node permissions list <node>`.
+// newPermissionsListCmd builds `pmx pve node permissions list <node>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -82,7 +82,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pmx node permissions effective <node>`.
+// newPermissionsEffectiveCmd builds `pmx pve node permissions effective <node>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -121,8 +121,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantRevokeCmd builds `pmx node permissions grant <node>` when
-// revoke is false, and `pmx node permissions revoke <node>` when true. The two
+// newPermissionsGrantRevokeCmd builds `pmx pve node permissions grant <node>` when
+// revoke is false, and `pmx pve node permissions revoke <node>` when true. The two
 // verbs share identical mechanics: both call Access.UpdateAcl with the derived
 // node path, differing only in the Delete flag.
 func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {

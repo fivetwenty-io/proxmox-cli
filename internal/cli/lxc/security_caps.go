@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
-// newSecurityCapsCmd builds `pmx lxc security caps` and its sub-commands: the
+// newSecurityCapsCmd builds `pmx pve lxc security caps` and its sub-commands: the
 // manager for the low-level Linux capability whitelist.
 func newSecurityCapsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -144,7 +144,7 @@ func gateDangerous(cmd *cobra.Command, caps []string, force bool) error {
 	return nil
 }
 
-// newSecurityCapsShowCmd builds `pmx lxc security caps show <vmid|name>`.
+// newSecurityCapsShowCmd builds `pmx pve lxc security caps show <vmid|name>`.
 func newSecurityCapsShowCmd() *cobra.Command {
 	var effective bool
 	var f sshcmd.Flags
@@ -266,7 +266,7 @@ func parseProcStatusCaps(status string) (capBnd, capEff string) {
 	return capBnd, capEff
 }
 
-// newSecurityCapsDescribeCmd builds `pmx lxc security caps describe`, an offline
+// newSecurityCapsDescribeCmd builds `pmx pve lxc security caps describe`, an offline
 // catalog of the known Linux capabilities and the named presets.
 func newSecurityCapsDescribeCmd() *cobra.Command {
 	return &cobra.Command{
@@ -326,7 +326,7 @@ func newSecurityCapsDescribeCmd() *cobra.Command {
 	}
 }
 
-// newSecurityCapsSetCmd builds `pmx lxc security caps set <vmid|name>`.
+// newSecurityCapsSetCmd builds `pmx pve lxc security caps set <vmid|name>`.
 func newSecurityCapsSetCmd() *cobra.Command {
 	var keepList, dropList, preset string
 	var force, restart bool
@@ -405,7 +405,7 @@ func capsSetSelection(cmd *cobra.Command, keepList, dropList, preset string) (mo
 	}
 }
 
-// newSecurityCapsAddCmd builds `pmx lxc security caps add <vmid|name> <cap>...`.
+// newSecurityCapsAddCmd builds `pmx pve lxc security caps add <vmid|name> <cap>...`.
 func newSecurityCapsAddCmd() *cobra.Command {
 	var force, restart bool
 	var f sshcmd.Flags
@@ -474,7 +474,7 @@ func newSecurityCapsAddCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityCapsRemoveCmd builds `pmx lxc security caps remove <vmid|name> <cap>...`.
+// newSecurityCapsRemoveCmd builds `pmx pve lxc security caps remove <vmid|name> <cap>...`.
 func newSecurityCapsRemoveCmd() *cobra.Command {
 	var restart bool
 	var f sshcmd.Flags
@@ -538,7 +538,7 @@ func newSecurityCapsRemoveCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityCapsResetCmd builds `pmx lxc security caps reset <vmid|name>`.
+// newSecurityCapsResetCmd builds `pmx pve lxc security caps reset <vmid|name>`.
 func newSecurityCapsResetCmd() *cobra.Command {
 	var restart bool
 	var f sshcmd.Flags

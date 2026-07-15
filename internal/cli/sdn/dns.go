@@ -24,7 +24,7 @@ type dnsEntry struct {
 // forwarded to the API but never echoed back.
 var dnsSetFlagNames = []string{"url", "key", "fingerprint", "reversemaskv6", "ttl"}
 
-// newDnsCmd builds `pmx sdn dns` and its sub-commands.
+// newDnsCmd builds `pmx pve sdn dns` and its sub-commands.
 func newDnsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dns",

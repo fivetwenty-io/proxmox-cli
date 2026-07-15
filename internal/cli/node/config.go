@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newNodeConfigCmd builds the `pmx node config` sub-tree for the node-level
+// newNodeConfigCmd builds the `pmx pve node config` sub-tree for the node-level
 // configuration: description, ACME settings, the wake-on-LAN MAC, the
 // ballooning target, and the startall on-boot delay.
 func newNodeConfigCmd() *cobra.Command {
@@ -30,7 +30,7 @@ func newNodeConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newNodeConfigDescribeCmd builds `pmx node config describe`, an offline
+// newNodeConfigDescribeCmd builds `pmx pve node config describe`, an offline
 // catalog of every settable node configuration option from the PVE API
 // schema (see config_schema_gen.go).
 func newNodeConfigDescribeCmd() *cobra.Command {

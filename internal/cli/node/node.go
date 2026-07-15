@@ -6,7 +6,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// Group builds the `pmx node` command and all of its sub-commands.
+// Group builds the `pmx pve node` command and all of its sub-commands.
 // The *cli.Deps argument is a placeholder used only so cobra can build the
 // command tree; live dependencies are obtained inside each RunE via
 // cli.GetDeps.

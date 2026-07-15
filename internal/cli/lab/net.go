@@ -125,7 +125,7 @@ func newNetApplyCmd() *cobra.Command {
 }
 
 // applySdn commits the pending SDN configuration via UpdateSdn and waits for
-// the reload task, mirroring `pmx sdn apply`'s immediate-vs-async response
+// the reload task, mirroring `pmx pve sdn apply`'s immediate-vs-async response
 // handling (a UPID is awaited; an older server's null/empty response is
 // treated as an immediate success). net apply never runs in --async mode, so
 // this always blocks until the reload task completes.

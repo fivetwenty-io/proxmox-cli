@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newOciPullCmd builds `pmx storage oci-pull <storage>` — instruct the resolved
+// newOciPullCmd builds `pmx pve storage oci-pull <storage>` — instruct the resolved
 // node to pull an OCI image from a registry and store it on the given storage
 // (POST /nodes/{node}/storage/{storage}/oci-registry-pull). The pull runs as an
 // asynchronous task; the command blocks until it finishes unless --async is set.

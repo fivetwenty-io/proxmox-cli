@@ -23,7 +23,7 @@ type nodeListEntry struct {
 	SSLFingerprint string  `json:"ssl_fingerprint"`
 }
 
-// newListCmd builds `pmx node list`.
+// newListCmd builds `pmx pve node list`.
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",

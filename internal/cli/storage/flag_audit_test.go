@@ -127,7 +127,7 @@ func TestStorageCreate_OmitsUnsetAuditFlags(t *testing.T) {
 	}
 }
 
-// TestStorageNodeList_Table verifies `pmx storage node-list` queries
+// TestStorageNodeList_Table verifies `pmx pve storage node-list` queries
 // GET /nodes/{node}/storage and renders the per-node storage status.
 func TestStorageNodeList_Table(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

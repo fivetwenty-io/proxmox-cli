@@ -22,7 +22,7 @@ type contentEntry struct {
 	Vmid   int64  `json:"vmid"`
 }
 
-// newContentCmd builds `pmx storage content <storage>` — the volumes stored on
+// newContentCmd builds `pmx pve storage content <storage>` — the volumes stored on
 // a storage on the resolved node (GET /nodes/{node}/storage/{storage}/content).
 func newContentCmd() *cobra.Command {
 	var (

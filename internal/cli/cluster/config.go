@@ -39,7 +39,7 @@ func parseLinkFlags(vals []string) (map[int]string, error) {
 	return links, nil
 }
 
-// newConfigCmd builds the `pmx cluster config` sub-tree for corosync cluster
+// newConfigCmd builds the `pmx pve cluster config` sub-tree for corosync cluster
 // membership: reading the join information a new node needs, and adding or
 // removing nodes from the cluster configuration.
 //
@@ -64,7 +64,7 @@ func newConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigCreateCmd builds `pmx cluster config create` — initial cluster
+// newConfigCreateCmd builds `pmx pve cluster config create` — initial cluster
 // formation on the local node (POST /cluster/config). This is a one-time,
 // disruptive operation, so it is gated behind --yes.
 func newConfigCreateCmd() *cobra.Command {
@@ -381,7 +381,7 @@ func newConfigNodesDeleteCmd() *cobra.Command {
 
 // ---- cluster configuration introspection -----------------------------------
 
-// newConfigApiversionCmd builds `pmx cluster config apiversion`.
+// newConfigApiversionCmd builds `pmx pve cluster config apiversion`.
 // It returns the cluster JOIN_API_VERSION, primarily useful for tooling that
 // needs to negotiate join protocol compatibility. The API returns a scalar
 // integer, so the response is rendered as a message rather than a table.
@@ -408,7 +408,7 @@ func newConfigApiversionCmd() *cobra.Command {
 	}
 }
 
-// newConfigQdeviceCmd builds `pmx cluster config qdevice`.
+// newConfigQdeviceCmd builds `pmx pve cluster config qdevice`.
 // It returns the QDevice quorum status for the corosync cluster.
 // On a cluster without a QDevice configured the API returns an error,
 // which is surfaced verbatim — the command itself is correct.
@@ -435,7 +435,7 @@ func newConfigQdeviceCmd() *cobra.Command {
 	}
 }
 
-// newConfigTotemCmd builds `pmx cluster config totem`.
+// newConfigTotemCmd builds `pmx pve cluster config totem`.
 // It returns the corosync totem settings, which govern ring transport, token
 // timeouts, and consensus parameters — useful for cluster health diagnosis.
 func newConfigTotemCmd() *cobra.Command {

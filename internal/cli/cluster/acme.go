@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newAcmeCmd builds the `pmx cluster acme` sub-tree for managing ACME (e.g.
+// newAcmeCmd builds the `pmx pve cluster acme` sub-tree for managing ACME (e.g.
 // Let's Encrypt) accounts and DNS-challenge plugins. Account registration,
 // update, and deregistration contact the configured ACME certificate authority
 // and run as asynchronous tasks; plugin definitions are stored locally.

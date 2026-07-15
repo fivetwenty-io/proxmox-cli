@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestClusterReplication_List verifies `pmx cluster replication list` reads
+// TestClusterReplication_List verifies `pmx pve cluster replication list` reads
 // GET /cluster/replication and renders the job columns.
 func TestClusterReplication_List(t *testing.T) {
 	f, ac := newFakeClient(t)

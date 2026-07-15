@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newStorageRrddataCmd builds `pmx storage rrddata <storage>` — structured
+// newStorageRrddataCmd builds `pmx pve storage rrddata <storage>` — structured
 // time-series metric data for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/rrddata).
 func newStorageRrddataCmd() *cobra.Command {
@@ -77,7 +77,7 @@ func newStorageRrddataCmd() *cobra.Command {
 	return cmd
 }
 
-// newStorageRrdCmd builds `pmx storage rrd <storage>` — returns the URL of a
+// newStorageRrdCmd builds `pmx pve storage rrd <storage>` — returns the URL of a
 // legacy PNG RRD graph for a storage on the resolved node
 // (GET /nodes/{node}/storage/{storage}/rrd).
 func newStorageRrdCmd() *cobra.Command {

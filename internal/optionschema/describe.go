@@ -20,7 +20,7 @@ type DescribeConfig struct {
 	// Long is the cobra Long text.
 	Long string
 	// CommandHint is the full command the unknown-option error points at,
-	// e.g. "pmx cluster options describe".
+	// e.g. "pmx pve cluster options describe".
 	CommandHint string
 	// SubKeyRowsInCatalog includes one row per dict sub-key in the no-argument
 	// catalog view. Disable for large tables (guest config); the single-option

@@ -23,7 +23,7 @@ type clusterTaskEntry struct {
 	User      string `json:"user"`
 }
 
-// newTasksCmd builds `pmx cluster tasks`.
+// newTasksCmd builds `pmx pve cluster tasks`.
 func newTasksCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "tasks",

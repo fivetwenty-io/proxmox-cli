@@ -29,7 +29,7 @@ type nodeStorageEntry struct {
 	Avail   int64  `json:"avail"`
 }
 
-// newStorageNodeListCmd builds `pmx storage node-list` — the storages available
+// newStorageNodeListCmd builds `pmx pve storage node-list` — the storages available
 // on the resolved node with their runtime status and usage
 // (GET /nodes/{node}/storage).
 func newStorageNodeListCmd() *cobra.Command {

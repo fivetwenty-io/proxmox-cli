@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestClusterFirewallMacros_List verifies `pmx cluster firewall macros list`
+// TestClusterFirewallMacros_List verifies `pmx pve cluster firewall macros list`
 // queries GET /cluster/firewall/macros and renders a dynamic table.
 func TestClusterFirewallMacros_List(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -54,7 +54,7 @@ func TestClusterFirewallMacros_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "firewall", "macros", "list"))
 }
 
-// TestClusterFirewallRefs_List verifies `pmx cluster firewall refs list`
+// TestClusterFirewallRefs_List verifies `pmx pve cluster firewall refs list`
 // queries GET /cluster/firewall/refs without a type param when unset.
 func TestClusterFirewallRefs_List(t *testing.T) {
 	f, ac := newFakeClient(t)

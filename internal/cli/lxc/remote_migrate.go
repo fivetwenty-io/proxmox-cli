@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newRemoteMigrateCmd builds `pmx lxc remote-migrate <vmid> --target-endpoint EP
+// newRemoteMigrateCmd builds `pmx pve lxc remote-migrate <vmid> --target-endpoint EP
 // --target-storage ST --target-bridge BR [flags]`.
 //
 // Cross-cluster container migration. This operation is irreversible: the

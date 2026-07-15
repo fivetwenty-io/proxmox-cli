@@ -11,9 +11,9 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newNodeExecuteCmd builds `pmx node execute`. It sends a JSON-encoded array of
+// newNodeExecuteCmd builds `pmx pve node execute`. It sends a JSON-encoded array of
 // commands to the PVE API's /nodes/{node}/execute endpoint and renders the
-// result array. This is distinct from `pmx node exec` (SSH-based remote
+// result array. This is distinct from `pmx pve node exec` (SSH-based remote
 // command execution).
 func newNodeExecuteCmd() *cobra.Command {
 	var commandsJSON string

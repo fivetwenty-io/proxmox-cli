@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestVnetShow verifies `pmx sdn vnet show` issues a GET to the single-vnet
+// TestVnetShow verifies `pmx pve sdn vnet show` issues a GET to the single-vnet
 // endpoint and renders the returned fields.
 func TestVnetShow(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

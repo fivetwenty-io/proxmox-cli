@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newAplinfoCmd builds the `pmx storage aplinfo` sub-group with its list and
+// newAplinfoCmd builds the `pmx pve storage aplinfo` sub-group with its list and
 // download sub-commands.
 func newAplinfoCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -36,7 +36,7 @@ type aplinfoEntry struct {
 	Description string `json:"description"`
 }
 
-// newAplinfoListCmd builds `pmx storage aplinfo list` — fetch all available
+// newAplinfoListCmd builds `pmx pve storage aplinfo list` — fetch all available
 // appliance templates from the Proxmox template index on the resolved node
 // (GET /nodes/{node}/aplinfo).
 func newAplinfoListCmd() *cobra.Command {
@@ -79,7 +79,7 @@ func newAplinfoListCmd() *cobra.Command {
 	return cmd
 }
 
-// newAplinfoDownloadCmd builds `pmx storage aplinfo download` — instruct the
+// newAplinfoDownloadCmd builds `pmx pve storage aplinfo download` — instruct the
 // resolved node to download the named appliance template to a storage
 // (POST /nodes/{node}/aplinfo). The download runs as an asynchronous task;
 // the command blocks until it finishes unless --async is set.

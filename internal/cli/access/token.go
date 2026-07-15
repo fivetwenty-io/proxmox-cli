@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newTokenCmd builds `pmx access user token` and its sub-commands.
+// newTokenCmd builds `pmx pve access user token` and its sub-commands.
 func newTokenCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "token",
@@ -36,7 +36,7 @@ type tokenListEntry struct {
 	Comment string  `json:"comment,omitempty"`
 }
 
-// newTokenListCmd builds `pmx access user token list <userid>`.
+// newTokenListCmd builds `pmx pve access user token list <userid>`.
 func newTokenListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <userid>",
@@ -74,7 +74,7 @@ func newTokenListCmd() *cobra.Command {
 	}
 }
 
-// newTokenGetCmd builds `pmx access user token get <userid> <tokenid>`.
+// newTokenGetCmd builds `pmx pve access user token get <userid> <tokenid>`.
 func newTokenGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <userid> <tokenid>",
@@ -105,7 +105,7 @@ func newTokenGetCmd() *cobra.Command {
 	}
 }
 
-// newTokenCreateCmd builds `pmx access user token create <userid> <tokenid>`.
+// newTokenCreateCmd builds `pmx pve access user token create <userid> <tokenid>`.
 // The returned secret value is printed once and is not persisted by the CLI.
 func newTokenCreateCmd() *cobra.Command {
 	var (
@@ -158,7 +158,7 @@ func newTokenCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newTokenSetCmd builds `pmx access user token set <userid> <tokenid>`.
+// newTokenSetCmd builds `pmx pve access user token set <userid> <tokenid>`.
 func newTokenSetCmd() *cobra.Command {
 	var (
 		comment    string
@@ -225,7 +225,7 @@ func newTokenSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newTokenDeleteCmd builds `pmx access user token delete <userid> <tokenid>`.
+// newTokenDeleteCmd builds `pmx pve access user token delete <userid> <tokenid>`.
 func newTokenDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

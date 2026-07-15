@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newHardwareCmd builds the `pmx node hardware` sub-tree: PCI(e) and USB device
+// newHardwareCmd builds the `pmx pve node hardware` sub-tree: PCI(e) and USB device
 // inventory for the resolved node, used when planning device passthrough.
 func newHardwareCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -99,7 +99,7 @@ func findPciDevice(raws []json.RawMessage, id string) ([]json.RawMessage, error)
 
 // ---- pci mdev --------------------------------------------------------------
 
-// newHardwarePciMdevCmd builds `pmx node hardware pci mdev <id>` — lists the
+// newHardwarePciMdevCmd builds `pmx pve node hardware pci mdev <id>` — lists the
 // available mediated device types for a given PCI device ID or mapping name.
 func newHardwarePciMdevCmd() *cobra.Command {
 	return &cobra.Command{

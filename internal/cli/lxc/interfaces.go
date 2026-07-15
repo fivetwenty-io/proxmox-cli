@@ -22,7 +22,7 @@ type lxcInterfaceEntry struct {
 	HardName string `json:"hardware-address"`
 }
 
-// newInterfacesCmd builds `pmx lxc interfaces <vmid|name>`. It lists the container's
+// newInterfacesCmd builds `pmx pve lxc interfaces <vmid|name>`. It lists the container's
 // network interfaces as reported by the host. The call is purely read-only.
 func newInterfacesCmd() *cobra.Command {
 	return &cobra.Command{

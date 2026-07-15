@@ -49,7 +49,7 @@ func newReplicationCmd() *cobra.Command {
 	return cmd
 }
 
-// newReplicationGetCmd builds `pmx node replication get <id>`.
+// newReplicationGetCmd builds `pmx pve node replication get <id>`.
 //
 // GET /nodes/{node}/replication/{id} is only a directory index (status, log,
 // schedule_now); the job configuration lives cluster-wide at

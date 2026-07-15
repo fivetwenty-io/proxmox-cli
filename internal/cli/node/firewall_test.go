@@ -242,7 +242,7 @@ func TestNodeFirewallOptions_SetForwardsFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestNodeFirewall_CommandTree asserts the firewall sub-tree exposes the
-// expected rules and options verb sets under `pmx node firewall`.
+// expected rules and options verb sets under `pmx pve node firewall`.
 func TestNodeFirewall_CommandTree(t *testing.T) {
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()

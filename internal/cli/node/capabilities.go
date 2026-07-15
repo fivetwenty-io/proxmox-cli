@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newCapabilitiesCmd builds the `pmx node capabilities` sub-tree: read-only
+// newCapabilitiesCmd builds the `pmx pve node capabilities` sub-tree: read-only
 // queries for the virtualization capabilities the resolved node can offer to
 // guests.
 func newCapabilitiesCmd() *cobra.Command {

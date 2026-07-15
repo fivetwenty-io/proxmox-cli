@@ -173,7 +173,7 @@ func (cf *controllerFlags) applyUpdate(fl interface{ Changed(string) bool }, p *
 	}
 }
 
-// newControllerCmd builds `pmx sdn controller` and its sub-commands.
+// newControllerCmd builds `pmx pve sdn controller` and its sub-commands.
 func newControllerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "controller",

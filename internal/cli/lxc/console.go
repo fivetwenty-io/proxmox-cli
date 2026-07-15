@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newConsoleCmd builds `pmx lxc console <vmid>`, which opens a console proxy to a
+// newConsoleCmd builds `pmx pve lxc console <vmid>`, which opens a console proxy to a
 // container and returns the connection ticket. Three console types are supported
 // via --type: vnc (default), term (xterm.js terminal), and spice. Each maps to a
 // distinct proxy endpoint and returns a short-lived ticket a viewer uses to

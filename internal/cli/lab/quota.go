@@ -129,7 +129,7 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 	}
 
 	// stdin is nil: "zfs set" reads no input of its own, unlike the
-	// arbitrary user commands `pmx node exec`/`pmx ssh` pass through.
+	// arbitrary user commands `pmx pve node exec`/`pmx ssh` pass through.
 	if err := deps.Runner.Run("ssh", argv, nil, nil, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
 		return fmt.Errorf("set refquota on lab %q via ssh %s@%s: %w", name, f.User, deps.Ctx.Host, err)
 	}

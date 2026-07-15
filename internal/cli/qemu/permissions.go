@@ -21,7 +21,7 @@ func permissionsAclPath(vmid string) string {
 }
 
 // newPermissionsCmd builds `pmx pve qemu permissions` and its sub-commands: a
-// thin, VM-scoped wrapper over the global `pmx access acl`/`pmx access
+// thin, VM-scoped wrapper over the global `pmx pve access acl`/`pmx pve access
 // permissions` commands that derives the VM's ACL path automatically.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{

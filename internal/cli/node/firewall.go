@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newFirewallCmd builds the `pmx node firewall` sub-tree: the host firewall
+// newFirewallCmd builds the `pmx pve node firewall` sub-tree: the host firewall
 // rules and the per-node firewall options. Unlike the cluster and per-guest
 // firewalls, a node firewall has no IP sets, aliases, or security groups — only
 // rules and options. Every operation is synchronous (no task UPID).
@@ -480,7 +480,7 @@ func newNodeFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newNodeFirewallOptionsDescribeCmd builds `pmx node firewall options
+// newNodeFirewallOptionsDescribeCmd builds `pmx pve node firewall options
 // describe`, an offline catalog of every settable host firewall option from
 // the PVE API schema (see firewall_options_schema_gen.go).
 func newNodeFirewallOptionsDescribeCmd() *cobra.Command {

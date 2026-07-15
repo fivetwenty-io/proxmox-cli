@@ -20,8 +20,8 @@ func permissionsAclPath(vmid string) string {
 	return "/vms/" + vmid
 }
 
-// newPermissionsCmd builds `pmx lxc permissions` and its sub-commands: a
-// thin, container-scoped wrapper over the global `pmx access acl`/`pve
+// newPermissionsCmd builds `pmx pve lxc permissions` and its sub-commands: a
+// thin, container-scoped wrapper over the global `pmx pve access acl`/`pve
 // access permissions` commands that derives the container's ACL path
 // automatically.
 func newPermissionsCmd() *cobra.Command {
@@ -44,7 +44,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pmx lxc permissions list <vmid|name>`.
+// newPermissionsListCmd builds `pmx pve lxc permissions list <vmid|name>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -90,7 +90,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pmx lxc permissions effective <vmid|name>`.
+// newPermissionsEffectiveCmd builds `pmx pve lxc permissions effective <vmid|name>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -131,12 +131,12 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantCmd builds `pmx lxc permissions grant <vmid|name>`.
+// newPermissionsGrantCmd builds `pmx pve lxc permissions grant <vmid|name>`.
 func newPermissionsGrantCmd() *cobra.Command {
 	return newPermissionsGrantRevokeCmd(false)
 }
 
-// newPermissionsRevokeCmd builds `pmx lxc permissions revoke <vmid|name>`.
+// newPermissionsRevokeCmd builds `pmx pve lxc permissions revoke <vmid|name>`.
 func newPermissionsRevokeCmd() *cobra.Command {
 	return newPermissionsGrantRevokeCmd(true)
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newCreateCmd builds `pmx lxc create <vmid>`. The container is created as an
+// newCreateCmd builds `pmx pve lxc create <vmid>`. The container is created as an
 // asynchronous task; the command blocks until it completes unless --async is
 // set. --ostemplate is required and names a template volume such as
 // "local:vztmpl/alpine-3.22-default_20250617_amd64.tar.xz".

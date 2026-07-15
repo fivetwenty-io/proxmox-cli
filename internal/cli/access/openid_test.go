@@ -15,7 +15,7 @@ import (
 // openid list
 // ---------------------------------------------------------------------------
 
-// TestAccess_OpenidList_Table verifies `pmx access openid list` reads the
+// TestAccess_OpenidList_Table verifies `pmx pve access openid list` reads the
 // realm list from GET /access/domains (GET /access/openid is only a directory
 // index) and keeps only openid realms.
 func TestAccess_OpenidList_Table(t *testing.T) {

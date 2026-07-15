@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newOpenidCmd builds `pmx access openid` and its sub-commands.
+// newOpenidCmd builds `pmx pve access openid` and its sub-commands.
 func newOpenidCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "openid",
@@ -28,7 +28,7 @@ type openidRealm struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-// newOpenidListCmd builds `pmx access openid list`.
+// newOpenidListCmd builds `pmx pve access openid list`.
 //
 // GET /access/openid is only a directory index (auth-url, login), not a realm
 // list; realms live in GET /access/domains, filtered to type openid here.

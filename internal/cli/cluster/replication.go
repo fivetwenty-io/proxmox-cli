@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newReplicationCmd builds the `pmx cluster replication` sub-tree for managing
+// newReplicationCmd builds the `pmx pve cluster replication` sub-tree for managing
 // storage replication jobs, which periodically replicate a guest's local-storage
 // volumes to another node so the guest can be recovered or migrated quickly.
 func newReplicationCmd() *cobra.Command {

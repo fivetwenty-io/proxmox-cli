@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newNextIDCmd builds `pmx cluster next-id`.
+// newNextIDCmd builds `pmx pve cluster next-id`.
 func newNextIDCmd() *cobra.Command {
 	var vmidHint int64
 

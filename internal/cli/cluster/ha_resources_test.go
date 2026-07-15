@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestHaResourceList_Table verifies `pmx cluster ha resource list` queries GET
+// TestHaResourceList_Table verifies `pmx pve cluster ha resource list` queries GET
 // /cluster/ha/resources and renders the curated columns.
 func TestHaResourceList_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -67,7 +67,7 @@ func TestHaResourceList_TypeFilter(t *testing.T) {
 	require.Equal(t, "vm", gotType)
 }
 
-// TestHaResourceGet_Single verifies `pmx cluster ha resource get <sid>` reads the
+// TestHaResourceGet_Single verifies `pmx pve cluster ha resource get <sid>` reads the
 // per-resource path and surfaces the fields.
 func TestHaResourceGet_Single(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -91,7 +91,7 @@ func TestHaResourceGet_Single(t *testing.T) {
 	require.Contains(t, out, "started")
 }
 
-// TestHaResourceCreate_PostsFields verifies `pmx cluster ha resource create <sid>`
+// TestHaResourceCreate_PostsFields verifies `pmx pve cluster ha resource create <sid>`
 // POSTs the sid plus the changed attributes.
 func TestHaResourceCreate_PostsFields(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -122,7 +122,7 @@ func TestHaResourceCreate_PostsFields(t *testing.T) {
 	require.Contains(t, buf.String(), "vm:100")
 }
 
-// TestHaResourceSet_PutsChangedFields verifies `pmx cluster ha resource set <sid>`
+// TestHaResourceSet_PutsChangedFields verifies `pmx pve cluster ha resource set <sid>`
 // issues a PUT carrying only the changed fields plus --delete.
 func TestHaResourceSet_PutsChangedFields(t *testing.T) {
 	f, ac := newFakeClient(t)

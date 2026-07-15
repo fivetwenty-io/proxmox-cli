@@ -26,7 +26,7 @@ type clusterStatusEntry struct {
 	Quorate int    `json:"quorate"`
 }
 
-// newStatusCmd builds `pmx cluster status`.
+// newStatusCmd builds `pmx pve cluster status`.
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",

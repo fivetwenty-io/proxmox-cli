@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newLockCmd builds `pmx sdn lock` and its sub-commands.
+// newLockCmd builds `pmx pve sdn lock` and its sub-commands.
 func newLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lock",
@@ -23,7 +23,7 @@ func newLockCmd() *cobra.Command {
 	return cmd
 }
 
-// newLockAcquireCmd builds `pmx sdn lock acquire`.
+// newLockAcquireCmd builds `pmx pve sdn lock acquire`.
 func newLockAcquireCmd() *cobra.Command {
 	var allowPending bool
 	cmd := &cobra.Command{
@@ -58,7 +58,7 @@ func newLockAcquireCmd() *cobra.Command {
 	return cmd
 }
 
-// newLockReleaseCmd builds `pmx sdn lock release`.
+// newLockReleaseCmd builds `pmx pve sdn lock release`.
 func newLockReleaseCmd() *cobra.Command {
 	var (
 		force     bool

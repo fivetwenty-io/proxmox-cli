@@ -16,7 +16,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newPermissionsCmd builds `pmx access permissions`. The response is a map of
+// newPermissionsCmd builds `pmx pve access permissions`. The response is a map of
 // path to a map of privilege to a propagate flag.
 func newPermissionsCmd() *cobra.Command {
 	var path, userid string
@@ -80,7 +80,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPasswordCmd builds `pmx access password set`.
+// newPasswordCmd builds `pmx pve access password set`.
 func newPasswordCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "password",
@@ -91,7 +91,7 @@ func newPasswordCmd() *cobra.Command {
 	return cmd
 }
 
-// newPasswordSetCmd builds `pmx access password set`.
+// newPasswordSetCmd builds `pmx pve access password set`.
 func newPasswordSetCmd() *cobra.Command {
 	var userid, password, confirmationPassword string
 	cmd := &cobra.Command{

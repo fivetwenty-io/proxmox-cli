@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newCloneCmd builds `pmx lxc clone <vmid> --newid N [flags]`.
+// newCloneCmd builds `pmx pve lxc clone <vmid> --newid N [flags]`.
 //
 // The clone is created as an asynchronous PVE task (UPID). The command blocks
 // until the task reaches a terminal state unless --async is given. Only flags

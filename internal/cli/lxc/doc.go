@@ -1,2 +1,2 @@
-// Package lxc implements the pmx lxc command group.
+// Package lxc implements the pmx pve lxc command group.
 package lxc

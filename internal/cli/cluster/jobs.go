@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newJobsCmd builds the `pmx cluster jobs` sub-tree for managing scheduled
+// newJobsCmd builds the `pmx pve cluster jobs` sub-tree for managing scheduled
 // cluster jobs. Currently this exposes realm-sync jobs, which periodically
 // synchronize users and groups from an authentication realm (LDAP/AD).
 func newJobsCmd() *cobra.Command {
@@ -238,7 +238,7 @@ func newJobsRealmSyncDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newJobsScheduleAnalyzeCmd builds `pmx cluster jobs schedule-analyze --schedule <cron>`.
+// newJobsScheduleAnalyzeCmd builds `pmx pve cluster jobs schedule-analyze --schedule <cron>`.
 // It calls GET /cluster/jobs/schedule-analyze and returns the next N runtimes for a
 // given systemd calendar expression. Useful for validating job schedules before
 // committing them to a realm-sync or backup job.

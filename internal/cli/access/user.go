@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newUserCmd builds `pmx access user` and its sub-commands.
+// newUserCmd builds `pmx pve access user` and its sub-commands.
 func newUserCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "user",
@@ -42,7 +42,7 @@ type userListEntry struct {
 	Groups    string  `json:"groups,omitempty"`
 }
 
-// newUserListCmd builds `pmx access user list`.
+// newUserListCmd builds `pmx pve access user list`.
 func newUserListCmd() *cobra.Command {
 	var enabled, full bool
 	cmd := &cobra.Command{
@@ -95,7 +95,7 @@ func newUserListCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserGetCmd builds `pmx access user get <userid>`.
+// newUserGetCmd builds `pmx pve access user get <userid>`.
 func newUserGetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "get <userid>",
@@ -133,7 +133,7 @@ func newUserGetCmd() *cobra.Command {
 	}
 }
 
-// newUserCreateCmd builds `pmx access user create <userid>`.
+// newUserCreateCmd builds `pmx pve access user create <userid>`.
 func newUserCreateCmd() *cobra.Command {
 	var (
 		password, firstname, lastname, email, groups, comment, keys string
@@ -187,7 +187,7 @@ func newUserCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserSetCmd builds `pmx access user set <userid>`.
+// newUserSetCmd builds `pmx pve access user set <userid>`.
 func newUserSetCmd() *cobra.Command {
 	var (
 		firstname, lastname, email, groups, comment, keys string
@@ -245,7 +245,7 @@ func newUserSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newUserDeleteCmd builds `pmx access user delete <userid>`.
+// newUserDeleteCmd builds `pmx pve access user delete <userid>`.
 func newUserDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{

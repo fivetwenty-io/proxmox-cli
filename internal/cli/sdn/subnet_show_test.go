@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestSubnetShow verifies `pmx sdn subnet show` issues a GET to the
+// TestSubnetShow verifies `pmx pve sdn subnet show` issues a GET to the
 // single-subnet endpoint and renders the returned fields.
 func TestSubnetShow(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

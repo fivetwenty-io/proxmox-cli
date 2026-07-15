@@ -19,7 +19,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // TestNodeConsoleProxy_CommandTree verifies that termproxy, vncshell, and
-// spiceshell are all registered under `pmx node`.
+// spiceshell are all registered under `pmx pve node`.
 func TestNodeConsoleProxy_CommandTree(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())

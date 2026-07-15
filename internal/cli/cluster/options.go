@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newOptionsCmd builds the `pmx cluster options` sub-tree, which reads and edits
+// newOptionsCmd builds the `pmx pve cluster options` sub-tree, which reads and edits
 // the datacenter-wide options stored in datacenter.cfg (console defaults,
 // migration policy, MAC prefix, language, and similar cluster settings).
 func newOptionsCmd() *cobra.Command {
@@ -31,7 +31,7 @@ func newOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newOptionsDescribeCmd builds `pmx cluster options describe`, an offline
+// newOptionsDescribeCmd builds `pmx pve cluster options describe`, an offline
 // catalog of every settable datacenter option from the PVE API schema (see
 // options_schema_gen.go). Unlike get, it needs no cluster connection.
 func newOptionsDescribeCmd() *cobra.Command {

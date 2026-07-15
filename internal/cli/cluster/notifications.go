@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newNotificationsCmd builds the `pmx cluster notifications` sub-tree for managing
+// newNotificationsCmd builds the `pmx pve cluster notifications` sub-tree for managing
 // the notification system: target endpoints (Gotify, Sendmail, SMTP, Webhook) and
 // the matchers that route notifications to those targets.
 func newNotificationsCmd() *cobra.Command {
@@ -122,7 +122,7 @@ func newNotificationsEndpointsCmd() *cobra.Command {
 	}
 }
 
-// newNotificationsTargetsTestCmd builds `pmx cluster notifications targets test <name>`.
+// newNotificationsTargetsTestCmd builds `pmx pve cluster notifications targets test <name>`.
 // It sends a test notification through the named target so operators can verify the
 // endpoint configuration is functional without waiting for a real alert.
 func newNotificationsTargetsTestCmd() *cobra.Command {
@@ -144,7 +144,7 @@ func newNotificationsTargetsTestCmd() *cobra.Command {
 	}
 }
 
-// newNotificationsMatcherFieldsCmd builds `pmx cluster notifications matcher-fields`.
+// newNotificationsMatcherFieldsCmd builds `pmx pve cluster notifications matcher-fields`.
 // It lists the known metadata field names that can be used in matcher rules.
 func newNotificationsMatcherFieldsCmd() *cobra.Command {
 	return &cobra.Command{
@@ -164,7 +164,7 @@ func newNotificationsMatcherFieldsCmd() *cobra.Command {
 	}
 }
 
-// newNotificationsMatcherFieldValuesCmd builds `pmx cluster notifications matcher-field-values`.
+// newNotificationsMatcherFieldValuesCmd builds `pmx pve cluster notifications matcher-field-values`.
 // It lists each known metadata field together with its valid values.
 func newNotificationsMatcherFieldValuesCmd() *cobra.Command {
 	return &cobra.Command{

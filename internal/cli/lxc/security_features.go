@@ -118,7 +118,7 @@ func compactFeatures(fs featureState) string {
 	return strings.Join(on, ",")
 }
 
-// newSecurityFeaturesCmd builds `pmx lxc security features` and its sub-commands.
+// newSecurityFeaturesCmd builds `pmx pve lxc security features` and its sub-commands.
 func newSecurityFeaturesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "features",
@@ -133,7 +133,7 @@ func newSecurityFeaturesCmd() *cobra.Command {
 	return cmd
 }
 
-// newSecurityFeaturesShowCmd builds `pmx lxc security features show <vmid|name>`.
+// newSecurityFeaturesShowCmd builds `pmx pve lxc security features show <vmid|name>`.
 func newSecurityFeaturesShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
@@ -172,7 +172,7 @@ func newSecurityFeaturesShowCmd() *cobra.Command {
 	}
 }
 
-// newSecurityFeaturesSetCmd builds `pmx lxc security features set <vmid|name>`.
+// newSecurityFeaturesSetCmd builds `pmx pve lxc security features set <vmid|name>`.
 func newSecurityFeaturesSetCmd() *cobra.Command {
 	var (
 		nesting bool

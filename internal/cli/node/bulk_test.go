@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestNodeStartall_ForwardsFields verifies `pmx node startall` posts the VMID
+// TestNodeStartall_ForwardsFields verifies `pmx pve node startall` posts the VMID
 // list and --force to the startall endpoint and omits unset flags.
 func TestNodeStartall_ForwardsFields(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

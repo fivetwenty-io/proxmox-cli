@@ -268,7 +268,7 @@ func newCephCfgValueCmd() *cobra.Command {
 	return cmd
 }
 
-// newCephLogCmd builds `pmx node ceph log`.
+// newCephLogCmd builds `pmx pve node ceph log`.
 func newCephLogCmd() *cobra.Command {
 	var (
 		limit int64
@@ -305,7 +305,7 @@ func newCephLogCmd() *cobra.Command {
 	return cmd
 }
 
-// newCephRulesCmd builds `pmx node ceph rules`.
+// newCephRulesCmd builds `pmx pve node ceph rules`.
 func newCephRulesCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rules",
@@ -326,7 +326,7 @@ func newCephRulesCmd() *cobra.Command {
 	}
 }
 
-// newCephCrushCmd builds `pmx node ceph crush`.
+// newCephCrushCmd builds `pmx pve node ceph crush`.
 func newCephCrushCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "crush",

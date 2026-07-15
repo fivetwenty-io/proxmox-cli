@@ -10,10 +10,10 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newRrdCmd builds `pmx lxc rrd <vmid> --ds DS --timeframe FRAME [--cf CF]`.
+// newRrdCmd builds `pmx pve lxc rrd <vmid> --ds DS --timeframe FRAME [--cf CF]`.
 //
 // The endpoint returns a PNG filename on the PVE server. This command is a
-// low-level helper; for time-series data points prefer `pmx lxc metrics`.
+// low-level helper; for time-series data points prefer `pmx pve lxc metrics`.
 func newRrdCmd() *cobra.Command {
 	var ds, timeframe, cf string
 

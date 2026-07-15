@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newAptCmd builds the `pmx node apt` sub-tree: package update inspection,
+// newAptCmd builds the `pmx pve node apt` sub-tree: package update inspection,
 // installed-version reporting, changelogs, the apt database refresh, and APT
 // repository management for the resolved node.
 func newAptCmd() *cobra.Command {

@@ -1,2 +1,2 @@
-// Package task implements the pmx task command group.
+// Package task implements the pmx pve task command group.
 package task

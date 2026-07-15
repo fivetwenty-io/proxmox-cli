@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newFeatureCmd builds `pmx lxc feature <vmid> --feature FEAT [--snapname SNAP]`.
+// newFeatureCmd builds `pmx pve lxc feature <vmid> --feature FEAT [--snapname SNAP]`.
 //
 // Checks whether the container supports a given feature (e.g. clone, snapshot,
 // copy). Useful as a pre-flight check before attempting the operation.

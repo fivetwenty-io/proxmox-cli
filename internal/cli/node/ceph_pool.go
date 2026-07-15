@@ -47,7 +47,7 @@ func newCephPoolListCmd() *cobra.Command {
 	}
 }
 
-// newCephPoolGetCmd builds `pmx node ceph pool get <name>`.
+// newCephPoolGetCmd builds `pmx pve node ceph pool get <name>`.
 //
 // GET /nodes/{node}/ceph/pool/{name} is only a directory index (status); the
 // pool parameters live at the status child endpoint.

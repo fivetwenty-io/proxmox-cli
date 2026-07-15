@@ -15,7 +15,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// Group builds the `pmx pool` command and all of its sub-commands.
+// Group builds the `pmx pve pool` command and all of its sub-commands.
 // The passed *cli.Deps is a placeholder used only so cobra can assemble the
 // command tree; live dependencies are resolved per-invocation via cli.GetDeps.
 func Group(_ *cli.Deps) *cobra.Command {
@@ -53,7 +53,7 @@ type poolListEntry struct {
 	Members []json.RawMessage `json:"members"`
 }
 
-// newListCmd builds `pmx pool list`.
+// newListCmd builds `pmx pve pool list`.
 func newListCmd() *cobra.Command {
 	var poolType, poolid string
 	cmd := &cobra.Command{
@@ -116,7 +116,7 @@ type poolGetEntry struct {
 	Members []json.RawMessage `json:"members"`
 }
 
-// newGetCmd builds `pmx pool get <poolid>`.
+// newGetCmd builds `pmx pve pool get <poolid>`.
 // Uses GET /pools?poolid=<id> (non-deprecated) instead of GET /pools/{poolid}.
 func newGetCmd() *cobra.Command {
 	var poolType string
@@ -173,7 +173,7 @@ func newGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newCreateCmd builds `pmx pool create`.
+// newCreateCmd builds `pmx pve pool create`.
 func newCreateCmd() *cobra.Command {
 	var poolid, comment string
 	cmd := &cobra.Command{
@@ -207,7 +207,7 @@ func newCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newSetCmd builds `pmx pool set <poolid>`.
+// newSetCmd builds `pmx pve pool set <poolid>`.
 // Uses PUT /pools (non-deprecated) instead of PUT /pools/{poolid}.
 func newSetCmd() *cobra.Command {
 	var comment, vms, storage string
@@ -261,7 +261,7 @@ func newSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newDeleteCmd builds `pmx pool delete <poolid>`.
+// newDeleteCmd builds `pmx pve pool delete <poolid>`.
 // Uses DELETE /pools (non-deprecated) instead of DELETE /pools/{poolid}.
 func newDeleteCmd() *cobra.Command {
 	var yes, destroyVMs, destroyStorage bool

@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// Group builds the `pmx task` command and all of its sub-commands.
+// Group builds the `pmx pve task` command and all of its sub-commands.
 //
 // The *cli.Deps argument is a placeholder used only so cobra can assemble the
 // command tree; each sub-command resolves its live dependencies from the cobra
@@ -59,7 +59,7 @@ func requireNode(node string) (string, error) {
 	return node, nil
 }
 
-// newListCmd builds `pmx task list`.
+// newListCmd builds `pmx pve task list`.
 func newListCmd() *cobra.Command {
 	var (
 		vmid         int
@@ -207,7 +207,7 @@ func buildTaskRowsFromRaw(raws []json.RawMessage) (output.Result, error) {
 	return output.Result{Headers: headers, Rows: rows, Raw: entries}, nil
 }
 
-// newClusterListCmd builds `pmx task cluster-list`.
+// newClusterListCmd builds `pmx pve task cluster-list`.
 func newClusterListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster-list",
@@ -249,7 +249,7 @@ func formatTimestamp(ts int64) string {
 	return strconv.FormatInt(ts, 10)
 }
 
-// newLogCmd builds `pmx task log <upid>`.
+// newLogCmd builds `pmx pve task log <upid>`.
 func newLogCmd() *cobra.Command {
 	var (
 		limit    int
@@ -342,7 +342,7 @@ func buildTaskLogResult(resp *nodes.ListTasksLogResponse) (output.Result, error)
 	return output.Result{Headers: headers, Rows: rows, Raw: lines}, nil
 }
 
-// newStopCmd builds `pmx task stop <upid>`.
+// newStopCmd builds `pmx pve task stop <upid>`.
 func newStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop <upid>",
@@ -373,7 +373,7 @@ func newStopCmd() *cobra.Command {
 	return cmd
 }
 
-// newWaitCmd builds `pmx task wait <upid>`.
+// newWaitCmd builds `pmx pve task wait <upid>`.
 func newWaitCmd() *cobra.Command {
 	var (
 		timeout     int

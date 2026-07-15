@@ -11,7 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newCpuModelCmd builds the `pmx cluster cpu-model` sub-tree for managing
+// newCpuModelCmd builds the `pmx pve cluster cpu-model` sub-tree for managing
 // datacenter-wide custom QEMU CPU models. A custom model lets guests use a
 // tailored CPU definition: a reported model plus extra CPU flags and CPUID
 // tuning.

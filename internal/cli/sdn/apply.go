@@ -12,7 +12,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newApplyCmd builds `pmx sdn apply` — commit pending SDN configuration by
+// newApplyCmd builds `pmx pve sdn apply` — commit pending SDN configuration by
 // reloading the network config on all nodes (PUT /cluster/sdn). The reload runs
 // as an asynchronous task; the command blocks until it completes unless --async
 // is set.

@@ -23,7 +23,7 @@ func zonePermPath(zone string) string {
 	return fmt.Sprintf("/sdn/zones/%s", zone)
 }
 
-// newZonePermissionsCmd builds `pmx sdn zone permissions` and its sub-commands:
+// newZonePermissionsCmd builds `pmx pve sdn zone permissions` and its sub-commands:
 // list/effective/grant/revoke against a zone's own ACL path (/sdn/zones/{zone}).
 func newZonePermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -43,7 +43,7 @@ func newZonePermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newZonePermListCmd builds `pmx sdn zone permissions list <zone>`.
+// newZonePermListCmd builds `pmx pve sdn zone permissions list <zone>`.
 func newZonePermListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -64,7 +64,7 @@ func newZonePermListCmd() *cobra.Command {
 	return cmd
 }
 
-// newZonePermEffectiveCmd builds `pmx sdn zone permissions effective <zone>`.
+// newZonePermEffectiveCmd builds `pmx pve sdn zone permissions effective <zone>`.
 func newZonePermEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -85,7 +85,7 @@ func newZonePermEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newZonePermGrantRevokeCmd builds `pmx sdn zone permissions grant <zone>` when
+// newZonePermGrantRevokeCmd builds `pmx pve sdn zone permissions grant <zone>` when
 // revoke is false, or `... revoke <zone>` when revoke is true.
 func newZonePermGrantRevokeCmd(revoke bool) *cobra.Command {
 	var (
@@ -174,7 +174,7 @@ func resolveVnetZone(ctx context.Context, deps *cli.Deps, vnet, zoneFlag string)
 	return v.Zone, nil
 }
 
-// newVnetPermissionsCmd builds `pmx sdn vnet permissions` and its sub-commands:
+// newVnetPermissionsCmd builds `pmx pve sdn vnet permissions` and its sub-commands:
 // list/effective/grant/revoke against a vnet's derived ACL path
 // (/sdn/zones/{zone}/{vnet}).
 func newVnetPermissionsCmd() *cobra.Command {
@@ -198,7 +198,7 @@ func newVnetPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetPermListCmd builds `pmx sdn vnet permissions list <vnet>`.
+// newVnetPermListCmd builds `pmx pve sdn vnet permissions list <vnet>`.
 func newVnetPermListCmd() *cobra.Command {
 	var (
 		inherited bool
@@ -231,7 +231,7 @@ func newVnetPermListCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetPermEffectiveCmd builds `pmx sdn vnet permissions effective <vnet>`.
+// newVnetPermEffectiveCmd builds `pmx pve sdn vnet permissions effective <vnet>`.
 func newVnetPermEffectiveCmd() *cobra.Command {
 	var (
 		userid   string
@@ -264,7 +264,7 @@ func newVnetPermEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetPermGrantRevokeCmd builds `pmx sdn vnet permissions grant <vnet>` when
+// newVnetPermGrantRevokeCmd builds `pmx pve sdn vnet permissions grant <vnet>` when
 // revoke is false, or `... revoke <vnet>` when revoke is true.
 func newVnetPermGrantRevokeCmd(revoke bool) *cobra.Command {
 	var (

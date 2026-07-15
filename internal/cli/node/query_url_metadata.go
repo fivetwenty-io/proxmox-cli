@@ -10,7 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
-// newQueryUrlMetadataCmd builds `pmx node query-url-metadata` — proxies a URL
+// newQueryUrlMetadataCmd builds `pmx pve node query-url-metadata` — proxies a URL
 // metadata request through the resolved node. Useful for resolving metadata for
 // URLs that are only reachable from a node's network (for example an ISO on an
 // internal HTTP server). The --url flag is required.

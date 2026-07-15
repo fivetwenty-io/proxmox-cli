@@ -182,9 +182,9 @@ func (f *vnetRuleFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnVnets
 	}
 }
 
-// newVnetFirewallCmd builds `pmx sdn vnet firewall` and its sub-commands: the
+// newVnetFirewallCmd builds `pmx pve sdn vnet firewall` and its sub-commands: the
 // per-vnet firewall rules and forward-policy options. Like all SDN edits, rule
-// changes are staged until `pmx sdn apply`.
+// changes are staged until `pmx pve sdn apply`.
 func newVnetFirewallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "firewall",
@@ -386,7 +386,7 @@ func newVnetFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newVnetFirewallOptionsDescribeCmd builds `pmx sdn vnet firewall options
+// newVnetFirewallOptionsDescribeCmd builds `pmx pve sdn vnet firewall options
 // describe`, an offline catalog of every settable vnet firewall option from
 // the PVE API schema (see vnet_firewall_options_schema_gen.go).
 func newVnetFirewallOptionsDescribeCmd() *cobra.Command {

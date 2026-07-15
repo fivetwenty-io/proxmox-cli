@@ -90,7 +90,7 @@ and the first token that is not an option starts the remote command. Use
 // RunSSH resolves the connection target, applies any context SSH default the
 // caller did not explicitly set on f, splits rest into leading ssh options
 // and a trailing remote command via sshcmd.SplitPassthrough, and execs ssh
-// interactively. It is shared by `pmx ssh` and `pmx node <node> ssh` so both
+// interactively. It is shared by `pmx ssh` and `pmx pve node <node> ssh` so both
 // commands connect identically.
 //
 // Target resolution branches on the active context's product: a PBS or PDM

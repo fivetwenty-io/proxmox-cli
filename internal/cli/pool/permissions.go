@@ -21,7 +21,7 @@ func poolACLPath(poolid string) string {
 	return fmt.Sprintf("/pool/%s", poolid)
 }
 
-// newPermissionsCmd builds `pmx pool permissions` and its sub-commands.
+// newPermissionsCmd builds `pmx pve pool permissions` and its sub-commands.
 func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
@@ -41,7 +41,7 @@ func newPermissionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsListCmd builds `pmx pool permissions list <poolid>`.
+// newPermissionsListCmd builds `pmx pve pool permissions list <poolid>`.
 func newPermissionsListCmd() *cobra.Command {
 	var inherited bool
 	cmd := &cobra.Command{
@@ -82,7 +82,7 @@ func newPermissionsListCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsEffectiveCmd builds `pmx pool permissions effective <poolid>`.
+// newPermissionsEffectiveCmd builds `pmx pve pool permissions effective <poolid>`.
 func newPermissionsEffectiveCmd() *cobra.Command {
 	var userid string
 	cmd := &cobra.Command{
@@ -119,8 +119,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	return cmd
 }
 
-// newPermissionsGrantRevokeCmd builds `pmx pool permissions grant <poolid>`
-// when revoke is false, and `pmx pool permissions revoke <poolid>` when true.
+// newPermissionsGrantRevokeCmd builds `pmx pve pool permissions grant <poolid>`
+// when revoke is false, and `pmx pve pool permissions revoke <poolid>` when true.
 // The two verbs share identical mechanics: both call Access.UpdateAcl with the
 // derived (singular) pool path, differing only in the Delete flag.
 func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {

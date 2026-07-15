@@ -51,7 +51,7 @@ func newCephOsdListCmd() *cobra.Command {
 	}
 }
 
-// newCephOsdGetCmd builds `pmx node ceph osd get <osdid>`.
+// newCephOsdGetCmd builds `pmx pve node ceph osd get <osdid>`.
 //
 // GET /nodes/{node}/ceph/osd/{osdid} is only a directory index (metadata,
 // lv-info, ...); the OSD detail lives at the metadata child endpoint.

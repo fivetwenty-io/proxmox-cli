@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newConfigCmd builds `pmx lxc config` and its get/set/pending/describe sub-commands.
+// newConfigCmd builds `pmx pve lxc config` and its get/set/pending/describe sub-commands.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -26,7 +26,7 @@ func newConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigDescribeCmd builds `pmx lxc config describe`, an offline catalog of
+// newConfigDescribeCmd builds `pmx pve lxc config describe`, an offline catalog of
 // every settable container configuration option from the PVE API schema (see
 // config_schema_gen.go).
 func newConfigDescribeCmd() *cobra.Command {
@@ -42,7 +42,7 @@ func newConfigDescribeCmd() *cobra.Command {
 	})
 }
 
-// newConfigGetCmd builds `pmx lxc config get <vmid|name>`.
+// newConfigGetCmd builds `pmx pve lxc config get <vmid|name>`.
 func newConfigGetCmd() *cobra.Command {
 	var snapshot string
 	var current bool
@@ -97,7 +97,7 @@ func newConfigGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newConfigSetCmd builds `pmx lxc config set <vmid|name>`.
+// newConfigSetCmd builds `pmx pve lxc config set <vmid|name>`.
 func newConfigSetCmd() *cobra.Command {
 	var (
 		hostname    string
@@ -445,7 +445,7 @@ type lxcPendingEntry struct {
 	Delete  int    `json:"delete"`
 }
 
-// newConfigPendingCmd builds `pmx lxc config pending <vmid|name>`.
+// newConfigPendingCmd builds `pmx pve lxc config pending <vmid|name>`.
 //
 // Returns the diff between the currently committed configuration and any
 // changes that take effect after the next container restart.

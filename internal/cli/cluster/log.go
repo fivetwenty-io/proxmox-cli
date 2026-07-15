@@ -42,7 +42,7 @@ func scalarCell(raw json.RawMessage) string {
 	return string(raw)
 }
 
-// newLogCmd builds `pmx cluster log`.
+// newLogCmd builds `pmx pve cluster log`.
 func newLogCmd() *cobra.Command {
 	var maxEntries int64
 

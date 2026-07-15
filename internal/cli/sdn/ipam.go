@@ -23,7 +23,7 @@ type ipamEntry struct {
 // forwarded to the API but never echoed back.
 var ipamFlagNames = []string{"section", "token", "url", "fingerprint"}
 
-// newIpamCmd builds `pmx sdn ipam` and its sub-commands.
+// newIpamCmd builds `pmx pve sdn ipam` and its sub-commands.
 func newIpamCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ipam",

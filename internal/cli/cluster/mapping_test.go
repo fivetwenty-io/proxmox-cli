@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestMappingDir_List verifies `pmx cluster mapping dir list` reads
+// TestMappingDir_List verifies `pmx pve cluster mapping dir list` reads
 // GET /cluster/mapping/dir and renders the focused columns.
 func TestMappingDir_List(t *testing.T) {
 	f, ac := newFakeClient(t)

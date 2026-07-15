@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newMappingCmd builds the `pmx cluster mapping` sub-tree for managing
+// newMappingCmd builds the `pmx pve cluster mapping` sub-tree for managing
 // hardware-mapping definitions. A mapping gives a logical name to one or more
 // physical devices (PCI, USB) or host directories so guests can reference the
 // name and Proxmox resolves it to the right device on whichever node runs the

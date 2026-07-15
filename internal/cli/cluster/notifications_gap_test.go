@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestNotificationsTargetsTest_Success verifies `pmx cluster notifications targets-test <name>`
+// TestNotificationsTargetsTest_Success verifies `pmx pve cluster notifications targets-test <name>`
 // posts to POST /cluster/notifications/targets/{name}/test and renders a success message.
 func TestNotificationsTargetsTest_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -47,7 +47,7 @@ func TestNotificationsTargetsTest_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "notifications", "targets-test", "missing"))
 }
 
-// TestNotificationsMatcherFields_Table verifies `pmx cluster notifications matcher-fields`
+// TestNotificationsMatcherFields_Table verifies `pmx pve cluster notifications matcher-fields`
 // reads GET /cluster/notifications/matcher-fields and renders the fields.
 func TestNotificationsMatcherFields_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -85,7 +85,7 @@ func TestNotificationsMatcherFields_ServerError(t *testing.T) {
 	require.Error(t, run(deps, &buf, "notifications", "matcher-fields"))
 }
 
-// TestNotificationsMatcherFieldValues_Table verifies `pmx cluster notifications matcher-field-values`
+// TestNotificationsMatcherFieldValues_Table verifies `pmx pve cluster notifications matcher-field-values`
 // reads GET /cluster/notifications/matcher-field-values and renders a table.
 func TestNotificationsMatcherFieldValues_Table(t *testing.T) {
 	f, ac := newFakeClient(t)

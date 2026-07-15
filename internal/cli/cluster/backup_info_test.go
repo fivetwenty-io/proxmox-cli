@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestBackupInfoNotBackedUp_Table verifies `pmx cluster backup-info not-backed-up`
+// TestBackupInfoNotBackedUp_Table verifies `pmx pve cluster backup-info not-backed-up`
 // queries GET /cluster/backup-info/not-backed-up and renders a dynamic table.
 func TestBackupInfoNotBackedUp_Table(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -73,7 +73,7 @@ func TestBackupInfoCommandTree(t *testing.T) {
 	require.True(t, names["not-backed-up"], "backup-info must expose not-backed-up sub-command")
 }
 
-// TestBackupIncludedVolumes_Table verifies `pmx cluster backup included-volumes <id>`
+// TestBackupIncludedVolumes_Table verifies `pmx pve cluster backup included-volumes <id>`
 // queries GET /cluster/backup/{id}/included_volumes and renders the children.
 func TestBackupIncludedVolumes_Table(t *testing.T) {
 	f, ac := newFakeClient(t)

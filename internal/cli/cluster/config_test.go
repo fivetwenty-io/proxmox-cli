@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// TestClusterConfigJoin_List verifies `pmx cluster config join list` reads
+// TestClusterConfigJoin_List verifies `pmx pve cluster config join list` reads
 // GET /cluster/config/join and renders the join information.
 func TestClusterConfigJoin_List(t *testing.T) {
 	f, ac := newFakeClient(t)
@@ -30,7 +30,7 @@ func TestClusterConfigJoin_List(t *testing.T) {
 	require.Contains(t, buf.String(), "pve1")
 }
 
-// TestClusterConfigNodes_List verifies `pmx cluster config nodes list` reads
+// TestClusterConfigNodes_List verifies `pmx pve cluster config nodes list` reads
 // GET /cluster/config/nodes and renders the member rows.
 func TestClusterConfigNodes_List(t *testing.T) {
 	f, ac := newFakeClient(t)

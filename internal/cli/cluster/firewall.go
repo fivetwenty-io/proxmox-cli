@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newFirewallCmd builds the `pmx cluster firewall` sub-tree: cluster-wide rules,
+// newFirewallCmd builds the `pmx pve cluster firewall` sub-tree: cluster-wide rules,
 // security groups, IP sets, address aliases, and the datacenter firewall
 // options. Every operation is synchronous (no task UPID).
 func newFirewallCmd() *cobra.Command {
@@ -1217,7 +1217,7 @@ func newClusterFirewallOptionsCmd() *cobra.Command {
 	return cmd
 }
 
-// newClusterFirewallOptionsDescribeCmd builds `pmx cluster firewall options
+// newClusterFirewallOptionsDescribeCmd builds `pmx pve cluster firewall options
 // describe`, an offline catalog of every settable datacenter firewall option
 // from the PVE API schema (see firewall_options_schema_gen.go).
 func newClusterFirewallOptionsDescribeCmd() *cobra.Command {
@@ -1339,7 +1339,7 @@ func newClusterFirewallOptionsSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newClusterFirewallMacrosCmd builds `pmx cluster firewall macros list`.
+// newClusterFirewallMacrosCmd builds `pmx pve cluster firewall macros list`.
 // It reads the static list of built-in firewall macros from the server. The list
 // is read-only and useful when authoring rules that reference a macro name.
 func newClusterFirewallMacrosCmd() *cobra.Command {
@@ -1379,7 +1379,7 @@ func newClusterFirewallMacrosCmd() *cobra.Command {
 	return cmd
 }
 
-// newClusterFirewallRefsCmd builds `pmx cluster firewall refs list`.
+// newClusterFirewallRefsCmd builds `pmx pve cluster firewall refs list`.
 // It returns the valid IPSet and alias references that can be used as source or
 // destination in firewall rules. The optional --type flag limits results to
 // either "ipset" or "alias".

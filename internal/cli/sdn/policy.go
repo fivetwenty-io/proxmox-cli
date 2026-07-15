@@ -13,7 +13,7 @@ import (
 
 // --- prefix-list ---
 
-// newPrefixListCmd builds `pmx sdn prefix-list` and its sub-commands.
+// newPrefixListCmd builds `pmx pve sdn prefix-list` and its sub-commands.
 func newPrefixListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "prefix-list",
@@ -215,7 +215,7 @@ func newPrefixListDeleteCmd() *cobra.Command {
 	return cmd
 }
 
-// newPrefixListEntryCmd builds `pmx sdn prefix-list entry` and its sub-commands.
+// newPrefixListEntryCmd builds `pmx pve sdn prefix-list entry` and its sub-commands.
 func newPrefixListEntryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "entry",
@@ -432,7 +432,7 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 
 // --- route-map ---
 
-// newRouteMapCmd builds `pmx sdn route-map` and its sub-commands. A route map is
+// newRouteMapCmd builds `pmx pve sdn route-map` and its sub-commands. A route map is
 // an ordered list of entries; there is no standalone route-map object, so a
 // route map comes into existence when its first entry is added.
 func newRouteMapCmd() *cobra.Command {
@@ -513,7 +513,7 @@ func newRouteMapGetCmd() *cobra.Command {
 	return cmd
 }
 
-// newRouteMapEntryCmd builds `pmx sdn route-map entry` and its sub-commands.
+// newRouteMapEntryCmd builds `pmx pve sdn route-map entry` and its sub-commands.
 func newRouteMapEntryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "entry",

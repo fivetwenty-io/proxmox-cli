@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newDiskCmd builds the `pmx lxc disk` sub-tree (resize, move).
+// newDiskCmd builds the `pmx pve lxc disk` sub-tree (resize, move).
 func newDiskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "disk",
@@ -27,7 +27,7 @@ func newDiskCmd() *cobra.Command {
 	return cmd
 }
 
-// newDiskResizeCmd builds `pmx lxc disk resize <vmid> --disk rootfs --size +5G`.
+// newDiskResizeCmd builds `pmx pve lxc disk resize <vmid> --disk rootfs --size +5G`.
 //
 // Resize is normally a synchronous operation that returns no task; some storage
 // back-ends instead schedule a worker and return a UPID, in which case the
@@ -82,7 +82,7 @@ func newDiskResizeCmd() *cobra.Command {
 	return cmd
 }
 
-// newDiskMoveCmd builds `pmx lxc disk move <vmid> --volume rootfs --storage X [--delete]`.
+// newDiskMoveCmd builds `pmx pve lxc disk move <vmid> --volume rootfs --storage X [--delete]`.
 //
 // Moving a volume is an asynchronous PVE task (UPID); the command blocks until the
 // task completes unless --async is set. By default the source volume is retained

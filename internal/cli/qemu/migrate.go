@@ -166,7 +166,7 @@ func newMigrateCmd() *cobra.Command {
 }
 
 // newMigrateCapabilitiesCmd builds `pmx pve qemu migrate capabilities`. It
-// mirrors `pmx node capabilities qemu migration` exactly (same headers/Raw
+// mirrors `pmx pve node capabilities qemu migration` exactly (same headers/Raw
 // shape) so the two spellings are interchangeable; `migrate check` already
 // reads this data internally, this leaf just surfaces it directly.
 func newMigrateCapabilitiesCmd() *cobra.Command {

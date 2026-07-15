@@ -14,7 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newNetworkCmd builds the `pmx node network` sub-tree: the host network
+// newNetworkCmd builds the `pmx pve node network` sub-tree: the host network
 // interfaces and bridges of the resolved node, plus the apply/revert verbs that
 // commit or discard the pending /etc/network/interfaces.new changes. Edits to a
 // host interface only become live once `network apply` reloads the networking
@@ -39,7 +39,7 @@ func newNetworkCmd() *cobra.Command {
 	return cmd
 }
 
-// newNetstatCmd builds `pmx node netstat` — reads per-interface traffic counters
+// newNetstatCmd builds `pmx pve node netstat` — reads per-interface traffic counters
 // from the resolved node.
 func newNetstatCmd() *cobra.Command {
 	return &cobra.Command{

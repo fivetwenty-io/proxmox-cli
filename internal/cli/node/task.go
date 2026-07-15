@@ -13,7 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newTaskCmd builds the `pmx node task` sub-group.
+// newTaskCmd builds the `pmx pve node task` sub-group.
 func newTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
@@ -43,7 +43,7 @@ type taskListEntry struct {
 	User      string `json:"user"`
 }
 
-// newTaskListCmd builds `pmx node task list <node>`.
+// newTaskListCmd builds `pmx pve node task list <node>`.
 func newTaskListCmd() *cobra.Command {
 	var (
 		vmid         int64
@@ -135,7 +135,7 @@ type taskLogLine struct {
 	T string `json:"t"`
 }
 
-// newTaskLogCmd builds `pmx node task log <node> <upid>`.
+// newTaskLogCmd builds `pmx pve node task log <node> <upid>`.
 func newTaskLogCmd() *cobra.Command {
 	var (
 		limit int64
@@ -191,7 +191,7 @@ func newTaskLogCmd() *cobra.Command {
 	return cmd
 }
 
-// newTaskStopCmd builds `pmx node task stop <node> <upid>`.
+// newTaskStopCmd builds `pmx pve node task stop <node> <upid>`.
 func newTaskStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "stop <node> <upid>",
@@ -214,7 +214,7 @@ func newTaskStopCmd() *cobra.Command {
 	}
 }
 
-// newTaskStatusCmd builds `pmx node task status <upid>`. The node is resolved
+// newTaskStatusCmd builds `pmx pve node task status <upid>`. The node is resolved
 // from deps.Node (--node flag, PMX_NODE env, or configured default).
 func newTaskStatusCmd() *cobra.Command {
 	return &cobra.Command{
@@ -251,7 +251,7 @@ func newTaskStatusCmd() *cobra.Command {
 	}
 }
 
-// newTaskWaitCmd builds `pmx node task wait <upid>`. The node is parsed from the
+// newTaskWaitCmd builds `pmx pve node task wait <upid>`. The node is parsed from the
 // UPID by the wait helper, so no positional node is required.
 func newTaskWaitCmd() *cobra.Command {
 	var (

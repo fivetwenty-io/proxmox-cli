@@ -84,7 +84,7 @@ func newCertAcmeCmd() *cobra.Command {
 // installed on a PVE node; pve-ssl.pem is the self-signed fallback.
 const acmeManagedCertFilename = "pveproxy-ssl.pem"
 
-// newCertAcmeListCmd builds `pmx node cert acme list`.
+// newCertAcmeListCmd builds `pmx pve node cert acme list`.
 //
 // GET /nodes/{node}/certificates/acme is only a directory index (certificate);
 // the certificate details live in /nodes/{node}/certificates/info, filtered

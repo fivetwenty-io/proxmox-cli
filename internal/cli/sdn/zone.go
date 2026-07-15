@@ -30,7 +30,7 @@ var zoneSetFlagNames = []string{
 	"vxlan-port",
 }
 
-// newZoneCmd builds `pmx sdn zone` and its sub-commands.
+// newZoneCmd builds `pmx pve sdn zone` and its sub-commands.
 func newZoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "zone",
@@ -47,7 +47,7 @@ func newZoneCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneShowCmd builds `pmx sdn zone show <zone>`.
+// newZoneShowCmd builds `pmx pve sdn zone show <zone>`.
 func newZoneShowCmd() *cobra.Command {
 	var (
 		pending bool
@@ -84,7 +84,7 @@ func newZoneShowCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneSetCmd builds `pmx sdn zone set <zone>`.
+// newZoneSetCmd builds `pmx pve sdn zone set <zone>`.
 func newZoneSetCmd() *cobra.Command {
 	var (
 		advertiseSubnets         bool
@@ -252,7 +252,7 @@ func newZoneSetCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneListCmd builds `pmx sdn zone list`.
+// newZoneListCmd builds `pmx pve sdn zone list`.
 func newZoneListCmd() *cobra.Command {
 	var (
 		pending  bool
@@ -310,7 +310,7 @@ func newZoneListCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneCreateCmd builds `pmx sdn zone create <zone>`.
+// newZoneCreateCmd builds `pmx pve sdn zone create <zone>`.
 func newZoneCreateCmd() *cobra.Command {
 	var (
 		zoneType                 string
@@ -472,7 +472,7 @@ func newZoneCreateCmd() *cobra.Command {
 	return cmd
 }
 
-// newZoneDeleteCmd builds `pmx sdn zone delete <zone>`.
+// newZoneDeleteCmd builds `pmx pve sdn zone delete <zone>`.
 func newZoneDeleteCmd() *cobra.Command {
 	var (
 		yes       bool

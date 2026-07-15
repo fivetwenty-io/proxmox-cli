@@ -28,7 +28,7 @@ type clusterResourceEntry struct {
 	Uptime *int64   `json:"uptime"`
 }
 
-// newResourcesCmd builds `pmx cluster resources`.
+// newResourcesCmd builds `pmx pve cluster resources`.
 func newResourcesCmd() *cobra.Command {
 	var typeFilter string
 
