@@ -140,7 +140,8 @@ func newSecurityFeaturesShowCmd() *cobra.Command {
 		Short: "Show container feature flags",
 		Long: "Show every known feature sub-option with its effective value (unset keys shown at " +
 			"their default). API-only read of the features= config option.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve lxc security features show 200`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -196,6 +197,8 @@ func newSecurityFeaturesSetCmd() *cobra.Command {
 			"loop and NFS filesystems widen the attack surface. Feature changes apply on the next " +
 			"container start.\n\n" +
 			"Example: pmx pve lxc security features set web1 --nesting --keyctl",
+		Example: `  pmx pve lxc security features set 200 --nesting --keyctl
+  pmx pve lxc security features set 200 --reset`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

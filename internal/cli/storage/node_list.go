@@ -46,6 +46,8 @@ func newStorageNodeListCmd() *cobra.Command {
 		Long: "List the storages available on the resolved node, including their " +
 			"runtime active/enabled status and capacity usage. This differs from " +
 			"`storage list`, which shows the cluster-wide storage configuration.",
+		Example: `  pmx pve storage node-list --node pve1
+  pmx pve storage node-list --node pve1 --enabled`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

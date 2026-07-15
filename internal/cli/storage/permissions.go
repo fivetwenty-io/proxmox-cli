@@ -50,6 +50,8 @@ func newPermissionsListCmd() *cobra.Command {
 		Long: "List the ACL entries whose path exactly matches /storage/{storage}. With " +
 			"--inherited, also include entries from every ancestor path (/, /storage), each " +
 			"row showing which path it came from.",
+		Example: `  pmx pve storage permissions list local-lvm
+  pmx pve storage permissions list local-lvm --inherited`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -91,6 +93,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 		Long: "Show the effective (post-inheritance) privileges on /storage/{storage} for the " +
 			"caller, or for --userid when passed. Querying another user's or token's permissions " +
 			"requires Sys.Audit on /access.",
+		Example: `  pmx pve storage permissions effective local-lvm
+  pmx pve storage permissions effective local-lvm --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -134,6 +138,11 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 		short = "Revoke roles from users, groups, or tokens on a storage's ACL path"
 	}
 
+	example := `  pmx pve storage permissions grant local-lvm --roles PVEVMAdmin --users alice@pve`
+	if revoke {
+		example = `  pmx pve storage permissions revoke local-lvm --roles PVEVMAdmin --users alice@pve`
+	}
+
 	cmd := &cobra.Command{
 		Use:   verb + " <storage>",
 		Short: short,
@@ -141,7 +150,8 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 			"on the path. Revoking an entry that does not exist succeeds silently, matching PVE " +
 			"server behavior. This command does not block self-lockout (e.g. revoking your own " +
 			"access to the path you are managing); check `permissions effective` first if unsure.",
-		Args: cobra.ExactArgs(1),
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			storageID := args[0]

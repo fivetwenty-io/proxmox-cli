@@ -27,7 +27,8 @@ func newStatusCmd() *cobra.Command {
 
 The node is resolved automatically from the UPID, so --node is not required.
 This command performs a single, non-blocking read and does not poll.`,
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve task status UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 

@@ -77,6 +77,8 @@ func newCreateCmd() *cobra.Command {
 			"filesystem is given as a PVE option string, e.g. --rootfs " +
 			"\"local-lvm:8\", and network interfaces and mount points as repeatable " +
 			"--net/--mp slots, e.g. --net 0=name=eth0,bridge=vmbr0,ip=dhcp --mp 0=local-lvm:8,mp=/data.",
+		Example: `  pmx pve lxc create 200 --ostemplate local:vztmpl/alpine-3.22-default_20250617_amd64.tar.xz \
+  --hostname web1 --rootfs local-lvm:8 --net0 name=eth0,bridge=vmbr0,ip=dhcp --start`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

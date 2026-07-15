@@ -44,7 +44,8 @@ func newDiskResizeCmd() *cobra.Command {
 		Short: "Grow an LXC container volume",
 		Long: "Increase the size of an attached volume such as rootfs or mp0. Use an absolute " +
 			"size such as `16G` or a relative increment such as `+5G`. Shrinking is not supported by PVE.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve lxc disk resize 200 --disk rootfs --size +5G`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -104,6 +105,8 @@ func newDiskMoveCmd() *cobra.Command {
 		Short: "Relocate an LXC container volume",
 		Long: "Move an attached volume to a different storage, or reassign it to another " +
 			"container. The command blocks until the move task completes unless --async is set.",
+		Example: `  pmx pve lxc disk move 200 --volume rootfs --storage local-lvm
+  pmx pve lxc disk move 200 --volume mp0 --target-vmid 201 --delete`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

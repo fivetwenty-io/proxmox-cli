@@ -20,7 +20,8 @@ func newStorageStatusCmd() *cobra.Command {
 		Long: "Query the live status of a storage on the resolved node. " +
 			"Reports used, available, and total capacity in bytes along with " +
 			"the active and enabled flags.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve storage status local-lvm --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
@@ -75,7 +76,8 @@ func newStorageIdentityCmd() *cobra.Command {
 		Long: "Return the backend-plugin identity for a storage on the resolved node. " +
 			"The exact format depends on the storage type (e.g. an RBD pool name or " +
 			"a filesystem path).",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve storage identity local-lvm --node pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {

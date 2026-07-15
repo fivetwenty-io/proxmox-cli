@@ -55,7 +55,9 @@ func newFirewallLogCmd() *cobra.Command {
 		Use:   "log <vmid|name>",
 		Short: "Read a container's firewall log",
 		Long:  "Read the firewall log of a container. Use --start and --limit to page through entries.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve lxc firewall log 200
+  pmx pve lxc firewall log 200 --start 100 --limit 50`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -300,6 +302,8 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 		Short: "Append a firewall rule to a container",
 		Long: "Create a new firewall rule. --type (in|out|group) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
+		Example: `  pmx pve lxc firewall rules create 200 --type in --action ACCEPT --source 10.0.0.0/8
+  pmx pve lxc firewall rules create 200 --type in --action DROP --dport 22`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -1079,6 +1083,8 @@ func newFirewallOptionsGetCmd() *cobra.Command {
 		Long: "Show the firewall options currently set on a container. The PVE API omits " +
 			"options left at their built-in defaults; pass --defaults to also list those " +
 			"with the value they effectively have.",
+		Example: `  pmx pve lxc firewall options get 200
+  pmx pve lxc firewall options get 200 --defaults`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -1126,7 +1132,9 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 		Use:   "set <vmid|name>",
 		Short: "Set a container's firewall options",
 		Long:  "Update per-container firewall options. Only the flags you pass are changed.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve lxc firewall options set 200 --enable --policy-in DROP
+  pmx pve lxc firewall options set 200 --dhcp --macfilter`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

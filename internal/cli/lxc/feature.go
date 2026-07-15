@@ -23,7 +23,8 @@ func newFeatureCmd() *cobra.Command {
 		Long: "Query PVE to determine whether a container supports a given feature. " +
 			"--feature is required. Typical values: clone, snapshot, copy. " +
 			"Pass --snapname to check feature support in the context of a snapshot.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve lxc feature 200 --feature snapshot`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

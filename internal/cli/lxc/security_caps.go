@@ -156,6 +156,8 @@ func newSecurityCapsShowCmd() *cobra.Command {
 			"an API-only read of the raw lxc.* entries. With --effective it additionally probes the " +
 			"running container's /proc/1/status over root ssh and decodes its bounding (CapBnd) and " +
 			"effective (CapEff) capability masks, so you can confirm what the container actually has.",
+		Example: `  pmx pve lxc security caps show 200
+  pmx pve lxc security caps show 200 --effective`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -275,6 +277,7 @@ func newSecurityCapsDescribeCmd() *cobra.Command {
 		Long: "List every Linux capability the security commands recognise, whether it is dangerous, " +
 			"and a one-line note on what it grants, followed by the named presets and their " +
 			"contents. Runs entirely offline.",
+		Example:     `  pmx pve lxc security caps describe`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -340,6 +343,8 @@ func newSecurityCapsSetCmd() *cobra.Command {
 			"removes any keep line); --preset writes a named keep-mode whitelist. Exactly one is " +
 			"required. Granting a dangerous capability requires --force.\n\n" +
 			"Example: pmx pve lxc security caps set web1 --keep chown,net_bind_service,setuid,setgid,kill",
+		Example: `  pmx pve lxc security caps set 200 --keep chown,net_bind_service,setuid,setgid,kill
+  pmx pve lxc security caps set 200 --drop sys_admin --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -421,6 +426,8 @@ func newSecurityCapsAddCmd() *cobra.Command {
 			"container gains the capability. With no capability configuration yet, add errors and " +
 			"points you at 'caps set --keep', since PVE's defaults already grant most capabilities. " +
 			"Granting a dangerous capability requires --force.",
+		Example: `  pmx pve lxc security caps add 200 net_bind_service
+  pmx pve lxc security caps add 200 sys_admin --force`,
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -486,7 +493,8 @@ func newSecurityCapsRemoveCmd() *cobra.Command {
 			"from lxc.cap.keep; in drop mode they are added to lxc.cap.drop. With no capability " +
 			"configuration yet, remove bootstraps an lxc.cap.drop entry — the natural way to take " +
 			"a single capability away from PVE's defaults.",
-		Args: cobra.MinimumNArgs(2),
+		Example: `  pmx pve lxc security caps remove 200 net_raw`,
+		Args:    cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			norm, err := normalizeCaps(args[1:])
@@ -549,7 +557,8 @@ func newSecurityCapsResetCmd() *cobra.Command {
 		Long: "Remove every lxc.cap.keep and lxc.cap.drop entry from the container config, restoring " +
 			"PVE's default capability set. There is no confirmation prompt because this restores the " +
 			"safer default.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve lxc security caps reset 200`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			edit := func(content string) (string, string, bool, error) {

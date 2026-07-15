@@ -34,6 +34,8 @@ func newDownloadURLCmd() *cobra.Command {
 			"under --filename. Optionally verify the download against a --checksum, decompress it " +
 			"with --compression, or skip TLS verification with --no-verify-certificates. The download " +
 			"runs as an asynchronous task and the command blocks until it finishes unless --async is set.",
+		Example: `  pmx pve storage download-url local-lvm --url https://example.com/image.iso --filename image.iso
+  pmx pve storage download-url local-lvm --url https://example.com/image.iso --filename image.iso --async`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

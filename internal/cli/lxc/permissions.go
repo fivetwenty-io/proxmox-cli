@@ -54,6 +54,8 @@ func newPermissionsListCmd() *cobra.Command {
 			"--inherited, also include entries on every ancestor of that path (/, /vms), unioned " +
 			"client-side from a single ACL read (no extra API calls); each row then shows the " +
 			"path it was actually granted on so inherited and direct entries are never confused.",
+		Example: `  pmx pve lxc permissions list 200
+  pmx pve lxc permissions list 200 --inherited`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -100,6 +102,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 			"container's /vms/{vmid} path for the calling user, or for --userid when passed. " +
 			"Querying another user's or token's effective permissions requires Sys.Audit on " +
 			"/access.",
+		Example: `  pmx pve lxc permissions effective 200
+  pmx pve lxc permissions effective 200 --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -169,11 +173,17 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 			"effective' first to confirm what you are about to lose."
 	}
 
+	example := `  pmx pve lxc permissions grant 200 --roles PVEVMAdmin --users alice@pve`
+	if revoke {
+		example = `  pmx pve lxc permissions revoke 200 --roles PVEVMAdmin --users alice@pve`
+	}
+
 	cmd := &cobra.Command{
-		Use:   verb + " <vmid|name>",
-		Short: shortDesc,
-		Long:  longDesc,
-		Args:  cobra.ExactArgs(1),
+		Use:     verb + " <vmid|name>",
+		Short:   shortDesc,
+		Long:    longDesc,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, _, err := resolveGuest(cmd.Context(), deps, args[0])

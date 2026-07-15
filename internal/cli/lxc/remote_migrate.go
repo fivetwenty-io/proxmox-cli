@@ -41,6 +41,8 @@ func newRemoteMigrateCmd() *cobra.Command {
 			"This operation moves the container across cluster boundaries and is irreversible " +
 			"unless --delete is omitted (the default keeps a stopped copy on the source). " +
 			"Pass --yes to confirm. The command blocks until the task completes unless --async is set.",
+		Example: `  pmx pve lxc remote-migrate 200 --target-endpoint https://remote:8006 \
+  --target-storage local-lvm --target-bridge vmbr0 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

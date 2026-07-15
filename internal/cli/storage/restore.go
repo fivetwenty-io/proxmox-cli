@@ -101,6 +101,8 @@ func newFileRestoreDownloadCmd() *cobra.Command {
 		Short: "Download a single file or directory from a backup snapshot",
 		Long: "Download a file (or, with --tar, a directory) from inside a backup snapshot. " +
 			"The raw bytes are written to --output-file, or to standard output when it is omitted.",
+		Example: `  pmx pve storage file-restore download pbs --node pve1 \
+  --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc/hosts --output-file hosts`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

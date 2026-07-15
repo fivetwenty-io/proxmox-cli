@@ -101,6 +101,8 @@ func newVolumeSetCmd() *cobra.Command {
 		Long: "Set the notes attached to a volume, or toggle its protection flag. " +
 			"Protection currently applies to backups only and prevents them from being pruned. " +
 			"Pass --notes \"\" to clear existing notes.",
+		Example: `  pmx pve storage volume set local:backup/vzdump-qemu-100-2026_01_01.vma.zst --protected
+  pmx pve storage volume set local:backup/vzdump-qemu-100-2026_01_01.vma.zst --notes "monthly archive"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -151,7 +153,8 @@ func newVolumeDeleteCmd() *cobra.Command {
 			"The volume identifier must be in <storage>:<path> form, " +
 			"e.g. local:backup/vzdump-qemu-100-2026_01_01.vma.zst. " +
 			"Pass --yes to confirm the deletion.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve storage volume delete local:backup/vzdump-qemu-100-2026_01_01.vma.zst --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
@@ -216,7 +219,8 @@ func newVolumeAllocCmd() *cobra.Command {
 			"and --size (e.g. 4G, 1024M, 2048). " +
 			"--format selects the image format (raw, qcow2, vmdk) when the " +
 			"storage plugin supports multiple formats.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve storage volume alloc --vmid 200 --filename local-lvm:vm-200-disk-1 --size 8G`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
@@ -286,6 +290,8 @@ func newVolumeCopyCmd() *cobra.Command {
 		Long: "Copy a volume to a new target volume, optionally on a different node. " +
 			"The copy runs as an asynchronous task; the command blocks until it finishes " +
 			"unless --async is set.",
+		Example: `  pmx pve storage volume copy local:backup/vzdump-qemu-100-2026_01_01.vma.zst \
+  --target-volume local-lvm:backup/copy.vma.zst`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

@@ -24,7 +24,8 @@ func newToTemplateCmd() *cobra.Command {
 		Long: "Convert an existing, stopped LXC container into a template. " +
 			"Templates cannot be started; clone them to create new containers. " +
 			"The container must be stopped before conversion.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve lxc to-template 200`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

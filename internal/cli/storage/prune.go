@@ -89,6 +89,8 @@ func newPruneCmd() *cobra.Command {
 		Long: "Remove backup archives on the resolved node's storage that fall outside the " +
 			"retention window described by the --keep-* options. Use --dry-run to preview the " +
 			"prune decisions without deleting anything, and --vmid/--type to limit the scope.",
+		Example: `  pmx pve storage prune local --keep-last 5 --keep-daily 7 --dry-run
+  pmx pve storage prune local --keep-last 5 --keep-daily 7 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

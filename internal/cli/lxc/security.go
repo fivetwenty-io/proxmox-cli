@@ -93,7 +93,8 @@ func newSecurityShowCmd() *cobra.Command {
 			"update but does not remap the rootfs UIDs, and PVE documents it as \"should not be " +
 			"modified manually.\" The supported path is to back up and restore with an explicit " +
 			"privilege choice (see 'pmx pve lxc create --restore --force --unprivileged ...').",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve lxc security show 200`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -205,6 +206,8 @@ func newSecurityListCmd() *cobra.Command {
 			"privilege level, enabled features, capability mode, and protection flag. Privileged " +
 			"containers are flagged with '!' and sorted first so the riskiest rows read top-down. " +
 			"This is a cluster resources scan plus one config read per container.",
+		Example: `  pmx pve lxc security list
+  pmx pve lxc security list --node pve1`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

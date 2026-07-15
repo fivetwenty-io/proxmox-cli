@@ -54,6 +54,8 @@ func newUploadCmd() *cobra.Command {
 			"requires a path-backed storage (dir, nfs, cifs, ...) with the snippets content type " +
 			"enabled, and SSH access to the node (root by default; -l/-i/-p and the context ssh " +
 			"block apply). --checksum is not supported in this mode, and no task is created.",
+		Example: `  pmx pve storage upload local --file ./debian-12.iso --content iso
+  pmx pve storage upload local --file ./snippet.yaml --content snippets`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

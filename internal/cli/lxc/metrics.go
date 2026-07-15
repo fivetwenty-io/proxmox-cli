@@ -25,6 +25,8 @@ func newMetricsCmd() *cobra.Command {
 		Long: "Retrieve time-series RRD data points for a container. " +
 			"--timeframe is required; supported values are hour, day, week, month, year. " +
 			"--cf selects the consolidation function (AVERAGE or MAX).",
+		Example: `  pmx pve lxc metrics 200 --timeframe hour
+  pmx pve lxc metrics 200 --timeframe day --cf MAX`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

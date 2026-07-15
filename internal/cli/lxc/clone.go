@@ -36,6 +36,8 @@ func newCloneCmd() *cobra.Command {
 			"By default a linked clone is created when the source is a template; " +
 			"pass --full to force a full disk copy. " +
 			"The command blocks until the clone task completes unless --async is set.",
+		Example: `  pmx pve lxc clone 200 --newid 201
+  pmx pve lxc clone 200 --newid 201 --full --storage local-lvm --async`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

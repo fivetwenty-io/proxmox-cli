@@ -32,6 +32,8 @@ func newListCmd() *cobra.Command {
 		Short: "List LXC containers on a node",
 		Long: "List the LXC containers on the node selected via --node, PMX_NODE, or the " +
 			"active context's default node, with their status, memory, disk, and uptime.",
+		Example: `  pmx pve lxc list
+  pmx pve lxc list --node pve1`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

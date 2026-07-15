@@ -36,6 +36,8 @@ func newMigrateCmd() *cobra.Command {
 			"pass --restart to migrate it by briefly restarting it on the target node. " +
 			"The command blocks until the migration task completes unless --async is set. " +
 			"Use `pmx pve lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
+		Example: `  pmx pve lxc migrate 200 --target-node pve2
+  pmx pve lxc migrate 200 --target-node pve2 --restart --async`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -103,6 +105,8 @@ func newMigrateCheckCmd() *cobra.Command {
 		Long: "Query PVE for migration pre-flight information. " +
 			"Returns allowed destination nodes, blocked nodes, local resource dependencies, " +
 			"and whether the container is currently running.",
+		Example: `  pmx pve lxc migrate check 200
+  pmx pve lxc migrate check 200 --target-node pve2`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

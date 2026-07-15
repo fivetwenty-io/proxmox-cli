@@ -46,7 +46,8 @@ func newAplinfoListCmd() *cobra.Command {
 		Long: "List all appliance templates available from the Proxmox template index " +
 			"on the resolved node (GET /nodes/{node}/aplinfo). Each row shows the " +
 			"package name, version, section, and description.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve storage aplinfo list --node pve1`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
@@ -94,7 +95,8 @@ func newAplinfoDownloadCmd() *cobra.Command {
 		Long: "Instruct the resolved node to download the named appliance template to " +
 			"the given storage (POST /nodes/{node}/aplinfo). The download runs as an " +
 			"asynchronous task and the command blocks until it finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve storage aplinfo download --storage local --template debian-12-standard`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {

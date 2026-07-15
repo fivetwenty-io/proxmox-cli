@@ -54,6 +54,8 @@ func newConfigGetCmd() *cobra.Command {
 		Long: "Show the configuration currently set on a container. The PVE API omits " +
 			"options left at their built-in defaults; pass --defaults to also list those " +
 			"with the value they effectively have.",
+		Example: `  pmx pve lxc config get 200
+  pmx pve lxc config get 200 --defaults`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
