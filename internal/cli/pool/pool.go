@@ -38,7 +38,6 @@ not accept member-destruction flags and prompts for confirmation unless
 	cmd.AddCommand(
 		newListCmd(),
 		newGetCmd(),
-		newShowCmd(),
 		newCreateCmd(),
 		newSetCmd(),
 		newDeleteCmd(),
@@ -126,8 +125,7 @@ func newGetCmd() *cobra.Command {
 		Short: "Show a resource pool's configuration and members",
 		Long: "Show a resource pool's comment and member count by its poolid, read through " +
 			"the current list-based pools endpoint. Pass --type to restrict the members " +
-			"counted to a kind (qemu, lxc, or storage). See 'pool show' for the equivalent " +
-			"that reads the older single-pool endpoint.",
+			"counted to a kind (qemu, lxc, or storage).",
 		Example: `  pmx pve pool get backups
   pmx pve pool get backups --type qemu`,
 		Args: cobra.ExactArgs(1),
@@ -166,59 +164,6 @@ func newGetCmd() *cobra.Command {
 					"poolid":  poolid,
 					"comment": entry.Comment,
 					"members": entry.Members,
-				},
-			}
-			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
-		},
-	}
-	cmd.Flags().StringVar(&poolType, "type", "", "filter members by type: qemu|lxc|storage")
-	return cmd
-}
-
-// newShowCmd builds `pmx pool show <poolid>`.
-// Uses the deprecated-but-still-live GET /pools/{poolid} endpoint (single-object
-// response keyed by poolid), distinct from `pool get`'s GET /pools?poolid=<id>
-// (list response filtered to one element). Proxmox VE has not removed this
-// endpoint despite the deprecation notice; it is exposed here for parity with
-// the API surface and for operators/scripts that already target it directly.
-func newShowCmd() *cobra.Command {
-	var poolType string
-	cmd := &cobra.Command{
-		Use:   "show <poolid>",
-		Short: "Show a resource pool's configuration and members (single-item endpoint)",
-		Long: "Show a resource pool's comment and member count by its poolid using the older " +
-			"single-pool endpoint, kept for parity with the API surface and for scripts that " +
-			"target it directly. The output matches 'pool get'; pass --type to restrict the " +
-			"members counted to a kind (qemu, lxc, or storage).",
-		Example: `  pmx pve pool show backups
-  pmx pve pool show backups --type storage`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			deps := cli.GetDeps(cmd)
-			poolid := args[0]
-
-			params := &pools.GetPoolsParams{}
-			if poolType != "" {
-				params.Type = &poolType
-			}
-
-			resp, err := deps.API.Pools.GetPools(cmd.Context(), poolid, params)
-			if err != nil {
-				return fmt.Errorf("show pool %q: %w", poolid, err)
-			}
-
-			single := map[string]string{"poolid": poolid}
-			if resp.Comment != nil {
-				single["comment"] = *resp.Comment
-			}
-			single["members"] = fmt.Sprintf("%d", len(resp.Members))
-
-			res := output.Result{
-				Single: single,
-				Raw: map[string]any{
-					"poolid":  poolid,
-					"comment": resp.Comment,
-					"members": resp.Members,
 				},
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

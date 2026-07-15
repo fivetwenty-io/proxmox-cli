@@ -29,14 +29,10 @@ def run(ctx: Ctx) -> None:
 
     if pid is None:
         ctx.skip("get", "no pool defined")
-        ctx.skip("show", "no pool defined")
         ctx.skip("permissions list", "no pool defined")
         ctx.skip("permissions effective", "no pool defined")
     else:
         ctx.check("get", "pve", "pool", "get", str(pid))
-        # show: the deprecated-but-still-live single-item endpoint
-        # (GET /pools/{poolid}), distinct from `get`'s list-filtered endpoint.
-        ctx.check("show", "pve", "pool", "show", str(pid))
 
         # permissions: ACL entries scoped to the pool's singular /pool/{poolid}
         # path (note: singular "pool", unlike the "pools" object tree noun).

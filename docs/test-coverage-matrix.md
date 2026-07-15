@@ -1137,7 +1137,6 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve pool permissions list` | ◑ | — |  |
 | `pve pool permissions revoke` | — | — | deferred — revokes ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve pool set` | — | ✓ |  |
-| `pve pool show` | ◑ | — |  |
 | `pve qemu agent` | — | ✓ |  |
 | `pve qemu agent exec` | — | ✓ |  |
 | `pve qemu agent exec-status` | — | ✓ |  |

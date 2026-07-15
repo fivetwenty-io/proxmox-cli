@@ -135,33 +135,14 @@ func TestPoolGet_TypeFilter(t *testing.T) {
 	require.Contains(t, rec[0].query, "type=lxc")
 }
 
-// TestPoolShow_TypeFilter re-confirms the --type flag added to `pool show` by
-// the GET /pools/{poolid} single-item command reaches the query string. This
-// is the newest command-specific flag in the package; TestPoolShowTypeFilter
-// in pool_test.go covers the same flag from the feature's own test file, and
-// this test does not replace it — it consolidates the flag into the package's
-// audit pass alongside `list` and `get`'s query flags above.
-func TestPoolShow_TypeFilter(t *testing.T) {
-	f := testhelper.NewFakePVE(t)
-	var rec []recordedRequest
-	mustNewClientAndRecord(f, &rec, "GET /api2/json/pools/prod", map[string]any{
-		"comment": "production", "members": []any{},
-	}, 200)
-
-	_, err := run(t, f, "", "show", "prod", "--type", "storage")
-	require.NoError(t, err)
-	require.Len(t, rec, 1)
-	require.Contains(t, rec[0].query, "type=storage")
-}
-
 // TestPool_AuditCommandTree verifies every documented pool sub-command is
-// registered: list, get, show, create, set, delete.
+// registered: list, get, create, set, delete.
 func TestPool_AuditCommandTree(t *testing.T) {
 	names := make(map[string]bool)
 	for _, c := range Group(nil).Commands() {
 		names[c.Name()] = true
 	}
-	for _, want := range []string{"list", "get", "show", "create", "set", "delete"} {
+	for _, want := range []string{"list", "get", "create", "set", "delete"} {
 		require.True(t, names[want], "expected pool sub-command %q to be registered", want)
 	}
 }

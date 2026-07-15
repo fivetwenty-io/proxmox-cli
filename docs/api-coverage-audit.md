@@ -111,7 +111,7 @@ from roughly sixty down to ten, all of which are now closed:
 | SDN | `pmx pve sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
 | SDN | `pmx pve sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
 | SDN | `pmx pve sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |
-| Pool | `pmx pve pool show <poolid>` | Single-item pool detail via the current (non-deprecated) endpoint, alongside the existing `pool get` |
+| Pool | `pmx pve pool show <poolid>` | Single-item pool detail; later folded into `pool get` (with `show` kept as an alias) since both rendered the same data |
 | QEMU firewall | `pmx pve qemu firewall log`, `refs`, `ipset update-member` | Brings VM firewall command parity with the equivalent LXC container commands |
 
 Two related, non-coverage fixes landed alongside the gap closure:
@@ -284,12 +284,10 @@ deprecated `/pools/{poolid}` endpoint variants rather than the current
 `/pools` forms that accept a pool ID as a query parameter, so nested resource
 pools (introduced in Proxmox VE 8.x) were not supported. This has since been
 fixed: `get`, `set`, `create`, and `delete` all use the current, non-deprecated
-`/pools` endpoint. `pmx pve pool show`, added in the 2026-07-04 completion pass,
-is a deliberate exception — it targets the deprecated-but-still-live
-single-item `GET /pools/{poolid}` endpoint on purpose, for parity with
-scripts and operators who already address a pool that way; it does not
-reintroduce the nested-pool limitation, since `get`/`set`/`delete` cover that
-case.
+`/pools` endpoint. A separate `pmx pve pool show` command briefly targeted the
+deprecated-but-still-live single-item `GET /pools/{poolid}` endpoint; it was
+folded into `pool get` (which keeps `show` as an alias) because both rendered
+the same data and the list-filtered endpoint is the one Proxmox VE recommends.
 
 ## The client is complete, and the version pin is current
 
