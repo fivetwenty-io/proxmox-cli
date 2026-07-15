@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // Repeated endpoint paths, factored into consts so tests never repeat a raw

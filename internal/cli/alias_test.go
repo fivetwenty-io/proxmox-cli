@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/persona"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/persona"
 )
 
 func aliasCmd(name string, aliases ...string) *cobra.Command {

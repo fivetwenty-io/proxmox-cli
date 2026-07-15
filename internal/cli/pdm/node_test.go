@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // TestNodeLs_ListsNodes asserts that `node ls` decodes the compatibility

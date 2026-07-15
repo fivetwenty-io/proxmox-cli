@@ -7,10 +7,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/exec"
-	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // nodeFirewallOptionsSetAllowlist lists schema flags the hand-written `node

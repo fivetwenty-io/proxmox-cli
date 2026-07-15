@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // testTokenName is the sample token-name reused across token tests.

@@ -11,8 +11,8 @@ import (
 
 	pdmautoinstall "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/autoinstall"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // validAutoInstallRebootModes are the reboot-mode enum values accepted by

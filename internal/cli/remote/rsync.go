@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
-	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
 // Rsync builds the top-level `pmx rsync` command: a thin wrapper over the

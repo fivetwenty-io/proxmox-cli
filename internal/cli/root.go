@@ -17,13 +17,13 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
-	"github.com/fivetwenty-io/pmx-cli/internal/exec"
-	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
-	"github.com/fivetwenty-io/pmx-cli/internal/logx"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/version"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
+	"github.com/fivetwenty-io/proxmox-cli/internal/logx"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/version"
 )
 
 // noopLogCloser satisfies io.Closer for the log-init fallback path where no

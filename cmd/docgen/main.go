@@ -26,8 +26,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/persona"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/persona"
 )
 
 // pages embeds the hand-authored markdown rendered into man pages. cobra/doc

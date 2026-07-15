@@ -9,8 +9,8 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // pdmTestUPID is a well-formed PDM UPID (9 fields: PDM shares PBS's

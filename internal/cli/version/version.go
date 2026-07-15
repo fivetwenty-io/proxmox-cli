@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	selfversion "github.com/fivetwenty-io/pmx-cli/internal/version"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	selfversion "github.com/fivetwenty-io/proxmox-cli/internal/version"
 )
 
 // Group builds the `pmx version` command and its sub-commands.

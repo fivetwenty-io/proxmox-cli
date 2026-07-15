@@ -12,11 +12,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
-	"github.com/fivetwenty-io/pmx-cli/internal/exec"
-	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // contextFor builds a token-auth *config.Context pointing at f's fake server.

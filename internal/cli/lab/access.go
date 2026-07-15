@@ -10,10 +10,10 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/pools"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/redact"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 )
 
 // pmxAdminRoleID is the fleet-wide role every human staff member holds on

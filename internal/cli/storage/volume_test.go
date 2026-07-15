@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 const testVolume = "local:backup/vzdump-qemu-100-2026_01_01-00_00_00.vma.zst"

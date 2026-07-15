@@ -11,8 +11,8 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
 // This file is a white-box companion to api_test.go (package api_test): it

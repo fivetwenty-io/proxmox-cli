@@ -16,10 +16,10 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // newTestCmd builds the lxc group command, injects deps via context, captures

@@ -38,9 +38,9 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
-      - -X github.com/fivetwenty-io/pmx-cli/internal/version.Version={{ .Version }}
-      - -X github.com/fivetwenty-io/pmx-cli/internal/version.Commit={{ .ShortCommit }}
-      - -X github.com/fivetwenty-io/pmx-cli/internal/version.Date={{ .CommitDate }}
+      - -X github.com/fivetwenty-io/proxmox-cli/internal/version.Version={{ .Version }}
+      - -X github.com/fivetwenty-io/proxmox-cli/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/fivetwenty-io/proxmox-cli/internal/version.Date={{ .CommitDate }}
     goos:
       - linux
       - darwin
@@ -168,7 +168,9 @@ homebrew_casks:
       post:
         install: |
           %w[pve pbs pdm].each do |persona|
-            (HOMEBREW_PREFIX/"bin"/persona).make_symlink("pmx")
+            link = HOMEBREW_PREFIX/"bin"/persona
+            link.delete if link.symlink? || link.exist?
+            link.make_symlink("pmx")
           end
         uninstall: |
           %w[pve pbs pdm].each do |persona|

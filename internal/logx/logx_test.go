@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/logx"
+	"github.com/fivetwenty-io/proxmox-cli/internal/logx"
 )
 
 // TestInit_NoLog verifies that NoLog=true produces no file on disk and that

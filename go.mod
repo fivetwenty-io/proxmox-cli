@@ -1,4 +1,4 @@
-module github.com/fivetwenty-io/pmx-cli
+module github.com/fivetwenty-io/proxmox-cli
 
 go 1.26.4
 

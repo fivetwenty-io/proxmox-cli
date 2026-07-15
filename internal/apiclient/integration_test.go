@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 )
 
 // newIntegrationClient constructs an *apiclient.APIClient from integration test

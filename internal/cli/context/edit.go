@@ -9,9 +9,9 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newEditCmd builds `pmx context edit [<name>]`.

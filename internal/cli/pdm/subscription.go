@@ -11,8 +11,8 @@ import (
 
 	pdmsubscriptions "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/subscriptions"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newSubscriptionCmd builds `pmx pdm subscription` — manage the subscription

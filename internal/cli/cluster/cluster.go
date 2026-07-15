@@ -3,7 +3,7 @@ package cluster
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // Group builds the `pmx cluster` command and its sub-commands.

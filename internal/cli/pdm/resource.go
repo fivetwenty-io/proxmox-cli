@@ -10,8 +10,8 @@ import (
 
 	pdmresources "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/resources"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // validResourceTypes are the resource-type enum values accepted by

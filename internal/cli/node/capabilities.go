@@ -7,7 +7,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // newCapabilitiesCmd builds the `pmx node capabilities` sub-tree: read-only

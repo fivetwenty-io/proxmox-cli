@@ -2,7 +2,7 @@
 
 package node
 
-import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+import "github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 
 // firewallOptionSchemas describes every settable option from the PVE API schema for
 // PUT /nodes/{node}/firewall/options, in lexical order by API key.

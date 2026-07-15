@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // TestPveRemoteLs_SortsById asserts that `pve remote ls` sorts entries by

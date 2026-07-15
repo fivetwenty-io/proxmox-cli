@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/initcmd"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/initcmd"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
 // run executes `pmx init <args>` through the real root command so the production

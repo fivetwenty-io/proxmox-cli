@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	execpkg "github.com/fivetwenty-io/pmx-cli/internal/exec"
+	execpkg "github.com/fivetwenty-io/proxmox-cli/internal/exec"
 )
 
 // ---------------------------------------------------------------------------

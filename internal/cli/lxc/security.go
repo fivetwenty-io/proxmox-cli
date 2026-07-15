@@ -14,15 +14,15 @@ import (
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/apiclient"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
-	"github.com/fivetwenty-io/pmx-cli/internal/exec"
-	"github.com/fivetwenty-io/pmx-cli/internal/lxcconf"
-	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pmx-cli/internal/nodefile"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/remote"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/lxcconf"
+	"github.com/fivetwenty-io/proxmox-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/proxmox-cli/internal/nodefile"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
 // newSecurityCmd builds `pmx lxc security` and its show/list/caps/features

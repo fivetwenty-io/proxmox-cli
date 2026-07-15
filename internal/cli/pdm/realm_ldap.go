@@ -9,9 +9,9 @@ import (
 	pveclient "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pdmconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/config"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newRealmLdapCmd builds `pmx pdm realm ldap` — manage LDAP realm

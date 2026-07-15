@@ -5,4 +5,4 @@ package pbs
 // POST /config/prune. "id" is the create call's own identity parameter, not
 // an option.
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/prune -verb POST -symbol pruneJobOptionSchemas -exclude "id" -out prune_job_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/prune -verb POST -symbol pruneJobOptionSchemas -exclude "id" -out prune_job_options_schema_gen.go

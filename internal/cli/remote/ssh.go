@@ -15,10 +15,10 @@ import (
 
 	pmx "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
-	"github.com/fivetwenty-io/pmx-cli/internal/nodeaddr"
-	"github.com/fivetwenty-io/pmx-cli/internal/sshcmd"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/nodeaddr"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
 // completeNodeNamesTimeout bounds how long completeNodeNames waits for the

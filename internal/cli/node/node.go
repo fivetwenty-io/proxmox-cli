@@ -3,7 +3,7 @@ package node
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // Group builds the `pmx node` command and all of its sub-commands.

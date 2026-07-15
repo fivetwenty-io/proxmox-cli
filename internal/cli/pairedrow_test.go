@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 type pairedRowEntry struct {

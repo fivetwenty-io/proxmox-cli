@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/peppi"
+	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
 	"github.com/stretchr/testify/require"
 )
 

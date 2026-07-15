@@ -8,8 +8,8 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsnodes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/nodes"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // nodeNetworkListEntry mirrors one element of the JSON array PBS returns

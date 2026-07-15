@@ -3,7 +3,7 @@ package redact_test
 import (
 	"testing"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/redact"
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 	"github.com/stretchr/testify/require"
 )
 

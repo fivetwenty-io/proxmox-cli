@@ -2,7 +2,7 @@
 
 package pdm
 
-import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+import "github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 
 // nodeConfigOptionSchemas describes every settable option from the Proxmox Datacenter Manager API schema for
 // PUT /nodes/{node}/config, in lexical order by API key.

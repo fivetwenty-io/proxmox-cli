@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
 // probeResult carries the outcome of one live --connect probe.

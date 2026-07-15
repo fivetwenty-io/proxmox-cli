@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/version"
+	"github.com/fivetwenty-io/proxmox-cli/internal/version"
 	"github.com/stretchr/testify/require"
 )
 

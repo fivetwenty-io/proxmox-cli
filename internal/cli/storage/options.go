@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 )
 
 // newDescribeCmd builds `pmx storage describe`, an offline catalog of every

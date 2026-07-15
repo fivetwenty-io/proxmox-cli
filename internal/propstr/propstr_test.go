@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/propstr"
+	"github.com/fivetwenty-io/proxmox-cli/internal/propstr"
 )
 
 // ── Parse / String round-trip ────────────────────────────────────────────────

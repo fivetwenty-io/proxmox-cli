@@ -6,4 +6,4 @@ package pbs
 // not an option. "password" is write-only credential material and must
 // never be listed alongside the other options.
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/remote -verb POST -symbol remoteOptionSchemas -exclude "name,password" -out remote_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/remote -verb POST -symbol remoteOptionSchemas -exclude "name,password" -out remote_options_schema_gen.go

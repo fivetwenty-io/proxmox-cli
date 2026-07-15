@@ -11,9 +11,9 @@ import (
 
 	pdmremotes "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/remotes"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/optionschema"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // validRemoteTypes are the remote-entry type enum values accepted by

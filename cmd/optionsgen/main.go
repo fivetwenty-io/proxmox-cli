@@ -8,7 +8,7 @@
 //
 // Usage (normally via go:generate in the owning package):
 //
-//	go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen \
+//	go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen \
 //	    -path /cluster/options -out options_schema_gen.go
 //
 // Path parameters ({node}, {vmid}, …) leak into apidoc properties and are
@@ -44,7 +44,7 @@ const clientModule = "github.com/fivetwenty-io/proxmox-apiclient-go/v3"
 
 // schemaPackage is the package providing the Schema/SubKey types the
 // generated file references.
-const schemaPackage = "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+const schemaPackage = "github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 
 // genConfig carries one generation target.
 type genConfig struct {

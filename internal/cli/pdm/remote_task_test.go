@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // TestRemoteTaskLs_ListsTasks asserts that `remote task ls` renders the

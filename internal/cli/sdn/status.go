@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // resolveNode returns deps.Node or an error with clear remediation steps.

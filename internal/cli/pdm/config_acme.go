@@ -10,8 +10,8 @@ import (
 	pveclient "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pdmconfig "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/config"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // acmePluginSecretKeys are the ACME challenge-plugin fields that must never

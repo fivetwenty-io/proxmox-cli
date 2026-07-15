@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
 // This file audits the sole command-specific flag in the initcmd package,

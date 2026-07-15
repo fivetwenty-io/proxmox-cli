@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/testhelper"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // TestZoneShow verifies `pmx sdn zone show` issues a GET to the single-zone

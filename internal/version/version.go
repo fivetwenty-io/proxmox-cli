@@ -7,7 +7,7 @@ import (
 )
 
 // Version is the human-readable release string. Override at build time via
-// -ldflags "-X github.com/fivetwenty-io/pmx-cli/internal/version.Version=<ver>".
+// -ldflags "-X github.com/fivetwenty-io/proxmox-cli/internal/version.Version=<ver>".
 // It is a var (not a const) so the linker's -X flag can inject the release tag.
 var Version = "0.1.0-dev"
 

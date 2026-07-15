@@ -7,7 +7,7 @@ import (
 
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // newTapeBackupCmd builds `pmx pbs tape backup` — run a one-shot tape

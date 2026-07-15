@@ -136,7 +136,7 @@ sudo dnf install ./pmx_${VERSION}_linux_amd64.rpm
 ### Install with `go install`
 
 ```bash
-go install github.com/fivetwenty-io/pmx-cli/cmd/pmx@latest
+go install github.com/fivetwenty-io/proxmox-cli/cmd/pmx@latest
 ```
 
 `go install` places only the `pmx` binary; it does not create persona

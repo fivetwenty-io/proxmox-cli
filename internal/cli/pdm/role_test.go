@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // TestRoleLs_SortsByRoleidWithPairedRaw asserts that `role ls` sorts

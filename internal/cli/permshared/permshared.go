@@ -21,7 +21,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // PVEBool is an optional boolean that tolerates the several JSON encodings

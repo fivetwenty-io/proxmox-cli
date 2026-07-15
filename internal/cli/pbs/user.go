@@ -10,8 +10,8 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newUserCmd builds `pmx pbs user` and its sub-commands: list, inspect,

@@ -5,16 +5,16 @@
 package persona
 
 import (
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/api"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/context"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/initcmd"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/lab"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pdm"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/remote"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/version"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/api"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/context"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/initcmd"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/lab"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pbs"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pdm"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pve"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/remote"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/version"
 )
 
 // Shared returns the product-neutral factories present under every persona.

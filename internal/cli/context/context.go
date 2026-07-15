@@ -3,7 +3,7 @@ package context
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // contextLong is the shared Long help for the context group and its hidden

@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // agentIPAddress is one address entry from the guest agent's

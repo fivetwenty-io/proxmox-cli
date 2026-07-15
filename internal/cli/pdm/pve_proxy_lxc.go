@@ -10,7 +10,7 @@ import (
 
 	pdmpve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/pve"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // newPveLxcCmd builds `pmx pdm pve lxc` — proxy operations against lxc

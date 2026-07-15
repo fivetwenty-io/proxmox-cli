@@ -1,7 +1,7 @@
 # Makefile for pmx-cli
 # Default target: help (categorized, colored)
 
-MODULE  := github.com/fivetwenty-io/pmx-cli
+MODULE  := github.com/fivetwenty-io/proxmox-cli
 BINARY  := ./dist/pmx
 SCRIPTS := ./scripts
 

@@ -7,7 +7,7 @@ import (
 
 	pbstape "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/tape"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // newTapeRestoreCmd builds `pmx pbs tape restore` — restore data from a

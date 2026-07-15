@@ -10,8 +10,8 @@ import (
 
 	pdmceph "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/ceph"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newCephCmd builds `pmx pdm ceph` — inspect the Ceph clusters registered

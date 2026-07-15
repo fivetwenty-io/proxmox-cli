@@ -4,4 +4,4 @@ package cluster
 // is generated from the PVE API schema for PUT /cluster/options; the types
 // and shared surfaces live in internal/optionschema.
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -path /cluster/options -out options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -path /cluster/options -out options_schema_gen.go

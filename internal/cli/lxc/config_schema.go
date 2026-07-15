@@ -5,4 +5,4 @@ package lxc
 // PUT /nodes/{node}/lxc/{vmid}/config; the types and shared surfaces live in
 // internal/optionschema.
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -path /nodes/{node}/lxc/{vmid}/config -symbol configSchemas -out config_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -path /nodes/{node}/lxc/{vmid}/config -symbol configSchemas -out config_schema_gen.go

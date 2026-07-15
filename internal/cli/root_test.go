@@ -15,15 +15,15 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/api"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pbs"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pdm"
-	pvegroup "github.com/fivetwenty-io/pmx-cli/internal/cli/pve"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
-	"github.com/fivetwenty-io/pmx-cli/internal/exec"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
-	"github.com/fivetwenty-io/pmx-cli/internal/version"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/api"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pbs"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pdm"
+	pvegroup "github.com/fivetwenty-io/proxmox-cli/internal/cli/pve"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/version"
 )
 
 // TestRootFlags_Defaults verifies that NewRootCmd sets the expected flag

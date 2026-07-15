@@ -138,7 +138,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--module",
-        default="github.com/fivetwenty-io/pmx-cli",
+        default="github.com/fivetwenty-io/proxmox-cli",
         help="Go module path",
     )
     args = parser.parse_args()

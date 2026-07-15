@@ -2,7 +2,7 @@
 
 package pbs
 
-import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+import "github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 
 // notifSmtpOptionSchemas describes every settable option from the Proxmox Backup Server API schema for
 // POST /config/notifications/endpoints/smtp, in lexical order by API key.

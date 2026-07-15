@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // Group is the factory for the `pmx api` command group (raw GET/POST/PUT/

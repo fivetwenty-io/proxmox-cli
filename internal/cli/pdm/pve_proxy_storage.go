@@ -11,8 +11,8 @@ import (
 	pveclient "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pdmpve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/pve"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newPveStorageCmd builds `pmx pdm pve storage` — inspect a PVE remote

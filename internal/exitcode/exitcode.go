@@ -4,8 +4,8 @@ package exitcode
 import (
 	"errors"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/exec"
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 )
 
 // Exit code constants. The values are a stable CLI contract: scripts branch

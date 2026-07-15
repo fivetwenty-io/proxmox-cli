@@ -2,7 +2,7 @@
 
 package qemu
 
-import "github.com/fivetwenty-io/pmx-cli/internal/optionschema"
+import "github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 
 // configSchemas describes every settable option from the PVE API schema for
 // PUT /nodes/{node}/qemu/{vmid}/config, in lexical order by API key.

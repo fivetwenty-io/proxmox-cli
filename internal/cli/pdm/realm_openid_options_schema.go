@@ -8,4 +8,4 @@ package pdm
 // realm_openid.go for why the live value is also stripped from show/ls
 // output, unlike the AD/LDAP password).
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pdm-apidoc.json -path /config/access/openid -verb POST -symbol realmOpenidOptionSchemas -exclude "realm,client-key" -out realm_openid_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -source pdm-apidoc.json -path /config/access/openid -verb POST -symbol realmOpenidOptionSchemas -exclude "realm,client-key" -out realm_openid_options_schema_gen.go

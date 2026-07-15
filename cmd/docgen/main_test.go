@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/exitcode"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 )
 
 // generateInto runs the generator for all personas into dir and returns

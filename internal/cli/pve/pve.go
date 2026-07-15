@@ -3,17 +3,17 @@ package pve
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/fivetwenty-io/pmx-cli/internal/cli"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/access"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/cluster"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/lxc"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/node"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/pool"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/qemu"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/sdn"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/storage"
-	"github.com/fivetwenty-io/pmx-cli/internal/cli/task"
-	"github.com/fivetwenty-io/pmx-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/access"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/cluster"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/lxc"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/node"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pool"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/qemu"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/sdn"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/storage"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/task"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
 // ChildFactories returns the Proxmox VE resource command groups. They are used

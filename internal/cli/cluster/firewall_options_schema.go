@@ -5,4 +5,4 @@ package cluster
 // PUT /cluster/firewall/options; the types and shared surfaces live in
 // internal/optionschema.
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -path /cluster/firewall/options -symbol firewallOptionSchemas -out firewall_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -path /cluster/firewall/options -symbol firewallOptionSchemas -out firewall_options_schema_gen.go

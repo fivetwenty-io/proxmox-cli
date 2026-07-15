@@ -6,4 +6,4 @@ package pbs
 // every option. "name" is the create call's own identity parameter, not an
 // option.
 
-//go:generate go run github.com/fivetwenty-io/pmx-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/datastore -verb POST -symbol datastoreOptionSchemas -exclude "name" -out datastore_options_schema_gen.go
+//go:generate go run github.com/fivetwenty-io/proxmox-cli/cmd/optionsgen -source pbs-apidoc.json -path /config/datastore -verb POST -symbol datastoreOptionSchemas -exclude "name" -out datastore_options_schema_gen.go
