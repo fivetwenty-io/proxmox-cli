@@ -55,12 +55,12 @@ This installs `pmx` plus the `pve`/`pbs`/`pdm` persona symlinks and the man
 pages and shell completions from the `share/` tree below. Maintainers: the
 tap lives in a separate `fivetwenty-io/homebrew-tap` GitHub repository, and
 releasing depends on a `HOMEBREW_TAP_GITHUB_TOKEN` repository secret on
-`pmx-cli` with write access to that tap — both are one-time, manual setup
+`proxmox-cli` with write access to that tap — both are one-time, manual setup
 steps that must exist before the first release publishes the cask.
 
 ### Download a release archive
 
-Pre-built archives are published on the [Releases page](https://github.com/fivetwenty-io/pmx-cli/releases)
+Pre-built archives are published on the [Releases page](https://github.com/fivetwenty-io/proxmox-cli/releases)
 for `darwin/arm64`, `linux/amd64`, `linux/arm64`, `freebsd/amd64`,
 `freebsd/arm64`, and `windows/amd64`.
 
@@ -68,7 +68,7 @@ for `darwin/arm64`, `linux/amd64`, `linux/arm64`, `freebsd/amd64`,
 # Pick your platform; example: macOS Apple Silicon.
 VERSION=1.0.0
 PLATFORM=darwin_arm64   # or linux_amd64, linux_arm64, freebsd_amd64, freebsd_arm64
-BASE="https://github.com/fivetwenty-io/pmx-cli/releases/download/v${VERSION}"
+BASE="https://github.com/fivetwenty-io/proxmox-cli/releases/download/v${VERSION}"
 
 curl -fsSLO "${BASE}/pmx_${VERSION}_${PLATFORM}.tar.gz"
 curl -fsSLO "${BASE}/pmx_${VERSION}_SHA256SUMS"
@@ -115,7 +115,7 @@ sudo ln -s pmx /usr/local/bin/pdm
 ### Download a `.deb` or `.rpm` package
 
 Debian/Ubuntu and Fedora/RHEL packages are published alongside the archives
-on the [Releases page](https://github.com/fivetwenty-io/pmx-cli/releases)
+on the [Releases page](https://github.com/fivetwenty-io/proxmox-cli/releases)
 for `linux/amd64` and `linux/arm64`, named
 `pmx_<version>_linux_<arch>.deb`/`.rpm`. Each package installs `pmx` to
 `/usr/bin/pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages under
@@ -125,11 +125,11 @@ setup step needed.
 
 ```bash
 # Debian/Ubuntu
-curl -fsSLO "https://github.com/fivetwenty-io/pmx-cli/releases/download/v${VERSION}/pmx_${VERSION}_linux_amd64.deb"
+curl -fsSLO "https://github.com/fivetwenty-io/proxmox-cli/releases/download/v${VERSION}/pmx_${VERSION}_linux_amd64.deb"
 sudo apt install ./pmx_${VERSION}_linux_amd64.deb
 
 # Fedora/RHEL
-curl -fsSLO "https://github.com/fivetwenty-io/pmx-cli/releases/download/v${VERSION}/pmx_${VERSION}_linux_amd64.rpm"
+curl -fsSLO "https://github.com/fivetwenty-io/proxmox-cli/releases/download/v${VERSION}/pmx_${VERSION}_linux_amd64.rpm"
 sudo dnf install ./pmx_${VERSION}_linux_amd64.rpm
 ```
 

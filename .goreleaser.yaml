@@ -100,7 +100,7 @@ nfpms:
     ids:
       - pmx
     vendor: FiveTwenty Inc.
-    homepage: https://github.com/fivetwenty-io/pmx-cli
+    homepage: https://github.com/fivetwenty-io/proxmox-cli
     maintainer: Wayne E. Seguin <wayneeseguin@fivetwenty.io>
     description: Proxmox command-line interface (VE / PBS / PDM).
     license: Apache-2.0
@@ -149,7 +149,7 @@ homebrew_casks:
       # unset — direct map access errors under missingkey=error.
       token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
     directory: Casks
-    homepage: https://github.com/fivetwenty-io/pmx-cli
+    homepage: https://github.com/fivetwenty-io/proxmox-cli
     description: Proxmox command-line interface (VE / PBS / PDM)
     # Skip pushing the cask whenever the tap token is not configured, so a
     # release without the HOMEBREW_TAP_GITHUB_TOKEN secret still succeeds
@@ -195,7 +195,7 @@ changelog:
 release:
   github:
     owner: fivetwenty-io
-    name: pmx-cli
+    name: proxmox-cli
   draft: false
   prerelease: auto
   name_template: "pmx {{ .Version }}"
@@ -226,5 +226,5 @@ release:
     ```
 
     (`make install`, when building from source, creates all three symlinks
-    automatically.) See the [README's Personas section](https://github.com/fivetwenty-io/pmx-cli#personas)
+    automatically.) See the [README's Personas section](https://github.com/fivetwenty-io/proxmox-cli#personas)
     for the full command surface each persona exposes.
