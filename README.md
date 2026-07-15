@@ -51,12 +51,16 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
 brew install --cask fivetwenty-io/tap/pmx
 ```
 
-This installs `pmx` plus the `pve`/`pbs`/`pdm` persona symlinks and the man
-pages and shell completions from the `share/` tree below. Maintainers: the
-tap lives in a separate `fivetwenty-io/homebrew-tap` GitHub repository, and
-releasing depends on a `HOMEBREW_TAP_GITHUB_TOKEN` repository secret on
-`proxmox-cli` with write access to that tap — both are one-time, manual setup
-steps that must exist before the first release publishes the cask.
+This installs `pmx` plus the `pve`/`pbs`/`pdm` persona symlinks, man pages
+for every command tree, and shell completions for `pmx` (Homebrew casks only
+support one completion script per shell, so the persona binaries do not get
+their own — see [Download a release archive](#download-a-release-archive) or
+[Download a `.deb` or `.rpm` package](#download-a-deb-or-rpm-package) for
+per-persona completions). Maintainers: the tap lives in a separate
+`fivetwenty-io/homebrew-tap` GitHub repository, and releasing depends on a
+`HOMEBREW_TAP_GITHUB_TOKEN` repository secret on `proxmox-cli` with write
+access to that tap — both are one-time, manual setup steps that must exist
+before the first release publishes the cask.
 
 ### Download a release archive
 
@@ -79,7 +83,8 @@ tar -xzf "pmx_${VERSION}_${PLATFORM}.tar.gz"
 ```
 
 Each archive contains the `pmx` binary, `README.md`, `LICENSE`, and a
-`share/` tree with man pages and shell completions (mirroring what `make
+`share/` tree with man pages for every command tree (`pmx`, `pve`, `pbs`,
+`pdm`) and shell completions for `pmx` and each persona (mirroring what `make
 install` lays down under a prefix — see below):
 
 ```
@@ -88,9 +93,9 @@ README.md
 LICENSE
 share/man/man1/*.1
 share/man/man5/*.5
-share/bash-completion/completions/pmx.bash
-share/zsh/site-functions/_pmx
-share/fish/vendor_completions.d/pmx.fish
+share/bash-completion/completions/{pmx,pve,pbs,pdm}.bash
+share/zsh/site-functions/_{pmx,pve,pbs,pdm}
+share/fish/vendor_completions.d/{pmx,pve,pbs,pdm}.fish
 ```
 
 Install the binary and, optionally, the `share/` tree:
@@ -118,10 +123,10 @@ Debian/Ubuntu and Fedora/RHEL packages are published alongside the archives
 on the [Releases page](https://github.com/fivetwenty-io/proxmox-cli/releases)
 for `linux/amd64` and `linux/arm64`, named
 `pmx_<version>_linux_<arch>.deb`/`.rpm`. Each package installs `pmx` to
-`/usr/bin/pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages under
-`/usr/share/man/`, shell completions under `/usr/share/{bash-completion,zsh,fish}/`,
-and `LICENSE` under `/usr/share/doc/pmx/` — no separate symlink or `share/`
-setup step needed.
+`/usr/bin/pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages (gzipped)
+under `/usr/share/man/`, shell completions for `pmx` and each persona under
+`/usr/share/{bash-completion,zsh,fish}/`, and `LICENSE` under
+`/usr/share/doc/pmx/` — no separate symlink or `share/` setup step needed.
 
 ```bash
 # Debian/Ubuntu

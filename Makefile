@@ -99,6 +99,11 @@ install: build man completions ## Install pmx + personas, man pages, completions
 	$(INSTALL_DATA) ./dist/completions/pmx.bash "$(DESTDIR)$(BASHCOMPDIR)/pmx"
 	$(INSTALL_DATA) ./dist/completions/_pmx     "$(DESTDIR)$(ZSHCOMPDIR)/_pmx"
 	$(INSTALL_DATA) ./dist/completions/pmx.fish "$(DESTDIR)$(FISHCOMPDIR)/pmx.fish"
+	@for p in $(PERSONAS); do \
+		$(INSTALL_DATA) ./dist/completions/$$p.bash "$(DESTDIR)$(BASHCOMPDIR)/$$p"; \
+		$(INSTALL_DATA) ./dist/completions/_$$p     "$(DESTDIR)$(ZSHCOMPDIR)/_$$p"; \
+		$(INSTALL_DATA) ./dist/completions/$$p.fish "$(DESTDIR)$(FISHCOMPDIR)/$$p.fish"; \
+	done
 	@echo "install: completions (bash/zsh/fish) -> $(DESTDIR)$(DATAROOT)"
 	@echo "install: done (prefix $(DESTDIR)$(PREFIX)). Permission denied? re-run: sudo make install"
 
@@ -112,6 +117,9 @@ uninstall: ## Remove everything `make install` placed under $(DESTDIR)$(PREFIX)
 	done
 	rm -f "$(DESTDIR)$(MANDIR)/man5/pmx-config.5.gz"
 	rm -f "$(DESTDIR)$(BASHCOMPDIR)/pmx" "$(DESTDIR)$(ZSHCOMPDIR)/_pmx" "$(DESTDIR)$(FISHCOMPDIR)/pmx.fish"
+	@for p in $(PERSONAS); do \
+		rm -f "$(DESTDIR)$(BASHCOMPDIR)/$$p" "$(DESTDIR)$(ZSHCOMPDIR)/_$$p" "$(DESTDIR)$(FISHCOMPDIR)/$$p.fish"; \
+	done
 	@echo "uninstall: removed pmx artifacts from $(DESTDIR)$(PREFIX)"
 
 .PHONY: install-user
@@ -243,13 +251,19 @@ run: build ## Build and run pmx (pass ARGS="..." for arguments)
 	@$(BINARY) $(ARGS)
 
 .PHONY: completions
-completions: build ## Generate shell completions into dist/completions/
+completions: build ## Generate shell completions (pmx + personas) into dist/completions/
 	@mkdir -p ./dist/completions
 	@$(BINARY) completion bash  > ./dist/completions/pmx.bash
 	@$(BINARY) completion zsh   > ./dist/completions/_pmx
 	@$(BINARY) completion fish  > ./dist/completions/pmx.fish
 	@$(BINARY) completion powershell > ./dist/completions/pmx.ps1
-	@echo "completions: written to ./dist/completions/"
+	@for p in $(PERSONAS); do \
+		./dist/$$p completion bash  > ./dist/completions/$$p.bash; \
+		./dist/$$p completion zsh   > ./dist/completions/_$$p; \
+		./dist/$$p completion fish  > ./dist/completions/$$p.fish; \
+		./dist/$$p completion powershell > ./dist/completions/$$p.ps1; \
+	done
+	@echo "completions: written to ./dist/completions/ (pmx $(PERSONAS))"
 
 .PHONY: deps
 deps: ## Tidy Go module dependencies
