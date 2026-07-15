@@ -133,6 +133,14 @@ func newCreateCmd() *cobra.Command {
 			fl := cmd.Flags()
 			eff := applyCreateOverrides(fl, lab, ov)
 
+			// A lab created from an incoherent address plan comes up broken —
+			// guests and node unable to reach each other on their shared vnet —
+			// so refuse before creating anything.
+			if issues := labNetworkPlanIssues(eff.Network); len(issues) > 0 {
+				return fmt.Errorf("lab %q network plan is incoherent:\n  %s",
+					name, strings.Join(issues, "\n  "))
+			}
+
 			// Flag overrides (in particular --pool) can change an identifier
 			// after the initial resolveLabForMutate guard already passed
 			// against the pre-override config; guard the effective values too

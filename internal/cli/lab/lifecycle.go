@@ -244,35 +244,41 @@ func applyLabConfigSurface(single map[string]string, l *config.Lab) {
 }
 
 // agentNetworkInterfaces is the decoded shape of the QEMU guest agent's
-// "network-get-interfaces" QMP command result.
+// "network-get-interfaces" QMP command result. Prefix is a pointer because
+// older agents may omit it; consumers must treat a nil prefix as unknown.
 type agentNetworkInterfaces struct {
 	Result []struct {
 		Name        string `json:"name"`
 		IPAddresses []struct {
 			IPAddress     string `json:"ip-address"`
 			IPAddressType string `json:"ip-address-type"`
+			Prefix        *int   `json:"prefix"`
 		} `json:"ip-addresses"`
 	} `json:"result"`
 }
 
-// guestAgentIP asks the QEMU guest agent for the VM's network interfaces and
-// returns the first non-loopback IPv4 address found. It returns ("", false)
-// on any failure — agent not installed, not running, or the call erroring —
-// rather than propagating an error, since a missing guest agent is an
-// expected, non-fatal state that status falls back from to the lab's
-// configured management IP.
-func guestAgentIP(ctx context.Context, deps *cli.Deps, node, vmid string) (string, bool) {
+// guestAgentInterfaces asks the QEMU guest agent for the VM's network
+// interfaces and returns the decoded result. It returns (nil, false) on any
+// failure — agent not installed, not running, or the call erroring — rather
+// than propagating an error, since a missing guest agent is an expected,
+// non-fatal state that status falls back from to the lab's configured
+// management IP.
+func guestAgentInterfaces(ctx context.Context, deps *cli.Deps, node, vmid string) (*agentNetworkInterfaces, bool) {
 	resp, err := deps.API.Nodes.ListQemuAgentNetworkGetInterfaces(ctx, node, vmid)
 	if err != nil || resp == nil {
-		return "", false
+		return nil, false
 	}
 
 	var parsed agentNetworkInterfaces
 	if err := json.Unmarshal(*resp, &parsed); err != nil {
-		return "", false
+		return nil, false
 	}
+	return &parsed, true
+}
 
-	for _, iface := range parsed.Result {
+// firstIPv4 returns the first non-loopback IPv4 address in the agent result.
+func (a *agentNetworkInterfaces) firstIPv4() (string, bool) {
+	for _, iface := range a.Result {
 		if iface.Name == "lo" {
 			continue
 		}
@@ -293,10 +299,12 @@ func newStatusCmd() *cobra.Command {
 		Long: "Show a lab's current power state, IP address, and key compute/storage " +
 			"configuration. The IP is read from the QEMU guest agent when the VM is " +
 			"running and the agent responds; otherwise the lab's configured management " +
-			"IP (network.mgmt.host_ip) is shown instead. A lab whose VM has not been " +
-			"created yet is reported as absent, with its config-derived sizing shown in " +
-			"place of live values, and exits successfully rather than erroring. Pass " +
-			"--node to use a specific node instead of the one the cluster reports.",
+			"IP (network.mgmt.host_ip) is shown instead. When the guest agent reports an " +
+			"in-cidr interface whose prefix is narrower than network.cidr, a " +
+			"NETWORK_WARNING row flags the asymmetric-routing hazard. A lab whose VM has " +
+			"not been created yet is reported as absent, with its config-derived sizing " +
+			"shown in place of live values, and exits successfully rather than erroring. " +
+			"Pass --node to use a specific node instead of the one the cluster reports.",
 		Example: `  pmx lab status wayne
   pmx lab status wayne --node pve2`,
 		Args: cobra.ExactArgs(1),
@@ -347,8 +355,13 @@ func newStatusCmd() *cobra.Command {
 
 			ip := l.Network.Mgmt.HostIP
 			if current.Status == "running" {
-				if liveIP, ok := guestAgentIP(cmd.Context(), deps, node, vmid); ok {
-					ip = liveIP
+				if ifaces, ok := guestAgentInterfaces(cmd.Context(), deps, node, vmid); ok {
+					if liveIP, ok := ifaces.firstIPv4(); ok {
+						ip = liveIP
+					}
+					if warn, ok := guestPrefixWarning(ifaces, l.Network.CIDR); ok {
+						single["NETWORK_WARNING"] = warn
+					}
 				}
 			}
 			single["IP"] = ip

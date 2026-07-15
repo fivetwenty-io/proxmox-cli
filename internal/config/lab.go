@@ -60,7 +60,13 @@ type LabNetwork struct {
 
 // LabMgmt describes the lab's management subnet.
 type LabMgmt struct {
-	// Subnet is the management subnet CIDR.
+	// Subnet is the management subnet CIDR: an address-plan reservation
+	// within LabNetwork.CIDR marking which slice is set aside for
+	// management-plane hosts. It is NOT an interface prefix: the lab host's
+	// interface must be addressed with LabNetwork.CIDR's own prefix length
+	// (e.g. host_ip/16 for a /16 lab, even when Subnet is a /24). A narrower
+	// interface prefix makes the host route replies to on-link guests in the
+	// wider CIDR via the gateway, which drops them as out-of-state.
 	Subnet string `yaml:"subnet"`
 
 	// HostIP is the management-plane IP address of the lab host.

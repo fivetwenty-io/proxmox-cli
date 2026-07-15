@@ -57,6 +57,10 @@ func TestCreateAuditFields_NetworkStorageAndPoolOverrides(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne") // Network.VxlanTag 5001, CIDR 10.10.1.0/24,
 	// Storage.OSDiskGB 64, DataDiskGB 400, Access.Pool "lab-wayne".
+	// The --cidr override below moves the lab to 10.10.9.0/24; drop the
+	// fixture's mgmt gateway (10.10.1.1) so the overridden plan stays
+	// coherent under create's network-plan validation.
+	lab.Network.Mgmt = config.LabMgmt{}
 
 	// Zone and storage already exist; overrides do not touch either, so they
 	// are left alone here to keep the fixture focused on the fields under

@@ -408,6 +408,9 @@ func validateConfigAddLab(lab *config.Lab) error {
 	if _, _, err := net.ParseCIDR(lab.Network.CIDR); err != nil {
 		return fmt.Errorf("cidr %q is invalid: %w", lab.Network.CIDR, err)
 	}
+	if issues := labNetworkPlanIssues(lab.Network); len(issues) > 0 {
+		return fmt.Errorf("network plan is incoherent:\n  %s", strings.Join(issues, "\n  "))
+	}
 
 	if lab.Compute.VCPU <= 0 {
 		return fmt.Errorf("vcpu must be > 0, got %d", lab.Compute.VCPU)
