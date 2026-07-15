@@ -78,10 +78,11 @@ func newGroupLsCmd() *cobra.Command {
 	var df storeFlags
 
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List backup groups in a datastore",
-		Long:  "List every backup group in a datastore, with backup count, last-backup time, owner, and comment.",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List backup groups in a datastore",
+		Long:    "List every backup group in a datastore, with backup count, last-backup time, owner, and comment.",
+		Example: "  pmx pbs group ls --store tank",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -134,7 +135,8 @@ func newGroupDeleteCmd() *cobra.Command {
 		Long: "Permanently remove a backup group and every snapshot it contains from a " +
 			"datastore. With --error-on-protected, the deletion fails instead of silently " +
 			"skipping protected snapshots. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs group delete vm/100 --store tank --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -193,6 +195,8 @@ func newGroupNotesCmd() *cobra.Command {
 		Short: "Get or set the notes attached to a backup group",
 		Long: "Without --set, print the free-text notes attached to a backup group. " +
 			"With --set TEXT, replace the notes with the given text.",
+		Example: `  pmx pbs group notes vm/100 --store tank
+  pmx pbs group notes vm/100 --store tank --set 'production database'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

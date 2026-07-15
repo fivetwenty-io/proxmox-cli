@@ -37,6 +37,8 @@ func newTapeBackupCmd() *cobra.Command {
 			"snapshots to a tape media pool via the given drive. --drive, --pool, and " +
 			"--store are required. Runs as an asynchronous task; the command blocks until " +
 			"it finishes unless --async is set.",
+		Example: `  pmx pbs tape backup --drive tape0 --pool weekly --store tank
+  pmx pbs tape backup --drive tape0 --pool weekly --store tank --latest-only --eject-media`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

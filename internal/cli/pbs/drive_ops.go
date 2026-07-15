@@ -65,7 +65,8 @@ func newTapeDriveOpLoadMediaCmd() *cobra.Command {
 			"label text/barcode (POST /tape/drive/{drive}/load-media). --label-text " +
 			"is required. Runs as an asynchronous task; the command blocks until it " +
 			"finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive load-media tape0 --label-text vol001",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -104,7 +105,8 @@ func newTapeDriveOpLoadSlotCmd() *cobra.Command {
 		Short: "Load media from a changer slot into a drive",
 		Long: "Load media from a specific changer slot into a drive (POST " +
 			"/tape/drive/{drive}/load-slot). --slot is required.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive load-slot tape0 --slot 3",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -144,7 +146,8 @@ func newTapeDriveOpUnloadCmd() *cobra.Command {
 			"omit it to return the media to the slot it was loaded from. Runs as " +
 			"an asynchronous task; the command blocks until it finishes unless " +
 			"--async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive unload tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -185,7 +188,8 @@ func newTapeDriveOpEjectCmd() *cobra.Command {
 		Long: "Eject the media currently loaded in a drive (POST " +
 			"/tape/drive/{drive}/eject-media). Runs as an asynchronous task; the " +
 			"command blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive eject tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -220,7 +224,8 @@ func newTapeDriveOpRewindCmd() *cobra.Command {
 		Long: "Rewind the media currently loaded in a drive to the start (POST " +
 			"/tape/drive/{drive}/rewind). Runs as an asynchronous task; the command " +
 			"blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive rewind tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -255,7 +260,8 @@ func newTapeDriveOpCleanCmd() *cobra.Command {
 		Long: "Run the cleaning cycle on a drive using a loaded cleaning cartridge " +
 			"(PUT /tape/drive/{drive}/clean). Runs as an asynchronous task; the " +
 			"command blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive clean tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -300,6 +306,8 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 			"command blocks until it finishes unless --async is set. This is " +
 			"destructive: all data on the media is erased and unrecoverable. Pass " +
 			"--yes/-y to confirm.",
+		Example: `  pmx pbs tape drive format tape0 --yes
+  pmx pbs tape drive format tape0 --label-text vol001 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -365,7 +373,8 @@ func newTapeDriveOpLabelCmd() *cobra.Command {
 			"--pool optionally assigns the media to a pool. Runs as an " +
 			"asynchronous task; the command blocks until it finishes unless " +
 			"--async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive label tape0 --label-text vol001 --pool weekly",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -413,7 +422,8 @@ func newTapeDriveOpBarcodeLabelCmd() *cobra.Command {
 			"/tape/drive/{drive}/barcode-label-media). --pool optionally assigns " +
 			"the media to a pool. Runs as an asynchronous task; the command " +
 			"blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive barcode-label tape0 --pool weekly",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -461,7 +471,8 @@ func newTapeDriveOpCatalogCmd() *cobra.Command {
 			"(POST /tape/drive/{drive}/catalog). Every option is optional and " +
 			"only forwarded when explicitly set. Runs as an asynchronous task; " +
 			"the command blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive catalog tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -526,7 +537,8 @@ func newTapeDriveOpExportCmd() *cobra.Command {
 			"changer's import-export slot (PUT /tape/drive/{drive}/export-media). " +
 			"--label-text is required. The response reports the destination slot " +
 			"number.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive export tape0 --label-text vol001",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -586,7 +598,8 @@ func newTapeDriveOpUpdateInventoryCmd() *cobra.Command {
 			"option is optional and only forwarded when explicitly set. Runs as " +
 			"an asynchronous task; the command blocks until it finishes unless " +
 			"--async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive update-inventory tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)
@@ -636,7 +649,8 @@ func newTapeDriveOpRestoreKeyCmd() *cobra.Command {
 		Long: "Restore an encryption key stored on the media currently loaded " +
 			"in a drive (POST /tape/drive/{drive}/restore-key). --password, the " +
 			"password the key was encrypted with, is required.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive restore-key tape0 --password '${TAPE_KEY_PASSWORD}'",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive, err := tapeDriveOpArg(args)

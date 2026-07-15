@@ -64,10 +64,11 @@ type datastoreListEntry struct {
 // datastores (GET /config/datastore).
 func newDatastoreLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List configured datastores",
-		Long:  "List the datastores configured on this Proxmox Backup Server.",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List configured datastores",
+		Long:    "List the datastores configured on this Proxmox Backup Server.",
+		Example: "  pmx pbs datastore ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -113,7 +114,8 @@ func newDatastoreShowCmd() *cobra.Command {
 		Long: "Show every populated field of a single Proxmox Backup Server datastore " +
 			"configuration. The PBS API omits options left at their built-in defaults; " +
 			"pass --defaults to also list those, with the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs datastore show tank",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -374,7 +376,8 @@ func newDatastoreCreateCmd() *cobra.Command {
 		Long: "Create a new Proxmox Backup Server datastore configuration. --path is required: " +
 			"either the absolute path to the datastore directory, or a relative on-device path " +
 			"for removable datastores.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs datastore create tank --path /mnt/datastore/tank",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -404,10 +407,11 @@ func newDatastoreCreateCmd() *cobra.Command {
 func newDatastoreUpdateCmd() *cobra.Command {
 	var df datastoreFlags
 	cmd := &cobra.Command{
-		Use:   "update <name>",
-		Short: "Update a datastore configuration",
-		Long:  "Update settings on an existing Proxmox Backup Server datastore configuration.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "update <name>",
+		Short:   "Update a datastore configuration",
+		Long:    "Update settings on an existing Proxmox Backup Server datastore configuration.",
+		Example: "  pmx pbs datastore update tank --prune-schedule daily",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -449,6 +453,8 @@ func newDatastoreDeleteCmd() *cobra.Command {
 			"and the on-disk data is left in place. This is an asynchronous task: by default the " +
 			"command blocks until it completes; pass --async (persistent flag) to return the UPID " +
 			"immediately instead. This is destructive: pass --yes/-y to confirm.",
+		Example: `  pmx pbs datastore delete tank --yes
+  pmx pbs datastore delete tank --destroy-data --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -498,7 +504,8 @@ func newDatastoreStatusCmd() *cobra.Command {
 		Short: "Show datastore space usage and garbage-collection status",
 		Long: "Show total/used/available space for a datastore. Pass --verbose to also include " +
 			"snapshot counts and garbage-collection status.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs datastore status tank --verbose",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -545,10 +552,11 @@ type datastoreUsageEntry struct {
 // and full-date estimates for every datastore (GET /status/datastore-usage).
 func newDatastoreUsageCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "usage",
-		Short: "List datastore space usage and full-date estimates",
-		Long:  "List usage totals, availability, and estimated-full dates for every datastore.",
-		Args:  cobra.NoArgs,
+		Use:     "usage",
+		Short:   "List datastore space usage and full-date estimates",
+		Long:    "List usage totals, availability, and estimated-full dates for every datastore.",
+		Example: "  pmx pbs datastore usage",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -615,7 +623,8 @@ func newDatastoreRrdCmd() *cobra.Command {
 		Long: "Read RRD (round-robin database) usage statistics for a datastore over the given " +
 			"time frame and consolidation function. The response shape is dynamic (PBS does not " +
 			"publish a fixed schema for it), so it is rendered as raw JSON.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs datastore rrd tank --timeframe day",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

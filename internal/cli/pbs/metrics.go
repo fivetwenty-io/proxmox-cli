@@ -102,10 +102,11 @@ type metricsInfluxdbHTTPEntry struct {
 // (GET /config/metrics/influxdb-http).
 func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List InfluxDB HTTP(s) metric servers",
-		Long:  "List every configured InfluxDB HTTP(s) metric server (GET /config/metrics/influxdb-http).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List InfluxDB HTTP(s) metric servers",
+		Long:    "List every configured InfluxDB HTTP(s) metric server (GET /config/metrics/influxdb-http).",
+		Example: "  pmx pbs metrics influxdb-http ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -172,7 +173,8 @@ func newMetricsInfluxdbHTTPShowCmd() *cobra.Command {
 			"never returned by the API. The API also omits options left at their " +
 			"built-in defaults; pass --defaults to also list those, with the value " +
 			"they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-http show graf01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -246,7 +248,8 @@ func newMetricsInfluxdbHTTPAddCmd() *cobra.Command {
 		Long: "Create a new InfluxDB HTTP(s) metric server (POST /config/metrics/influxdb-http). " +
 			"--url is required; every other flag is optional and only forwarded when " +
 			"explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-http add graf01 --url http://influx.example.com:8086",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -322,7 +325,8 @@ func newMetricsInfluxdbHTTPUpdateCmd() *cobra.Command {
 		Long: "Update an existing InfluxDB HTTP(s) metric server (PUT " +
 			"/config/metrics/influxdb-http/{name}). Only flags explicitly set are " +
 			"sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-http update graf01 --bucket proxmox",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -412,7 +416,8 @@ func newMetricsInfluxdbHTTPDeleteCmd() *cobra.Command {
 		Short: "Delete an InfluxDB HTTP(s) metric server",
 		Long: "Remove an InfluxDB HTTP(s) metric server (DELETE /config/metrics/influxdb-http/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-http delete graf01 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -481,10 +486,11 @@ type metricsInfluxdbUDPEntry struct {
 // (GET /config/metrics/influxdb-udp).
 func newMetricsInfluxdbUDPLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List InfluxDB UDP metric servers",
-		Long:  "List every configured InfluxDB UDP metric server (GET /config/metrics/influxdb-udp).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List InfluxDB UDP metric servers",
+		Long:    "List every configured InfluxDB UDP metric server (GET /config/metrics/influxdb-udp).",
+		Example: "  pmx pbs metrics influxdb-udp ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -540,7 +546,8 @@ func newMetricsInfluxdbUDPShowCmd() *cobra.Command {
 			"(GET /config/metrics/influxdb-udp/{name}). The API omits options left " +
 			"at their built-in defaults; pass --defaults to also list those, with " +
 			"the value they effectively have.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-udp show graf01",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -605,7 +612,8 @@ func newMetricsInfluxdbUDPAddCmd() *cobra.Command {
 		Long: "Create a new InfluxDB UDP metric server (POST /config/metrics/influxdb-udp). " +
 			"--host is required; every other flag is optional and only forwarded when " +
 			"explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-udp add graf01 --host metrics.example.com:8089",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -665,7 +673,8 @@ func newMetricsInfluxdbUDPUpdateCmd() *cobra.Command {
 		Long: "Update an existing InfluxDB UDP metric server (PUT " +
 			"/config/metrics/influxdb-udp/{name}). Only flags explicitly set are " +
 			"sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-udp update graf01 --mtu 1450",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -739,7 +748,8 @@ func newMetricsInfluxdbUDPDeleteCmd() *cobra.Command {
 		Short: "Delete an InfluxDB UDP metric server",
 		Long: "Remove an InfluxDB UDP metric server (DELETE /config/metrics/influxdb-udp/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs metrics influxdb-udp delete graf01 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -810,6 +820,8 @@ func newMetricsDataCmd() *cobra.Command {
 			"for host and datastore statistics (GET /status/metrics). Use --history to " +
 			"also return the last 30 minutes of historic values, optionally bounded by " +
 			"--start-time.",
+		Example: `  pmx pbs metrics data
+  pmx pbs metrics data --history`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

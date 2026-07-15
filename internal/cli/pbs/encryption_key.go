@@ -59,7 +59,8 @@ func newEncKeyLsCmd() *cobra.Command {
 		Long: "List the datastore encryption keys configured on this server (GET " +
 			"/config/encryption-keys). Pass --include-archived to also list " +
 			"archived keys.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs encryption-key ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -118,7 +119,8 @@ func newEncKeyAddCmd() *cobra.Command {
 			"one, under <id> (POST /config/encryption-keys). Pass --key to " +
 			"register an existing key instead of generating a new one; the " +
 			"required key material format/encoding is defined by PBS, not this CLI.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs encryption-key add mykey",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -154,7 +156,8 @@ func newEncKeyDeleteCmd() *cobra.Command {
 		Long: "Remove a datastore encryption key (DELETE /config/encryption-keys/{id}). " +
 			"This is destructive: backups encrypted with this key become unrecoverable. " +
 			"Pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs encryption-key delete mykey --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -202,7 +205,8 @@ func newEncKeyToggleArchiveCmd() *cobra.Command {
 			"/config/encryption-keys/{id}). Archived keys can no longer encrypt " +
 			"new content, but remain usable to decrypt existing content. Running " +
 			"this again on an archived key un-archives it.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs encryption-key toggle-archive mykey",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

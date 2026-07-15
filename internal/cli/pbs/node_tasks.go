@@ -69,7 +69,9 @@ func newNodeTasksLsCmd(nf *nodeFlags) *cobra.Command {
 		Use:   "ls",
 		Short: "List background tasks on the node",
 		Long:  "List background tasks recorded on the node, optionally filtered by status, time range, store, or user.",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pbs node tasks ls
+  pmx pbs node tasks ls --running`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

@@ -325,7 +325,8 @@ func newNodeNetworkCreateCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Create a network interface configuration",
 		Long: "Create a network interface configuration. Changes are staged in " +
 			"/etc/network/interfaces.new; run `network apply` to activate them.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs node network create vmbr1 --type bridge --cidr 10.0.0.2/24",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			iface := args[0]
@@ -357,7 +358,8 @@ func newNodeNetworkUpdateCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Update a network interface configuration",
 		Long: "Update a network interface configuration. Changes are staged in " +
 			"/etc/network/interfaces.new; run `network apply` to activate them.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs node network update vmbr0 --cidr 10.0.0.3/24",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			iface := args[0]
@@ -399,7 +401,8 @@ func newNodeNetworkDeleteCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Remove a single network interface configuration. Changes are staged in " +
 			"/etc/network/interfaces.new; run `network apply` to activate them. This is " +
 			"destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs node network delete vmbr1 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			iface := args[0]
@@ -438,7 +441,8 @@ func newNodeNetworkRevertCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Discard staged network configuration changes",
 		Long: "Discard every staged network configuration change by removing " +
 			"/etc/network/interfaces.new. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node network revert --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -463,10 +467,11 @@ func newNodeNetworkRevertCmd(nf *nodeFlags) *cobra.Command {
 // staged network changes (PUT /nodes/{node}/network, requires ifupdown2).
 func newNodeNetworkApplyCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "apply",
-		Short: "Reload the network configuration, activating staged changes",
-		Long:  "Reload the network configuration (requires ifupdown2), activating every staged change.",
-		Args:  cobra.NoArgs,
+		Use:     "apply",
+		Short:   "Reload the network configuration, activating staged changes",
+		Long:    "Reload the network configuration (requires ifupdown2), activating every staged change.",
+		Example: "  pmx pbs node network apply",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

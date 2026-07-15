@@ -61,7 +61,8 @@ func newTapeChangerLsCmd() *cobra.Command {
 		Short: "List tape changers with runtime model information",
 		Long: "List the configured tape changers together with the autodetected " +
 			"model, vendor, and serial number (GET /tape/changer).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape changer ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -107,10 +108,11 @@ func newTapeChangerLsCmd() *cobra.Command {
 // single changer's configuration (GET /config/changer/{name}).
 func newTapeChangerShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <name>",
-		Short: "Show a single tape changer's configuration",
-		Long:  "Show every populated field of a single tape changer configuration (GET /config/changer/{name}).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <name>",
+		Short:   "Show a single tape changer's configuration",
+		Long:    "Show every populated field of a single tape changer configuration (GET /config/changer/{name}).",
+		Example: "  pmx pbs tape changer show changer0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -195,7 +197,8 @@ func newTapeChangerAddCmd() *cobra.Command {
 		Long: "Create a new tape changer (autoloader/library) configuration (POST " +
 			"/config/changer). --path is required; every other option is optional " +
 			"and only forwarded when explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape changer add changer0 --path /dev/sg4",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -241,7 +244,8 @@ func newTapeChangerUpdateCmd() *cobra.Command {
 		Long: "Update an existing tape changer configuration (PUT /config/changer/{name}). " +
 			"Only flags explicitly set are sent; use --delete to reset properties to their " +
 			"default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape changer update changer0 --export-slots 15,16",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -287,7 +291,8 @@ func newTapeChangerDeleteCmd() *cobra.Command {
 		Short: "Delete a tape changer configuration",
 		Long: "Remove a tape changer configuration (DELETE /config/changer/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape changer delete changer0 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -326,10 +331,11 @@ type tapeChangerScanEntry struct {
 // attached SCSI tape changer devices (GET /tape/scan-changers).
 func newTapeChangerScanCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "scan",
-		Short: "Scan for attached SCSI tape changer devices",
-		Long:  "List autodetected SCSI tape changer devices attached to this host (GET /tape/scan-changers).",
-		Args:  cobra.NoArgs,
+		Use:     "scan",
+		Short:   "Scan for attached SCSI tape changer devices",
+		Long:    "List autodetected SCSI tape changer devices attached to this host (GET /tape/scan-changers).",
+		Example: "  pmx pbs tape changer scan",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -390,7 +396,8 @@ func newTapeChangerStatusCmd() *cobra.Command {
 		Long: "Show a status entry for every drive and slot on a tape changer (GET " +
 			"/tape/changer/{name}/status). Pass --cache to use the last cached value " +
 			"instead of querying the device directly.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape changer status changer0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -452,7 +459,8 @@ func newTapeChangerTransferCmd() *cobra.Command {
 			"/tape/changer/{name}/transfer). --from and --to are required slot " +
 			"numbers. This is a synchronous operation: the PBS API returns no task " +
 			"ID for it.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape changer transfer changer0 --from 3 --to 7",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

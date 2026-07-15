@@ -82,10 +82,11 @@ type acmeAccountListEntry struct {
 // registered ACME account (GET /config/acme/account).
 func newAcmeAccountLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List ACME accounts",
-		Long:  "List every ACME account registered on this Proxmox Backup Server (GET /config/acme/account).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List ACME accounts",
+		Long:    "List every ACME account registered on this Proxmox Backup Server (GET /config/acme/account).",
+		Example: "  pmx pbs acme account ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -135,7 +136,8 @@ func newAcmeAccountShowCmd() *cobra.Command {
 		Long: "Show the directory URL, account location, agreed Terms of Service, and " +
 			"the ACME provider's own account data for one registered account " +
 			"(GET /config/acme/account/{name}).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme account show my-account",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -178,7 +180,8 @@ func newAcmeAccountAddCmd() *cobra.Command {
 			"email addresses); every other flag is optional and only forwarded when " +
 			"explicitly set. Pass --tos-url to indicate agreement with the CA's " +
 			"Terms of Service (see 'pmx pbs acme tos show').",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme account add my-account --contact admin@example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -240,7 +243,8 @@ func newAcmeAccountUpdateCmd() *cobra.Command {
 		Short: "Update an ACME account's contact addresses",
 		Long: "Update the contact email addresses registered with an ACME account (PUT " +
 			"/config/acme/account/{name}).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme account update my-account --contact admin@example.com",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -285,7 +289,8 @@ func newAcmeAccountDeleteCmd() *cobra.Command {
 			"configuration (DELETE /config/acme/account/{name}). --force removes the " +
 			"local configuration even if the provider refuses the deactivation request. " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme account delete my-account --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -358,10 +363,11 @@ type acmePluginEntry struct {
 // `acme plugin show` and in JSON/YAML output.
 func newAcmePluginLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List ACME challenge plugins",
-		Long:  "List every configured ACME challenge plugin (GET /config/acme/plugins).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List ACME challenge plugins",
+		Long:    "List every configured ACME challenge plugin (GET /config/acme/plugins).",
+		Example: "  pmx pbs acme plugin ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -413,7 +419,8 @@ func newAcmePluginShowCmd() *cobra.Command {
 		Short: "Show one ACME challenge plugin's configuration",
 		Long: "Show the full configuration of one ACME challenge plugin " +
 			"(GET /config/acme/plugins/{id}).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme plugin show my-plugin",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -472,7 +479,8 @@ func newAcmePluginAddCmd() *cobra.Command {
 		Short: "Create an ACME challenge plugin",
 		Long: "Create a new ACME DNS challenge-plugin configuration (POST " +
 			"/config/acme/plugins). --type, --api, and --data are required.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme plugin add my-plugin --type dns --api aws --data '${ACME_DNS_DATA}'",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -541,7 +549,8 @@ func newAcmePluginUpdateCmd() *cobra.Command {
 			"/config/acme/plugins/{id}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead. The plugin's " +
 			"--type cannot be changed after creation.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme plugin update my-plugin --data '${ACME_DNS_DATA}'",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -614,7 +623,8 @@ func newAcmePluginDeleteCmd() *cobra.Command {
 		Short: "Delete an ACME challenge plugin",
 		Long: "Remove an ACME DNS challenge-plugin configuration (DELETE " +
 			"/config/acme/plugins/{id}). This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs acme plugin delete my-plugin --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -676,7 +686,8 @@ func newAcmeChallengeSchemaLsCmd() *cobra.Command {
 		Short: "List ACME challenge-plugin schemas",
 		Long: "List every known ACME challenge-plugin type together with its parameter " +
 			"schema (GET /config/acme/challenge-schema).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs acme challenge-schema ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -741,10 +752,11 @@ type acmeDirectoryEntry struct {
 // known ACME directory endpoints (GET /config/acme/directories).
 func newAcmeDirectoriesLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List known ACME directory endpoints",
-		Long:  "List every named ACME directory endpoint PBS ships (GET /config/acme/directories).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List known ACME directory endpoints",
+		Long:    "List every named ACME directory endpoint PBS ships (GET /config/acme/directories).",
+		Example: "  pmx pbs acme directories ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -810,6 +822,8 @@ func newAcmeTosShowCmd() *cobra.Command {
 		Long: "Get the Terms of Service URL for an ACME directory (GET /config/acme/tos). " +
 			"Without --directory, PBS returns the ToS for its default ACME directory " +
 			"(Let's Encrypt).",
+		Example: `  pmx pbs acme tos show
+  pmx pbs acme tos show --directory https://acme-v02.api.letsencrypt.org/directory`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

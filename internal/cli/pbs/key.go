@@ -70,10 +70,11 @@ func decodeTapeKeyEntries(resp *pbsconfig.ListTapeEncryptionKeysResponse) []tape
 // key (GET /config/tape-encryption-keys).
 func newTapeKeyLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List tape encryption keys",
-		Long:  "List every tape encryption key visible to the caller (GET /config/tape-encryption-keys).",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Short:   "List tape encryption keys",
+		Long:    "List every tape encryption key visible to the caller (GET /config/tape-encryption-keys).",
+		Example: "  pmx pbs tape key ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -115,7 +116,8 @@ func newTapeKeyShowCmd() *cobra.Command {
 		Long: "Show every populated field of a single tape encryption key's metadata " +
 			"(GET /config/tape-encryption-keys/{fingerprint}). The key material and " +
 			"password are never returned by this endpoint.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape key show AB:CD:EF:01:23:45:67:89",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fingerprint := args[0]
@@ -169,7 +171,8 @@ func newTapeKeyAddCmd() *cobra.Command {
 			"exported key file via --key (POST /config/tape-encryption-keys). " +
 			"--password is required. The response carries the new key's sha256 " +
 			"fingerprint, shown here; it is needed to reference the key afterward.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape key add --password '${TAPE_KEY_PASSWORD}'",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -258,7 +261,8 @@ func newTapeKeyUpdateCmd() *cobra.Command {
 			"are always required by this endpoint; --password is the current " +
 			"password (omit it only with --force, which resets the passphrase using " +
 			"the root-only accessible key copy).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape key update AB:CD:EF:01:23:45:67:89 --hint backup --new-password '${TAPE_KEY_NEW_PASSWORD}'",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fingerprint := args[0]
@@ -335,7 +339,8 @@ func newTapeKeyDeleteCmd() *cobra.Command {
 		Long: "Remove a tape encryption key (DELETE /config/tape-encryption-keys/{fingerprint}). " +
 			"This is destructive: tape backups encrypted with this key become unrecoverable. " +
 			"Pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape key delete AB:CD:EF:01:23:45:67:89 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fingerprint := args[0]

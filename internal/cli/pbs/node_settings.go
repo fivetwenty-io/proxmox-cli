@@ -212,6 +212,8 @@ func newNodeConfigShowCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Show the node configuration. The PBS API omits options left at their " +
 			"built-in defaults; pass --defaults to also list those, with the value " +
 			"they effectively have.",
+		Example: `  pmx pbs node config show
+  pmx pbs node config show --defaults`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -480,10 +482,11 @@ func newNodeSubscriptionUpdateCmd(nf *nodeFlags) *cobra.Command {
 func newNodeSubscriptionDeleteCmd(nf *nodeFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete the node's subscription info",
-		Long:  "Remove the node's stored subscription info. This is destructive: pass --yes/-y to confirm.",
-		Args:  cobra.NoArgs,
+		Use:     "delete",
+		Short:   "Delete the node's subscription info",
+		Long:    "Remove the node's stored subscription info. This is destructive: pass --yes/-y to confirm.",
+		Example: "  pmx pbs node subscription delete --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -509,10 +512,11 @@ func newNodeSubscriptionDeleteCmd(nf *nodeFlags) *cobra.Command {
 // identity derived from /etc/machine-id (GET /nodes/{node}/identity).
 func newNodeIdentityCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "identity",
-		Short: "Show the node's unique server identity",
-		Long:  "Show the unique server identity derived from /etc/machine-id.",
-		Args:  cobra.NoArgs,
+		Use:     "identity",
+		Short:   "Show the node's unique server identity",
+		Long:    "Show the unique server identity derived from /etc/machine-id.",
+		Example: "  pmx pbs node identity",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

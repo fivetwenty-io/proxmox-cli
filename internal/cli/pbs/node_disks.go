@@ -203,7 +203,8 @@ func newNodeDisksInitgptCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Initialize an empty disk with a GPT partition table",
 		Long: "Initialize an empty disk with a GPT partition table. Runs as an asynchronous " +
 			"task; the command blocks until it finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node disks initgpt --disk sdb",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -246,7 +247,8 @@ func newNodeDisksWipeCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Erase the partition table and filesystem signatures on a disk, destroying its " +
 			"data. Runs as an asynchronous task; the command blocks until it finishes unless " +
 			"--async is set. This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node disks wipe --disk sdb1 --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -344,7 +346,8 @@ func newNodeDisksDirectoryCreateCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Create a filesystem on an unused disk and mount it",
 		Long: "Create a filesystem on --disk and mount it under /mnt/datastore/<name>. Runs as " +
 			"an asynchronous task; the command blocks until it finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs node disks directory create tank --disk sdb",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -401,7 +404,8 @@ func newNodeDisksDirectoryDeleteCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Unmount and remove a filesystem mounted under /mnt/datastore/<name>. Runs as an " +
 			"asynchronous task; the command blocks until it finishes unless --async is set. " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs node disks directory delete tank --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -523,7 +527,8 @@ func newNodeDisksZfsCreateCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Create a new ZFS pool from --devices at --raidlevel, mounted under " +
 			"/mnt/datastore/<name>. Runs as an asynchronous task; the command blocks until it " +
 			"finishes unless --async is set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs node disks zfs create tank --devices sdb,sdc --raidlevel mirror",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]

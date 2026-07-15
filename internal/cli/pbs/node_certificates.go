@@ -54,10 +54,11 @@ func newNodeCertificatesCmd(nf *nodeFlags) *cobra.Command {
 // node's certificate chain (GET /nodes/{node}/certificates/info).
 func newNodeCertificatesInfoCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "info",
-		Short: "Show the node's certificate chain",
-		Long:  "Show every certificate currently serving the node's API, including subject, issuer, fingerprint, and validity window.",
-		Args:  cobra.NoArgs,
+		Use:     "info",
+		Short:   "Show the node's certificate chain",
+		Long:    "Show every certificate currently serving the node's API, including subject, issuer, fingerprint, and validity window.",
+		Example: "  pmx pbs node certificates info",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -125,7 +126,8 @@ func newNodeCertificatesAcmeOrderCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Request a new ACME (Let's Encrypt) certificate for the node and install it. " +
 			"Runs as an asynchronous task; the command blocks until it finishes unless --async " +
 			"is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node certificates acme order --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -175,7 +177,8 @@ func newNodeCertificatesAcmeRenewCmd(nf *nodeFlags) *cobra.Command {
 			"renews when expiry is within its renewal lead time; pass --force to renew " +
 			"regardless. Runs as an asynchronous task; the command blocks until it finishes " +
 			"unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node certificates acme renew --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -237,7 +240,8 @@ func newNodeCertificatesCustomUploadCmd(nf *nodeFlags) *cobra.Command {
 			"the node's API certificate. The private key is sent to the API but never echoed " +
 			"back. Use --restart to reload the API proxy so the new certificate takes effect " +
 			"immediately.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pbs node certificates custom upload --certificates "$(cat cert.pem)" --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -291,10 +295,11 @@ func newNodeCertificatesCustomDeleteCmd(nf *nodeFlags) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Remove the node's custom certificate",
-		Long:  "Delete the custom certificate from the node, reverting it to the self-signed certificate.",
-		Args:  cobra.NoArgs,
+		Use:     "delete",
+		Short:   "Remove the node's custom certificate",
+		Long:    "Delete the custom certificate from the node, reverting it to the self-signed certificate.",
+		Example: "  pmx pbs node certificates custom delete --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {

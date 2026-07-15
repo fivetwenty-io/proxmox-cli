@@ -98,7 +98,8 @@ func newTapeJobLsCmd() *cobra.Command {
 		Long: "List every tape backup job configuration visible to the caller (GET " +
 			"/config/tape-backup-job). This is the plain configuration listing; use " +
 			"`pmx pbs tape job status` for run-status fields.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape job ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -135,7 +136,8 @@ func newTapeJobShowCmd() *cobra.Command {
 		Short: "Show one tape backup job's configuration",
 		Long: "Show every populated field of a single tape backup job configuration " +
 			"(GET /config/tape-backup-job/{id}).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape job show weekly-tape",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -367,7 +369,8 @@ func newTapeJobAddCmd() *cobra.Command {
 		Long: "Create a new tape backup job configuration (POST " +
 			"/config/tape-backup-job). --drive, --pool, and --store are required; " +
 			"every other option is optional and only forwarded when explicitly set.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape job add weekly-tape --drive tape0 --pool weekly --store tank",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -428,7 +431,8 @@ func newTapeJobUpdateCmd() *cobra.Command {
 		Long: "Update an existing tape backup job configuration (PUT " +
 			"/config/tape-backup-job/{id}). Only flags explicitly set are sent; use " +
 			"--delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape job update weekly-tape --schedule daily",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -479,7 +483,8 @@ func newTapeJobDeleteCmd() *cobra.Command {
 		Short: "Delete a scheduled tape backup job",
 		Long: "Remove a tape backup job configuration (DELETE /config/tape-backup-job/{id}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape job delete weekly-tape --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -535,7 +540,8 @@ func newTapeJobRunCmd() *cobra.Command {
 			"--async is set. If the server reports no UPID for this run (some PBS " +
 			"versions document this endpoint as returning null), a plain success " +
 			"message is printed instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape job run weekly-tape",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -637,7 +643,8 @@ func newTapeJobStatusCmd() *cobra.Command {
 			"with its most recent run state (GET /tape/backup). This is the " +
 			"status-rich view; use `pmx pbs tape job ls` for the plain configuration " +
 			"listing.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape job status",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

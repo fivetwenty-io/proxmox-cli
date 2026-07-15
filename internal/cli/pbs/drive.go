@@ -74,7 +74,8 @@ func newTapeDriveLsCmd() *cobra.Command {
 			"vendor, and serial number (GET /tape/drive). Pass --changer to scope to drives " +
 			"associated with a tape changer, and --query-activity to also report each " +
 			"drive's current activity (slower, as it queries the drive directly).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape drive ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -123,10 +124,11 @@ func newTapeDriveLsCmd() *cobra.Command {
 // single tape drive configuration (GET /config/drive/{name}).
 func newTapeDriveShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <name>",
-		Short: "Show a single tape drive configuration",
-		Long:  "Show every populated field of a single tape drive configuration.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <name>",
+		Short:   "Show a single tape drive configuration",
+		Long:    "Show every populated field of a single tape drive configuration.",
+		Example: "  pmx pbs tape drive show tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -161,7 +163,8 @@ func newTapeDriveAddCmd() *cobra.Command {
 		Short: "Create a tape drive configuration",
 		Long: "Create a new tape drive configuration. --path is required: the path to a " +
 			"LTO SCSI-generic tape device (i.e. '/dev/sg0').",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive add tape0 --path /dev/sg0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -208,7 +211,8 @@ func newTapeDriveUpdateCmd() *cobra.Command {
 		Short: "Update a tape drive configuration",
 		Long: "Update settings on an existing tape drive configuration. Only flags " +
 			"explicitly set are sent; use --delete to reset properties to their default instead.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive update tape0 --changer changer0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -275,7 +279,8 @@ func newTapeDriveDeleteCmd() *cobra.Command {
 		Short: "Delete a tape drive configuration",
 		Long: "Remove a tape drive configuration (DELETE /config/drive/{name}). " +
 			"This is destructive: pass --yes/-y to confirm.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive delete tape0 --yes",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -315,10 +320,11 @@ type tapeScanDriveEntry struct {
 // attached SCSI tape drives (GET /tape/scan-drives).
 func newTapeDriveScanCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "scan",
-		Short: "Scan for locally attached tape drives",
-		Long:  "Scan the host for autodetected SCSI tape drives (GET /tape/scan-drives).",
-		Args:  cobra.NoArgs,
+		Use:     "scan",
+		Short:   "Scan for locally attached tape drives",
+		Long:    "Scan the host for autodetected SCSI tape drives (GET /tape/scan-drives).",
+		Example: "  pmx pbs tape drive scan",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -354,10 +360,11 @@ func newTapeDriveScanCmd() *cobra.Command {
 // drive and loaded-media status (GET /tape/drive/{drive}/status).
 func newTapeDriveStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "status <drive>",
-		Short: "Show drive and loaded-media status",
-		Long:  "Read live drive and loaded-media status (GET /tape/drive/{drive}/status).",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <drive>",
+		Short:   "Show drive and loaded-media status",
+		Long:    "Read live drive and loaded-media status (GET /tape/drive/{drive}/status).",
+		Example: "  pmx pbs tape drive status tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive := args[0]
@@ -398,7 +405,8 @@ func newTapeDriveCartridgeMemoryCmd() *cobra.Command {
 		Short: "Read the loaded tape's cartridge memory attributes",
 		Long: "Read Cartridge Memory (medium auxiliary memory attributes) from the tape " +
 			"currently loaded in a drive (GET /tape/drive/{drive}/cartridge-memory).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive cartridge-memory tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive := args[0]
@@ -437,7 +445,8 @@ func newTapeDriveVolumeStatisticsCmd() *cobra.Command {
 		Short: "Read the loaded tape's volume statistics",
 		Long: "Read Volume Statistics (SCSI log page 17h) from the tape currently loaded " +
 			"in a drive (GET /tape/drive/{drive}/volume-statistics).",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive volume-statistics tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive := args[0]
@@ -471,7 +480,8 @@ func newTapeDriveReadLabelCmd() *cobra.Command {
 		Long: "Read the media label of the tape currently loaded in a drive " +
 			"(GET /tape/drive/{drive}/read-label). Pass --inventorize to also record the " +
 			"result in the media inventory.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive read-label tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive := args[0]
@@ -519,7 +529,8 @@ func newTapeDriveInventoryCmd() *cobra.Command {
 			"associated with the given drive (GET /tape/drive/{drive}/inventory). Only " +
 			"useful for drives with an associated changer device; this also updates the " +
 			"media online status.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape drive inventory tape0",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			drive := args[0]

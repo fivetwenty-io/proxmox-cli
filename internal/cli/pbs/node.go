@@ -85,7 +85,8 @@ func newNodeLsCmd() *cobra.Command {
 		Short: "List node entries visible to this PBS host",
 		Long: "List the node entries returned by the compatibility cluster-node listing. " +
 			"PBS is single-node, so this always returns exactly one entry.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node ls",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -124,10 +125,11 @@ func newNodeLsCmd() *cobra.Command {
 // root-disk usage (GET /nodes/{node}/status).
 func newNodeStatusCmd(nf *nodeFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "status",
-		Short: "Show node memory, CPU, and root-disk usage",
-		Long:  "Show node memory, CPU, load average, kernel, and root-filesystem usage.",
-		Args:  cobra.NoArgs,
+		Use:     "status",
+		Short:   "Show node memory, CPU, and root-disk usage",
+		Long:    "Show node memory, CPU, load average, kernel, and root-filesystem usage.",
+		Example: "  pmx pbs node status",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -204,7 +206,8 @@ func newNodeRrdCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Read RRD (round-robin database) usage statistics for the node over the " +
 			"given time frame and consolidation function. The response shape is dynamic " +
 			"(PBS does not publish a fixed schema for it), so it is rendered as raw JSON.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node rrd --timeframe day",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -252,7 +255,8 @@ func newNodeReportCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Generate a diagnostic report covering system, network, and storage " +
 			"configuration for the node — the same report `proxmox-backup-manager report` " +
 			"produces on the host itself.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node report",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 

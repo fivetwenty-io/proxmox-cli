@@ -39,7 +39,9 @@ func newNodeSyslogCmd(nf *nodeFlags) *cobra.Command {
 		Use:   "syslog",
 		Short: "Read the node's system log",
 		Long:  "Read entries from the node's system log, optionally filtered by service or time range.",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pbs node syslog
+  pmx pbs node syslog --service proxmox-backup-proxy`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -106,7 +108,8 @@ func newNodeJournalCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Read the node's systemd journal",
 		Long: "Read raw lines from the node's systemd journal, optionally limited to the " +
 			"last N entries or bounded by a Unix-epoch time range or cursor.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node journal --lastentries 100",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

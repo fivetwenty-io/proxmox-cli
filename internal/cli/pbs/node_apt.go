@@ -103,7 +103,8 @@ func newNodeAptUpdateCmd(nf *nodeFlags) *cobra.Command {
 		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Refresh the local APT package database from the configured repositories. " +
 			"Runs as an asynchronous task; the command blocks until it finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node apt update",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -181,7 +182,8 @@ func newNodeAptRepoAddCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Add (or enable) a standard APT repository by handle",
 		Long: "Add the standard repository identified by --handle. If the repository is " +
 			"already configured, it is set to enabled.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node apt repo-add --handle no-subscription",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -223,7 +225,8 @@ func newNodeAptRepoUpdateCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Change the enabled state of an existing repository entry",
 		Long: "Change the properties (currently: enabled) of the repository entry at " +
 			"--index within --path, the containing sources file.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs node apt repo-update --path /etc/apt/sources.list.d/pbs.sources --index 0 --enabled=false",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

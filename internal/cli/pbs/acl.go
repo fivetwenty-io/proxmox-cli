@@ -45,6 +45,8 @@ func newACLLsCmd() *cobra.Command {
 		Long: "List Access Control List entries (GET /access/acl). --path restricts " +
 			"to entries at or under a path (prefix match by default; pass --exact to " +
 			"require an exact match).",
+		Example: `  pmx pbs acl ls
+  pmx pbs acl ls --path /datastore/tank --exact`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -118,6 +120,8 @@ func newACLUpdateCmd() *cobra.Command {
 			"(PUT /access/acl). --path and --role are required, and exactly one of " +
 			"--auth-id or --group identifies the subject. Pass --delete to remove the " +
 			"role instead of granting it.",
+		Example: `  pmx pbs acl update --path /datastore/tank --role DatastoreAdmin --auth-id user@pbs
+  pmx pbs acl update --path /datastore/tank --role DatastoreAdmin --auth-id user@pbs --delete`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

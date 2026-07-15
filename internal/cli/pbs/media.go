@@ -76,6 +76,8 @@ func newTapeMediaLsCmd() *cobra.Command {
 			"/tape/media/list). Pass --update-status together with " +
 			"--update-status-changer to refresh each medium's online/offline " +
 			"status from that changer's inventory before listing.",
+		Example: `  pmx pbs tape media ls
+  pmx pbs tape media ls --pool weekly`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -175,7 +177,8 @@ func newTapeMediaContentCmd() *cobra.Command {
 		Long: "List the backup snapshots recorded on tape media (GET " +
 			"/tape/media/content), optionally filtered by backup ID/type, media, " +
 			"media set, or pool.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape media content --pool weekly",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -271,10 +274,11 @@ type tapeMediaSetEntry struct {
 // sets (GET /tape/media/media-sets).
 func newTapeMediaSetsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sets",
-		Short: "List tape media sets",
-		Long:  "List every media set known to the tape backend (GET /tape/media/media-sets).",
-		Args:  cobra.NoArgs,
+		Use:     "sets",
+		Short:   "List tape media sets",
+		Long:    "List every media set known to the tape backend (GET /tape/media/media-sets).",
+		Example: "  pmx pbs tape media sets",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
@@ -332,7 +336,8 @@ func newTapeMediaMoveCmd() *cobra.Command {
 			"--vault-name), or mark it offline (POST /tape/media/move). Identify " +
 			"the medium with --uuid or --label-text; at least one is required. " +
 			"This is a synchronous operation: the PBS API returns no task ID for it.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape media move --label-text vol001 --vault-name offsite",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -399,7 +404,8 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 			"the PBS API returns no task ID for it. This is destructive: the " +
 			"medium's cataloged backup content becomes unrecoverable through PBS. " +
 			"Pass --yes/-y to confirm.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs tape media destroy --label-text vol001 --yes",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -459,7 +465,8 @@ func newTapeMediaSetStatusCmd() *cobra.Command {
 			"('writable' and 'unknown' are managed automatically and cannot be " +
 			"set directly). This is a synchronous operation: the PBS API returns " +
 			"no task ID for it.",
-		Args: cobra.ExactArgs(1),
+		Example: "  pmx pbs tape media set-status 3f2a9c10-8b7d-4e21-9a3f-1c2d3e4f5a6b --status damaged",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			uuid := args[0]

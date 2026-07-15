@@ -127,7 +127,8 @@ func newGcRunCmd() *cobra.Command {
 			"from chunks no longer referenced by any backup snapshot (POST " +
 			"/admin/datastore/{store}/gc). Runs as an asynchronous task; the " +
 			"command blocks until it finishes unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs gc run --store tank",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -161,7 +162,8 @@ func newGcStatusCmd() *cobra.Command {
 		Short: "Show a datastore's garbage-collection status",
 		Long: "Report the last and next garbage-collection run along with chunk " +
 			"and byte counters for a single datastore (GET /admin/datastore/{store}/gc).",
-		Args: cobra.NoArgs,
+		Example: "  pmx pbs gc status --store tank",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -220,6 +222,8 @@ func newGcLsCmd() *cobra.Command {
 		Long: "List the garbage-collection schedule and last-run status for " +
 			"every datastore visible to the caller, or a single one with --store " +
 			"(GET /admin/gc).",
+		Example: `  pmx pbs gc ls
+  pmx pbs gc ls --store tank`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
