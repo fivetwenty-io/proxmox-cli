@@ -42,20 +42,18 @@ func newAddCmd() *cobra.Command {
 		Long: `Add a new named context to the config file.
 
 The --product flag selects which Proxmox product the context targets and,
-unless --port is also given, its default API port.
-
-Examples:
-  # Proxmox VE (default product, port 8006)
+unless --port is also given, its default API port.`,
+		Example: `  # Proxmox VE (default product, port 8006)
   pmx context add lab --host pve.example.com \
-    --username root@pam --token-id automation --secret ${PVE_TOKEN} --select
+  --username root@pam --token-id automation --secret '${PVE_TOKEN}' --select
 
   # Proxmox Backup Server (port 8007)
   pmx context add backup --product pbs --host pbs.example.com \
-    --username root@pam --token-id automation --secret ${PBS_TOKEN}
+  --username root@pam --token-id automation --secret '${PBS_TOKEN}'
 
   # Proxmox Datacenter Manager (port 8443)
   pmx context add dcmgr --product pdm --host pdm.example.com \
-    --username root@pam --token-id automation --secret ${PDM_TOKEN}`,
+  --username root@pam --token-id automation --secret '${PDM_TOKEN}'`,
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {

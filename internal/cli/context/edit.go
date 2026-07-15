@@ -43,6 +43,8 @@ Note: config.Save rewrites the config file and does not preserve comments.
 Passing --product <pve|pbs|pdm> edits that single field directly without
 opening $EDITOR; a port equal to the old product's default port is switched
 to the new product's default (8006 pve, 8007 pbs, 8443 pdm).`,
+		Example: `  pmx context edit lab
+  pmx context edit lab --product pbs`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg

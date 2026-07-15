@@ -100,6 +100,8 @@ func newConfigCmd() *cobra.Command {
 		Long: "Write a commented config.yml template to the config path " +
 			"(default ~/.config/pmx/config.yml) for you to fill in.\n\n" +
 			"Refuses to overwrite an existing file unless --force is given.",
+		Example: `  pmx init config
+  pmx init config --force`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

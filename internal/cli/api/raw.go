@@ -85,6 +85,9 @@ func newRawGetCmd() *cobra.Command {
 		Long: "Issue a GET request to an arbitrary API path (e.g. /nodes or /admin/datastore) " +
 			"against the active context's Proxmox VE or Proxmox Backup Server API, passing any " +
 			"--data KEY=VALUE pairs as query parameters.",
+		Example: `  pmx api get /nodes
+  pmx api get /nodes/pve1/status
+  pmx api get /cluster/resources -d type=vm`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -120,6 +123,8 @@ func newRawPostCmd() *cobra.Command {
 		Long: "Issue a POST request to an arbitrary API path against the active context's " +
 			"Proxmox VE or Proxmox Backup Server API, sending any --data KEY=VALUE pairs as the " +
 			"form-encoded request body.",
+		Example: `  pmx api post /nodes/pve1/lxc/200/status/start
+  pmx api post /access/users -d userid=alice@pve -d password='${PMX_PASSWORD}'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -155,6 +160,8 @@ func newRawPutCmd() *cobra.Command {
 		Long: "Issue a PUT request to an arbitrary API path against the active context's " +
 			"Proxmox VE or Proxmox Backup Server API, sending any --data KEY=VALUE pairs as the " +
 			"form-encoded request body.",
+		Example: `  pmx api put /nodes/pve1/lxc/200/config -d cores=4
+  pmx api put /access/domains/pve -d comment='local realm'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -193,6 +200,8 @@ func newRawDeleteCmd() *cobra.Command {
 		Long: "Issue a DELETE request to an arbitrary API path against the active context's " +
 			"Proxmox VE or Proxmox Backup Server API, passing any --data KEY=VALUE pairs as query " +
 			"parameters.",
+		Example: `  pmx api delete /nodes/pve1/lxc/200/snapshot/pre-upgrade
+  pmx api delete /access/users/alice@pve`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

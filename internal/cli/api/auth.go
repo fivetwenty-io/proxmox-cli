@@ -102,6 +102,9 @@ func newAuthLoginCmd() *cobra.Command {
 			"--otp (one-time password for TOTP-based two-factor authentication) is PVE-only; " +
 			"PBS and PDM contexts use --tfa-challenge for second-factor login instead. " +
 			"--oidc works with PVE, PBS, and PDM contexts.",
+		Example: `  pmx auth login --context lab
+  pmx auth login --context lab --username alice@pve --realm pve
+  pmx auth login --context lab --oidc --realm sso`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

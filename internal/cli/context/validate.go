@@ -53,6 +53,9 @@ stored secret is checked for resolvability. Unreachable contexts fail the
 command; a product mismatch is reported as a warning only.
 
 Exit status: 0 if all validated contexts are valid; 1 if any are invalid.`,
+		Example: `  pmx context validate
+  pmx context validate lab
+  pmx context validate --all --connect`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg

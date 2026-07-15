@@ -91,6 +91,8 @@ func newPingCmd() *cobra.Command {
 		Short: "Check connectivity to the PBS API",
 		Long: "Send a dummy request that confirms the Proxmox Backup Server API daemon is online " +
 			"(GET /ping). Requires a PBS context.",
+		Example: `  pmx version ping
+  pmx version ping --context backup`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -123,6 +125,7 @@ func newClientCmd() *cobra.Command {
 		Use:         "client",
 		Short:       "Show this CLI's build information",
 		Long:        "Show this CLI's version, commit, build date, and Go toolchain details.",
+		Example:     `  pmx version client`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},
 		RunE:        runClientVersion,
