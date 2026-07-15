@@ -24,10 +24,11 @@ func newCephMonCmd() *cobra.Command {
 
 func newCephMonListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List Ceph monitors",
-		Long:  "List the Ceph monitor (MON) daemons known to the cluster, as reported by the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List Ceph monitors",
+		Long:    "List the Ceph monitor (MON) daemons known to the cluster, as reported by the resolved node.",
+		Example: `  pmx pve node ceph mon list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -48,10 +49,11 @@ func newCephMonCreateCmd() *cobra.Command {
 		yes        bool
 	)
 	cmd := &cobra.Command{
-		Use:   "create <monid>",
-		Short: "Create a Ceph monitor (destructive)",
-		Long:  "Create a Ceph monitor daemon with the given id on the resolved node.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <monid>",
+		Short:   "Create a Ceph monitor (destructive)",
+		Long:    "Create a Ceph monitor daemon with the given id on the resolved node.",
+		Example: `  pmx pve node ceph mon create pve1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -123,10 +125,11 @@ func newCephMdsCmd() *cobra.Command {
 
 func newCephMdsListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List Ceph metadata servers",
-		Long:  "List the Ceph metadata server (MDS) daemons known to the cluster, as reported by the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List Ceph metadata servers",
+		Long:    "List the Ceph metadata server (MDS) daemons known to the cluster, as reported by the resolved node.",
+		Example: `  pmx pve node ceph mds list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -147,10 +150,11 @@ func newCephMdsCreateCmd() *cobra.Command {
 		yes        bool
 	)
 	cmd := &cobra.Command{
-		Use:   "create <name>",
-		Short: "Create a Ceph metadata server (destructive)",
-		Long:  "Create a Ceph metadata server (MDS) daemon with the given name on the resolved node.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <name>",
+		Short:   "Create a Ceph metadata server (destructive)",
+		Long:    "Create a Ceph metadata server (MDS) daemon with the given name on the resolved node.",
+		Example: `  pmx pve node ceph mds create pve1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -222,10 +226,11 @@ func newCephMgrCmd() *cobra.Command {
 
 func newCephMgrListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List Ceph managers",
-		Long:  "List the Ceph manager (MGR) daemons known to the cluster, as reported by the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List Ceph managers",
+		Long:    "List the Ceph manager (MGR) daemons known to the cluster, as reported by the resolved node.",
+		Example: `  pmx pve node ceph mgr list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -243,10 +248,11 @@ func newCephMgrListCmd() *cobra.Command {
 func newCephMgrCreateCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "create <id>",
-		Short: "Create a Ceph manager (destructive)",
-		Long:  "Create a Ceph manager (MGR) daemon with the given id on the resolved node.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <id>",
+		Short:   "Create a Ceph manager (destructive)",
+		Long:    "Create a Ceph manager (MGR) daemon with the given id on the resolved node.",
+		Example: `  pmx pve node ceph mgr create pve1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -312,10 +318,11 @@ func newCephFsCmd() *cobra.Command {
 
 func newCephFsListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List CephFS filesystems",
-		Long:  "List the CephFS filesystems known to the cluster, as reported by the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List CephFS filesystems",
+		Long:    "List the CephFS filesystems known to the cluster, as reported by the resolved node.",
+		Example: `  pmx pve node ceph fs list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -340,7 +347,9 @@ func newCephFsCreateCmd() *cobra.Command {
 		Use:   "create <name>",
 		Short: "Create a CephFS filesystem (destructive)",
 		Long:  "Create a CephFS filesystem with the given name, provisioning its backing data and metadata pools.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve node ceph fs create cephfs --yes
+  pmx pve node ceph fs create cephfs --add-storage --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -379,10 +388,11 @@ func newCephFsDeleteCmd() *cobra.Command {
 		yes            bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete <name>",
-		Short: "Destroy a CephFS filesystem (destructive)",
-		Long:  "Destroy the given CephFS filesystem, optionally removing its pools and managed storages.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <name>",
+		Short:   "Destroy a CephFS filesystem (destructive)",
+		Long:    "Destroy the given CephFS filesystem, optionally removing its pools and managed storages.",
+		Example: `  pmx pve node ceph fs delete cephfs --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

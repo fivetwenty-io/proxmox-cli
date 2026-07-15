@@ -59,6 +59,8 @@ func newVzdumpCmd() *cobra.Command {
 			"--pool, or --all to the given --storage. The command blocks until the backup " +
 			"task finishes unless --async is set. Use the sub-commands defaults and " +
 			"extract-config to inspect vzdump configuration.",
+		Example: `  pmx pve node vzdump --vmid 100 --storage local
+  pmx pve node vzdump --all --storage local --mode snapshot`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -248,6 +250,8 @@ func newVzdumpDefaultsCmd() *cobra.Command {
 		Short: "Show effective vzdump backup defaults for the node",
 		Long: "Show the effective vzdump backup defaults for the resolved node as derived " +
 			"from the datacenter configuration. Optionally scope to a specific storage.",
+		Example: `  pmx pve node vzdump defaults
+  pmx pve node vzdump defaults --storage local`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -287,7 +291,8 @@ func newVzdumpExtractConfigCmd() *cobra.Command {
 		Short: "Extract the guest configuration from a backup archive",
 		Long: "Read the guest configuration stored inside a backup archive volume. The " +
 			"--volume flag is required and must be a valid storage volume identifier.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node vzdump extract-config --volume local:backup/vzdump-qemu-100-2024_01_01-00_00_00.vma.zst`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

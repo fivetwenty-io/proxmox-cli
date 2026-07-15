@@ -49,6 +49,8 @@ func newStartallCmd() *cobra.Command {
 		Short: "Start all guests on the node",
 		Long: "Start every guest on the resolved node, or only those listed in --vmids. " +
 			"Requires --yes because it affects all guests by default.",
+		Example: `  pmx pve node startall --yes
+  pmx pve node startall --vmids 100,101,102 --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -97,6 +99,8 @@ func newStopallCmd() *cobra.Command {
 		Short: "Stop all guests on the node",
 		Long: "Shut down every guest on the resolved node, or only those listed in --vmids. " +
 			"Requires --yes because it affects all guests by default.",
+		Example: `  pmx pve node stopall --yes
+  pmx pve node stopall --vmids 100,101,102 --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -147,7 +151,8 @@ func newSuspendallCmd() *cobra.Command {
 		Short: "Suspend all guests on the node",
 		Long: "Suspend every guest on the resolved node, or only those listed in --vmids. " +
 			"Requires --yes because it affects all guests by default.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node suspendall --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -191,7 +196,8 @@ func newMigrateallCmd() *cobra.Command {
 		Short: "Migrate all guests off the node",
 		Long: "Migrate every guest on the resolved node to --target-node, or only those " +
 			"listed in --vmids. Requires --yes because it affects all guests by default.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node migrateall --target-node pve2 --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -235,7 +241,8 @@ func newWakeonlanCmd() *cobra.Command {
 		Short: "Send a Wake-on-LAN packet to the node",
 		Long: "Send a Wake-on-LAN magic packet to power on the resolved node. The node's " +
 			"wake-on-LAN MAC address must be configured. Requires --yes.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node wakeonlan --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

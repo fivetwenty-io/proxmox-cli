@@ -56,7 +56,8 @@ func newTermproxyCmd() *cobra.Command {
 			"establish the interactive session.\n\n" +
 			"Use --cmd to run a specific command instead of the default login shell\n" +
 			"(requires root@pam credentials).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node termproxy`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -105,7 +106,8 @@ func newVncshellCmd() *cobra.Command {
 			"does not open an interactive terminal.\n\n" +
 			"Use --cmd to run a specific command instead of the default login shell\n" +
 			"(requires root@pam credentials).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node vncshell`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -216,7 +218,8 @@ func newSpiceshellCmd() *cobra.Command {
 			"file only and does not open an interactive terminal.\n\n" +
 			"Use --cmd to run a specific command instead of the default login shell\n" +
 			"(requires root@pam credentials).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node spiceshell`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

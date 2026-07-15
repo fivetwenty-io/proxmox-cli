@@ -47,7 +47,8 @@ func newCapabilitiesQemuCpuCmd() *cobra.Command {
 		Short: "List supported QEMU CPU models",
 		Long: "List the QEMU CPU models the resolved node can offer to VMs. --arch " +
 			"defaults to the host architecture.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node capabilities qemu cpu`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -78,7 +79,8 @@ func newCapabilitiesQemuCpuFlagsCmd() *cobra.Command {
 		Short: "List supported QEMU CPU flags",
 		Long: "List the QEMU CPU flags supported on the resolved node for the given " +
 			"--accel and --arch (both default to the host's).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node capabilities qemu cpu-flags`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -111,7 +113,8 @@ func newCapabilitiesQemuMachinesCmd() *cobra.Command {
 		Short: "List supported QEMU machine types",
 		Long: "List the QEMU machine types the resolved node can offer to VMs. --arch " +
 			"defaults to the host architecture.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node capabilities qemu machines`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -134,10 +137,11 @@ func newCapabilitiesQemuMachinesCmd() *cobra.Command {
 
 func newCapabilitiesQemuMigrationCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "migration",
-		Short: "Show node live-migration capabilities",
-		Long:  "Show the live-migration capabilities (supported transports and options) of the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "migration",
+		Short:   "Show node live-migration capabilities",
+		Long:    "Show the live-migration capabilities (supported transports and options) of the resolved node.",
+		Example: `  pmx pve node capabilities qemu migration`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

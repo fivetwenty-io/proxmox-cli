@@ -99,10 +99,11 @@ func newCephCmd() *cobra.Command {
 
 func newCephStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status",
-		Short: "Show the Ceph cluster status",
-		Long:  "Report the overall Ceph cluster health, monitor quorum, OSD map, and placement-group state as seen from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "status",
+		Short:   "Show the Ceph cluster status",
+		Long:    "Report the overall Ceph cluster health, monitor quorum, OSD map, and placement-group state as seen from the resolved node.",
+		Example: `  pmx pve node ceph status`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -128,7 +129,8 @@ func newCephCmdSafetyCmd() *cobra.Command {
 		Short: "Check whether a Ceph action is safe to perform",
 		Long: "Ask Ceph's own heuristics whether the given action on the given service would be " +
 			"safe to perform right now, as seen from the resolved node.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node ceph cmd-safety --action stop --id osd.0 --service osd`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -159,7 +161,8 @@ func newCephCfgCmd() *cobra.Command {
 		Long: "Show the Ceph configuration index, the config-DB overrides, the raw ceph.conf text, " +
 			"or individual per-section configuration values.\n\n" +
 			"With no subcommand, lists the configuration index (same as `cfg index`).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node ceph cfg`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runCephCfgIndex(cmd)
 		},
@@ -191,10 +194,11 @@ func runCephCfgIndex(cmd *cobra.Command) error {
 // Ceph configuration sections and keys from the config API.
 func newCephCfgIndexCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "index",
-		Short: "List all Ceph configuration sections and keys",
-		Long:  "Show the Ceph configuration entries (ceph.conf and the config database) as seen from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "index",
+		Short:   "List all Ceph configuration sections and keys",
+		Long:    "Show the Ceph configuration entries (ceph.conf and the config database) as seen from the resolved node.",
+		Example: `  pmx pve node ceph cfg index`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runCephCfgIndex(cmd)
 		},
@@ -203,10 +207,11 @@ func newCephCfgIndexCmd() *cobra.Command {
 
 func newCephCfgDbCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "db",
-		Short: "Show the Ceph configuration-DB overrides",
-		Long:  "List the per-daemon configuration overrides stored in the Ceph config-DB on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "db",
+		Short:   "Show the Ceph configuration-DB overrides",
+		Long:    "List the per-daemon configuration overrides stored in the Ceph config-DB on the resolved node.",
+		Example: `  pmx pve node ceph cfg db`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -223,10 +228,11 @@ func newCephCfgDbCmd() *cobra.Command {
 
 func newCephCfgRawCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "raw",
-		Short: "Show the raw ceph.conf text",
-		Long:  "Retrieve the full contents of ceph.conf as plain text from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "raw",
+		Short:   "Show the raw ceph.conf text",
+		Long:    "Retrieve the full contents of ceph.conf as plain text from the resolved node.",
+		Example: `  pmx pve node ceph cfg raw`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -248,7 +254,8 @@ func newCephCfgValueCmd() *cobra.Command {
 		Short: "Look up specific Ceph configuration values",
 		Long: "Retrieve the value of one or more Ceph configuration keys. Each key must be " +
 			"given as <section>:<key>; separate multiple keys with a semicolon, comma, or space.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node ceph cfg value --keys global:fsid`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -275,10 +282,11 @@ func newCephLogCmd() *cobra.Command {
 		start int64
 	)
 	cmd := &cobra.Command{
-		Use:   "log",
-		Short: "Show the Ceph cluster log",
-		Long:  "Retrieve recent Ceph log lines from the resolved node. Use --limit and --start to page through the log.",
-		Args:  cobra.NoArgs,
+		Use:     "log",
+		Short:   "Show the Ceph cluster log",
+		Long:    "Retrieve recent Ceph log lines from the resolved node. Use --limit and --start to page through the log.",
+		Example: `  pmx pve node ceph log --limit 50`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -308,10 +316,11 @@ func newCephLogCmd() *cobra.Command {
 // newCephRulesCmd builds `pmx pve node ceph rules`.
 func newCephRulesCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "rules",
-		Short: "List CRUSH rules in the Ceph cluster",
-		Long:  "Show all CRUSH rules defined in the Ceph cluster as seen from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "rules",
+		Short:   "List CRUSH rules in the Ceph cluster",
+		Long:    "Show all CRUSH rules defined in the Ceph cluster as seen from the resolved node.",
+		Example: `  pmx pve node ceph rules`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -329,10 +338,11 @@ func newCephRulesCmd() *cobra.Command {
 // newCephCrushCmd builds `pmx pve node ceph crush`.
 func newCephCrushCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "crush",
-		Short: "Show the CRUSH map text",
-		Long:  "Retrieve the full CRUSH map as plain text from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "crush",
+		Short:   "Show the CRUSH map text",
+		Long:    "Retrieve the full CRUSH map as plain text from the resolved node.",
+		Example: `  pmx pve node ceph crush`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -362,6 +372,8 @@ func newCephInitCmd() *cobra.Command {
 		Short: "Initialize the Ceph cluster configuration on the node (destructive)",
 		Long: "Create the initial Ceph configuration on the resolved node. This is a one-time, " +
 			"cluster-wide operation that lays down ceph.conf and the cluster keys.",
+		Example: `  pmx pve node ceph init --yes
+  pmx pve node ceph init --size 3 --min-size 2 --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

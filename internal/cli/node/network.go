@@ -47,7 +47,8 @@ func newNetstatCmd() *cobra.Command {
 		Short: "Show network interface statistics for the node",
 		Long: "Read the per-interface traffic counters (bytes, packets, errors) from the " +
 			"resolved node. This is a read-only point-in-time snapshot.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node netstat`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -228,7 +229,8 @@ func newNetworkCreateCmd() *cobra.Command {
 		Long: "Create a new host network interface or bridge. --iface (the interface name) " +
 			"and --type (for example bridge, bond, eth, vlan, or OVSBridge) are required. " +
 			"The change is staged; run `network apply` to make it live.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node network create --iface vmbr1 --type bridge --bridge-ports eth1 --autostart`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -353,7 +355,8 @@ func newNetworkUpdateCmd() *cobra.Command {
 		Short: "Modify a host network interface",
 		Long: "Update an existing host network interface. --type is required. The change " +
 			"is staged; run `network apply` to make it live.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node network set vmbr0 --type bridge --mtu 9000`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -475,7 +478,8 @@ func newNetworkDeleteCmd() *cobra.Command {
 		Short: "Delete a host network interface",
 		Long: "Delete a host network interface. The change is staged; run `network apply` " +
 			"to make it live.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node network delete vmbr1 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -510,7 +514,8 @@ func newNetworkApplyCmd() *cobra.Command {
 		Short: "Reload the network configuration to apply staged changes",
 		Long: "Reload the host network configuration, making every staged interface change " +
 			"live. This can briefly disrupt connectivity to the node.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node network apply --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -539,10 +544,11 @@ func newNetworkApplyCmd() *cobra.Command {
 func newNetworkRevertCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "revert",
-		Short: "Discard staged network configuration changes",
-		Long:  "Revert the staged host network configuration changes that have not yet been applied.",
-		Args:  cobra.NoArgs,
+		Use:     "revert",
+		Short:   "Discard staged network configuration changes",
+		Long:    "Revert the staged host network configuration changes that have not yet been applied.",
+		Example: `  pmx pve node network revert --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

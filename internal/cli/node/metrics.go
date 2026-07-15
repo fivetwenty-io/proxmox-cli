@@ -23,7 +23,8 @@ func newRrddataCmd() *cobra.Command {
 		Long: "Fetch structured time-series performance metrics (CPU, memory, network, " +
 			"disk) for the resolved node from the PVE RRD database. --timeframe is " +
 			"required; --cf is optional.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node rrddata --timeframe hour`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

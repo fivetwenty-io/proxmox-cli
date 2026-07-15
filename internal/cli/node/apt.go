@@ -57,7 +57,8 @@ func newAptListCmd() *cobra.Command {
 		Long: "List the packages on the resolved node that have an available update. " +
 			"INSTALLED is the currently installed version and CANDIDATE is the version " +
 			"the update would install.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node apt list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -96,7 +97,8 @@ func newAptVersionsCmd() *cobra.Command {
 		Short: "List installed versions of Proxmox-relevant packages",
 		Long: "List the installed versions of the packages APT considers relevant to Proxmox " +
 			"on the resolved node, with their current state and priority.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node apt versions`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -190,7 +192,8 @@ func newAptUpdateCmd() *cobra.Command {
 		Long: "Refresh the package database on the resolved node (equivalent to " +
 			"`apt-get update`). The command blocks until the refresh task finishes " +
 			"unless --async is set.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node apt update`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -288,7 +291,8 @@ func newAptReposListCmd() *cobra.Command {
 		Short: "List the standard APT repositories and their status",
 		Long: "List the standard Proxmox APT repositories and, for each, whether it is " +
 			"enabled, disabled, or not configured on the resolved node.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node apt repositories list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -375,6 +379,8 @@ func newAptReposEnableCmd() *cobra.Command {
 		Short: "Enable or disable a configured repository",
 		Long: "Enable (the default) or disable (--enabled=false) the repository at the " +
 			"given --index within the repository file at --path.",
+		Example: `  pmx pve node apt repositories enable --path /etc/apt/sources.list --index 0 --yes
+  pmx pve node apt repositories enable --path /etc/apt/sources.list --index 0 --enabled=false --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

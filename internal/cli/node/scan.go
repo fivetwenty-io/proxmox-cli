@@ -97,10 +97,11 @@ func renderScan(cmd *cobra.Command, deps *cli.Deps, raws []json.RawMessage, raw 
 
 func newScanLvmCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "lvm",
-		Short: "List local LVM volume groups",
-		Long:  "Probe the resolved node for local LVM volume groups it could use as storage.",
-		Args:  cobra.NoArgs,
+		Use:     "lvm",
+		Short:   "List local LVM volume groups",
+		Long:    "Probe the resolved node for local LVM volume groups it could use as storage.",
+		Example: `  pmx pve node scan lvm`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -117,10 +118,11 @@ func newScanLvmCmd() *cobra.Command {
 
 func newScanZfsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "zfs",
-		Short: "List local ZFS pools",
-		Long:  "Probe the resolved node for local ZFS pools it could use as storage.",
-		Args:  cobra.NoArgs,
+		Use:     "zfs",
+		Short:   "List local ZFS pools",
+		Long:    "Probe the resolved node for local ZFS pools it could use as storage.",
+		Example: `  pmx pve node scan zfs`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

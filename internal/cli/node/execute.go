@@ -23,7 +23,8 @@ func newNodeExecuteCmd() *cobra.Command {
 		Long: "Send a JSON-encoded array of commands to the Proxmox VE API for execution on the " +
 			"resolved node. The value of --commands must be a valid JSON array, for example: " +
 			`'["uname -a","hostname"]'. Each element becomes one command.`,
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node execute --commands '["uname -a"]'`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

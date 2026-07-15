@@ -50,10 +50,11 @@ func newCertCmd() *cobra.Command {
 
 func newCertListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List the node's certificate chain",
-		Long:  "Show every certificate currently serving the resolved node's API, including subject, issuer, fingerprint, and validity window.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List the node's certificate chain",
+		Long:    "Show every certificate currently serving the resolved node's API, including subject, issuer, fingerprint, and validity window.",
+		Example: `  pmx pve node cert list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -95,7 +96,8 @@ func newCertAcmeListCmd() *cobra.Command {
 		Short: "Show the node's ACME-managed certificate",
 		Long: "Show the certificate installed at " + acmeManagedCertFilename + " on the resolved node — the file " +
 			"ACME orders and renewals manage. If none is installed, the node is serving its self-signed certificate.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node cert acme list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -141,7 +143,8 @@ func newCertAcmeOrderCmd() *cobra.Command {
 		Short: "Order a new ACME certificate for the node",
 		Long: "Request a new ACME (Let's Encrypt) certificate for the resolved node and install it. " +
 			"This contacts the configured ACME directory and replaces the node's API certificate.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node cert acme order --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -178,6 +181,8 @@ func newCertAcmeRenewCmd() *cobra.Command {
 		Short: "Renew the node's ACME certificate",
 		Long: "Renew the ACME (Let's Encrypt) certificate for the resolved node. By default PVE only " +
 			"renews when expiry is within 30 days; pass --force to renew regardless.",
+		Example: `  pmx pve node cert acme renew --yes
+  pmx pve node cert acme renew --force --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -208,10 +213,11 @@ func newCertAcmeRenewCmd() *cobra.Command {
 func newCertAcmeDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Remove the node's ACME certificate",
-		Long:  "Delete the ACME (Let's Encrypt) certificate from the resolved node, reverting it to the self-signed certificate.",
-		Args:  cobra.NoArgs,
+		Use:     "delete",
+		Short:   "Remove the node's ACME certificate",
+		Long:    "Delete the ACME (Let's Encrypt) certificate from the resolved node, reverting it to the self-signed certificate.",
+		Example: `  pmx pve node cert acme delete --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -258,7 +264,8 @@ func newCertCustomUploadCmd() *cobra.Command {
 		Long: "Install a PEM-encoded certificate (chain) — and optionally its private key — as the node's " +
 			"API certificate. The private key is sent to the API but never echoed back. Use --restart to " +
 			"reload pveproxy so the new certificate takes effect immediately.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node cert custom upload --certificates "$(cat cert.pem)" --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -303,10 +310,11 @@ func newCertCustomDeleteCmd() *cobra.Command {
 		yes     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Remove the node's custom certificate",
-		Long:  "Delete the custom certificate from the resolved node, reverting it to the self-signed certificate.",
-		Args:  cobra.NoArgs,
+		Use:     "delete",
+		Short:   "Remove the node's custom certificate",
+		Long:    "Delete the custom certificate from the resolved node, reverting it to the self-signed certificate.",
+		Example: `  pmx pve node cert custom delete --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

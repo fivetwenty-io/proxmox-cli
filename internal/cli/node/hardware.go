@@ -40,6 +40,8 @@ func newHardwarePciCmd() *cobra.Command {
 		Long: "Without an argument, list the PCI(e) devices on the resolved node. With a " +
 			"PCI ID (with or without the domain prefix, e.g. 0000:01:00.0 or 01:00.0), " +
 			"show that device's detail row.",
+		Example: `  pmx pve node hardware pci
+  pmx pve node hardware pci 0000:01:00.0`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -107,7 +109,8 @@ func newHardwarePciMdevCmd() *cobra.Command {
 		Short: "List mediated device types for a PCI device",
 		Long: "List the mediated device (mdev) types supported by the specified PCI device " +
 			"on the resolved node. Used when planning vGPU or other mdev passthrough.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node hardware pci mdev 0000:01:00.0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -127,10 +130,11 @@ func newHardwarePciMdevCmd() *cobra.Command {
 
 func newHardwareUsbCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "usb",
-		Short: "List USB devices on the node",
-		Long:  "List the USB devices attached to the resolved node. This is a read-only query.",
-		Args:  cobra.NoArgs,
+		Use:     "usb",
+		Short:   "List USB devices on the node",
+		Long:    "List the USB devices attached to the resolved node. This is a read-only query.",
+		Example: `  pmx pve node hardware usb`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

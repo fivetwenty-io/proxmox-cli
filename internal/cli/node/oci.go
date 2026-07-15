@@ -58,7 +58,8 @@ func newOciTagsCmd() *cobra.Command {
 		Short: "List published tags for an OCI image repository",
 		Long: "List the tags published for an OCI image repository as seen from the " +
 			"resolved node. This is a read-only query.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node oci tags --reference docker.io/library/alpine`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -100,7 +101,8 @@ func newOciPullCmd() *cobra.Command {
 			"on the resolved node. This writes a new image artifact to the storage " +
 			"and requires --yes. The operation runs as a background task; use --async " +
 			"to return the task UPID immediately.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node oci pull local-lvm --reference docker.io/library/alpine:latest --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

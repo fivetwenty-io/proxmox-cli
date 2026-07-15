@@ -72,7 +72,8 @@ func newDisksListCmd() *cobra.Command {
 		Long: "List the block devices on the resolved node. SIZE is reported in bytes; " +
 			"USED indicates how the disk is currently consumed (for example LVM, ZFS, " +
 			"or a partition table).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node disks list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -416,10 +417,11 @@ func newDisksLsCmd() *cobra.Command {
 
 func newDisksLsDirectoryCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "directory",
-		Short: "List directory storage mounts on the node",
-		Long:  "List the directory-backed storage mounts already configured on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "directory",
+		Short:   "List directory storage mounts on the node",
+		Long:    "List the directory-backed storage mounts already configured on the resolved node.",
+		Example: `  pmx pve node disks pools directory`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -436,10 +438,11 @@ func newDisksLsDirectoryCmd() *cobra.Command {
 
 func newDisksLsLvmCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "lvm",
-		Short: "List LVM volume groups on the node",
-		Long:  "List the LVM volume groups already configured on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "lvm",
+		Short:   "List LVM volume groups on the node",
+		Long:    "List the LVM volume groups already configured on the resolved node.",
+		Example: `  pmx pve node disks pools lvm`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -459,10 +462,11 @@ func newDisksLsLvmCmd() *cobra.Command {
 
 func newDisksLsLvmthinCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "lvmthin",
-		Short: "List LVM-thin pools on the node",
-		Long:  "List the LVM-thin pools already configured on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "lvmthin",
+		Short:   "List LVM-thin pools on the node",
+		Long:    "List the LVM-thin pools already configured on the resolved node.",
+		Example: `  pmx pve node disks pools lvmthin`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -479,10 +483,11 @@ func newDisksLsLvmthinCmd() *cobra.Command {
 
 func newDisksLsZfsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "zfs",
-		Short: "List ZFS pools on the node",
-		Long:  "List the ZFS pools already configured on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "zfs",
+		Short:   "List ZFS pools on the node",
+		Long:    "List the ZFS pools already configured on the resolved node.",
+		Example: `  pmx pve node disks pools zfs`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

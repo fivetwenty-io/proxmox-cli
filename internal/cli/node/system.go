@@ -47,10 +47,11 @@ func newDnsCmd() *cobra.Command {
 
 func newDnsGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get",
-		Short: "Show the node's DNS configuration",
-		Long:  "Show the DNS search domain and configured name-server addresses on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "get",
+		Short:   "Show the node's DNS configuration",
+		Long:    "Show the DNS search domain and configured name-server addresses on the resolved node.",
+		Example: `  pmx pve node dns get`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -75,7 +76,8 @@ func newDnsSetCmd() *cobra.Command {
 		Short: "Update the node's DNS configuration",
 		Long: "Set the DNS search domain and, optionally, up to three name-server addresses " +
 			"on the resolved node. Re-applying the current values is idempotent.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node dns set --search example.com --dns1 1.1.1.1`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -122,10 +124,11 @@ func newHostsCmd() *cobra.Command {
 
 func newHostsGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get",
-		Short: "Show the node's /etc/hosts content",
-		Long:  "Show the current /etc/hosts file content on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "get",
+		Short:   "Show the node's /etc/hosts content",
+		Long:    "Show the current /etc/hosts file content on the resolved node.",
+		Example: `  pmx pve node hosts get`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -157,7 +160,8 @@ func newHostsSetCmd() *cobra.Command {
 		Long: "Replace the entire /etc/hosts file on the resolved node with the supplied content. " +
 			"This is a wholesale replacement, not a merge, so pass the complete file. Supply --digest " +
 			"to guard against a concurrent modification. Requires --yes.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node hosts set --data "$(cat hosts)" --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -199,10 +203,11 @@ func newTimeCmd() *cobra.Command {
 
 func newTimeGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get",
-		Short: "Show the node's time and time zone",
-		Long:  "Show the current local time, UTC time, and configured time zone on the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "get",
+		Short:   "Show the node's time and time zone",
+		Long:    "Show the current local time, UTC time, and configured time zone on the resolved node.",
+		Example: `  pmx pve node time get`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -224,7 +229,8 @@ func newTimeSetCmd() *cobra.Command {
 		Short: "Set the node's time zone",
 		Long: "Set the node's time zone to a name from /usr/share/zoneinfo/zone.tab (for example " +
 			"\"UTC\" or \"Europe/Vienna\"). Re-applying the current zone is idempotent.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node time set --timezone UTC`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -252,10 +258,11 @@ func newSyslogCmd() *cobra.Command {
 		limit, start int64
 	)
 	cmd := &cobra.Command{
-		Use:   "syslog",
-		Short: "Read the node's system log",
-		Long:  "Read entries from the node's system log, optionally filtered by service or time range.",
-		Args:  cobra.NoArgs,
+		Use:     "syslog",
+		Short:   "Read the node's system log",
+		Long:    "Read entries from the node's system log, optionally filtered by service or time range.",
+		Example: `  pmx pve node syslog --limit 50`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -308,7 +315,8 @@ func newJournalCmd() *cobra.Command {
 		Short: "Read the node's systemd journal",
 		Long: "Read raw lines from the node's systemd journal, optionally limited to the last N " +
 			"entries or bounded by a time range or cursor.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node journal --lastentries 100`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -356,10 +364,11 @@ func newJournalCmd() *cobra.Command {
 
 func newReportCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "report",
-		Short: "Generate the node's system report",
-		Long:  "Generate the node's full system report — a single text document summarizing host configuration and state.",
-		Args:  cobra.NoArgs,
+		Use:     "report",
+		Short:   "Generate the node's system report",
+		Long:    "Generate the node's full system report — a single text document summarizing host configuration and state.",
+		Example: `  pmx pve node report`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -402,10 +411,11 @@ func newSubscriptionCmd() *cobra.Command {
 
 func newSubscriptionGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get",
-		Short: "Show the node's subscription status",
-		Long:  "Show the Proxmox VE subscription status and product info of the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "get",
+		Short:   "Show the node's subscription status",
+		Long:    "Show the Proxmox VE subscription status and product info of the resolved node.",
+		Example: `  pmx pve node subscription get`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -426,10 +436,11 @@ func newSubscriptionSetCmd() *cobra.Command {
 		yes bool
 	)
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Set the node's subscription key",
-		Long:  "Set (or replace) the Proxmox VE subscription key on the resolved node. Requires --yes.",
-		Args:  cobra.NoArgs,
+		Use:     "set",
+		Short:   "Set the node's subscription key",
+		Long:    "Set (or replace) the Proxmox VE subscription key on the resolved node. Requires --yes.",
+		Example: `  pmx pve node subscription set --key '${PVE_SUBSCRIPTION_KEY}' --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -464,7 +475,8 @@ func newSubscriptionUpdateCmd() *cobra.Command {
 		Short: "Refresh the node's subscription against the server",
 		Long: "Refresh the node's subscription information from the Proxmox server. Pass --force to " +
 			"always contact the server even when the local cache is still valid. Requires --yes.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node subscription update --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -493,10 +505,11 @@ func newSubscriptionUpdateCmd() *cobra.Command {
 func newSubscriptionDeleteCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Remove the node's subscription key",
-		Long:  "Remove the Proxmox VE subscription key from the resolved node. Requires --yes.",
-		Args:  cobra.NoArgs,
+		Use:     "delete",
+		Short:   "Remove the node's subscription key",
+		Long:    "Remove the Proxmox VE subscription key from the resolved node. Requires --yes.",
+		Example: `  pmx pve node subscription delete --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

@@ -25,7 +25,8 @@ func newQueryUrlMetadataCmd() *cobra.Command {
 		Long: "Resolve URL metadata (filename, MIME type, size) for the given URL by " +
 			"proxying the request through the resolved node. Useful for URLs that are " +
 			"only reachable from the node's network. --url is required.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node query-url-metadata --url http://10.0.0.5/isos/debian.iso`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

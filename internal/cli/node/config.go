@@ -57,6 +57,8 @@ func newNodeConfigGetCmd() *cobra.Command {
 		Long: "Show the node configuration currently set. The PVE API omits options left " +
 			"at their built-in defaults; pass --defaults to also list those with the " +
 			"value they effectively have.",
+		Example: `  pmx pve node config get
+  pmx pve node config get --defaults`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -105,10 +107,11 @@ func newNodeConfigSetCmd() *cobra.Command {
 		"startall-onboot-delay", "digest", "delete", "location",
 	}
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Update the node configuration",
-		Long:  "Update the node-level configuration. Only the flags you pass are changed.",
-		Args:  cobra.NoArgs,
+		Use:     "set",
+		Short:   "Update the node configuration",
+		Long:    "Update the node-level configuration. Only the flags you pass are changed.",
+		Example: `  pmx pve node config set --description "Primary compute node"`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

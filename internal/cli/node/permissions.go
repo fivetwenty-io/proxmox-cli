@@ -50,6 +50,8 @@ func newPermissionsListCmd() *cobra.Command {
 			"path it came from. Some node privileges (Sys.Incoming, PCI mdev) are checked at " +
 			"root \"/\" and are not shown here even with --inherited beyond the normal chain; use " +
 			"`pmx pve access acl list --path /` to inspect root grants directly.",
+		Example: `  pmx pve node permissions list pve1
+  pmx pve node permissions list pve1 --inherited`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -93,7 +95,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 			"requires Sys.Audit on /access. Some node privileges (Sys.Incoming, PCI mdev) are " +
 			"checked at root \"/\" instead and will not appear here; use " +
 			"`pmx pve access permissions --path /` to inspect those.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node permissions effective pve1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			path := nodeACLPath(args[0])
@@ -145,7 +148,8 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
 			"silently, matching PVE server behavior. This command does not block self-lockout; " +
 			"check `permissions effective` first if unsure.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node permissions ` + verb + ` pve1 --roles PVEAdmin --users alice@pve`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

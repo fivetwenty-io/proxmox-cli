@@ -222,7 +222,8 @@ func newTaskStatusCmd() *cobra.Command {
 		Short: "Show the runtime status of a task by UPID",
 		Long: "Query the current status of a single task on the resolved node by its UPID. " +
 			"Reports whether the task is still running and, when finished, the exit status.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node task status UPID:pve1:00001234:...`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

@@ -45,7 +45,8 @@ func newAptTemplatesListCmd() *cobra.Command {
 		Short: "List available container appliance templates",
 		Long: "List the appliance templates available to download on the resolved node " +
 			"from its configured template repositories.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node apt templates list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -85,7 +86,8 @@ func newAptTemplatesDownloadCmd() *cobra.Command {
 		Long: "Download the template named by --template to the storage named by " +
 			"--storage. The command blocks until the download task finishes unless " +
 			"--async is set.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node apt templates download --storage local --template debian-12-standard`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

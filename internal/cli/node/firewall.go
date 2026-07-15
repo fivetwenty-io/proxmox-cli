@@ -48,10 +48,11 @@ func newNodeFirewallLogCmd() *cobra.Command {
 		until int64
 	)
 	cmd := &cobra.Command{
-		Use:   "log",
-		Short: "Read the host firewall log",
-		Long:  "Read the firewall log of the resolved node. Use --start and --limit to page through entries.",
-		Args:  cobra.NoArgs,
+		Use:     "log",
+		Short:   "Read the host firewall log",
+		Long:    "Read the firewall log of the resolved node. Use --start and --limit to page through entries.",
+		Example: `  pmx pve node firewall log --limit 50`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -205,10 +206,11 @@ func newNodeFirewallRulesCmd() *cobra.Command {
 
 func newNodeFirewallRulesListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List the host firewall rules",
-		Long:  "List every firewall rule configured on the resolved node, in rule-evaluation order.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List the host firewall rules",
+		Long:    "List every firewall rule configured on the resolved node, in rule-evaluation order.",
+		Example: `  pmx pve node firewall rules list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -270,7 +272,8 @@ func newNodeFirewallRulesCreateCmd() *cobra.Command {
 		Short: "Append a rule to the host firewall",
 		Long: "Create a new host firewall rule. --type (in|out|group) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node firewall rules create --type in --action ACCEPT --source 10.0.0.0/24 --dport 22`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -504,7 +507,8 @@ func newNodeFirewallOptionsGetCmd() *cobra.Command {
 		Long: "Show the host firewall options currently set on the resolved node. The PVE " +
 			"API omits options left at their built-in defaults; pass --defaults to also " +
 			"list those with the value they effectively have.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve node firewall options get`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -563,10 +567,11 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 		"protection-synflood-burst", "protection-synflood-rate", "digest", "delete",
 	}
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Set the host firewall options",
-		Long:  "Update the host firewall options on the resolved node. Only the flags you pass are changed.",
-		Args:  cobra.NoArgs,
+		Use:     "set",
+		Short:   "Set the host firewall options",
+		Long:    "Update the host firewall options on the resolved node. Only the flags you pass are changed.",
+		Example: `  pmx pve node firewall options set --enable`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

@@ -33,10 +33,11 @@ func newCephOsdCmd() *cobra.Command {
 
 func newCephOsdListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "Show the Ceph OSD tree",
-		Long:  "Show the CRUSH/OSD tree and any cluster-wide OSD flags as seen from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "Show the Ceph OSD tree",
+		Long:    "Show the CRUSH/OSD tree and any cluster-wide OSD flags as seen from the resolved node.",
+		Example: `  pmx pve node ceph osd list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -57,10 +58,11 @@ func newCephOsdListCmd() *cobra.Command {
 // lv-info, ...); the OSD detail lives at the metadata child endpoint.
 func newCephOsdGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <osdid>",
-		Short: "Show details for a single OSD",
-		Long:  "Show the metadata and runtime detail rows for the given OSD id on the resolved node.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <osdid>",
+		Short:   "Show details for a single OSD",
+		Long:    "Show the metadata and runtime detail rows for the given OSD id on the resolved node.",
+		Example: `  pmx pve node ceph osd get 0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -82,7 +84,8 @@ func newCephOsdLvInfoCmd() *cobra.Command {
 		Short: "Show the logical volume details for an OSD",
 		Long: "Show the LVM logical-volume name, path, size, UUID, and volume group backing the " +
 			"given OSD on the resolved node.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node ceph osd lv-info 0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -109,7 +112,8 @@ func newCephOsdMetadataCmd() *cobra.Command {
 		Short: "Show OSD metadata",
 		Long: "Show detailed runtime metadata for the given OSD, including its backing devices, " +
 			"as seen from the resolved node.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node ceph osd metadata 0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -140,7 +144,9 @@ func newCephOsdCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create a Ceph OSD on a block device (destructive)",
 		Long:  "Create a Ceph OSD backed by the given block device. The device is wiped and consumed by Ceph.",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pve node ceph osd create --dev /dev/sdb --yes
+  pmx pve node ceph osd create --dev /dev/sdb --db-dev /dev/sdc --yes`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -203,7 +209,9 @@ func newCephOsdDeleteCmd() *cobra.Command {
 		Use:   "delete <osdid>",
 		Short: "Destroy a Ceph OSD (destructive)",
 		Long:  "Remove the given OSD from the cluster. With --cleanup, also zap the underlying logical volumes and partitions.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve node ceph osd delete 0 --yes
+  pmx pve node ceph osd delete 0 --cleanup --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -233,10 +241,11 @@ func newCephOsdDeleteCmd() *cobra.Command {
 func newCephOsdInCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "in <osdid>",
-		Short: "Mark an OSD as in (destructive)",
-		Long:  "Mark the given OSD as 'in', allowing the cluster to place data on it. Triggers data movement.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "in <osdid>",
+		Short:   "Mark an OSD as in (destructive)",
+		Long:    "Mark the given OSD as 'in', allowing the cluster to place data on it. Triggers data movement.",
+		Example: `  pmx pve node ceph osd in 0 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -259,10 +268,11 @@ func newCephOsdInCmd() *cobra.Command {
 func newCephOsdOutCmd() *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "out <osdid>",
-		Short: "Mark an OSD as out (destructive)",
-		Long:  "Mark the given OSD as 'out', draining data off it. Triggers data movement.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "out <osdid>",
+		Short:   "Mark an OSD as out (destructive)",
+		Long:    "Mark the given OSD as 'out', draining data off it. Triggers data movement.",
+		Example: `  pmx pve node ceph osd out 0 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -291,7 +301,9 @@ func newCephOsdScrubCmd() *cobra.Command {
 		Use:   "scrub <osdid>",
 		Short: "Trigger a scrub on an OSD (destructive)",
 		Long:  "Instruct the given OSD to scrub. With --deep, perform a deep scrub. Scrubbing adds I/O load.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve node ceph osd scrub 0 --yes
+  pmx pve node ceph osd scrub 0 --deep --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

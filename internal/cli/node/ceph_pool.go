@@ -29,10 +29,11 @@ func newCephPoolCmd() *cobra.Command {
 
 func newCephPoolListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List Ceph pools",
-		Long:  "List every Ceph pool defined on the cluster as seen from the resolved node.",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Short:   "List Ceph pools",
+		Long:    "List every Ceph pool defined on the cluster as seen from the resolved node.",
+		Example: `  pmx pve node ceph pool list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -53,10 +54,11 @@ func newCephPoolListCmd() *cobra.Command {
 // pool parameters live at the status child endpoint.
 func newCephPoolGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <name>",
-		Short: "Show a Ceph pool's parameters",
-		Long:  "Show the configured parameters for the given Ceph pool on the resolved node.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "get <name>",
+		Short:   "Show a Ceph pool's parameters",
+		Long:    "Show the configured parameters for the given Ceph pool on the resolved node.",
+		Example: `  pmx pve node ceph pool get cephpool`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -75,10 +77,11 @@ func newCephPoolGetCmd() *cobra.Command {
 func newCephPoolStatusCmd() *cobra.Command {
 	var verbose bool
 	cmd := &cobra.Command{
-		Use:   "status <name>",
-		Short: "Show a Ceph pool's status",
-		Long:  "Show runtime status for the given Ceph pool, optionally including detailed statistics with --verbose.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <name>",
+		Short:   "Show a Ceph pool's status",
+		Long:    "Show runtime status for the given Ceph pool, optionally including detailed statistics with --verbose.",
+		Example: `  pmx pve node ceph pool status cephpool`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -118,7 +121,9 @@ func newCephPoolCreateCmd() *cobra.Command {
 		Use:   "create <name>",
 		Short: "Create a Ceph pool (destructive)",
 		Long:  "Create a new Ceph pool. Pool creation consumes cluster capacity and may reconfigure storage.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve node ceph pool create cephpool --yes
+  pmx pve node ceph pool create cephpool --size 3 --pg-num 128 --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -193,10 +198,11 @@ func newCephPoolSetCmd() *cobra.Command {
 		yes             bool
 	)
 	cmd := &cobra.Command{
-		Use:   "set <name>",
-		Short: "Update a Ceph pool's parameters (destructive)",
-		Long:  "Update one or more parameters of an existing Ceph pool. Pass at least one field flag.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <name>",
+		Short:   "Update a Ceph pool's parameters (destructive)",
+		Long:    "Update one or more parameters of an existing Ceph pool. Pass at least one field flag.",
+		Example: `  pmx pve node ceph pool set cephpool --size 3 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -281,10 +287,11 @@ func newCephPoolDeleteCmd() *cobra.Command {
 		yes             bool
 	)
 	cmd := &cobra.Command{
-		Use:   "delete <name>",
-		Short: "Destroy a Ceph pool (destructive)",
-		Long:  "Destroy the given Ceph pool. All data in the pool is permanently lost.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <name>",
+		Short:   "Destroy a Ceph pool (destructive)",
+		Long:    "Destroy the given Ceph pool. All data in the pool is permanently lost.",
+		Example: `  pmx pve node ceph pool delete cephpool --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {

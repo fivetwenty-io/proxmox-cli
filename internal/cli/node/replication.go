@@ -61,7 +61,8 @@ func newReplicationGetCmd() *cobra.Command {
 		Long: "Show the full configuration of a single storage-replication job, including its target, " +
 			"schedule, rate limit, remove-job setting, and comment. Job configuration is cluster-wide; " +
 			"this is equivalent to `pmx pve cluster replication get`.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node replication get local-100-0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.GetReplication(cmd.Context(), args[0])
@@ -80,6 +81,8 @@ func newReplicationListCmd() *cobra.Command {
 		Short: "List replication job states on the node",
 		Long: "Show every storage-replication job whose source is the resolved node, including its target, " +
 			"schedule, last and next sync, and any error. Pass --guest to filter to a single guest.",
+		Example: `  pmx pve node replication list
+  pmx pve node replication list --guest 100`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -103,10 +106,11 @@ func newReplicationListCmd() *cobra.Command {
 
 func newReplicationStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <id>",
-		Short: "Show the runtime status of a replication job",
-		Long:  "Show the current runtime status of a single replication job on the resolved node, including last and next sync, duration, fail count, and any error.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "status <id>",
+		Short:   "Show the runtime status of a replication job",
+		Long:    "Show the current runtime status of a single replication job on the resolved node, including last and next sync, duration, fail count, and any error.",
+		Example: `  pmx pve node replication status local-100-0`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -127,10 +131,11 @@ func newReplicationLogCmd() *cobra.Command {
 		start int64
 	)
 	cmd := &cobra.Command{
-		Use:   "log <id>",
-		Short: "Show the log of a replication job",
-		Long:  "Show the log lines recorded for a single replication job on the resolved node. Use --limit and --start to page through the log.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "log <id>",
+		Short:   "Show the log of a replication job",
+		Long:    "Show the log lines recorded for a single replication job on the resolved node. Use --limit and --start to page through the log.",
+		Example: `  pmx pve node replication log local-100-0 --limit 50`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
@@ -164,7 +169,8 @@ func newReplicationRunCmd() *cobra.Command {
 		Short: "Trigger an immediate run of a replication job",
 		Long: "Schedule a single replication job to run immediately on the resolved node instead of waiting " +
 			"for its next scheduled sync. The job must already be defined; this only triggers an early run.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve node replication run local-100-0 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
