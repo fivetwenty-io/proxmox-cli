@@ -32,6 +32,8 @@ func newAgentExecCmd() *cobra.Command {
 			"`--` so each argument is preserved exactly (spaces included); the\n" +
 			"legacy --command flag splits on whitespace. Use\n" +
 			"`pmx pve qemu agent exec-status` to poll for completion and output.",
+		Example: `  pmx pve qemu agent exec 100 -- uptime
+  pmx pve qemu agent exec 100 --command uptime`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -86,7 +88,8 @@ func newAgentExecStatusCmd() *cobra.Command {
 		Short: "Poll exit status and output of a guest-agent exec process",
 		Long: "Query the status of a process started with `pmx pve qemu agent exec`. " +
 			"Returns stdout/stderr and exit code once the process has exited.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu agent exec-status 100 --pid 1234`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -148,7 +151,8 @@ func newAgentFileReadCmd() *cobra.Command {
 		Long: "Read up to 16 MiB of a file from the running guest via the QEMU " +
 			"guest agent. Content is returned as plain text (decoded from base64 " +
 			"by default). Use --offset and --count to page through larger files.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu agent file-read 100 --file /etc/hostname`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -200,7 +204,8 @@ func newAgentFileWriteCmd() *cobra.Command {
 		Short: "Write content to a file inside a VM via the guest agent",
 		Long: "Write the value of --content to the specified file path inside the " +
 			"running guest. The QEMU guest agent handles base64 encoding automatically.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu agent file-write 100 --file /etc/motd --content 'Managed by pmx'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -243,7 +248,8 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 		Long: "Set the password for a user account inside the running guest. The " +
 			"password is read from stdin so it is never exposed in process arguments, " +
 			"shell history, or log files.",
-		Args: cobra.ExactArgs(1),
+		Example: `  echo '${NEW_PASSWORD}' | pmx pve qemu agent set-user-password 100 --username alice --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

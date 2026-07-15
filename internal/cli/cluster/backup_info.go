@@ -32,7 +32,8 @@ func newBackupInfoNotBackedUpCmd() *cobra.Command {
 		Short: "List guests with no backup coverage",
 		Long: "List every guest in the cluster that is not covered by any scheduled backup " +
 			"job. Essential for backup coverage audits.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster backup-info not-backed-up`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListBackupInfoNotBackedUp(cmd.Context())

@@ -70,6 +70,8 @@ func newConfigGetCmd() *cobra.Command {
 		Long: "Show the VM configuration currently set. The PVE API omits options " +
 			"left at their built-in defaults; pass --defaults to also list the options " +
 			"that carry one, with the value they effectively have.",
+		Example: `  pmx pve qemu config get 100
+  pmx pve qemu config get 100 --defaults`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

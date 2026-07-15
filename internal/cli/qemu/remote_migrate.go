@@ -36,6 +36,8 @@ func newRemoteMigrateCmd() *cobra.Command {
 			"--target-endpoint, --target-storage, and --target-bridge are required. " +
 			"The source VM may be deleted after migration if --delete is set. " +
 			"Pass --yes to confirm this irreversible cross-cluster operation.",
+		Example: `  pmx pve qemu remote-migrate 100 --target-endpoint pve-remote --target-storage local-lvm \
+  --target-bridge vmbr0 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

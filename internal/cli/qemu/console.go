@@ -32,6 +32,8 @@ func newConsoleCmd() *cobra.Command {
 			"The response contains a short-lived ticket and the host, port, and\n" +
 			"certificate a viewer needs to connect. This command returns that\n" +
 			"connection info; it does not open the console session itself.",
+		Example: `  pmx pve qemu console 100
+  pmx pve qemu console 100 --type spice`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

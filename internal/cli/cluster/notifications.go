@@ -66,7 +66,8 @@ func newNotificationsEndpointsCmd() *cobra.Command {
 		Short: "List all notification endpoints",
 		Long: "List every configured notification endpoint across all endpoint types " +
 			"(sendmail, gotify, smtp, webhook), with a type column identifying each.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster notifications endpoints`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			ctx := cmd.Context()
@@ -131,7 +132,8 @@ func newNotificationsTargetsTestCmd() *cobra.Command {
 		Short: "Send a test notification through a target",
 		Long: "Send a test notification through the named notification target. " +
 			"Use this to verify endpoint configuration is functional.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster notifications targets-test my-gotify`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -152,7 +154,8 @@ func newNotificationsMatcherFieldsCmd() *cobra.Command {
 		Short: "List known matcher metadata field names",
 		Long: "List the known metadata field names that can be used when authoring " +
 			"notification matcher rules.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster notifications matcher-fields`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsMatcherFields(cmd.Context())
@@ -172,7 +175,8 @@ func newNotificationsMatcherFieldValuesCmd() *cobra.Command {
 		Short: "List matcher field names and their known values",
 		Long: "List each known notification matcher metadata field together with the " +
 			"values it can take. Useful when authoring matcher rules.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster notifications matcher-field-values`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListNotificationsMatcherFieldValues(cmd.Context())

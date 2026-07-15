@@ -107,9 +107,11 @@ func newAgentCmd() *cobra.Command {
 		"  exec, exec-status, file-read, file-write, set-user-password"
 
 	cmd := &cobra.Command{
-		Use:       "agent <vmid|name> <command>",
-		Short:     "Run a QEMU guest-agent command against a VM",
-		Long:      long,
+		Use:   "agent <vmid|name> <command>",
+		Short: "Run a QEMU guest-agent command against a VM",
+		Long:  long,
+		Example: `  pmx pve qemu agent 100 ping
+  pmx pve qemu agent 100 get-osinfo`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: append(append([]string{}, agentQueryCommands...), agentMutateCommands...),
 		RunE: func(cmd *cobra.Command, args []string) error {

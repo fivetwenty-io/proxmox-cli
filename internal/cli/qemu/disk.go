@@ -46,7 +46,8 @@ func newDiskResizeCmd() *cobra.Command {
 		Short: "Grow a QEMU virtual machine disk",
 		Long: "Increase the size of an attached disk. Use an absolute size such as " +
 			"`32G` or a relative increment such as `+10G`. Shrinking is not supported by PVE.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu disk resize 100 --disk scsi0 --size +10G`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -115,6 +116,8 @@ func newDiskMoveCmd() *cobra.Command {
 		Short: "Relocate a QEMU virtual machine disk",
 		Long: "Move an attached disk to a different storage, or reassign it to another " +
 			"VM. The command blocks until the move task completes unless --async is set.",
+		Example: `  pmx pve qemu disk move 100 --disk scsi0 --storage local-lvm
+  pmx pve qemu disk move 100 --disk scsi0 --target-vmid 101`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -196,6 +199,8 @@ func newDiskUnlinkCmd() *cobra.Command {
 		Long: "Detach one or more disks from a VM. By default each disk is kept as an " +
 			"`unused[n]` config entry; pass --force to physically remove the underlying volume. " +
 			"Multiple disks may be given as a comma-separated list.",
+		Example: `  pmx pve qemu disk unlink 100 --disk scsi1
+  pmx pve qemu disk unlink 100 --disk scsi1 --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

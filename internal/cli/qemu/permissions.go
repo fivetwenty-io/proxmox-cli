@@ -53,6 +53,8 @@ func newPermissionsListCmd() *cobra.Command {
 			"--inherited, also include entries on every ancestor of that path (/, /vms), unioned " +
 			"client-side from a single ACL read (no extra API calls); each row then shows the " +
 			"path it was actually granted on so inherited and direct entries are never confused.",
+		Example: `  pmx pve qemu permissions list 100
+  pmx pve qemu permissions list 100 --inherited`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -98,7 +100,8 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 		Long: "Show the effective (post-inheritance, post-propagation) privileges on a VM's " +
 			"/vms/{vmid} path for the calling user, or for --userid when passed. Querying " +
 			"another user's or token's effective permissions requires Sys.Audit on /access.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu permissions effective 100`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, _, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -155,6 +158,7 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 		"--tokens is required). Requires Permissions.Modify on the path. By default the " +
 		"granted roles propagate to any path below /vms/{vmid}; pass --no-propagate to " +
 		"restrict them to this path only."
+	example := "  pmx pve qemu permissions grant 100 --roles PVEVMAdmin --users alice@pve"
 	if revoke {
 		verb, pastTense, prep = "revoke", "Revoked", "from"
 		shortDesc = "Revoke roles from users, groups, or tokens on a VM's ACL path"
@@ -165,13 +169,15 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 			"confirm it ever matched). Revoking roles you rely on, including your own access to " +
 			"this VM, is not blocked by this command (self-lockout); run 'permissions effective' first to " +
 			"confirm what you are about to lose."
+		example = "  pmx pve qemu permissions revoke 100 --roles PVEVMAdmin --users alice@pve"
 	}
 
 	cmd := &cobra.Command{
-		Use:   verb + " <vmid|name>",
-		Short: shortDesc,
-		Long:  longDesc,
-		Args:  cobra.ExactArgs(1),
+		Use:     verb + " <vmid|name>",
+		Short:   shortDesc,
+		Long:    longDesc,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, _, err := resolveGuest(cmd.Context(), deps, args[0])

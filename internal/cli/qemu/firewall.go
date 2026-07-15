@@ -54,7 +54,9 @@ func newFirewallLogCmd() *cobra.Command {
 		Use:   "log <vmid|name>",
 		Short: "Read a VM's firewall log",
 		Long:  "Read the firewall log of a VM. Use --start and --limit to page through entries.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve qemu firewall log 100
+  pmx pve qemu firewall log 100 --limit 50`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -320,7 +322,8 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 		Short: "Append a firewall rule to a VM",
 		Long: "Create a new firewall rule. --type (in|out|group) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu firewall rules create 100 --type in --action ACCEPT --source 10.0.0.0/24 --dport 22`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -1102,6 +1105,8 @@ func newFirewallOptionsGetCmd() *cobra.Command {
 		Long: "Show the per-VM firewall options currently set. The PVE API omits " +
 			"options left at their built-in defaults; pass --defaults to also list " +
 			"those with the value they effectively have.",
+		Example: `  pmx pve qemu firewall options get 100
+  pmx pve qemu firewall options get 100 --defaults`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -1146,10 +1151,11 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 		del         string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <vmid|name>",
-		Short: "Set a VM's firewall options",
-		Long:  "Update per-VM firewall options. Only the flags you pass are changed.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <vmid|name>",
+		Short:   "Set a VM's firewall options",
+		Long:    "Update per-VM firewall options. Only the flags you pass are changed.",
+		Example: `  pmx pve qemu firewall options set 100 --enable=true --policy-in DROP`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

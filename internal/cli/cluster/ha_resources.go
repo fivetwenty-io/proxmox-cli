@@ -167,7 +167,8 @@ func newHaResourceCreateCmd() *cobra.Command {
 		Short: "Create an HA resource",
 		Long: "Place a guest under HA management. The SID is a resource type and name separated by a " +
 			"colon (vm:100 or ct:100); a bare guest ID (100) is also accepted.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster ha resource create vm:100 --state started --group preferred-nodes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			sid := args[0]
@@ -320,7 +321,8 @@ func newHaResourceMigrateCmd() *cobra.Command {
 		Long: "Ask the HA manager to live-migrate the resource to --target-node, preserving its " +
 			"running state. The command reports the requested node and any resources that block or " +
 			"co-migrate with it.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster ha resource migrate vm:100 --target-node pve2`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			sid := args[0]
@@ -355,7 +357,8 @@ func newHaResourceRelocateCmd() *cobra.Command {
 		Long: "Ask the HA manager to relocate the resource to --target-node by stopping it and " +
 			"starting it on the target. The command reports the requested node and any resources " +
 			"that block or co-relocate with it.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster ha resource relocate vm:100 --target-node pve2`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			sid := args[0]

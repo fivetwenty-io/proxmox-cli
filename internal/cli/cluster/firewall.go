@@ -1241,6 +1241,8 @@ func newClusterFirewallOptionsGetCmd() *cobra.Command {
 		Long: "Show the datacenter firewall options currently set. The PVE API omits " +
 			"options left at their built-in defaults; pass --defaults to also list " +
 			"those with the value they effectively have.",
+		Example: `  pmx pve cluster firewall options get
+  pmx pve cluster firewall options get --defaults`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -1354,7 +1356,8 @@ func newClusterFirewallMacrosCmd() *cobra.Command {
 		Short: "List all built-in firewall macros",
 		Long: "List all built-in firewall macros available for use in firewall rules. " +
 			"The list is static and provided by the PVE server.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster firewall macros list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListFirewallMacros(cmd.Context())
@@ -1396,6 +1399,8 @@ func newClusterFirewallRefsCmd() *cobra.Command {
 		Short: "List IP set and alias references",
 		Long: "List the IP set and alias references that can be used as source or " +
 			"destination in firewall rules. Pass --type ipset or --type alias to filter.",
+		Example: `  pmx pve cluster firewall refs list
+  pmx pve cluster firewall refs list --type ipset`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

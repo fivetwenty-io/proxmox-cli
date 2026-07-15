@@ -33,6 +33,8 @@ func newCpuListCmd() *cobra.Command {
 		Short: "List available QEMU CPU models for a node",
 		Long: "List the CPU models available to QEMU on the target node. " +
 			"Pass --arch to filter by virtual processor architecture.",
+		Example: `  pmx pve qemu cpu list
+  pmx pve qemu cpu list --arch x86_64`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -84,7 +86,8 @@ func newMachineListCmd() *cobra.Command {
 		Short: "List available QEMU machine types for a node",
 		Long: "List the machine types available to QEMU on the target node. " +
 			"Pass --arch to filter by virtual processor architecture.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve qemu machine list`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)
@@ -125,6 +128,8 @@ func newCpuFlagsCmd() *cobra.Command {
 		Short: "List available QEMU CPU flags for a node",
 		Long: "List the CPU flags available to QEMU on the target node. " +
 			"Pass --arch to filter by architecture and --accel to filter by acceleration type.",
+		Example: `  pmx pve qemu cpu-flags
+  pmx pve qemu cpu-flags --arch x86_64`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

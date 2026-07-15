@@ -136,6 +136,8 @@ func newCreateCmd() *cobra.Command {
 		Long: "Create a QEMU virtual machine on a node. Devices are given as repeatable " +
 			"indexed slots, e.g. --scsi 0=local-lvm:8 --net 0=virtio,bridge=vmbr0 and " +
 			"--ide 2=local:iso/img.iso,media=cdrom.",
+		Example: `  pmx pve qemu create 100 --cores 2 --memory 2048 --net 0=virtio,bridge=vmbr0 --scsi 0=local-lvm:32
+  pmx pve qemu create 100 --cores 4 --memory 4096 --start`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

@@ -25,7 +25,8 @@ func newMetricsCmd() *cobra.Command {
 		Long: "Retrieve RRD time-series data points (cpu, memory, disk I/O, network) " +
 			"for a VM. --timeframe is required. Optional --cf selects the RRD " +
 			"consolidation function (AVERAGE or MAX); the server default is AVERAGE.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu metrics 100 --timeframe hour`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

@@ -42,6 +42,8 @@ func newListCmd() *cobra.Command {
 		Short: "List QEMU virtual machines on a node",
 		Long: "List QEMU virtual machines on the configured node. Pass --cluster to " +
 			"list VMs across every cluster node without specifying --node.",
+		Example: `  pmx pve qemu list
+  pmx pve qemu list --cluster`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

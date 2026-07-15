@@ -23,7 +23,8 @@ func newFeatureCmd() *cobra.Command {
 		Long: "Pre-flight check: query whether the given VM supports a specific " +
 			"feature (e.g. clone, snapshot, copy) and which nodes can perform it. " +
 			"--feature is required.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu feature 100 --feature snapshot`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

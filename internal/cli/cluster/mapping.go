@@ -169,7 +169,8 @@ func newMappingPciCreateCmd() *cobra.Command {
 		Short: "Create a PCI device mapping",
 		Long: "Create a logical PCI mapping. Each --map entry is a per-node device " +
 			"property string, for example 'node=pve,path=0000:01:00.0,id=10de:1b80'.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster mapping pci create gpu0 --map node=pve1,path=0000:01:00.0,id=10de:1b80`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -214,7 +215,8 @@ func newMappingPciSetCmd() *cobra.Command {
 		Short: "Update a PCI device mapping",
 		Long: "Update a PCI mapping. --map re-sends the full per-node entry list " +
 			"(the API rewrites it on every update); other flags are changed only when passed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster mapping pci set gpu0 --map node=pve1,path=0000:01:00.0,id=10de:1b80`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -289,7 +291,8 @@ func newMappingUsbCreateCmd() *cobra.Command {
 		Short: "Create a USB device mapping",
 		Long: "Create a logical USB mapping. Each --map entry is a per-node device " +
 			"property string, for example 'node=pve,path=1-2,id=046d:c52b'.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster mapping usb create scanner --map node=pve1,path=1-2,id=046d:c52b`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -323,7 +326,8 @@ func newMappingUsbSetCmd() *cobra.Command {
 		Short: "Update a USB device mapping",
 		Long: "Update a USB mapping. --map re-sends the full per-node entry list " +
 			"(the API rewrites it on every update); other flags are changed only when passed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster mapping usb set scanner --map node=pve1,path=1-2,id=046d:c52b`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -390,7 +394,8 @@ func newMappingDirCreateCmd() *cobra.Command {
 		Short: "Create a host directory mapping",
 		Long: "Create a logical directory mapping. Each --map entry is a per-node " +
 			"property string, for example 'node=pve,path=/mnt/data'.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster mapping dir create shared-data --map node=pve1,path=/mnt/data`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -424,7 +429,8 @@ func newMappingDirSetCmd() *cobra.Command {
 		Short: "Update a host directory mapping",
 		Long: "Update a directory mapping. --map re-sends the full per-node entry list " +
 			"(the API rewrites it on every update); other flags are changed only when passed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster mapping dir set shared-data --map node=pve1,path=/mnt/data`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

@@ -54,6 +54,8 @@ func newOptionsGetCmd() *cobra.Command {
 		Long: "Show the datacenter options currently set in datacenter.cfg. The PVE API " +
 			"omits options left at their built-in defaults; pass --defaults to also list " +
 			"those with the value they effectively have.",
+		Example: `  pmx pve cluster options get
+  pmx pve cluster options get --defaults`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -118,7 +120,9 @@ func newOptionsSetCmd() *cobra.Command {
 		Use:   "set",
 		Short: "Set cluster-wide datacenter options",
 		Long:  "Update the datacenter options. Only the flags you pass are changed.",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pve cluster options set --keyboard en-us
+  pmx pve cluster options set --migration type=insecure`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

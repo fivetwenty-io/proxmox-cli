@@ -23,6 +23,8 @@ func newMigrateCheckCmd() *cobra.Command {
 		Long: "Query migration feasibility for a VM without performing the migration. " +
 			"Returns allowed target nodes, local resources that block migration, " +
 			"and local disks. Optionally filter results for a specific --target-node.",
+		Example: `  pmx pve qemu migrate check 100
+  pmx pve qemu migrate check 100 --target-node pve2`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -89,6 +91,8 @@ func newMigrateCmd() *cobra.Command {
 			"live migration; without it PVE will refuse to migrate a running VM " +
 			"unless --force is also set. " +
 			"The command blocks until the migration task completes unless --async is set.",
+		Example: `  pmx pve qemu migrate 100 --target-node pve2
+  pmx pve qemu migrate 100 --target-node pve2 --online`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -176,7 +180,8 @@ func newMigrateCapabilitiesCmd() *cobra.Command {
 		Long: "Show which migration features the node's QEMU build supports (e.g. " +
 			"dbus-vmstate for switchover of attached daemons). Node-scoped: uses --node. " +
 			"Same data as 'pmx pve node capabilities qemu migration'.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve qemu migrate capabilities`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			node, err := resolveNode(deps)

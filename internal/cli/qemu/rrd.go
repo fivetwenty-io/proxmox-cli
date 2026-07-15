@@ -25,7 +25,8 @@ func newRrdCmd() *cobra.Command {
 		Long: "Return the server-side path of the generated RRD graph PNG for one " +
 			"or more data sources. The file is created on the PVE node; the command " +
 			"prints its path. Use `pmx pve qemu metrics` for numeric time-series data.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu rrd 100 --ds cpu,mem --timeframe hour`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

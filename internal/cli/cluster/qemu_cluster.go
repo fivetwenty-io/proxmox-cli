@@ -36,6 +36,8 @@ func newClusterQemuCpuFlagsCmd() *cobra.Command {
 		Short: "List cluster-wide QEMU CPU flags",
 		Long: "List CPU flags available across the cluster. Pass --accel to filter by " +
 			"acceleration type, or --arch to filter by virtual processor architecture.",
+		Example: `  pmx pve cluster qemu cpu-flags
+  pmx pve cluster qemu cpu-flags --arch x86_64`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

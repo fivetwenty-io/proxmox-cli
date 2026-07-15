@@ -26,7 +26,8 @@ func newMonitorCmd() *cobra.Command {
 			"Some monitor commands are destructive or service-affecting. " +
 			"--yes is required to confirm the operation. " +
 			"This command is typically restricted to root.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu monitor 100 --command 'info status' --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

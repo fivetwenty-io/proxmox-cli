@@ -94,7 +94,8 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 			"accepted set depends on the PVE version and host hardware). If the VM currently " +
 			"has the other platform configured, clear it first with 'confidential clear'.\n\n" +
 			"Example: pmx pve qemu security confidential set 100 --sev snp --sev-no-debug",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security confidential set 100 --sev snp --sev-no-debug`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

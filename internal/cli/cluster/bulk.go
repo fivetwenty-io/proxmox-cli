@@ -91,6 +91,8 @@ func newBulkStartCmd() *cobra.Command {
 		Short: "Start guests across the cluster",
 		Long: "Start every guest in the cluster, or only those listed in --vmids. " +
 			"Requires --yes because it affects all guests by default.",
+		Example: `  pmx pve cluster bulk start --yes
+  pmx pve cluster bulk start --vmids 100,101,102 --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -140,6 +142,8 @@ func newBulkShutdownCmd() *cobra.Command {
 		Short: "Shut down guests across the cluster",
 		Long: "Gracefully shut down every guest in the cluster, or only those listed in " +
 			"--vmids. Requires --yes because it affects all guests by default.",
+		Example: `  pmx pve cluster bulk shutdown --yes
+  pmx pve cluster bulk shutdown --vmids 100,101 --force-stop --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -194,6 +198,8 @@ func newBulkSuspendCmd() *cobra.Command {
 		Long: "Suspend every guest in the cluster, or only those listed in --vmids. " +
 			"With --to-disk the guests are suspended to disk and resumed on next start. " +
 			"Requires --yes because it affects all guests by default.",
+		Example: `  pmx pve cluster bulk suspend --yes
+  pmx pve cluster bulk suspend --vmids 100,101 --to-disk --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -249,6 +255,8 @@ func newBulkMigrateCmd() *cobra.Command {
 		Long: "Migrate every guest in the cluster to --target-node, or only those listed " +
 			"in --vmids. With --online VMs are live-migrated and containers are restart-" +
 			"migrated. Requires --yes because it affects all guests by default.",
+		Example: `  pmx pve cluster bulk migrate --target-node pve2 --yes
+  pmx pve cluster bulk migrate --vmids 100,101 --target-node pve2 --online --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

@@ -24,6 +24,8 @@ func newSSHCmd() *cobra.Command {
 		Long: "Open an SSH session to a QEMU VM by VMID or name. The VM's address is\n" +
 			"discovered via the QEMU guest agent (first non-loopback IPv4); pass\n" +
 			"--host to connect to a specific address when the agent is unavailable.",
+		Example: `  pmx pve qemu ssh 100
+  pmx pve qemu ssh 100 -- uptime`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

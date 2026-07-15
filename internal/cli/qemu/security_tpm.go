@@ -82,7 +82,8 @@ func newSecurityTpmAddCmd() *cobra.Command {
 			"recommended interface (note: the PVE API's own default is the legacy v1.2; this " +
 			"command overrides that). The version is immutable after creation.\n\n" +
 			"Example: pmx pve qemu security tpm add win11 --storage local-lvm",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security tpm add win11 --storage local-lvm`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -155,7 +156,8 @@ func newSecurityTpmRemoveCmd() *cobra.Command {
 		Long: "Detach and delete the tpmstate0 disk. Everything sealed in the TPM — BitLocker " +
 			"keys, Windows Hello credentials, measured-boot state — is destroyed and cannot be " +
 			"recovered. A guest relying on TPM-bound disk encryption may become unbootable.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security tpm remove win11 --force`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

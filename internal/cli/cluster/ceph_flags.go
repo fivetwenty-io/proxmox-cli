@@ -39,7 +39,8 @@ func newCephStatusCmd() *cobra.Command {
 		Short: "Show the cluster-wide Ceph status summary",
 		Long: "Show the cluster-wide Ceph status: health, monitors, OSDs, pools, and " +
 			"capacity. Requires a configured Ceph cluster.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster ceph status`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListCephStatus(cmd.Context())
@@ -106,7 +107,8 @@ func newCephFlagsSetAllCmd() *cobra.Command {
 		Long: "Enable or disable several cluster-wide Ceph OSD flags in a single request, " +
 			"for example 'set-all --noout=true --norebalance=true' during maintenance. " +
 			"Only the flags you pass are changed.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster ceph flags set-all --noout=true --norebalance=true`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -188,7 +190,8 @@ func newCephFlagsSetCmd() *cobra.Command {
 		Short: "Enable or disable a single Ceph flag",
 		Long: "Enable or disable a single cluster-wide Ceph flag, for example " +
 			"'set noout true' to keep OSDs from being marked out during maintenance.",
-		Args: cobra.ExactArgs(2),
+		Example: `  pmx pve cluster ceph flags set noout true`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			flag := args[0]
@@ -222,6 +225,8 @@ func newCephMetadataCmd() *cobra.Command {
 		Short: "Show per-node Ceph daemon metadata",
 		Long: "Show per-node Ceph daemon metadata including monitors, OSDs, MDS, and managers. " +
 			"Requires a configured Ceph cluster; returns an error on nodes without Ceph.",
+		Example: `  pmx pve cluster ceph metadata
+  pmx pve cluster ceph metadata --scope osd`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)

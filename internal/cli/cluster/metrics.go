@@ -350,6 +350,8 @@ func newMetricsServerCreateCmd() *cobra.Command {
 		Short: "Create a metric server",
 		Long: "Create an external metric server. --type selects the plugin (graphite, " +
 			"influxdb, or opentelemetry); --server and --port address the target.",
+		Example: `  pmx pve cluster metrics server create influx-prod --type influxdb \
+  --server metrics.example.com --port 8086`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -376,7 +378,8 @@ func newMetricsServerSetCmd() *cobra.Command {
 		Short: "Update a metric server",
 		Long: "Update a metric server. --server and --port are required because the API " +
 			"rewrites the full target address on every update.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster metrics server set influx-prod --server metrics.example.com --port 8086`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -430,7 +433,9 @@ func newMetricsExportCmd() *cobra.Command {
 		Use:   "export",
 		Short: "Export the cluster's current metrics",
 		Long:  "Return the metrics Proxmox VE would push to its configured servers.",
-		Args:  cobra.NoArgs,
+		Example: `  pmx pve cluster metrics export
+  pmx pve cluster metrics export --history`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

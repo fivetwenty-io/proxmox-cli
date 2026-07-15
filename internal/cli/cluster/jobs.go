@@ -110,7 +110,8 @@ func newJobsRealmSyncCreateCmd() *cobra.Command {
 		Short: "Create a realm-sync job",
 		Long: "Create a realm-sync job. --schedule is a systemd calendar event " +
 			"(for example 'daily' or '*/15'); --realm selects the authentication realm to sync.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster jobs realm-sync create ldap-daily --schedule daily --realm ldap`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -169,7 +170,8 @@ func newJobsRealmSyncSetCmd() *cobra.Command {
 		Short: "Update a realm-sync job",
 		Long: "Update a realm-sync job. --schedule is required because the API rewrites " +
 			"the full schedule; other flags are changed only when passed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster jobs realm-sync set ldap-daily --schedule daily --scope both`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -254,7 +256,8 @@ func newJobsScheduleAnalyzeCmd() *cobra.Command {
 		Long: "Calculate and list the next runtimes for a systemd calendar expression. " +
 			"Use this to validate a schedule before applying it to a job. " +
 			"--schedule is required; --iterations defaults to the server default (10).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster jobs schedule-analyze --schedule daily`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

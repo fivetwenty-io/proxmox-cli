@@ -135,7 +135,8 @@ func newHaGroupCreateCmd() *cobra.Command {
 		Short: "Create an HA group",
 		Long: "Create an HA group that binds resources to a preferred set of nodes. --nodes is " +
 			"required and lists the member nodes, each with an optional priority (node:priority).",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster ha group create preferred-nodes --nodes pve1:2,pve2:1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			group := args[0]
@@ -404,6 +405,8 @@ func newHaRuleCreateCmd() *cobra.Command {
 		Long: "Create an HA rule. --type selects node-affinity or resource-affinity, and --resources " +
 			"lists the HA resource IDs the rule applies to. Node-affinity rules also take --nodes; " +
 			"resource-affinity rules take --affinity.",
+		Example: `  pmx pve cluster ha rule create keep-web-together --type resource-affinity \
+  --resources vm:100,vm:101 --affinity positive`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -458,7 +461,8 @@ func newHaRuleSetCmd() *cobra.Command {
 		Short: "Update an HA rule",
 		Long: "Update an HA rule. --type is required because it identifies the rule kind the other " +
 			"attributes are validated against.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster ha rule set keep-web-together --type resource-affinity --strict`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			rule := args[0]

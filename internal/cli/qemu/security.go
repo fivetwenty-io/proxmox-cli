@@ -528,7 +528,8 @@ func newSecurityShowCmd() *cobra.Command {
 			"confidential-computing settings, security-relevant CPU flags, guest-agent config, " +
 			"per-NIC firewall coverage, and the VM firewall option summary. Risky settings " +
 			"(raw QEMU args, hookscript, PCI passthrough) are called out.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security show 100`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
@@ -680,6 +681,8 @@ func newSecurityListCmd() *cobra.Command {
 			"coverage, and risky settings (raw args, hookscript, PCI passthrough). VMs with a " +
 			"risky setting are flagged with '!' and sorted first. This is a cluster resources " +
 			"scan plus one config read per VM.",
+		Example: `  pmx pve qemu security list
+  pmx pve qemu security list --node pve1`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -834,18 +837,21 @@ func newSecurityProtectionSetCmd(enable bool) *cobra.Command {
 		"Set the protection flag (blocks 'qemu delete' and disk removal)",
 		"Set the VM protection flag. While set, PVE refuses the remove-VM and remove-disk "+
 			"operations. Applies immediately; no restart needed."
+	example := "  pmx pve qemu security protection enable 100"
 	if !enable {
 		use, short, long = "disable <vmid|name>",
 			"Clear the protection flag (re-enables destroy and disk removal)",
 			"Clear the VM protection flag, restoring the default remove-VM/remove-disk behavior. "+
 				"Applies immediately; no restart needed."
+		example = "  pmx pve qemu security protection disable 100"
 	}
 
 	cmd := &cobra.Command{
-		Use:   use,
-		Short: short,
-		Long:  long,
-		Args:  cobra.ExactArgs(1),
+		Use:     use,
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

@@ -124,7 +124,8 @@ func newSecurityNicFirewallCmd() *cobra.Command {
 			"other sub-option (model, bridge, MAC, VLAN, ...). With hotplug=network the change " +
 			"applies live; otherwise it is pending until restart.\n\n" +
 			"Example: pmx pve qemu security nic firewall web1 --on --all",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security nic firewall web1 --on --all`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

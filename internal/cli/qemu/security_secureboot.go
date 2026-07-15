@@ -106,7 +106,8 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 			"the guest. Replacing an existing efidisk0 discards all stored EFI variables " +
 			"(enrolled keys, boot entries) and requires --recreate.\n\n" +
 			"Example: pmx pve qemu security secureboot enable win11 --storage local-lvm --ms-cert 2023",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security secureboot enable win11 --storage local-lvm --ms-cert 2023`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

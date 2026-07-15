@@ -98,7 +98,8 @@ func newCpuModelCreateCmd() *cobra.Command {
 		Long: "Create a custom CPU model in the datacenter configuration. The 'custom-' " +
 			"prefix on <cputype> is optional. --reported-model is the QEMU/KVM model " +
 			"reported to guests; additional CPU flags and CPUID tuning are optional.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster cpu-model create custom-x86-64-v3 --reported-model x86-64-v3`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cputype := args[0]
@@ -154,7 +155,8 @@ func newCpuModelSetCmd() *cobra.Command {
 		Short: "Update a custom CPU model",
 		Long: "Update a custom CPU model. Only the flags you pass are changed; use " +
 			"--delete to reset specific properties to their defaults.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster cpu-model set custom-x86-64-v3 --flags '+aes;-spec-ctrl'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			cputype := args[0]

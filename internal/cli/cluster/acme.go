@@ -140,6 +140,9 @@ func newAcmeAccountCreateCmd() *cobra.Command {
 		Long: "Register a new ACME account with the certificate authority. This " +
 			"contacts the ACME directory and runs as an asynchronous task. The " +
 			"optional positional name is the account config file name (default 'default').",
+		Example: `  pmx pve cluster acme account create --contact admin@example.com
+  pmx pve cluster acme account create default --contact admin@example.com \
+  --directory https://acme-staging-v02.api.letsencrypt.org/directory`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -191,7 +194,8 @@ func newAcmeAccountSetCmd() *cobra.Command {
 		Short: "Update an ACME account contact",
 		Long: "Update the contact email address(es) of an ACME account. This contacts " +
 			"the ACME CA and runs as an asynchronous task.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster acme account set default --contact admin@example.com`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -225,7 +229,8 @@ func newAcmeAccountDeleteCmd() *cobra.Command {
 		Short: "Deactivate and remove an ACME account",
 		Long: "Deactivate an ACME account at the CA and remove it locally. This " +
 			"contacts the ACME CA and runs as an asynchronous task.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster acme account delete default --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
@@ -341,7 +346,8 @@ func newAcmePluginCreateCmd() *cobra.Command {
 		Short: "Create an ACME challenge plugin",
 		Long: "Create an ACME challenge plugin. For dns-01 plugins, --api selects the " +
 			"DNS provider and --data carries its base64-encoded credential block.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster acme plugin create my-dns --type dns --api cloudflare --data '${ACME_DNS_DATA}'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -391,10 +397,11 @@ func newAcmePluginSetCmd() *cobra.Command {
 		del      string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <id>",
-		Short: "Update an ACME challenge plugin",
-		Long:  "Update an ACME challenge plugin. Only flags that are passed are changed.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <id>",
+		Short:   "Update an ACME challenge plugin",
+		Long:    "Update an ACME challenge plugin. Only flags that are passed are changed.",
+		Example: `  pmx pve cluster acme plugin set my-dns --data '${ACME_DNS_DATA}'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

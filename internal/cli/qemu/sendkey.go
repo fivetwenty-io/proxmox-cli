@@ -24,7 +24,8 @@ func newSendkeyCmd() *cobra.Command {
 		Long: "Inject a key event into the VM console using QEMU monitor key encoding " +
 			"(e.g. ctrl-alt-delete, ret, esc). Useful for navigating BIOS menus or " +
 			"sending special key sequences without a graphical console.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu sendkey 100 --key ctrl-alt-delete`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

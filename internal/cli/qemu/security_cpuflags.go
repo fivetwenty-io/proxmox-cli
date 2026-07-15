@@ -269,7 +269,8 @@ func newSecurityCpuFlagsSetCmd() *cobra.Command {
 			"amd-no-ssb, ibpb, md-clear) exposes the guest to speculative-execution attacks and " +
 			"requires --force.\n\n" +
 			"Example: pmx pve qemu security cpu-flags set web1 --enable spec-ctrl,ssbd,md-clear",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security cpu-flags set web1 --enable spec-ctrl,ssbd,md-clear`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
@@ -404,6 +405,7 @@ func newSecurityCpuFlagsDescribeCmd() *cobra.Command {
 		Long: "List every CPU flag settable per VM, what it mitigates or provides, and guidance " +
 			"on when to enable it. Runs entirely offline. To see which flags a node's hardware " +
 			"actually supports, use 'pmx pve qemu cpu-flags'.",
+		Example:     `  pmx pve qemu security cpu-flags describe`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {

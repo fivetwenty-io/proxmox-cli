@@ -115,7 +115,8 @@ func newHaStatusArmCmd() *cobra.Command {
 		Short: "Arm the cluster-wide HA stack",
 		Long: "Re-enable HA management across the whole cluster after it was disarmed. This affects " +
 			"every HA-managed resource, so it is guarded by --yes.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster ha status arm --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -144,7 +145,8 @@ func newHaStatusDisarmCmd() *cobra.Command {
 		Long: "Disable HA management across the whole cluster. --resource-mode controls how managed " +
 			"resources are handled: 'freeze' holds new commands and state changes, 'ignore' removes " +
 			"resources from HA tracking. This affects every HA-managed resource, so it is guarded by --yes.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster ha status disarm --resource-mode freeze --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {

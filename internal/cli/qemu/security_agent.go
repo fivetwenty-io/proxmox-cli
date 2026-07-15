@@ -35,6 +35,8 @@ func newSecurityAgentShowCmd() *cobra.Command {
 		Short: "Show guest-agent configuration",
 		Long: "Show every agent= sub-option with its effective value (unset keys shown at their " +
 			"API default: enabled=false, freeze-fs=true, fstrim_cloned_disks=false, type=virtio).",
+		Example: `  pmx pve qemu security agent show 100
+  pmx pve qemu security agent show web1`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -87,7 +89,8 @@ func newSecurityAgentSetCmd() *cobra.Command {
 			"commands and read/write files inside the guest; freeze-fs affects snapshot/backup " +
 			"consistency, not isolation.\n\n" +
 			"Example: pmx pve qemu security agent set web1 --enabled --type virtio",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve qemu security agent set web1 --enabled --type virtio`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()

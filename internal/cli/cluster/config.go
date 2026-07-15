@@ -81,7 +81,8 @@ func newConfigCreateCmd() *cobra.Command {
 		Short: "Create a new cluster on this node",
 		Long: "Initialize a new corosync cluster on the local node. This is a one-time " +
 			"cluster-formation step; afterwards other nodes join with `cluster config join add`.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster config create --clustername prod --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {
@@ -184,6 +185,8 @@ func newConfigJoinAddCmd() *cobra.Command {
 		Long: "Join the local node to an existing cluster reachable at --hostname, " +
 			"authenticating with the peer's root password and verifying its certificate " +
 			"fingerprint. This changes cluster membership and quorum.",
+		Example: `  pmx pve cluster config join add --hostname pve1 --fingerprint AB:CD:EF:01:23:45:67:89 \
+  --password '${PVE_ROOT_PASSWORD}' --yes`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -301,7 +304,8 @@ func newConfigNodesAddCmd() *cobra.Command {
 		Long: "Register a new node in the local cluster configuration and return the " +
 			"corosync configuration and authkey the joining node needs. This changes " +
 			"cluster membership and quorum.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster config nodes add pve2 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -361,7 +365,8 @@ func newConfigNodesDeleteCmd() *cobra.Command {
 		Short: "Remove a node from the cluster configuration",
 		Long: "Remove a node from the corosync cluster configuration. This changes " +
 			"cluster membership and quorum.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve cluster config nodes delete pve2 --yes`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
@@ -391,7 +396,8 @@ func newConfigApiversionCmd() *cobra.Command {
 		Short: "Show the cluster join API version",
 		Long: "Return the cluster JOIN_API_VERSION. Primarily useful for tooling " +
 			"that needs to verify join protocol compatibility between nodes.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster config apiversion`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigApiversion(cmd.Context())
@@ -418,7 +424,8 @@ func newConfigQdeviceCmd() *cobra.Command {
 		Short: "Show QDevice quorum status",
 		Long: "Show the QDevice quorum device status for the corosync cluster. " +
 			"Returns an error on clusters without a configured QDevice.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster config qdevice`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigQdevice(cmd.Context())
@@ -444,7 +451,8 @@ func newConfigTotemCmd() *cobra.Command {
 		Short: "Show corosync totem settings",
 		Long: "Show the corosync totem configuration: ring transport, token timeouts, " +
 			"and consensus parameters. Useful for cluster health diagnosis.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve cluster config totem`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListConfigTotem(cmd.Context())
