@@ -184,6 +184,9 @@ func newAptUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Refresh the APT package database",
+		// update here means apt-get update (refresh), not a config change;
+		// a "set" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Refresh the package database on the resolved node (equivalent to " +
 			"`apt-get update`). The command blocks until the refresh task finishes " +
 			"unless --async is set.",
@@ -325,6 +328,9 @@ func newAptReposAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a standard repository to the configuration",
+		// add enables a well-known repository rather than creating one;
+		// a "create" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Add a standard Proxmox repository, identified by --handle, to the resolved " +
 			"node's APT configuration. Refuses to run without --yes/-y.",
 		Example: `  pmx pve node apt repositories add --handle no-subscription --yes`,

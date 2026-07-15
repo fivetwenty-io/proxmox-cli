@@ -75,6 +75,9 @@ func newNodeSubscriptionUpdateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <node>",
 		Short: "Check and refresh the node's subscription status against the server",
+		// update re-checks the subscription rather than changing configuration;
+		// a "set" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Check and refresh the node's subscription status against the Proxmox " +
 			"subscription server (POST /nodes/{node}/subscription). Runs synchronously; " +
 			"takes no parameters.",

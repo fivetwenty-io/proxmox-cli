@@ -178,6 +178,9 @@ func newConfigJoinAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Join this node to an existing cluster",
+		// add joins an existing cluster rather than creating anything;
+		// a "create" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Join the local node to an existing cluster reachable at --hostname, " +
 			"authenticating with the peer's root password and verifying its certificate " +
 			"fingerprint. This changes cluster membership and quorum.",
@@ -292,6 +295,9 @@ func newConfigNodesAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <node>",
 		Short: "Add a node to the cluster configuration",
+		// add registers an existing node in the cluster rather than creating
+		// one; a "create" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Register a new node in the local cluster configuration and return the " +
 			"corosync configuration and authkey the joining node needs. This changes " +
 			"cluster membership and quorum.",

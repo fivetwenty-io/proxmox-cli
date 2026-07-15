@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// disks ls directory / lvm / lvmthin / zfs
+// disks pools directory / lvm / lvmthin / zfs
 // ---------------------------------------------------------------------------
 
 func TestNodeDisksLs_Directory(t *testing.T) {
@@ -25,7 +25,7 @@ func TestNodeDisksLs_Directory(t *testing.T) {
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "ls", "directory"))
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "pools", "directory"))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "GET", rec.method)
@@ -40,7 +40,7 @@ func TestNodeDisksLs_Directory_APIError(t *testing.T) {
 	})
 
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "ls", "directory"))
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "pools", "directory"))
 
 	err := root.Execute()
 	require.Error(t, err)
@@ -57,7 +57,7 @@ func TestNodeDisksLs_Lvm(t *testing.T) {
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "ls", "lvm"))
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "pools", "lvm"))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "GET", rec.method)
@@ -72,7 +72,7 @@ func TestNodeDisksLs_Lvm_APIError(t *testing.T) {
 	})
 
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "ls", "lvm"))
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "pools", "lvm"))
 
 	err := root.Execute()
 	require.Error(t, err)
@@ -87,7 +87,7 @@ func TestNodeDisksLs_Lvmthin(t *testing.T) {
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "ls", "lvmthin"))
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "pools", "lvmthin"))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "/api2/json/nodes/pve1/disks/lvmthin", rec.path)
@@ -102,7 +102,7 @@ func TestNodeDisksLs_Zfs(t *testing.T) {
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "ls", "zfs"))
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "disks", "pools", "zfs"))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "/api2/json/nodes/pve1/disks/zfs", rec.path)
@@ -117,8 +117,8 @@ func TestNodeGapCommands_RequiresNode(t *testing.T) {
 		args []string
 	}{
 		{
-			name: "disks ls zfs",
-			args: []string{"node", "disks", "ls", "zfs"},
+			name: "disks pools zfs",
+			args: []string{"node", "disks", "pools", "zfs"},
 		},
 		{
 			name: "disks get zfs",
@@ -373,11 +373,11 @@ func TestNodeDisks_ExtendedCommandTree(t *testing.T) {
 	disks := find(nodeCmd, "disks")
 	require.NotNil(t, disks)
 
-	// ls sub-tree
-	ls := find(disks, "ls")
-	require.NotNil(t, ls, "disks must expose ls")
+	// pools sub-tree
+	pools := find(disks, "pools")
+	require.NotNil(t, pools, "disks must expose pools")
 	for _, sub := range []string{"directory", "lvm", "lvmthin", "zfs"} {
-		require.NotNil(t, find(ls, sub), "disks ls must expose %q", sub)
+		require.NotNil(t, find(pools, sub), "disks pools must expose %q", sub)
 	}
 
 	// get sub-tree

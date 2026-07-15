@@ -178,6 +178,9 @@ func newSubscriptionKeyAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add subscription keys to the pool",
+		// add registers existing keys in the pool rather than creating them;
+		// a "create" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Add one or more subscription keys to the pool (POST /subscriptions/keys). " +
 			"Duplicate keys within the input are silently collapsed; a key already present " +
 			"in the pool fails the whole call and leaves the pool untouched.",

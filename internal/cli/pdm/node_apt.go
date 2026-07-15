@@ -214,6 +214,9 @@ func newNodeAptRepositoryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <node>",
 		Short: "Add (or enable) a standard APT repository by handle",
+		// add enables a well-known repository rather than creating one;
+		// a "create" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Add the standard repository identified by --handle. If the repository is " +
 			"already configured, it is set to enabled (PUT /nodes/{node}/apt/repositories).",
 		Args: cobra.ExactArgs(1),

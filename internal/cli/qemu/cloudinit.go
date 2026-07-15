@@ -137,6 +137,9 @@ func newCloudinitUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <vmid|name>",
 		Short: "Regenerate the cloud-init drive from the VM configuration",
+		// update regenerates the drive rather than changing configuration;
+		// a "set" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Regenerate the cloud-init drive so it reflects the VM's current configuration. " +
 			"Run this after changing cloud-init settings (via 'pmx pve qemu config set') on a " +
 			"running guest; only the changed configuration is applied to the drive. This call " +

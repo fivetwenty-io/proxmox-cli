@@ -413,6 +413,9 @@ func newSecurityCapsAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <vmid|name> <capability>...",
 		Short: "Grant capability(ies) to the container",
+		// add grants an existing capability rather than creating anything;
+		// a "create" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Grant one or more capabilities to the container. In keep mode the caps are appended " +
 			"to lxc.cap.keep; in drop mode they are removed from lxc.cap.drop. Both mean the " +
 			"container gains the capability. With no capability configuration yet, add errors and " +

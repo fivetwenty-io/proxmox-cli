@@ -98,6 +98,9 @@ func newNodeAptUpdateCmd(nf *nodeFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Refresh the node's APT package index",
+		// update here means apt-get update (refresh), not a config change;
+		// a "set" alias would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Refresh the local APT package database from the configured repositories. " +
 			"Runs as an asynchronous task; the command blocks until it finishes unless --async is set.",
 		Args: cobra.NoArgs,

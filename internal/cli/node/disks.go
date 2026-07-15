@@ -394,13 +394,13 @@ func newDisksCreateDirectoryCmd() *cobra.Command {
 	return cmd
 }
 
-// ---- ls (list storage-type pools) -----------------------------------------
+// ---- pools (list storage-type pools) ---------------------------------------
 
-// newDisksLsCmd builds the `pmx node disks ls <type>` sub-group that lists
+// newDisksLsCmd builds the `pmx node disks pools <type>` sub-group that lists
 // existing storage pools by type: directory, lvm, lvmthin, or zfs.
 func newDisksLsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ls",
+		Use:   "pools",
 		Short: "List existing disk-backed storage pools by type",
 		Long: "List the disk-backed storage pools of a given type on the resolved node. " +
 			"Choose one of: directory, lvm, lvmthin, or zfs.",

@@ -79,6 +79,9 @@ func newRawGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <path>",
 		Short: "Issue a raw GET request",
+		// The verb is the HTTP method, not a CRUD synonym; a "show" alias
+		// would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Issue a GET request to an arbitrary API path (e.g. /nodes or /admin/datastore) " +
 			"against the active context's Proxmox VE or Proxmox Backup Server API, passing any " +
 			"--data KEY=VALUE pairs as query parameters.",
@@ -184,6 +187,9 @@ func newRawDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <path>",
 		Short: "Issue a raw DELETE request",
+		// The verb is the HTTP method, not a CRUD synonym; an "rm" alias
+		// would misdescribe the command.
+		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Issue a DELETE request to an arbitrary API path against the active context's " +
 			"Proxmox VE or Proxmox Backup Server API, passing any --data KEY=VALUE pairs as query " +
 			"parameters.",

@@ -895,6 +895,7 @@ func AddGroups(root *cobra.Command, deps *Deps, factories []GroupFactory) {
 	for _, factory := range factories {
 		root.AddCommand(factory(deps))
 	}
+	NormalizeAliases(root)
 	RequireSubcommands(root)
 }
 
