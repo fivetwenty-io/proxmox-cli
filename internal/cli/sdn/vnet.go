@@ -104,7 +104,9 @@ func newVnetIpsCreateCmd() *cobra.Command {
 		Use:   "create <vnet>",
 		Short: "Add an IP mapping to a vnet",
 		Long:  "Add an IP-to-MAC mapping in a vnet's IPAM zone.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve sdn vnet ips create vnet1 --ip 10.0.0.5 --zone myzone
+  pmx pve sdn vnet ips create vnet1 --ip 10.0.0.5 --zone myzone --mac 00:11:22:33:44:55`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -141,10 +143,11 @@ func newVnetIpsSetCmd() *cobra.Command {
 		zone string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <vnet>",
-		Short: "Update an IP mapping in a vnet",
-		Long:  "Update an IP-to-MAC/VMID mapping in a vnet's IPAM zone.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <vnet>",
+		Short:   "Update an IP mapping in a vnet",
+		Long:    "Update an IP-to-MAC/VMID mapping in a vnet's IPAM zone.",
+		Example: `  pmx pve sdn vnet ips set vnet1 --ip 10.0.0.5 --zone myzone --vmid 100`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -239,7 +242,9 @@ func newVnetSetCmd() *cobra.Command {
 		Use:   "set <vnet>",
 		Short: "Update an SDN vnet",
 		Long:  "Update an SDN vnet. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve sdn vnet set vnet1 --alias "prod frontend"
+  pmx pve sdn vnet set vnet1 --tag 200`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]
@@ -362,7 +367,9 @@ func newVnetCreateCmd() *cobra.Command {
 		Use:   "create <vnet>",
 		Short: "Create an SDN vnet",
 		Long:  "Create an SDN vnet in a zone. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve sdn vnet create vnet1 --zone myzone
+  pmx pve sdn vnet create vnet1 --zone myzone --tag 100 --alias "prod frontend"`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]

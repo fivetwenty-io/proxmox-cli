@@ -32,7 +32,8 @@ func newLockAcquireCmd() *cobra.Command {
 		Long: "Acquire the global SDN configuration lock. Returns a lock token that must " +
 			"be passed to `pmx pve sdn lock release` (or via --lock-token on other commands) " +
 			"to release the lock.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve sdn lock acquire`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.CreateSdnLockParams{}
@@ -71,7 +72,8 @@ func newLockReleaseCmd() *cobra.Command {
 		Long: "Release the global SDN configuration lock. Pass the token returned by " +
 			"`pmx pve sdn lock acquire` via --lock-token, or use --force to release without " +
 			"a token (requires --yes).",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve sdn lock release --lock-token abc123 --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {

@@ -291,6 +291,8 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 		Long: "Create a new vnet firewall rule. --type (in|out|forward) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required. The change " +
 			"is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn vnet firewall rules create vnet1 --type in --action ACCEPT
+  pmx pve sdn vnet firewall rules create vnet1 --type in --action ACCEPT --source 10.0.0.0/24 --dport 22`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -318,6 +320,8 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 		Short: "Modify a vnet firewall rule by position",
 		Long: "Update a vnet firewall rule. Only the flags you pass are changed. " +
 			"The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn vnet firewall rules set vnet1 0 --action DROP
+  pmx pve sdn vnet firewall rules set vnet1 0 --enable 0`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -408,6 +412,8 @@ func newVnetFirewallOptionsGetCmd() *cobra.Command {
 		Long: "Show a vnet's firewall options currently set. The PVE API omits options " +
 			"left at their built-in defaults; pass --defaults to also list those with " +
 			"the value they effectively have.",
+		Example: `  pmx pve sdn vnet firewall options get vnet1
+  pmx pve sdn vnet firewall options get vnet1 --defaults`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -446,6 +452,8 @@ func newVnetFirewallOptionsSetCmd() *cobra.Command {
 		Long: "Update a vnet's firewall options: enable/disable rule enforcement and " +
 			"the forward policy. Only the flags you pass are changed. The change is " +
 			"staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn vnet firewall options set vnet1 --enable
+  pmx pve sdn vnet firewall options set vnet1 --policy-forward ACCEPT`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

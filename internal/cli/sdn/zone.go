@@ -120,7 +120,9 @@ func newZoneSetCmd() *cobra.Command {
 		Use:   "set <zone>",
 		Short: "Update an SDN zone",
 		Long:  "Update an SDN zone. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve sdn zone set myzone --mtu 1450
+  pmx pve sdn zone set myzone --nodes pve1,pve2`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			zone := args[0]
@@ -348,6 +350,8 @@ func newZoneCreateCmd() *cobra.Command {
 			"A simple zone needs no bridge or uplink and provides an isolated L2 segment. " +
 			"VLAN/QinQ zones need a --bridge; VXLAN zones need --peers (or a --fabric); " +
 			"EVPN zones need a --controller and --vrf-vxlan.",
+		Example: `  pmx pve sdn zone create myzone --type simple
+  pmx pve sdn zone create myzone --type vxlan --peers 10.0.0.1,10.0.0.2`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

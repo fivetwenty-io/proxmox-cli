@@ -22,7 +22,8 @@ func newDryRunCmd() *cobra.Command {
 			"configuration (the FRR config and /etc/network/interfaces.d/sdn) " +
 			"for a node, without applying anything. Use this to review staged " +
 			"changes before `pmx pve sdn apply`. Requires a node.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve sdn dry-run --node pve1`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
@@ -56,7 +57,8 @@ func newRollbackCmd() *cobra.Command {
 		Long: "Revert all staged SDN configuration changes cluster-wide, " +
 			"discarding everything not yet committed with `pmx pve sdn apply`. This " +
 			"affects every pending SDN edit, not just your own.",
-		Args: cobra.NoArgs,
+		Example: `  pmx pve sdn rollback --yes`,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if !yes {

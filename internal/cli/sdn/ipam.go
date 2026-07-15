@@ -92,7 +92,8 @@ func newIpamCreateCmd() *cobra.Command {
 		Short: "Create an SDN IPAM backend",
 		Long: "Create an SDN IPAM backend (pve, netbox, or phpipam). The change is staged " +
 			"until `pmx pve sdn apply`. The --token value is a provider API token and is never echoed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve sdn ipam create netbox1 --type netbox --url https://netbox.example.com --token '${NETBOX_TOKEN}'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			ipam := args[0]
@@ -169,7 +170,8 @@ func newIpamSetCmd() *cobra.Command {
 		Short: "Update an SDN IPAM backend",
 		Long: "Update an SDN IPAM backend. The change is staged until `pmx pve sdn apply`. " +
 			"The --token value is a provider API token and is never echoed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve sdn ipam set netbox1 --url https://netbox2.example.com`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			ipam := args[0]

@@ -94,7 +94,8 @@ func newDnsCreateCmd() *cobra.Command {
 		Short: "Create an SDN DNS provider",
 		Long: "Create an SDN DNS provider (e.g. PowerDNS). The change is staged until " +
 			"`pmx pve sdn apply`. The --key value is a provider API key and is never echoed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve sdn dns create powerdns1 --type powerdns --url https://dns.example.com --key '${DNS_API_KEY}'`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			dns := args[0]
@@ -176,7 +177,8 @@ func newDnsSetCmd() *cobra.Command {
 		Short: "Update an SDN DNS provider",
 		Long: "Update an SDN DNS provider. The change is staged until `pmx pve sdn apply`. " +
 			"The --key value is a provider API key and is never echoed.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve sdn dns set powerdns1 --ttl 3600`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			dns := args[0]

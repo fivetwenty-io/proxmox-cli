@@ -53,6 +53,8 @@ func newZonePermListCmd() *cobra.Command {
 			"(/sdn/zones/{zone}). Pass --inherited to also include entries inherited from the " +
 			"zone's ancestor paths (/, /sdn, /sdn/zones); this walks the path client-side and " +
 			"issues no extra API calls. Needs the same privilege as `pmx pve access acl list`.",
+		Example: `  pmx pve sdn zone permissions list myzone
+  pmx pve sdn zone permissions list myzone --inherited`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -74,6 +76,8 @@ func newZonePermEffectiveCmd() *cobra.Command {
 			"the zone's ACL path (/sdn/zones/{zone}), after role and ACL propagation is resolved " +
 			"server-side. Querying another user's or token's effective permissions with --userid " +
 			"needs Sys.Audit on /access.",
+		Example: `  pmx pve sdn zone permissions effective myzone
+  pmx pve sdn zone permissions effective myzone --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -103,6 +107,7 @@ func newZonePermGrantRevokeCmd(revoke bool) *cobra.Command {
 			"Needs Permissions.Modify on the path. By default the granted roles propagate to any "+
 			"path nested under the zone (including its vnets); pass --no-propagate to grant "+
 			"non-propagating access instead."
+	example := `  pmx pve sdn zone permissions grant myzone --roles PVEVMAdmin --users alice@pve`
 	if revoke {
 		use, short, long = "revoke <zone>",
 			"Revoke roles from users, groups, or tokens on an SDN zone",
@@ -112,13 +117,15 @@ func newZonePermGrantRevokeCmd(revoke bool) *cobra.Command {
 				"granted at this exact path silently succeeds. Nothing here stops an operator from "+
 				"revoking their own access to this path (self-lockout): double-check --users before "+
 				"running this against your own account."
+		example = `  pmx pve sdn zone permissions revoke myzone --roles PVEVMAdmin --users alice@pve`
 	}
 
 	cmd := &cobra.Command{
-		Use:   use,
-		Short: short,
-		Long:  long,
-		Args:  cobra.ExactArgs(1),
+		Use:     use,
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireSubjects(users, groups, tokens); err != nil {
@@ -213,6 +220,8 @@ func newVnetPermListCmd() *cobra.Command {
 			"path client-side and issues no extra API calls beyond the zone lookup below. Pass " +
 			"--zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves " +
 			"the vnet's zone. Needs the same privilege as `pmx pve access acl list`.",
+		Example: `  pmx pve sdn vnet permissions list vnet1
+  pmx pve sdn vnet permissions list vnet1 --inherited`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -246,6 +255,8 @@ func newVnetPermEffectiveCmd() *cobra.Command {
 			"GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves the vnet's zone. " +
 			"Querying another user's or token's effective permissions with --userid needs " +
 			"Sys.Audit on /access.",
+		Example: `  pmx pve sdn vnet permissions effective vnet1
+  pmx pve sdn vnet permissions effective vnet1 --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -284,6 +295,7 @@ func newVnetPermGrantRevokeCmd(revoke bool) *cobra.Command {
 			"otherwise auto-resolves the vnet's zone. Needs Permissions.Modify on the path. By "+
 			"default the granted roles propagate to any path nested under the vnet; pass "+
 			"--no-propagate to grant non-propagating access instead."
+	example := `  pmx pve sdn vnet permissions grant vnet1 --roles PVEVMAdmin --users alice@pve`
 	if revoke {
 		use, short, long = "revoke <vnet>",
 			"Revoke roles from users, groups, or tokens on an SDN vnet",
@@ -295,13 +307,15 @@ func newVnetPermGrantRevokeCmd(revoke bool) *cobra.Command {
 				"granted at this exact path silently succeeds. Nothing here stops an operator "+
 				"from revoking their own access to this path (self-lockout): double-check "+
 				"--users before running this against your own account."
+		example = `  pmx pve sdn vnet permissions revoke vnet1 --roles PVEVMAdmin --users alice@pve`
 	}
 
 	cmd := &cobra.Command{
-		Use:   use,
-		Short: short,
-		Long:  long,
-		Args:  cobra.ExactArgs(1),
+		Use:     use,
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet := args[0]

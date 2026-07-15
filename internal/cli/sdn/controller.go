@@ -250,10 +250,11 @@ func newControllerCreateCmd() *cobra.Command {
 		lockToken string
 	)
 	cmd := &cobra.Command{
-		Use:   "create <controller> --type <type>",
-		Short: "Create an SDN controller",
-		Long:  "Create an SDN controller. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <controller> --type <type>",
+		Short:   "Create an SDN controller",
+		Long:    "Create an SDN controller. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn controller create evpn-ctl1 --type evpn --asn 65000 --peers 10.0.0.1,10.0.0.2`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			controller := args[0]
@@ -323,10 +324,11 @@ func newControllerSetCmd() *cobra.Command {
 		lockToken string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <controller>",
-		Short: "Update an SDN controller",
-		Long:  "Update an SDN controller. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <controller>",
+		Short:   "Update an SDN controller",
+		Long:    "Update an SDN controller. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn controller set evpn-ctl1 --peers 10.0.0.1,10.0.0.2,10.0.0.3`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			controller := args[0]

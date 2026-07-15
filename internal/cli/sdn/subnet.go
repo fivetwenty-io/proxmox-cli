@@ -129,7 +129,8 @@ func newSubnetSetCmd() *cobra.Command {
 		Long: "Update a subnet on a vnet. The subnet may be given as its CIDR (10.241.0.0/24) " +
 			"or its full subnet ID (zone-10.241.0.0-24). The change is staged until " +
 			"`pmx pve sdn apply`.",
-		Args: cobra.ExactArgs(2),
+		Example: `  pmx pve sdn subnet set vnet1 10.241.0.0/24 --gateway 10.241.0.1`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, subnet := args[0], args[1]
@@ -255,7 +256,8 @@ func newSubnetCreateCmd() *cobra.Command {
 		Short: "Create a subnet on a vnet",
 		Long: "Create a subnet (given as a CIDR, e.g. 10.241.0.0/24) on a vnet. " +
 			"The change is staged until `pmx pve sdn apply`.",
-		Args: cobra.ExactArgs(2),
+		Example: `  pmx pve sdn subnet create vnet1 10.241.0.0/24 --gateway 10.241.0.1`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vnet, cidr := args[0], args[1]

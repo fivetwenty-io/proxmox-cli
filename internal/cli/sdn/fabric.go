@@ -148,6 +148,8 @@ func newFabricListAllCmd() *cobra.Command {
 		Short: "List all SDN fabrics across nodes",
 		Long: "List all SDN fabrics across all cluster nodes. Returns both fabric " +
 			"definitions and their member nodes in a single request.",
+		Example: `  pmx pve sdn fabric list-all
+  pmx pve sdn fabric list-all --running`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -225,7 +227,9 @@ func newFabricCreateCmd() *cobra.Command {
 		Use:   "create <id> --protocol <protocol>",
 		Short: "Create an SDN fabric",
 		Long:  "Create an SDN fabric. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve sdn fabric create fab1 --protocol openfabric
+  pmx pve sdn fabric create fab1 --protocol openfabric --ip-prefix 10.0.0.0/24`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -273,10 +277,11 @@ func newFabricSetCmd() *cobra.Command {
 		digest   string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <id> --protocol <protocol>",
-		Short: "Update an SDN fabric",
-		Long:  "Update an SDN fabric. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <id> --protocol <protocol>",
+		Short:   "Update an SDN fabric",
+		Long:    "Update an SDN fabric. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn fabric set fab1 --protocol openfabric --route-filter pfx1`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -523,10 +528,11 @@ func newFabricNodeCreateCmd() *cobra.Command {
 		nf       nodeFlags
 	)
 	cmd := &cobra.Command{
-		Use:   "create <fabric> <node> --protocol <protocol>",
-		Short: "Add a node to an SDN fabric",
-		Long:  "Add a node to an SDN fabric. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "create <fabric> <node> --protocol <protocol>",
+		Short:   "Add a node to an SDN fabric",
+		Long:    "Add a node to an SDN fabric. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn fabric node create fab1 node1 --protocol openfabric --ip 10.0.0.1`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fabric, node := args[0], args[1]
@@ -554,10 +560,11 @@ func newFabricNodeSetCmd() *cobra.Command {
 		digest   string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <fabric> <node> --protocol <protocol>",
-		Short: "Update a node in an SDN fabric",
-		Long:  "Update a node in an SDN fabric. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "set <fabric> <node> --protocol <protocol>",
+		Short:   "Update a node in an SDN fabric",
+		Long:    "Update a node in an SDN fabric. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn fabric node set fab1 node1 --protocol openfabric --ip 10.0.0.2`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			fabric, node := args[0], args[1]

@@ -85,7 +85,9 @@ func newPrefixListCreateCmd() *cobra.Command {
 		Use:   "create <id>",
 		Short: "Create an SDN prefix list",
 		Long:  "Create an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Example: `  pmx pve sdn prefix-list create pfx1
+  pmx pve sdn prefix-list create pfx1 --entry "seq 10 permit 10.0.0.0/8"`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -139,10 +141,11 @@ func newPrefixListSetCmd() *cobra.Command {
 		lockToken string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <id>",
-		Short: "Update an SDN prefix list",
-		Long:  "Update an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "set <id>",
+		Short:   "Update an SDN prefix list",
+		Long:    "Update an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn prefix-list set pfx1 --entry "seq 10 permit 10.0.0.0/8"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -264,10 +267,11 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 		lockToken string
 	)
 	cmd := &cobra.Command{
-		Use:   "add <id> --action <permit|deny> --prefix <cidr>",
-		Short: "Add an entry to an SDN prefix list",
-		Long:  "Add an entry to an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "add <id> --action <permit|deny> --prefix <cidr>",
+		Short:   "Add an entry to an SDN prefix list",
+		Long:    "Add an entry to an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn prefix-list entry add pfx1 --action permit --prefix 10.0.0.0/8 --seq 10`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
@@ -337,10 +341,11 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 		lockToken string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <id> <seq>",
-		Short: "Update a single entry of an SDN prefix list",
-		Long:  "Update a single entry of an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "set <id> <seq>",
+		Short:   "Update a single entry of an SDN prefix list",
+		Long:    "Update a single entry of an SDN prefix list. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn prefix-list entry set pfx1 10 --prefix 10.0.0.0/16`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id, urlSeq := args[0], args[1]
@@ -580,10 +585,11 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 		lockToken  string
 	)
 	cmd := &cobra.Command{
-		Use:   "add <route-map> --order <n> --action <permit|deny>",
-		Short: "Add an entry to an SDN route map",
-		Long:  "Add an entry to an SDN route map. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(1),
+		Use:     "add <route-map> --order <n> --action <permit|deny>",
+		Short:   "Add an entry to an SDN route map",
+		Long:    "Add an entry to an SDN route map. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn route-map entry add rm1 --order 10 --action permit --match "ip address prefix-list pfx1"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			routeMap := args[0]
@@ -661,10 +667,11 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 		lockToken  string
 	)
 	cmd := &cobra.Command{
-		Use:   "set <route-map> <order>",
-		Short: "Update a single entry of an SDN route map",
-		Long:  "Update a single entry of an SDN route map. The change is staged until `pmx pve sdn apply`.",
-		Args:  cobra.ExactArgs(2),
+		Use:     "set <route-map> <order>",
+		Short:   "Update a single entry of an SDN route map",
+		Long:    "Update a single entry of an SDN route map. The change is staged until `pmx pve sdn apply`.",
+		Example: `  pmx pve sdn route-map entry set rm1 10 --set "local-preference 200"`,
+		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			routeMap, order := args[0], args[1]

@@ -268,7 +268,8 @@ func newTfaCreateCmd() *cobra.Command {
 			"The operator must supply their own --password (or be prompted) as " +
 			"required by the PVE API. --value and --totp accept credential material " +
 			"and are never logged.",
-		Args: cobra.ExactArgs(1),
+		Example: `  pmx pve access tfa create alice@pve --type totp --description "Work phone"`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			userid := args[0]
@@ -412,6 +413,8 @@ func newTfaTypesCmd() *cobra.Command {
 		Long: "Return the TFA type summary for a user from GET /access/users/{userid}/tfa. " +
 			"Without --multiple, returns realm-level type, user-level type, and any " +
 			"configured entry types. With --multiple, returns all entries as an array.",
+		Example: `  pmx pve access tfa types alice@pve
+  pmx pve access tfa types alice@pve --multiple`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
