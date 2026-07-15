@@ -897,6 +897,45 @@ func AddGroups(root *cobra.Command, deps *Deps, factories []GroupFactory) {
 	}
 	NormalizeAliases(root)
 	RequireSubcommands(root)
+	markBuiltinCommandsNoClient(root)
+}
+
+// markBuiltinCommandsNoClient installs cobra's default "help" and
+// "completion" commands early and marks them (and completion's per-shell
+// subcommands) with Annotations["noClient"]="true".
+//
+// Cobra normally creates these commands lazily inside (*Command).ExecuteC,
+// which runs after PersistentPreRunE would already need to see the
+// annotation for that very invocation — so by the time they exist,
+// persistentPreRunE has already required a configured context and failed.
+// Calling InitDefaultHelpCmd/InitDefaultCompletionCmd here, once the rest of
+// the tree is assembled, creates them up front so the annotation can be set
+// before root.Execute() ever runs; cobra's own lazy init later sees each
+// command already present (by name) and leaves it alone. The annotation
+// check in persistentPreRunE is per-command, not inherited, so each
+// completion subcommand (bash/zsh/fish/powershell) needs it set too.
+func markBuiltinCommandsNoClient(root *cobra.Command) {
+	root.InitDefaultHelpCmd()
+	root.InitDefaultCompletionCmd()
+
+	for _, sub := range root.Commands() {
+		switch sub.Name() {
+		case "help", "completion":
+			setNoClient(sub)
+			for _, grand := range sub.Commands() {
+				setNoClient(grand)
+			}
+		}
+	}
+}
+
+// setNoClient sets Annotations["noClient"]="true" on cmd, initializing the
+// map if necessary.
+func setNoClient(cmd *cobra.Command) {
+	if cmd.Annotations == nil {
+		cmd.Annotations = map[string]string{}
+	}
+	cmd.Annotations["noClient"] = "true"
 }
 
 // RequireSubcommands walks the command tree rooted at cmd and, for every command

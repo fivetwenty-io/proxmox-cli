@@ -281,6 +281,87 @@ func TestPersistentPreRunE_NoClient_DepsAreInjected(t *testing.T) {
 	require.Nil(t, capturedDeps.API, "API must be nil for noClient commands")
 }
 
+// TestPersistentPreRunE_NoConfig_CompletionSucceeds verifies that generating a
+// shell completion script does not require a configured context. Every CI
+// runner and fresh install has no ~/.config/pmx/config.yml, and goreleaser's
+// before-hooks run `pmx completion <shell>` to produce the shipped scripts.
+//
+// A real sub-command is registered via AddGroups (as the actual binaries do)
+// so that cobra's default "completion" command is built against a tree that
+// HasSubCommands() — matching production shape, not an empty root.
+func TestPersistentPreRunE_NoConfig_CompletionSucceeds(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh"} {
+		t.Run(shell, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			t.Setenv("PMX_OUTPUT", "json")
+			t.Setenv("PMX_NODE", "")
+			t.Setenv("PMX_CONTEXT", "")
+
+			root, cleanup := cli.NewRootCmd("pmx")
+			defer cleanup()
+			root.SetContext(context.Background())
+
+			var out bytes.Buffer
+			root.SetOut(&out)
+			root.SetErr(&out)
+
+			// SetOut must precede AddGroups: cobra's completion sub-commands
+			// capture c.OutOrStdout() at creation time (inside
+			// InitDefaultCompletionCmd, which AddGroups triggers), not at Run
+			// time, so setting the writer afterward would be a no-op here.
+			called := false
+			root.AddCommand(buildNoopCmd(&called))
+			cli.AddGroups(root, &cli.Deps{}, nil)
+
+			root.SetArgs([]string{
+				"--config", filepath.Join(tmpDir, "config.yml"),
+				"completion", shell,
+			})
+
+			err := root.Execute()
+			require.NoError(t, err, "completion %s must succeed without a configured context", shell)
+			require.NotEmpty(t, out.String(), "completion %s must write a script to stdout", shell)
+		})
+	}
+}
+
+// TestPersistentPreRunE_NoConfig_HelpSucceeds verifies that the "help" command
+// (as opposed to the --help flag, which never reaches PersistentPreRunE) does
+// not require a configured context.
+//
+// A real sub-command is registered via AddGroups (as the actual binaries do)
+// so that cobra's default "help" command actually gets created: cobra only
+// installs it when the root HasSubCommands(); on an empty root, "help" as a
+// bare positional resolves to the (non-runnable) root itself, which cobra
+// turns into a help display WITHOUT ever invoking PersistentPreRunE — that
+// would pass regardless of this fix and mask the bug.
+func TestPersistentPreRunE_NoConfig_HelpSucceeds(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("PMX_OUTPUT", "json")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	root.SetContext(context.Background())
+	called := false
+	root.AddCommand(buildNoopCmd(&called))
+	cli.AddGroups(root, &cli.Deps{}, nil)
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	root.SetArgs([]string{
+		"--config", filepath.Join(tmpDir, "config.yml"),
+		"help",
+	})
+
+	err := root.Execute()
+	require.NoError(t, err, "help command must succeed without a configured context")
+	require.NotEmpty(t, out.String(), "help command must write usage output to stdout")
+}
+
 // TestAddGroups_GroupAppearsInHelp verifies that a factory passed to AddGroups
 // is wired into the root command.
 func TestAddGroups_GroupAppearsInHelp(t *testing.T) {
