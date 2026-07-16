@@ -38,7 +38,8 @@ func newContentCmd() *cobra.Command {
 			"only one content type (for example iso, backup, or images) and --vmid to show " +
 			"only volumes owned by a given guest.",
 		Example: `  pmx pve storage content local --node pve1
-  pmx pve storage content local --node pve1 --content backup --vmid 100`,
+  pmx pve storage content local --node pve1 --content backup --vmid 100
+  pmx pve storage content local --node pve1 --content snippets`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)

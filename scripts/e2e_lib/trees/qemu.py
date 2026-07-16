@@ -59,6 +59,7 @@ def run(ctx: Ctx) -> None:
     if vmid is None:
         ctx.skip("status", "no VM on node")
         ctx.skip("config get", "no VM on node")
+        ctx.skip("hookscript get", "no VM on node")
         ctx.skip("metrics", "no VM on node")
         ctx.skip("rrd", "no VM on node")
         ctx.skip("feature", "no VM on node")
@@ -75,6 +76,9 @@ def run(ctx: Ctx) -> None:
         vid = str(vmid)
         ctx.check("status", "pve", "qemu", "status", vid, node=n, validate=has_status)
         ctx.check("config get", "pve", "qemu", "config", "get", vid, node=n)
+        # hookscript get is a read-only view over one config key; a VM with no
+        # hookscript configured still exits 0 with a message.
+        ctx.check("hookscript get", "pve", "qemu", "hookscript", "get", vid, node=n)
 
         # metrics: rrd timeseries for a guest; zero-row result is a valid list.
         ctx.check("metrics", "pve", "qemu", "metrics", vid, "--timeframe", "hour",

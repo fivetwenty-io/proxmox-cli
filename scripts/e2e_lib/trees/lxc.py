@@ -59,6 +59,7 @@ def run(ctx: Ctx) -> None:
     if ctid is None:
         ctx.skip("status", "no container on node")
         ctx.skip("config get", "no container on node")
+        ctx.skip("hookscript get", "no container on node")
         ctx.skip("config pending", "no container on node")
         ctx.skip("metrics", "no container on node")
         ctx.skip("rrd", "no container on node")
@@ -75,6 +76,9 @@ def run(ctx: Ctx) -> None:
         cid = str(ctid)
         ctx.check("status", "pve", "lxc", "status", cid, node=n, validate=has_status)
         ctx.check("config get", "pve", "lxc", "config", "get", cid, node=n)
+        # hookscript get is a read-only view over one config key; a container
+        # with no hookscript configured still exits 0 with a message.
+        ctx.check("hookscript get", "pve", "lxc", "hookscript", "get", cid, node=n)
         # config pending reads the diff between current and pending config; it is
         # non-mutating and returns an array on any container (even if no change is
         # staged), so it is safe against any existing container.

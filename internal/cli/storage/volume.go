@@ -153,8 +153,9 @@ func newVolumeDeleteCmd() *cobra.Command {
 			"The volume identifier must be in <storage>:<path> form, " +
 			"e.g. local:backup/vzdump-qemu-100-2026_01_01.vma.zst. " +
 			"Pass --yes to confirm the deletion.",
-		Example: `  pmx pve storage volume delete local:backup/vzdump-qemu-100-2026_01_01.vma.zst --yes`,
-		Args:    cobra.ExactArgs(1),
+		Example: `  pmx pve storage volume delete local:backup/vzdump-qemu-100-2026_01_01.vma.zst --yes
+  pmx pve storage volume delete local:snippets/hook.pl --yes`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
