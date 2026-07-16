@@ -69,3 +69,14 @@ jobs:
           # is unset (an empty env value evaluates falsy in the goreleaser
           # template, so the tap push is skipped rather than failing).
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # Apple code signing + notarization for the darwin binaries.
+          # Optional — notarize.macos.enabled degrades gracefully when
+          # MACOS_SIGN_P12 is unset, same pattern as the tap token above.
+          # MACOS_SIGN_P12: base64 of the Developer ID Application .p12
+          # (cert + key + Apple chain); MACOS_NOTARY_KEY: base64 of the
+          # App Store Connect API .p8 key.
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}

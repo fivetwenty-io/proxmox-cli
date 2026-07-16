@@ -180,6 +180,31 @@ nfpms:
       - src: LICENSE
         dst: /usr/share/doc/pmx/LICENSE
 
+# Sign + notarize the darwin binaries so Gatekeeper accepts them on first
+# launch (Homebrew quarantines cask artifacts; an unsigned binary is blocked
+# with an "Apple could not verify" dialog). Runs via quill, so it works on
+# the Linux release runner — no macOS runner needed. All values come from
+# secrets; when MACOS_SIGN_P12 is unset/empty the step is skipped entirely,
+# so local snapshots and releases without the Apple secrets still succeed
+# (envOrDefault keeps the unset-env case from failing template evaluation
+# under missingkey=error).
+notarize:
+  macos:
+    - enabled: '{{ if index .Env "MACOS_SIGN_P12" }}true{{ else }}false{{ end }}'
+      ids:
+        - pmx
+      sign:
+        certificate: '{{ envOrDefault "MACOS_SIGN_P12" "" }}'
+        password: '{{ envOrDefault "MACOS_SIGN_PASSWORD" "" }}'
+      notarize:
+        issuer_id: '{{ envOrDefault "MACOS_NOTARY_ISSUER_ID" "" }}'
+        key_id: '{{ envOrDefault "MACOS_NOTARY_KEY_ID" "" }}'
+        key: '{{ envOrDefault "MACOS_NOTARY_KEY" "" }}'
+        wait: true
+        # First submissions from a new team have been observed to exceed
+        # quill's 15m default; give Apple generous headroom.
+        timeout: 30m
+
 # NOTE: `brews:` is hard-deprecated as of the installed goreleaser (v2.17,
 # deprecated since v2.10/hard since v2.16) — `goreleaser check` fails on it.
 # `homebrew_casks:` is the maintained replacement; see
