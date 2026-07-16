@@ -56,7 +56,10 @@ for every command tree, and shell completions for `pmx` (Homebrew casks only
 support one completion script per shell, so the persona binaries do not get
 their own — see [Download a release archive](#download-a-release-archive) or
 [Download a `.deb` or `.rpm` package](#download-a-deb-or-rpm-package) for
-per-persona completions). Maintainers: the tap lives in the separate
+per-persona completions). The macOS binaries are signed with an Apple
+Developer ID and notarized, so Gatekeeper accepts them on first launch even
+though Homebrew quarantines cask artifacts. Maintainers: the tap lives in the
+separate
 [`fivetwenty-io/homebrew-tap`](https://github.com/fivetwenty-io/homebrew-tap)
 GitHub repository, and each release updates the cask there via the
 `HOMEBREW_TAP_GITHUB_TOKEN` repository secret on `proxmox-cli`.
@@ -65,7 +68,8 @@ GitHub repository, and each release updates the cask there via the
 
 Pre-built archives are published on the [Releases page](https://github.com/fivetwenty-io/proxmox-cli/releases)
 for `darwin/arm64`, `linux/amd64`, `linux/arm64`, `freebsd/amd64`,
-`freebsd/arm64`, and `windows/amd64`.
+`freebsd/arm64`, and `windows/amd64`. The `darwin` binaries are signed and
+notarized.
 
 ```bash
 # Pick your platform; example: macOS Apple Silicon.
@@ -1048,6 +1052,18 @@ lab whose resolved identifiers collide with a protected production
 resource. `pmx lab list`/`status`/`start`/`stop` join each configured lab
 against its live VM by resource-pool membership, since labs carry no
 stored VMID in config.
+
+`pmx lab create` and `pmx lab config add` also validate the lab's address
+plan up front: `network.mgmt.subnet`, `network.mgmt.host_ip`,
+`network.mgmt.gateway`, and `network.bosh_bloc` must all fall inside
+`network.cidr`. Note that `network.mgmt.subnet` is an address-plan
+reservation, not the lab host's interface prefix — the host's interface
+must be addressed with the lab CIDR's own prefix length (`host_ip/16` for a
+`/16` lab, even when the management subnet is a `/24`), because a narrower
+interface prefix makes the host route replies to on-link guests via the
+gateway, which drops them as out-of-state. `pmx lab status` decodes each
+guest interface's prefix from the guest agent and adds a `NETWORK_WARNING`
+row when an in-CIDR interface is narrower than the lab CIDR.
 
 ## Exit codes
 

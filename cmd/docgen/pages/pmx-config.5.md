@@ -319,19 +319,33 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 
 **network.cidr**
 : Overall subnet CIDR allocated to the lab (for example
-  **10.108.0.0/16**). Required by **pmx lab config add**.
+  **10.108.0.0/16**). Required by **pmx lab config add**. The address
+  plan is validated against this CIDR: **pmx lab create** and **pmx lab
+  config add** reject a lab whose **network.mgmt.subnet**,
+  **network.mgmt.host_ip**, **network.mgmt.gateway**, or
+  **network.bosh_bloc** falls outside it.
 
 **network.mgmt.subnet**
-: Management subnet CIDR, carved out of **network.cidr**.
+: Management subnet CIDR: an address-plan reservation within
+  **network.cidr** marking which slice is set aside for management-plane
+  hosts. It is NOT an interface prefix: the lab host's interface must be
+  addressed with **network.cidr**'s own prefix length (e.g. host_ip/16
+  for a /16 lab, even when this subnet is a /24). A narrower interface
+  prefix makes the host route replies to on-link guests in the wider
+  CIDR via the gateway, which drops them as out-of-state; **pmx lab
+  status** flags such interfaces with a NETWORK_WARNING row.
 
 **network.mgmt.host_ip**
-: Management-plane IP address of the lab host.
+: Management-plane IP address of the lab host. Must fall inside
+  **network.cidr**.
 
 **network.mgmt.gateway**
-: Gateway address for the management subnet.
+: Gateway address for the management subnet. Must fall inside
+  **network.cidr**.
 
 **network.bosh_bloc**
-: Subnet range reserved for BOSH-deployed VMs inside the lab.
+: Subnet range reserved for BOSH-deployed VMs inside the lab. Must fall
+  inside **network.cidr**.
 
 **network.mtu**
 : MTU for the vnet. **pmx lab config add** writes **1450**.
