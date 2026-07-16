@@ -579,7 +579,7 @@ pve --node pve1 qemu start 100 --async         # return the UPID immediately
 
 # Snapshots.
 pve --node pve1 qemu snapshot create 100 pre-upgrade --vmstate
-pve --node pve1 qemu snapshot rollback 100 pre-upgrade
+pve --node pve1 qemu snapshot rollback 100 pre-upgrade --yes
 
 # Node access.
 pve node ssh pve1 -- uptime

@@ -682,7 +682,7 @@ def vm_lifecycle(r: Runner) -> None:
                "pve", "qemu", "shutdown", vmid, "--timeout", "10", "--force-stop")
         # Rollback requires the VM stopped (the snapshot carries no RAM state).
         r.step("qemu", "snapshot rollback", f"snapshot rollback {SNAP_NAME}",
-               "pve", "qemu", "snapshot", "rollback", vmid, SNAP_NAME)
+               "pve", "qemu", "snapshot", "rollback", vmid, SNAP_NAME, "--yes")
         r.step("qemu", "snapshot delete", f"snapshot delete {SNAP_NAME}",
                "pve", "qemu", "snapshot", "delete", vmid, SNAP_NAME, "--yes")
         # Drive `task wait` against a real UPID: start the (stopped) VM with
@@ -949,9 +949,9 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
         r.step("lxc", "shutdown", f"shutdown CT {ctid}",
                "pve", "lxc", "shutdown", ctid, "--timeout", "30", "--force-stop")
         r.step("lxc", "snapshot rollback", f"snapshot rollback {SNAP_NAME}",
-               "pve", "lxc", "snapshot", "rollback", ctid, SNAP_NAME)
+               "pve", "lxc", "snapshot", "rollback", ctid, SNAP_NAME, "--yes")
         r.step("lxc", "snapshot delete", f"snapshot delete {SNAP_NAME}",
-               "pve", "lxc", "snapshot", "delete", ctid, SNAP_NAME)
+               "pve", "lxc", "snapshot", "delete", ctid, SNAP_NAME, "--yes")
 
         # Clone the (stopped) container, verify it exists, then migrate it on a
         # multi-node cluster. Mirrors the qemu clone/migrate path; everything

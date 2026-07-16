@@ -89,16 +89,17 @@ func newSnapshotDeleteCmd() *cobra.Command {
 	var (
 		async bool
 		force bool
+		yes   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name> <snapname>",
 		Short: "Delete a snapshot of a container",
-		Long: "Permanently delete a named snapshot. Pass --force to remove it from the config " +
-			"even if removing its disk snapshots fails. Submits a PVE task and blocks until it " +
-			"completes; pass --async or the global --async flag to print the task UPID " +
-			"immediately instead of waiting.",
-		Example: `  pmx pve lxc snapshot delete 200 pre-upgrade
-  pmx pve lxc snapshot delete web1 pre-upgrade --force`,
+		Long: "Permanently delete a named snapshot. Pass --yes to confirm the deletion, and " +
+			"--force to remove it from the config even if removing its disk snapshots fails. " +
+			"Submits a PVE task and blocks until it completes; pass --async or the global " +
+			"--async flag to print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc snapshot delete 200 pre-upgrade --yes
+  pmx pve lxc snapshot delete web1 pre-upgrade --yes --force`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -107,6 +108,9 @@ func newSnapshotDeleteCmd() *cobra.Command {
 				return err
 			}
 			snapname := args[1]
+			if !yes {
+				return fmt.Errorf("refusing to delete snapshot %q without confirmation: pass --yes/-y", snapname)
+			}
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -125,6 +129,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm deletion without prompting")
 	cmd.Flags().BoolVar(&force, "force", false, "remove the snapshot from config even if its removal fails")
 	return cmd
 }
@@ -134,17 +139,18 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	var (
 		async bool
 		start bool
+		yes   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a container back to a snapshot",
 		Long: "Restore the container's disks to the state captured in the named snapshot, " +
-			"discarding any changes made since. Pass --start to start the container " +
-			"immediately after a successful rollback. Submits a PVE task and blocks until it " +
-			"completes; pass --async or the global --async flag to print the task UPID " +
-			"immediately instead of waiting.",
-		Example: `  pmx pve lxc snapshot rollback 200 pre-upgrade
-  pmx pve lxc snapshot rollback web1 pre-upgrade --start`,
+			"DISCARDING any changes made since — pass --yes to confirm. Pass --start to " +
+			"start the container immediately after a successful rollback. Submits a PVE task " +
+			"and blocks until it completes; pass --async or the global --async flag to print " +
+			"the task UPID immediately instead of waiting.",
+		Example: `  pmx pve lxc snapshot rollback 200 pre-upgrade --yes
+  pmx pve lxc snapshot rollback web1 pre-upgrade --yes --start`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -153,6 +159,10 @@ func newSnapshotRollbackCmd() *cobra.Command {
 				return err
 			}
 			snapname := args[1]
+			if !yes {
+				return fmt.Errorf(
+					"rollback to %q discards all changes made since the snapshot: pass --yes/-y to confirm", snapname)
+			}
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -171,6 +181,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the rollback without prompting")
 	cmd.Flags().BoolVar(&start, "start", false, "start the container after a successful rollback")
 	return cmd
 }

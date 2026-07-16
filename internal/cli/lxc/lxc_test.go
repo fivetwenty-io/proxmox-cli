@@ -515,7 +515,7 @@ func TestSnapshotRollback_Async(t *testing.T) {
 
 	deps := newDeps(t, f, output.FormatTable, "pve1", true)
 	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "snapshot", "rollback", "101", "snap1", "--start")
+	run := newTestCmd(t, deps, &buf, "snapshot", "rollback", "101", "snap1", "--start", "--yes")
 	require.NoError(t, run())
 
 	require.Equal(t, http.MethodPost, gotMethod)
@@ -531,10 +531,30 @@ func TestSnapshotRollback_ServerError(t *testing.T) {
 		})
 	deps := newDeps(t, f, output.FormatTable, "pve1", true)
 	var buf bytes.Buffer
-	run := newTestCmd(t, deps, &buf, "snapshot", "rollback", "101", "snap1")
+	run := newTestCmd(t, deps, &buf, "snapshot", "rollback", "101", "snap1", "--yes")
 	err := run()
 	require.Error(t, err)
 	require.ErrorContains(t, err, "roll back container")
+}
+
+func TestSnapshotRollback_NoYes_Refuses(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	deps := newDeps(t, f, output.FormatTable, "pve1", true)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "snapshot", "rollback", "101", "snap1")
+	err := run()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "--yes")
+}
+
+func TestSnapshotDelete_NoYes_Refuses(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	deps := newDeps(t, f, output.FormatTable, "pve1", true)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "snapshot", "delete", "101", "snap1")
+	err := run()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "--yes")
 }
 
 func TestGroupCommand_Registers(t *testing.T) {

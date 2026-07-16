@@ -874,10 +874,19 @@ func TestQemuSnapshotRollback_Blocking(t *testing.T) {
 	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 
 	var buf bytes.Buffer
-	require.NoError(t, run(deps, &buf, "snapshot", "rollback", "100", "snap1"))
+	require.NoError(t, run(deps, &buf, "snapshot", "rollback", "100", "snap1", "--yes"))
 	require.Equal(t, http.MethodPost, gotMethod)
 	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/snapshot/snap1/rollback", gotPath)
 	require.Contains(t, buf.String(), "rolled back")
+}
+
+func TestQemuSnapshotRollback_NoYes_Refuses(t *testing.T) {
+	_, ac := newFakeClient(t)
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, "snapshot", "rollback", "100", "snap1")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "--yes")
 }
 
 func TestQemuSnapshotRollback_ServerError(t *testing.T) {
@@ -888,7 +897,7 @@ func TestQemuSnapshotRollback_ServerError(t *testing.T) {
 	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
 
 	var buf bytes.Buffer
-	require.Error(t, run(deps, &buf, "snapshot", "rollback", "100", "snap1"))
+	require.Error(t, run(deps, &buf, "snapshot", "rollback", "100", "snap1", "--yes"))
 }
 
 // --- create ---------------------------------------------------------------

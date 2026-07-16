@@ -292,17 +292,18 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	var (
 		async bool
 		start bool
+		yes   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a VM back to a snapshot",
 		Long: "Restore the VM's disks (and RAM state, if the snapshot has one) to the state " +
-			"captured in the named snapshot, discarding any changes made since. Pass --start " +
-			"to start the VM immediately after a successful rollback. Submits a PVE task and " +
-			"blocks until it completes; pass --async to print the task UPID immediately " +
-			"instead of waiting.",
-		Example: `  pmx pve qemu snapshot rollback 100 pre-upgrade
-  pmx pve qemu snapshot rollback web1 pre-upgrade --start`,
+			"captured in the named snapshot, DISCARDING any changes made since — pass --yes " +
+			"to confirm. Pass --start to start the VM immediately after a successful " +
+			"rollback. Submits a PVE task and blocks until it completes; pass --async to " +
+			"print the task UPID immediately instead of waiting.",
+		Example: `  pmx pve qemu snapshot rollback 100 pre-upgrade --yes
+  pmx pve qemu snapshot rollback web1 pre-upgrade --yes --start`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -311,6 +312,10 @@ func newSnapshotRollbackCmd() *cobra.Command {
 				return err
 			}
 			snapname := args[1]
+			if !yes {
+				return fmt.Errorf(
+					"rollback to %q discards all changes made since the snapshot: pass --yes/-y to confirm", snapname)
+			}
 			if cmd.Flags().Changed("async") {
 				deps.Async = async
 			}
@@ -330,6 +335,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&async, "async", false, "return the task UPID immediately without waiting")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm the rollback without prompting")
 	cmd.Flags().BoolVar(&start, "start", false, "start the VM after a successful rollback")
 	return cmd
 }
