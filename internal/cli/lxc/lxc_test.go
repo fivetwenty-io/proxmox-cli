@@ -123,11 +123,13 @@ func TestList_Table(t *testing.T) {
 	require.Contains(t, out, "VMID")
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "STATUS")
+	require.Contains(t, out, "NODE")
 	require.Contains(t, out, "101")
 	require.Contains(t, out, "web")
 	require.Contains(t, out, "running")
 	require.Contains(t, out, "102")
 	require.Contains(t, out, "db")
+	require.Contains(t, out, "pve1", "node-scoped rows carry the resolved node")
 }
 
 func TestList_NoNode_Errors(t *testing.T) {
@@ -138,6 +140,56 @@ func TestList_NoNode_Errors(t *testing.T) {
 	err := run()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "node")
+}
+
+// TestList_Cluster asserts `lxc list --cluster` reads the cluster resource
+// inventory (GET /cluster/resources?type=vm) — the same mixed qemu+lxc
+// endpoint qemu list uses — keeps only lxc guests, and shows each guest's
+// node without requiring --node.
+func TestList_Cluster(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotPath, gotType string
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotType = r.URL.Query().Get("type")
+		testhelper.WriteData(w, []any{
+			map[string]any{"vmid": 200, "name": "ct-cluster", "status": "running", "node": "pve2", "type": "lxc"},
+			map[string]any{"vmid": 100, "name": "vm-cluster", "status": "running", "node": "pve2", "type": "qemu"},
+		})
+	})
+
+	// No node required for --cluster mode.
+	deps := newDeps(t, f, output.FormatTable, "", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "list", "--cluster")
+	require.NoError(t, run())
+
+	require.Equal(t, "/api2/json/cluster/resources", gotPath)
+	require.Equal(t, "vm", gotType)
+	out := buf.String()
+	require.Contains(t, out, "ct-cluster")
+	require.Contains(t, out, "pve2")
+	require.NotContains(t, out, "vm-cluster", "qemu guests must be filtered out of lxc list")
+}
+
+// TestList_ClusterAbsent asserts without --cluster the node-scoped endpoint is
+// still used.
+func TestList_ClusterAbsent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve1/lxc", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, []any{
+			map[string]any{"vmid": 101, "name": "local-ct", "status": "stopped"},
+		})
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "list")
+	require.NoError(t, run())
+	require.Equal(t, "/api2/json/nodes/pve1/lxc", gotPath)
+	require.Contains(t, buf.String(), "local-ct")
 }
 
 func TestStatus_Table(t *testing.T) {

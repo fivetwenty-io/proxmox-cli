@@ -32,6 +32,9 @@ def run(ctx: Ctx) -> None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
 
     lst = ctx.check("list", "pve", "qemu", "list", node=n, validate=is_list)
+    # list --cluster reads /cluster/resources instead of a node endpoint, so
+    # it needs no node and each row carries the guest's own node.
+    ctx.check("list cluster", "pve", "qemu", "list", "--cluster", validate=is_list)
 
     vmid = None
     if lst.rc == 0:
