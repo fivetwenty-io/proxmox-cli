@@ -56,11 +56,10 @@ for every command tree, and shell completions for `pmx` (Homebrew casks only
 support one completion script per shell, so the persona binaries do not get
 their own — see [Download a release archive](#download-a-release-archive) or
 [Download a `.deb` or `.rpm` package](#download-a-deb-or-rpm-package) for
-per-persona completions). Maintainers: the tap lives in a separate
-`fivetwenty-io/homebrew-tap` GitHub repository, and releasing depends on a
-`HOMEBREW_TAP_GITHUB_TOKEN` repository secret on `proxmox-cli` with write
-access to that tap — both are one-time, manual setup steps that must exist
-before the first release publishes the cask.
+per-persona completions). Maintainers: the tap lives in the separate
+[`fivetwenty-io/homebrew-tap`](https://github.com/fivetwenty-io/homebrew-tap)
+GitHub repository, and each release updates the cask there via the
+`HOMEBREW_TAP_GITHUB_TOKEN` repository secret on `proxmox-cli`.
 
 ### Download a release archive
 
