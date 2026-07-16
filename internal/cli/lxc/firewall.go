@@ -1183,6 +1183,11 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 				return fmt.Errorf("no options to set: pass at least one option flag")
 			}
 
+			if fl.Changed("enable") && enable {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
+					"WARNING: enabling the container firewall applies its input policy (default DROP) to the "+
+						"container's NICs; ensure allow rules cover any services you reach over the network (e.g. SSH)")
+			}
 			if err := deps.API.Nodes.UpdateLxcFirewallOptions(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("set firewall options for container %s on node %q: %w", vmid, node, err)
 			}

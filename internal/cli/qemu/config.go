@@ -508,7 +508,7 @@ func newConfigSetCmd() *cobra.Command {
 	f.StringVar(&cdrom, "cdrom", "", "CD-ROM image alias for -ide2, e.g. local:iso/img.iso,media=cdrom")
 
 	f.StringVar(&ciuser, "ciuser", "", "cloud-init: default user to configure")
-	f.StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user")
+	f.StringVar(&cipassword, "cipassword", "", "cloud-init: password for the default user (stored in the VM config, readable via VM.Audit — prefer --sshkeys)")
 	f.StringVar(&citype, "citype", "", "cloud-init: config format, e.g. nocloud or configdrive2")
 	f.BoolVar(&ciupgrade, "ciupgrade", false, "cloud-init: run a package upgrade on first boot")
 	f.StringVar(&cicustom, "cicustom", "", "cloud-init: custom config files, e.g. user=local:snippets/user.yml")

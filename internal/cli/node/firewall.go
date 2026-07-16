@@ -647,6 +647,11 @@ func newNodeFirewallOptionsSetCmd() *cobra.Command {
 				params.Delete = &del
 			}
 
+			if fl.Changed("enable") && enable {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
+					"WARNING: enabling the node firewall applies the cluster input policy (default DROP) on this node; "+
+						"ensure a management allow rule (SSH 22, GUI 8006) exists first")
+			}
 			if err := deps.API.Nodes.UpdateFirewallOptions(cmd.Context(), deps.Node, params); err != nil {
 				return fmt.Errorf("set firewall options on node %q: %w", deps.Node, err)
 			}

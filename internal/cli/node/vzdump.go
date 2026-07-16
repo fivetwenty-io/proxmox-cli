@@ -60,7 +60,8 @@ func newVzdumpCmd() *cobra.Command {
 			"task finishes unless --async is set. Use the sub-commands defaults and " +
 			"extract-config to inspect vzdump configuration.",
 		Example: `  pmx pve node vzdump --vmid 100 --storage local
-  pmx pve node vzdump --all --storage local --mode snapshot`,
+  pmx pve node vzdump --all --storage local --mode snapshot
+  pmx pve node vzdump --vmid 100 --storage local --notes-template "{{guestname}}"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -207,7 +208,7 @@ func newVzdumpCmd() *cobra.Command {
 	fl.StringVar(&notesTemplate, "notes-template", "", "template for backup notes (supports {{guestname}}, {{node}}, {{vmid}})")
 	fl.StringVar(&mailto, "mailto", "", "comma-separated email addresses for notifications")
 	fl.Int64Var(&bwlimit, "bwlimit", 0, "I/O rate limit in KiB/s (0 for unlimited)")
-	fl.Int64Var(&ionice, "ionice", 7, "ionice priority for the backup process (0-8)")
+	fl.Int64Var(&ionice, "ionice", 7, "ionice priority for the backup process (0-8, BFQ scheduler only)")
 	fl.StringVar(&fleecing, "fleecing", "", "backup fleecing options, for example enabled=1,storage=local-lvm")
 	fl.Int64Var(&lockwait, "lockwait", 0, "maximal time to wait for the global lock, in minutes")
 	fl.Int64Var(&stopwait, "stopwait", 0, "maximal time to wait until a guest is stopped, in minutes")
@@ -219,7 +220,7 @@ func newVzdumpCmd() *cobra.Command {
 	fl.StringVar(&exclude, "exclude", "", "comma-separated guest IDs to exclude (only with --all)")
 	fl.StringArrayVar(&excludePath, "exclude-path", nil,
 		"path or glob to exclude from the backup; repeat for multiple paths")
-	fl.Int64Var(&zstd, "zstd", 1, "number of zstd threads (0 for all available cores)")
+	fl.Int64Var(&zstd, "zstd", 1, "number of zstd threads (0 uses half the available cores)")
 	fl.Int64Var(&pigz, "pigz", 0, "number of pigz threads when using gzip (0 to use a single thread)")
 	fl.StringVar(&notificationMode, "notification-mode", "",
 		"how to send notifications: auto, legacy-sendmail, or notification-system")

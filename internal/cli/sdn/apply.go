@@ -29,8 +29,10 @@ func newApplyCmd() *cobra.Command {
 			"(zones, vnets, subnets, controllers, IPAM/DNS providers, fabrics) take effect. " +
 			"Submits a PVE task and blocks until it completes; pass --async to print the task " +
 			"UPID immediately instead of waiting. Some PVE versions return no task and the " +
-			"reload is reported as immediately applied.",
-		Example: `  pmx pve sdn apply
+			"reload is reported as immediately applied. The reload touches every cluster " +
+			"node; preview the pending changes first with `pmx pve sdn dry-run`.",
+		Example: `  pmx pve sdn dry-run
+  pmx pve sdn apply
   pmx pve sdn apply --async`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
