@@ -1124,6 +1124,15 @@ The sweep skips gracefully (exit 0) when the context is not configured; pass
 `--strict` to fail instead. `make test-integration` runs the Go integration
 tests (gated on the config file or `PMX_TEST_*`).
 
+`scripts/stack` provisions the PBS and PDM servers those opt-in trees need,
+as guests on the lab cluster itself: `scripts/stack init` writes a commented
+`config/stack.toml`, `make stack-up` clones a Debian cloud-init template per
+enabled product, installs the product from its Proxmox apt repository,
+provisions an API token, and creates the matching `pbs-e2e`/`pdm-e2e`
+contexts; `make test-e2e-stack` then runs the full sweep with those contexts
+wired in, and `make stack-down` destroys the guests again. See
+[`docs/e2e-stack.md`](docs/e2e-stack.md) for details.
+
 `scripts/lifecycle` (`make test-lifecycle`) is the destructive counterpart, and
 `scripts/e2e --mutate` runs the read-only sweep and then this mutate phase in
 one invocation. It provisions an isolated `pmxcli` SDN (zone, vnet, and a

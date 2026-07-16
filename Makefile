@@ -189,6 +189,22 @@ test-e2e-mutate: ## Run the e2e sweep plus the destructive qemu/lxc verb matrix 
 test-lifecycle: ## Run destructive VM+CT lifecycle on an isolated SDN/pool (CONTEXT=lab)
 	$(SCRIPTS)/lifecycle $(if $(CONTEXT),--context $(CONTEXT),) $(LIFECYCLE_ARGS)
 
+.PHONY: stack-up
+stack-up: ## Provision the nested PBS+PDM(+PVE) e2e stack on the lab (config/stack.toml)
+	$(SCRIPTS)/stack up
+
+.PHONY: stack-down
+stack-down: ## Destroy the nested e2e stack guests and remove their contexts
+	$(SCRIPTS)/stack down
+
+.PHONY: stack-status
+stack-status: ## Show nested e2e stack state (guests, contexts)
+	$(SCRIPTS)/stack status
+
+.PHONY: test-e2e-stack
+test-e2e-stack: ## Run the full e2e sweep with the stack's PBS/PDM contexts wired in
+	$(SCRIPTS)/stack e2e
+
 .PHONY: test-race
 test-race: ## Run unit tests with race detector
 	$(SCRIPTS)/test unit --race

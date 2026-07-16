@@ -1,0 +1,589 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Stand up / tear down the nested PBS+PDM(+PVE) e2e stack on the lab cluster.
+
+The stack turns the opt-in `pbs` and `pdm` e2e trees into a default-on suite:
+each enabled product gets a guest VM cloned from a Debian cloud-init template
+on the lab PVE cluster, the product installed from the Proxmox apt repository,
+an API token provisioned, and a matching pmx context created — everything the
+sweep needs to run `scripts/e2e --pbs-context ... --pdm-context ...`.
+
+Everything is config-driven from config/stack.toml (see `stack init` for a
+commented example) and every phase is idempotent: re-running `up` converges
+on the desired state instead of failing on what already exists.
+
+Usage:
+  scripts/stack init      # write config/stack.example.toml to config/stack.toml
+  scripts/stack up        # provision guests + contexts for enabled products
+  scripts/stack status    # show guest, install, and context state per product
+  scripts/stack env       # print PMX_E2E_*_CONTEXT exports for the sweep
+  scripts/stack e2e       # run scripts/e2e with the stack contexts wired in
+  scripts/stack down      # destroy guests and remove contexts
+
+The guests are addressed by static IPs from the config (no guest-agent
+dependency); the template must be a cloud-init-enabled Debian image (e.g.
+a debian-13-genericcloud template). All hosts get root SSH via the configured
+public key, which is also how provisioning connects.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import tomllib
+
+# --- output helpers ----------------------------------------------------------
+
+_TTY = sys.stdout.isatty()
+
+
+def _c(code: str, text: str) -> str:
+    return f"\033[{code}m{text}\033[0m" if _TTY else text
+
+
+GREEN = lambda s: _c("32", s)
+RED = lambda s: _c("31", s)
+YELLOW = lambda s: _c("33", s)
+DIM = lambda s: _c("2", s)
+BOLD = lambda s: _c("1", s)
+
+
+def die(msg: str, code: int = 2) -> None:
+    print(f"stack: {RED('error')}: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def phase(title: str) -> None:
+    print(BOLD(f"▸ {title}"))
+
+
+def step(msg: str) -> None:
+    print(f"  {GREEN('✓')} {msg}")
+
+
+def note(msg: str) -> None:
+    print(f"  {DIM(msg)}")
+
+
+# --- config -------------------------------------------------------------------
+
+PRODUCTS = ("pbs", "pdm", "pve")
+
+EXAMPLE_CONFIG = """\
+# config/stack.toml — nested PBS+PDM(+PVE) e2e stack on the lab PVE cluster.
+#
+# `scripts/stack up` clones one guest per enabled product from a Debian
+# cloud-init template, installs the product from the Proxmox apt repo over
+# SSH, provisions an API token, and creates the matching pmx context.
+
+[lab]
+context = "lab"            # pmx context of the PVE cluster hosting the stack
+node = ""                  # node hosting the template and the stack guests
+                           # (empty: the context's default node; clones use it
+                           # as the SOURCE node, so the template must live there)
+storage = "local-zfs"      # storage for full-cloned guest disks
+template = 9000            # VMID of a Debian cloud-init template to clone
+gateway = "10.10.0.1"      # gateway for the static guest IPs below
+nameserver = "1.1.1.1"
+suite = "trixie"           # Debian suite of the template (apt repo suite)
+ssh_public_key = "~/.ssh/id_ed25519.pub"   # installed as root's authorized key
+ssh_private_key = ""       # matching private key (empty: ssh defaults/agent)
+
+[products.pbs]
+enabled = true
+vmid = 9101
+name = "e2e-pbs"
+ip = "10.10.0.101/24"      # static IP in CIDR form (address plan: see docs)
+cores = 2
+memory = 4096              # MiB
+context = "pbs-e2e"        # pmx context created for this product
+component = "pbs-no-subscription"
+token_name = "e2e"
+role = "Admin"             # role granted to the token on /
+
+[products.pdm]
+enabled = true
+vmid = 9102
+name = "e2e-pdm"
+ip = "10.10.0.102/24"
+cores = 2
+memory = 4096
+context = "pdm-e2e"
+component = "pdm-test"     # PDM still ships via the test component
+token_name = "e2e"
+role = "Administrator"
+
+# A nested full PVE guest is optional: the lab cluster itself already is the
+# PVE target for the sweep. Enable this only for a fully isolated stack.
+[products.pve]
+enabled = false
+vmid = 9103
+name = "e2e-pve"
+ip = "10.10.0.103/24"
+cores = 4
+memory = 8192
+context = "pve-e2e"
+component = "pve-no-subscription"
+token_name = "e2e"
+role = "Administrator"
+"""
+
+
+def repo_root() -> str:
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(here)
+
+
+def config_path() -> str:
+    return os.path.join(repo_root(), "config", "stack.toml")
+
+
+def load_config() -> dict:
+    path = config_path()
+    if not os.path.isfile(path):
+        die(f"no {os.path.relpath(path, repo_root())}; run `scripts/stack init` and edit it")
+    with open(path, "rb") as fh:
+        cfg = tomllib.load(fh)
+    lab = cfg.get("lab", {})
+    for key in ("context", "storage", "template", "gateway", "ssh_public_key"):
+        if not lab.get(key):
+            die(f"config: [lab].{key} is required")
+    products = cfg.get("products", {})
+    for name, p in products.items():
+        if name not in PRODUCTS:
+            die(f"config: unknown product [products.{name}]")
+        if not p.get("enabled"):
+            continue
+        for key in ("vmid", "name", "ip", "context"):
+            if not p.get(key):
+                die(f"config: [products.{name}].{key} is required")
+    return cfg
+
+
+def enabled_products(cfg: dict) -> list[str]:
+    return [n for n in PRODUCTS if cfg.get("products", {}).get(n, {}).get("enabled")]
+
+
+# --- process helpers -----------------------------------------------------------
+
+
+def find_binary() -> str:
+    cand = os.path.join(repo_root(), "dist", "pmx")
+    if os.path.isfile(cand):
+        return cand
+    print("stack: building ./dist/pmx ...", flush=True)
+    rc = subprocess.run(["go", "build", "-o", cand, "./cmd/pmx"], cwd=repo_root()).returncode
+    if rc != 0 or not os.path.isfile(cand):
+        die("go build failed")
+    return cand
+
+
+class Runner:
+    """Wraps pmx and ssh invocations against the lab."""
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.lab = cfg["lab"]
+        self.binary = find_binary()
+
+    def pmx(self, *args: str, context: str | None = None, check: bool = True,
+            json_out: bool = False) -> subprocess.CompletedProcess:
+        argv = [self.binary, "--context", context or self.lab["context"], "--no-log"]
+        if json_out:
+            argv += ["-o", "json"]
+        node = self.lab.get("node") or ""
+        if node and args[0] == "pve":
+            argv += ["--node", node]
+        argv += list(args)
+        proc = subprocess.run(argv, capture_output=True, text=True)
+        if check and proc.returncode != 0:
+            die(f"`pmx {' '.join(args)}` failed:\n{proc.stderr.strip() or proc.stdout.strip()}")
+        return proc
+
+    def pmx_json(self, *args: str, context: str | None = None):
+        proc = self.pmx(*args, context=context, json_out=True)
+        try:
+            return json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            die(f"`pmx {' '.join(args)}`: invalid json: {exc}")
+
+    def ssh(self, host: str, script: str, check: bool = True) -> subprocess.CompletedProcess:
+        argv = ["ssh", "-o", "StrictHostKeyChecking=accept-new",
+                "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+        key = os.path.expanduser(self.lab.get("ssh_private_key") or "")
+        if key:
+            argv += ["-i", key]
+        argv += [f"root@{host}", "bash", "-s"]
+        proc = subprocess.run(argv, input=script, capture_output=True, text=True)
+        if check and proc.returncode != 0:
+            die(f"ssh root@{host} failed:\n{proc.stderr.strip() or proc.stdout.strip()}")
+        return proc
+
+
+# --- guest lifecycle -----------------------------------------------------------
+
+
+def guest_ip(p: dict) -> str:
+    return p["ip"].split("/", 1)[0]
+
+
+def vm_exists(r: Runner, vmid: int) -> bool:
+    proc = r.pmx("pve", "qemu", "config", "get", str(vmid), check=False)
+    return proc.returncode == 0
+
+
+def vm_running(r: Runner, vmid: int) -> bool:
+    proc = r.pmx("pve", "qemu", "status", str(vmid), check=False, json_out=True)
+    if proc.returncode != 0:
+        return False
+    try:
+        return json.loads(proc.stdout).get("status") == "running"
+    except json.JSONDecodeError:
+        return False
+
+
+def ensure_guest(r: Runner, product: str, p: dict) -> None:
+    lab, vmid = r.lab, int(p["vmid"])
+    if vm_exists(r, vmid):
+        step(f"{product}: VM {vmid} present")
+    else:
+        note(f"{product}: cloning template {lab['template']} -> VM {vmid} ...")
+        r.pmx("pve", "qemu", "clone", str(lab["template"]), "--newid", str(vmid),
+              "--name", p["name"], "--full", "--storage", lab["storage"])
+        step(f"{product}: VM {vmid} cloned from template {lab['template']}")
+
+    pubkey_path = os.path.expanduser(lab["ssh_public_key"])
+    if not os.path.isfile(pubkey_path):
+        die(f"[lab].ssh_public_key not found: {pubkey_path}")
+    with open(pubkey_path) as fh:
+        pubkey = fh.read().strip()
+
+    args = ["pve", "qemu", "config", "set", str(vmid),
+            "--cores", str(p.get("cores", 2)), "--memory", str(p.get("memory", 4096)),
+            "--ipconfig", f"0=ip={p['ip']},gw={lab['gateway']}",
+            "--ciuser", "root", "--sshkeys", pubkey]
+    if lab.get("nameserver"):
+        args += ["--nameserver", lab["nameserver"]]
+    r.pmx(*args)
+    step(f"{product}: cloud-init configured (ip {p['ip']}, gw {lab['gateway']})")
+
+    if not vm_running(r, vmid):
+        r.pmx("pve", "qemu", "start", str(vmid))
+        step(f"{product}: VM {vmid} started")
+
+
+def wait_for_ssh(r: Runner, product: str, host: str, timeout: int = 300) -> None:
+    note(f"{product}: waiting for SSH on {host} (max {timeout}s) ...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, 22), timeout=5):
+                pass
+        except OSError:
+            time.sleep(5)
+            continue
+        if r.ssh(host, "true", check=False).returncode == 0:
+            step(f"{product}: SSH reachable at root@{host}")
+            return
+        time.sleep(5)
+    die(f"{product}: SSH to root@{host} not reachable within {timeout}s")
+
+
+# --- product provisioning -------------------------------------------------------
+
+# Per-product install facts: apt repo path, package set, admin CLI, API port.
+INSTALL = {
+    "pbs": {
+        "repo": "pbs",
+        "packages": "proxmox-backup-server",
+        "admin": "proxmox-backup-manager",
+        "port": 8007,
+    },
+    "pdm": {
+        "repo": "pdm",
+        "packages": "proxmox-datacenter-manager proxmox-datacenter-manager-ui",
+        "admin": "proxmox-datacenter-manager-admin",
+        "port": 8443,
+    },
+    "pve": {
+        "repo": "pve",
+        "packages": "proxmox-ve postfix open-iscsi",
+        "admin": "pveum",
+        "port": 8006,
+    },
+}
+
+
+def _ident(value: str, what: str) -> str:
+    """Validate a config value that is interpolated into a remote bash script.
+
+    Repo components, suites, token names, and role names are all plain
+    identifier-ish tokens; anything else is a config error, and rejecting it
+    here keeps the generated scripts quote-safe.
+    """
+    ok = value and all(c.isalnum() or c in "-_." for c in value)
+    if not ok:
+        die(f"config: {what} {value!r} must be alphanumeric with -_. only")
+    return value
+
+
+def install_script(product: str, p: dict, lab: dict) -> str:
+    facts = INSTALL[product]
+    suite = _ident(lab.get("suite", "trixie"), "[lab].suite")
+    component = _ident(p.get("component", f"{facts['repo']}-no-subscription"),
+                       f"[products.{product}].component")
+    lines = [
+        "set -euo pipefail",
+        "export DEBIAN_FRONTEND=noninteractive",
+        f"if [ ! -f /etc/apt/trusted.gpg.d/proxmox-release-{suite}.gpg ]; then",
+        f"  wget -qO /etc/apt/trusted.gpg.d/proxmox-release-{suite}.gpg "
+        f"http://download.proxmox.com/debian/proxmox-release-{suite}.gpg",
+        "fi",
+        f"echo 'deb http://download.proxmox.com/debian/{facts['repo']} {suite} {component}'"
+        f" > /etc/apt/sources.list.d/{facts['repo']}.list",
+        f"if ! dpkg -s {facts['packages'].split()[0]} >/dev/null 2>&1; then",
+        "  apt-get update -qq",
+        f"  apt-get install -y -qq {facts['packages']}",
+        "fi",
+        f"echo INSTALLED=$(dpkg -s {facts['packages'].split()[0]} >/dev/null 2>&1 && echo yes || echo no)",
+    ]
+    return "\n".join(lines)
+
+
+def token_script(product: str, p: dict) -> str:
+    """Provision an API token and print its secret as TOKEN_SECRET=<value>.
+
+    Token secrets are only shown at creation, so an existing token is deleted
+    and re-generated — `up` always converges on a token whose secret we hold.
+    """
+    facts = INSTALL[product]
+    tok = _ident(p.get("token_name", "e2e"), "token_name")
+    role = _ident(p.get("role", "Admin"), "role")
+    if product == "pve":
+        return "\n".join([
+            "set -euo pipefail",
+            f"pveum user token remove root@pam {tok} >/dev/null 2>&1 || true",
+            f"OUT=$(pveum user token add root@pam {tok} --privsep 0 --output-format json)",
+            "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"value\"])')",
+        ])
+    admin = facts["admin"]
+    return "\n".join([
+        "set -euo pipefail",
+        f"{admin} user delete-token root@pam {tok} >/dev/null 2>&1 || true",
+        f"OUT=$({admin} user generate-token root@pam {tok} --output-format json)",
+        f"{admin} acl update / {role} --auth-id 'root@pam!{tok}'",
+        "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"value\"])')",
+    ])
+
+
+PBS_DATASTORE_SCRIPT = """\
+set -euo pipefail
+if ! proxmox-backup-manager datastore list --output-format json \\
+    | python3 -c 'import json,sys; sys.exit(0 if any(d.get("name")=="e2e" for d in json.load(sys.stdin)) else 1)'; then
+  mkdir -p /srv/pbs-e2e
+  proxmox-backup-manager datastore create e2e /srv/pbs-e2e
+fi
+echo DATASTORE=e2e
+"""
+
+
+def provision_product(r: Runner, product: str, p: dict) -> str:
+    """Install the product and return the API token secret."""
+    host = guest_ip(p)
+    proc = r.ssh(host, install_script(product, p, r.lab))
+    if "INSTALLED=yes" not in proc.stdout:
+        die(f"{product}: package install did not converge:\n{proc.stdout}\n{proc.stderr}")
+    step(f"{product}: {INSTALL[product]['packages'].split()[0]} installed")
+
+    if product == "pve":
+        # proxmox-ve replaces the Debian kernel; a reboot is required before
+        # the API stack is fully consistent.
+        r.ssh(host, "test -d /run/systemd/system && systemctl reboot || reboot", check=False)
+        note("pve: rebooting into the PVE kernel ...")
+        time.sleep(15)
+        wait_for_ssh(r, product, host)
+        # SSH answering does not mean pve-cluster/pvedaemon are up yet; token
+        # provisioning needs a working pveum, so wait for it explicitly.
+        note("pve: waiting for the PVE API stack (pveum) ...")
+        deadline = time.time() + 180
+        while r.ssh(host, "pveum user list >/dev/null 2>&1", check=False).returncode != 0:
+            if time.time() > deadline:
+                die("pve: pveum not ready within 180s after reboot")
+            time.sleep(5)
+        step("pve: API stack ready")
+
+    if product == "pbs":
+        r.ssh(host, PBS_DATASTORE_SCRIPT)
+        step("pbs: datastore 'e2e' present at /srv/pbs-e2e")
+
+    proc = r.ssh(host, token_script(product, p))
+    secret = ""
+    for line in proc.stdout.splitlines():
+        if line.startswith("TOKEN_SECRET="):
+            secret = line.split("=", 1)[1].strip()
+    if not secret:
+        die(f"{product}: token provisioning returned no secret:\n{proc.stdout}\n{proc.stderr}")
+    step(f"{product}: API token root@pam!{p.get('token_name', 'e2e')} provisioned")
+    return secret
+
+
+# --- pmx context wiring ---------------------------------------------------------
+
+
+def context_exists(r: Runner, name: str) -> bool:
+    data = r.pmx_json("context", "ls", context=r.lab["context"])
+    return isinstance(data, list) and any(
+        isinstance(c, dict) and c.get("name") == name for c in data)
+
+
+def ensure_context(r: Runner, product: str, p: dict, secret: str) -> None:
+    name, host, tok = p["context"], guest_ip(p), p.get("token_name", "e2e")
+    if context_exists(r, name):
+        r.pmx("context", "rm", name, "--yes")
+    args = ["context", "add", name, "--host", host, "--username", "root@pam",
+            "--token-id", tok, "--secret", secret, "--insecure"]
+    if product != "pve":
+        args += ["--product", product]
+    r.pmx(*args)
+    step(f"{product}: context {name!r} -> https://{host}:{INSTALL[product]['port']}")
+
+    proc = r.pmx("context", "validate", name, "--connect", check=False)
+    if proc.returncode == 0:
+        step(f"{product}: context {name!r} validated live (--connect)")
+    else:
+        print(f"  {YELLOW('!')} {product}: context validation failed: "
+              f"{proc.stderr.strip() or proc.stdout.strip()}")
+
+
+# --- subcommands -----------------------------------------------------------------
+
+
+def cmd_init(_: argparse.Namespace) -> int:
+    path = config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.isfile(path):
+        die(f"{os.path.relpath(path, repo_root())} already exists; edit it directly")
+    with open(path, "w") as fh:
+        fh.write(EXAMPLE_CONFIG)
+    print(f"stack: wrote {os.path.relpath(path, repo_root())} — edit it for your lab "
+          "(template VMID, storage, IPs), then run `scripts/stack up`")
+    return 0
+
+
+def cmd_up(_: argparse.Namespace) -> int:
+    cfg = load_config()
+    r = Runner(cfg)
+    products = enabled_products(cfg)
+    if not products:
+        die("no products enabled in config/stack.toml")
+
+    phase(f"stack up: {', '.join(products)} on context {cfg['lab']['context']!r}")
+    for product in products:
+        p = cfg["products"][product]
+        phase(f"{product} ({p['name']}, VM {p['vmid']}, {p['ip']})")
+        ensure_guest(r, product, p)
+        wait_for_ssh(r, product, guest_ip(p))
+        secret = provision_product(r, product, p)
+        ensure_context(r, product, p, secret)
+
+    phase("stack ready")
+    print_env(cfg)
+    return 0
+
+
+def cmd_down(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    r = Runner(cfg)
+    products = enabled_products(cfg)
+    phase(f"stack down: {', '.join(products)}")
+    for product in products:
+        p = cfg["products"][product]
+        vmid = str(p["vmid"])
+        if context_exists(r, p["context"]):
+            r.pmx("context", "rm", p["context"], "--yes")
+            step(f"{product}: context {p['context']!r} removed")
+        if vm_exists(r, int(p["vmid"])):
+            if vm_running(r, int(p["vmid"])):
+                r.pmx("pve", "qemu", "stop", vmid, check=False)
+            r.pmx("pve", "qemu", "delete", vmid, "--yes")
+            step(f"{product}: VM {vmid} destroyed")
+        else:
+            note(f"{product}: VM {vmid} absent")
+    return 0
+
+
+def cmd_status(_: argparse.Namespace) -> int:
+    cfg = load_config()
+    r = Runner(cfg)
+    for product in enabled_products(cfg):
+        p = cfg["products"][product]
+        vmid = int(p["vmid"])
+        exists = vm_exists(r, vmid)
+        running = exists and vm_running(r, vmid)
+        ctx = context_exists(r, p["context"])
+        vm_state = "running" if running else ("stopped" if exists else "absent")
+        glyph = GREEN("✓") if running and ctx else YELLOW("○")
+        print(f"  {glyph} {product}: VM {vmid} {vm_state}, "
+              f"context {p['context']!r} {'present' if ctx else 'absent'}")
+    return 0
+
+
+def print_env(cfg: dict) -> None:
+    exports = []
+    for product in enabled_products(cfg):
+        if product in ("pbs", "pdm"):
+            exports.append(
+                f"export PMX_E2E_{product.upper()}_CONTEXT={shlex.quote(cfg['products'][product]['context'])}")
+    if exports:
+        print("\n".join(exports))
+        print(DIM("# eval \"$(scripts/stack env)\" then run scripts/e2e"))
+
+
+def cmd_env(_: argparse.Namespace) -> int:
+    print_env(load_config())
+    return 0
+
+
+def cmd_e2e(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    argv = [os.path.join(repo_root(), "scripts", "e2e")]
+    for product in ("pbs", "pdm"):
+        p = cfg.get("products", {}).get(product, {})
+        if p.get("enabled"):
+            argv += [f"--{product}-context", p["context"]]
+    argv += args.rest
+    print(DIM(f"stack: exec {' '.join(argv)}"))
+    return subprocess.run(argv, cwd=repo_root()).returncode
+
+
+def main() -> int:
+    if not shutil.which("ssh"):
+        die("ssh not found in PATH")
+    parser = argparse.ArgumentParser(
+        prog="scripts/stack",
+        description="Provision/tear down the nested PBS+PDM(+PVE) e2e stack.")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("init", help="write a commented config/stack.toml to edit").set_defaults(fn=cmd_init)
+    sub.add_parser("up", help="provision guests, products, tokens, contexts").set_defaults(fn=cmd_up)
+    sub.add_parser("down", help="destroy guests and remove contexts").set_defaults(fn=cmd_down)
+    sub.add_parser("status", help="show per-product stack state").set_defaults(fn=cmd_status)
+    sub.add_parser("env", help="print PMX_E2E_*_CONTEXT exports").set_defaults(fn=cmd_env)
+    p_e2e = sub.add_parser("e2e", help="run scripts/e2e with stack contexts wired in")
+    p_e2e.add_argument("rest", nargs="*", help="extra args passed through to scripts/e2e")
+    p_e2e.set_defaults(fn=cmd_e2e)
+    args = parser.parse_args()
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

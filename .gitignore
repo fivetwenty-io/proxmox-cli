@@ -20,3 +20,7 @@ coverage.html
 /manpages/
 /manpages-gz/
 /completions/
+
+# Local lab/stack configuration (holds addresses and context names)
+/config/stack.toml
+/config/.env.test
