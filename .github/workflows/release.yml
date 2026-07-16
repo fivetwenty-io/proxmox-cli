@@ -80,3 +80,29 @@ jobs:
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+
+      # The cask push degrades gracefully when HOMEBREW_TAP_GITHUB_TOKEN is
+      # unset, which also makes it silent: a vanished or broken secret would
+      # leave this run green while the tap keeps serving the previous
+      # version. On the canonical repo the cask must always ship, so fail
+      # the release unless the tap's cask advertises this tag's version.
+      # Forks (which lack the tap secret by design) skip this check.
+      - name: Verify tap cask version
+        if: github.repository == 'fivetwenty-io/proxmox-cli'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          for attempt in 1 2 3 4 5; do
+            published=$(gh api repos/fivetwenty-io/homebrew-tap/contents/Casks/pmx.rb \
+              -H "Accept: application/vnd.github.raw" \
+              | sed -n 's/^[[:space:]]*version "\(.*\)"/\1/p')
+            if [ "$published" = "$expected" ]; then
+              echo "tap cask is at ${published}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: tap cask at '${published:-<none>}', want '${expected}'"
+            sleep 15
+          done
+          echo "tap cask never reached ${expected}" >&2
+          exit 1
