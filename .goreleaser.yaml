@@ -193,10 +193,10 @@ homebrew_casks:
     repository:
       owner: fivetwenty-io
       name: homebrew-tap
-      # envOrDefault (not `.Env.HOMEBREW_TAP_GITHUB_TOKEN` directly) so
-      # `goreleaser check`/local snapshots don't fail when the tap secret is
-      # unset — direct map access errors under missingkey=error.
-      token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
+      # `index .Env` (not `.Env.HOMEBREW_TAP_GITHUB_TOKEN` directly) so this
+      # never errors when the tap secret is unset: direct map access errors
+      # under missingkey=error, and envOrDefault is unavailable in this field.
+      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
     directory: Casks
     homepage: https://github.com/fivetwenty-io/proxmox-cli
     description: Proxmox command-line interface (VE / PBS / PDM)
