@@ -3,12 +3,16 @@ package lab
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
 // labCtxUser is the username portion of the derived lab context account
@@ -213,4 +217,149 @@ func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
 		labSSHPollSleep(labSSHWaitInterval)
 	}
 	return fmt.Errorf("timed out waiting for ssh on %s after %d attempts", ip, labSSHWaitAttempts)
+}
+
+// labSyncOptions tunes syncLabContext. WaitSSH bounds-waits for the node's
+// sshd (used right after `create --start`, when the VM has only just booted);
+// context sync leaves it false and fails fast if the node is unreachable.
+type labSyncOptions struct {
+	WaitSSH bool
+}
+
+// labSyncResult reports what a sync did, for row/message rendering.
+type labSyncResult struct {
+	ContextName string
+	Rotated     bool
+	Changed     []string
+}
+
+// labProbeContextVersion connects to the named context's API with its
+// configured (resolved) token and calls GET /version. It is a package var so
+// tests can bypass the live network call. SSH reachability (port 22) does not
+// imply API reachability (port 8006), so this is the only real proof the
+// context works end to end.
+var labProbeContextVersion = func(cmd *cobra.Command, deps *cli.Deps, ctxName string) error {
+	ac, _, err := cli.BuildContextClient(
+		cmd, deps.Cfg, deps.ConfigPath, ctxName, deps.Insecure, func() bool { return false })
+	if err != nil {
+		return err
+	}
+	if _, err := ac.Version.Get(cmd.Context()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// labStoreSecretFn persists the minted secret and returns the config secret
+// reference to record. On macOS it writes to the keychain and returns a
+// "keychain:<service>/<account>" reference; on a platform without a keychain
+// it warns and returns the literal secret (stored in the 0600 config). It is
+// a package var so tests can bypass the real keychain.
+var labStoreSecretFn = func(cmd *cobra.Command, deps *cli.Deps, service, account, secret string) (string, error) {
+	err := config.StoreKeychainSecret(service, account, secret)
+	switch {
+	case err == nil:
+		return "keychain:" + service + "/" + account, nil
+	case errors.Is(err, config.ErrKeychainUnsupported):
+		fmt.Fprintf(cmd.ErrOrStderr(),
+			"WARN: no macOS keychain on this platform; storing the lab token secret literally in %s (0600). "+
+				"Prefer a ${ENV_VAR} reference.\n", deps.ConfigPath)
+		return secret, nil
+	default:
+		return "", fmt.Errorf("store lab token secret: %w", err)
+	}
+}
+
+// labDeleteSecretFn removes a lab's stored keychain secret; a package var so
+// destroy tests can bypass the real keychain.
+var labDeleteSecretFn = config.DeleteKeychainSecret
+
+// syncLabContext performs the full mint/probe/rotate + upsert routine against
+// a lab's node 0, then verifies the resulting context end to end. It ensures
+// the pmx@pve user and ACL exist, reuses a still-valid stored secret (or
+// rotates to a fresh one), refreshes the pinned TLS fingerprint, writes the
+// lab-<name> context to config, and finally proves it works with GET /version.
+// It returns an error on any fatal step; the create hook wraps this
+// best-effort while `context sync` propagates the error.
+func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts labSyncOptions) (labSyncResult, error) {
+	var res labSyncResult
+	res.ContextName = labContextName(lab.Name)
+
+	node0IP, err := labNodeMgmtIP(lab.Network, 0)
+	if err != nil {
+		return res, fmt.Errorf("resolve node 0 mgmt IP: %w", err)
+	}
+
+	if opts.WaitSSH {
+		if err := labWaitForSSH(cmd.Context(), deps, node0IP); err != nil {
+			return res, err
+		}
+	}
+
+	if err := labEnsureUser(deps, node0IP); err != nil {
+		return res, err
+	}
+	if err := labEnsureACL(deps, node0IP); err != nil {
+		return res, err
+	}
+
+	service := labKeychainService(lab.Name)
+	account := labCtxAccount()
+
+	// Reuse a still-valid stored secret rather than rotating (a re-run must
+	// never invalidate a working credential). Only an already-present context
+	// with a secret can be probed.
+	secretRef := ""
+	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil && existing.Auth.Secret != "" {
+		if labProbeContextVersion(cmd, deps, res.ContextName) == nil {
+			secretRef = existing.Auth.Secret
+		}
+	}
+	if secretRef == "" {
+		secret, err := labMintToken(deps, node0IP)
+		if err != nil {
+			return res, err
+		}
+		ref, err := labStoreSecretFn(cmd, deps, service, account, secret)
+		if err != nil {
+			return res, err
+		}
+		secretRef = ref
+		res.Rotated = true
+	}
+
+	fp, err := labFetchFingerprint(deps, node0IP)
+	if err != nil {
+		return res, err
+	}
+	hostname, err := labFetchHostname(deps, node0IP)
+	if err != nil {
+		return res, err
+	}
+
+	in := config.LabContextInput{
+		Host:        node0IP,
+		Port:        config.DefaultPortForProduct(config.ProductPVE),
+		Username:    labCtxUser,
+		TokenID:     labCtxTokenName,
+		Secret:      secretRef,
+		Fingerprint: fp,
+		DefaultNode: hostname,
+		MgmtSubnet:  lab.Network.Mgmt.Subnet,
+	}
+	changed, err := config.UpsertLabContext(deps.Cfg, res.ContextName, in)
+	if err != nil {
+		return res, err
+	}
+	res.Changed = changed
+
+	if err := config.Save(deps.ConfigPath, deps.Cfg); err != nil {
+		return res, fmt.Errorf("save config: %w", err)
+	}
+
+	// Mandatory end-to-end proof the context actually works.
+	if err := labProbeContextVersion(cmd, deps, res.ContextName); err != nil {
+		return res, fmt.Errorf("context %q written but GET /version failed: %w", res.ContextName, err)
+	}
+	return res, nil
 }

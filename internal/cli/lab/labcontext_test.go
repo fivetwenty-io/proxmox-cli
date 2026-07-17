@@ -3,16 +3,20 @@ package lab
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // TestLabContextName verifies derived context name formation.
@@ -630,4 +634,139 @@ func TestLabWaitForSSH_HonorsCancelledContext(t *testing.T) {
 // loop runs at full speed without blocking.
 func init() {
 	labSSHPollSleep = func(time.Duration) {}
+}
+
+// syncTestDeps builds a *cli.Deps with a temp config path, a fake ssh runner,
+// and an active context (for guest-ssh defaults). It overrides the network
+// probe and keychain-store seams so no live API call or real keychain write
+// happens, restoring them via t.Cleanup.
+func syncTestDeps(t *testing.T, fake *exec.FakeRunner) (*cobra.Command, *cli.Deps) {
+	t.Helper()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("contexts: {}\n"), 0o600))
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	deps := &cli.Deps{
+		Cfg:        cfg,
+		ConfigPath: cfgPath,
+		Out:        output.New(),
+		Format:     output.FormatPlain,
+		Runner:     fake,
+		Ctx:        &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}},
+	}
+
+	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }
+	labStoreSecretFn = func(_ *cobra.Command, _ *cli.Deps, service, account, _ string) (string, error) {
+		return "keychain:" + service + "/" + account, nil
+	}
+	t.Cleanup(func() { labProbeContextVersion, labStoreSecretFn = origProbe, origStore })
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	return cmd, deps
+}
+
+func TestSyncLabContext_FreshMintsAndWritesContext(t *testing.T) {
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	lab := multiNodeTestLab("demo", 1, "never")
+	// multiNodeTestLab (via cleanLab) does not set Name; syncLabContext is
+	// called directly here (no config-load round trip through the loader's
+	// map-key defaulting), so Name must be set explicitly, matching the
+	// pattern used elsewhere in this package (resolve_test.go, scale_test.go).
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.NoError(t, err)
+	assert.Equal(t, "lab-demo", res.ContextName)
+	assert.True(t, res.Rotated)
+
+	ctx := deps.Cfg.Contexts["lab-demo"]
+	require.NotNil(t, ctx)
+	assert.Equal(t, "10.10.1.10", ctx.Host)
+	assert.Equal(t, "keychain:pmx-lab-demo/pmx@pve!pmx", ctx.Auth.Secret)
+	assert.Equal(t, fp, ctx.TLS.Fingerprint)
+	assert.Equal(t, "lab-demo-0", ctx.DefaultNode)
+
+	// Persisted to disk.
+	reloaded, err := config.Load(deps.ConfigPath)
+	require.NoError(t, err)
+	assert.NotNil(t, reloaded.Contexts["lab-demo"])
+}
+
+func TestSyncLabContext_ReusesValidStoredSecret(t *testing.T) {
+	// Pre-seed a working context; the version probe returns nil (valid), so
+	// the token must NOT be rotated (no token add call).
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = &config.Context{
+		Host: "10.10.1.10", Port: 8006, Protocol: "https", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx",
+			Secret: "keychain:pmx-lab-demo/pmx@pve!pmx"},
+	}
+	lab := multiNodeTestLab("demo", 1, "never")
+	// multiNodeTestLab (via cleanLab) does not set Name; syncLabContext is
+	// called directly here (no config-load round trip through the loader's
+	// map-key defaulting), so Name must be set explicitly, matching the
+	// pattern used elsewhere in this package (resolve_test.go, scale_test.go).
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.NoError(t, err)
+	assert.False(t, res.Rotated, "a valid stored secret must not be rotated")
+	for _, c := range fake.Calls {
+		for _, a := range c.Args {
+			assert.NotContains(t, a, "token add", "must not mint when the stored secret is valid")
+		}
+	}
+}
+
+func TestSyncLabContext_ProbeFailureIsFatal(t *testing.T) {
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, exec.FakeResponse{}, exec.FakeResponse{},
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"},
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	// Force the end-to-end probe (after upsert) to fail.
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
+		return assertAnErr{}
+	}
+	lab := multiNodeTestLab("demo", 1, "never")
+	// multiNodeTestLab (via cleanLab) does not set Name; syncLabContext is
+	// called directly here (no config-load round trip through the loader's
+	// map-key defaulting), so Name must be set explicitly, matching the
+	// pattern used elsewhere in this package (resolve_test.go, scale_test.go).
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.Error(t, err)
+
+	// The probe runs after the context is written and saved, so a probe
+	// failure must still leave the context recorded (and name it), not roll
+	// it back — the error reports "written but GET /version failed".
+	assert.Equal(t, "lab-demo", res.ContextName)
+	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"])
+	reloaded, lerr := config.Load(deps.ConfigPath)
+	require.NoError(t, lerr)
+	assert.NotNil(t, reloaded.Contexts["lab-demo"])
 }
