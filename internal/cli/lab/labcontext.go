@@ -262,7 +262,7 @@ var labStoreSecretFn = func(cmd *cobra.Command, deps *cli.Deps, service, account
 	case err == nil:
 		return "keychain:" + service + "/" + account, nil
 	case errors.Is(err, config.ErrKeychainUnsupported):
-		fmt.Fprintf(cmd.ErrOrStderr(),
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 			"WARN: no macOS keychain on this platform; storing the lab token secret literally in %s (0600). "+
 				"Prefer a ${ENV_VAR} reference.\n", deps.ConfigPath)
 		return secret, nil
