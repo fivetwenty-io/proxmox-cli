@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -11,6 +12,82 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 )
+
+// samplePvecmStatusQuorate1of1 returns pvecm status output for a
+// freshly-created single-node cluster (node 0 immediately after `pvecm
+// create`, before any other node has joined): quorate with exactly 1
+// expected and 1 total vote, matching the shape ensureClusterInit's
+// post-create verify step requires (clustered, quorate, expected=total=1).
+// Kept in this file (rather than guestssh_test.go's shared fixture consts)
+// since it is only consumed by this file's cluster-init tests.
+func samplePvecmStatusQuorate1of1() string {
+	return `Cluster information
+-------------------
+Name:             demo
+Config Version:   1
+Transport:        knet
+Secure auth:      on
+
+Quorum information
+------------------
+Date:             Thu Jul 16 12:00:00 2026
+Quorum provider:  corosync_votequorum
+Nodes:            1
+Node ID:          0x00000001
+Ring ID:          1.1
+Quorate:          Yes
+
+Votequorum information
+----------------------
+Expected votes:   1
+Highest expected: 1
+Total votes:      1
+Quorum:           1
+Flags:            Quorate
+
+Membership information
+----------------------
+    Nodeid      Votes Name
+0x00000001          1 10.10.1.10 (local)
+`
+}
+
+// buildClusterCmdWithContext builds `pmx lab cluster` wired to fake (the
+// caller's own ordered exec.FakeRunner) plus a config that already carries a
+// resolvable lab-<name> lab (2-node topology, mgmt 10.10.1.0/24, so node 0's
+// mgmt IP is 10.10.1.10) and a seeded lab-<name> pmx context (host
+// 10.10.1.10 — inside that mgmt subnet — token auth, non-empty secret) so
+// syncLabContext's existing-context reuse path can run without minting a new
+// token. It returns the built command and its *cli.Deps for assertions.
+func buildClusterCmdWithContext(t *testing.T, fake *exec.FakeRunner, name string) (*cobra.Command, *cli.Deps) {
+	t.Helper()
+
+	lab := multiNodeTestLab(name, 2, "")
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{name: lab},
+		Contexts: map[string]*config.Context{
+			"lab-" + name: {
+				Host:     "10.10.1.10",
+				Port:     8006,
+				Protocol: "https",
+				Product:  config.ProductPVE,
+				Auth: config.AuthBlock{
+					Type:     "token",
+					Username: "pmx@pve",
+					TokenID:  "pmx",
+					Secret:   "keychain:pmx-lab-" + name + "/pmx@pve!pmx",
+				},
+			},
+		},
+	}
+	path := writeConfig(t, cfg)
+
+	cmd, _ := buildGuestSSHCmd(t, path, newClusterCmd())
+	deps := cli.GetDeps(cmd)
+	deps.Runner = fake
+
+	return cmd, deps
+}
 
 func TestClusterInit_SingleNodeLab_Errors(t *testing.T) {
 	lab := multiNodeTestLab("solo", 1, "")
@@ -362,4 +439,36 @@ func TestClusterStatus_NotClustered(t *testing.T) {
 	out, err := runGuestCmd(t, cmd, "status", "wayne")
 	require.NoError(t, err)
 	assert.Contains(t, out, "n/a (not clustered)")
+}
+
+// TestClusterInit_RefreshesExistingContextFingerprint covers cluster init's
+// best-effort context refresh: `pvecm create` reissues node 0's API cert
+// under a new cluster CA, invalidating any previously pinned TLS fingerprint,
+// so `cluster init` must refresh the existing lab-<name> context afterward.
+func TestClusterInit_RefreshesExistingContextFingerprint(t *testing.T) {
+	// pvecm status (not clustered) -> pvecm create -> pvecm status (quorate),
+	// then the context refresh's ensure-user/ensure-ACL/fingerprint/hostname
+	// calls (the reuse-probe below is stubbed and issues no ssh call, so no
+	// token remove/add happens).
+	fp := "11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00"
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // probe
+		exec.FakeResponse{}, // pvecm create
+		exec.FakeResponse{Stdout: samplePvecmStatusQuorate1of1()}, // verify
+		exec.FakeResponse{}, exec.FakeResponse{}, // ensure user, ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := buildClusterCmdWithContext(t, fake, "demo")
+
+	// Reuse-secret path: probe returns valid so no token add is issued.
+	origProbe := labProbeContextVersion
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }
+	t.Cleanup(func() { labProbeContextVersion = origProbe })
+
+	out, err := runGuestCmd(t, cmd, "init", "demo")
+	require.NoError(t, err)
+	assert.Equal(t, fp, deps.Cfg.Contexts["lab-demo"].TLS.Fingerprint)
+	assert.Contains(t, out, "context lab-demo refreshed")
+	require.Len(t, fake.Calls, 7)
 }

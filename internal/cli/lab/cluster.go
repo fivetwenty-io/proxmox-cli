@@ -106,7 +106,27 @@ func runClusterInit(cmd *cobra.Command, name string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
+	if note := refreshLabContextAfterClusterInit(cmd, deps, lab); note != "" {
+		message += "; " + note
+	}
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format)
+}
+
+// refreshLabContextAfterClusterInit refreshes the lab's pmx context after
+// `pvecm create`, which reissues the node's API certificate under a new
+// cluster CA and so invalidates any previously pinned TLS fingerprint. It runs
+// only when a lab-<name> context already exists (a --no-context lab is left
+// untouched), is best-effort, and returns a short note for the command
+// message; it never fails cluster init, which has already succeeded.
+func refreshLabContextAfterClusterInit(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab) string {
+	ctxName := labContextName(lab.Name)
+	if deps.Cfg == nil || deps.Cfg.Contexts[ctxName] == nil {
+		return ""
+	}
+	if _, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false}); err != nil {
+		return fmt.Sprintf("⚠ context %s refresh failed: %v; run 'pmx lab context sync %s'", ctxName, err, lab.Name)
+	}
+	return fmt.Sprintf("context %s refreshed", ctxName)
 }
 
 // ensureClusterInit performs `cluster init`'s actual work — probe, create,
