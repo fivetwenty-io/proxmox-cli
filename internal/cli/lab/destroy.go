@@ -193,8 +193,13 @@ func cleanupLabContext(deps *cli.Deps, name string) error {
 
 	// Delete the keychain secret regardless of whether the context is present
 	// (a partially-registered lab may have a secret but no context, or vice
-	// versa); DeleteKeychainSecret treats not-found as success.
-	if derr := labDeleteSecretFn(labKeychainService(name), labCtxAccount()); derr != nil {
+	// versa); DeleteKeychainSecret treats not-found as success. On a non-
+	// darwin build DeleteKeychainSecret always returns ErrKeychainUnsupported
+	// (secrets_keychain_other.go documents delete as a no-op there), so that
+	// error is tolerated rather than aborting before the context itself
+	// (which holds the literal secret on those platforms) is removed below.
+	if derr := labDeleteSecretFn(labKeychainService(name), labCtxAccount()); derr != nil &&
+		!errors.Is(derr, config.ErrKeychainUnsupported) {
 		return derr
 	}
 

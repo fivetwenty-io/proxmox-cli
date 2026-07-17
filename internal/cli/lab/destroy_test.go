@@ -151,6 +151,27 @@ func TestDestroy_RemovesContextAndSecret(t *testing.T) {
 	assert.Equal(t, "pmx@pve!pmx", deletedAccount)
 }
 
+// TestDestroy_RemovesContext_WhenKeychainUnsupported covers the fix for the
+// early-return defect in cleanupLabContext: on a non-darwin build,
+// DeleteKeychainSecret always returns config.ErrKeychainUnsupported, which
+// must be tolerated rather than aborting before the lab-<name> context and
+// CurrentContext are cleared.
+func TestDestroy_RemovesContext_WhenKeychainUnsupported(t *testing.T) {
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(string, string) error { return config.ErrKeychainUnsupported }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	cmd, deps := buildDestroyCmdWithContext(t, "demo")
+	deps.Cfg.CurrentContext = "lab-demo"
+	_, _, err := destroyRun(t, cmd, "demo", "--yes")
+	require.NoError(t, err)
+
+	assert.Nil(t, deps.Cfg.Contexts["lab-demo"],
+		"context must be removed even when the keychain backend is unsupported")
+	assert.Equal(t, "", deps.Cfg.CurrentContext,
+		"CurrentContext pointing at the destroyed lab must be cleared")
+}
+
 func TestDestroy_KeepContextFlag_PreservesContext(t *testing.T) {
 	orig := labDeleteSecretFn
 	called := false
