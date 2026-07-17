@@ -22,6 +22,7 @@ than the Proxmox VE API.
 | Context CRUD | `pmx context add`, `pmx context ls`, `pmx context show`, `pmx context rm` | Add, list, inspect, and remove named contexts | Shipped |
 | Context switching | `pmx context select`, `pmx context previous` | Set the active context; `-` arg toggles to the previous context | Shipped |
 | Context copy and edit | `pmx context copy`, `pmx context edit` | Duplicate a context to a new name; open a context in `$EDITOR` | Shipped |
+| Context field update | `pmx context update` (alias `set`) | Change individual fields of an existing context via flags, no `$EDITOR`; result validated before save | Shipped |
 | Context validation | `pmx context validate` | Structural checks (host, auth type, port, protocol, fingerprint); `--all` validates every context; no network connect in v1 | Shipped |
 | Config migration | `scripts/migrate-config.py` | One-shot renamer: `targets:`/`current-target:` → `contexts:`/`current-context:` for pre-rename configs | Shipped |
 
