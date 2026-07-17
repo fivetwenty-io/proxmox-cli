@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -49,4 +50,55 @@ func keychainLookup(path string) (string, error) {
 
 	// security -w prints the password followed by a trailing newline.
 	return strings.TrimRight(string(out), "\r\n"), nil
+}
+
+// keychainRun executes /usr/bin/security with args, feeding stdin on the
+// process's standard input, and returns its captured stderr. It is a package
+// var so tests can intercept the security(1) call without touching the real
+// login keychain. The secret, when present, is passed only through stdin
+// (never argv), so it is not exposed to `ps`.
+var keychainRun = func(stdin string, args ...string) (string, error) {
+	cmd := exec.Command("/usr/bin/security", args...) //nolint:gosec // fixed binary, vetted flags
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return stderr.String(), err
+}
+
+// StoreKeychainSecret stores secret in the macOS login keychain under the
+// generic-password item (service, account), creating it or updating it in
+// place (-U). The security(1) "add-generic-password" line — including the
+// -w <secret> argument — is fed to `security -i` on stdin, so the secret
+// never appears on any process's argv (which is world-readable via `ps`).
+// Lab token secrets are UUID-form (no whitespace), so the interactive line
+// parses unambiguously.
+func StoreKeychainSecret(service, account, secret string) error {
+	if service == "" || account == "" {
+		return fmt.Errorf("keychain store requires non-empty service and account")
+	}
+	line := fmt.Sprintf("add-generic-password -U -s %s -a %s -w %s\n", service, account, secret)
+	if stderr, err := keychainRun(line, "-i"); err != nil {
+		return fmt.Errorf("keychain store for service %q account %q failed: %s: %w",
+			service, account, strings.TrimSpace(stderr), err)
+	}
+	return nil
+}
+
+// DeleteKeychainSecret removes the generic-password item (service, account)
+// from the macOS login keychain. A "not found" result (the item was never
+// created, or was already removed) is treated as success, so cleanup is
+// idempotent.
+func DeleteKeychainSecret(service, account string) error {
+	stderr, err := keychainRun("", "delete-generic-password", "-s", service, "-a", account)
+	if err != nil {
+		if strings.Contains(strings.ToLower(stderr), "could not be found") {
+			return nil
+		}
+		return fmt.Errorf("keychain delete for service %q account %q failed: %s: %w",
+			service, account, strings.TrimSpace(stderr), err)
+	}
+	return nil
 }
