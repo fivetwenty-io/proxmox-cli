@@ -305,6 +305,13 @@ func TestDestroy_IdempotentWhenVMAlreadyAbsent(t *testing.T) {
 	assert.Contains(t, stdout.String(), "nothing to destroy")
 }
 
+// TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone covers F8's fix
+// against a real PVE 9 response: DELETE /pools and DELETE
+// /storage/{storage} both signal "already gone" with a bare HTTP 500 whose
+// body is the literal Perl die string ("pool '<id>' does not exist" /
+// "storage '<id>' does not exist"), never an HTTP 404 — confirmed live
+// against PVE 9 (F8). destroyDeletePool/destroyDeleteStorage must still
+// treat this as already-gone, not a fatal error.
 func TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone(t *testing.T) {
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
@@ -314,10 +321,10 @@ func TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone(t *testing.T) {
 
 	destroyHandleClusterResources(f) // no live VMs at all
 	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusNotFound, "pool 'lab-alpha' does not exist")
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "pool 'lab-alpha' does not exist")
 	})
 	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusNotFound, "storage 'tank-lab-alpha' does not exist")
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "storage 'tank-lab-alpha' does not exist")
 	})
 
 	cmd := destroyTestCmd(t, path, ac, "pve1")
@@ -325,6 +332,53 @@ func TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone(t *testing.T) {
 	require.NoError(t, err, "absent pool/storage must be reported as already gone, not errors")
 
 	assert.Contains(t, stdout.String(), "destroyed")
+}
+
+// TestDestroy_PurgeFailsOnGenuinePoolDeleteError covers the flip side of
+// isPoolNotFound: a 500 that is NOT the "pool '<id>' does not exist"
+// message (e.g. a lock timeout) must still abort destroy, not be swallowed
+// as though the pool were already gone.
+func TestDestroy_PurgeFailsOnGenuinePoolDeleteError(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	destroyHandleClusterResources(f) // no live VMs at all
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "unable to acquire lock 'file' - got timeout")
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge")
+	require.Error(t, err, "a genuine pool-delete failure must abort destroy, not be treated as already-gone")
+	assert.Contains(t, err.Error(), "delete pool")
+}
+
+// TestDestroy_PurgeFailsOnGenuineStorageDeleteError mirrors
+// TestDestroy_PurgeFailsOnGenuinePoolDeleteError for storage deletion: a 500
+// naming a DIFFERENT storage ID as missing must not be misread as this
+// lab's own storage already being gone.
+func TestDestroy_PurgeFailsOnGenuineStorageDeleteError(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	destroyHandleClusterResources(f) // no live VMs at all
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "pool 'lab-alpha' does not exist")
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "storage 'tank-lab-other' does not exist")
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge")
+	require.Error(t, err, "a 500 naming a different storage ID must not be classified as this lab's storage already being gone")
+	assert.Contains(t, err.Error(), "delete storage")
 }
 
 // TestDestroy_ThreeNodeCluster_DestroysInReverseOrder covers M2-02's

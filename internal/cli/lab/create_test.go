@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
@@ -143,18 +145,22 @@ func createForbid(f *testhelper.FakePVE, t *testing.T, pattern string) {
 	})
 }
 
-// createPoolNotFoundRoute registers a 404 "does not exist" response for GET
-// /pools/{poolID}, the GetPools?type=qemu call buildCreatePlan's VM-lookup
-// step issues to check pool membership before falling back to a name+node
-// match. A bare "GET /api2/json/pools" route (registered by every test that
-// also exercises the resource-pool list/create step) would otherwise
-// prefix-match this exact per-pool path and answer with the wrong response
-// shape, since FakePVE's router falls back to longest-prefix matching when
-// no exact route is registered; registering the exact path here (which
-// FakePVE always prefers over a prefix match) avoids that collision.
+// createPoolNotFoundRoute registers the real PVE response for GET
+// /pools/{poolID} against a pool that was never created: an HTTP 500 with a
+// plain-text body reading exactly `pool '<poolID>' does not exist` (PVE::
+// API2::Pool's index handler signals this with a bare Perl `die`, not a
+// PVE::Exception, so it never comes back as an HTTP 404 — confirmed against
+// a live PVE 9 host, F8). This is the call buildCreatePlan's VM-lookup step
+// issues to check pool membership before falling back to a name+node match.
+// A bare "GET /api2/json/pools" route (registered by every test that also
+// exercises the resource-pool list/create step) would otherwise prefix-match
+// this exact per-pool path and answer with the wrong response shape, since
+// FakePVE's router falls back to longest-prefix matching when no exact route
+// is registered; registering the exact path here (which FakePVE always
+// prefers over a prefix match) avoids that collision.
 func createPoolNotFoundRoute(f *testhelper.FakePVE, poolID string) {
 	f.HandleFunc("GET /api2/json/pools/"+poolID, func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusNotFound, fmt.Sprintf("pool %q does not exist", poolID))
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, fmt.Sprintf("pool '%s' does not exist", poolID))
 	})
 }
 
@@ -222,6 +228,150 @@ func TestCreateHappyPath_OrderedCalls(t *testing.T) {
 		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "storage-list", "qemu-list", "nextid",
 		"zone-create", "vnet-create", "subnet-create", "storage-create", "pool-create", "qemu-create",
 	}, order)
+}
+
+// TestCreatePoolMembers_RealPVE500NotFoundShape_ReturnsEmptyNoError covers
+// F8: GET /pools/{poolID} against a pool that was never created answers with
+// an HTTP 500 whose plain-text body is the literal Perl die string ("pool
+// '<id>' does not exist"), confirmed live against a PVE 9 host, never a
+// bare HTTP 404. createPoolMembers must classify that as "no members yet"
+// (nil, nil), matching a real 404 exactly, not propagate it as a fatal
+// error.
+func TestCreatePoolMembers_RealPVE500NotFoundShape_ReturnsEmptyNoError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	createPoolNotFoundRoute(f, "lab-krutten")
+
+	api, err := apiclient.NewAPIClient(f.Options)
+	require.NoError(t, err)
+
+	members, err := createPoolMembers(context.Background(), api, "lab-krutten")
+	require.NoError(t, err)
+	assert.Empty(t, members)
+}
+
+// TestCreatePoolMembers_GenuineServerError_RemainsFatal covers the flip side
+// of isPoolNotFound: an HTTP 500 that does NOT carry the "pool '<id>' does
+// not exist" message (e.g. a connection-refused or permission failure
+// surfaced as a 500 by an intermediary) must still propagate as a fatal
+// error out of createPoolMembers, not be swallowed as though the pool were
+// merely uncreated.
+func TestCreatePoolMembers_GenuineServerError_RemainsFatal(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/pools/lab-krutten", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "connection refused")
+	})
+
+	api, err := apiclient.NewAPIClient(f.Options)
+	require.NoError(t, err)
+
+	members, err := createPoolMembers(context.Background(), api, "lab-krutten")
+	require.Error(t, err, "a genuine 500 unrelated to pool existence must remain fatal")
+	assert.Nil(t, members)
+	assert.Contains(t, err.Error(), `look up VMs for pool "lab-krutten"`)
+}
+
+// TestCreatePoolMembers_500NamingDifferentPool_RemainsFatal covers
+// isPoolNotFound's anchoring on the queried pool's own ID: a 500 whose
+// message names a DIFFERENT pool as missing (e.g. a nested-pool parent
+// lookup failing inside the same request) must not be misread as this
+// pool being not-found.
+func TestCreatePoolMembers_500NamingDifferentPool_RemainsFatal(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/pools/lab-krutten", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteErrorText(w, http.StatusInternalServerError, "pool 'lab-other' does not exist")
+	})
+
+	api, err := apiclient.NewAPIClient(f.Options)
+	require.NoError(t, err)
+
+	members, err := createPoolMembers(context.Background(), api, "lab-krutten")
+	require.Error(t, err, "a 500 naming a different pool must not be classified as this pool being not-found")
+	assert.Nil(t, members)
+}
+
+// TestIsResourceNotFound covers isPoolNotFound/isStorageNotFound's full
+// classification matrix directly against constructed errors, without a
+// round trip through HTTP: a genuine pveerrors.ErrNotFound (a real HTTP
+// 404) always matches regardless of message content; a 500 APIError whose
+// Message or Errors map names exactly the queried resource as missing
+// matches; a 500 naming a different resource, a differently-worded 500, and
+// a nil error all do not.
+func TestIsResourceNotFound(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		kind string
+		id   string
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			kind: "pool", id: "lab-wayne",
+			want: false,
+		},
+		{
+			name: "genuine 404 sentinel matches regardless of message",
+			err:  fmt.Errorf("wrapped: %w", pveerrors.ErrNotFound),
+			kind: "pool", id: "lab-wayne",
+			want: true,
+		},
+		{
+			name: "500 APIError.Message names the exact pool as missing",
+			err:  &pveerrors.APIError{Message: "pool 'lab-wayne' does not exist", HTTPCode: 500},
+			kind: "pool", id: "lab-wayne",
+			want: true,
+		},
+		{
+			name: "500 APIError.Errors map names the exact pool as missing",
+			err:  &pveerrors.APIError{Errors: map[string]string{"msg": "pool 'lab-wayne' does not exist"}, HTTPCode: 500},
+			kind: "pool", id: "lab-wayne",
+			want: true,
+		},
+		{
+			name: "500 APIError.Message names a DIFFERENT pool as missing",
+			err:  &pveerrors.APIError{Message: "pool 'lab-other' does not exist", HTTPCode: 500},
+			kind: "pool", id: "lab-wayne",
+			want: false,
+		},
+		{
+			name: "500 APIError with unrelated message stays fatal",
+			err:  &pveerrors.APIError{Message: "connection refused", HTTPCode: 500},
+			kind: "pool", id: "lab-wayne",
+			want: false,
+		},
+		{
+			name: "500 APIError with unrelated message stays fatal (permission)",
+			err:  &pveerrors.APIError{Message: "permission denied", HTTPCode: 500},
+			kind: "pool", id: "lab-wayne",
+			want: false,
+		},
+		{
+			name: "500 APIError.Message names the exact storage as missing",
+			err:  &pveerrors.APIError{Message: "storage 'tank-lab-wayne' does not exist", HTTPCode: 500},
+			kind: "storage", id: "tank-lab-wayne",
+			want: true,
+		},
+		{
+			name: "kind mismatch does not cross-match (storage message vs pool query)",
+			err:  &pveerrors.APIError{Message: "storage 'lab-wayne' does not exist", HTTPCode: 500},
+			kind: "pool", id: "lab-wayne",
+			want: false,
+		},
+		{
+			name: "non-APIError error is not misclassified",
+			err:  errors.New("pool 'lab-wayne' does not exist"),
+			kind: "pool", id: "lab-wayne",
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isResourceNotFound(tc.err, tc.kind, tc.id)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
 // TestCreateIdempotent_SkipsExistingResources covers a lab whose zone, vnet,

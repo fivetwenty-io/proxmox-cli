@@ -257,21 +257,29 @@ func destroyDeleteVM(ctx context.Context, api *apiclient.APIClient, node string,
 	return nil
 }
 
-// destroyDeletePool deletes the lab's resource pool. A 404 (already deleted,
-// or never created) is treated as already-gone, not an error.
+// destroyDeletePool deletes the lab's resource pool. Already-gone (never
+// created, or already deleted) is treated as success, not an error: PVE's
+// DELETE /pools reports a missing pool the same way GET /pools/{poolid}
+// does, a bare HTTP 500 "pool '<id>' does not exist" body rather than a 404,
+// so a plain pveerrors.ErrNotFound check misses it (see isPoolNotFound in
+// create.go).
 func destroyDeletePool(ctx context.Context, api *apiclient.APIClient, poolID string) error {
 	err := api.Pools.DeletePools(ctx, &pools.DeletePoolsParams{Poolid: poolID})
-	if err != nil && !errors.Is(err, pveerrors.ErrNotFound) {
+	if err != nil && !isPoolNotFound(err, poolID) {
 		return fmt.Errorf("delete pool %q: %w", poolID, err)
 	}
 	return nil
 }
 
-// destroyDeleteStorage deletes the lab's storage.cfg entry. A 404 (already
-// deleted, or never created) is treated as already-gone, not an error.
+// destroyDeleteStorage deletes the lab's storage.cfg entry. Already-gone
+// (never created, or already deleted) is treated as success, not an error:
+// PVE's storage delete reports a missing storage ID the same way pool
+// lookups do, a bare HTTP 500 "storage '<id>' does not exist" body rather
+// than a 404, so a plain pveerrors.ErrNotFound check misses it (see
+// isStorageNotFound in create.go).
 func destroyDeleteStorage(ctx context.Context, api *apiclient.APIClient, stgID string) error {
 	err := api.ClusterStorage.DeleteStorage(ctx, stgID)
-	if err != nil && !errors.Is(err, pveerrors.ErrNotFound) {
+	if err != nil && !isStorageNotFound(err, stgID) {
 		return fmt.Errorf("delete storage %q: %w", stgID, err)
 	}
 	return nil

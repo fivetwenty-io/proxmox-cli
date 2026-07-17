@@ -265,6 +265,25 @@ func WriteError(w http.ResponseWriter, statusCode int, message string) {
 	}
 }
 
+// WriteErrorText writes a plain-text error response with the given HTTP
+// status code and no JSON envelope: the shape real PVE actually sends for a
+// handler that dies with a bare Perl string (`die "...\n"`) instead of
+// raising a PVE::Exception, e.g. PVE::API2::Pool's "pool '$id' does not
+// exist" and PVE::Storage's "storage '$id' does not exist" checks. The
+// apiclient-go response parser cannot unmarshal this body as the {message,
+// code} JSON APIError shape, so it falls back to treating the trimmed body
+// text itself as the error message (see pveerrors.ParseAPIError's
+// newGenericError path) — unlike WriteError's JSON envelope, which is the
+// shape PVE actually uses for structured parameter/permission errors, not
+// for this bare-die class of error.
+func WriteErrorText(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(statusCode)
+	if _, err := w.Write([]byte(message)); err != nil {
+		panic("testhelper.WriteErrorText: write failed: " + err.Error())
+	}
+}
+
 // MustNewClient constructs a pve.Client pointing at the fake server.
 // Fails the test immediately if client construction fails.
 func (f *FakePVE) MustNewClient(t *testing.T) pve.Client {

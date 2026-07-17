@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -666,15 +667,74 @@ func createCapacityGate(ctx context.Context, deps *cli.Deps, eff *config.Lab, no
 	}
 }
 
+// resourceNotFoundPattern matches PVE's "<kind> '<id>' does not exist" error
+// text for one specific resource ID. Several PVE lookups (pool GET/DELETE in
+// PVE::API2::Pool, storage DELETE via PVE::Storage::storage_config) signal a
+// missing resource with a bare Perl `die "<kind> '$id' does not exist\n"`
+// rather than raising a proper PVE::Exception with an HTTP code; the REST
+// framework then surfaces that as a generic HTTP 500 whose body is just the
+// die string, not the HTTP 404 pveerrors.ErrNotFound matches. Anchoring on
+// both the resource kind and its exact ID (never a bare "does not exist"
+// substring test) keeps an unrelated 500 — a permission denial, a locked
+// config, a connection failure — from being misclassified as not-found.
+func resourceNotFoundPattern(kind, id string) *regexp.Regexp {
+	return regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(kind) + ` ['"]?` + regexp.QuoteMeta(id) + `['"]? does not exist\b`)
+}
+
+// isResourceNotFound reports whether err represents kind/id not existing,
+// whether PVE surfaced it as a genuine 404 (pveerrors.ErrNotFound) or — the
+// shape actually observed against live PVE 9 for pool and storage lookups —
+// an HTTP 500 APIError whose message or errors map names this exact
+// resource as missing. See resourceNotFoundPattern for why the match is
+// anchored to kind+id rather than a bare substring test.
+func isResourceNotFound(err error, kind, id string) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, pveerrors.ErrNotFound) {
+		return true
+	}
+
+	var apiErr *pveerrors.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+
+	pattern := resourceNotFoundPattern(kind, id)
+	if pattern.MatchString(apiErr.Message) {
+		return true
+	}
+	for _, msg := range apiErr.Errors {
+		if pattern.MatchString(msg) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPoolNotFound reports whether err represents poolID not existing yet, per
+// isResourceNotFound.
+func isPoolNotFound(err error, poolID string) bool {
+	return isResourceNotFound(err, "pool", poolID)
+}
+
+// isStorageNotFound reports whether err represents storageID not existing
+// yet, per isResourceNotFound.
+func isStorageNotFound(err error, storageID string) bool {
+	return isResourceNotFound(err, "storage", storageID)
+}
+
 // createPoolMembers returns every qemu member of poolID via GetPools
 // filtered to type=qemu, tolerating more than one member (every multi-node
 // lab's pool has one). found is an empty, nil-error slice both when the
-// pool does not exist yet (404) and when it exists but has no qemu member.
+// pool does not exist yet (PVE reports this as an HTTP 500 "pool '<id>' does
+// not exist" body for GET /pools/{poolid}, not a 404 — see isPoolNotFound)
+// and when it exists but has no qemu member.
 func createPoolMembers(ctx context.Context, api *apiclient.APIClient, poolID string) ([]createPoolMember, error) {
 	qemuType := "qemu"
 	resp, err := api.Pools.GetPools(ctx, poolID, &pools.GetPoolsParams{Type: &qemuType})
 	if err != nil {
-		if errors.Is(err, pveerrors.ErrNotFound) {
+		if isPoolNotFound(err, poolID) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("look up VMs for pool %q: %w", poolID, err)
