@@ -11,6 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
+
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -251,6 +253,21 @@ var labProbeContextVersion = func(cmd *cobra.Command, deps *cli.Deps, ctxName st
 	return nil
 }
 
+// labProbeTransportFailed reports whether a context probe failed with a
+// transport-class error the client explicitly typed as a connection, SSL/TLS,
+// or timeout failure — as opposed to an authentication rejection. Such a
+// failure is no evidence the stored token is invalid, so the reuse path must
+// not rotate on it. Note the client does not currently type every raw net/TLS
+// failure this way (many surface as an opaque wrapped error), so an untyped
+// transport failure conservatively falls through to rotation rather than
+// reuse; this guard only ever prevents an unnecessary rotation, never causes
+// one.
+func labProbeTransportFailed(err error) bool {
+	return pveerrors.IsConnectionError(err) ||
+		pveerrors.IsSSLError(err) ||
+		pveerrors.IsTimeoutError(err)
+}
+
 // labStoreSecretFn persists the minted secret and returns the config secret
 // reference to record. On macOS it writes to the keychain and returns a
 // "keychain:<service>/<account>" reference; on a platform without a keychain
@@ -308,11 +325,24 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	account := labCtxAccount()
 
 	// Reuse a still-valid stored secret rather than rotating (a re-run must
-	// never invalidate a working credential). Only an already-present context
-	// with a secret can be probed.
+	// never invalidate a working credential). Only reuse a context that
+	// already carries this lab's own pmx@pve!pmx identity and a secret: a
+	// same-named context with a different identity (e.g. an operator's own
+	// root@pam token that the ownership rule happened to claim) would, once
+	// UpsertLabContext rewrites the identity to pmx@pve!pmx, be paired with
+	// the wrong secret. Probe to confirm the secret still authenticates; if
+	// the probe fails only with a transport-class error the client reports as
+	// such (see labProbeTransportFailed), that is no evidence the secret is
+	// bad, so reuse rather than needlessly rotating a credential that may
+	// still be valid elsewhere. Any other failure — an auth rejection, an
+	// unresolvable secret ref, or a raw net/TLS error the client does not
+	// classify — falls through to a rotation that self-heals.
 	secretRef := ""
-	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil && existing.Auth.Secret != "" {
-		if labProbeContextVersion(cmd, deps, res.ContextName) == nil {
+	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil &&
+		existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
+		existing.Auth.TokenID == labCtxTokenName {
+		switch perr := labProbeContextVersion(cmd, deps, res.ContextName); {
+		case perr == nil, labProbeTransportFailed(perr):
 			secretRef = existing.Auth.Secret
 		}
 	}

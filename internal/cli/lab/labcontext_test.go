@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
+
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
@@ -736,6 +738,121 @@ func TestSyncLabContext_ReusesValidStoredSecret(t *testing.T) {
 			assert.NotContains(t, a, "token add", "must not mint when the stored secret is valid")
 		}
 	}
+}
+
+func mintedAToken(fake *exec.FakeRunner) bool {
+	for _, c := range fake.Calls {
+		for _, a := range c.Args {
+			if strings.Contains(a, "token add") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestSyncLabContext_RefusesReuseWhenIdentityDiffers(t *testing.T) {
+	// A same-named context whose stored identity is NOT this lab's pmx@pve!pmx
+	// must never have its secret reused: UpsertLabContext would rewrite the
+	// identity to pmx@pve!pmx and pair it with the foreign secret. The probe
+	// would pass (syncTestDeps stubs it to nil), so only the identity guard
+	// prevents the mistaken reuse — the token must be freshly minted.
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = &config.Context{
+		Host: "10.10.1.10", Port: 8006, Protocol: "https", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "pmx",
+			Secret: "keychain:pmx-lab-demo/root@pam!pmx"},
+	}
+	lab := multiNodeTestLab("demo", 1, "never")
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.NoError(t, err)
+	assert.True(t, res.Rotated, "a foreign identity must force a fresh mint, not reuse")
+	assert.True(t, mintedAToken(fake), "must mint when the stored context is not the lab's own identity")
+	assert.Equal(t, "keychain:pmx-lab-demo/pmx@pve!pmx", deps.Cfg.Contexts["lab-demo"].Auth.Secret)
+}
+
+func TestSyncLabContext_ReusesOnTransportProbeFailure(t *testing.T) {
+	// The reuse probe failing for a transport reason (node briefly unreachable,
+	// or a stale pinned fingerprint about to be refreshed) is not evidence the
+	// stored token is bad, so it must NOT be rotated. The end-to-end probe that
+	// runs after the fingerprint refresh then succeeds.
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = &config.Context{
+		Host: "10.10.1.10", Port: 8006, Protocol: "https", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx",
+			Secret: "keychain:pmx-lab-demo/pmx@pve!pmx"},
+	}
+	// First probe (reuse check) fails at the transport layer; the mandatory
+	// end-to-end probe after the refresh succeeds.
+	probeCalls := 0
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
+		probeCalls++
+		if probeCalls == 1 {
+			return &pveerrors.ConnectionError{Host: "10.10.1.10", Port: 8006, Message: "connection refused"}
+		}
+		return nil
+	}
+	lab := multiNodeTestLab("demo", 1, "never")
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.NoError(t, err)
+	assert.False(t, res.Rotated, "a transport-level probe failure must not rotate a possibly-valid secret")
+	assert.False(t, mintedAToken(fake), "must not mint when the probe failed only at the transport layer")
+	assert.Equal(t, 2, probeCalls, "reuse probe then the mandatory end-to-end probe")
+}
+
+func TestSyncLabContext_RotatesOnAuthProbeFailure(t *testing.T) {
+	// A reuse probe that fails with an authentication rejection (not a
+	// transport error) IS evidence the stored secret is bad, so it must rotate.
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = &config.Context{
+		Host: "10.10.1.10", Port: 8006, Protocol: "https", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx",
+			Secret: "keychain:pmx-lab-demo/pmx@pve!pmx"},
+	}
+	probeCalls := 0
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
+		probeCalls++
+		if probeCalls == 1 {
+			return pveerrors.ErrUnauthorized
+		}
+		return nil
+	}
+	lab := multiNodeTestLab("demo", 1, "never")
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.NoError(t, err)
+	assert.True(t, res.Rotated, "an auth rejection must rotate the stored secret")
+	assert.True(t, mintedAToken(fake), "must mint a fresh token when the stored secret no longer authenticates")
 }
 
 func TestSyncLabContext_ProbeFailureIsFatal(t *testing.T) {
