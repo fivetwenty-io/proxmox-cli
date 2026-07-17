@@ -40,9 +40,10 @@ import (
 // guessing which VM it is.
 func newDestroyCmd() *cobra.Command {
 	var (
-		yes    bool
-		dryRun bool
-		purge  bool
+		yes         bool
+		dryRun      bool
+		purge       bool
+		keepContext bool
 	)
 
 	cmd := &cobra.Command{
@@ -111,10 +112,14 @@ func newDestroyCmd() *cobra.Command {
 			}
 
 			if len(plan) == 0 {
-				res := output.Result{
-					Message: fmt.Sprintf(
-						"lab %q: nothing to destroy — no VM found in pool %q", name, poolID),
+				msg := fmt.Sprintf(
+					"lab %q: nothing to destroy — no VM found in pool %q", name, poolID)
+				if !keepContext {
+					if cerr := cleanupLabContext(deps, name); cerr != nil {
+						msg += fmt.Sprintf("; context cleanup warning: %v", cerr)
+					}
 				}
+				res := output.Result{Message: msg}
 				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 			}
 
@@ -157,6 +162,12 @@ func newDestroyCmd() *cobra.Command {
 				}
 			}
 
+			if !keepContext {
+				if cerr := cleanupLabContext(deps, name); cerr != nil {
+					summary += fmt.Sprintf("; context cleanup warning: %v", cerr)
+				}
+			}
+
 			res := output.Result{Message: fmt.Sprintf("lab %q destroyed: %s", name, summary)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
@@ -167,8 +178,38 @@ func newDestroyCmd() *cobra.Command {
 		"preview what would be destroyed without mutating anything or prompting")
 	cmd.Flags().BoolVar(&purge, "purge", false,
 		"also remove the lab's resource pool and storage definition")
+	cmd.Flags().BoolVar(&keepContext, "keep-context", false,
+		"do not remove the lab's pmx context and keychain secret on destroy")
 
 	return cmd
+}
+
+// cleanupLabContext removes the lab-<name> pmx context from config and deletes
+// its keychain secret, persisting the config. It is best-effort: the caller
+// annotates the summary on error rather than failing a destroy whose VMs are
+// already gone. Removing an absent context or secret is a no-op.
+func cleanupLabContext(deps *cli.Deps, name string) error {
+	ctxName := labContextName(name)
+
+	// Delete the keychain secret regardless of whether the context is present
+	// (a partially-registered lab may have a secret but no context, or vice
+	// versa); DeleteKeychainSecret treats not-found as success.
+	if derr := labDeleteSecretFn(labKeychainService(name), labCtxAccount()); derr != nil {
+		return derr
+	}
+
+	if deps.Cfg == nil || deps.Cfg.Contexts == nil {
+		return nil
+	}
+	if _, ok := deps.Cfg.Contexts[ctxName]; !ok {
+		return nil
+	}
+	// Never leave the destroyed lab as the active context.
+	if deps.Cfg.CurrentContext == ctxName {
+		deps.Cfg.CurrentContext = ""
+	}
+	delete(deps.Cfg.Contexts, ctxName)
+	return config.Save(deps.ConfigPath, deps.Cfg)
 }
 
 // destroyTarget pairs one classified live VM with the lifecycleTarget role

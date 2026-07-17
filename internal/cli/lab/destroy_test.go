@@ -99,6 +99,72 @@ func destroyHandleClusterResources(f *testhelper.FakePVE, entries ...map[string]
 	f.HandleJSON("GET /api2/json/cluster/resources", entries)
 }
 
+// buildDestroyCmdWithContext builds a destroy command whose deps.Cfg already
+// carries a lab-<name> pmx context (a minimal token context that satisfies
+// config.Load's lenient validation) plus a clean lab config, and registers an
+// empty cluster/resources pool so the run resolves to "nothing to destroy" —
+// the no-op path that still must trigger context/keychain cleanup on success.
+func buildDestroyCmdWithContext(t *testing.T, name string) (*cobra.Command, *cli.Deps) {
+	t.Helper()
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{name: cleanLab(name)},
+		Contexts: map[string]*config.Context{
+			"lab-" + name: {
+				Host:     "10.10.1.10",
+				Port:     8006,
+				Protocol: "https",
+				Product:  config.ProductPVE,
+				Auth: config.AuthBlock{
+					Type:     "token",
+					Username: "pmx@pve",
+					TokenID:  "pmx",
+					Secret:   "keychain:pmx-lab-" + name + "/pmx@pve!pmx",
+				},
+			},
+		},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+	f.HandleJSON("GET /api2/json/cluster/resources", []any{})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	deps := cli.GetDeps(cmd)
+	return cmd, deps
+}
+
+func TestDestroy_RemovesContextAndSecret(t *testing.T) {
+	var deletedService, deletedAccount string
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(service, account string) error {
+		deletedService, deletedAccount = service, account
+		return nil
+	}
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	cmd, deps := buildDestroyCmdWithContext(t, "demo")
+	_, _, err := destroyRun(t, cmd, "demo", "--yes")
+	require.NoError(t, err)
+
+	assert.Nil(t, deps.Cfg.Contexts["lab-demo"], "context must be removed")
+	assert.Equal(t, "pmx-lab-demo", deletedService)
+	assert.Equal(t, "pmx@pve!pmx", deletedAccount)
+}
+
+func TestDestroy_KeepContextFlag_PreservesContext(t *testing.T) {
+	orig := labDeleteSecretFn
+	called := false
+	labDeleteSecretFn = func(string, string) error { called = true; return nil }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	cmd, deps := buildDestroyCmdWithContext(t, "demo")
+	_, _, err := destroyRun(t, cmd, "demo", "--yes", "--keep-context")
+	require.NoError(t, err)
+
+	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"], "--keep-context must preserve the context")
+	assert.False(t, called, "--keep-context must not touch the keychain")
+}
+
 func TestDestroy_HappyPathWithYes_StopsAndDeletesVMInOrder(t *testing.T) {
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
