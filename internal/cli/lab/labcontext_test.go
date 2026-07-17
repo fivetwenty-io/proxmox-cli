@@ -1,11 +1,18 @@
 package lab
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 )
 
 // TestLabContextName verifies derived context name formation.
@@ -267,4 +274,360 @@ func TestFingerprintRE_Rejects(t *testing.T) {
 				"expected fingerprintRE to reject %q", tt)
 		})
 	}
+}
+
+// TestLabEnsureUser verifies that labEnsureUser tolerates an existing user
+// but aborts on transport failure.
+func TestLabEnsureUser(t *testing.T) {
+	tests := []struct {
+		name     string
+		response exec.FakeResponse
+		wantErr  bool
+	}{
+		{
+			"success - user created",
+			exec.FakeResponse{Stdout: "", ExitCode: 0},
+			false,
+		},
+		{
+			"user already exists (exit code 1)",
+			exec.FakeResponse{Stdout: "", ExitCode: 1},
+			false,
+		},
+		{
+			"user already exists (exit code 2)",
+			exec.FakeResponse{Stdout: "", ExitCode: 2},
+			false,
+		},
+		{
+			"transport failure",
+			exec.FakeResponse{Err: fmt.Errorf("ssh: command not found")},
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := exec.Fake(tt.response)
+			deps := &cli.Deps{
+				Runner: fake,
+				Ctx:    &config.Context{SSH: config.SSHBlock{}},
+			}
+			err := labEnsureUser(deps, "192.0.2.1")
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.NotEmpty(t, fake.Calls)
+			assert.Contains(t, fake.Calls[0].Args, "pveum user add pmx@pve")
+		})
+	}
+}
+
+// TestLabEnsureACL verifies that labEnsureACL applies the Administrator ACL on
+// / for pmx@pve. `pveum acl modify` is idempotent (exits 0 on re-apply), so any
+// non-zero exit or transport failure is a real error.
+func TestLabEnsureACL(t *testing.T) {
+	tests := []struct {
+		name     string
+		response exec.FakeResponse
+		wantErr  bool
+	}{
+		{
+			"success - ACL applied",
+			exec.FakeResponse{Stdout: "", ExitCode: 0},
+			false,
+		},
+		{
+			"non-zero exit is an error",
+			exec.FakeResponse{Stdout: "", ExitCode: 1},
+			true,
+		},
+		{
+			"transport failure",
+			exec.FakeResponse{Err: fmt.Errorf("connection refused")},
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := exec.Fake(tt.response)
+			deps := &cli.Deps{
+				Runner: fake,
+				Ctx:    &config.Context{SSH: config.SSHBlock{}},
+			}
+			err := labEnsureACL(deps, "192.0.2.1")
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.NotEmpty(t, fake.Calls)
+			assert.Contains(t, fake.Calls[0].Args,
+				"pveum acl modify / --users pmx@pve --roles Administrator")
+		})
+	}
+}
+
+// TestLabMintToken verifies token removal and addition, including removal
+// tolerance for non-existent tokens and parsing of the token secret.
+func TestLabMintToken(t *testing.T) {
+	tests := []struct {
+		name       string
+		responses  []exec.FakeResponse
+		wantSecret string
+		wantErr    bool
+	}{
+		{
+			"success - token removed and added",
+			[]exec.FakeResponse{
+				{Stdout: "", ExitCode: 0},
+				{Stdout: `{"value":"test-secret-123"}`, ExitCode: 0},
+			},
+			"test-secret-123",
+			false,
+		},
+		{
+			"success - token not found, then added",
+			[]exec.FakeResponse{
+				{Stdout: "", ExitCode: 1},
+				{Stdout: `{"value":"new-secret-456"}`, ExitCode: 0},
+			},
+			"new-secret-456",
+			false,
+		},
+		{
+			"failure - remove transport error",
+			[]exec.FakeResponse{
+				{Err: fmt.Errorf("connection refused")},
+			},
+			"",
+			true,
+		},
+		{
+			"failure - add fails with non-zero exit",
+			[]exec.FakeResponse{
+				{Stdout: "", ExitCode: 0},
+				{Stdout: "", ExitCode: 1},
+			},
+			"",
+			true,
+		},
+		{
+			"failure - add returns invalid JSON",
+			[]exec.FakeResponse{
+				{Stdout: "", ExitCode: 0},
+				{Stdout: "not json", ExitCode: 0},
+			},
+			"",
+			true,
+		},
+		{
+			"failure - add returns empty secret",
+			[]exec.FakeResponse{
+				{Stdout: "", ExitCode: 0},
+				{Stdout: `{"value":""}`, ExitCode: 0},
+			},
+			"",
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := exec.Fake(tt.responses...)
+			deps := &cli.Deps{
+				Runner: fake,
+				Ctx:    &config.Context{SSH: config.SSHBlock{}},
+			}
+			secret, err := labMintToken(deps, "192.0.2.1")
+
+			require.NotEmpty(t, fake.Calls)
+			assert.Contains(t, fake.Calls[0].Args, "pveum user token remove pmx@pve pmx")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantSecret, secret)
+				require.Len(t, fake.Calls, 2)
+				assert.Contains(t, fake.Calls[1].Args,
+					"pveum user token add pmx@pve pmx --privsep 0 --output-format json")
+			}
+		})
+	}
+}
+
+// TestLabFetchFingerprint verifies that the fingerprint is fetched and
+// normalized correctly.
+func TestLabFetchFingerprint(t *testing.T) {
+	testFP := "ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90"
+	tests := []struct {
+		name            string
+		response        exec.FakeResponse
+		wantFingerprint string
+		wantErr         bool
+	}{
+		{
+			"success - with prefix",
+			exec.FakeResponse{Stdout: "sha256 Fingerprint=" + testFP, ExitCode: 0},
+			testFP,
+			false,
+		},
+		{
+			"success - without prefix",
+			exec.FakeResponse{Stdout: testFP, ExitCode: 0},
+			testFP,
+			false,
+		},
+		{
+			"failure - invalid fingerprint format",
+			exec.FakeResponse{Stdout: "not-a-fingerprint", ExitCode: 0},
+			"",
+			true,
+		},
+		{
+			"failure - command fails",
+			exec.FakeResponse{Stdout: "", ExitCode: 1},
+			"",
+			true,
+		},
+		{
+			"failure - transport error",
+			exec.FakeResponse{Err: fmt.Errorf("ssh failed")},
+			"",
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := exec.Fake(tt.response)
+			deps := &cli.Deps{
+				Runner: fake,
+				Ctx:    &config.Context{SSH: config.SSHBlock{}},
+			}
+			fp, err := labFetchFingerprint(deps, "192.0.2.1")
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantFingerprint, fp)
+			}
+			require.NotEmpty(t, fake.Calls)
+			assert.Contains(t, fake.Calls[0].Args,
+				"openssl x509 -noout -fingerprint -sha256 -in /etc/pve/local/pve-ssl.pem")
+		})
+	}
+}
+
+// TestLabFetchHostname verifies that the hostname is fetched correctly.
+func TestLabFetchHostname(t *testing.T) {
+	tests := []struct {
+		name         string
+		response     exec.FakeResponse
+		wantHostname string
+		wantErr      bool
+	}{
+		{
+			"success - simple hostname",
+			exec.FakeResponse{Stdout: "pve-lab-node1\n", ExitCode: 0},
+			"pve-lab-node1",
+			false,
+		},
+		{
+			"success - hostname with spaces (trimmed)",
+			exec.FakeResponse{Stdout: "  pve-lab-node1  \n", ExitCode: 0},
+			"pve-lab-node1",
+			false,
+		},
+		{
+			"failure - command fails",
+			exec.FakeResponse{Stdout: "", ExitCode: 1},
+			"",
+			true,
+		},
+		{
+			"failure - transport error",
+			exec.FakeResponse{Err: fmt.Errorf("ssh failed")},
+			"",
+			true,
+		},
+		{
+			"failure - empty hostname",
+			exec.FakeResponse{Stdout: "\n", ExitCode: 0},
+			"",
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := &cli.Deps{
+				Runner: exec.Fake(tt.response),
+				Ctx:    &config.Context{SSH: config.SSHBlock{}},
+			}
+			hostname, err := labFetchHostname(deps, "192.0.2.1")
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantHostname, hostname)
+			}
+		})
+	}
+}
+
+// assertAnErr is a non-ExitError so guestCommandTransportFailed treats it as a
+// transport failure (ssh could not connect), the shape labWaitForSSH retries.
+type assertAnErr struct{}
+
+func (assertAnErr) Error() string { return "dial tcp: connection refused" }
+
+// waitDeps builds a *cli.Deps whose runner replays the given fake responses.
+func waitDeps(responses ...exec.FakeResponse) *cli.Deps {
+	return &cli.Deps{
+		Runner: exec.Fake(responses...),
+		Ctx:    &config.Context{SSH: config.SSHBlock{}},
+	}
+}
+
+// TestLabWaitForSSH_SucceedsWhenProbeOK verifies the loop returns nil as soon
+// as the hostname probe connects.
+func TestLabWaitForSSH_SucceedsWhenProbeOK(t *testing.T) {
+	deps := waitDeps(exec.FakeResponse{Stdout: "node0\n"})
+	require.NoError(t, labWaitForSSH(context.Background(), deps, "10.10.1.10"))
+}
+
+// TestLabWaitForSSH_RetriesTransportThenSucceeds verifies the loop retries on
+// transport failures and returns success once a probe connects.
+func TestLabWaitForSSH_RetriesTransportThenSucceeds(t *testing.T) {
+	deps := waitDeps(
+		exec.FakeResponse{Err: assertAnErr{}},
+		exec.FakeResponse{Err: assertAnErr{}},
+		exec.FakeResponse{Stdout: "node0\n"},
+	)
+	require.NoError(t, labWaitForSSH(context.Background(), deps, "10.10.1.10"))
+}
+
+// TestLabWaitForSSH_HonorsCancelledContext verifies the loop stops on a
+// cancelled context rather than exhausting its attempt budget. Every probe
+// fails as a transport error, so the loop must rely on ctx.Err(), not on a
+// probe eventually succeeding.
+func TestLabWaitForSSH_HonorsCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	deps := waitDeps(exec.FakeResponse{Err: assertAnErr{}})
+	require.Error(t, labWaitForSSH(ctx, deps, "10.10.1.10"))
+}
+
+// init disables the actual sleep in labSSHPollSleep during tests so the wait
+// loop runs at full speed without blocking.
+func init() {
+	labSSHPollSleep = func(time.Duration) {}
 }
