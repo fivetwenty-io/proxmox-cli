@@ -5,7 +5,7 @@ a temp dir. No live Proxmox API is contacted. `with_context=False` is used
 throughout so the real config and configured context are never touched.
 
 Verbs covered: add, ls, show, select (by name), select '-' (previous alias),
-previous, copy, validate, rm (non-active), rm-active guard.
+previous, copy, update, validate, rm (non-active), rm-active guard.
 
 Deferred: edit (requires $EDITOR / TTY interaction).
 """
@@ -74,6 +74,13 @@ def _scratch_context_checks(ctx: Ctx) -> None:
         if secret and secret != "***":
             return f"secret not redacted in show output: {secret!r}"
         return None
+
+    def updated_node(res: CmdResult) -> str | None:
+        data = res.json()
+        node = data.get("default_node", "")
+        if node == "e2e-node":
+            return None
+        return f"default-node not updated, got {node!r}"
 
     def validate_ok(res: CmdResult) -> str | None:
         data = res.json()
@@ -180,6 +187,17 @@ def _scratch_context_checks(ctx: Ctx) -> None:
         ctx.check(
             "context ls (copy present)", "--config", cfg, "context", "ls",
             with_context=False, validate=copy_present,
+        )
+
+        # -- update (single-field, everything else preserved) -------------------
+        ctx.check(
+            "context update", "--config", cfg, "context", "update", probe,
+            "--default-node", "e2e-node",
+            with_context=False, fmt="",
+        )
+        ctx.check(
+            "context show (updated field)", "--config", cfg, "context", "show", probe,
+            with_context=False, validate=updated_node,
         )
 
         # -- validate ----------------------------------------------------------

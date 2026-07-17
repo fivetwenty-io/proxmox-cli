@@ -90,7 +90,7 @@ def target_configured(binary: str, target: str) -> tuple[bool, str]:
 
 
 def discover_node(binary: str, target: str) -> str:
-    rc, data, _ = _probe_json(binary, target, "node", "list")
+    rc, data, _ = _probe_json(binary, target, "pve", "node", "list")
     if rc == 0 and isinstance(data, list) and data:
         first = data[0]
         if isinstance(first, dict):

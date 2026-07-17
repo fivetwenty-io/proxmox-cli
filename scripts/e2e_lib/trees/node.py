@@ -185,16 +185,16 @@ def run(ctx: Ctx) -> None:
 
         # Disk sub-type inventories: each returns a list (possibly empty on a lab
         # that lacks the given storage layout). Empty list is a valid pass.
-        ctx.check("disks ls directory", "pve", "node", "disks", "ls", "directory",
+        ctx.check("disks pools directory", "pve", "node", "disks", "pools", "directory",
                   node=n, validate=is_list)
         # lvm reports a volume-group tree as an object ({"children": [...]}),
         # unlike the other disk sub-types which return arrays.
-        lvm_tree = ctx.check("disks ls lvm", "pve", "node", "disks", "ls", "lvm", node=n,
+        lvm_tree = ctx.check("disks pools lvm", "pve", "node", "disks", "pools", "lvm", node=n,
                              validate=lambda r: None if isinstance(r.json(), (dict, list))
                              else "expected a JSON object or array")
-        ctx.check("disks ls lvmthin", "pve", "node", "disks", "ls", "lvmthin",
+        ctx.check("disks pools lvmthin", "pve", "node", "disks", "pools", "lvmthin",
                   node=n, validate=is_list)
-        zfs_list = ctx.check("disks ls zfs", "pve", "node", "disks", "ls", "zfs",
+        zfs_list = ctx.check("disks pools zfs", "pve", "node", "disks", "pools", "zfs",
                              node=n, validate=is_list)
         # disks get zfs: detail for a specific pool; discover from the ls output.
         zfs_pool = None
