@@ -118,3 +118,24 @@ func TestUpsertLabContext_SkipsFingerprintWhenInsecure(t *testing.T) {
 	assert.Empty(t, cfg.Contexts["lab-demo"].TLS.Fingerprint, "must not pin a fingerprint when Insecure is set")
 	assert.NotContains(t, changed, "fingerprint")
 }
+
+func TestUpsertLabContext_SkipsFingerprintWhenCACertSet(t *testing.T) {
+	cfg := &Config{Contexts: map[string]*Context{
+		"lab-demo": {
+			Host:    "10.10.1.10",
+			Product: ProductPVE,
+			Auth:    AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx", Secret: "old"},
+			TLS:     TLSBlock{CACert: "/etc/pmx/lab-ca.pem"},
+		},
+	}}
+
+	changed, err := UpsertLabContext(cfg, "lab-demo", baseInput())
+	require.NoError(t, err)
+	ctx := cfg.Contexts["lab-demo"]
+	// A context relying on a custom CA must keep its trust model: no fingerprint pinned.
+	assert.Empty(t, ctx.TLS.Fingerprint, "must not pin a fingerprint when a custom CACert is configured")
+	assert.Equal(t, "/etc/pmx/lab-ca.pem", ctx.TLS.CACert, "CACert must be preserved")
+	assert.NotContains(t, changed, "fingerprint")
+	// The credential is still refreshed (proves the context was recognized as owned and updated).
+	assert.Equal(t, "keychain:pmx-lab-demo/pmx@pve!pmx", ctx.Auth.Secret)
+}
