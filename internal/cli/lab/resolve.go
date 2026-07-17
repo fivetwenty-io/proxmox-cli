@@ -3,6 +3,7 @@ package lab
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,33 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
 )
+
+// labNameCharsetRE is the strict charset a lab name must match before any
+// mutating verb acts on it: lowercase letters and digits, with internal
+// hyphens allowed, starting and ending on a letter or digit — the same
+// "hostname rules: alphanumeric + hyphen" convention the multi-node lab plan
+// (§3.2) documents for a nested cluster's own name, and a superset-safe
+// bound for every existing lab name in the fleet (e.g. "wayneeseguin",
+// "pve-cpi"). This matters beyond cosmetics: several mutating verbs
+// (cluster init/join, qdevice add, sdn apply, nfs attach/detach, quota set)
+// interpolate lab.Name — or values derived from it (the cluster name passed
+// to `pvecm create`, dataset paths) — directly into a remote shell command
+// line run as root over ssh, rather than through a typed API parameter a
+// server-side decoder would reject on its own; a name containing a space or
+// shell metacharacter would otherwise reach that command line unvalidated.
+var labNameCharsetRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// validateLabNameCharset returns an error when name does not match
+// labNameCharsetRE.
+func validateLabNameCharset(name string) error {
+	if !labNameCharsetRE.MatchString(name) {
+		return fmt.Errorf(
+			"lab name %q contains characters outside the allowed charset (lowercase letters, "+
+				"digits, and internal hyphens only; must start and end with a letter or digit) — "+
+				"refusing before it can reach any remote command line", name)
+	}
+	return nil
+}
 
 // resolveLab loads the active config via cli.GetDeps(cmd), resolves every
 // configured lab (inline cfg.Labs plus cfg.Include/cfg.LabsDir includes, see
@@ -69,6 +97,10 @@ func availableLabNames(labs map[string]*config.Lab) string {
 func resolveLabForMutate(cmd *cobra.Command, name string) (*config.Lab, error) {
 	lab, err := resolveLab(cmd, name)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := validateLabNameCharset(lab.Name); err != nil {
 		return nil, err
 	}
 

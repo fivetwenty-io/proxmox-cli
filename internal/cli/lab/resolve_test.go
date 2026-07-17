@@ -139,6 +139,54 @@ func TestResolveLabForMutate_CleanLabPasses(t *testing.T) {
 	assert.Equal(t, "alpha", lab.Name)
 }
 
+func TestResolveLabForMutate_AcceptsHyphenatedAndNumericNames(t *testing.T) {
+	for _, name := range []string{"pve-cpi", "wayneeseguin", "lab2", "a", "0a"} {
+		lab := cleanLab(name)
+		cfg := &config.Config{Labs: map[string]*config.Lab{name: lab}}
+		path := writeConfig(t, cfg)
+		cmd := newCmdWithDeps(t, path)
+
+		got, err := resolveLabForMutate(cmd, name)
+		require.NoError(t, err, "name %q should pass the charset check", name)
+		require.NotNil(t, got)
+	}
+}
+
+// TestResolveLabForMutate_RejectsInvalidNameCharset covers M3-R02: a lab
+// name outside the strict charset (lowercase alnum + internal hyphen) must
+// be refused before resolveLabForMutate returns, since several M3 verbs
+// (cluster init/join, qdevice add, sdn apply, nfs attach/detach, quota set)
+// interpolate lab.Name directly into a remote ssh command line. Every case
+// is configured with a "placeholder" map key and an explicit Lab.Name
+// override, so config.ResolveLabs (which defaults an empty/unset Name to
+// its map key) always resolves the exact invalid string under test, indexed
+// by that same string — resolveLabForMutate is then called with that
+// string, exactly as a `pmx lab cluster init <name>` invocation would pass
+// whatever the operator typed.
+func TestResolveLabForMutate_RejectsInvalidNameCharset(t *testing.T) {
+	cases := []string{
+		"Wayne",         // uppercase
+		"wayne eseguin", // space
+		"wayne; reboot", // shell metacharacter
+		"wayne_eseguin", // underscore
+		"-wayne",        // leading hyphen
+		"wayne-",        // trailing hyphen
+	}
+
+	for _, name := range cases {
+		lab := cleanLab("placeholder")
+		lab.Name = name
+		cfg := &config.Config{Labs: map[string]*config.Lab{"placeholder": lab}}
+		path := writeConfig(t, cfg)
+		cmd := newCmdWithDeps(t, path)
+
+		got, err := resolveLabForMutate(cmd, name)
+		require.Error(t, err, "name %q must be rejected", name)
+		assert.Nil(t, got)
+		assert.ErrorContains(t, err, "charset")
+	}
+}
+
 func TestResolveLabForMutate_GuardFiresOnVnetID(t *testing.T) {
 	dirty := cleanLab("dirty")
 	dirty.Network.VnetID = "peppivn0"

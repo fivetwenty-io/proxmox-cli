@@ -31,7 +31,15 @@ has no API for ZFS dataset properties. 'pmx lab destroy' stops and deletes a
 lab's VM, optionally purging its resource pool and storage definition too.
 'pmx lab list'/'status'/'start'/'stop' inspect and control a lab's VM
 lifecycle, joining each configured lab against its live state by resource
-pool membership.`,
+pool membership. For a multi-node lab (topology.nodes > 1): 'pmx lab
+cluster init'/'join'/'status' form and inspect the nested PVE cluster;
+'pmx lab qdevice add'/'remove' wire up or tear down the corosync QDevice
+tie-breaker a 2-node (mandatory) or 4-node (recommended) topology needs;
+'pmx lab sdn apply' reconciles the inner VXLAN zone spanning the nested
+cluster's own nodes; 'pmx lab nfs attach'/'status'/'detach' register the
+shared NFS service's exports as storage inside the nested cluster. Every
+one of these six verb groups is transported entirely over ssh into the lab
+guest's own mgmt IP, never against the outer Proxmox VE API.`,
 		Example: `  pmx lab create wayne --node sm-0
   pmx lab status wayne
   pmx lab list
@@ -39,7 +47,12 @@ pool membership.`,
   pmx lab net apply wayne
   pmx lab access grant wayne wayne@pve
   pmx lab quota set wayne --refquota-gb 600
-  pmx lab destroy wayne --yes`,
+  pmx lab destroy wayne --yes
+  pmx lab cluster init wayne
+  pmx lab cluster join wayne --node 1
+  pmx lab qdevice add wayne
+  pmx lab sdn apply wayne
+  pmx lab nfs attach wayne`,
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPVE},
 	}
 
@@ -54,6 +67,10 @@ pool membership.`,
 		newAccessCmd(),
 		newQuotaCmd(),
 		newConfigCmd(),
+		newClusterCmd(),
+		newQdeviceCmd(),
+		newSdnCmd(),
+		newNfsCmd(),
 	)
 
 	return cmd
