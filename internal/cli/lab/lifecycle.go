@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,20 +21,23 @@ import (
 
 // labVM is the decoded shape of one /cluster/resources entry of type "vm"
 // that this file cares about: enough to join a configured lab against its
-// live QEMU guest by resource-pool membership. The endpoint also returns
-// lxc guests under type=vm; Type is kept so callers can filter those out.
+// live QEMU guest(s) by resource-pool membership, and to classify which
+// node/QDevice role each one plays by its live name. The endpoint also
+// returns lxc guests under type=vm; Type is kept so callers can filter those
+// out.
 type labVM struct {
 	VMID   int64  `json:"vmid"`
 	Node   string `json:"node"`
 	Pool   string `json:"pool"`
 	Status string `json:"status"`
 	Type   string `json:"type"`
+	Name   string `json:"name"`
 }
 
 // listLiveVMs queries GET /cluster/resources for every QEMU guest in the
 // cluster, across every node, so list/status/start/stop can each join a
-// configured lab against its live VM by resource-pool membership rather than
-// by a stored VMID (labs carry no VMID field in config). The
+// configured lab against its live VM(s) by resource-pool membership rather
+// than by a stored VMID (labs carry no VMID field in config). The
 // node-scoped GET /nodes/{node}/qemu endpoint is not used here because it
 // would require already knowing which node a lab's VM lives on.
 func listLiveVMs(ctx context.Context, deps *cli.Deps) ([]labVM, error) {
@@ -55,7 +57,7 @@ func listLiveVMs(ctx context.Context, deps *cli.Deps) ([]labVM, error) {
 			return nil, fmt.Errorf("decode cluster resource entry: %w", err)
 		}
 		// cluster/resources type=vm returns both qemu and lxc guests; a lab's
-		// VM is always qemu, never lxc.
+		// VMs are always qemu, never lxc.
 		if vm.Type != "qemu" {
 			continue
 		}
@@ -64,17 +66,171 @@ func listLiveVMs(ctx context.Context, deps *cli.Deps) ([]labVM, error) {
 	return vms, nil
 }
 
-// findLabVM returns the first qemu guest in vms that is a member of pool, or
-// false if none is. Two VMs sharing one lab's pool would be a data problem
-// upstream of this lookup (pool assignment, not resolution); this returns
-// whichever is listed first by the API rather than guessing further.
-func findLabVM(vms []labVM, pool string) (labVM, bool) {
+// classifyLabVMName matches vmName against labName's node/QDevice naming
+// convention (resolve.go): "lab-<labName>-<i>" for i in
+// [0, maxLabNodeIndex] classifies as node i; "lab-<labName>-q" classifies as
+// the QDevice; and the legacy bare "lab-<labName>" (no index suffix, the
+// pre-multi-node convention) classifies as node 0, for back-compat with a
+// lab created before topology.nodes existed (multi-node lab plan §3.2,
+// decision D3's safety-net case). ok is false when vmName matches none of
+// these.
+func classifyLabVMName(vmName, labName string) (isQdevice bool, index int, ok bool) {
+	if vmName == legacyLabVMName(labName) {
+		return false, 0, true
+	}
+	if vmName == labQdeviceVMName(labName) {
+		return true, 0, true
+	}
+	for i := 0; i <= maxLabNodeIndex; i++ {
+		if vmName == labNodeVMName(labName, i) {
+			return false, i, true
+		}
+	}
+	return false, 0, false
+}
+
+// classifiedLabVM pairs one live pool-member VM with the topology role its
+// name identifies: a specific node index, or the QDevice.
+type classifiedLabVM struct {
+	VM        labVM
+	IsQdevice bool
+	Index     int // valid only when !IsQdevice
+}
+
+// findLabVMs returns every qemu guest in vms that belongs to pool,
+// classified by its live name against labName's node/QDevice naming
+// convention (classifyLabVMName). It errors when any pool member's name
+// matches none of the convention's patterns — an unclassifiable VM sharing
+// the lab's pool is a data problem the operator must resolve, not a case
+// lifecycle verbs can safely guess past — or when two members classify to
+// the same role (e.g. a legacy bare-named VM and an explicit "-0"-named VM
+// present in the pool at once), which is equally ambiguous.
+func findLabVMs(vms []labVM, pool, labName string) ([]classifiedLabVM, error) {
+	var out []classifiedLabVM
+	seen := make(map[string]labVM)
+
 	for _, vm := range vms {
-		if vm.Pool == pool {
-			return vm, true
+		if vm.Pool != pool {
+			continue
+		}
+
+		isQdevice, index, ok := classifyLabVMName(vm.Name, labName)
+		if !ok {
+			return nil, fmt.Errorf(
+				"lab pool %q member VM %d (name %q) does not match the node/QDevice naming convention "+
+					"for lab %q (expected lab-%s-<0..%d> or lab-%s-q)",
+				pool, vm.VMID, vm.Name, labName, labName, maxLabNodeIndex, labName)
+		}
+
+		key := "q"
+		if !isQdevice {
+			key = strconv.Itoa(index)
+		}
+		if dup, exists := seen[key]; exists {
+			return nil, fmt.Errorf(
+				"lab pool %q has two VMs claiming the same role %q: VM %d (%q) and VM %d (%q)",
+				pool, key, dup.VMID, dup.Name, vm.VMID, vm.Name)
+		}
+		seen[key] = vm
+
+		out = append(out, classifiedLabVM{VM: vm, IsQdevice: isQdevice, Index: index})
+	}
+
+	return out, nil
+}
+
+// nodeLabVM returns the classified VM for node index idx among classified,
+// if present.
+func nodeLabVM(classified []classifiedLabVM, idx int) (labVM, bool) {
+	for _, c := range classified {
+		if !c.IsQdevice && c.Index == idx {
+			return c.VM, true
 		}
 	}
 	return labVM{}, false
+}
+
+// qdeviceLabVM returns the classified QDevice VM among classified, if
+// present.
+func qdeviceLabVM(classified []classifiedLabVM) (labVM, bool) {
+	for _, c := range classified {
+		if c.IsQdevice {
+			return c.VM, true
+		}
+	}
+	return labVM{}, false
+}
+
+// lifecycleTarget is one node index or the QDevice that a lifecycle verb
+// (start/stop/status) can act against.
+type lifecycleTarget struct {
+	// label identifies the target in output and in --node matching: "0"
+	// through "4" for a node, "q" for the QDevice.
+	label  string
+	isNode bool
+	index  int // valid only when isNode
+}
+
+// lookup returns the live VM classified for t among classified, if any.
+func (t lifecycleTarget) lookup(classified []classifiedLabVM) (labVM, bool) {
+	if t.isNode {
+		return nodeLabVM(classified, t.index)
+	}
+	return qdeviceLabVM(classified)
+}
+
+// lifecycleTargetsForLab returns every target a lifecycle verb should act
+// against for lab, in start order: node 0, 1, …, N-1 (N =
+// config.EffectiveTopologyNodes(lab.Topology)), then the QDevice when
+// config.QdeviceRequired(lab.Topology) is true (multi-node lab plan §4.4).
+// stop callers reverse this slice (reverseLifecycleTargets) so the QDevice
+// (if present) stops first and node 0 stops last.
+func lifecycleTargetsForLab(l *config.Lab) []lifecycleTarget {
+	n := config.EffectiveTopologyNodes(l.Topology)
+	targets := make([]lifecycleTarget, 0, n+1)
+	for i := 0; i < n; i++ {
+		targets = append(targets, lifecycleTarget{label: strconv.Itoa(i), isNode: true, index: i})
+	}
+	if config.QdeviceRequired(l.Topology) {
+		targets = append(targets, lifecycleTarget{label: "q", isNode: false})
+	}
+	return targets
+}
+
+// reverseLifecycleTargets returns a new slice holding targets in reverse
+// order, for `stop`'s "QDevice (if any), then N-1 down to 0" sequencing.
+func reverseLifecycleTargets(targets []lifecycleTarget) []lifecycleTarget {
+	out := make([]lifecycleTarget, len(targets))
+	for i, t := range targets {
+		out[len(targets)-1-i] = t
+	}
+	return out
+}
+
+// lifecycleTargetLabels returns the comma-joined labels of targets, for a
+// --node error message listing the valid choices.
+func lifecycleTargetLabels(targets []lifecycleTarget) string {
+	labels := make([]string, len(targets))
+	for i, t := range targets {
+		labels[i] = t.label
+	}
+	return strings.Join(labels, ", ")
+}
+
+// filterLifecycleTargets returns all when nodeFlag is empty, else the single
+// target among all whose label matches nodeFlag exactly. An unmatched,
+// non-empty nodeFlag is a caller error naming the valid choices.
+func filterLifecycleTargets(all []lifecycleTarget, nodeFlag string) ([]lifecycleTarget, error) {
+	if nodeFlag == "" {
+		return all, nil
+	}
+	for _, t := range all {
+		if t.label == nodeFlag {
+			return []lifecycleTarget{t}, nil
+		}
+	}
+	return nil, fmt.Errorf("--node %q does not name a configured node/QDevice for this lab (valid: %s)",
+		nodeFlag, lifecycleTargetLabels(all))
 }
 
 // guardVMID re-runs peppi.Guard now that a concrete VMID has been resolved
@@ -101,10 +257,11 @@ func newListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List every configured lab and its live VM state",
 		Long: "List every lab defined in config (inline `labs:` plus `labs_dir`/`include` " +
-			"includes), joined with the live state of its VM in the configured PVE " +
+			"includes), joined with the live state of its node-0 VM in the configured PVE " +
 			"cluster: present or absent, running or stopped, VMID, and node. A lab whose " +
-			"VM has not been created yet, or was destroyed, shows an absent state rather " +
-			"than an error.",
+			"node-0 VM has not been created yet, or was destroyed, shows an absent state " +
+			"rather than an error. Use `pmx lab status <name>` for a full per-node/QDevice " +
+			"breakdown of a multi-node lab.",
 		Example: `  pmx lab list
   pmx lab list -o json`,
 		Args: cobra.NoArgs,
@@ -127,120 +284,32 @@ func newListCmd() *cobra.Command {
 			}
 			sort.Strings(names)
 
-			headers := []string{"NAME", "POOL", "VMID", "NODE", "STATUS"}
+			headers := []string{"NAME", "POOL", "NODES", "VMID", "NODE", "STATUS"}
 			rows := make([][]string, 0, len(names))
 
 			for _, name := range names {
 				l := labs[name]
 				pool := labPoolID(l)
+				nodeCount := strconv.Itoa(config.EffectiveTopologyNodes(l.Topology))
+
+				classified, cerr := findLabVMs(vms, pool, l.Name)
+				if cerr != nil {
+					return fmt.Errorf("lab %q: %w", name, cerr)
+				}
 
 				vmidStr, node, status := "", "", "absent"
-				if vm, found := findLabVM(vms, pool); found {
+				if vm, found := nodeLabVM(classified, 0); found {
 					vmidStr = strconv.FormatInt(vm.VMID, 10)
 					node = vm.Node
 					status = vm.Status
 				}
 
-				rows = append(rows, []string{name, pool, vmidStr, node, status})
+				rows = append(rows, []string{name, pool, nodeCount, vmidStr, node, status})
 			}
 
 			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 		},
 	}
-}
-
-// diskKeyPrefixes are the PVE VM config key families that address a virtual
-// disk: "scsi[n]", "virtio[n]", "ide[n]", "sata[n]" (n is a small integer).
-// The generated nodes.ListQemuConfigResponse struct cannot represent these
-// dynamically indexed keys — its fields for them are literal placeholders
-// (e.g. a field tagged json:"scsi[n]") that never match a real response key
-// such as "scsi0"; see qemu/config.go's newConfigGetCmd doc comment for the
-// same limitation against the same generated type. Status therefore reads
-// the raw decoded config map via deps.API.Raw.GetCtx instead of ListQemuConfig.
-var diskKeyPrefixes = []string{"scsi", "virtio", "ide", "sata"}
-
-// isDiskKey reports whether key is a disk-slot config key such as "scsi0" or
-// "virtio15": one of diskKeyPrefixes followed by one or more decimal digits.
-func isDiskKey(key string) bool {
-	for _, prefix := range diskKeyPrefixes {
-		if !strings.HasPrefix(key, prefix) {
-			continue
-		}
-		rest := key[len(prefix):]
-		if rest == "" {
-			continue
-		}
-		if _, err := strconv.Atoi(rest); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// stringifyConfigValue renders one JSON-decoded config value (from the raw
-// map returned by GetCtx) as a display string, the same conversions
-// qemu/config.go's stringifyValue applies to the same kind of decoded data.
-func stringifyConfigValue(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case float64:
-		if t == float64(int64(t)) {
-			return strconv.FormatInt(int64(t), 10)
-		}
-		return strconv.FormatFloat(t, 'f', -1, 64)
-	case bool:
-		return strconv.FormatBool(t)
-	case nil:
-		return ""
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return fmt.Sprintf("%v", t)
-		}
-		return string(b)
-	}
-}
-
-// applyLiveConfigSurface reads cores, sockets, memory, and every disk-slot
-// key out of a decoded raw VM config map (as returned by GetCtx) and writes
-// them into single, upper-cased to match the rest of the status output's
-// key style.
-func applyLiveConfigSurface(single map[string]string, rawConfig any) error {
-	m, ok := rawConfig.(map[string]any)
-	if !ok {
-		return fmt.Errorf("decode VM config: unexpected response shape %T", rawConfig)
-	}
-
-	for _, key := range []string{"cores", "sockets", "memory"} {
-		if v, present := m[key]; present {
-			single[strings.ToUpper(key)] = stringifyConfigValue(v)
-		}
-	}
-
-	diskKeys := make([]string, 0)
-	for k := range m {
-		if isDiskKey(k) {
-			diskKeys = append(diskKeys, k)
-		}
-	}
-	sort.Strings(diskKeys)
-	for _, k := range diskKeys {
-		single[strings.ToUpper(k)] = stringifyConfigValue(m[k])
-	}
-
-	return nil
-}
-
-// applyLabConfigSurface writes a lab's config-derived compute and storage
-// sizing into single, for the "VM absent" branch of status where no live
-// PVE config exists yet to read from.
-func applyLabConfigSurface(single map[string]string, l *config.Lab) {
-	single["VCPU"] = strconv.Itoa(l.Compute.VCPU)
-	single["MEMORY_MIN_GB"] = strconv.Itoa(l.Compute.Memory.MinGB)
-	single["MEMORY_MAX_GB"] = strconv.Itoa(l.Compute.Memory.MaxGB)
-	single["OS_DISK_GB"] = strconv.Itoa(l.Storage.OSDiskGB)
-	single["DATA_DISK_GB"] = strconv.Itoa(l.Storage.DataDiskGB)
 }
 
 // agentNetworkInterfaces is the decoded shape of the QEMU guest agent's
@@ -291,22 +360,83 @@ func (a *agentNetworkInterfaces) firstIPv4() (string, bool) {
 	return "", false
 }
 
+// statusRow renders one row of `pmx lab status`'s per-node/QDevice table for
+// tgt: VM state, node, agent-reported (falling back to configured) IP, the
+// target's configured sizing, and a network-prefix hazard warning (see
+// netplan.go's guestPrefixWarning) when the guest agent reports an in-cidr
+// interface whose prefix is narrower than network.cidr. An absent target (no
+// live VM classified for it yet) still reports its configured sizing,
+// matching status's existing "absent VM shows config-derived sizing"
+// contract.
+func statusRow(ctx context.Context, deps *cli.Deps, l *config.Lab, tgt lifecycleTarget, classified []classifiedLabVM) ([]string, error) {
+	vcpu, memMaxGB := "-", "-"
+	if tgt.isNode {
+		compute, _ := config.EffectiveNodeSizing(l, tgt.index)
+		vcpu, memMaxGB = strconv.Itoa(compute.VCPU), strconv.Itoa(compute.Memory.MaxGB)
+	}
+
+	configuredIP := "-"
+	if tgt.isNode {
+		if ip, err := labNodeMgmtIP(l.Network, tgt.index); err == nil {
+			configuredIP = ip
+		}
+	} else if ip, err := labQdeviceMgmtIP(l.Network); err == nil {
+		configuredIP = ip
+	}
+
+	vm, found := tgt.lookup(classified)
+	if !found {
+		return []string{tgt.label, "", "", "absent", configuredIP, "n/a", vcpu, memMaxGB, ""}, nil
+	}
+
+	vmid := strconv.FormatInt(vm.VMID, 10)
+
+	current, err := deps.API.Nodes.ListQemuStatusCurrent(ctx, vm.Node, vmid)
+	if err != nil {
+		return nil, fmt.Errorf("get status for lab %q target %s VM %s on node %q: %w", l.Name, tgt.label, vmid, vm.Node, err)
+	}
+	if current == nil {
+		return nil, fmt.Errorf("get status for lab %q target %s VM %s on node %q: empty response", l.Name, tgt.label, vmid, vm.Node)
+	}
+
+	ip := configuredIP
+	agent := "n/a"
+	warning := ""
+	if current.Status == "running" {
+		if ifaces, ok := guestAgentInterfaces(ctx, deps, vm.Node, vmid); ok {
+			agent = "ok"
+			if liveIP, ok2 := ifaces.firstIPv4(); ok2 {
+				ip = liveIP
+			}
+			if w, ok2 := guestPrefixWarning(ifaces, l.Network.CIDR); ok2 {
+				warning = w
+			}
+		} else {
+			agent = "no response"
+		}
+	}
+
+	return []string{tgt.label, vmid, vm.Node, current.Status, ip, agent, vcpu, memMaxGB, warning}, nil
+}
+
 // newStatusCmd builds `pmx lab status <name>`.
 func newStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	var nodeFlag string
+
+	cmd := &cobra.Command{
 		Use:   "status <name>",
-		Short: "Show a lab's power state, IP, and key configuration",
-		Long: "Show a lab's current power state, IP address, and key compute/storage " +
-			"configuration. The IP is read from the QEMU guest agent when the VM is " +
-			"running and the agent responds; otherwise the lab's configured management " +
-			"IP (network.mgmt.host_ip) is shown instead. When the guest agent reports an " +
-			"in-cidr interface whose prefix is narrower than network.cidr, a " +
-			"NETWORK_WARNING row flags the asymmetric-routing hazard. A lab whose VM has " +
-			"not been created yet is reported as absent, with its config-derived sizing " +
-			"shown in place of live values, and exits successfully rather than erroring. " +
-			"Pass --node to use a specific node instead of the one the cluster reports.",
+		Short: "Show a lab's per-node power state, IP, and sizing",
+		Long: "Show one row per configured node (and, when the lab's topology calls for one, " +
+			"the QDevice tie-breaker VM): live power state, PVE host node, IP address " +
+			"(guest-agent-reported when running and the agent responds, else the target's " +
+			"configured management IP), guest-agent responsiveness, and configured vCPU/" +
+			"memory sizing. A target whose VM has not been created yet is reported as absent, " +
+			"with its configured sizing shown in place of live values, and does not cause the " +
+			"command to fail. Pass --node to show only one node index (0-4) or \"q\" for the " +
+			"QDevice.",
 		Example: `  pmx lab status wayne
-  pmx lab status wayne --node pve2`,
+  pmx lab status wayne --node 0
+  pmx lab status wayne --node q`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -323,61 +453,44 @@ func newStatusCmd() *cobra.Command {
 			}
 
 			pool := labPoolID(l)
-			single := map[string]string{
-				"NAME": l.Name,
-				"POOL": pool,
-			}
-
-			vm, found := findLabVM(vms, pool)
-			if !found {
-				single["STATUS"] = "absent"
-				applyLabConfigSurface(single, l)
-				return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single}, deps.Format)
-			}
-
-			node := vm.Node
-			if cmd.Flags().Changed("node") && deps.Node != "" {
-				node = deps.Node
-			}
-			vmid := strconv.FormatInt(vm.VMID, 10)
-
-			single["VMID"] = vmid
-			single["NODE"] = node
-
-			current, err := deps.API.Nodes.ListQemuStatusCurrent(cmd.Context(), node, vmid)
+			classified, err := findLabVMs(vms, pool, l.Name)
 			if err != nil {
-				return fmt.Errorf("get status for lab %q VM %s on node %q: %w", name, vmid, node, err)
+				return fmt.Errorf("lab %q: %w", name, err)
 			}
-			if current == nil {
-				return fmt.Errorf("get status for lab %q VM %s on node %q: empty response", name, vmid, node)
-			}
-			single["STATUS"] = current.Status
 
-			ip := l.Network.Mgmt.HostIP
-			if current.Status == "running" {
-				if ifaces, ok := guestAgentInterfaces(cmd.Context(), deps, node, vmid); ok {
-					if liveIP, ok := ifaces.firstIPv4(); ok {
-						ip = liveIP
-					}
-					if warn, ok := guestPrefixWarning(ifaces, l.Network.CIDR); ok {
-						single["NETWORK_WARNING"] = warn
-					}
+			targets, err := filterLifecycleTargets(lifecycleTargetsForLab(l), nodeFlag)
+			if err != nil {
+				return err
+			}
+
+			headers := []string{"NODE", "VMID", "PVE_NODE", "STATUS", "IP", "AGENT", "VCPU", "MEMORY_MAX_GB", "WARNING"}
+			rows := make([][]string, 0, len(targets)+1)
+			for _, tgt := range targets {
+				row, err := statusRow(cmd.Context(), deps, l, tgt, classified)
+				if err != nil {
+					return err
 				}
-			}
-			single["IP"] = ip
-
-			configPath := fmt.Sprintf("/nodes/%s/qemu/%s/config", url.PathEscape(node), url.PathEscape(vmid))
-			rawConfig, err := deps.API.Raw.GetCtx(cmd.Context(), configPath, nil)
-			if err != nil {
-				return fmt.Errorf("get config for lab %q VM %s on node %q: %w", name, vmid, node, err)
-			}
-			if err := applyLiveConfigSurface(single, rawConfig); err != nil {
-				return fmt.Errorf("get config for lab %q VM %s on node %q: %w", name, vmid, node, err)
+				rows = append(rows, row)
 			}
 
-			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single}, deps.Format)
+			// Rendered as a trailing row, not via output.Result.Message: every
+			// renderer in internal/output (table, plain, JSON, YAML) drops
+			// Message whenever Headers/Rows are also set, which this table
+			// always is, so a Message-only summary here would never reach the
+			// operator in any output format (the same defect create.go's
+			// renderCreatePlan hit and fixed the same way).
+			summaryRow := make([]string, len(headers))
+			summaryRow[0] = "summary"
+			summaryRow[len(summaryRow)-1] = fmt.Sprintf(
+				"Lab %q: %d node(s) configured, pool %q.", name, config.EffectiveTopologyNodes(l.Topology), pool)
+			rows = append(rows, summaryRow)
+
+			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 		},
 	}
+
+	cmd.Flags().StringVar(&nodeFlag, "node", "", "scope to one node index (0-4) or \"q\" for the QDevice")
+	return cmd
 }
 
 // lifecycleAction describes one of the start/stop verbs: the state that
@@ -393,6 +506,10 @@ type lifecycleAction struct {
 	// noopState is the PVE power state ("running", "stopped") in which this
 	// action is already satisfied and must not be repeated.
 	noopState string
+	// reverse selects stop's node-order reversal (QDevice first if present,
+	// then N-1 down to 0) versus start's natural order (0, 1, …, N-1, then
+	// QDevice).
+	reverse bool
 	// invoke issues the actual mutating API call and returns its raw task
 	// response — normally a JSON-encoded UPID string, but possibly null or
 	// empty on older servers.
@@ -400,11 +517,18 @@ type lifecycleAction struct {
 }
 
 // runLifecycleMutate implements the shared start/stop control flow:
-// resolve-and-guard the lab, locate its live VM by pool, guard again now
-// that a concrete VMID is known, skip idempotently if the action is already
-// satisfied, preview under --dry-run, or else invoke the action and block
-// on its task.
-func runLifecycleMutate(cmd *cobra.Command, name string, dryRun bool, action lifecycleAction) error {
+// resolve-and-guard the lab, classify every live VM in its pool by
+// node/QDevice role, walk the lab's targets in the action's order (or the
+// single target --node selects), guarding each concrete VMID again before
+// acting, skipping idempotently where the action is already satisfied,
+// previewing under --dry-run, or else invoking the action and blocking on
+// its task. A target with no VM found is skipped silently when acting
+// against the whole topology (a partially-created lab is not itself an
+// error for start/stop), but errors immediately when --node named that
+// specific, missing target. The overall command errors only when --node
+// named a target with no VM, or when none of the lab's targets have any VM
+// at all.
+func runLifecycleMutate(cmd *cobra.Command, name string, dryRun bool, nodeFlag string, action lifecycleAction) error {
 	deps := cli.GetDeps(cmd)
 
 	l, err := resolveLabForMutate(cmd, name)
@@ -418,75 +542,115 @@ func runLifecycleMutate(cmd *cobra.Command, name string, dryRun bool, action lif
 	}
 
 	pool := labPoolID(l)
-	vm, found := findLabVM(vms, pool)
-	if !found {
+	classified, err := findLabVMs(vms, pool, l.Name)
+	if err != nil {
+		return fmt.Errorf("lab %q: %w", name, err)
+	}
+
+	targets := lifecycleTargetsForLab(l)
+	if action.reverse {
+		targets = reverseLifecycleTargets(targets)
+	}
+	targets, err = filterLifecycleTargets(targets, nodeFlag)
+	if err != nil {
+		return err
+	}
+
+	var lines []string
+	var anyFound bool
+
+	for _, tgt := range targets {
+		vm, found := tgt.lookup(classified)
+		if !found {
+			if nodeFlag != "" {
+				return fmt.Errorf("lab %q: no VM found for node %q in pool %q; run `pmx lab create %s` first",
+					name, tgt.label, pool, name)
+			}
+			continue
+		}
+		anyFound = true
+
+		if err := guardVMID(l, vm.VMID); err != nil {
+			return err
+		}
+
+		vmid := strconv.FormatInt(vm.VMID, 10)
+
+		current, err := deps.API.Nodes.ListQemuStatusCurrent(cmd.Context(), vm.Node, vmid)
+		if err != nil {
+			return fmt.Errorf("get status for lab %q node %q VM %s on node %q: %w", name, tgt.label, vmid, vm.Node, err)
+		}
+		if current == nil {
+			return fmt.Errorf("get status for lab %q node %q VM %s on node %q: empty response", name, tgt.label, vmid, vm.Node)
+		}
+
+		if current.Status == action.noopState {
+			lines = append(lines, fmt.Sprintf("node %s VM %s on node %q is already %s",
+				tgt.label, vmid, vm.Node, action.noopState))
+			continue
+		}
+
+		if dryRun {
+			lines = append(lines, fmt.Sprintf("[dry-run] would %s node %s VM %s on node %q (currently %s)",
+				action.verb, tgt.label, vmid, vm.Node, current.Status))
+			continue
+		}
+
+		raw, err := action.invoke(cmd.Context(), deps, vm.Node, vmid)
+		if err != nil {
+			return err
+		}
+
+		// Mirror applySdn's immediate-vs-async response handling: a UPID is
+		// awaited; a null/empty/non-UPID body from an older server is treated as
+		// an immediate success rather than a failure — the mutating call itself
+		// already succeeded by this point.
+		upid, perr := apiclient.UPIDFromRaw(raw)
+		if perr == nil && upid != "" {
+			if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, nil); err != nil {
+				return err
+			}
+		}
+
+		lines = append(lines, fmt.Sprintf("node %s VM %s %s", tgt.label, vmid, action.pastVerb))
+	}
+
+	if !anyFound {
 		return fmt.Errorf("lab %q: no VM found in pool %q; run `pmx lab create %s` first", name, pool, name)
 	}
 
-	if err := guardVMID(l, vm.VMID); err != nil {
-		return err
-	}
-
-	vmid := strconv.FormatInt(vm.VMID, 10)
-
-	current, err := deps.API.Nodes.ListQemuStatusCurrent(cmd.Context(), vm.Node, vmid)
-	if err != nil {
-		return fmt.Errorf("get status for lab %q VM %s on node %q: %w", name, vmid, vm.Node, err)
-	}
-	if current == nil {
-		return fmt.Errorf("get status for lab %q VM %s on node %q: empty response", name, vmid, vm.Node)
-	}
-
-	if current.Status == action.noopState {
-		msg := fmt.Sprintf("Lab %q VM %s on node %q is already %s; nothing to do.", name, vmid, vm.Node, action.noopState)
-		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
-	}
-
-	if dryRun {
-		msg := fmt.Sprintf("[dry-run] would %s lab %q VM %s on node %q (currently %s).",
-			action.verb, name, vmid, vm.Node, current.Status)
-		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
-	}
-
-	raw, err := action.invoke(cmd.Context(), deps, vm.Node, vmid)
-	if err != nil {
-		return err
-	}
-
-	// Mirror applySdn's immediate-vs-async response handling: a UPID is
-	// awaited; a null/empty/non-UPID body from an older server is treated as
-	// an immediate success rather than a failure — the mutating call itself
-	// already succeeded by this point.
-	upid, perr := apiclient.UPIDFromRaw(raw)
-	if perr == nil && upid != "" {
-		if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, nil); err != nil {
-			return err
-		}
-	}
-
-	msg := fmt.Sprintf("Lab %q VM %s %s.", name, vmid, action.pastVerb)
+	msg := fmt.Sprintf("Lab %q: %s.", name, strings.Join(lines, "; "))
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 }
 
 // newStartCmd builds `pmx lab start <name>`.
 func newStartCmd() *cobra.Command {
-	var dryRun bool
+	var (
+		dryRun   bool
+		nodeFlag string
+	)
 	cmd := &cobra.Command{
 		Use:   "start <name>",
-		Short: "Start a lab's VM",
-		Long: "Start a lab's VM, locating it by the lab's configured resource pool. " +
-			"Idempotent: a VM that is already running is reported as a no-op rather than " +
-			"re-issuing the start call. Refuses to act when the lab's identifiers, or its " +
-			"live VM's ID, overlap a peppi-protected production resource. Blocks until the " +
-			"PVE task completes.",
+		Short: "Start a lab's node VMs (and QDevice, if any)",
+		Long: "Start every configured node VM in order (node 0 first, so a fresh cluster " +
+			"regains quorum predictably), then the QDevice VM if the lab's topology calls " +
+			"for one. Idempotent per target: a VM that is already running is reported as a " +
+			"no-op rather than re-issuing the start call. A target with no VM created yet is " +
+			"skipped silently unless --node names it explicitly. Refuses to act when the " +
+			"lab's identifiers, or any target's live VM ID, overlap a peppi-protected " +
+			"production resource. Blocks until each PVE task completes before starting the " +
+			"next target. Pass --node to scope the action to one node index (0-4) or \"q\" for " +
+			"the QDevice.",
 		Example: `  pmx lab start wayne
+  pmx lab start wayne --node 1
   pmx lab start wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLifecycleMutate(cmd, args[0], dryRun, lifecycleAction{
+			return runLifecycleMutate(cmd, args[0], dryRun, nodeFlag, lifecycleAction{
 				verb:      "start",
 				pastVerb:  "started",
 				noopState: "running",
+				reverse:   false,
 				invoke: func(ctx context.Context, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 					resp, err := deps.API.Nodes.CreateQemuStatusStart(ctx, node, vmid, &nodes.CreateQemuStatusStartParams{})
 					if err != nil {
@@ -500,30 +664,39 @@ func newStartCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the intended action without starting the VM")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the intended actions without starting any VM")
+	cmd.Flags().StringVar(&nodeFlag, "node", "", "scope to one node index (0-4) or \"q\" for the QDevice")
 	return cmd
 }
 
 // newStopCmd builds `pmx lab stop <name>`.
 func newStopCmd() *cobra.Command {
-	var dryRun bool
+	var (
+		dryRun   bool
+		nodeFlag string
+	)
 	cmd := &cobra.Command{
 		Use:   "stop <name>",
-		Short: "Stop a lab's VM (hard power off)",
-		Long: "Immediately power off a lab's running VM without asking the guest OS to shut " +
-			"down cleanly, similar to pulling the power. Locates the VM by the lab's " +
-			"configured resource pool. Idempotent: a VM that is already stopped is reported " +
-			"as a no-op rather than re-issuing the stop call. Refuses to act when the lab's " +
-			"identifiers, or its live VM's ID, overlap a peppi-protected production " +
-			"resource. Blocks until the PVE task completes.",
+		Short: "Stop a lab's node VMs (and QDevice, if any) (hard power off)",
+		Long: "Immediately power off every configured node VM without asking the guest OS to " +
+			"shut down cleanly, similar to pulling the power — in reverse start order (the " +
+			"QDevice VM, if the lab's topology calls for one, then node N-1 down to node 0). " +
+			"Idempotent per target: a VM that is already stopped is reported as a no-op " +
+			"rather than re-issuing the stop call. A target with no VM created yet is skipped " +
+			"silently unless --node names it explicitly. Refuses to act when the lab's " +
+			"identifiers, or any target's live VM ID, overlap a peppi-protected production " +
+			"resource. Blocks until each PVE task completes before stopping the next target. " +
+			"Pass --node to scope the action to one node index (0-4) or \"q\" for the QDevice.",
 		Example: `  pmx lab stop wayne
+  pmx lab stop wayne --node q
   pmx lab stop wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLifecycleMutate(cmd, args[0], dryRun, lifecycleAction{
+			return runLifecycleMutate(cmd, args[0], dryRun, nodeFlag, lifecycleAction{
 				verb:      "stop",
 				pastVerb:  "stopped",
 				noopState: "stopped",
+				reverse:   true,
 				invoke: func(ctx context.Context, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 					resp, err := deps.API.Nodes.CreateQemuStatusStop(ctx, node, vmid, &nodes.CreateQemuStatusStopParams{})
 					if err != nil {
@@ -537,6 +710,7 @@ func newStopCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the intended action without stopping the VM")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the intended actions without stopping any VM")
+	cmd.Flags().StringVar(&nodeFlag, "node", "", "scope to one node index (0-4) or \"q\" for the QDevice")
 	return cmd
 }

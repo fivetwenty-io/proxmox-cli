@@ -285,3 +285,77 @@ func TestResolveLabForMutate_GuardFiresOnDNSZone(t *testing.T) {
 	assert.ErrorContains(t, err, "peppi guard")
 	assert.ErrorContains(t, err, "peppivn0.internal")
 }
+
+// --- node/QDevice naming ---------------------------------------------------
+
+func TestLabNodeVMName(t *testing.T) {
+	assert.Equal(t, "lab-wayne-0", labNodeVMName("wayne", 0))
+	assert.Equal(t, "lab-wayne-4", labNodeVMName("wayne", 4))
+}
+
+func TestLabQdeviceVMName(t *testing.T) {
+	assert.Equal(t, "lab-wayne-q", labQdeviceVMName("wayne"))
+}
+
+func TestLegacyLabVMName(t *testing.T) {
+	assert.Equal(t, "lab-wayne", legacyLabVMName("wayne"))
+}
+
+// --- node/QDevice management IP derivation ---------------------------------
+
+// TestLabNodeMgmtIP_DerivesFromMgmtSubnet covers the primary source: the
+// lab's mgmt subnet CIDR, base + 10 + i.
+func TestLabNodeMgmtIP_DerivesFromMgmtSubnet(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "10.10.1.0/24"}}
+
+	for i, want := range map[int]string{0: "10.10.1.10", 1: "10.10.1.11", 4: "10.10.1.14"} {
+		ip, err := labNodeMgmtIP(net, i)
+		require.NoError(t, err)
+		assert.Equal(t, want, ip, "node index %d", i)
+	}
+}
+
+// TestLabNodeMgmtIP_DerivesFromHostIPWhenSubnetUnset covers the fallback
+// source: today's convention of Mgmt.HostIP always being node 0's own .10
+// address, masked to /24 to recover the same network base an explicit
+// Subnet would state.
+func TestLabNodeMgmtIP_DerivesFromHostIPWhenSubnetUnset(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{HostIP: "10.20.3.10"}}
+
+	ip, err := labNodeMgmtIP(net, 2)
+	require.NoError(t, err)
+	assert.Equal(t, "10.20.3.12", ip)
+}
+
+// TestLabNodeMgmtIP_NeitherSourceSet_Errors covers a lab whose network
+// config has no mgmt subnet or host IP at all: node IP derivation has no
+// source of truth and must error, not silently return a zero-value string.
+func TestLabNodeMgmtIP_NeitherSourceSet_Errors(t *testing.T) {
+	_, err := labNodeMgmtIP(config.LabNetwork{}, 0)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "mgmt.subnet")
+}
+
+// TestLabNodeMgmtIP_OutOfRangeIndex_Errors covers the [0, maxLabNodeIndex]
+// bound on the node index parameter.
+func TestLabNodeMgmtIP_OutOfRangeIndex_Errors(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "10.10.1.0/24"}}
+
+	_, err := labNodeMgmtIP(net, 5)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "out of range")
+
+	_, err = labNodeMgmtIP(net, -1)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "out of range")
+}
+
+// TestLabQdeviceMgmtIP_IsDotFifteen covers the QDevice's fixed offset within
+// the lab's mgmt /24.
+func TestLabQdeviceMgmtIP_IsDotFifteen(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "10.10.1.0/24"}}
+
+	ip, err := labQdeviceMgmtIP(net)
+	require.NoError(t, err)
+	assert.Equal(t, "10.10.1.15", ip)
+}

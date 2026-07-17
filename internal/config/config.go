@@ -50,6 +50,45 @@ type Config struct {
 
 	// Labs is the named map of inline lab environment configurations.
 	Labs map[string]*Lab `yaml:"labs,omitempty"`
+
+	// Storage holds pool-wide storage reservations that are not
+	// attributable to any single lab (e.g. the shared NFS service's
+	// quota), read by `pmx lab create`'s capacity gate alongside per-lab
+	// refquotas.
+	Storage ConfigStorage `yaml:"storage,omitempty" json:"storage,omitempty"`
+}
+
+// DefaultNFSReservedGB is the fallback ZFS quota (in GB) EffectiveNFSReservedGB
+// uses when ConfigStorage.NFSReservedGB is unset: 1024 (1T), the tank/nfs
+// dataset's hard quota (multi-node lab plan §10 decision D1, amended). This
+// applies only while the shared NFS service lives on the same pool as every
+// lab's dataset; once it moves to its own dedicated nfs_pool, operators set
+// storage.nfs_reserved_gb: 0 to opt out entirely.
+const DefaultNFSReservedGB = 1024
+
+// ConfigStorage holds pool-wide storage reservations that are not
+// attributable to any single lab.
+type ConfigStorage struct {
+	// NFSReservedGB is the ZFS quota (in GB) reserved on the shared pool
+	// for the tank/nfs dataset (decision D1, amended). A nil pointer means
+	// "not set": EffectiveNFSReservedGB then falls back to
+	// DefaultNFSReservedGB. An explicit 0 is a deliberate opt-out (the
+	// state once NFS moves to its own dedicated nfs_pool), distinct from
+	// "unset" — this is why the field is a pointer rather than a plain
+	// int, whose zero value could not otherwise be told apart from
+	// "unset".
+	NFSReservedGB *int `yaml:"nfs_reserved_gb,omitempty" json:"nfs_reserved_gb,omitempty"`
+}
+
+// EffectiveNFSReservedGB returns cfg.Storage.NFSReservedGB when set
+// (including an explicit 0, the documented opt-out once NFS moves to its
+// own dedicated nfs_pool), else DefaultNFSReservedGB. A nil cfg also
+// returns DefaultNFSReservedGB, so callers need not nil-check cfg first.
+func EffectiveNFSReservedGB(cfg *Config) int {
+	if cfg == nil || cfg.Storage.NFSReservedGB == nil {
+		return DefaultNFSReservedGB
+	}
+	return *cfg.Storage.NFSReservedGB
 }
 
 // Context represents one named Proxmox VE API endpoint.

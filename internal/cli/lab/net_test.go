@@ -142,9 +142,9 @@ func TestNetApplyFreshCreatesZoneVnetSubnet(t *testing.T) {
 	require.Len(t, zoneRec, 2, "expected one zone list + one zone create")
 	create := zoneRec[1]
 	assert.Equal(t, http.MethodPost, create.method)
-	assert.Equal(t, labZoneName, create.body["zone"])
-	assert.Equal(t, labZoneType, create.body["type"])
-	assert.Equal(t, labZonePeers, create.body["peers"])
+	assert.Equal(t, lab.Network.EffectiveZoneName(), create.body["zone"])
+	assert.Equal(t, lab.Network.EffectiveZoneType(), create.body["type"])
+	assert.Empty(t, create.body["peers"])
 	assert.Equal(t, "node1", create.body["nodes"])
 	assert.Equal(t, "1450", create.body["mtu"])
 
@@ -152,7 +152,7 @@ func TestNetApplyFreshCreatesZoneVnetSubnet(t *testing.T) {
 	vc := vnetRec[1]
 	assert.Equal(t, http.MethodPost, vc.method)
 	assert.Equal(t, "labwayne", vc.body["vnet"])
-	assert.Equal(t, labZoneName, vc.body["zone"])
+	assert.Equal(t, lab.Network.EffectiveZoneName(), vc.body["zone"])
 	assert.Equal(t, "5001", vc.body["tag"])
 	assert.Equal(t, "lab-wayne", vc.body["alias"])
 
@@ -189,19 +189,19 @@ func TestNetApplyIdempotentSkipsCreatesAndSkipsApplyWhenNoPendingChanges(t *test
 	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
 
 	netRecord(f, &zoneRec, &order, "zone-list", "GET /api2/json/cluster/sdn/zones", []any{
-		map[string]any{"zone": labZoneName, "type": labZoneType, "mtu": 1450, "nodes": "node1", "peers": labZonePeers},
+		map[string]any{"zone": lab.Network.EffectiveZoneName(), "type": lab.Network.EffectiveZoneType(), "mtu": 1450, "nodes": "node1", "peers": lab.Network.EffectiveZonePeers()},
 	}, 200)
 	netRecord(f, &zoneRec, &order, "zone-create", "POST /api2/json/cluster/sdn/zones", map[string]any{}, 200)
-	netRecord(f, &zoneRec, &order, "zone-update", "PUT /api2/json/cluster/sdn/zones/"+labZoneName, map[string]any{}, 200)
+	netRecord(f, &zoneRec, &order, "zone-update", "PUT /api2/json/cluster/sdn/zones/"+lab.Network.EffectiveZoneName(), map[string]any{}, 200)
 
 	netRecord(f, &vnetRec, &order, "vnet-list", "GET /api2/json/cluster/sdn/vnets", []any{
-		map[string]any{"vnet": "labwayne", "zone": labZoneName, "tag": 5001, "alias": "lab-wayne"},
+		map[string]any{"vnet": "labwayne", "zone": lab.Network.EffectiveZoneName(), "tag": 5001, "alias": "lab-wayne"},
 	}, 200)
 	netRecord(f, &vnetRec, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
 	netRecord(f, &vnetRec, &order, "vnet-update", "PUT /api2/json/cluster/sdn/vnets/labwayne", map[string]any{}, 200)
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": labZoneName},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-create",
 		"POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
@@ -264,20 +264,20 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
 
 	netRecord(f, &zoneRec, &order, "zone-list", "GET /api2/json/cluster/sdn/zones", []any{
-		map[string]any{"zone": labZoneName, "type": labZoneType, "mtu": 1450, "nodes": "node1", "peers": labZonePeers},
+		map[string]any{"zone": lab.Network.EffectiveZoneName(), "type": lab.Network.EffectiveZoneType(), "mtu": 1450, "nodes": "node1", "peers": lab.Network.EffectiveZonePeers()},
 	}, 200)
-	netRecord(f, &zoneRec, &order, "zone-update", "PUT /api2/json/cluster/sdn/zones/"+labZoneName, map[string]any{}, 200)
+	netRecord(f, &zoneRec, &order, "zone-update", "PUT /api2/json/cluster/sdn/zones/"+lab.Network.EffectiveZoneName(), map[string]any{}, 200)
 
 	// Existing vnet has the wrong tag (9999 instead of the lab's 5001); alias
 	// and zone already match.
 	netRecord(f, &vnetRec, &order, "vnet-list", "GET /api2/json/cluster/sdn/vnets", []any{
-		map[string]any{"vnet": "labwayne", "zone": labZoneName, "tag": 9999, "alias": "lab-wayne"},
+		map[string]any{"vnet": "labwayne", "zone": lab.Network.EffectiveZoneName(), "tag": 9999, "alias": "lab-wayne"},
 	}, 200)
 	netRecord(f, &vnetRec, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
 	netRecord(f, &vnetRec, &order, "vnet-update", "PUT /api2/json/cluster/sdn/vnets/labwayne", map[string]any{}, 200)
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": labZoneName},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-update",
 		"PUT /api2/json/cluster/sdn/vnets/labwayne/subnets/labwayne-10.10.1.0-24", map[string]any{}, 200)

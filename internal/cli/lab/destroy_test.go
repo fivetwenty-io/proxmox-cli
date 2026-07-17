@@ -92,6 +92,13 @@ func destroyRun(t *testing.T, cmd *cobra.Command, args ...string) (stdout, stder
 	return stdout, stderr, err
 }
 
+// destroyHandleClusterResources registers GET /cluster/resources to return
+// entries, mirroring lifecycle_test.go's handleClusterResources (a distinct
+// name to avoid a package-level collision with that file's own helper).
+func destroyHandleClusterResources(f *testhelper.FakePVE, entries ...map[string]any) {
+	f.HandleJSON("GET /api2/json/cluster/resources", entries)
+}
+
 func TestDestroy_HappyPathWithYes_StopsAndDeletesVMInOrder(t *testing.T) {
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
@@ -100,12 +107,10 @@ func TestDestroy_HappyPathWithYes_StopsAndDeletesVMInOrder(t *testing.T) {
 	f, ac := destroyFakeClient(t)
 
 	var calls []string
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		calls = append(calls, "GetPools")
-		testhelper.WriteData(w, map[string]any{
-			"members": []map[string]any{
-				{"id": "qemu/100", "node": "pve1", "type": "qemu", "vmid": 100},
-			},
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "ClusterResources")
+		testhelper.WriteData(w, []map[string]any{
+			{"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "running", "type": "qemu"},
 		})
 	})
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
@@ -129,7 +134,7 @@ func TestDestroy_HappyPathWithYes_StopsAndDeletesVMInOrder(t *testing.T) {
 	stdout, _, err := destroyRun(t, cmd, "alpha", "--yes")
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"GetPools", "Status", "Stop", "Delete"}, calls)
+	assert.Equal(t, []string{"ClusterResources", "Status", "Stop", "Delete"}, calls)
 	assert.Contains(t, stdout.String(), "destroyed")
 }
 
@@ -141,13 +146,8 @@ func TestDestroy_HappyPathWithPurge_AlsoDeletesPoolAndStorage(t *testing.T) {
 	f, ac := destroyFakeClient(t)
 
 	var calls []string
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		calls = append(calls, "GetPools")
-		testhelper.WriteData(w, map[string]any{
-			"members": []map[string]any{
-				{"id": "qemu/100", "node": "pve1", "type": "qemu", "vmid": 100},
-			},
-		})
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "stopped", "type": "qemu",
 	})
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
 		calls = append(calls, "Status")
@@ -174,7 +174,7 @@ func TestDestroy_HappyPathWithPurge_AlsoDeletesPoolAndStorage(t *testing.T) {
 
 	// The VM was already stopped, so no Stop call is expected between Status
 	// and Delete.
-	assert.Equal(t, []string{"GetPools", "Status", "Delete", "DeletePool", "DeleteStorage"}, calls)
+	assert.Equal(t, []string{"Status", "Delete", "DeletePool", "DeleteStorage"}, calls)
 	assert.Contains(t, stdout.String(), "destroyed")
 }
 
@@ -186,12 +186,8 @@ func TestDestroy_RefusesWithoutYesNonInteractively(t *testing.T) {
 	f, ac := destroyFakeClient(t)
 
 	var mutatingCalls int
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteData(w, map[string]any{
-			"members": []map[string]any{
-				{"id": "qemu/100", "node": "pve1", "type": "qemu", "vmid": 100},
-			},
-		})
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "running", "type": "qemu",
 	})
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/status/stop", func(w http.ResponseWriter, _ *http.Request) {
 		mutatingCalls++
@@ -219,12 +215,8 @@ func TestDestroy_DryRun_NoMutatingCallsAndPreviewsDoomedResources(t *testing.T) 
 	f, ac := destroyFakeClient(t)
 
 	var mutatingCalls int
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteData(w, map[string]any{
-			"members": []map[string]any{
-				{"id": "qemu/100", "node": "pve1", "type": "qemu", "vmid": 100},
-			},
-		})
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "running", "type": "qemu",
 	})
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
 		mutatingCalls++ // never reached in a dry-run; any call here is a bug
@@ -259,13 +251,9 @@ func TestDestroy_PeppiRefusesProtectedVMIDBeforeAnyMutation(t *testing.T) {
 	f, ac := destroyFakeClient(t)
 
 	var mutatingCalls int
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteData(w, map[string]any{
-			"members": []map[string]any{
-				// 50010 is a peppi-protected production VMID.
-				{"id": "qemu/50010", "node": "pve1", "type": "qemu", "vmid": 50010},
-			},
-		})
+	destroyHandleClusterResources(f, map[string]any{
+		// 50010 is a peppi-protected production VMID.
+		"vmid": 50010, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "running", "type": "qemu",
 	})
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/50010/status/stop", func(w http.ResponseWriter, _ *http.Request) {
 		mutatingCalls++
@@ -308,9 +296,7 @@ func TestDestroy_IdempotentWhenVMAlreadyAbsent(t *testing.T) {
 	path := writeConfig(t, cfg)
 	f, ac := destroyFakeClient(t)
 
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusNotFound, "pool 'lab-alpha' does not exist")
-	})
+	destroyHandleClusterResources(f) // no live VMs at all
 
 	cmd := destroyTestCmd(t, path, ac, "pve1")
 	stdout, _, err := destroyRun(t, cmd, "alpha", "--yes")
@@ -326,9 +312,7 @@ func TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone(t *testing.T) {
 	path := writeConfig(t, cfg)
 	f, ac := destroyFakeClient(t)
 
-	f.HandleFunc("GET /api2/json/pools/lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
-		testhelper.WriteError(w, http.StatusNotFound, "pool 'lab-alpha' does not exist")
-	})
+	destroyHandleClusterResources(f) // no live VMs at all
 	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusNotFound, "pool 'lab-alpha' does not exist")
 	})
@@ -341,4 +325,118 @@ func TestDestroy_PurgeIdempotentWhenPoolAndStorageAlreadyGone(t *testing.T) {
 	require.NoError(t, err, "absent pool/storage must be reported as already gone, not errors")
 
 	assert.Contains(t, stdout.String(), "destroyed")
+}
+
+// TestDestroy_ThreeNodeCluster_DestroysInReverseOrder covers M2-02's
+// multi-node acceptance shape: a 3-node lab's VMs are stopped and deleted
+// in reverse start order (node 2, then node 1, then node 0), not pool
+// iteration order.
+func TestDestroy_ThreeNodeCluster_DestroysInReverseOrder(t *testing.T) {
+	lab := cleanLab("pve-cpi")
+	lab.Topology = config.LabTopology{Nodes: 3}
+	cfg := &config.Config{Labs: map[string]*config.Lab{"pve-cpi": lab}}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var order []string
+	destroyHandleClusterResources(f,
+		map[string]any{"vmid": 100, "node": "pve1", "pool": "lab-pve-cpi", "name": "lab-pve-cpi-0", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 101, "node": "pve1", "pool": "lab-pve-cpi", "name": "lab-pve-cpi-1", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 102, "node": "pve1", "pool": "lab-pve-cpi", "name": "lab-pve-cpi-2", "status": "stopped", "type": "qemu"},
+	)
+	// Every route (including each VMID's task-status route) is registered
+	// up front, before destroyRun executes: registering a route from inside
+	// another route's handler would deadlock, since FakePVE's router holds
+	// its RWMutex's read lock for the whole duration of the handler it
+	// dispatches to, and registration takes that same mutex's write lock.
+	for _, vmid := range []string{"100", "101", "102"} {
+		vmid := vmid
+		deleteUPID := "UPID:pve1:00000000:00000000:65000000:qmdestroy:" + vmid + ":root@pam:"
+		f.HandleFunc("GET /api2/json/nodes/pve1/qemu/"+vmid+"/status/current", func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": vmid})
+		})
+		f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/"+vmid, func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "delete-"+vmid)
+			testhelper.WriteData(w, deleteUPID)
+		})
+		destroyHandleTaskStatus(f, "pve1", deleteUPID)
+	}
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	stdout, _, err := destroyRun(t, cmd, "pve-cpi", "--yes")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"delete-102", "delete-101", "delete-100"}, order,
+		"destroy must proceed from the highest node index down to node 0")
+	assert.Contains(t, stdout.String(), "destroyed")
+}
+
+// TestDestroy_TwoNodePlusQdevice_DestroysQdeviceFirst covers the QDevice
+// ordering half of M2-02: the QDevice VM is destroyed before either node
+// VM, mirroring lifecycle.go's stop sequencing.
+func TestDestroy_TwoNodePlusQdevice_DestroysQdeviceFirst(t *testing.T) {
+	lab := cleanLab("wayne")
+	lab.Topology = config.LabTopology{Nodes: 2}
+	cfg := &config.Config{Labs: map[string]*config.Lab{"wayne": lab}}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var order []string
+	destroyHandleClusterResources(f,
+		map[string]any{"vmid": 200, "node": "pve1", "pool": "lab-wayne", "name": "lab-wayne-0", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 201, "node": "pve1", "pool": "lab-wayne", "name": "lab-wayne-1", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 202, "node": "pve1", "pool": "lab-wayne", "name": "lab-wayne-q", "status": "stopped", "type": "qemu"},
+	)
+	// Every route (including each VMID's task-status route) is registered
+	// up front, before destroyRun executes: see the identical note in
+	// TestDestroy_ThreeNodeCluster_DestroysInReverseOrder.
+	for _, vmid := range []string{"200", "201", "202"} {
+		vmid := vmid
+		deleteUPID := "UPID:pve1:00000000:00000000:65000000:qmdestroy:" + vmid + ":root@pam:"
+		f.HandleFunc("GET /api2/json/nodes/pve1/qemu/"+vmid+"/status/current", func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": vmid})
+		})
+		f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/"+vmid, func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "delete-"+vmid)
+			testhelper.WriteData(w, deleteUPID)
+		})
+		destroyHandleTaskStatus(f, "pve1", deleteUPID)
+	}
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, _, err := destroyRun(t, cmd, "wayne", "--yes")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"delete-202", "delete-201", "delete-200"}, order,
+		"the QDevice (202) must be destroyed first, then node 1, then node 0")
+}
+
+// TestDestroy_UnclassifiablePoolMember_RefusesLoudly covers the other half
+// of M2-02: a pool member whose live name matches none of the node/QDevice
+// naming convention refuses the whole command before any mutating call,
+// rather than silently ignoring it or guessing which VM it corresponds to.
+func TestDestroy_UnclassifiablePoolMember_RefusesLoudly(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var mutatingCalls int
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "totally-unrelated", "status": "running", "type": "qemu",
+	})
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/status/stop", func(w http.ResponseWriter, _ *http.Request) {
+		mutatingCalls++
+	})
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/100", func(w http.ResponseWriter, _ *http.Request) {
+		mutatingCalls++
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, _, err := destroyRun(t, cmd, "alpha", "--yes")
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "totally-unrelated")
+	assert.Zero(t, mutatingCalls, "must refuse before any mutating call")
 }

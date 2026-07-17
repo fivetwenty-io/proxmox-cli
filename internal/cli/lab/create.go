@@ -3,6 +3,7 @@ package lab
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,8 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/clusterstorage"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/pools"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
@@ -23,6 +26,26 @@ import (
 // createSubnetType is the fixed "type" value the PVE API requires when
 // creating an SDN subnet.
 const createSubnetType = "subnet"
+
+// qdeviceVCPU, qdeviceMemoryGB, and qdeviceDiskGB are the fixed QDevice VM
+// spec (multi-node lab plan §4.3, §6.4): a tiny witness VM, never resized by
+// lab config, topology.node_overrides, or CLI sizing flags — those all
+// apply to node VMs only.
+const (
+	qdeviceVCPU     = 1
+	qdeviceMemoryGB = 1
+	qdeviceDiskGB   = 8
+)
+
+// createCapacityWarnRatio and createCapacityRefuseRatio are the pool-fill
+// thresholds the capacity gate (createCapacityGate) checks aggregate lab
+// refquota reservation against, relative to the shared ZFS pool's live total
+// size (multi-node lab plan §3.4): a warning above 75%, a hard refusal
+// (absent --force) above 85%.
+const (
+	createCapacityWarnRatio   = 0.75
+	createCapacityRefuseRatio = 0.85
+)
 
 // createStorageEntry is the subset of a /cluster/storage element this command
 // needs to decide whether a storage definition already exists.
@@ -43,20 +66,41 @@ type createQemuEntry struct {
 	Name string `json:"name"`
 }
 
+// createPoolMember is the decoded shape of one entry from
+// pools.GetPoolsResponse.Members that buildCreatePlan's per-node/QDevice VM
+// lookup needs: enough to classify which node/QDevice role (if any) each
+// pool member already fills, by its live name (lifecycle.go's
+// classifyLabVMName). destroy.go uses the cluster-wide listLiveVMs/
+// findLabVMs pair instead of this pool-scoped GetPools lookup, since it
+// needs each VM's live power state too (to decide whether to stop it
+// before deleting); this type stays pool-scoped because buildCreatePlan
+// only ever needs identity, not live state, for its existing-VM lookup.
+type createPoolMember struct {
+	ID   string     `json:"id"`
+	Type string     `json:"type"`
+	Node string     `json:"node"`
+	Name string     `json:"name"`
+	VMID pve.PVEInt `json:"vmid"`
+}
+
 // createOverrides holds the parsed --vcpu/--memory-*/--data-disk-gb/--os-disk-gb/
-// --vxlan-tag/--cidr/--pool/--clone-from flag values for `pmx lab create`. Values
-// are only applied to the effective lab copy when cmd.Flags().Changed reports
-// the corresponding flag was actually passed (flag-over-config precedence).
+// --vxlan-tag/--cidr/--pool/--clone-from/--nodes/--qdevice/--qdevice-clone-from
+// flag values for `pmx lab create`. Values are only applied to the effective
+// lab copy when cmd.Flags().Changed reports the corresponding flag was
+// actually passed (flag-over-config precedence).
 type createOverrides struct {
-	vcpu       int
-	memMaxGB   int
-	memMinGB   int
-	dataDiskGB int
-	osDiskGB   int
-	vxlanTag   int
-	cidr       string
-	pool       string
-	cloneFrom  string
+	vcpu             int
+	memMaxGB         int
+	memMinGB         int
+	dataDiskGB       int
+	osDiskGB         int
+	vxlanTag         int
+	cidr             string
+	pool             string
+	cloneFrom        string
+	nodes            int
+	qdevice          string
+	qdeviceCloneFrom string
 }
 
 // createStep is one entry in the ordered plan `pmx lab create` builds before
@@ -71,20 +115,29 @@ type createStep struct {
 	apply      func(ctx context.Context) error
 }
 
-// createPlan is the fully-resolved, ordered set of operations `pmx lab create`
-// will perform (or preview). vmid is 0 only when the lab's VM does not yet
-// exist and creation was not actually planned (--dry-run against a lab with no
-// prior next-id allocation), in which case the preview renders the "<vmid>"
-// placeholder.
-type createPlan struct {
-	steps     []createStep
-	labName   string
+// createNodePlan records one create target's (a node index or the QDevice)
+// resolved naming/VMID state, accumulated by buildCreatePlan's per-target
+// loop and read by renderCreatePlan to compose the final summary message.
+type createNodePlan struct {
+	label     string // "0".."4" or "q"
+	vmName    string
 	vmid      int64
 	vmidKnown bool
-	node      string
-	vmName    string
-	storageID string
-	agentNote string
+	node      string // the PVE host node this VM lives, or will live, on
+}
+
+// createPlan is the fully-resolved, ordered set of operations `pmx lab create`
+// will perform (or preview): the shared zone/vnet/subnet/storage/pool steps,
+// plus one VM step (and, when --start is set, one start step) per configured
+// node and, when the lab's topology calls for one, the QDevice.
+type createPlan struct {
+	steps           []createStep
+	labName         string
+	node            string
+	storageID       string
+	nodePlans       []createNodePlan
+	agentNote       string
+	capacityWarning string
 }
 
 // createPtr returns a pointer to v, for building the many optional pointer
@@ -95,6 +148,7 @@ func createPtr[T any](v T) *T { return &v }
 func newCreateCmd() *cobra.Command {
 	var (
 		dryRun bool
+		force  bool
 		node   string
 		start  bool
 		ov     createOverrides
@@ -102,24 +156,33 @@ func newCreateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create <name>",
-		Short: "Create a lab's SDN network, storage, and VM",
-		Long: "Create a lab: idempotently ensures the shared labsvxlan SDN zone, the lab's own " +
-			"vnet and subnet, its derived lab storage (tank-lab-wayne for lab wayne), and its resource pool all exist, then " +
-			"creates the lab's VM (or clones it from an existing VM given --clone-from) and applies " +
-			"the resolved compute spec. Every step queries live state first and skips anything " +
-			"already satisfied, so re-running create against a partially-built lab is safe.\n\n" +
+		Short: "Create a lab's SDN network, storage, and node (and QDevice) VMs",
+		Long: "Create a lab: idempotently ensures the lab's config-resolved SDN zone " +
+			"(defaulting to zone \"labs\", type \"simple\" — decision D4), the lab's own vnet " +
+			"and subnet, its derived lab storage (tank-lab-wayne for lab wayne), and its " +
+			"resource pool all exist, then creates one VM per configured topology.nodes index " +
+			"(or clones each from an existing VM given --clone-from) plus, when the lab's " +
+			"topology calls for a QDevice tie-breaker, a QDevice VM (or clones it given " +
+			"--qdevice-clone-from), applying each target's resolved compute spec. Every step " +
+			"queries live state first and skips anything already satisfied, so re-running " +
+			"create against a partially-built lab is safe. Before adding any node/QDevice VM " +
+			"step, a capacity gate sums every configured lab's ZFS refquota reservation " +
+			"against the shared pool's live size: it warns above 75% full and refuses above " +
+			"85% full unless --force is passed.\n\n" +
 			"This does not run `pmx lab net apply`: the vnet/subnet definitions are staged, not yet " +
 			"live, until that command (or `pmx pve sdn apply`) commits them. --clone-from assumes " +
-			"the source VM lives on the same node as the new lab VM; the platform is single-node " +
+			"the source VM lives on the same node as the new lab VMs; the platform is single-node " +
 			"today, so this always holds.\n\n" +
-			"Every other lab verb (destroy, start, stop, list, status) locates the lab's VM by its " +
+			"Every other lab verb (destroy, start, stop, list, status) locates the lab's VMs by " +
 			"membership in the effective resource pool, not by name: a --pool override here must " +
 			"match the lab's configured access.pool, or the config must be updated to match, or " +
 			"those verbs will report no VM found even though create succeeded.",
 		Example: `  pmx lab create wayne --node sm-0
   pmx lab create wayne --node sm-0 --start
   pmx lab create wayne --node sm-0 --dry-run
-  pmx lab create wayne --node sm-0 --vcpu 24 --memory-max-gb 128`,
+  pmx lab create wayne --node sm-0 --vcpu 24 --memory-max-gb 128
+  pmx lab create pve-cpi --node sm-0 --nodes 3
+  pmx lab create wayne --node sm-0 --nodes 2 --qdevice auto`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -139,6 +202,15 @@ func newCreateCmd() *cobra.Command {
 			if issues := labNetworkPlanIssues(eff.Network); len(issues) > 0 {
 				return fmt.Errorf("lab %q network plan is incoherent:\n  %s",
 					name, strings.Join(issues, "\n  "))
+			}
+
+			// --nodes/--qdevice can move the lab's topology to a state config-load
+			// validation never saw; re-validate the effective topology the same
+			// way, so a flag combination that would never be accepted in config
+			// (e.g. --nodes 7, or --qdevice auto against an odd --nodes) is
+			// refused before creating anything either.
+			if issues := config.ValidateTopology(name, eff.Topology); len(issues) > 0 {
+				return fmt.Errorf("lab %q topology is invalid:\n  %s", name, strings.Join(issues, "\n  "))
 			}
 
 			// Flag overrides (in particular --pool) can change an identifier
@@ -161,7 +233,8 @@ func newCreateCmd() *cobra.Command {
 				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
-			plan, err := buildCreatePlan(cmd.Context(), deps, eff, targetNode, ov.cloneFrom, start, dryRun)
+			plan, err := buildCreatePlan(
+				cmd.Context(), deps, eff, targetNode, ov.cloneFrom, ov.qdeviceCloneFrom, start, dryRun, force)
 			if err != nil {
 				return err
 			}
@@ -185,9 +258,10 @@ func newCreateCmd() *cobra.Command {
 
 	f := cmd.Flags()
 	f.BoolVar(&dryRun, "dry-run", false, "preview the ordered plan without mutating anything")
-	f.StringVar(&node, "node", "", "node to create the lab's VM on (defaults to --node/PMX_NODE/config default)")
-	f.BoolVar(&start, "start", false, "start the VM after creation and verify the guest agent responds")
-	f.IntVar(&ov.vcpu, "vcpu", 0, "override compute.vcpu")
+	f.BoolVar(&force, "force", false, "override the capacity gate's 85% pool-fill refusal threshold")
+	f.StringVar(&node, "node", "", "node to create the lab's VMs on (defaults to --node/PMX_NODE/config default)")
+	f.BoolVar(&start, "start", false, "start every created VM after creation and verify the guest agent responds")
+	f.IntVar(&ov.vcpu, "vcpu", 0, "override compute.vcpu (base sizing for every node before per-node overrides)")
 	f.IntVar(&ov.memMaxGB, "memory-max-gb", 0, "override compute.memory.max_gb")
 	f.IntVar(&ov.memMinGB, "memory-min-gb", 0, "override compute.memory.min_gb")
 	f.IntVar(&ov.dataDiskGB, "data-disk-gb", 0, "override storage.data_disk_gb")
@@ -195,10 +269,15 @@ func newCreateCmd() *cobra.Command {
 	f.IntVar(&ov.vxlanTag, "vxlan-tag", 0, "override network.vxlan_tag")
 	f.StringVar(&ov.cidr, "cidr", "", "override network.cidr")
 	f.StringVar(&ov.pool, "pool", "",
-		"override access.pool (destroy/start/stop/list/status locate the VM by resource-pool "+
+		"override access.pool (destroy/start/stop/list/status locate the VMs by resource-pool "+
 			"membership; a --pool override must match the lab's configured pool, or those verbs "+
-			"will not find the VM until the config is updated to match)")
-	f.StringVar(&ov.cloneFrom, "clone-from", "", "VMID of an existing VM to clone the lab's VM from, instead of creating blank disks")
+			"will not find them until the config is updated to match)")
+	f.StringVar(&ov.cloneFrom, "clone-from", "",
+		"VMID of an existing VM to clone every node's VM from, instead of creating blank disks")
+	f.IntVar(&ov.nodes, "nodes", 0, "override topology.nodes (1-5)")
+	f.StringVar(&ov.qdevice, "qdevice", "", "override topology.qdevice (\"auto\" or \"never\")")
+	f.StringVar(&ov.qdeviceCloneFrom, "qdevice-clone-from", "",
+		"VMID of an existing template (e.g. tmpl-qdevice) to clone the QDevice VM from")
 
 	return cmd
 }
@@ -207,9 +286,17 @@ func newCreateCmd() *cobra.Command {
 // that was actually passed on the command line applied on top of it. lab
 // itself is never mutated: config.Lab's nested fields are all plain structs
 // (not pointers), so the top-level copy also copies every nested section by
-// value.
+// value — except Topology.NodeOverrides, a map, which is copied explicitly
+// below so mutating the copy's Topology never aliases lab's own map.
 func applyCreateOverrides(fl interface{ Changed(string) bool }, lab *config.Lab, ov createOverrides) *config.Lab {
 	eff := *lab
+
+	if lab.Topology.NodeOverrides != nil {
+		eff.Topology.NodeOverrides = make(map[int]config.LabNodeOverride, len(lab.Topology.NodeOverrides))
+		for k, v := range lab.Topology.NodeOverrides {
+			eff.Topology.NodeOverrides[k] = v
+		}
+	}
 
 	if fl.Changed("vcpu") {
 		eff.Compute.VCPU = ov.vcpu
@@ -234,6 +321,12 @@ func applyCreateOverrides(fl interface{ Changed(string) bool }, lab *config.Lab,
 	}
 	if fl.Changed("pool") {
 		eff.Access.Pool = ov.pool
+	}
+	if fl.Changed("nodes") {
+		eff.Topology.Nodes = ov.nodes
+	}
+	if fl.Changed("qdevice") {
+		eff.Topology.Qdevice = ov.qdevice
 	}
 
 	return &eff
@@ -280,47 +373,290 @@ func createDecodeNextID(raw json.RawMessage) (int64, error) {
 	return 0, fmt.Errorf("decode next VMID: unrecognized response %q", string(raw))
 }
 
-// buildCreatePlan queries live PVE state for every resource `pmx lab create`
-// composes (SDN zone/vnet/subnet, storage, pool, VM) and returns the full
-// ordered plan of steps needed to reach the desired state, marking any
-// already-satisfied step as skipped, keeping create idempotent. No mutating API call is made by
-// this function; it only performs GETs plus, if the lab's VM does not yet
-// exist AND dryRun is false, a GET /cluster/nextid VMID allocation (also
-// non-mutating, but still skipped in dry-run: a not-yet-existing
-// lab's preview shows the "<vmid>" placeholder rather than reserving a real
-// one it may never use).
+// createCapacityGate is the sum-of-refquotas-vs-pool-size check `pmx lab
+// create` runs before adding one more node/QDevice VM step to the plan
+// (multi-node lab plan §3.4): it sums config.EffectiveRefquotaGB across
+// every lab config.ResolveLabs resolves, substituting eff for the on-disk
+// entry of the same name (see below), compares that sum against the live
+// pool's total capacity — read via GET /nodes/{node}/storage/{storage}/status
+// for the lab's base pool storage entry (zfsBasePool(eff), e.g. "tank") —
+// and returns a non-empty warning string when the ratio exceeds
+// createCapacityWarnRatio, or an error when it exceeds
+// createCapacityRefuseRatio and force is false. When the base pool has no
+// PVE storage entry registered under its own name (only per-lab
+// "tank-lab-<name>" entries exist), or the status call otherwise fails, the
+// gate cannot learn the pool's live size; it is skipped with an explanatory
+// warning instead of blocking create outright, since a missing capacity
+// signal is not itself evidence the pool is full.
+func createCapacityGate(ctx context.Context, deps *cli.Deps, eff *config.Lab, node string, force bool) (string, error) {
+	labs, err := config.ResolveLabs(deps.Cfg, deps.ConfigPath)
+	if err != nil {
+		return "", fmt.Errorf("capacity gate: resolve labs: %w", err)
+	}
+
+	// eff carries this invocation's flag overrides (--nodes,
+	// --data-disk-gb, --os-disk-gb, etc.) on top of the on-disk config; the
+	// entry ResolveLabs returned for the same name is still the pre-override
+	// config. Substituting eff here means the gate reflects the lab actually
+	// about to be created — a `--nodes 5` override against an on-disk
+	// `nodes: 1` config must count at the 5-node reservation, not the
+	// stale 1-node figure.
+	labs[eff.Name] = eff
+
+	var reservedGB int64
+	for _, l := range labs {
+		reservedGB += int64(config.EffectiveRefquotaGB(l))
+	}
+
+	nfsReservedGB := int64(config.EffectiveNFSReservedGB(deps.Cfg))
+
+	basePool := zfsBasePool(eff)
+	status, statusErr := deps.API.Nodes.ListStorageStatus(ctx, node, basePool)
+	if statusErr != nil {
+		return fmt.Sprintf(
+			"capacity gate: could not read live size of pool %q on node %q (%v); skipping the pre-create capacity check",
+			basePool, node, statusErr), nil
+	}
+	if status == nil || status.Total == nil || status.Total.Int() <= 0 {
+		return fmt.Sprintf(
+			"capacity gate: pool %q on node %q reports no total size; skipping the pre-create capacity check",
+			basePool, node), nil
+	}
+
+	totalBytes := status.Total.Int()
+	const bytesPerGB = int64(1024 * 1024 * 1024)
+
+	// "Peppi actuals" (multi-node lab plan §3.4: "sum of all lab refquotas +
+	// peppi actuals vs. pool size"): the live pool-wide "used" figure from
+	// this same status call is the only actual-usage signal the PVE API
+	// exposes for a ZFS pool storage entry — there is no per-dataset or
+	// per-VM breakdown available without an SSH-based `zfs list` (out of
+	// scope for this API-only gate), so peppi's actual usage cannot be
+	// cleanly isolated from every lab's own actual usage, which "used"
+	// necessarily also includes. Rather than risk under-counting (and
+	// letting the gate pass a pool that is actually close to full), this
+	// deliberately takes the conservative, higher estimate: the whole
+	// pool's live "used" bytes are added on top of reservedGB's per-lab
+	// refquota sum, even though that double-counts a lab whose actual usage
+	// is smaller than its refquota (once via its own quota headroom, once
+	// via the pool-wide "used" figure). Over-estimating the reservation
+	// trips the gate sooner rather than later — the safe direction to err
+	// in a "before the pool actually fills" check. A missing "used" value
+	// (the field is optional in the API response) degrades this term to 0
+	// rather than skipping the whole gate: unlike a missing Total, which
+	// leaves no denominator to compute a ratio at all, a missing "used"
+	// still leaves the refquota-sum and NFS-reserve terms meaningful on
+	// their own.
+	var usedGB int64
+	if status.Used != nil {
+		usedGB = status.Used.Int() / bytesPerGB
+	}
+
+	reservedBytes := (reservedGB + usedGB + nfsReservedGB) * bytesPerGB
+	ratio := float64(reservedBytes) / float64(totalBytes)
+
+	switch {
+	case ratio > createCapacityRefuseRatio && !force:
+		return "", fmt.Errorf(
+			"capacity gate: configured labs reserve %dG + pool actual usage %dG + NFS reserve %dG "+
+				"against pool %q's %dG capacity (%.0f%%), over the %.0f%% refuse threshold; "+
+				"pass --force to override",
+			reservedGB, usedGB, nfsReservedGB, basePool, totalBytes/bytesPerGB, ratio*100, createCapacityRefuseRatio*100)
+	case ratio > createCapacityWarnRatio:
+		return fmt.Sprintf(
+			"capacity gate WARNING: configured labs reserve %dG + pool actual usage %dG + NFS reserve %dG "+
+				"against pool %q's %dG capacity (%.0f%%), over the %.0f%% warning threshold.",
+			reservedGB, usedGB, nfsReservedGB, basePool, totalBytes/bytesPerGB, ratio*100, createCapacityWarnRatio*100), nil
+	default:
+		return "", nil
+	}
+}
+
+// createPoolMembers returns every qemu member of poolID via GetPools
+// filtered to type=qemu, tolerating more than one member (every multi-node
+// lab's pool has one). found is an empty, nil-error slice both when the
+// pool does not exist yet (404) and when it exists but has no qemu member.
+func createPoolMembers(ctx context.Context, api *apiclient.APIClient, poolID string) ([]createPoolMember, error) {
+	qemuType := "qemu"
+	resp, err := api.Pools.GetPools(ctx, poolID, &pools.GetPoolsParams{Type: &qemuType})
+	if err != nil {
+		if errors.Is(err, pveerrors.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("look up VMs for pool %q: %w", poolID, err)
+	}
+	if resp == nil {
+		return nil, nil
+	}
+
+	members := make([]createPoolMember, 0, len(resp.Members))
+	for _, raw := range resp.Members {
+		var m createPoolMember
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return nil, fmt.Errorf("decode member of pool %q: %w", poolID, err)
+		}
+		if m.Type != "qemu" || m.VMID.Int() == 0 {
+			continue
+		}
+		members = append(members, m)
+	}
+	return members, nil
+}
+
+// createNextVMIDAllocator hands out a distinct VMID per call within one
+// buildCreatePlan invocation (fixes M2-01: every node/QDevice target
+// allocated the SAME VMID). GET /cluster/nextid is a pure function of live
+// server state — the lowest currently-free VMID — and does not reserve the
+// ID it returns. buildCreatePlan resolves every target's VMID during
+// planning (before any target's VM actually exists, since planning never
+// mutates anything), so calling ListNextid once per target, as the earlier
+// implementation did, queried the SAME "lowest free VMID" answer every
+// time and handed every target the identical ID; node 1's create would
+// then fail "VM already exists" against node 0's already-created VM.
 //
-// As soon as the lab's VMID becomes known, whether from an already-existing
+// This allocator instead queries ListNextid exactly once per buildCreatePlan
+// run, then hands out baseline, baseline+1, baseline+2, ... for every
+// subsequent call, so every target that needs a fresh VMID in one command
+// invocation gets a distinct one even though none of them exist yet at
+// planning time. This does not eliminate the inherent cross-process TOCTOU
+// race every nextid-based allocation carries (PVE does not lock the ID it
+// returns) — a concurrent `pmx lab create`/`qm create` elsewhere could still
+// collide with one of these IDs before this command's execute phase
+// reaches it, exactly as a single bare nextid call always could — it only
+// fixes the guaranteed self-collision across this command's own targets.
+type createNextVMIDAllocator struct {
+	ac     *apiclient.APIClient
+	next   int64
+	primed bool
+}
+
+// allocate returns the next distinct VMID from a, querying
+// GET /cluster/nextid on the first call and incrementing locally on every
+// call after that.
+func (a *createNextVMIDAllocator) allocate(ctx context.Context) (int64, error) {
+	if !a.primed {
+		nextRaw, nerr := a.ac.Cluster.ListNextid(ctx, &cluster.ListNextidParams{})
+		if nerr != nil {
+			return 0, fmt.Errorf("allocate next VMID: %w", nerr)
+		}
+		if nextRaw == nil {
+			return 0, fmt.Errorf("allocate next VMID: empty response")
+		}
+		id, derr := createDecodeNextID(*nextRaw)
+		if derr != nil {
+			return 0, derr
+		}
+		a.next = id
+		a.primed = true
+	}
+
+	id := a.next
+	a.next++
+	return id, nil
+}
+
+// createFindExistingTarget locates the already-existing VM (if any) for one
+// create target — a specific node index or the QDevice — first by
+// classifying every pool member's live name against the target's role
+// (multi-VM-aware), then, when the pool itself does not exist yet or has no
+// matching member (e.g. this lab's first-ever create run, before its pool
+// has any member), falling back to a name match against qemus on node.
+// Node index 0 additionally matches the legacy bare "lab-<labName>" name in
+// the fallback, back-compat for a lab created before topology.nodes
+// existed.
+func createFindExistingTarget(
+	members []createPoolMember, qemus *nodes.ListQemuResponse, node, labName, vmName string, isQdevice bool, index int,
+) (vmid int64, vmNode string, found bool, err error) {
+	for _, m := range members {
+		mIsQ, mIdx, ok := classifyLabVMName(m.Name, labName)
+		if !ok || mIsQ != isQdevice {
+			continue
+		}
+		if !isQdevice && mIdx != index {
+			continue
+		}
+		return m.VMID.Int(), m.Node, true, nil
+	}
+
+	if id, ok, ferr := createFindQemuByName(qemus, vmName); ferr != nil {
+		return 0, "", false, ferr
+	} else if ok {
+		return id, node, true, nil
+	}
+
+	if !isQdevice && index == 0 {
+		if id, ok, ferr := createFindQemuByName(qemus, legacyLabVMName(labName)); ferr != nil {
+			return 0, "", false, ferr
+		} else if ok {
+			return id, node, true, nil
+		}
+	}
+
+	return 0, "", false, nil
+}
+
+// createTargetSpec describes one `pmx lab create` target: a specific node
+// index, or the QDevice.
+type createTargetSpec struct {
+	label     string // "0".."4" or "q"
+	vmName    string
+	isQdevice bool
+	index     int // valid only when !isQdevice
+	cloneFrom string
+	compute   config.LabCompute
+	storage   config.LabStorage
+}
+
+// buildCreatePlan queries live PVE state for every resource `pmx lab create`
+// composes (SDN zone/vnet/subnet, storage, pool, and one VM per configured
+// node plus, when applicable, the QDevice) and returns the full ordered plan
+// of steps needed to reach the desired state, marking any already-satisfied
+// step as skipped, keeping create idempotent. No mutating API call is made
+// by this function; it only performs GETs plus, for each not-yet-existing
+// target, a GET /cluster/nextid VMID allocation when dryRun is false (also
+// non-mutating, but still skipped in dry-run: a not-yet-created target's
+// preview shows the "<vmid>" placeholder rather than reserving a real one it
+// may never use).
+//
+// As soon as a target's VMID becomes known, whether from an already-existing
 // VM found on node or from a freshly allocated next-id, it is peppi-guarded
 // immediately, before any step in the returned plan is executed, so a
-// protected VMID always aborts the whole command rather than only the VM
-// step.
+// protected VMID always aborts the whole command rather than only that
+// target's step.
+//
+// Before any node/QDevice VM step is added, createCapacityGate runs; a
+// refusal aborts here (returning an error) before any VMID is allocated for
+// any target, so a lab over the pool-fill refuse threshold never even
+// reserves VMIDs it will not use.
 func buildCreatePlan(
-	ctx context.Context, deps *cli.Deps, eff *config.Lab, node, cloneFrom string, start, dryRun bool,
+	ctx context.Context, deps *cli.Deps, eff *config.Lab, node, cloneFrom, qdeviceCloneFrom string, start, dryRun, force bool,
 ) (*createPlan, error) {
 	ac := deps.API
 	plan := &createPlan{
-		node: node, labName: eff.Name, vmName: fmt.Sprintf("lab-%s", eff.Name), storageID: storageID(eff),
+		node: node, labName: eff.Name, storageID: storageID(eff),
 	}
 
-	// 1. SDN zone (shared, "labsvxlan"). The create spec (Peers/Nodes/MTU) is
-	// built by labZoneCreateParams (net.go), the same helper `pmx lab net
-	// apply`'s ensureLabSdnZone uses, so the two verbs can never provision the
-	// zone with diverging parameters.
+	zoneName := labZoneName(eff.Network)
+
+	// 1. SDN zone (config-resolved, defaulting to "labs"/"simple" — decision
+	// D4). The create spec (Peers/Nodes/MTU) is built by labZoneCreateParams
+	// (net.go), the same helper `pmx lab net apply`'s ensureLabSdnZone uses,
+	// so the two verbs can never provision the zone with diverging
+	// parameters.
 	zones, err := ac.Cluster.ListSdnZones(ctx, &cluster.ListSdnZonesParams{})
 	if err != nil {
 		return nil, fmt.Errorf("list SDN zones: %w", err)
 	}
-	_, zoneExists, err := findSdnZone(*zones, labZoneName)
+	_, zoneExists, err := findSdnZone(*zones, zoneName)
 	if err != nil {
 		return nil, fmt.Errorf("decode SDN zone list: %w", err)
 	}
 	plan.steps = append(plan.steps, createStep{
-		desc:       fmt.Sprintf("sdn zone %q (%s)", labZoneName, labZoneType),
+		desc:       fmt.Sprintf("sdn zone %q (%s)", zoneName, labZoneType(eff.Network)),
 		skip:       zoneExists,
 		skipReason: "already exists",
 		apply: func(ctx context.Context) error {
-			return ac.Cluster.CreateSdnZones(ctx, labZoneCreateParams(node, int64(eff.Network.MTU)))
+			return ac.Cluster.CreateSdnZones(ctx, labZoneCreateParams(eff.Network, node, int64(eff.Network.MTU)))
 		},
 	})
 
@@ -337,13 +673,13 @@ func buildCreatePlan(
 		return nil, fmt.Errorf("decode SDN vnet list: %w", err)
 	}
 	plan.steps = append(plan.steps, createStep{
-		desc:       fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", eff.Network.VnetID, labZoneName, eff.Network.VxlanTag),
+		desc:       fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", eff.Network.VnetID, zoneName, eff.Network.VxlanTag),
 		skip:       vnetExists,
 		skipReason: "already exists",
 		apply: func(ctx context.Context) error {
 			params := &cluster.CreateSdnVnetsParams{
 				Vnet: eff.Network.VnetID,
-				Zone: labZoneName,
+				Zone: zoneName,
 				Tag:  createPtr(int64(eff.Network.VxlanTag)),
 			}
 			if eff.Network.VnetAlias != "" {
@@ -380,7 +716,7 @@ func buildCreatePlan(
 		},
 	})
 
-	// 4. Storage (per-lab zfspool).
+	// 4. Storage (per-lab zfspool, shared by every node's disks).
 	storages, err := ac.ClusterStorage.ListStorage(ctx, &clusterstorage.ListStorageParams{})
 	if err != nil {
 		return nil, fmt.Errorf("list storage: %w", err)
@@ -431,35 +767,97 @@ func buildCreatePlan(
 		},
 	})
 
-	// 6. VM: find an existing lab VM primarily by membership in poolID, the
-	// same resource-pool join key destroy/start/stop/list/status use (see
-	// destroyLocateVM), falling back to a name+node match when the pool
-	// does not exist yet or has no qemu member — e.g. this lab's first-ever
-	// create run, before its pool has any member. Either way, guard the
-	// concrete VMID before returning the plan, since every step above is
-	// still unexecuted.
+	// 6. Capacity gate: before reserving any VMID for any node/QDevice
+	// target, check the aggregate lab refquota reservation against the
+	// shared pool's live size (multi-node lab plan §3.4). A refusal aborts
+	// here; a warning is carried through to the rendered summary.
+	capNote, capErr := createCapacityGate(ctx, deps, eff, node, force)
+	if capErr != nil {
+		return nil, capErr
+	}
+	plan.capacityWarning = capNote
+
+	// 7. One VM per configured node, plus the QDevice when the lab's
+	// topology calls for one. Existing VMs are located once via pool
+	// membership (multi-VM-aware) and once via a name-match fallback on
+	// node, shared across every target's lookup.
+	members, err := createPoolMembers(ctx, ac, poolID)
+	if err != nil {
+		return nil, err
+	}
 	qemus, err := ac.Nodes.ListQemu(ctx, node, &nodes.ListQemuParams{})
 	if err != nil {
 		return nil, fmt.Errorf("list VMs on node %q: %w", node, err)
 	}
 
-	poolVMID, poolVMNode, poolVMFound, err := destroyLocateVM(ctx, ac, poolID)
-	if err != nil {
-		return nil, fmt.Errorf("locate existing VM in pool %q: %w", poolID, err)
+	numNodes := config.EffectiveTopologyNodes(eff.Topology)
+	specs := make([]createTargetSpec, 0, numNodes+1)
+	for i := 0; i < numNodes; i++ {
+		compute, storage := config.EffectiveNodeSizing(eff, i)
+		specs = append(specs, createTargetSpec{
+			label:     strconv.Itoa(i),
+			vmName:    labNodeVMName(eff.Name, i),
+			isQdevice: false,
+			index:     i,
+			cloneFrom: cloneFrom,
+			compute:   compute,
+			storage:   storage,
+		})
+	}
+	if config.QdeviceRequired(eff.Topology) {
+		specs = append(specs, createTargetSpec{
+			label:     "q",
+			vmName:    labQdeviceVMName(eff.Name),
+			isQdevice: true,
+			cloneFrom: qdeviceCloneFrom,
+		})
 	}
 
-	var existingVMID int64
-	vmExists := poolVMFound
-	vmNode := node
-	switch {
-	case poolVMFound:
-		existingVMID = int64(poolVMID)
-		vmNode = poolVMNode
-	default:
-		existingVMID, vmExists, err = createFindQemuByName(qemus, plan.vmName)
+	// One allocator per buildCreatePlan run, shared across every target: see
+	// createNextVMIDAllocator's doc comment (M2-01) for why a fresh
+	// ListNextid call per target would hand every target the same VMID.
+	vmidAllocator := &createNextVMIDAllocator{ac: ac}
+
+	for _, spec := range specs {
+		np, err := planCreateTarget(ctx, deps, plan, eff, poolID, node, spec, members, qemus, vmidAllocator, start, dryRun)
 		if err != nil {
-			return nil, fmt.Errorf("decode VM list on node %q: %w", node, err)
+			return nil, err
 		}
+		plan.nodePlans = append(plan.nodePlans, np)
+	}
+
+	return plan, nil
+}
+
+// planCreateTarget composes the plan step(s) for one create target — a
+// specific node index or the QDevice — appending them to plan.steps in
+// order: locate its existing VM (createFindExistingTarget), allocate a
+// fresh, distinct VMID from vmidAllocator when none exists (skipped under
+// dryRun, in which case the step renders the "<vmid>" placeholder;
+// vmidAllocator — shared across every target in one buildCreatePlan run —
+// is what keeps this VMID distinct from every other target's, see
+// createNextVMIDAllocator), peppi-guard the resolved VMID immediately
+// (before any step in the plan executes, matching buildCreatePlan's
+// existing contract), guard a clone source VMID the same way, and append
+// the VM-create step plus, when start is set, a start+agent-ping step
+// targeting the VM's own live node (which may differ from node when an
+// already-existing VM was found elsewhere via pool membership).
+func planCreateTarget(
+	ctx context.Context, deps *cli.Deps, plan *createPlan, eff *config.Lab, poolID, node string,
+	spec createTargetSpec, members []createPoolMember, qemus *nodes.ListQemuResponse,
+	vmidAllocator *createNextVMIDAllocator, start, dryRun bool,
+) (createNodePlan, error) {
+	ac := deps.API
+
+	existingVMID, existingNode, vmExists, err := createFindExistingTarget(
+		members, qemus, node, eff.Name, spec.vmName, spec.isQdevice, spec.index)
+	if err != nil {
+		return createNodePlan{}, fmt.Errorf("locate existing VM for %s: %w", spec.label, err)
+	}
+
+	vmNode := node
+	if vmExists {
+		vmNode = existingNode
 	}
 
 	var vmid int64
@@ -468,20 +866,11 @@ func buildCreatePlan(
 	case vmExists:
 		vmid = existingVMID
 	case dryRun:
-		// Not yet created and previewing only: do not reserve a real VMID
-		// via GET /cluster/nextid; the plan renders the "<vmid>" placeholder
-		// for this step instead.
+		// Not yet created and previewing only: do not reserve a real VMID.
 	default:
-		nextRaw, nerr := ac.Cluster.ListNextid(ctx, &cluster.ListNextidParams{})
-		if nerr != nil {
-			return nil, fmt.Errorf("allocate next VMID: %w", nerr)
-		}
-		if nextRaw == nil {
-			return nil, fmt.Errorf("allocate next VMID: empty response")
-		}
-		vmid, err = createDecodeNextID(*nextRaw)
+		vmid, err = vmidAllocator.allocate(ctx)
 		if err != nil {
-			return nil, err
+			return createNodePlan{}, fmt.Errorf("allocate next VMID for %s: %w", spec.label, err)
 		}
 		vmidKnown = true
 	}
@@ -493,37 +882,28 @@ func buildCreatePlan(
 		Names: []string{eff.Network.VnetID, poolID, plan.storageID, eff.DNS.Zone, eff.Name},
 	}
 	if err := peppi.Guard(vmTarget); err != nil {
-		return nil, err
+		return createNodePlan{}, err
 	}
 
-	// --clone-from reads (never mutates) its source VM, but a protected
-	// production VMID must never seed a lab clone even so; guard the source
-	// VMID here, before any step's apply runs, exactly like the target VMID
-	// above. The source's own name (from the same qemus list, since
-	// --clone-from's source is documented to live on the same node) is
-	// guarded alongside its VMID, so a production VM whose name matches a
-	// protected pattern is refused even when its VMID alone is not one of
-	// the protected IDs.
-	if cloneFrom != "" {
-		sourceVMID, cerr := strconv.ParseInt(cloneFrom, 10, 64)
+	if spec.cloneFrom != "" {
+		sourceVMID, cerr := strconv.ParseInt(spec.cloneFrom, 10, 64)
 		if cerr != nil {
-			return nil, fmt.Errorf("invalid --clone-from %q: expected a numeric VMID: %w", cloneFrom, cerr)
+			return createNodePlan{}, fmt.Errorf(
+				"invalid clone source %q for %s: expected a numeric VMID: %w", spec.cloneFrom, spec.label, cerr)
 		}
 		sourceTarget := peppi.Target{VMID: int(sourceVMID)}
 		sourceName, sourceFound, nerr := createFindQemuNameByVMID(qemus, sourceVMID)
 		if nerr != nil {
-			return nil, fmt.Errorf("decode VM list on node %q: %w", node, nerr)
+			return createNodePlan{}, fmt.Errorf("decode VM list on node %q: %w", node, nerr)
 		}
 		if sourceFound {
 			sourceTarget.Names = []string{sourceName}
 		}
 		if err := peppi.Guard(sourceTarget); err != nil {
-			return nil, fmt.Errorf("clone source: %w", err)
+			return createNodePlan{}, fmt.Errorf("%s clone source: %w", spec.label, err)
 		}
 	}
 
-	plan.vmid = vmid
-	plan.vmidKnown = vmidKnown
 	vmidStr := strconv.FormatInt(vmid, 10)
 	vmidLabel := "<vmid>"
 	if vmidKnown {
@@ -531,26 +911,30 @@ func buildCreatePlan(
 	}
 
 	plan.steps = append(plan.steps, createStep{
-		desc:       fmt.Sprintf("qemu VM %s (%s) on node %q", vmidLabel, plan.vmName, vmNode),
+		desc:       fmt.Sprintf("qemu VM %s (%s) on node %q", vmidLabel, spec.vmName, vmNode),
 		skip:       vmExists,
 		skipReason: "already exists",
 		apply: func(ctx context.Context) error {
-			return createVM(ctx, deps, eff, node, vmid, vmidStr, plan.storageID, cloneFrom)
+			if spec.isQdevice {
+				return createQdeviceVM(ctx, deps, eff, node, vmid, vmidStr, plan.storageID, spec.cloneFrom)
+			}
+			return createVM(ctx, deps, eff, spec.vmName, spec.compute, spec.storage, node, vmid, vmidStr, plan.storageID, spec.cloneFrom)
 		},
 	})
 
-	// 7. Optional start + guest-agent verification. The start targets vmNode,
+	// Optional start + guest-agent verification. The start targets vmNode,
 	// not the --node flag value: an already-existing VM found via pool
 	// membership may live on a different node than the one create was told
 	// to provision on, and node-scoped qemu calls 404 against the wrong node.
 	// For a VM this command creates, vmNode is node.
 	if start {
+		label := spec.label
 		plan.steps = append(plan.steps, createStep{
-			desc: fmt.Sprintf("start VM %s on node %q", vmidLabel, vmNode),
+			desc: fmt.Sprintf("start VM %s (%s) on node %q", vmidLabel, label, vmNode),
 			apply: func(ctx context.Context) error {
 				resp, serr := ac.Nodes.CreateQemuStatusStart(ctx, vmNode, vmidStr, &nodes.CreateQemuStatusStartParams{})
 				if serr != nil {
-					return fmt.Errorf("start VM %d: %w", vmid, serr)
+					return fmt.Errorf("start VM %d (%s): %w", vmid, label, serr)
 				}
 				if resp != nil {
 					if upid, uerr := apiclient.UPIDFromRaw(*resp); uerr == nil && upid != "" {
@@ -560,25 +944,34 @@ func buildCreatePlan(
 					}
 				}
 				if _, aerr := ac.Nodes.CreateQemuAgentPing(ctx, vmNode, vmidStr); aerr != nil {
-					plan.agentNote = fmt.Sprintf(
-						"guest agent did not respond after start (expected if the OS has not been installed yet): %v", aerr)
+					note := fmt.Sprintf(
+						"guest agent did not respond after starting %s (expected if the OS has not been installed yet): %v",
+						label, aerr)
+					if plan.agentNote == "" {
+						plan.agentNote = note
+					} else {
+						plan.agentNote = plan.agentNote + "; " + note
+					}
 				}
 				return nil
 			},
 		})
 	}
 
-	return plan, nil
+	return createNodePlan{label: spec.label, vmName: spec.vmName, vmid: vmid, vmidKnown: vmidKnown, node: vmNode}, nil
 }
 
-// createVM creates or clones a lab's VM once its VMID has been resolved and
-// peppi-guarded. When cloneFrom is empty a blank VM is created with the
-// lab's full compute/storage/network spec (matching Lab Host VM Spec); when
-// cloneFrom names a source VMID, the VM is created via clone and the
-// compute/network spec is then applied with a follow-up config update, since
-// CreateQemuClone only carries identity/placement parameters.
+// createVM creates or clones a node's VM once its VMID has been resolved and
+// peppi-guarded, using the given vmName/compute/storage (config.EffectiveNodeSizing's
+// per-node result — not necessarily eff.Compute/eff.Storage verbatim). When
+// cloneFrom is empty a blank VM is created with the target's full compute/
+// storage/network spec (matching Lab Host VM Spec); when cloneFrom names a
+// source VMID, the VM is created via clone and the compute/network spec is
+// then applied with a follow-up config update, since CreateQemuClone only
+// carries identity/placement parameters.
 func createVM(
-	ctx context.Context, deps *cli.Deps, eff *config.Lab, node string, vmid int64, vmidStr, stID, cloneFrom string,
+	ctx context.Context, deps *cli.Deps, eff *config.Lab, vmName string, compute config.LabCompute, storage config.LabStorage,
+	node string, vmid int64, vmidStr, stID, cloneFrom string,
 ) error {
 	ac := deps.API
 	net0 := fmt.Sprintf("virtio,bridge=%s", eff.Network.VnetID)
@@ -589,33 +982,33 @@ func createVM(
 	if cloneFrom == "" {
 		params := &nodes.CreateQemuParams{
 			Vmid:     vmid,
-			Name:     createPtr(fmt.Sprintf("lab-%s", eff.Name)),
+			Name:     createPtr(vmName),
 			Pool:     createPtr(labPoolID(eff)),
-			Cores:    createPtr(int64(eff.Compute.VCPU)),
+			Cores:    createPtr(int64(compute.VCPU)),
 			Sockets:  createPtr(int64(1)),
-			Numa:     createPtr(eff.Compute.NUMA),
-			Memory:   createPtr(strconv.Itoa(eff.Compute.Memory.MaxGB * 1024)),
-			Balloon:  createPtr(int64(eff.Compute.Memory.MinGB * 1024)),
+			Numa:     createPtr(compute.NUMA),
+			Memory:   createPtr(strconv.Itoa(compute.Memory.MaxGB * 1024)),
+			Balloon:  createPtr(int64(compute.Memory.MinGB * 1024)),
 			Agent:    createPtr("enabled=1"),
 			Ostype:   createPtr("l26"),
 			Efidisk0: createPtr(fmt.Sprintf("%s:1,efitype=4m,pre-enrolled-keys=1", stID)),
 			Scsi: map[int]string{
-				0: fmt.Sprintf("%s:%d%s", stID, eff.Storage.OSDiskGB, createDiskOptions(eff.Storage)),
-				1: fmt.Sprintf("%s:%d%s", stID, eff.Storage.DataDiskGB, createDiskOptions(eff.Storage)),
+				0: fmt.Sprintf("%s:%d%s", stID, storage.OSDiskGB, createDiskOptions(storage)),
+				1: fmt.Sprintf("%s:%d%s", stID, storage.DataDiskGB, createDiskOptions(storage)),
 			},
 			Net: map[int]string{0: net0},
 		}
-		if eff.Compute.CPUType != "" {
-			params.Cpu = createPtr(eff.Compute.CPUType)
+		if compute.CPUType != "" {
+			params.Cpu = createPtr(compute.CPUType)
 		}
-		if eff.Compute.Machine != "" {
-			params.Machine = createPtr(eff.Compute.Machine)
+		if compute.Machine != "" {
+			params.Machine = createPtr(compute.Machine)
 		}
-		if eff.Compute.Firmware != "" {
-			params.Bios = createPtr(eff.Compute.Firmware)
+		if compute.Firmware != "" {
+			params.Bios = createPtr(compute.Firmware)
 		}
-		if eff.Storage.Controller != "" {
-			params.Scsihw = createPtr(eff.Storage.Controller)
+		if storage.Controller != "" {
+			params.Scsihw = createPtr(storage.Controller)
 		}
 
 		resp, err := ac.Nodes.CreateQemu(ctx, node, params)
@@ -634,12 +1027,12 @@ func createVM(
 
 	sourceVMID, err := strconv.ParseInt(cloneFrom, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid --clone-from %q: expected a numeric VMID: %w", cloneFrom, err)
+		return fmt.Errorf("invalid clone source %q: expected a numeric VMID: %w", cloneFrom, err)
 	}
 
 	cloneParams := &nodes.CreateQemuCloneParams{
 		Newid:   vmid,
-		Name:    createPtr(fmt.Sprintf("lab-%s", eff.Name)),
+		Name:    createPtr(vmName),
 		Pool:    createPtr(labPoolID(eff)),
 		Storage: createPtr(stID),
 		Full:    createPtr(true),
@@ -657,27 +1050,116 @@ func createVM(
 	}
 
 	updateParams := &nodes.UpdateQemuConfigParams{
-		Cores:   createPtr(int64(eff.Compute.VCPU)),
-		Numa:    createPtr(eff.Compute.NUMA),
-		Memory:  createPtr(strconv.Itoa(eff.Compute.Memory.MaxGB * 1024)),
-		Balloon: createPtr(int64(eff.Compute.Memory.MinGB * 1024)),
+		Cores:   createPtr(int64(compute.VCPU)),
+		Numa:    createPtr(compute.NUMA),
+		Memory:  createPtr(strconv.Itoa(compute.Memory.MaxGB * 1024)),
+		Balloon: createPtr(int64(compute.Memory.MinGB * 1024)),
 	}
-	if eff.Compute.CPUType != "" {
-		updateParams.Cpu = createPtr(eff.Compute.CPUType)
+	if compute.CPUType != "" {
+		updateParams.Cpu = createPtr(compute.CPUType)
 	}
-	if eff.Compute.Machine != "" {
-		updateParams.Machine = createPtr(eff.Compute.Machine)
+	if compute.Machine != "" {
+		updateParams.Machine = createPtr(compute.Machine)
 	}
-	if eff.Compute.Firmware != "" {
-		updateParams.Bios = createPtr(eff.Compute.Firmware)
+	if compute.Firmware != "" {
+		updateParams.Bios = createPtr(compute.Firmware)
 	}
-	if eff.Storage.Controller != "" {
-		updateParams.Scsihw = createPtr(eff.Storage.Controller)
+	if storage.Controller != "" {
+		updateParams.Scsihw = createPtr(storage.Controller)
 	}
 	updateParams.Net = map[int]string{0: net0}
 
 	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {
 		return fmt.Errorf("update cloned VM %d config on node %q: %w", vmid, node, err)
+	}
+	return nil
+}
+
+// createQdeviceVM creates or clones a lab's QDevice tie-breaker VM once its
+// VMID has been resolved and peppi-guarded, at the fixed tiny spec
+// (qdeviceVCPU/qdeviceMemoryGB/qdeviceDiskGB — multi-node lab plan §4.3),
+// never the lab's own node compute/storage sizing. Mirrors createVM's
+// create-vs-clone branching, but the QDevice is deliberately never resized
+// by lab config or CLI flags: it exists only to cast one corosync
+// tie-breaker vote and needs no meaningful compute. A blank (non-clone)
+// QDevice VM has no OS installed — §6.4 documents provisioning it from the
+// shared tmpl-qdevice template via --qdevice-clone-from as the intended
+// path; blank creation is supported for completeness (e.g. a caller that
+// installs the OS out-of-band) but is not the documented production path.
+func createQdeviceVM(
+	ctx context.Context, deps *cli.Deps, eff *config.Lab, node string, vmid int64, vmidStr, stID, cloneFrom string,
+) error {
+	ac := deps.API
+	net0 := fmt.Sprintf("virtio,bridge=%s", eff.Network.VnetID)
+	if eff.Network.MTU > 0 {
+		net0 = fmt.Sprintf("%s,mtu=%d", net0, eff.Network.MTU)
+	}
+	memKiB := strconv.Itoa(qdeviceMemoryGB * 1024)
+	vmName := labQdeviceVMName(eff.Name)
+
+	if cloneFrom == "" {
+		params := &nodes.CreateQemuParams{
+			Vmid:    vmid,
+			Name:    createPtr(vmName),
+			Pool:    createPtr(labPoolID(eff)),
+			Cores:   createPtr(int64(qdeviceVCPU)),
+			Sockets: createPtr(int64(1)),
+			Memory:  createPtr(memKiB),
+			Balloon: createPtr(int64(qdeviceMemoryGB * 1024)),
+			Agent:   createPtr("enabled=1"),
+			Ostype:  createPtr("l26"),
+			Scsi: map[int]string{
+				0: fmt.Sprintf("%s:%d", stID, qdeviceDiskGB),
+			},
+			Net: map[int]string{0: net0},
+		}
+
+		resp, err := ac.Nodes.CreateQemu(ctx, node, params)
+		if err != nil {
+			return fmt.Errorf("create QDevice VM %d on node %q: %w", vmid, node, err)
+		}
+		if resp == nil {
+			return fmt.Errorf("create QDevice VM %d on node %q: empty response", vmid, node)
+		}
+		upid, err := apiclient.UPIDFromRaw(*resp)
+		if err != nil {
+			return fmt.Errorf("create QDevice VM %d on node %q: %w", vmid, node, err)
+		}
+		return apiclient.WaitTask(ctx, ac, upid, nil)
+	}
+
+	sourceVMID, err := strconv.ParseInt(cloneFrom, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid --qdevice-clone-from %q: expected a numeric VMID: %w", cloneFrom, err)
+	}
+
+	cloneParams := &nodes.CreateQemuCloneParams{
+		Newid:   vmid,
+		Name:    createPtr(vmName),
+		Pool:    createPtr(labPoolID(eff)),
+		Storage: createPtr(stID),
+		Full:    createPtr(true),
+	}
+	resp, err := ac.Nodes.CreateQemuClone(ctx, node, strconv.FormatInt(sourceVMID, 10), cloneParams)
+	if err != nil {
+		return fmt.Errorf("clone QDevice VM %d from %d on node %q: %w", vmid, sourceVMID, node, err)
+	}
+	if resp != nil {
+		if upid, uerr := apiclient.UPIDFromRaw(*resp); uerr == nil && upid != "" {
+			if werr := apiclient.WaitTask(ctx, ac, upid, nil); werr != nil {
+				return werr
+			}
+		}
+	}
+
+	updateParams := &nodes.UpdateQemuConfigParams{
+		Cores:   createPtr(int64(qdeviceVCPU)),
+		Memory:  createPtr(memKiB),
+		Balloon: createPtr(int64(qdeviceMemoryGB * 1024)),
+		Net:     map[int]string{0: net0},
+	}
+	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {
+		return fmt.Errorf("update cloned QDevice VM %d config on node %q: %w", vmid, node, err)
 	}
 	return nil
 }
@@ -722,8 +1204,9 @@ func createFindQemuByName(resp *nodes.ListQemuResponse, name string) (int64, boo
 
 // createFindQemuNameByVMID decodes a nodes.ListQemuResponse and reports the
 // name of the first entry whose VMID equals vmid, if any. Used to guard a
-// --clone-from source by name as well as VMID: a production VM's name might
-// match a protected pattern even when its VMID does not.
+// --clone-from/--qdevice-clone-from source by name as well as VMID: a
+// production VM's name might match a protected pattern even when its VMID
+// alone does not.
 func createFindQemuNameByVMID(resp *nodes.ListQemuResponse, vmid int64) (string, bool, error) {
 	if resp == nil {
 		return "", false, nil
@@ -766,12 +1249,21 @@ func createRawList(resp any) ([]json.RawMessage, error) {
 // renderCreatePlan renders plan as a STEP/STATUS table. In dry-run mode every
 // step shows either "would create" or "skip (already exists)", and the VM
 // (and start) steps carry the literal "<vmid>" placeholder baked into their
-// desc by buildCreatePlan when the lab's VM does not yet exist. In
+// desc by buildCreatePlan when a target's VM does not yet exist. In
 // non-dry-run mode every non-skipped step has already been applied by the
 // caller and rows show "created"/"skip (already exists)".
+//
+// A trailing "summary" row lists every target's resolved VMID (label=VM
+// id), and a "capacity gate"/"start" row is appended when the capacity
+// gate's warning or a post-start agent note, respectively, is non-empty.
+// These are rendered as table rows rather than via output.Result.Message:
+// every renderer in internal/output (table, plain, JSON, YAML) drops
+// Message whenever Headers/Rows are also set, which create's STEP table
+// always is, so a Message-only warning here would never reach the operator
+// in any output format.
 func renderCreatePlan(cmd *cobra.Command, deps *cli.Deps, plan *createPlan, dryRun bool) error {
 	headers := []string{"STEP", "STATUS"}
-	rows := make([][]string, 0, len(plan.steps))
+	rows := make([][]string, 0, len(plan.steps)+3)
 	for _, step := range plan.steps {
 		status := "created"
 		if dryRun {
@@ -783,18 +1275,31 @@ func renderCreatePlan(cmd *cobra.Command, deps *cli.Deps, plan *createPlan, dryR
 		rows = append(rows, []string{step.desc, status})
 	}
 
-	var msg string
+	var summary string
 	switch {
 	case dryRun:
-		msg = fmt.Sprintf("Lab %q create plan on node %q.", plan.labName, plan.node)
-	case plan.vmidKnown:
-		msg = fmt.Sprintf("Lab %q created on node %q (VM %d).", plan.labName, plan.node, plan.vmid)
+		summary = fmt.Sprintf("create plan for lab %q on node %q", plan.labName, plan.node)
 	default:
-		msg = fmt.Sprintf("Lab %q created on node %q.", plan.labName, plan.node)
+		parts := make([]string, 0, len(plan.nodePlans))
+		for _, np := range plan.nodePlans {
+			if np.vmidKnown {
+				parts = append(parts, fmt.Sprintf("%s=VM %d", np.label, np.vmid))
+			}
+		}
+		if len(parts) > 0 {
+			summary = fmt.Sprintf("lab %q created on node %q: %s", plan.labName, plan.node, strings.Join(parts, ", "))
+		} else {
+			summary = fmt.Sprintf("lab %q created on node %q", plan.labName, plan.node)
+		}
+	}
+	rows = append(rows, []string{"summary", summary})
+
+	if plan.capacityWarning != "" {
+		rows = append(rows, []string{"capacity gate", plan.capacityWarning})
 	}
 	if plan.agentNote != "" {
-		msg = msg + " " + plan.agentNote
+		rows = append(rows, []string{"start", plan.agentNote})
 	}
 
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows, Message: msg}, deps.Format)
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 }

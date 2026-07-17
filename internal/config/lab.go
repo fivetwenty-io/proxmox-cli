@@ -1,5 +1,10 @@
 package config
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Lab describes one nested (or, in a future mode, hardware) lab environment:
 // its network, compute, storage, DNS, provisioning, and access settings.
 type Lab struct {
@@ -17,10 +22,16 @@ type Lab struct {
 	// Network holds the SDN zone/vnet/subnet configuration for the lab.
 	Network LabNetwork `yaml:"network" json:"network"`
 
-	// Compute holds the CPU and memory configuration for the lab's VM.
+	// Compute holds the CPU and memory configuration for the lab's VM (node 0
+	// when Topology.Nodes > 1, and the base sizing every other node falls
+	// back to before its own topology.node_overrides entry, if any, is
+	// layered on top — see EffectiveNodeSizing).
 	Compute LabCompute `yaml:"compute" json:"compute"`
 
-	// Storage holds the ZFS pool and disk sizing for the lab.
+	// Storage holds the ZFS pool and disk sizing for the lab. RefquotaGB is
+	// the lab-wide dataset quota (shared by every node's disks); OSDiskGB/
+	// DataDiskGB are the base per-node disk sizing EffectiveNodeSizing
+	// starts from before per-node overrides.
 	Storage LabStorage `yaml:"storage" json:"storage"`
 
 	// DNS holds the DNS zone configuration for the lab.
@@ -31,6 +42,12 @@ type Lab struct {
 
 	// Access holds the pve realm/pool/role granted to the lab owner.
 	Access LabAccess `yaml:"access" json:"access"`
+
+	// Topology describes the lab's node count and QDevice policy. The zero
+	// value means a single node with no QDevice, today's shape — see
+	// EffectiveTopologyNodes and EffectiveTopologyQdevice for the defaulting
+	// rules every caller must use instead of reading the fields directly.
+	Topology LabTopology `yaml:"topology,omitempty" json:"topology,omitempty"`
 }
 
 // LabNetwork describes the SDN vnet, VXLAN tag, and subnet layout for a lab.
@@ -56,6 +73,60 @@ type LabNetwork struct {
 
 	// MTU is the maximum transmission unit for the vnet.
 	MTU int `yaml:"mtu" json:"mtu"`
+
+	// ZoneName is the SDN zone this lab's vnet lives in. Empty defaults to
+	// "labs" (EffectiveZoneName) — the deployed outer Simple zone (decision
+	// D4 of the multi-node lab plan) — rather than the platform's historical
+	// hardcoded "labsvxlan" VXLAN zone.
+	ZoneName string `yaml:"zone_name,omitempty" json:"zone_name,omitempty"`
+
+	// ZoneType is the SDN zone plugin type for ZoneName ("simple" or
+	// "vxlan"). Empty defaults to "simple" (EffectiveZoneType), matching
+	// ZoneName's "labs" default.
+	ZoneType string `yaml:"zone_type,omitempty" json:"zone_type,omitempty"`
+
+	// ZonePeers is the VXLAN zone's underlay peer list. Only meaningful when
+	// ZoneType (effective) is "vxlan"; ignored for "simple", which has no
+	// peers concept.
+	ZonePeers string `yaml:"zone_peers,omitempty" json:"zone_peers,omitempty"`
+}
+
+// Defaults for LabNetwork's SDN zone fields, applied whenever the
+// corresponding config field is empty: the deployed outer Simple zone
+// "labs" (decision D4 of the multi-node lab plan), superseding the
+// platform's historical hardcoded "labsvxlan" VXLAN zone constants.
+const (
+	DefaultZoneName = "labs"
+	DefaultZoneType = "simple"
+)
+
+// EffectiveZoneName returns n.ZoneName, defaulting to DefaultZoneName when
+// unset.
+func (n LabNetwork) EffectiveZoneName() string {
+	if n.ZoneName != "" {
+		return n.ZoneName
+	}
+	return DefaultZoneName
+}
+
+// EffectiveZoneType returns n.ZoneType, defaulting to DefaultZoneType when
+// unset.
+func (n LabNetwork) EffectiveZoneType() string {
+	if n.ZoneType != "" {
+		return n.ZoneType
+	}
+	return DefaultZoneType
+}
+
+// EffectiveZonePeers returns n.ZonePeers when the effective zone type is
+// "vxlan" (the only zone type with a peers concept), else "": a "simple"
+// zone's Peers field must never be sent or compared, since PVE's Simple zone
+// plugin has no such field.
+func (n LabNetwork) EffectiveZonePeers() string {
+	if n.EffectiveZoneType() != "vxlan" {
+		return ""
+	}
+	return n.ZonePeers
 }
 
 // LabMgmt describes the lab's management subnet.
@@ -163,4 +234,297 @@ type LabAccess struct {
 
 	// Role is the pve role granted to the owner on Pool.
 	Role string `yaml:"role" json:"role"`
+}
+
+// LabTopology describes the node count and QDevice tie-breaker policy of a
+// lab's nested PVE cluster (multi-node lab plan §3.1). The zero value means
+// a single node with no QDevice — today's shape — so labs written before
+// this field existed keep working unchanged.
+type LabTopology struct {
+	// Nodes is how many PVE node VMs make up the lab, 1 through 5 (indexes
+	// 0..Nodes-1). Zero means "not set"; callers must read
+	// EffectiveTopologyNodes(t) rather than this field directly, since zero
+	// defaults to 1.
+	Nodes int `yaml:"nodes,omitempty" json:"nodes,omitempty"`
+
+	// Qdevice selects the QDevice tie-breaker policy: "auto" (the default
+	// when empty) adds a QDevice VM iff the effective node count is even;
+	// "never" never adds one regardless of node count. No other value is
+	// valid — see ValidateTopology. Callers must read
+	// EffectiveTopologyQdevice(t) / QdeviceRequired(t) rather than this
+	// field directly.
+	Qdevice string `yaml:"qdevice,omitempty" json:"qdevice,omitempty"`
+
+	// NodeOverrides holds optional per-node sizing overrides keyed by 0-based
+	// node index (0..4). A node index absent from this map uses the lab's
+	// sizing profile default for every field — see EffectiveNodeSizing. Only
+	// the fields an entry actually sets (non-zero) override the profile;
+	// zero-valued fields in an override fall through to the profile default,
+	// exactly like the top-level Compute/Storage-over-profile precedence.
+	NodeOverrides map[int]LabNodeOverride `yaml:"node_overrides,omitempty" json:"node_overrides,omitempty"`
+}
+
+// LabNodeOverride holds per-node compute/storage sizing overrides layered on
+// top of a lab's sizing profile (and its lab-level Compute/Storage values)
+// for one node index. A zero field means "use the profile/lab-level value
+// for this field", not "set this field to zero" — there is no sizing
+// dimension for which zero is a meaningful VM spec.
+type LabNodeOverride struct {
+	VCPU        int `yaml:"vcpu,omitempty" json:"vcpu,omitempty"`
+	MemoryMinGB int `yaml:"memory_min_gb,omitempty" json:"memory_min_gb,omitempty"`
+	MemoryMaxGB int `yaml:"memory_max_gb,omitempty" json:"memory_max_gb,omitempty"`
+	OSDiskGB    int `yaml:"os_disk_gb,omitempty" json:"os_disk_gb,omitempty"`
+	DataDiskGB  int `yaml:"data_disk_gb,omitempty" json:"data_disk_gb,omitempty"`
+}
+
+// MinTopologyNodes and MaxTopologyNodes bound LabTopology.Nodes' valid
+// range: 1 (today's single-node shape) through 5 (multi-node lab plan §3.1).
+const (
+	MinTopologyNodes = 1
+	MaxTopologyNodes = 5
+)
+
+// Valid LabTopology.Qdevice values.
+const (
+	QdeviceAuto  = "auto"
+	QdeviceNever = "never"
+)
+
+// EffectiveTopologyNodes returns t.Nodes, defaulting to 1 (today's
+// single-node shape) when unset (zero or negative).
+func EffectiveTopologyNodes(t LabTopology) int {
+	if t.Nodes <= 0 {
+		return 1
+	}
+	return t.Nodes
+}
+
+// EffectiveTopologyQdevice returns t.Qdevice, defaulting to QdeviceAuto when
+// empty.
+func EffectiveTopologyQdevice(t LabTopology) string {
+	if t.Qdevice == "" {
+		return QdeviceAuto
+	}
+	return t.Qdevice
+}
+
+// QdeviceRequired reports whether a lab's topology calls for a QDevice
+// tie-breaker VM: true iff the effective node count is even AND the
+// effective policy is not QdeviceNever. An odd node count never gets a
+// QDevice regardless of policy — forcing one onto odd votes flips the
+// cluster to Last-Man-Standing semantics and worsens availability (multi-
+// node lab plan §3.1) — so QdeviceAuto on an odd count is simply a no-op
+// here, not an error; ValidateTopology separately rejects the more specific
+// case of an explicitly-written "auto" combined with an odd node count, to
+// surface that contradiction to the operator instead of silently ignoring
+// it.
+func QdeviceRequired(t LabTopology) bool {
+	if EffectiveTopologyQdevice(t) == QdeviceNever {
+		return false
+	}
+	return EffectiveTopologyNodes(t)%2 == 0
+}
+
+// ValidateTopology checks t for internal coherence and returns one message
+// per problem found, or nil when t is valid. name is the lab's name, used to
+// prefix every message so a multi-lab validation error (see
+// validateAllTopologies) can name which lab each issue belongs to.
+func ValidateTopology(name string, t LabTopology) []string {
+	var issues []string
+
+	if t.Nodes != 0 && (t.Nodes < MinTopologyNodes || t.Nodes > MaxTopologyNodes) {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: topology.nodes %d is out of range [%d, %d]", name, t.Nodes, MinTopologyNodes, MaxTopologyNodes))
+	}
+
+	switch t.Qdevice {
+	case "", QdeviceAuto, QdeviceNever:
+		// valid
+	default:
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: topology.qdevice %q must be %q or %q", name, t.Qdevice, QdeviceAuto, QdeviceNever))
+	}
+
+	// An operator who explicitly writes "qdevice: auto" is asking for a
+	// QDevice; on an odd node count that request can never be satisfied
+	// (§3.1: no QDevice ever on odd votes), so treat the combination as a
+	// config error rather than silently no-op'ing it. Leaving qdevice unset
+	// (empty string) is not "explicit" and never errors here: the common
+	// case of an odd-node lab that never mentions qdevice at all (e.g. the
+	// pve-cpi capstone lab, §12) must pass cleanly.
+	if t.Qdevice == QdeviceAuto && EffectiveTopologyNodes(t)%2 != 0 {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: topology.qdevice: \"auto\" requires an even node count, got %d nodes "+
+				"(odd node counts never use a QDevice; omit topology.qdevice entirely instead of writing \"auto\")",
+			name, EffectiveTopologyNodes(t)))
+	}
+
+	// §3.1: a QDevice is MANDATORY at exactly 2 nodes — a bare 2-node
+	// cluster is 2/2 votes, and losing either node drops the survivor below
+	// quorum (/etc/pve goes read-only, no VM starts). Unlike 4 nodes, where
+	// "qdevice: never" is a legitimate opt-out (the cluster still tolerates
+	// one node down without a QDevice), 2 nodes has no safe "never" state,
+	// so an explicit "never" here is rejected rather than silently accepted
+	// into a fragile bare 2/2 cluster. Only the explicit string is checked
+	// (not EffectiveTopologyQdevice): the unset default is "auto", which
+	// QdeviceRequired already treats as mandatory at 2 nodes on its own.
+	if EffectiveTopologyNodes(t) == 2 && t.Qdevice == QdeviceNever {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: topology.qdevice: \"never\" is invalid at 2 nodes — a QDevice is mandatory for a "+
+				"2-node cluster (without a tie-breaker, any single node outage loses quorum); "+
+				"use 3 or more nodes if you want no QDevice at all",
+			name))
+	}
+
+	// Validated against the lab's own effective node count, not the global
+	// [0, MaxTopologyNodes-1] range: an override index at or beyond the
+	// lab's actual node count addresses a node that will never exist, and
+	// EffectiveNodeSizing silently never applies it (no node loop ever
+	// reaches that index), so it must be a config error rather than a
+	// silently dead entry.
+	effNodes := EffectiveTopologyNodes(t)
+	for idx := range t.NodeOverrides {
+		if idx < 0 || idx >= effNodes {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: topology.node_overrides key %d is out of range for a %d-node lab [0, %d]",
+				name, idx, effNodes, effNodes-1))
+		}
+	}
+
+	return issues
+}
+
+// SizingProfile is a set of default per-node compute/storage values a lab's
+// nodes draw from when neither the lab's own Compute/Storage fields nor a
+// per-node override set a given value explicitly (multi-node lab plan §3.4).
+type SizingProfile struct {
+	VCPU        int
+	MemoryMinGB int
+	MemoryMaxGB int
+	OSDiskGB    int
+	DataDiskGB  int
+}
+
+// SingleNodeProfile returns the default sizing for a single-node lab
+// (topology.nodes == 1): today's per-lab shape, unchanged by the multi-node
+// work.
+func SingleNodeProfile() SizingProfile {
+	return SizingProfile{VCPU: 16, MemoryMinGB: 32, MemoryMaxGB: 128, OSDiskGB: 64, DataDiskGB: 400}
+}
+
+// ClusterNodeProfile returns the default per-node sizing for a multi-node
+// lab (topology.nodes > 1): a smaller footprint than the single-node
+// profile, sized so several labs' clusters fit the shared tank pool at once
+// (multi-node lab plan §3.4, decision D2).
+func ClusterNodeProfile() SizingProfile {
+	return SizingProfile{VCPU: 8, MemoryMinGB: 16, MemoryMaxGB: 48, OSDiskGB: 64, DataDiskGB: 200}
+}
+
+// ProfileForTopology returns SingleNodeProfile() when t's effective node
+// count is 1, else ClusterNodeProfile().
+func ProfileForTopology(t LabTopology) SizingProfile {
+	if EffectiveTopologyNodes(t) == 1 {
+		return SingleNodeProfile()
+	}
+	return ClusterNodeProfile()
+}
+
+// EffectiveNodeSizing returns the fully-resolved compute and storage sizing
+// for node index idx of lab: starting from ProfileForTopology(lab.Topology),
+// layering lab.Compute/lab.Storage's own non-zero fields on top (the
+// lab-wide base every node without a more specific override uses, matching
+// today's single-VM behavior when Compute/Storage are set), then layering
+// lab.Topology.NodeOverrides[idx]'s own non-zero fields on top of that. Only
+// the sizing fields are read from Storage (Controller/IOThread/Discard/SSD
+// and RefquotaGB/Pool are lab-wide and copied through unchanged from
+// lab.Storage). idx is not range-checked here — out-of-range indexes simply
+// find no NodeOverrides entry and use the lab-level/profile values, since
+// range-checking is ValidateTopology's job at config-load time, not this
+// read path's.
+func EffectiveNodeSizing(lab *Lab, idx int) (LabCompute, LabStorage) {
+	profile := ProfileForTopology(lab.Topology)
+
+	compute := lab.Compute
+	if compute.VCPU == 0 {
+		compute.VCPU = profile.VCPU
+	}
+	if compute.Memory.MinGB == 0 {
+		compute.Memory.MinGB = profile.MemoryMinGB
+	}
+	if compute.Memory.MaxGB == 0 {
+		compute.Memory.MaxGB = profile.MemoryMaxGB
+	}
+
+	storage := lab.Storage
+	if storage.OSDiskGB == 0 {
+		storage.OSDiskGB = profile.OSDiskGB
+	}
+	if storage.DataDiskGB == 0 {
+		storage.DataDiskGB = profile.DataDiskGB
+	}
+
+	if ov, ok := lab.Topology.NodeOverrides[idx]; ok {
+		if ov.VCPU != 0 {
+			compute.VCPU = ov.VCPU
+		}
+		if ov.MemoryMinGB != 0 {
+			compute.Memory.MinGB = ov.MemoryMinGB
+		}
+		if ov.MemoryMaxGB != 0 {
+			compute.Memory.MaxGB = ov.MemoryMaxGB
+		}
+		if ov.OSDiskGB != 0 {
+			storage.OSDiskGB = ov.OSDiskGB
+		}
+		if ov.DataDiskGB != 0 {
+			storage.DataDiskGB = ov.DataDiskGB
+		}
+	}
+
+	return compute, storage
+}
+
+// DefaultSingleRefquotaGB and DefaultClusterRefquotaPerNodeGB are the
+// fallback ZFS dataset refquota values EffectiveRefquotaGB uses when a lab
+// does not set storage.refquota_gb explicitly (multi-node lab plan §3.4):
+// 480G for a single-node lab, or node-count × 264G (plus no extra slack
+// beyond the per-node figure already carrying it) for a multi-node lab.
+const (
+	DefaultSingleRefquotaGB         = 480
+	DefaultClusterRefquotaPerNodeGB = 264
+)
+
+// EffectiveRefquotaGB returns lab.Storage.RefquotaGB when set, else the
+// profile-appropriate default: DefaultSingleRefquotaGB for a single-node
+// lab, or EffectiveTopologyNodes(lab.Topology) × DefaultClusterRefquotaPerNodeGB
+// for a multi-node lab. Used by the capacity gate (`pmx lab create`) to
+// estimate a lab's pool reservation when the operator has not pinned an
+// explicit refquota.
+func EffectiveRefquotaGB(lab *Lab) int {
+	if lab.Storage.RefquotaGB > 0 {
+		return lab.Storage.RefquotaGB
+	}
+	if EffectiveTopologyNodes(lab.Topology) == 1 {
+		return DefaultSingleRefquotaGB
+	}
+	return EffectiveTopologyNodes(lab.Topology) * DefaultClusterRefquotaPerNodeGB
+}
+
+// MaxVnetIDLen is the Proxmox VE SDN vnet ID length limit: at most 8
+// alphanumeric characters, no hyphen.
+const MaxVnetIDLen = 8
+
+// DeriveVnetID returns the deterministic SDN vnet ID for a lab named name:
+// every hyphen stripped, then truncated to the first MaxVnetIDLen
+// characters. This is PVE's own vnet ID constraint (≤8 alphanumeric
+// characters, no hyphen), applied to the lab's name so a lab that does not
+// set network.vnet_id explicitly still gets a valid, deterministic vnet ID
+// (multi-node lab plan §14.1). Examples: "wayneeseguin" -> "wayneese",
+// "pve-cpi" -> "pvecpi", "krutten" -> "krutten" (already ≤8 chars).
+func DeriveVnetID(name string) string {
+	stripped := strings.ReplaceAll(name, "-", "")
+	if len(stripped) > MaxVnetIDLen {
+		return stripped[:MaxVnetIDLen]
+	}
+	return stripped
 }

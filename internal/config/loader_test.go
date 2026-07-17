@@ -321,3 +321,123 @@ func TestResolveLabs_GlobMatchingZeroFiles_IsNotAnError(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, labs)
 }
+
+// --- vnet-ID derivation and uniqueness ------------------------------------
+
+// TestResolveLabs_VnetIDDerivedWhenUnset covers a lab whose config leaves
+// network.vnet_id empty: ResolveLabs must fill it in via
+// config.DeriveVnetID(name), truncating a long name to 8 characters.
+func TestResolveLabs_VnetIDDerivedWhenUnset(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"wayneeseguin": {Mode: "nested"},
+		},
+	}
+
+	labs, err := config.ResolveLabs(cfg, configPath)
+	require.NoError(t, err)
+	require.Equal(t, "wayneese", labs["wayneeseguin"].Network.VnetID)
+}
+
+// TestResolveLabs_ExplicitVnetIDWinsOverDerived covers a lab that sets
+// network.vnet_id explicitly to a value diverging from what DeriveVnetID
+// would produce: the explicit value must be kept verbatim.
+func TestResolveLabs_ExplicitVnetIDWinsOverDerived(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"wayneeseguin": {Mode: "nested", Network: config.LabNetwork{VnetID: "custom1"}},
+		},
+	}
+
+	labs, err := config.ResolveLabs(cfg, configPath)
+	require.NoError(t, err)
+	require.Equal(t, "custom1", labs["wayneeseguin"].Network.VnetID)
+}
+
+// TestResolveLabs_VnetIDCollisionAcrossLabs_Errors covers two labs whose
+// names truncate to the same 8-character vnet ID (both starting
+// "collide-"): ResolveLabs must refuse rather than silently letting two
+// labs share one vnet.
+func TestResolveLabs_VnetIDCollisionAcrossLabs_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			// Both strip to no hyphens and truncate to the same first 8
+			// characters ("collidea"), even though the full names differ.
+			"collideaaa1": {Mode: "nested"},
+			"collideaaa2": {Mode: "nested"},
+		},
+	}
+
+	_, err := config.ResolveLabs(cfg, configPath)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "collidea")
+	require.ErrorContains(t, err, "collideaaa1")
+	require.ErrorContains(t, err, "collideaaa2")
+}
+
+// TestResolveLabs_ExplicitVnetIDCollidesWithAnother_Errors covers an
+// explicit network.vnet_id that happens to collide with another lab's
+// (derived or explicit) vnet ID.
+func TestResolveLabs_ExplicitVnetIDCollidesWithAnother_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"alpha": {Mode: "nested", Network: config.LabNetwork{VnetID: "shared"}},
+			"beta":  {Mode: "nested", Network: config.LabNetwork{VnetID: "shared"}},
+		},
+	}
+
+	_, err := config.ResolveLabs(cfg, configPath)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "shared")
+}
+
+// --- topology validation --------------------------------------------------
+
+// TestResolveLabs_InvalidTopologyNodes_Errors covers ResolveLabs wiring
+// ValidateTopology in: a lab whose topology.nodes is out of [1, 5] must
+// fail to resolve, naming the lab.
+func TestResolveLabs_InvalidTopologyNodes_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"wayne": {Mode: "nested", Topology: config.LabTopology{Nodes: 9}},
+		},
+	}
+
+	_, err := config.ResolveLabs(cfg, configPath)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "wayne")
+	require.ErrorContains(t, err, "topology.nodes")
+}
+
+// TestResolveLabs_ValidTopology_Passes covers a well-formed multi-node
+// topology resolving cleanly end-to-end through ResolveLabs.
+func TestResolveLabs_ValidTopology_Passes(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{
+			"pve-cpi": {Mode: "nested", Topology: config.LabTopology{Nodes: 3}},
+		},
+	}
+
+	labs, err := config.ResolveLabs(cfg, configPath)
+	require.NoError(t, err)
+	require.Equal(t, 3, labs["pve-cpi"].Topology.Nodes)
+	require.Equal(t, "pvecpi", labs["pve-cpi"].Network.VnetID)
+}

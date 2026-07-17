@@ -65,7 +65,7 @@ func TestCreateAuditFields_NetworkStorageAndPoolOverrides(t *testing.T) {
 	// Zone and storage already exist; overrides do not touch either, so they
 	// are left alone here to keep the fixture focused on the fields under
 	// test.
-	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labsvxlan"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/zones")
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
 	createForbid(f, t, "POST /api2/json/storage")
@@ -128,7 +128,7 @@ func TestCreateAuditFields_StartInvokesLifecycleStart(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne") // Access.Pool "lab-wayne", CIDR 10.10.1.0/24.
 
-	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labsvxlan"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/zones")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
@@ -178,7 +178,7 @@ func TestCreateAuditFields_CloneFromForwardsToCloneAndConfigUpdate(t *testing.T)
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
 
-	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labsvxlan"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})

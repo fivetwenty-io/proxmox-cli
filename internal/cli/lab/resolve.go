@@ -2,6 +2,7 @@ package lab
 
 import (
 	"fmt"
+	"net"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -129,4 +130,104 @@ func labPoolID(lab *config.Lab) string {
 		return lab.Access.Pool
 	}
 	return fmt.Sprintf("lab-%s", lab.Name)
+}
+
+// maxLabNodeIndex is the highest valid node index (topology.nodes maxes out
+// at config.MaxTopologyNodes, indexes 0..4).
+const maxLabNodeIndex = config.MaxTopologyNodes - 1
+
+// labNodeVMName returns the VM name for node index i (0-based, 0..4) of a
+// lab named name: "lab-<name>-<i>" (multi-node lab plan §3.2). i is not
+// range-checked here — callers loop i over 0..config.EffectiveTopologyNodes(...)-1,
+// which is already bounded to [0, maxLabNodeIndex] by ValidateTopology at
+// config-load time.
+func labNodeVMName(name string, i int) string {
+	return fmt.Sprintf("lab-%s-%d", name, i)
+}
+
+// labQdeviceVMName returns the QDevice tie-breaker VM name for a lab named
+// name: "lab-<name>-q" (multi-node lab plan §3.2).
+func labQdeviceVMName(name string) string {
+	return fmt.Sprintf("lab-%s-q", name)
+}
+
+// legacyLabVMName returns the pre-multi-node VM name convention for a lab
+// named name: "lab-<name>", with no node-index suffix. lifecycle.go's
+// findLabVMs treats a live VM with this exact name, found in the lab's pool,
+// as node 0 for back-compat with labs created before topology.nodes existed
+// (multi-node lab plan §3.2, decision D3's safety-net case).
+func legacyLabVMName(name string) string {
+	return fmt.Sprintf("lab-%s", name)
+}
+
+// labNodeMgmtIP returns the management IP address for node index i (0-based)
+// of a lab's mgmt /24: the subnet's network address plus 10+i (".10"-".14"
+// for i in 0..4). i must be in [0, maxLabNodeIndex]; any other value is a
+// caller error, not a config error, since every call site loops i over an
+// already-validated topology's node range.
+func labNodeMgmtIP(n config.LabNetwork, i int) (string, error) {
+	if i < 0 || i > maxLabNodeIndex {
+		return "", fmt.Errorf("node index %d is out of range [0, %d]", i, maxLabNodeIndex)
+	}
+	return labMgmtOffsetIP(n, 10+i)
+}
+
+// labQdeviceMgmtIP returns the QDevice VM's management IP address: the lab's
+// mgmt /24 base plus ".15" (multi-node lab plan §3.3).
+func labQdeviceMgmtIP(n config.LabNetwork) (string, error) {
+	return labMgmtOffsetIP(n, 15)
+}
+
+// labMgmtOffsetIP returns the IPv4 address at offset (the last octet) within
+// a lab's mgmt /24, derived from labMgmtBaseIP(n).
+func labMgmtOffsetIP(n config.LabNetwork, offset int) (string, error) {
+	if offset < 0 || offset > 255 {
+		return "", fmt.Errorf("mgmt IP offset %d is out of range [0, 255]", offset)
+	}
+
+	base, err := labMgmtBaseIP(n)
+	if err != nil {
+		return "", err
+	}
+
+	ip := make(net.IP, len(base))
+	copy(ip, base)
+	ip[len(ip)-1] = byte(offset)
+	return ip.String(), nil
+}
+
+// labMgmtBaseIP returns the network address (all-zero host bits) of a lab's
+// mgmt /24: parsed from n.Mgmt.Subnet when it is set, else derived from
+// n.Mgmt.HostIP masked to /24 (today's convention: HostIP is always node 0's
+// own ".10" address, so masking it to /24 yields the same network base an
+// explicit Subnet would state). Both fields empty, or set but unparsable, is
+// an error: node/QDevice IP derivation has no other source of truth for the
+// mgmt subnet's base address.
+func labMgmtBaseIP(n config.LabNetwork) (net.IP, error) {
+	if n.Mgmt.Subnet != "" {
+		_, cidr, err := net.ParseCIDR(n.Mgmt.Subnet)
+		if err != nil {
+			return nil, fmt.Errorf("network.mgmt.subnet %q is invalid: %w", n.Mgmt.Subnet, err)
+		}
+		v4 := cidr.IP.To4()
+		if v4 == nil {
+			return nil, fmt.Errorf("network.mgmt.subnet %q is not an IPv4 subnet", n.Mgmt.Subnet)
+		}
+		return v4, nil
+	}
+
+	if n.Mgmt.HostIP != "" {
+		ip := net.ParseIP(n.Mgmt.HostIP)
+		if ip == nil {
+			return nil, fmt.Errorf("network.mgmt.host_ip %q is not a valid IP address", n.Mgmt.HostIP)
+		}
+		v4 := ip.To4()
+		if v4 == nil {
+			return nil, fmt.Errorf("network.mgmt.host_ip %q is not a valid IPv4 address", n.Mgmt.HostIP)
+		}
+		return v4.Mask(net.CIDRMask(24, 32)), nil
+	}
+
+	return nil, fmt.Errorf(
+		"lab network has neither mgmt.subnet nor mgmt.host_ip set; cannot derive a node management IP")
 }

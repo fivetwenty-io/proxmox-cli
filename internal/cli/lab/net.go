@@ -15,19 +15,28 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// labZoneName is the single Proxmox VE SDN zone shared by every nested lab: a VXLAN zone named
-// "labsvxlan" that hosts one vnet per lab, each tagged with its own VXLAN
-// VNI. It is not per-lab configuration; every `pmx lab net apply` invocation
-// reconciles against this same zone name regardless of which lab is named.
-const labZoneName = "labsvxlan"
+// labZoneName returns the SDN zone a lab's vnet lives in: net.EffectiveZoneName(),
+// which defaults to "labs" (the deployed outer Simple zone, decision D4 of
+// the multi-node lab plan) when the lab's config leaves network.zone_name
+// unset. Every `pmx lab net apply`/`pmx lab create` invocation reconciles
+// against this per-lab-resolved zone name, superseding the platform's
+// historical hardcoded "labsvxlan" VXLAN zone constant.
+func labZoneName(net config.LabNetwork) string {
+	return net.EffectiveZoneName()
+}
 
-// labZoneType is the Proxmox VE SDN zone plugin type used for labZoneName.
-const labZoneType = "vxlan"
+// labZoneType returns the SDN zone plugin type for labZoneName(net):
+// net.EffectiveZoneType(), which defaults to "simple".
+func labZoneType(net config.LabNetwork) string {
+	return net.EffectiveZoneType()
+}
 
-// labZonePeers is the VXLAN zone's peer list: sm-0's underlay address. The
-// platform runs a single physical node today, so the zone's only peer is
-// sm-0 itself.
-const labZonePeers = "192.168.1.180"
+// labZonePeers returns the VXLAN zone's underlay peer list: net.EffectiveZonePeers(),
+// which is always "" for a "simple"-type zone (Simple zones have no peers
+// concept) and net.ZonePeers verbatim for a "vxlan"-type zone.
+func labZonePeers(net config.LabNetwork) string {
+	return net.EffectiveZonePeers()
+}
 
 // newNetCmd builds `pmx lab net` and its subcommands.
 func newNetCmd() *cobra.Command {
@@ -87,7 +96,7 @@ func newNetApplyCmd() *cobra.Command {
 			ctx := cmd.Context()
 
 			if !dryRun {
-				if err := ensureLabSdnZone(ctx, deps.API, deps.Node, int64(lab.Network.MTU)); err != nil {
+				if err := ensureLabSdnZone(ctx, deps.API, lab.Network, deps.Node, int64(lab.Network.MTU)); err != nil {
 					return err
 				}
 				if err := ensureLabSdnVnet(ctx, deps.API, lab.Network); err != nil {
@@ -271,19 +280,22 @@ func findSdnSubnet(list cluster.ListSdnVnetsSubnetsResponse, cidr string) (sdnSu
 	return sdnSubnetState{}, false, nil
 }
 
-// labZoneCreateParams builds the CreateSdnZonesParams that provisions
-// labZoneName as a VXLAN zone peered on labZonePeers and scoped to node, at
-// the given MTU (0 leaves MTU unset). This is the single source of truth
-// for the shared labsvxlan zone's create spec: both ensureLabSdnZone (`pmx
-// lab net apply`) and `pmx lab create` build the zone's CreateSdnZones call
-// through this function, so the two verbs can never provision the zone with
-// diverging Peers, Nodes, or MTU values.
-func labZoneCreateParams(node string, mtu int64) *cluster.CreateSdnZonesParams {
+// labZoneCreateParams builds the CreateSdnZonesParams that provisions the
+// lab's config-resolved zone (labZoneName(net)/labZoneType(net)), peered on
+// labZonePeers(net) when it is a vxlan-type zone, scoped to node, at the
+// given MTU (0 leaves MTU unset). This is the single source of truth for the
+// zone's create spec: both ensureLabSdnZone (`pmx lab net apply`) and `pmx
+// lab create` build the zone's CreateSdnZones call through this function, so
+// the two verbs can never provision the zone with diverging Type, Peers,
+// Nodes, or MTU values.
+func labZoneCreateParams(net config.LabNetwork, node string, mtu int64) *cluster.CreateSdnZonesParams {
 	params := &cluster.CreateSdnZonesParams{
-		Zone:  labZoneName,
-		Type:  labZoneType,
-		Peers: netPtr(labZonePeers),
+		Zone:  labZoneName(net),
+		Type:  labZoneType(net),
 		Nodes: netPtr(node),
+	}
+	if peers := labZonePeers(net); peers != "" {
+		params.Peers = netPtr(peers)
 	}
 	if mtu > 0 {
 		params.Mtu = netPtr(mtu)
@@ -291,26 +303,30 @@ func labZoneCreateParams(node string, mtu int64) *cluster.CreateSdnZonesParams {
 	return params
 }
 
-// ensureLabSdnZone ensures labZoneName exists as a VXLAN zone peered on
-// labZonePeers, scoped to node, at the given MTU (0 leaves MTU unmanaged,
+// ensureLabSdnZone ensures the lab's config-resolved zone (labZoneName(net))
+// exists as labZoneType(net), peered on labZonePeers(net) when it is a
+// vxlan-type zone, scoped to node, at the given MTU (0 leaves MTU unmanaged,
 // e.g. when the lab config carries no explicit value). It creates the zone
 // when absent; when present, it updates only the fields that have drifted
-// (MTU, peers, or node membership), issuing no request at all when nothing
-// has changed.
-func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, node string, mtu int64) error {
+// (MTU, peers — only compared for a vxlan-type zone, since a simple zone has
+// no peers field — or node membership), issuing no request at all when
+// nothing has changed.
+func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, net config.LabNetwork, node string, mtu int64) error {
+	zoneName := labZoneName(net)
+
 	list, err := api.Cluster.ListSdnZones(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("list SDN zones: %w", err)
 	}
 
-	existing, found, err := findSdnZone(*list, labZoneName)
+	existing, found, err := findSdnZone(*list, zoneName)
 	if err != nil {
 		return err
 	}
 
 	if !found {
-		if err := api.Cluster.CreateSdnZones(ctx, labZoneCreateParams(node, mtu)); err != nil {
-			return fmt.Errorf("create SDN zone %q: %w", labZoneName, err)
+		if err := api.Cluster.CreateSdnZones(ctx, labZoneCreateParams(net, node, mtu)); err != nil {
+			return fmt.Errorf("create SDN zone %q: %w", zoneName, err)
 		}
 		return nil
 	}
@@ -322,8 +338,8 @@ func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, node string
 		params.Mtu = netPtr(mtu)
 		changed = true
 	}
-	if existing.Peers != labZonePeers {
-		params.Peers = netPtr(labZonePeers)
+	if peers := labZonePeers(net); peers != "" && existing.Peers != peers {
+		params.Peers = netPtr(peers)
 		changed = true
 	}
 	if node != "" && !nodeListContains(existing.Nodes, node) {
@@ -334,21 +350,23 @@ func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, node string
 		return nil
 	}
 
-	if err := api.Cluster.UpdateSdnZones(ctx, labZoneName, params); err != nil {
-		return fmt.Errorf("update SDN zone %q: %w", labZoneName, err)
+	if err := api.Cluster.UpdateSdnZones(ctx, zoneName, params); err != nil {
+		return fmt.Errorf("update SDN zone %q: %w", zoneName, err)
 	}
 	return nil
 }
 
-// ensureLabSdnVnet ensures net.VnetID exists as a vnet in labZoneName with
-// the tag and alias from net. It creates the vnet when absent; when present,
-// it updates only fields that have drifted, issuing no request when nothing
-// has changed. An empty net.VnetID is a caller/config error, not silently
-// skipped, since every lab must name a vnet.
+// ensureLabSdnVnet ensures net.VnetID exists as a vnet in labZoneName(net)
+// with the tag and alias from net. It creates the vnet when absent; when
+// present, it updates only fields that have drifted, issuing no request when
+// nothing has changed. An empty net.VnetID is a caller/config error, not
+// silently skipped, since every lab must name a vnet.
 func ensureLabSdnVnet(ctx context.Context, api *apiclient.APIClient, net config.LabNetwork) error {
 	if net.VnetID == "" {
 		return fmt.Errorf("lab network vnet_id is empty; cannot ensure an SDN vnet")
 	}
+
+	zoneName := labZoneName(net)
 
 	list, err := api.Cluster.ListSdnVnets(ctx, nil)
 	if err != nil {
@@ -363,7 +381,7 @@ func ensureLabSdnVnet(ctx context.Context, api *apiclient.APIClient, net config.
 	tag := int64(net.VxlanTag)
 
 	if !found {
-		params := &cluster.CreateSdnVnetsParams{Vnet: net.VnetID, Zone: labZoneName}
+		params := &cluster.CreateSdnVnetsParams{Vnet: net.VnetID, Zone: zoneName}
 		if tag != 0 {
 			params.Tag = netPtr(tag)
 		}
@@ -379,8 +397,8 @@ func ensureLabSdnVnet(ctx context.Context, api *apiclient.APIClient, net config.
 	params := &cluster.UpdateSdnVnetsParams{}
 	changed := false
 
-	if existing.Zone != labZoneName {
-		params.Zone = netPtr(labZoneName)
+	if existing.Zone != zoneName {
+		params.Zone = netPtr(zoneName)
 		changed = true
 	}
 	if tag != 0 && existing.Tag != tag {

@@ -43,6 +43,7 @@ func TestStatus_NarrowGuestPrefixSurfacesNetworkWarning(t *testing.T) {
 		"vmid":   100,
 		"node":   "pve1",
 		"pool":   "lab-alpha",
+		"name":   "lab-alpha",
 		"status": "running",
 		"type":   "qemu",
 	})
@@ -71,10 +72,12 @@ func TestStatus_NarrowGuestPrefixSurfacesNetworkWarning(t *testing.T) {
 	body, err := execLifecycle(newStatusCmd(), deps, "alpha")
 	require.NoError(t, err)
 
-	var single jsonSingle
-	require.NoError(t, json.Unmarshal([]byte(body), &single))
-	assert.Equal(t, "10.10.1.50", single.Data["IP"])
-	warn := single.Data["NETWORK_WARNING"]
+	var table jsonTable
+	require.NoError(t, json.Unmarshal([]byte(body), &table))
+	require.Len(t, table.Rows, 2, "one node row plus a trailing summary row")
+	row := table.Rows[0]
+	assert.Equal(t, "10.10.1.50", row[4], "IP")
+	warn := row[8]
 	require.NotEmpty(t, warn)
 	assert.Contains(t, warn, "10.10.1.50/28")
 	assert.Contains(t, warn, "network.cidr 10.10.1.0/24")
@@ -88,6 +91,7 @@ func TestStatus_MatchingGuestPrefixHasNoWarning(t *testing.T) {
 		"vmid":   100,
 		"node":   "pve1",
 		"pool":   "lab-alpha",
+		"name":   "lab-alpha",
 		"status": "running",
 		"type":   "qemu",
 	})
@@ -116,8 +120,8 @@ func TestStatus_MatchingGuestPrefixHasNoWarning(t *testing.T) {
 	body, err := execLifecycle(newStatusCmd(), deps, "alpha")
 	require.NoError(t, err)
 
-	var single jsonSingle
-	require.NoError(t, json.Unmarshal([]byte(body), &single))
-	_, hasWarn := single.Data["NETWORK_WARNING"]
-	assert.False(t, hasWarn)
+	var table jsonTable
+	require.NoError(t, json.Unmarshal([]byte(body), &table))
+	require.Len(t, table.Rows, 2, "one node row plus a trailing summary row")
+	assert.Empty(t, table.Rows[0][8], "WARNING column")
 }

@@ -13,11 +13,11 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/pools"
-	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
 )
@@ -25,13 +25,19 @@ import (
 // newDestroyCmd builds `pmx lab destroy <name>`.
 //
 // It resolves the lab (peppi-guarding every identifier the config exposes),
-// locates the lab's VM by its pool's qemu membership, peppi-guards the
-// resolved VMID a second time, then — after a confirmation gate and an
-// optional --dry-run preview — stops the VM if running and deletes it.
-// --purge additionally removes the lab's resource pool and storage
-// definition. Every step queries live state first, so re-running destroy
-// against a lab that is partially or fully torn down already reports the
-// missing pieces as already gone rather than erroring.
+// classifies every live VM in the lab's pool by name (findLabVMs/
+// classifyLabVMName — the same classification start/stop/status use, not
+// the single-VM assumption this command carried before multi-node labs
+// existed), peppi-guards each classified VM's VMID a second time, then —
+// after a confirmation gate and an optional --dry-run preview — stops each
+// VM if running and deletes it, in reverse start order (the QDevice first
+// if present, then node N-1 down to node 0). --purge additionally removes
+// the lab's resource pool and storage definition. Every step queries live
+// state first, so re-running destroy against a lab that is partially or
+// fully torn down already reports the missing pieces as already gone
+// rather than erroring. A pool member whose name matches none of the
+// node/QDevice naming convention refuses the whole command rather than
+// guessing which VM it is.
 func newDestroyCmd() *cobra.Command {
 	var (
 		yes    bool
@@ -41,11 +47,17 @@ func newDestroyCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "destroy <name>",
-		Short: "Destroy a lab's VM",
-		Long: "Destroy the named lab's VM: stop it if running, then delete it. Refuses to " +
-			"run without --yes/-y or an interactive 'y' confirmation. Pass --purge to also " +
-			"remove the lab's resource pool and storage definition. Pass --dry-run to preview " +
-			"what would be destroyed without mutating anything or prompting.",
+		Short: "Destroy a lab's node VMs (and QDevice, if any)",
+		Long: "Destroy every node VM belonging to the named lab (and its QDevice VM, if the " +
+			"lab's topology has one), in reverse start order — the QDevice first (if present), " +
+			"then node N-1 down to node 0: stop each if running, then delete it. Every live VM " +
+			"in the lab's pool is classified by name against the node/QDevice naming " +
+			"convention (the same classification start/stop/status use); a pool member whose " +
+			"name matches none of it refuses the whole command rather than guessing which VM " +
+			"it is. Refuses to run without --yes/-y or an interactive 'y' confirmation. Pass " +
+			"--purge to also remove the lab's resource pool and storage definition. Pass " +
+			"--dry-run to preview what would be destroyed without mutating anything or " +
+			"prompting.",
 		Example: `  pmx lab destroy wayne --yes
   pmx lab destroy wayne --dry-run
   pmx lab destroy wayne --yes --purge`,
@@ -63,21 +75,26 @@ func newDestroyCmd() *cobra.Command {
 			poolID := labPoolID(lab)
 			stgID := storageID(lab)
 
-			vmid, node, vmFound, err := destroyLocateVM(ctx, deps.API, poolID)
+			vms, err := listLiveVMs(ctx, deps)
 			if err != nil {
-				return fmt.Errorf("locate VM for lab %q: %w", name, err)
+				return err
 			}
 
-			if vmFound {
+			classified, err := findLabVMs(vms, poolID, lab.Name)
+			if err != nil {
+				return fmt.Errorf("lab %q: %w", name, err)
+			}
+
+			toDestroy := destroyTargets(lab, classified)
+
+			// Peppi-guard every VM this run would touch before building or
+			// rendering any plan, so a single protected VMID anywhere in the
+			// lab's pool aborts the whole command before any mutation, and
+			// before the preview even names the lab's other, harmless VMs.
+			for _, d := range toDestroy {
 				target := peppi.Target{
-					VMID: vmid,
-					Names: []string{
-						poolID,
-						lab.Network.VnetID,
-						stgID,
-						lab.DNS.Zone,
-						lab.Name,
-					},
+					VMID:  int(d.vm.VMID),
+					Names: []string{poolID, lab.Network.VnetID, stgID, lab.DNS.Zone, lab.Name},
 				}
 				if err := peppi.Guard(target); err != nil {
 					return err
@@ -85,8 +102,8 @@ func newDestroyCmd() *cobra.Command {
 			}
 
 			var plan []string
-			if vmFound {
-				plan = append(plan, fmt.Sprintf("VM %d on node %q", vmid, node))
+			for _, d := range toDestroy {
+				plan = append(plan, fmt.Sprintf("node %s VM %d on node %q", d.target.label, d.vm.VMID, d.vm.Node))
 			}
 			if purge {
 				plan = append(plan, fmt.Sprintf("pool %q", poolID))
@@ -121,11 +138,12 @@ func newDestroyCmd() *cobra.Command {
 				}
 			}
 
-			if vmFound {
-				if err := destroyStopIfRunning(ctx, deps.API, node, vmid); err != nil {
+			for _, d := range toDestroy {
+				vmid := int(d.vm.VMID)
+				if err := destroyStopIfRunning(ctx, deps.API, d.vm.Node, vmid); err != nil {
 					return err
 				}
-				if err := destroyDeleteVM(ctx, deps.API, node, vmid); err != nil {
+				if err := destroyDeleteVM(ctx, deps.API, d.vm.Node, vmid); err != nil {
 					return err
 				}
 			}
@@ -153,59 +171,31 @@ func newDestroyCmd() *cobra.Command {
 	return cmd
 }
 
-// destroyPoolMember is the minimal decoded shape of one entry from
-// pools.GetPoolsResponse.Members. Vmid uses pve.PVEInt since PVE's Perl-based
-// API renders an integer field as either a JSON number or a JSON string
-// depending on endpoint.
-type destroyPoolMember struct {
-	ID   string     `json:"id"`
-	Type string     `json:"type"`
-	Node string     `json:"node"`
-	VMID pve.PVEInt `json:"vmid"`
+// destroyTarget pairs one classified live VM with the lifecycleTarget role
+// (a node index or the QDevice) its name identifies it as.
+type destroyTarget struct {
+	target lifecycleTarget
+	vm     labVM
 }
 
-// destroyLocateVM finds the single qemu guest belonging to poolID by calling
-// pools.GetPools filtered to type=qemu. It returns found=false, with no
-// error, both when the pool itself does not exist (HTTP 404) and when the
-// pool exists but currently has no qemu member — both cases mean "no VM to
-// destroy" rather than a failure. More than one qemu member is refused as
-// ambiguous: lab tooling only ever expects at most one VM per lab pool, and
-// guessing which one to destroy would be unsafe.
-func destroyLocateVM(ctx context.Context, api *apiclient.APIClient, poolID string) (vmid int, node string, found bool, err error) {
-	qemuType := "qemu"
-	resp, err := api.Pools.GetPools(ctx, poolID, &pools.GetPoolsParams{Type: &qemuType})
-	if err != nil {
-		if errors.Is(err, pveerrors.ErrNotFound) {
-			return 0, "", false, nil
-		}
-		return 0, "", false, fmt.Errorf("look up VM for pool %q: %w", poolID, err)
-	}
-	if resp == nil {
-		return 0, "", false, nil
-	}
-
-	var match *destroyPoolMember
-	for _, raw := range resp.Members {
-		var m destroyPoolMember
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return 0, "", false, fmt.Errorf("decode member of pool %q: %w", poolID, err)
-		}
-		if m.Type != "qemu" || m.VMID.Int() == 0 {
+// destroyTargets returns every classified VM in lab's pool that destroy
+// should act on, in destroy order: the QDevice first (if present), then
+// node N-1 down to node 0 — the reverse of create/start order, mirroring
+// lifecycle.go's stop sequencing and the multi-node lab plan's §9 scale-
+// down sequencing (highest-index/QDevice evacuated before lower nodes). A
+// target with no classified VM (a partially-created lab) is simply absent
+// from the result, not an error: destroy tears down whatever exists.
+func destroyTargets(lab *config.Lab, classified []classifiedLabVM) []destroyTarget {
+	targets := reverseLifecycleTargets(lifecycleTargetsForLab(lab))
+	out := make([]destroyTarget, 0, len(targets))
+	for _, tgt := range targets {
+		vm, found := tgt.lookup(classified)
+		if !found {
 			continue
 		}
-		if match != nil {
-			return 0, "", false, fmt.Errorf(
-				"pool %q has more than one qemu member (VMIDs %d and %d); refusing to guess which VM to destroy",
-				poolID, match.VMID.Int(), m.VMID.Int())
-		}
-		mCopy := m
-		match = &mCopy
+		out = append(out, destroyTarget{target: tgt, vm: vm})
 	}
-
-	if match == nil {
-		return 0, "", false, nil
-	}
-	return int(match.VMID.Int()), match.Node, true, nil
+	return out
 }
 
 // destroyStopIfRunning reads the VM's current status and, if it is running,
@@ -241,8 +231,8 @@ func destroyStopIfRunning(ctx context.Context, api *apiclient.APIClient, node st
 }
 
 // destroyDeleteVM deletes the VM's configuration and disks and blocks until
-// the delete task completes. A 404 (the VM vanished between the pool lookup
-// and this call) is treated as already-gone, not an error.
+// the delete task completes. A 404 (the VM vanished between discovery and
+// this call) is treated as already-gone, not an error.
 func destroyDeleteVM(ctx context.Context, api *apiclient.APIClient, node string, vmid int) error {
 	vmidStr := strconv.Itoa(vmid)
 

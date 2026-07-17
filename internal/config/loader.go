@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
@@ -401,7 +402,82 @@ func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
 		}
 	}
 
+	applyVnetIDDefaults(result)
+
+	if err := validateVnetIDUniqueness(result); err != nil {
+		return nil, err
+	}
+
+	if err := validateAllTopologies(result); err != nil {
+		return nil, err
+	}
+
 	return result, nil
+}
+
+// applyVnetIDDefaults fills in Network.VnetID for every lab in labs whose
+// config left it empty, using DeriveVnetID(name). A lab that sets
+// network.vnet_id explicitly keeps that value verbatim, even if it diverges
+// from what DeriveVnetID(name) would produce — explicit config always wins
+// over the derived default.
+func applyVnetIDDefaults(labs map[string]*Lab) {
+	for name, lab := range labs {
+		if lab.Network.VnetID == "" {
+			lab.Network.VnetID = DeriveVnetID(name)
+		}
+	}
+}
+
+// validateVnetIDUniqueness reports an error naming every colliding pair when
+// two or more labs in labs resolve to the same effective Network.VnetID
+// (after applyVnetIDDefaults has already filled in any derived defaults).
+// PVE vnet IDs must be unique cluster-wide; a collision here would silently
+// make two labs share one vnet the moment either is created.
+func validateVnetIDUniqueness(labs map[string]*Lab) error {
+	byVnetID := make(map[string][]string, len(labs))
+	for name, lab := range labs {
+		byVnetID[lab.Network.VnetID] = append(byVnetID[lab.Network.VnetID], name)
+	}
+
+	names := make([]string, 0, len(byVnetID))
+	for vnetID := range byVnetID {
+		names = append(names, vnetID)
+	}
+	sort.Strings(names)
+
+	for _, vnetID := range names {
+		labNames := byVnetID[vnetID]
+		if len(labNames) < 2 {
+			continue
+		}
+		sort.Strings(labNames)
+		return fmt.Errorf(
+			"vnet ID %q collides across labs %s: set network.vnet_id explicitly on one of them to disambiguate",
+			vnetID, strings.Join(labNames, ", "))
+	}
+
+	return nil
+}
+
+// validateAllTopologies runs ValidateTopology against every lab in labs and
+// returns a single combined error naming every issue found across every lab,
+// or nil when every lab's topology is valid.
+func validateAllTopologies(labs map[string]*Lab) error {
+	names := make([]string, 0, len(labs))
+	for name := range labs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var issues []string
+	for _, name := range names {
+		issues = append(issues, ValidateTopology(name, labs[name].Topology)...)
+	}
+
+	if len(issues) == 0 {
+		return nil
+	}
+	return fmt.Errorf("invalid lab topology:\n  %s", strings.Join(issues, "\n  "))
 }
 
 // loadLabFile reads and parses path as a bare single-lab YAML document: the
