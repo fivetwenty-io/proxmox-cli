@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"unicode"
 )
 
 // keychainLookup resolves a "keychain:<service>[/<account>]" reference against
@@ -68,6 +69,22 @@ var keychainRun = func(stdin string, args ...string) (string, error) {
 	return stderr.String(), err
 }
 
+// keychainFieldSafe reports whether s is a single non-empty token safe to
+// interpolate into the whitespace-tokenized `security -i` command line: no
+// whitespace (which would split the token) and no control characters (a
+// newline would inject a second command into the interactive session).
+func keychainFieldSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
+
 // StoreKeychainSecret stores secret in the macOS login keychain under the
 // generic-password item (service, account), creating it or updating it in
 // place (-U). The security(1) "add-generic-password" line — including the
@@ -76,8 +93,12 @@ var keychainRun = func(stdin string, args ...string) (string, error) {
 // Lab token secrets are UUID-form (no whitespace), so the interactive line
 // parses unambiguously.
 func StoreKeychainSecret(service, account, secret string) error {
-	if service == "" || account == "" {
-		return fmt.Errorf("keychain store requires non-empty service and account")
+	if !keychainFieldSafe(service) || !keychainFieldSafe(account) {
+		return fmt.Errorf("keychain store requires non-empty, whitespace-free service and account")
+	}
+	if !keychainFieldSafe(secret) {
+		// Never echo the secret; report only the shape violation.
+		return fmt.Errorf("keychain store: secret must be non-empty and free of whitespace and control characters")
 	}
 	line := fmt.Sprintf("add-generic-password -U -s %s -a %s -w %s\n", service, account, secret)
 	if stderr, err := keychainRun(line, "-i"); err != nil {

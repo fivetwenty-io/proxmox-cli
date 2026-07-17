@@ -42,6 +42,24 @@ func TestStoreKeychainSecret_RejectsEmptyServiceOrAccount(t *testing.T) {
 	require.Error(t, StoreKeychainSecret("svc", "", "x"))
 }
 
+func TestStoreKeychainSecret_RejectsInjectionChars(t *testing.T) {
+	// keychainRun must never be invoked when validation rejects the input.
+	orig := keychainRun
+	called := false
+	keychainRun = func(string, ...string) (string, error) { called = true; return "", nil }
+	defer func() { keychainRun = orig }()
+
+	require.Error(t, StoreKeychainSecret("svc", "acct", "line1\nadd-generic-password -s evil"))
+	require.Error(t, StoreKeychainSecret("bad svc", "acct", "x"))
+	require.Error(t, StoreKeychainSecret("svc", "acct\ninject", "x"))
+	require.Error(t, StoreKeychainSecret("svc", "acct", "")) // empty secret now rejected too
+	require.False(t, called, "keychainRun must not run when validation fails")
+
+	// A clean UUID-form secret still succeeds (no whitespace/control chars).
+	require.NoError(t, StoreKeychainSecret("pmx-lab-demo", "pmx@pve!pmx", "12345678-90ab-cdef-1234-567890abcdef"))
+	assert.True(t, called)
+}
+
 func TestStoreKeychainSecret_SurfacesSecurityError(t *testing.T) {
 	orig := keychainRun
 	keychainRun = func(string, ...string) (string, error) {
