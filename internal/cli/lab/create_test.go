@@ -20,6 +20,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
@@ -173,6 +174,153 @@ func createHandleTaskStatus(f *testhelper.FakePVE) {
 		"exitstatus": "OK",
 		"upid":       createTestUPID,
 	})
+}
+
+// buildCreateCmdWithSSH is buildCreateCmd plus a fake ssh runner, an active
+// context (for guest-ssh defaults), and stubbed context-hook seams so the
+// end-of-create context registration never touches a real keychain or the
+// network. It returns the fake ssh runner for response pre-loading.
+func buildCreateCmdWithSSH(
+	t *testing.T, configPath string, f *testhelper.FakePVE, node string,
+) (*cobra.Command, *exec.FakeRunner) {
+	t.Helper()
+	cmd := buildCreateCmd(t, configPath, f, node)
+	deps := cli.GetDeps(cmd)
+
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // wait-for-ssh probe (hostname)
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-wayne-0\n"},                   // hostname (for DefaultNode)
+	)
+	deps.Runner = fake
+	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}
+
+	origProbe, origStore := labProbeContextVersion, labStoreSecretFn
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }
+	labStoreSecretFn = func(_ *cobra.Command, _ *cli.Deps, service, account, _ string) (string, error) {
+		return "keychain:" + service + "/" + account, nil
+	}
+	t.Cleanup(func() { labProbeContextVersion, labStoreSecretFn = origProbe, origStore })
+
+	return cmd, fake
+}
+
+// createRegisterContextHookFreshVMRoutes registers the full route set needed
+// for a lab "wayne" whose SDN zone/vnet/subnet/storage/pool already exist
+// (via createSharedResourcesExist) but whose VM does not yet exist: an empty
+// qemu-list, a nextid allocation to createTestUPID's embedded VMID (9500), a
+// qemu-create responding with createTestUPID, and the task-status route that
+// completes it. This is the fixture the context-hook tests build on, since
+// the hook only runs once create has actually produced a VM.
+func createRegisterContextHookFreshVMRoutes(f *testhelper.FakePVE, t *testing.T, lab *config.Lab) {
+	t.Helper()
+	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu", createTestUPID)
+	createHandleTaskStatus(f)
+}
+
+// createRegisterContextHookStartRoutes registers the start + guest-agent-ping
+// routes for the freshly-created VM 9500 on node1, needed by any
+// context-hook test invoked with --start.
+func createRegisterContextHookStartRoutes(f *testhelper.FakePVE) {
+	f.HandleFunc("POST /api2/json/nodes/node1/qemu/9500/status/start", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu/9500/agent/ping", map[string]any{})
+}
+
+// TestCreate_NoContextFlag_SkipsRegistration covers --no-context: even with
+// --start (which would otherwise register the lab-wayne context), no context
+// row is rendered and no context is written to config.
+func TestCreate_NoContextFlag_SkipsRegistration(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+	createRegisterContextHookStartRoutes(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start", "--no-context")
+	require.NoError(t, err)
+
+	assert.NotContains(t, out, "context lab-wayne ready")
+	deps := cli.GetDeps(cmd)
+	assert.Nil(t, deps.Cfg.Contexts["lab-wayne"], "--no-context must not register a context")
+}
+
+// TestCreate_Start_RegistersContextRow covers --start registering the
+// lab-wayne context: the rendered output names it and it is written to
+// config.
+func TestCreate_Start_RegistersContextRow(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+	createRegisterContextHookStartRoutes(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.NoError(t, err)
+
+	// Assert on the rendered context row specifically (not the bare
+	// "lab-wayne" substring, which also appears in the "tank-lab-wayne"
+	// storage id) so this proves the context row was emitted.
+	assert.Contains(t, out, "context lab-wayne ready")
+	deps := cli.GetDeps(cmd)
+	assert.NotNil(t, deps.Cfg.Contexts["lab-wayne"])
+}
+
+// TestCreate_NoStart_EmitsGuidanceRow covers create with neither --start nor
+// --no-context: the VM is powered off, so the hook emits sync guidance
+// instead of registering a context.
+func TestCreate_NoStart_EmitsGuidanceRow(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne")
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "pmx lab context sync wayne")
+	deps := cli.GetDeps(cmd)
+	assert.Nil(t, deps.Cfg.Contexts["lab-wayne"], "without --start no context is registered")
+}
+
+// TestCreate_ContextHookFailure_IsBestEffort covers a forced end-to-end probe
+// failure: create must still exit 0 and render the sync-guidance row, since
+// the context hook is strictly best-effort.
+func TestCreate_ContextHookFailure_IsBestEffort(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Network.Mgmt.Subnet = "10.10.1.0/24"
+	createRegisterContextHookFreshVMRoutes(f, t, lab)
+	createRegisterContextHookStartRoutes(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildCreateCmdWithSSH(t, path, f, "node1")
+
+	origProbe := labProbeContextVersion
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return assertAnErr{} }
+	t.Cleanup(func() { labProbeContextVersion = origProbe })
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--start")
+	require.NoError(t, err, "context-hook failure must never fail provisioning")
+	assert.Contains(t, out, "pmx lab context sync wayne")
 }
 
 // TestCreateHappyPath_OrderedCalls covers a lab whose zone, vnet, subnet,

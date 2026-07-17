@@ -139,6 +139,7 @@ type createPlan struct {
 	nodePlans       []createNodePlan
 	agentNote       string
 	capacityWarning string
+	contextNote     string
 }
 
 // createPtr returns a pointer to v, for building the many optional pointer
@@ -148,11 +149,12 @@ func createPtr[T any](v T) *T { return &v }
 // newCreateCmd builds `pmx lab create <name>`.
 func newCreateCmd() *cobra.Command {
 	var (
-		dryRun bool
-		force  bool
-		node   string
-		start  bool
-		ov     createOverrides
+		dryRun    bool
+		force     bool
+		node      string
+		start     bool
+		noContext bool
+		ov        createOverrides
 	)
 
 	cmd := &cobra.Command{
@@ -253,6 +255,7 @@ func newCreateCmd() *cobra.Command {
 				}
 			}
 
+			plan.contextNote = runCreateContextHook(cmd, deps, eff, name, start, noContext)
 			return renderCreatePlan(cmd, deps, plan, false)
 		},
 	}
@@ -262,6 +265,7 @@ func newCreateCmd() *cobra.Command {
 	f.BoolVar(&force, "force", false, "override the capacity gate's 85% pool-fill refusal threshold")
 	f.StringVar(&node, "node", "", "node to create the lab's VMs on (defaults to --node/PMX_NODE/config default)")
 	f.BoolVar(&start, "start", false, "start every created VM after creation and verify the guest agent responds")
+	f.BoolVar(&noContext, "no-context", false, "skip auto-registering the lab-<name> pmx context after --start")
 	f.IntVar(&ov.vcpu, "vcpu", 0, "override compute.vcpu (base sizing for every node before per-node overrides)")
 	f.IntVar(&ov.memMaxGB, "memory-max-gb", 0, "override compute.memory.max_gb")
 	f.IntVar(&ov.memMinGB, "memory-min-gb", 0, "override compute.memory.min_gb")
@@ -1500,6 +1504,34 @@ func createRawList(resp any) ([]json.RawMessage, error) {
 	return out, nil
 }
 
+// runCreateContextHook registers or refreshes the lab-<name> pmx context after
+// a successful create, and returns the STEP-table note describing the outcome.
+// It is strictly best-effort: any failure yields a warning note pointing at
+// `pmx lab context sync` and never affects create's exit code. When --start
+// was not given the VMs are powered off, so it emits guidance instead of
+// polling a dead node; --no-context suppresses it entirely.
+func runCreateContextHook(
+	cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, name string, start, noContext bool,
+) string {
+	if noContext {
+		return ""
+	}
+	ctxName := labContextName(name)
+	if !start {
+		return fmt.Sprintf("skipped (no --start); run 'pmx lab context sync %s' after 'pmx lab start %s'", name, name)
+	}
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: true})
+	if err != nil {
+		return fmt.Sprintf("⚠ context %s: %v; run 'pmx lab context sync %s' to retry", ctxName, err, name)
+	}
+	verb := "reused existing token"
+	if res.Rotated {
+		verb = "rotated token"
+	}
+	return fmt.Sprintf("context %s ready (%s)", ctxName, verb)
+}
+
 // renderCreatePlan renders plan as a STEP/STATUS table. In dry-run mode every
 // step shows either "would create" or "skip (already exists)", and the VM
 // (and start) steps carry the literal "<vmid>" placeholder baked into their
@@ -1553,6 +1585,9 @@ func renderCreatePlan(cmd *cobra.Command, deps *cli.Deps, plan *createPlan, dryR
 	}
 	if plan.agentNote != "" {
 		rows = append(rows, []string{"start", plan.agentNote})
+	}
+	if plan.contextNote != "" {
+		rows = append(rows, []string{"context", plan.contextNote})
 	}
 
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
