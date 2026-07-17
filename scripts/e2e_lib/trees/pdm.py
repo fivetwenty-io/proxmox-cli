@@ -28,6 +28,11 @@ from __future__ import annotations
 
 from ..context import CmdResult, Ctx
 
+# Like PBS, several PDM endpoints (GET /nodes, remote inventories, proxied
+# firewall status) only accept ticket auth and 403 any API token regardless
+# of its ACLs; the sweep's token context skips them instead of failing.
+TICKET_ONLY = {"permission check failed": "endpoint accepts only ticket auth (API tokens get 403)"}
+
 NAME = "pdm"
 DESCRIPTION = "Proxmox Datacenter Manager admin (opt-in: --pdm-context)"
 
@@ -112,7 +117,7 @@ def _access(ctx: Ctx) -> None:
 def _remotes(ctx: Ctx) -> None:
     if ctx.env.context:  # opt-in gate (see module docstring)
         ctx.check("config view ls", "pdm", "config", "view", "ls", validate=is_list)
-        ctx.check("node ls", "pdm", "node", "ls", validate=is_list)
+        ctx.check("node ls", "pdm", "node", "ls", validate=is_list, skip_on=TICKET_ONLY)
         ctx.check("auto-install prepared ls", "pdm", "auto-install", "prepared", "ls",
                   validate=is_list)
 
@@ -122,10 +127,12 @@ def _remotes(ctx: Ctx) -> None:
 # --------------------------------------------------------------------------- #
 def _proxy(ctx: Ctx) -> None:
     if ctx.env.context:  # opt-in gate (see module docstring)
-        ctx.check("pve remote ls", "pdm", "pve", "remote", "ls", validate=is_list)
-        ctx.check("pbs remote ls", "pdm", "pbs", "remote", "ls", validate=is_list)
+        ctx.check("pve remote ls", "pdm", "pve", "remote", "ls", validate=is_list,
+                  skip_on=TICKET_ONLY)
+        ctx.check("pbs remote ls", "pdm", "pbs", "remote", "ls", validate=is_list,
+                  skip_on=TICKET_ONLY)
         ctx.check("pve firewall status", "pdm", "pve", "firewall", "status",
-                  validate=is_list)
+                  validate=is_list, skip_on=TICKET_ONLY)
 
 
 # --------------------------------------------------------------------------- #

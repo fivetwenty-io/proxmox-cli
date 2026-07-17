@@ -87,12 +87,19 @@ class Ctx:
         fmt: str = "json",
         with_context: bool = True,
         validate: Callable[[CmdResult], str | None] | None = None,
+        skip_on: dict[str, str] | None = None,
     ) -> CmdResult:
         """Run a command, record PASS/FAIL.
 
         Default assertion: exit code 0. An optional `validate` returns an error
         string to fail the check, or None to accept. JSON output is parsed and,
         when `fmt=json`, malformed JSON fails the check.
+
+        `skip_on` maps stderr substrings to skip reasons: a failure whose
+        stderr contains a key records SKIP with that reason instead of FAIL.
+        For failures caused by the environment or by server-side policy (an
+        endpoint that only accepts ticket auth, a kernel without ZFS), not by
+        the CLI under test.
         """
         start = time.monotonic()
         res = self.run(*args, node=node, fmt=fmt, with_context=with_context)
@@ -102,6 +109,10 @@ class Ctx:
         status = Status.PASS
 
         if res.rc != 0:
+            for needle, reason in (skip_on or {}).items():
+                if needle in res.stderr or needle in res.stdout:
+                    self.skip(name, reason)
+                    return res
             status = Status.FAIL
             detail = (res.stderr.strip() or res.stdout.strip() or "non-zero exit")[:200]
         elif fmt == "json" and res.stdout.strip():

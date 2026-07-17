@@ -23,6 +23,11 @@ from __future__ import annotations
 
 from ..context import CmdResult, Ctx
 
+# Some PBS endpoints (GET /nodes, tape scans) only accept ticket auth and 403
+# any API token, no matter what ACL the token holds. The sweep runs on a
+# token context, so those checks skip rather than fail.
+TICKET_ONLY = {"permission check failed": "endpoint accepts only ticket auth (API tokens get 403)"}
+
 NAME = "pbs"
 DESCRIPTION = "Proxmox Backup Server admin (opt-in: --pbs-context)"
 
@@ -441,7 +446,7 @@ def _metrics(ctx: Ctx) -> None:
 # --------------------------------------------------------------------------- #
 def _node(ctx: Ctx) -> None:
     if ctx.env.context:  # opt-in gate (see module docstring)
-        ctx.check("node ls", "pbs", "node", "ls", validate=is_list)
+        ctx.check("node ls", "pbs", "node", "ls", validate=is_list, skip_on=TICKET_ONLY)
         ctx.check("node status", "pbs", "node", "status")
         ctx.check("node report", "pbs", "node", "report", fmt="plain")
         ctx.check("node syslog", "pbs", "node", "syslog")
@@ -514,7 +519,9 @@ def _node(ctx: Ctx) -> None:
         ctx.check("node disks directory ls", "pbs", "node", "disks", "directory", "ls",
                   validate=is_list)
         zfs = ctx.check("node disks zfs ls", "pbs", "node", "disks", "zfs", "ls",
-                        validate=is_list)
+                        validate=is_list,
+                        skip_on={"ZFS modules cannot be auto-loaded":
+                                 "host kernel has no ZFS module"})
         zp = _pick(_rows(zfs), "name")
         if zp:
             ctx.check("node disks zfs show", "pbs", "node", "disks", "zfs", "show", zp)
@@ -537,11 +544,12 @@ def _tape(ctx: Ctx) -> None:
     if ctx.env.context:  # opt-in gate (see module docstring)
         drives = ctx.check("tape drive ls", "pbs", "tape", "drive", "ls",
                            validate=is_list)
-        ctx.check("tape drive scan", "pbs", "tape", "drive", "scan", validate=is_list)
+        ctx.check("tape drive scan", "pbs", "tape", "drive", "scan", validate=is_list,
+                  skip_on=TICKET_ONLY)
         changers = ctx.check("tape changer ls", "pbs", "tape", "changer", "ls",
                              validate=is_list)
         ctx.check("tape changer scan", "pbs", "tape", "changer", "scan",
-                  validate=is_list)
+                  validate=is_list, skip_on=TICKET_ONLY)
         ctx.check("tape media ls", "pbs", "tape", "media", "ls", validate=is_list)
         ctx.check("tape media content", "pbs", "tape", "media", "content",
                   validate=is_list)
