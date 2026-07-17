@@ -208,9 +208,16 @@ func buildAccessPlanResult(
 		{userStep, accessStepVerb(userFound, dryRun)},
 		{fmt.Sprintf("role %q", role), accessStepVerb(roleFound, dryRun)},
 		{fmt.Sprintf("grant role %q to user %q on pool %q", role, user, poolID), accessGrantStepVerb(dryRun)},
+		// Rendered as a trailing row, not via output.Result.Message: every
+		// renderer in internal/output drops Message whenever Headers/Rows are
+		// also set, which this table always is, so a Message-only summary
+		// would never reach the operator in any output format (same defect
+		// lifecycle's status and create's plan rendering hit and fixed the
+		// same way).
+		{"summary", msg},
 	}
 
-	return output.Result{Headers: []string{"STEP", "STATUS"}, Rows: rows, Message: msg}
+	return output.Result{Headers: []string{"STEP", "STATUS"}, Rows: rows}
 }
 
 // accessGrantStepVerb describes the final ACL-grant step's status: "would be

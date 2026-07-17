@@ -508,7 +508,10 @@ func TestAccessGrant_JSONFormat_DryRunEmitsStructuredPlanNoPassword(t *testing.T
 	var decoded accessJSONResult
 	require.NoError(t, json.Unmarshal([]byte(out), &decoded), "-o json output must be a single valid JSON document")
 	require.Len(t, decoded.Headers, 2)
-	require.Len(t, decoded.Rows, 4, "expected pool/user/role/grant plan rows")
+	require.Len(t, decoded.Rows, 5, "expected pool/user/role/grant plan rows plus the summary row")
+	summaryRow := decoded.Rows[4]
+	require.Equal(t, "summary", summaryRow[0])
+	assert.Contains(t, summaryRow[1], "would grant", "the dry-run summary must reach the operator as a row")
 
 	var sawPasswordCell bool
 	for _, row := range decoded.Rows {
@@ -556,7 +559,10 @@ func TestAccessGrant_JSONFormat_ApplyEmitsStructuredPlanNoPassword(t *testing.T)
 
 	var decoded accessJSONResult
 	require.NoError(t, json.Unmarshal([]byte(out), &decoded), "-o json output must be a single valid JSON document")
-	require.Len(t, decoded.Rows, 4, "expected pool/user/role/grant plan rows")
+	require.Len(t, decoded.Rows, 5, "expected pool/user/role/grant plan rows plus the summary row")
+	applySummaryRow := decoded.Rows[4]
+	require.Equal(t, "summary", applySummaryRow[0])
+	assert.Contains(t, applySummaryRow[1], "granted role", "the completion summary must reach the operator as a row")
 
 	var sawPasswordCell bool
 	for _, row := range decoded.Rows {
@@ -573,6 +579,36 @@ func TestAccessGrant_JSONFormat_ApplyEmitsStructuredPlanNoPassword(t *testing.T)
 	assert.Equal(t, fakeDefaultUserPassword, state.createUserCalls[0].password,
 		"the real secret must still have reached the API request")
 	require.Len(t, state.updateAclCalls, 1)
+}
+
+// TestAccessGrant_SummaryReachesDefaultOutput pins the fix for a dropped
+// completion message: buildAccessPlanResult used to set Result.Message
+// alongside Rows, and every renderer drops Message once Rows/Headers are
+// set, so the grant summary never reached the operator in any format. The
+// summary is now a trailing row and must appear in the default rendering.
+func TestAccessGrant_SummaryReachesDefaultOutput(t *testing.T) {
+	cfg := &config.Config{
+		DefaultUserPassword: fakeDefaultUserPassword,
+		Labs: map[string]*config.Lab{
+			"alpha": cleanLab("alpha"),
+		},
+	}
+	path := writeConfig(t, cfg)
+	cmd := accessTestCmd(t, path)
+
+	f := testhelper.NewFakePVE(t)
+	state := newAccessFakeState(nil, nil, nil)
+	registerAccessFakeRoutes(t, f, state)
+
+	var stdout, stderr bytes.Buffer
+	wireAccessDeps(t, cmd, f, &stdout, &stderr)
+
+	role, dryRun := accessFlagValues(t, cmd)
+	err := runAccessGrant(cmd, "alpha", "alice@pve", role, dryRun)
+	require.NoError(t, err)
+
+	assert.Contains(t, stdout.String(), "granted role",
+		"the completion summary must appear in the default rendered output")
 }
 
 func TestAccessGrant_RoleMissingAndNotPMXAdmin_Errors(t *testing.T) {
