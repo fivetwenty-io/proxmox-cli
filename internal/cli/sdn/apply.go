@@ -50,6 +50,7 @@ func newApplyCmd() *cobra.Command {
 				params.ReleaseLock = boolPtr(releaseLock)
 			}
 
+			cli.WarnIfInquorate(cmd.Context(), deps, cmd.ErrOrStderr(), "the SDN reload")
 			resp, err := deps.API.Cluster.UpdateSdn(cmd.Context(), params)
 			if err != nil {
 				return fmt.Errorf("apply SDN configuration: %w", err)

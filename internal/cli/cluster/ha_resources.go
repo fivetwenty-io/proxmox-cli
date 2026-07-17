@@ -200,6 +200,7 @@ func newHaResourceCreateCmd() *cobra.Command {
 				params.AutoRebalance = &hf.autoRebalance
 			}
 
+			cli.WarnIfInquorate(cmd.Context(), deps, cmd.ErrOrStderr(), "the HA resource change")
 			if err := deps.API.Cluster.CreateHaResources(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create HA resource %q: %w", sid, err)
 			}
@@ -261,6 +262,7 @@ func newHaResourceSetCmd() *cobra.Command {
 				params.Digest = &digest
 			}
 
+			cli.WarnIfInquorate(cmd.Context(), deps, cmd.ErrOrStderr(), "the HA resource change")
 			if err := deps.API.Cluster.UpdateHaResources(cmd.Context(), sid, params); err != nil {
 				return fmt.Errorf("update HA resource %q: %w", sid, err)
 			}
@@ -300,6 +302,7 @@ func newHaResourceDeleteCmd() *cobra.Command {
 				params.Purge = &purge
 			}
 
+			cli.WarnIfInquorate(cmd.Context(), deps, cmd.ErrOrStderr(), "the HA resource change")
 			if err := deps.API.Cluster.DeleteHaResources(cmd.Context(), sid, params); err != nil {
 				return fmt.Errorf("delete HA resource %q: %w", sid, err)
 			}

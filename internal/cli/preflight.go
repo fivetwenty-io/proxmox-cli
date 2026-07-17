@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -63,5 +64,32 @@ func WarnInboundAllow(w io.Writer, state InboundAllowState, scope string) {
 	case InboundAllowMissing:
 		_, _ = fmt.Fprintf(w, "WARNING: no inbound ACCEPT rule found in the %s rule set; "+
 			"enabling the firewall may cut off SSH (22) and GUI (8006) access\n", scope)
+	}
+}
+
+// WarnIfInquorate fetches /cluster/status and warns on w when the cluster
+// reports it is not quorate, since op may then fail or be deferred until
+// quorum returns. Best effort by design: standalone nodes (no cluster entry)
+// and status fetch failures stay silent, and the operation always proceeds.
+func WarnIfInquorate(ctx context.Context, deps *Deps, w io.Writer, op string) {
+	if deps.API == nil {
+		return
+	}
+	resp, err := deps.API.Cluster.ListStatus(ctx)
+	if err != nil || resp == nil {
+		return
+	}
+	for _, raw := range *resp {
+		var e struct {
+			Type    string `json:"type"`
+			Quorate *int   `json:"quorate"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			continue
+		}
+		if e.Type == "cluster" && e.Quorate != nil && *e.Quorate == 0 {
+			_, _ = fmt.Fprintf(w, "WARNING: the cluster is not quorate; %s may fail or not take effect until quorum is restored\n", op)
+			return
+		}
 	}
 }
