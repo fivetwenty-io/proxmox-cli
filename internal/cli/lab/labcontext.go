@@ -13,6 +13,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // labCtxUser is the username portion of the derived lab context account
@@ -362,4 +363,56 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 		return res, fmt.Errorf("context %q written but GET /version failed: %w", res.ContextName, err)
 	}
 	return res, nil
+}
+
+// newContextCmd builds `pmx lab context` and its sub-commands.
+func newContextCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "context",
+		Short: "Manage the pmx context auto-registered for a lab",
+		Long: "Register or refresh the pmx context (named lab-<name>) that points at a lab's " +
+			"nested Proxmox VE API, minting a dedicated admin token over ssh and storing its " +
+			"secret in the macOS keychain. `pmx lab create --start` runs this automatically; " +
+			"use `sync` to (re-)register a lab, rotate a lost secret, or refresh the pinned " +
+			"TLS fingerprint.",
+	}
+	cmd.AddCommand(newContextSyncCmd())
+	return cmd
+}
+
+// newContextSyncCmd builds `pmx lab context sync <name>`.
+func newContextSyncCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sync <name>",
+		Short: "Register or refresh a lab's pmx context",
+		Long: "Ensure the lab-<name> pmx context exists and works: ensure the pmx@pve admin " +
+			"token user and ACL on the nested cluster, reuse the stored token secret if it " +
+			"still authenticates (otherwise rotate to a fresh one), refresh the pinned TLS " +
+			"fingerprint, and verify the context end to end with GET /version. Requires an " +
+			"active pmx context (--context/-c) as the source of ssh connection defaults, and " +
+			"the lab's node 0 to be running.",
+		Example: `  pmx -c fleet lab context sync demo`,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			name := args[0]
+
+			lab, err := resolveLabForMutate(cmd, name)
+			if err != nil {
+				return err
+			}
+
+			res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+			if err != nil {
+				return fmt.Errorf("sync context for lab %q: %w", name, err)
+			}
+
+			verb := "reused existing token"
+			if res.Rotated {
+				verb = "rotated token"
+			}
+			msg := fmt.Sprintf("context %q ready (%s)", res.ContextName, verb)
+			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+		},
+	}
 }

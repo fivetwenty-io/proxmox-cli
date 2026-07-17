@@ -40,12 +40,12 @@ func TestLabGroup_CommandTreeAndAnnotation(t *testing.T) {
 
 	for _, want := range []string{
 		"create", "destroy", "list", "status", "start", "stop",
-		"net", "access", "quota", "config",
+		"net", "access", "quota", "config", "context",
 		"cluster", "qdevice", "sdn", "nfs", "scale",
 	} {
 		assert.True(t, names[want], "expected %q sub-command to be registered", want)
 	}
-	assert.Len(t, root.Commands(), 15, "expected exactly fifteen lab sub-commands")
+	assert.Len(t, root.Commands(), 16, "expected exactly sixteen lab sub-commands")
 }
 
 // TestCreateAuditFields_NetworkStorageAndPoolOverrides covers the five

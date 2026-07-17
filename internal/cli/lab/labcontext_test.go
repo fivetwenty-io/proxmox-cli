@@ -770,3 +770,38 @@ func TestSyncLabContext_ProbeFailureIsFatal(t *testing.T) {
 	require.NoError(t, lerr)
 	assert.NotNil(t, reloaded.Contexts["lab-demo"])
 }
+
+func TestContextSyncCommand_WritesContextAndRenders(t *testing.T) {
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, exec.FakeResponse{}, exec.FakeResponse{},
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"},
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},
+	)
+	_, deps := syncTestDeps(t, fake)
+	// Write a lab config the command can resolve.
+	writeLabConfig(t, deps.ConfigPath, "demo")
+	// Reload cfg so resolveLabForMutate sees the lab.
+	reloaded, err := config.Load(deps.ConfigPath)
+	require.NoError(t, err)
+	deps.Cfg = reloaded
+
+	root := newContextCmd()
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+	out, err := runGuestCmd(t, root, "sync", "demo")
+	require.NoError(t, err)
+	assert.Contains(t, out, "lab-demo")
+
+	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"])
+}
+
+// writeLabConfig writes a minimal config.yml at path containing one inline lab
+// named name with a resolvable mgmt /24, so resolveLabForMutate succeeds.
+func writeLabConfig(t *testing.T, path, name string) {
+	t.Helper()
+	body := "contexts: {}\nlabs:\n  " + name + ":\n" +
+		"    name: " + name + "\n" +
+		"    network:\n      mgmt:\n        subnet: 10.10.1.0/24\n        gateway: 10.10.1.1\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+}
