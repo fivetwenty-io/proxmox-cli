@@ -240,7 +240,7 @@ func runScale(cmd *cobra.Command, name string, nodesFlag int, qdeviceFlag, nodeF
 		}
 	}
 
-	rows, execErr := executeScalePlan(ctx, deps, lab, eff, plan, targetNode, force)
+	rows, execErr := executeScalePlan(ctx, cmd, deps, lab, eff, plan, targetNode, force)
 	rows = append(preflightRows, rows...)
 
 	if len(rows) > 0 {
@@ -539,7 +539,8 @@ func renderScalePlanPreview(name string, p scalePlan) output.Result {
 // mid-operation propagates immediately, without rendering a partial plan"
 // convention.
 func executeScalePlan(
-	ctx context.Context, deps *cli.Deps, lab, eff *config.Lab, p scalePlan, targetNode string, force bool,
+	ctx context.Context, cmd *cobra.Command, deps *cli.Deps, lab, eff *config.Lab, p scalePlan,
+	targetNode string, force bool,
 ) ([][]string, error) {
 	name := lab.Name
 	var rows [][]string
@@ -598,6 +599,10 @@ func executeScalePlan(
 			return nil, err
 		}
 		rows = append(rows, []string{"cluster init (node 0)", clusterMsg})
+
+		if note := refreshLabContextAfterClusterInit(cmd, deps, lab); note != "" {
+			rows = append(rows, []string{"context refresh", note})
+		}
 
 		for _, i := range p.growIndices {
 			nodeIP, err := labNodeMgmtIP(lab.Network, i)

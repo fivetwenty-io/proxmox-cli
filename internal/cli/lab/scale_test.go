@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1290,4 +1291,113 @@ func TestScale_DeferredGrow_ExitsZeroDespiteIncompleteFinalValidation(t *testing
 	assert.Contains(t, out, "deferred:")
 	assert.Contains(t, out, "final validation node 1")
 	assert.Contains(t, out, "not reachable")
+}
+
+// TestScale_Grow_RefreshesContextFingerprintAfterClusterInit covers the fix
+// for executeScalePlan's grow branch, which calls ensureClusterInit (the
+// same `pvecm create` cert reissue `cluster init` performs) but, before this
+// fix, never called refreshLabContextAfterClusterInit afterward — so a
+// pinned lab-<name> context's TLS fingerprint went stale the moment a scale
+// actually formed the cluster, and every later `pmx -c lab-<name>` command
+// failed TLS silently. This is a near-duplicate of
+// TestScale_DeferredGrow_ExitsZeroDespiteIncompleteFinalValidation's fixture
+// (fresh 1-node lab growing to 3, deferred at node 1's ssh reachability),
+// with a seeded lab-wayne context added and the refresh's own ssh calls
+// (ensure-user, ensure-ACL, fingerprint, hostname — same shape as
+// cluster_test.go's TestClusterInit_RefreshesExistingContextFingerprint)
+// inserted right after cluster init's create+verify.
+//
+// Non-vacuousness: if the fix (the refreshLabContextAfterClusterInit call in
+// scale.go's grow branch) is reverted, refreshLabContextAfterClusterInit is
+// never invoked, so deps.Cfg.Contexts["lab-wayne"].TLS.Fingerprint stays at
+// its seeded zero value ("") and the fingerprint assertion below fails
+// regardless of how the now-misaligned fake ssh call queue plays out
+// downstream (the 4 queued refresh responses would instead be misread as
+// the node-1 reachability probe and whatever follows it, very likely
+// failing require.NoError or require.Len first).
+func TestScale_Grow_RefreshesContextFingerprintAfterClusterInit(t *testing.T) {
+	lab := scaleTestLab("wayne", 1, "")
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"wayne": lab},
+		Contexts: map[string]*config.Context{
+			"lab-wayne": {
+				Host:     "10.10.1.10",
+				Port:     8006,
+				Protocol: "https",
+				Product:  config.ProductPVE,
+				Auth: config.AuthBlock{
+					Type:     "token",
+					Username: "pmx@pve",
+					TokenID:  "pmx",
+					Secret:   "keychain:pmx-lab-wayne/pmx@pve!pmx",
+				},
+			},
+		},
+	}
+	path := writeConfig(t, cfg)
+	f := testhelper.NewFakePVE(t)
+
+	handleClusterResources(f,
+		map[string]any{"vmid": 9200, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-0"},
+	)
+	scaleGrowFixture(f, lab,
+		[]map[string]any{{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"}},
+		[]map[string]any{{"vmid": 9200, "name": "lab-wayne-0"}},
+	)
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9201")
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu", createTestUPID)
+	createHandleTaskStatus(f)
+
+	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
+	deps := cli.GetDeps(cmd)
+
+	// Reuse-secret path: the probe stub returns nil (valid), so refresh never
+	// mints a new token over ssh, matching cluster_test.go's own
+	// TestClusterInit_RefreshesExistingContextFingerprint fixture.
+	origProbe := labProbeContextVersion
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error { return nil }
+	t.Cleanup(func() { labProbeContextVersion = origProbe })
+
+	fp := "11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00"
+	fake := exec.Fake(
+		// 0: preflight membership probe: fresh, not clustered.
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1},
+		// 1-3: cluster init: probe, create, verify.
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1},
+		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice1of1},
+		// 4-7: context refresh: ensure user, ensure ACL, fingerprint, hostname.
+		exec.FakeResponse{}, exec.FakeResponse{},
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"},
+		exec.FakeResponse{Stdout: "lab-wayne-0\n"},
+		// 8: node 1 reachability probe FAILS -> deferred, loop breaks before
+		// node 2 is even probed.
+		exec.FakeResponse{ExitCode: 255},
+		// 9-11: sdn (target is 3 nodes, so this still reconciles).
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{}, exec.FakeResponse{},
+		// 12-17: nfs.
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		// 18-20: final validation node 0 (healthy, self-consistent at 1/1).
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice1of1},
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolSingleNode},
+		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
+		// 21: final validation node 1: unreachable.
+		exec.FakeResponse{ExitCode: 255},
+		// 22: final validation node 2: unreachable (its VM shell was
+		// created, but it was never even probed for join reachability).
+		exec.FakeResponse{ExitCode: 255},
+	)
+	deps.Runner = fake
+
+	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
+	require.NoError(t, err, "a deferred (not-yet-complete) transition must exit 0")
+	assert.Contains(t, out, "deferred:")
+	assert.Contains(t, out, "context lab-wayne refreshed")
+
+	require.Len(t, fake.Calls, 23)
+	assert.Equal(t, fp, deps.Cfg.Contexts["lab-wayne"].TLS.Fingerprint,
+		"the grow path's ensureClusterInit reissues node 0's API cert; the pinned lab-wayne context's "+
+			"fingerprint must be refreshed afterward, exactly like `pmx lab cluster init` already does")
 }
