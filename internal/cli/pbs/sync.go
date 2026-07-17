@@ -128,7 +128,7 @@ func newSyncLsCmd() *cobra.Command {
 					e.Id, e.Store, pbsFormatOptionalString(e.Remote), e.RemoteStore,
 					pbsFormatOptionalString(e.Ns), pbsFormatOptionalString(e.SyncDirection),
 					pbsFormatOptionalString(e.Schedule), pbsFormatOptionalString(e.LastRunState),
-					pbsFormatOptionalInt64(e.NextRun),
+					epochCellPtr(e.NextRun),
 				})
 			}
 

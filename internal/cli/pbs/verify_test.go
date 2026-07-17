@@ -108,6 +108,8 @@ func TestVerifyJobLs_RendersTable(t *testing.T) {
 	require.Contains(t, out, "job2")
 	require.Contains(t, out, "hourly")
 	require.Contains(t, out, "daily")
+	require.Contains(t, out, "2023-11-14T22:13:20Z")
+	require.NotContains(t, out, "1700000000")
 }
 
 func TestVerifyJobLs_SurfacesAPIError(t *testing.T) {

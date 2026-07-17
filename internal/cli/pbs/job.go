@@ -664,7 +664,7 @@ func newTapeJobStatusCmd() *cobra.Command {
 			for _, e := range entries {
 				rows = append(rows, []string{
 					e.Id, e.Store, e.Pool, e.Drive, pbsFormatOptionalString(e.Schedule),
-					pbsFormatOptionalString(e.LastRunState), pbsFormatOptionalInt64(e.NextRun),
+					pbsFormatOptionalString(e.LastRunState), epochCellPtr(e.NextRun),
 					pbsFormatOptionalString(e.NextMediaLabel),
 				})
 			}

@@ -221,7 +221,7 @@ func newVerifyJobLsCmd() *cobra.Command {
 			for _, e := range entries {
 				rows = append(rows, []string{
 					e.Id, e.Store, pbsFormatOptionalString(e.Ns), pbsFormatOptionalString(e.Schedule),
-					pbsFormatOptionalString(e.LastRunState), pbsFormatOptionalInt64(e.NextRun),
+					pbsFormatOptionalString(e.LastRunState), epochCellPtr(e.NextRun),
 				})
 			}
 

@@ -84,7 +84,7 @@ func gcStatusSingle(e gcStatusEntry) map[string]string {
 	}
 
 	if e.LastRunEndtime != nil {
-		single["last-run-endtime"] = strconv.FormatInt(*e.LastRunEndtime, 10)
+		single["last-run-endtime"] = epochCellPtr(e.LastRunEndtime)
 	}
 
 	if e.LastRunState != nil {
@@ -92,7 +92,7 @@ func gcStatusSingle(e gcStatusEntry) map[string]string {
 	}
 
 	if e.NextRun != nil {
-		single["next-run"] = strconv.FormatInt(*e.NextRun, 10)
+		single["next-run"] = epochCellPtr(e.NextRun)
 	}
 
 	if e.Schedule != nil {
@@ -252,7 +252,7 @@ func newGcLsCmd() *cobra.Command {
 					pbsFormatOptionalString(e.Schedule),
 					pbsFormatOptionalString(e.LastRunState),
 					pbsFormatOptionalInt64(e.Duration),
-					pbsFormatOptionalInt64(e.NextRun),
+					epochCellPtr(e.NextRun),
 					strconv.FormatInt(e.RemovedBytes, 10),
 					strconv.FormatInt(e.PendingBytes, 10),
 				})

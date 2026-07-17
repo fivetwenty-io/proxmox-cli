@@ -389,7 +389,7 @@ func newPruneJobLsCmd() *cobra.Command {
 				rows = append(rows, []string{
 					e.Id, e.Store, pbsFormatOptionalString(e.Ns), e.Schedule,
 					pbsFormatOptionalBool(e.Disable), pbsFormatOptionalString(e.LastRunState),
-					pbsFormatOptionalInt64(e.NextRun),
+					epochCellPtr(e.NextRun),
 				})
 			}
 
