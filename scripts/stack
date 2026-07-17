@@ -345,15 +345,32 @@ def install_script(product: str, p: dict, lab: dict) -> str:
     lines = [
         "set -euo pipefail",
         "export DEBIAN_FRONTEND=noninteractive",
-        f"if [ ! -f /etc/apt/trusted.gpg.d/proxmox-release-{suite}.gpg ]; then",
-        f"  wget -qO /etc/apt/trusted.gpg.d/proxmox-release-{suite}.gpg "
-        f"http://download.proxmox.com/debian/proxmox-release-{suite}.gpg",
+        # SSH comes up before first boot finishes; wait out cloud-init's own
+        # apt activity instead of racing it for the lock (belt: the wait,
+        # suspenders: the lock timeout on every apt-get below).
+        "cloud-init status --wait >/dev/null 2>&1 || true",
+        # -s, not -f: a failed download leaves a 0-byte file behind, which must
+        # not satisfy the check on the next run. Fetch to a temp path first so
+        # the installed keyring is only ever complete. The release key is
+        # served from enterprise.proxmox.com (download.proxmox.com 404s).
+        f"if [ ! -s /etc/apt/trusted.gpg.d/proxmox-release-{suite}.gpg ]; then",
+        f"  wget -qO /tmp/proxmox-release-{suite}.gpg "
+        f"https://enterprise.proxmox.com/debian/proxmox-release-{suite}.gpg"
+        " || { echo 'failed to fetch the proxmox release keyring' >&2; exit 1; }",
+        f"  test -s /tmp/proxmox-release-{suite}.gpg"
+        " || { echo 'proxmox release keyring downloaded empty' >&2; exit 1; }",
+        f"  mv /tmp/proxmox-release-{suite}.gpg /etc/apt/trusted.gpg.d/proxmox-release-{suite}.gpg",
         "fi",
         f"echo 'deb http://download.proxmox.com/debian/{facts['repo']} {suite} {component}'"
         f" > /etc/apt/sources.list.d/{facts['repo']}.list",
         f"if ! dpkg -s {facts['packages'].split()[0]} >/dev/null 2>&1; then",
-        "  apt-get update -qq",
-        f"  apt-get install -y -qq {facts['packages']}",
+        # The proxmox repos ship a patched grub; on a cloud image grub-pc has
+        # no configured install device, and its postinst aborts noninteractive
+        # runs asking for one. Preseed the root disk so the upgrade proceeds.
+        "  ROOTDISK=/dev/$(lsblk -rno pkname \"$(findmnt -rno SOURCE /)\" | head -1)",
+        "  echo \"grub-pc grub-pc/install_devices multiselect $ROOTDISK\" | debconf-set-selections",
+        "  apt-get -o DPkg::Lock::Timeout=600 update -qq",
+        f"  apt-get -o DPkg::Lock::Timeout=600 install -y -qq {facts['packages']}",
         "fi",
         f"echo INSTALLED=$(dpkg -s {facts['packages'].split()[0]} >/dev/null 2>&1 && echo yes || echo no)",
     ]
@@ -376,13 +393,43 @@ def token_script(product: str, p: dict) -> str:
             f"OUT=$(pveum user token add root@pam {tok} --privsep 0 --output-format json)",
             "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"value\"])')",
         ])
+    if product == "pdm":
+        # PDM has no user/token CLI — proxmox-datacenter-manager-admin only
+        # covers acme, remotes, and reports — so provision via the localhost
+        # API. Its PAM ticket auth needs a root password: set a throwaway one
+        # on this disposable guest (key-based SSH stays the access path). The
+        # ticket itself arrives as an HttpOnly cookie, hence the cookie jar.
+        port = facts["port"]
+        api = f"https://localhost:{port}/api2/json"
+        return "\n".join([
+            "set -euo pipefail",
+            "PW=$(openssl rand -base64 18)",
+            'echo "root:$PW" | chpasswd',
+            "J=$(mktemp)",
+            "trap 'rm -f \"$J\"' EXIT",
+            'CSRF=$(curl -fsk -c "$J" -d "username=root@pam" --data-urlencode "password=$PW" '
+            f'"{api}/access/ticket" '
+            "| python3 -c 'import json,sys; print(json.load(sys.stdin)[\"data\"][\"CSRFPreventionToken\"])')",
+            'curl -sk -b "$J" -H "CSRFPreventionToken: $CSRF" -X DELETE '
+            f'"{api}/access/users/root@pam/token/{tok}" >/dev/null || true',
+            'OUT=$(curl -fsk -b "$J" -H "CSRFPreventionToken: $CSRF" -X POST '
+            f'"{api}/access/users/root@pam/token/{tok}")',
+            'curl -fsk -b "$J" -H "CSRFPreventionToken: $CSRF" -X PUT '
+            f"--data-urlencode 'path=/' --data-urlencode 'role={role}' "
+            f"--data-urlencode 'auth-id=root@pam!{tok}' \"{api}/access/acl\" >/dev/null",
+            "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c "
+            "'import json,sys; print(json.load(sys.stdin)[\"data\"][\"value\"])')",
+        ])
     admin = facts["admin"]
     return "\n".join([
         "set -euo pipefail",
         f"{admin} user delete-token root@pam {tok} >/dev/null 2>&1 || true",
-        f"OUT=$({admin} user generate-token root@pam {tok} --output-format json)",
+        # generate-token takes no --output-format flag and prints the JSON
+        # object behind a "Result: " prefix — parse from the first brace.
+        f"OUT=$({admin} user generate-token root@pam {tok})",
         f"{admin} acl update / {role} --auth-id 'root@pam!{tok}'",
-        "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"value\"])')",
+        "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c 'import json,sys;"
+        " s=sys.stdin.read(); print(json.loads(s[s.index(\"{\"):])[\"value\"])')",
     ])
 
 

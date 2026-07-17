@@ -62,6 +62,18 @@ scripts/e2e
 - static guest IPs that fit the lab address plan, reachable from the machine
   running the script (provisioning connects over SSH as root)
 
+Creating the template is a one-time step on the target node, e.g.:
+
+```bash
+wget https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
+qm create 9002 --name debian-13-template --ostype l26 --memory 2048 --cores 2 \
+  --net0 virtio,bridge=vmbr0 --scsihw virtio-scsi-single --serial0 socket --vga serial0
+qm set 9002 --scsi0 <storage>:0,import-from=$PWD/debian-13-genericcloud-amd64.qcow2,discard=on
+qm set 9002 --ide2 <storage>:cloudinit --boot order=scsi0
+qm disk resize 9002 scsi0 8G
+qm template 9002
+```
+
 ## Notes
 
 - Every phase is idempotent. Re-running `up` skips guests that exist,
@@ -71,9 +83,16 @@ scripts/e2e
 - `config/stack.toml` is gitignored: it holds lab addresses and context
   names. `scripts/stack init` writes a commented example to start from.
 
-- PDM is pre-1.0; the apt component (`pdm-test`) and its admin CLI
-  (`proxmox-datacenter-manager-admin`) track upstream and may need adjusting
-  in `config/stack.toml` / `scripts/stack` as PDM stabilizes.
+- PDM has no user/token CLI (`proxmox-datacenter-manager-admin` only covers
+  acme, remotes, and reports), so the stack provisions the PDM token through
+  the localhost API. That flow needs PAM ticket auth, so `up` sets a random
+  throwaway root password inside the PDM guest; key-based SSH remains the
+  access path.
+
+- Several PBS and PDM endpoints (PBS `GET /nodes` and the tape scans, PDM
+  `GET /nodes` and the remote inventories) accept only ticket auth and 403
+  any API token regardless of its ACLs. The e2e trees record those checks as
+  skips (`skip_on`) under the stack's token contexts rather than failures.
 
 - After `up`, the PDM instance has no remotes configured. Add the lab cluster
   as a remote (`pmx pdm remote ...` against the `pdm-e2e` context) if remote
