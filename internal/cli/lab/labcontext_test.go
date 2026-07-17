@@ -84,11 +84,6 @@ func TestParseTokenAddValue_Success(t *testing.T) {
 			"sec ret 123",
 		},
 		{
-			"empty value",
-			`{"value":""}`,
-			"",
-		},
-		{
 			"long value",
 			`{"value":"` + strings.Repeat("a", 256) + `"}`,
 			strings.Repeat("a", 256),
@@ -139,6 +134,7 @@ func TestParseTokenAddValue_MissingValue(t *testing.T) {
 	}{
 		{"missing value key", `{"data":"secret"}`},
 		{"null value", `{"value":null}`},
+		{"empty value", `{"value":""}`},
 		{"empty object", `{}`},
 		{"value is object", `{"value":{}}`},
 		{"value is array", `{"value":[]}`},
@@ -202,12 +198,25 @@ func TestNormalizeFingerprint_InvalidFormat(t *testing.T) {
 	}{
 		{"empty string", ""},
 		{"no colons", "abcdef123456"},
-		{"invalid hex chars", "ab:cd:ef:12:34:56:78:90:xz:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90"},
-		{"too many colons", "ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab"},
+		{
+			"invalid hex chars",
+			"ab:cd:ef:12:34:56:78:90:xz:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90",
+		},
+		{
+			"too many colons",
+			"ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab",
+		},
 		{"too few colons", "ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef"},
-		{"space instead of colon", "ab cd ef 12 34 56 78 90 ab cd ef 12 34 56 78 90 ab cd ef 12 34 56 78 90 ab cd ef 12 34 56 78 90"},
+		{
+			"space instead of colon",
+			"ab cd ef 12 34 56 78 90 ab cd ef 12 34 56 78 90 ab cd ef 12 34 56 78 90 ab cd ef 12 34 56 78 90",
+		},
 		{"single digit parts", "a:b:c:d:e:f:1:2:3:4:5:6:7:8:9:0:a:b:c:d:e:f:1:2:3:4:5:6:7:8:9:0"},
-		{"three digit parts", "abc:def:123:456:789:012:345:678:90a:bcd:ef1:234:567:890:abc:def:123:456:789:012:345:678:90a:bcd:ef1:234:567:890:abc"},
+		{
+			"three digit parts",
+			"abc:def:123:456:789:012:345:678:90a:bcd:ef1:234:567:890:abc:def:123:456:789:012:345:678:90a:" +
+				"bcd:ef1:234:567:890:abc",
+		},
 		{"missing prefix but wrong format", "sha256 Fingerprint=not-hex"},
 	}
 

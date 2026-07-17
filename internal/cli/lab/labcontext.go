@@ -42,40 +42,28 @@ func labCtxAccount() string {
 	return labCtxUser + "!" + labCtxTokenName
 }
 
-// parseTokenAddValue extracts the secret token value from the JSON response of
-// a successful `pveum user token add` command, which returns `{"value":"<secret>"}`.
-// It returns an error when the JSON is malformed, the "value" key is missing or
-// null, or the value is not a string.
+// parseTokenAddValue extracts the one-time secret from the JSON output of
+// `pveum user token add ... --output-format json`, whose shape is
+// {"full-tokenid":"pmx@pve!pmx","info":{...},"value":"<secret>"}. A missing,
+// null, or empty value is an error: a lab context with an empty secret is
+// broken, so it must never be treated as success.
 func parseTokenAddValue(stdout string) (string, error) {
-	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
-		return "", fmt.Errorf("parse token response JSON: %w", err)
+	var resp struct {
+		Value string `json:"value"`
 	}
-
-	valueRaw, ok := response["value"]
-	if !ok {
-		return "", fmt.Errorf("parse token response: missing 'value' key in JSON")
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &resp); err != nil {
+		return "", fmt.Errorf("parse token add output: %w", err)
 	}
-
-	if valueRaw == nil {
-		return "", fmt.Errorf("parse token response: 'value' key is null")
+	if resp.Value == "" {
+		return "", fmt.Errorf("token add returned no secret value")
 	}
-
-	value, ok := valueRaw.(string)
-	if !ok {
-		return "", fmt.Errorf("parse token response: 'value' key is not a string")
-	}
-
-	return value, nil
+	return resp.Value, nil
 }
 
-// fingerprintRE is a compiled regexp that matches colon-separated hexadecimal
-// SHA-256 fingerprints in the format "xx:xx:...:xx" where each xx is exactly
-// two hex digits (0-9, a-f, A-F) and the total structure represents all 32
-// bytes of a SHA-256 hash. The regexp ensures 32 colon-separated pairs of hex
-// digits with no leading or trailing whitespace.
-var fingerprintRE = regexp.MustCompile(
-	`^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}$`)
+// fingerprintRE matches the colon-separated hex SHA-256 form
+// config.StrictValidateContext requires (mirrored here because that package's
+// regex is unexported).
+var fingerprintRE = regexp.MustCompile(`^(?i)[0-9a-f]{2}(?::[0-9a-f]{2}){31}$`)
 
 // normalizeFingerprint strips the "sha256 Fingerprint=" prefix from a
 // certificate fingerprint string (if present), validates the result is a
