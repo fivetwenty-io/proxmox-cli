@@ -151,6 +151,25 @@ func TestDestroy_RemovesContextAndSecret(t *testing.T) {
 	assert.Equal(t, "pmx@pve!pmx", deletedAccount)
 }
 
+// TestDestroy_DryRun_PreviewsContextCleanupWithoutMutating covers the fix for
+// the "nothing to destroy" path performing a real context/keychain cleanup
+// even under --dry-run: the command's Long text promises --dry-run mutates
+// nothing, so it must preview the cleanup rather than delete the context.
+func TestDestroy_DryRun_PreviewsContextCleanupWithoutMutating(t *testing.T) {
+	called := false
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(string, string) error { called = true; return nil }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	cmd, deps := buildDestroyCmdWithContext(t, "demo")
+	out, _, err := destroyRun(t, cmd, "demo", "--dry-run")
+	require.NoError(t, err)
+
+	assert.False(t, called, "--dry-run must not touch the keychain")
+	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"], "--dry-run must not remove the context")
+	assert.Contains(t, out.String(), `would remove context "lab-demo" and its keychain secret`)
+}
+
 // TestDestroy_RemovesContext_WhenKeychainUnsupported covers the fix for the
 // early-return defect in cleanupLabContext: on a non-darwin build,
 // DeleteKeychainSecret always returns config.ErrKeychainUnsupported, which

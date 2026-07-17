@@ -114,7 +114,11 @@ func newDestroyCmd() *cobra.Command {
 			if len(plan) == 0 {
 				msg := fmt.Sprintf(
 					"lab %q: nothing to destroy — no VM found in pool %q", name, poolID)
-				if !keepContext {
+				if dryRun {
+					// --dry-run must not mutate: preview the context/keychain
+					// cleanup instead of performing it.
+					msg = "[dry-run] " + msg + destroyContextCleanupPreview(keepContext, name)
+				} else if !keepContext {
 					if cerr := cleanupLabContext(deps, name); cerr != nil {
 						msg += fmt.Sprintf("; context cleanup warning: %v", cerr)
 					}
@@ -127,7 +131,8 @@ func newDestroyCmd() *cobra.Command {
 
 			if dryRun {
 				res := output.Result{
-					Message: fmt.Sprintf("[dry-run] would destroy lab %q: %s", name, summary),
+					Message: fmt.Sprintf("[dry-run] would destroy lab %q: %s%s",
+						name, summary, destroyContextCleanupPreview(keepContext, name)),
 				}
 				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 			}
@@ -182,6 +187,16 @@ func newDestroyCmd() *cobra.Command {
 		"do not remove the lab's pmx context and keychain secret on destroy")
 
 	return cmd
+}
+
+// destroyContextCleanupPreview returns the dry-run suffix describing the
+// context and keychain secret a real destroy would remove, or "" when
+// --keep-context suppresses that cleanup.
+func destroyContextCleanupPreview(keepContext bool, name string) string {
+	if keepContext {
+		return ""
+	}
+	return fmt.Sprintf("; would remove context %q and its keychain secret", labContextName(name))
 }
 
 // cleanupLabContext removes the lab-<name> pmx context from config and deletes
