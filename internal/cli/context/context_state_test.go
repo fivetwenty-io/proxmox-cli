@@ -479,6 +479,7 @@ func TestAnnotations_NoClient_ExpectedVerbCount(t *testing.T) {
 		"rm":       true,
 		"copy":     true,
 		"rename":   true,
+		"update":   true,
 		"edit":     true,
 		"validate": true,
 	}
