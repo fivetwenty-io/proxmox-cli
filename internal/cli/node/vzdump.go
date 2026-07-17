@@ -61,7 +61,8 @@ func newVzdumpCmd() *cobra.Command {
 			"extract-config to inspect vzdump configuration.",
 		Example: `  pmx pve node vzdump --vmid 100 --storage local
   pmx pve node vzdump --all --storage local --mode snapshot
-  pmx pve node vzdump --vmid 100 --storage local --notes-template "{{guestname}}"`,
+  pmx pve node vzdump --vmid 100 --storage local --notes-template "{{guestname}}"
+  pmx pve node vzdump --vmid 100 --storage local --protected  # kept out of prune/retention`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -203,7 +204,9 @@ func newVzdumpCmd() *cobra.Command {
 	fl.StringVar(&compress, "compress", "", "compression: 0|1|gzip|lzo|zstd")
 	fl.StringVar(&pool, "pool", "", "back up all guests in this pool")
 	fl.BoolVar(&all, "all", false, "back up all guests on the node")
-	fl.BoolVar(&protected, "protected", false, "mark the resulting backup as protected")
+	fl.BoolVar(&protected, "protected", false,
+		"mark the resulting backup as protected; protected backups are excluded from prune and "+
+			"retention, so use this for long-term or compliance copies")
 	fl.BoolVar(&remove, "remove", false, "prune older backups according to the storage retention settings")
 	fl.StringVar(&notesTemplate, "notes-template", "", "template for backup notes (supports {{guestname}}, {{node}}, {{vmid}})")
 	fl.StringVar(&mailto, "mailto", "", "comma-separated email addresses for notifications")
