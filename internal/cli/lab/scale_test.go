@@ -674,10 +674,14 @@ func TestScale_CapacityGateRefusesBeforeQdeviceRemove(t *testing.T) {
 		map[string]any{"vmid": 9201, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-1"},
 		map[string]any{"vmid": 9299, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-q"},
 	)
-	// A tiny pool: reserved refquota (50G, cleanLab's fixture) alone blows
-	// past the 85% refuse threshold against a ~1G pool.
-	f.HandleJSON("GET /api2/json/nodes/node1/storage/tank/status",
-		map[string]any{"total": 1000000000, "used": 900000000})
+	// A realistic fleet-shaped zfspool storage nested under the base pool
+	// (field finding F4, ignored by the capacity gate's resolver), and a
+	// tiny real pool read via disks/zfs: reserved refquota (50G, cleanLab's
+	// fixture) alone blows past the 85% refuse threshold against a ~1G pool.
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{
+		"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne",
+	}})
+	createHandleDisksZfs(f, "node1", "tank", 1000000000, 900000000)
 
 	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
 	fake := exec.Fake(exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice}) // preflight membership probe: 2+Q
@@ -769,7 +773,15 @@ func scaleGrowFixture(f *testhelper.FakePVE, lab *config.Lab, existingMembers []
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	// A realistic fleet-shaped zfspool storage: nested under the base pool
+	// ("tank/labs/wayne"), not rooted at it (field finding F4: real hosts
+	// register only per-lab storages). This backs the storage-provisioning
+	// step's own existence check; the capacity gate never matches a nested
+	// entry (createResolveCapacityDenominator) and falls through to the
+	// disks/zfs mock below for the pool's real, refquota-independent size.
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{
+		"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne",
+	}})
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": "lab-wayne"}})
 	members := make([]any, len(existingMembers))
 	for i, m := range existingMembers {
@@ -781,8 +793,7 @@ func scaleGrowFixture(f *testhelper.FakePVE, lab *config.Lab, existingMembers []
 		qemus[i] = q
 	}
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", qemus)
-	f.HandleJSON("GET /api2/json/nodes/node1/storage/tank/status",
-		map[string]any{"total": 10000000000000, "used": 100000000000})
+	createHandleDisksZfs(f, "node1", "tank", 10000000000000, 100000000000)
 }
 
 func TestScale_Grow_RemovesStaleQdeviceBeforeJoin_2PlusQTo3(t *testing.T) {

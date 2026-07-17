@@ -373,21 +373,215 @@ func createDecodeNextID(raw json.RawMessage) (int64, error) {
 	return 0, fmt.Errorf("decode next VMID: unrecognized response %q", string(raw))
 }
 
+// createCapacityStorageEntry is the subset of a /cluster/storage element
+// createResolveCapacityDenominator needs to decide whether an entry backs
+// the capacity gate's base pool. Nodes is the storage's optional
+// node-restriction list (comma-separated PVE node names; empty means "every
+// node") — see createStorageAvailableOnNode.
+type createCapacityStorageEntry struct {
+	Storage string `json:"storage"`
+	Type    string `json:"type"`
+	Pool    string `json:"pool"`
+	Nodes   string `json:"nodes"`
+}
+
+// createZfsPoolEntry is the subset of a GET /nodes/{node}/disks/zfs element
+// (PVE's `zpool list` equivalent) createResolveCapacityDenominator's
+// pool-level fallback needs: Size and Alloc are the zpool's true,
+// dataset-quota-independent total and allocated byte counts.
+type createZfsPoolEntry struct {
+	Name  string     `json:"name"`
+	Size  pve.PVEInt `json:"size"`
+	Alloc pve.PVEInt `json:"alloc"`
+}
+
+const createZfspoolType = "zfspool"
+
+// createStorageAvailableOnNode reports whether a /cluster/storage entry
+// whose "nodes" attribute is nodesAttr (the raw, possibly empty,
+// comma-separated PVE node-restriction string) is available on node: an
+// empty/unset restriction means every node, per PVE's storage.cfg
+// semantics.
+func createStorageAvailableOnNode(nodesAttr, node string) bool {
+	if nodesAttr == "" {
+		return true
+	}
+	for _, n := range strings.Split(nodesAttr, ",") {
+		if strings.TrimSpace(n) == node {
+			return true
+		}
+	}
+	return false
+}
+
+// createCapacityDenominator carries the live total/used bytes
+// createCapacityGate compares its numerator against, plus a human-readable
+// label identifying the source for the gate's skip/warn/refuse messages.
+type createCapacityDenominator struct {
+	totalBytes int64
+	usedBytes  int64
+	label      string
+}
+
+// createReadStorageStatus reads GET /nodes/{node}/storage/{storageID}/status
+// and reports the denominator it carries. found is false (nil error) when
+// the storage is reachable but reports no usable total (e.g. disabled), the
+// same "nothing learned, but not itself an error" signal
+// createResolveCapacityDenominator's other sources use to fall through.
+func createReadStorageStatus(ctx context.Context, deps *cli.Deps, node, storageID, label string) (createCapacityDenominator, bool, error) {
+	status, err := deps.API.Nodes.ListStorageStatus(ctx, node, storageID)
+	if err != nil {
+		return createCapacityDenominator{}, false, err
+	}
+	if status == nil || status.Total == nil || status.Total.Int() <= 0 {
+		return createCapacityDenominator{}, false, nil
+	}
+	var usedBytes int64
+	if status.Used != nil {
+		usedBytes = status.Used.Int()
+	}
+	return createCapacityDenominator{totalBytes: status.Total.Int(), usedBytes: usedBytes, label: label}, true, nil
+}
+
+// createResolveCapacityDenominator finds the live total/used bytes
+// createCapacityGate should compare its numerator against for basePool, in
+// order:
+//
+//  1. deps.Cfg.Storage.CapacityStorageID, when the operator set it: read via
+//     GET /nodes/{node}/storage/{storage}/status verbatim — the documented
+//     escape hatch for hosts whose storage naming does not fit the
+//     heuristics below.
+//  2. A zfspool-type storage registered in /cluster/storage whose "pool"
+//     attribute is basePool verbatim (e.g. "tank", never a nested dataset —
+//     see the disks/zfs fallback below for why a nested match is never
+//     used), available on node (a node-restricted candidate excluding node
+//     is skipped — a node-scoped storage's status is only queryable on
+//     nodes it is actually enabled on): read the same way.
+//  3. GET /nodes/{node}/disks/zfs (PVE's `zpool list` equivalent): the entry
+//     whose "name" is basePool, using its "size"/"alloc" fields directly.
+//     This is the fallback for the real fleet shape the capacity gate's
+//     storage-lookup fix targets — hosts with no storage.cfg entry rooted
+//     at the bare pool name, only per-lab "tank-lab-<member>" entries
+//     nested under it (e.g. pool "tank/labs/wayne"). A per-lab dataset's
+//     own status is deliberately NEVER used as a stand-in for the pool
+//     here: PVE's zfspool storage status reads that dataset's own zfs
+//     avail/used, capped by whatever refquota `pmx lab quota set` applies
+//     to it (quota.go), so its "total" reflects that ONE lab's refquota —
+//     while createCapacityGate's numerator sums EVERY configured lab's
+//     refquota. Measuring a fleet-wide numerator against a single lab's
+//     quota inflates the ratio by roughly the lab count and refuses by
+//     default on exactly the fleet shape this fallback exists to serve.
+//     disks/zfs reports the zpool's actual total/allocated bytes,
+//     independent of any dataset-level quota, so it is the only sound
+//     source once no pool-rooted storage.cfg entry exists.
+//
+// err is non-nil only when an API call itself failed (network/decode
+// error): the caller degrades to a skipped gate in that case, since a
+// transient failure is not itself evidence the pool is full. When every
+// source above found nothing for basePool, found is false with a nil
+// error — the caller must treat that as a real gap (no live capacity
+// signal exists for this pool at all) and refuse loudly rather than
+// silently skip.
+func createResolveCapacityDenominator(
+	ctx context.Context, deps *cli.Deps, node, basePool string,
+) (denom createCapacityDenominator, found bool, err error) {
+	if deps.Cfg != nil && deps.Cfg.Storage.CapacityStorageID != "" {
+		storageID := deps.Cfg.Storage.CapacityStorageID
+		d, ok, statusErr := createReadStorageStatus(ctx, deps, node, storageID,
+			fmt.Sprintf("storage %q (storage.capacity_storage_id override)", storageID))
+		if statusErr != nil {
+			return createCapacityDenominator{}, false, statusErr
+		}
+		if !ok {
+			// An explicit override reporting no usable size degrades to a
+			// skipped gate (via the non-nil error, caught by the caller),
+			// not a hard refusal: unlike the "nothing matched at all" case
+			// below, the operator did point at a real, reachable storage —
+			// treating that as the "no live signal anywhere" refusal would
+			// be misleading, and there is no further source to fall back
+			// to once an override is set.
+			return createCapacityDenominator{}, false, fmt.Errorf(
+				"storage.capacity_storage_id %q reports no live size on node %q", storageID, node)
+		}
+		return d, true, nil
+	}
+
+	zfspoolType := createZfspoolType
+	storages, err := deps.API.ClusterStorage.ListStorage(ctx, &clusterstorage.ListStorageParams{Type: &zfspoolType})
+	if err != nil {
+		return createCapacityDenominator{}, false, err
+	}
+	var rootedID string
+	for _, raw := range *storages {
+		var entry createCapacityStorageEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return createCapacityDenominator{}, false, fmt.Errorf("decode storage list: %w", err)
+		}
+		if entry.Type != createZfspoolType || entry.Storage == "" || entry.Pool != basePool {
+			continue
+		}
+		if !createStorageAvailableOnNode(entry.Nodes, node) {
+			continue
+		}
+		if rootedID == "" || entry.Storage < rootedID {
+			rootedID = entry.Storage
+		}
+	}
+	if rootedID != "" {
+		d, ok, statusErr := createReadStorageStatus(ctx, deps, node, rootedID, fmt.Sprintf("storage %q (pool %q)", rootedID, basePool))
+		if statusErr != nil {
+			return createCapacityDenominator{}, false, statusErr
+		}
+		if ok {
+			return d, true, nil
+		}
+		// Registered and pool-rooted, but its status reports no usable
+		// total (e.g. disabled): fall through to disks/zfs rather than
+		// treating this as "no source at all" outright.
+	}
+
+	zfsPools, err := deps.API.Nodes.ListDisksZfs(ctx, node)
+	if err != nil {
+		return createCapacityDenominator{}, false, err
+	}
+	if zfsPools != nil {
+		for _, raw := range *zfsPools {
+			var entry createZfsPoolEntry
+			if err := json.Unmarshal(raw, &entry); err != nil {
+				return createCapacityDenominator{}, false, fmt.Errorf("decode zfs pool list: %w", err)
+			}
+			if entry.Name != basePool || entry.Size.Int() <= 0 {
+				continue
+			}
+			return createCapacityDenominator{
+				totalBytes: entry.Size.Int(),
+				usedBytes:  entry.Alloc.Int(),
+				label:      fmt.Sprintf("zfs pool %q", basePool),
+			}, true, nil
+		}
+	}
+
+	return createCapacityDenominator{}, false, nil
+}
+
 // createCapacityGate is the sum-of-refquotas-vs-pool-size check `pmx lab
 // create` runs before adding one more node/QDevice VM step to the plan
 // (multi-node lab plan §3.4): it sums config.EffectiveRefquotaGB across
 // every lab config.ResolveLabs resolves, substituting eff for the on-disk
 // entry of the same name (see below), compares that sum against the live
-// pool's total capacity — read via GET /nodes/{node}/storage/{storage}/status
-// for the lab's base pool storage entry (zfsBasePool(eff), e.g. "tank") —
-// and returns a non-empty warning string when the ratio exceeds
-// createCapacityWarnRatio, or an error when it exceeds
-// createCapacityRefuseRatio and force is false. When the base pool has no
-// PVE storage entry registered under its own name (only per-lab
-// "tank-lab-<name>" entries exist), or the status call otherwise fails, the
-// gate cannot learn the pool's live size; it is skipped with an explanatory
-// warning instead of blocking create outright, since a missing capacity
-// signal is not itself evidence the pool is full.
+// pool's total capacity — read via createResolveCapacityDenominator for the
+// lab's base pool (zfsBasePool(eff), e.g. "tank") — and returns a non-empty
+// warning string when the ratio exceeds createCapacityWarnRatio, or an
+// error when it exceeds createCapacityRefuseRatio and force is false. When
+// no live capacity source exists for the base pool at all, the gate refuses
+// loudly (an operator-actionable error naming the base pool) rather than
+// silently skipping, since a bare capacity gate with no live signal at all
+// provides no protection. When resolving a source or reading its live size
+// fails for another reason (a transient API/network error, a storage
+// disabled/unavailable on this node, or a resolved storage reporting no
+// usable size), the gate is skipped with an explanatory warning instead of
+// blocking create outright, since that failure is not itself evidence the
+// pool is full.
 func createCapacityGate(ctx context.Context, deps *cli.Deps, eff *config.Lab, node string, force bool) (string, error) {
 	labs, err := config.ResolveLabs(deps.Cfg, deps.ConfigPath)
 	if err != nil {
@@ -411,46 +605,46 @@ func createCapacityGate(ctx context.Context, deps *cli.Deps, eff *config.Lab, no
 	nfsReservedGB := int64(config.EffectiveNFSReservedGB(deps.Cfg))
 
 	basePool := zfsBasePool(eff)
-	status, statusErr := deps.API.Nodes.ListStorageStatus(ctx, node, basePool)
-	if statusErr != nil {
+	denom, found, resolveErr := createResolveCapacityDenominator(ctx, deps, node, basePool)
+	if resolveErr != nil {
 		return fmt.Sprintf(
-			"capacity gate: could not read live size of pool %q on node %q (%v); skipping the pre-create capacity check",
-			basePool, node, statusErr), nil
+			"capacity gate: could not read pool %q's live size on node %q (%v); skipping the pre-create capacity check",
+			basePool, node, resolveErr), nil
 	}
-	if status == nil || status.Total == nil || status.Total.Int() <= 0 {
-		return fmt.Sprintf(
-			"capacity gate: pool %q on node %q reports no total size; skipping the pre-create capacity check",
-			basePool, node), nil
+	if !found {
+		return "", fmt.Errorf(
+			"capacity gate: no live capacity signal found for base pool %q on node %q (no /cluster/storage "+
+				"entry whose \"pool\" attribute is %q, and no %q entry in `zpool list`); register a storage "+
+				"rooted at the pool (e.g. `pvesm add zfspool %s --pool %s`), or set storage.capacity_storage_id "+
+				"in config to the storage ID the gate should read pool size from",
+			basePool, node, basePool, basePool, basePool, basePool)
 	}
 
-	totalBytes := status.Total.Int()
+	totalBytes := denom.totalBytes
 	const bytesPerGB = int64(1024 * 1024 * 1024)
 
 	// "Peppi actuals" (multi-node lab plan §3.4: "sum of all lab refquotas +
-	// peppi actuals vs. pool size"): the live pool-wide "used" figure from
-	// this same status call is the only actual-usage signal the PVE API
-	// exposes for a ZFS pool storage entry — there is no per-dataset or
-	// per-VM breakdown available without an SSH-based `zfs list` (out of
-	// scope for this API-only gate), so peppi's actual usage cannot be
-	// cleanly isolated from every lab's own actual usage, which "used"
-	// necessarily also includes. Rather than risk under-counting (and
-	// letting the gate pass a pool that is actually close to full), this
-	// deliberately takes the conservative, higher estimate: the whole
-	// pool's live "used" bytes are added on top of reservedGB's per-lab
-	// refquota sum, even though that double-counts a lab whose actual usage
-	// is smaller than its refquota (once via its own quota headroom, once
-	// via the pool-wide "used" figure). Over-estimating the reservation
-	// trips the gate sooner rather than later — the safe direction to err
-	// in a "before the pool actually fills" check. A missing "used" value
-	// (the field is optional in the API response) degrades this term to 0
-	// rather than skipping the whole gate: unlike a missing Total, which
-	// leaves no denominator to compute a ratio at all, a missing "used"
-	// still leaves the refquota-sum and NFS-reserve terms meaningful on
-	// their own.
-	var usedGB int64
-	if status.Used != nil {
-		usedGB = status.Used.Int() / bytesPerGB
-	}
+	// peppi actuals vs. pool size"): denom.usedBytes — the pool-wide
+	// allocated/used figure createResolveCapacityDenominator's resolved
+	// source reports (a pool-rooted storage's live "used", or a zpool's
+	// "alloc") — is the only actual-usage signal available without an
+	// SSH-based `zfs list` (out of scope for this API-only gate), so
+	// peppi's actual usage cannot be cleanly isolated from every lab's own
+	// actual usage, which it necessarily also includes. Rather than risk
+	// under-counting (and letting the gate pass a pool that is actually
+	// close to full), this deliberately takes the conservative, higher
+	// estimate: the whole pool's live used bytes are added on top of
+	// reservedGB's per-lab refquota sum, even though that double-counts a
+	// lab whose actual usage is smaller than its refquota (once via its own
+	// quota headroom, once via the pool-wide used figure). Over-estimating
+	// the reservation trips the gate sooner rather than later — the safe
+	// direction to err in a "before the pool actually fills" check. A
+	// resolved source reporting no used figure at all degrades this term to
+	// 0 rather than skipping the whole gate: unlike a missing/zero total,
+	// which leaves no denominator to compute a ratio at all, a missing used
+	// figure still leaves the refquota-sum and NFS-reserve terms meaningful
+	// on their own.
+	usedGB := denom.usedBytes / bytesPerGB
 
 	reservedBytes := (reservedGB + usedGB + nfsReservedGB) * bytesPerGB
 	ratio := float64(reservedBytes) / float64(totalBytes)

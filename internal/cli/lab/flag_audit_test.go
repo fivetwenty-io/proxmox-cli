@@ -68,7 +68,8 @@ func TestCreateAuditFields_NetworkStorageAndPoolOverrides(t *testing.T) {
 	// test.
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/zones")
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	createForbid(f, t, "POST /api2/json/storage")
 
 	var vnetRec []createRecordedRequest
@@ -136,7 +137,8 @@ func TestCreateAuditFields_StartInvokesLifecycleStart(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	createForbid(f, t, "POST /api2/json/storage")
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createForbid(f, t, "POST /api2/json/pools")
@@ -183,7 +185,8 @@ func TestCreateAuditFields_CloneFromForwardsToCloneAndConfigUpdate(t *testing.T)
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})

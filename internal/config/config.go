@@ -78,6 +78,19 @@ type ConfigStorage struct {
 	// int, whose zero value could not otherwise be told apart from
 	// "unset".
 	NFSReservedGB *int `yaml:"nfs_reserved_gb,omitempty" json:"nfs_reserved_gb,omitempty"`
+
+	// CapacityStorageID is an explicit override for the PVE storage
+	// identifier `pmx lab create`/`pmx lab scale`'s capacity gate reads
+	// the base pool's live total/used size from (GET
+	// /nodes/{node}/storage/{storage}/status). When empty, the gate
+	// auto-discovers a zfspool-type storage registered in
+	// /cluster/storage whose "pool" attribute is the lab's base pool
+	// (e.g. "tank") or nested under it (e.g. "tank/labs/wayne"),
+	// preferring one rooted at the base pool itself. Set this when no
+	// such storage exists yet, or when the auto-discovered storage's
+	// live status does not reflect the pool's true capacity (a nested
+	// per-lab dataset's status is bound by that dataset's own refquota).
+	CapacityStorageID string `yaml:"capacity_storage_id,omitempty" json:"capacity_storage_id,omitempty"`
 }
 
 // EffectiveNFSReservedGB returns cfg.Storage.NFSReservedGB when set

@@ -186,7 +186,13 @@ func TestCreateHappyPath_OrderedCalls(t *testing.T) {
 	createRecord(f, &recs, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
 	createRecord(f, &recs, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{}, 200)
 	createRecord(f, &recs, &order, "subnet-create", "POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
-	createRecord(f, &recs, &order, "storage-list", "GET /api2/json/storage", []any{}, 200)
+	// The capacity gate needs a zfspool storage rooted at the base pool
+	// ("tank") to read the pool's live size from; this lab's own
+	// per-lab storage ("tank-lab-wayne") does not exist yet, which is
+	// exactly the resource this storage-list/storage-create pair is
+	// testing.
+	createRecord(f, &recs, &order, "storage-list", "GET /api2/json/storage",
+		[]any{map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"}}, 200)
 	createRecord(f, &recs, &order, "storage-create", "POST /api2/json/storage", map[string]any{}, 200)
 	createRecord(f, &recs, &order, "pool-list", "GET /api2/json/pools", []any{}, 200)
 	createRecord(f, &recs, &order, "pool-create", "POST /api2/json/pools", map[string]any{}, 200)
@@ -209,8 +215,11 @@ func TestCreateHappyPath_OrderedCalls(t *testing.T) {
 	// peppi VMID discovered late in planning aborts before any earlier step
 	// (zone/vnet/subnet/storage/pool) has been mutated. Reads therefore all
 	// precede writes here, rather than interleaving list/create per resource.
+	// "storage-list" appears twice: once for the storage step's own
+	// existence check, once more for the capacity gate's (step 6, after
+	// pool-list) base-pool storage lookup.
 	assert.Equal(t, []string{
-		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "qemu-list", "nextid",
+		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "storage-list", "qemu-list", "nextid",
 		"zone-create", "vnet-create", "subnet-create", "storage-create", "pool-create", "qemu-create",
 	}, order)
 }
@@ -238,8 +247,9 @@ func TestCreateIdempotent_SkipsExistingResources(t *testing.T) {
 	createRecord(f, &recs, &order, "subnet-create", "POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
 
 	createRecord(f, &recs, &order, "storage-list", "GET /api2/json/storage",
-		[]any{map[string]any{"storage": "tank-lab-wayne"}}, 200)
+		[]any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}}, 200)
 	createForbid(f, t, "POST /api2/json/storage")
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 
 	createRecord(f, &recs, &order, "pool-list", "GET /api2/json/pools", []any{}, 200)
 	createRecord(f, &recs, &order, "pool-create", "POST /api2/json/pools", map[string]any{}, 200)
@@ -259,9 +269,13 @@ func TestCreateIdempotent_SkipsExistingResources(t *testing.T) {
 
 	// As in the happy-path test, every read happens during planning before
 	// any write; no next-id allocation call is made since the VM already
-	// exists.
+	// exists. "storage-list" appears twice: once for the storage step's own
+	// existence check, once more for the capacity gate's base-pool storage
+	// lookup (this fixture's only zfspool storage, "tank-lab-wayne", is
+	// nested under the base pool "tank", not rooted at it, matching real
+	// fleet storage naming).
 	assert.Equal(t, []string{
-		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "qemu-list",
+		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "storage-list", "qemu-list",
 		"subnet-create", "pool-create",
 	}, order)
 }
@@ -288,7 +302,8 @@ func TestCreateIdempotent_SkipsSubnetOnRealPVESubnetShape(t *testing.T) {
 			"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName(),
 		}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	createForbid(f, t, "POST /api2/json/storage")
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createForbid(f, t, "POST /api2/json/pools")
@@ -323,7 +338,8 @@ func TestCreateIdempotent_FindsExistingVMViaPoolMembership(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	createForbid(f, t, "POST /api2/json/storage")
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createForbid(f, t, "POST /api2/json/pools")
@@ -365,7 +381,8 @@ func TestCreateStart_TargetsExistingVMsOwnNode(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 
 	f.HandleFunc("GET /api2/json/pools/lab-wayne", func(w http.ResponseWriter, _ *http.Request) {
@@ -415,7 +432,8 @@ func TestCreateIdempotent_FallsBackToNameMatchWhenPoolAbsent(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	createForbid(f, t, "POST /api2/json/storage")
 	f.HandleJSON("GET /api2/json/pools", []any{})
 	f.HandleJSON("POST /api2/json/pools", map[string]any{})
@@ -448,7 +466,12 @@ func TestCreateDryRun_NoMutationsShowsPlaceholderVMID(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{})
+	// The capacity gate needs a zfspool storage rooted at (or nested
+	// under) the base pool "tank" to read the pool's live size from;
+	// this lab's own per-lab storage does not exist yet (the dry-run
+	// premise), so a base-rooted entry stands in for pre-existing host
+	// storage setup.
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"}})
 	createForbid(f, t, "POST /api2/json/storage")
 	f.HandleJSON("GET /api2/json/pools", []any{})
 	createForbid(f, t, "POST /api2/json/pools")
@@ -478,7 +501,8 @@ func TestCreateFlagOverride_VCPUAndMemory(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
@@ -517,7 +541,8 @@ func TestCreateZoneSpecMatchesNetApply(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
@@ -560,7 +585,12 @@ func TestCreateDerivesStorageAndPoolFromNonDefaultConfig(t *testing.T) {
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
 
 	var storageRec []createRecordedRequest
-	createRecord(f, &storageRec, nil, "storage-list", "GET /api2/json/storage", []any{}, 200)
+	// The capacity gate needs a zfspool storage rooted at the non-default
+	// base pool ("othertank") to read its live size from; this lab's own
+	// per-lab storage does not exist yet (the premise under test), so a
+	// base-rooted entry stands in for pre-existing host storage setup.
+	createRecord(f, &storageRec, nil, "storage-list", "GET /api2/json/storage",
+		[]any{map[string]any{"storage": "othertank", "type": "zfspool", "pool": "othertank"}}, 200)
 	createRecord(f, &storageRec, nil, "storage-create", "POST /api2/json/storage", map[string]any{}, 200)
 
 	var poolRec []createRecordedRequest
@@ -581,9 +611,10 @@ func TestCreateDerivesStorageAndPoolFromNonDefaultConfig(t *testing.T) {
 	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
 	require.NoError(t, err)
 
-	require.Len(t, storageRec, 2, "expected one storage list + one storage create")
-	assert.Equal(t, "othertank-lab-wayne", storageRec[1].body["storage"])
-	assert.Equal(t, "othertank/labs/wayne", storageRec[1].body["pool"])
+	require.Len(t, storageRec, 3, "expected one storage list (storage step) + one storage list "+
+		"(capacity gate) + one storage create")
+	assert.Equal(t, "othertank-lab-wayne", storageRec[2].body["storage"])
+	assert.Equal(t, "othertank/labs/wayne", storageRec[2].body["pool"])
 
 	require.Len(t, poolRec, 2, "expected one pool list + one pool create")
 	assert.Equal(t, "lab-wayne", poolRec[1].body["poolid"],
@@ -609,7 +640,8 @@ func TestCreateCloneFrom_PeppiGuardRefusesProtectedSourceVMID(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
@@ -641,7 +673,8 @@ func TestCreateCloneFrom_PeppiGuardRefusesProtectedSourceName(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne"}})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{map[string]any{"vmid": 777, "name": "peppiprd"}})
@@ -673,7 +706,11 @@ func TestCreatePeppiGuard_RefusesExistingProtectedVMID(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{})
+	// The capacity gate needs a zfspool storage rooted at the base pool
+	// "tank" to read the pool's live size from; this lab's own per-lab
+	// storage does not exist yet (the premise under test), so a
+	// base-rooted entry stands in for pre-existing host storage setup.
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"}})
 	createForbid(f, t, "POST /api2/json/storage")
 	f.HandleJSON("GET /api2/json/pools", []any{})
 	createForbid(f, t, "POST /api2/json/pools")
@@ -735,8 +772,23 @@ func createSharedResourcesExist(f *testhelper.FakePVE, t *testing.T, lab *config
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets")
-	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-" + name}})
+	// A realistic fleet-shaped zfspool storage: nested under the base pool
+	// ("tank/labs/<name>"), not rooted at it — real hosts register only
+	// per-lab storages, never one named after the bare base pool itself
+	// (field finding F4). This entry backs the storage-provisioning step's
+	// own existence check; the capacity gate's resolver deliberately never
+	// matches a nested entry (see createResolveCapacityDenominator) and
+	// falls through to the disks/zfs mock below instead.
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{
+		"storage": "tank-lab-" + name, "type": "zfspool", "pool": "tank/labs/" + name,
+	}})
 	createForbid(f, t, "POST /api2/json/storage")
+	// A comfortably large, mostly-empty pool so tests using this shared
+	// fixture that do not care about capacity-gate specifics never trip a
+	// warning/refusal note; capacity-gate-specific tests override this
+	// route (via createHandleDisksZfs, last registration wins) with the
+	// figures their scenario needs.
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": poolID}})
 	createForbid(f, t, "POST /api2/json/pools")
 	createPoolNotFoundRoute(f, poolID) // no members yet: every node target falls back to name-match (empty)
@@ -1031,6 +1083,22 @@ func createHandleStorageStatus(f *testhelper.FakePVE, node, storage string, tota
 	})
 }
 
+// createHandleDisksZfs registers GET /nodes/{node}/disks/zfs (PVE's `zpool
+// list` equivalent) to report a single zpool named poolName with
+// sizeBytes/allocBytes — the capacity gate's pool-level fallback source
+// once no storage.cfg entry is registered rooted at the bare pool name
+// (createResolveCapacityDenominator's third resolution step). Unlike a
+// per-lab zfspool storage's own status, these figures are genuinely
+// pool-wide and independent of any dataset refquota.
+func createHandleDisksZfs(f *testhelper.FakePVE, node, poolName string, sizeBytes, allocBytes int64) {
+	f.HandleJSON("GET /api2/json/nodes/"+node+"/disks/zfs", []any{
+		map[string]any{
+			"name": poolName, "size": sizeBytes, "alloc": allocBytes, "free": sizeBytes - allocBytes,
+			"frag": 0, "dedup": 1, "health": "ONLINE",
+		},
+	})
+}
+
 // createNoNFSReserve returns a *config.Config with storage.nfs_reserved_gb
 // explicitly set to 0, isolating a capacity-gate test to the refquota and/or
 // peppi-actuals ("used") terms without the default 1024G NFS reserve
@@ -1049,7 +1117,7 @@ func TestCreateCapacityGate_BelowWarnThreshold_NoNote(t *testing.T) {
 	lab.Storage.RefquotaGB = 100 // 100G refquota + 0G used + 1024G default NFS reserve, against a 10T pool
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 10*1024*1024*1024*1024, 0) // 10 TiB total, 0 used
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0) // 10 TiB total, 0 used
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1075,7 +1143,7 @@ func TestCreateCapacityGate_AboveWarnThreshold_AddsWarningNote(t *testing.T) {
 	lab.Storage.RefquotaGB = 7000 // 7000G refquota + 0G used + 1024G default NFS reserve = 8024G
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 10000*1024*1024*1024, 0) // 10000G total: 8024/10000 = 80.24%
+	createHandleDisksZfs(f, "node1", "tank", 10000*1024*1024*1024, 0) // 10000G total: 8024/10000 = 80.24%
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1106,7 +1174,7 @@ func TestCreateCapacityGate_AboveRefuseThreshold_RefusesWithoutForce(t *testing.
 	lab.Storage.RefquotaGB = 900 // 900G + 0G used + 1024G default NFS reserve = 1924G against a 1000G pool
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	createForbid(f, t, "GET /api2/json/cluster/nextid")
 	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
@@ -1128,7 +1196,7 @@ func TestCreateCapacityGate_ForceOverridesRefusal(t *testing.T) {
 	lab.Storage.RefquotaGB = 900
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9900")
 
@@ -1157,7 +1225,7 @@ func TestCreateCapacityGate_NFSReserveIncludedByDefault(t *testing.T) {
 	lab.Storage.RefquotaGB = 200
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 1600*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1600*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1188,7 +1256,7 @@ func TestCreateCapacityGate_NFSReserveOverriddenToZero(t *testing.T) {
 	lab.Storage.RefquotaGB = 200
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 1600*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1600*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1218,7 +1286,7 @@ func TestCreateCapacityGate_PeppiActualUsageCounted(t *testing.T) {
 	lab.Storage.RefquotaGB = 100 // 100G refquota + 1500G used + 0G NFS reserve = 1600G
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 2000*1024*1024*1024, 1500*1024*1024*1024) // 1600/2000 = 80%
+	createHandleDisksZfs(f, "node1", "tank", 2000*1024*1024*1024, 1500*1024*1024*1024) // 1600/2000 = 80%
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1256,7 +1324,7 @@ func TestCreateCapacityGate_UsesEffectiveLabNotOnDiskConfig(t *testing.T) {
 	lab.Storage.RefquotaGB = 0
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "tank", 1600*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1600*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 
 	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
@@ -1268,4 +1336,228 @@ func TestCreateCapacityGate_UsesEffectiveLabNotOnDiskConfig(t *testing.T) {
 		"the --nodes 5 override must push the gate's reservation figure above the on-disk (1-node) value")
 	assert.Contains(t, out, "reserve 1320G",
 		"the numerator must use the 5-node refquota default (5*264G), not the on-disk 1-node default (480G)")
+}
+
+// --- capacity gate storage lookup (field finding F4 fix) --------------
+
+// TestCreateCapacityGate_IgnoresNestedPerLabStorage_UsesZfsPoolFallback
+// covers the F1 fix directly (review round 1 found the nested-storage
+// fallback measured a fleet-wide numerator against a single lab's
+// refquota-bound total, refusing by default on the exact fleet shape it was
+// meant to serve): a realistic /cluster/storage listing carrying only
+// per-lab zfspool entries ("tank-lab-<name>", each nested under
+// "tank/labs/<name>", NEVER rooted at "tank" itself — field finding F4's
+// real fleet shape) for several labs, each with a refquota-sized total (a
+// stand-in for the dataset's own refquota-capped status) that would refuse
+// create outright if any one of them were mistaken for the pool's true
+// size. The gate must ignore all of them and fall through to GET
+// /nodes/{node}/disks/zfs (PVE's `zpool list` equivalent) for the pool's
+// real, much larger, size — proving the nested entries are never read as
+// the denominator, regardless of how many exist or what their totals are.
+func TestCreateCapacityGate_IgnoresNestedPerLabStorage_UsesZfsPoolFallback(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 480 // 480G + 0G used + 0G NFS reserve (opted out below) against a 10T pool: ~0.005%
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
+		[]any{map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+	f.HandleJSON("GET /api2/json/storage", []any{
+		map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"},
+		map[string]any{"storage": "tank-lab-alpha", "type": "zfspool", "pool": "tank/labs/alpha"},
+		map[string]any{"storage": "tank-lab-bravo", "type": "zfspool", "pool": "tank/labs/bravo"},
+		map[string]any{"storage": "local-zfs", "type": "zfspool", "pool": "rpool/data"},
+		map[string]any{"storage": "backups", "type": "dir", "pool": ""},
+	})
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	// Every nested per-lab storage's own status reports a refquota-sized
+	// total (480G, matching a single lab's default). If the gate mistook
+	// any one of these for the pool's true size, the numerator's default
+	// NFS reserve (1024G) alone would already exceed it and refuse.
+	createHandleStorageStatus(f, "node1", "tank-lab-wayne", 480*1024*1024*1024, 0)
+	createHandleStorageStatus(f, "node1", "tank-lab-alpha", 480*1024*1024*1024, 0)
+	createHandleStorageStatus(f, "node1", "tank-lab-bravo", 480*1024*1024*1024, 0)
+	// The pool's real size, read via disks/zfs since no storage is rooted
+	// at "tank" itself.
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.NoError(t, err,
+		"a nested per-lab storage's refquota-bound total must never be read as the pool denominator")
+	assert.NotContains(t, out, "capacity gate")
+	require.Len(t, qemuCreateRec, 1)
+}
+
+// TestCreateCapacityGate_PrefersRootedStorageOverZfsPoolFallback covers the
+// resolution order documented on createResolveCapacityDenominator: when a
+// zfspool storage is registered rooted at the base pool itself ("tank"),
+// the gate must read live size from it rather than falling through to
+// disks/zfs, even though a "tank" entry also exists there. The two sources
+// report different figures (rooted storage: over the refuse threshold;
+// disks/zfs: comfortably under every threshold) so the assertion proves
+// which one was actually read, not just that a source was found.
+func TestCreateCapacityGate_PrefersRootedStorageOverZfsPoolFallback(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 900 // 900G + 0G used + 0G NFS reserve (opted out below)
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
+		[]any{map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+	f.HandleJSON("GET /api2/json/storage", []any{
+		map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"},
+	})
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	// Rooted storage status: 900G/1000G = 90%, over the refuse threshold.
+	createHandleStorageStatus(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	// disks/zfs: if this were read instead, 900G/10000G = 9%, comfortably
+	// under every threshold. Its presence must not affect the outcome once
+	// a rooted storage.cfg entry exists.
+	createHandleDisksZfs(f, "node1", "tank", 10000*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.Error(t, err, "the rooted storage's 90%% ratio must be what the gate reads, not disks/zfs's 9%%")
+	assert.ErrorContains(t, err, "capacity gate")
+	assert.ErrorContains(t, err, "--force")
+}
+
+// TestCreateCapacityGate_SkipsNodeRestrictedRootedStorage covers F3 from
+// review round 1: a rooted zfspool storage whose "nodes" attribute
+// restricts it away from the create target must not be treated as a match
+// — reading its live status on a node it is not enabled on would 404 and
+// silently skip the gate (reintroducing the original bug's shape for a
+// "resolved" storage). The gate must instead fall through to disks/zfs.
+func TestCreateCapacityGate_SkipsNodeRestrictedRootedStorage(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 900 // over the refuse threshold against the disks/zfs 1000G pool below
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
+		[]any{map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+	f.HandleJSON("GET /api2/json/storage", []any{
+		// Rooted at "tank", but restricted to "node2" — not the create
+		// target ("node1") — so it must be skipped as a candidate.
+		map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank", "nodes": "node2"},
+	})
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	createForbid(f, t, "GET /api2/json/nodes/node1/storage/tank/status")
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "capacity gate")
+	assert.ErrorContains(t, err, "--force")
+}
+
+// TestCreateCapacityGate_NoMatchingStorage_RefusesLoudly covers the other
+// half of the F4 fix: no /cluster/storage entry rooted at the base pool and
+// no matching disks/zfs pool at all (e.g. a host whose only zfspool storage
+// backs a completely different pool) must refuse create with an
+// operator-actionable error naming the base pool, rather than silently
+// skipping the gate as the old literal-name lookup always did in this
+// situation. No mutating call, including VMID allocation, may happen first.
+func TestCreateCapacityGate_NoMatchingStorage_RefusesLoudly(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
+		[]any{map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+	f.HandleJSON("GET /api2/json/storage", []any{
+		map[string]any{"storage": "otherpool-lab-someone", "type": "zfspool", "pool": "otherpool/labs/someone"},
+		map[string]any{"storage": "local-zfs", "type": "zfspool", "pool": "rpool/data"},
+	})
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	createForbid(f, t, "GET /api2/json/nodes/node1/storage/")
+	// disks/zfs succeeds but reports pools other than "tank" — an explicit
+	// "found nothing" rather than an unmocked/erroring route, so this test
+	// exercises the true not-found path rather than the API-failure skip
+	// path.
+	f.HandleJSON("GET /api2/json/nodes/node1/disks/zfs", []any{
+		map[string]any{"name": "rpool", "size": 500 * 1024 * 1024 * 1024, "alloc": 0, "free": 500 * 1024 * 1024 * 1024},
+	})
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "capacity gate")
+	assert.ErrorContains(t, err, `no live capacity signal found for base pool "tank"`)
+	assert.ErrorContains(t, err, "capacity_storage_id")
+}
+
+// TestCreateCapacityGate_CapacityStorageIDOverride covers the documented
+// escape hatch: storage.capacity_storage_id, when set, is used verbatim as
+// the status-read target and skips the /cluster/storage discovery call
+// entirely (asserted via createForbid on GET /api2/json/storage), so an
+// operator on a host whose storage naming does not fit the auto-discovery
+// heuristic can still point the gate at the right storage.
+func TestCreateCapacityGate_CapacityStorageIDOverride(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 900 // 900G + 0G used + 0G NFS reserve against a 1000G pool: over refuse threshold
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
+		[]any{map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+	// The storage step (unaffected by the capacity-gate override) still
+	// lists /cluster/storage once to check whether this lab's own
+	// per-lab entry already exists; the override only means the capacity
+	// gate itself skips making its own, second, list call.
+	var storageListRec []createRecordedRequest
+	createRecord(f, &storageListRec, nil, "storage-list", "GET /api2/json/storage",
+		[]any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}}, 200)
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	createHandleStorageStatus(f, "node1", "custom-tank-storage", 1000*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	cfg := createNoNFSReserve(map[string]*config.Lab{"wayne": lab})
+	cfg.Storage.CapacityStorageID = "custom-tank-storage"
+	path := writeConfig(t, cfg)
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "capacity gate")
+	assert.ErrorContains(t, err, "--force")
+	assert.Len(t, storageListRec, 1,
+		"the capacity gate must skip its own /cluster/storage discovery call once storage.capacity_storage_id is set")
 }
