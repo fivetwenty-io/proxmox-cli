@@ -164,7 +164,24 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 	}
 
+	rows, err := nfsEnsureAttached(deps, name, node0IP, server, targets)
+	if err != nil {
+		return err
+	}
+	rows = append(rows, []string{"summary", fmt.Sprintf("lab %q: NFS storage reconciled against server %s.", name, server)})
+
 	headers := []string{"STORAGE", "STATUS"}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+}
+
+// nfsEnsureAttached performs `nfs attach`'s actual work — probe each
+// target's existing storage config, add it if missing — without any cobra/
+// rendering coupling, so `pmx lab scale`'s reconcile step can reuse the
+// identical idempotent logic runNfsAttach's RunE wraps. Returns one
+// STORAGE/STATUS row per target, in order (no trailing "summary" row —
+// callers append their own, since scale.go's summary text differs from
+// runNfsAttach's).
+func nfsEnsureAttached(deps *cli.Deps, name, node0IP, server string, targets []nfsAttachTarget) ([][]string, error) {
 	rows := make([][]string, 0, len(targets))
 
 	for _, t := range targets {
@@ -174,17 +191,16 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 			rows = append(rows, []string{t.id, "skip (already attached)"})
 			continue
 		case guestCommandTransportFailed(perr):
-			return fmt.Errorf("lab %q: probe storage %q on node 0 (%s): %w", name, t.id, node0IP, perr)
+			return nil, fmt.Errorf("lab %q: probe storage %q on node 0 (%s): %w", name, t.id, node0IP, perr)
 		}
 
 		if _, aerr := runGuestSSH(deps, node0IP, nfsAddCommand(t, server)); aerr != nil {
-			return fmt.Errorf("lab %q: attach storage %q on node 0 (%s): %w", name, t.id, node0IP, aerr)
+			return nil, fmt.Errorf("lab %q: attach storage %q on node 0 (%s): %w", name, t.id, node0IP, aerr)
 		}
 		rows = append(rows, []string{t.id, "attached"})
 	}
 
-	rows = append(rows, []string{"summary", fmt.Sprintf("lab %q: NFS storage reconciled against server %s.", name, server)})
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+	return rows, nil
 }
 
 // nfsAddCommand renders the `pvesm add nfs` command for t against server.

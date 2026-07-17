@@ -147,37 +147,9 @@ func runQdeviceAdd(cmd *cobra.Command, name string, dryRun bool) error {
 			name, node0IP, lab.Name)
 	}
 
-	var steps []qdeviceStepResult
-
-	alreadyInstalled, err := ensureGuestPackage(deps, qdeviceIP, qdeviceQnetdPackage)
+	steps, err := qdeviceEnsureWired(deps, lab, name, qdeviceIP, node0IP, numNodes, cst.HasQdevice)
 	if err != nil {
-		return fmt.Errorf("lab %q: %w", name, err)
-	}
-	steps = append(steps, qdeviceStepResult{
-		desc: fmt.Sprintf("install %s on QDevice VM (%s)", qdeviceQnetdPackage, qdeviceIP), skip: alreadyInstalled})
-
-	for i := 0; i < numNodes; i++ {
-		nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
-		if ierr != nil {
-			return fmt.Errorf("resolve node %d mgmt IP: %w", i, ierr)
-		}
-		already, perr := ensureGuestPackage(deps, nodeIP, qdeviceClientPackage)
-		if perr != nil {
-			return fmt.Errorf("lab %q: %w", name, perr)
-		}
-		steps = append(steps, qdeviceStepResult{
-			desc: fmt.Sprintf("install %s on node %d (%s)", qdeviceClientPackage, i, nodeIP), skip: already})
-	}
-
-	if cst.HasQdevice {
-		steps = append(steps, qdeviceStepResult{
-			desc: fmt.Sprintf("pvecm qdevice setup %s on node 0", qdeviceIP), skip: true})
-	} else {
-		setupCmd := fmt.Sprintf("pvecm qdevice setup %s", qdeviceIP)
-		if _, serr := runGuestSSH(deps, node0IP, setupCmd); serr != nil {
-			return fmt.Errorf("lab %q: qdevice setup against node 0 (%s): %w", name, node0IP, serr)
-		}
-		steps = append(steps, qdeviceStepResult{desc: fmt.Sprintf("pvecm qdevice setup %s on node 0", qdeviceIP)})
+		return err
 	}
 
 	headers := []string{"STEP", "STATUS"}
@@ -192,6 +164,53 @@ func runQdeviceAdd(cmd *cobra.Command, name string, dryRun bool) error {
 	rows = append(rows, []string{"summary", fmt.Sprintf("lab %q: QDevice wired up against cluster %q.", name, lab.Name)})
 
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+}
+
+// qdeviceEnsureWired installs corosync-qnetd on the QDevice VM,
+// corosync-qdevice on every node 0..numNodes-1, and runs `pvecm qdevice
+// setup` on node 0 (skipped if hasQdevice is already true) — the actual
+// wiring work `qdevice add`'s RunE performs after its preconditions pass,
+// factored out with no cobra/rendering coupling so `pmx lab scale`'s
+// QDevice-add step can reuse the identical idempotent logic. Every returned
+// qdeviceStepResult and error is produced exactly as runQdeviceAdd's
+// original inline version did.
+func qdeviceEnsureWired(
+	deps *cli.Deps, lab *config.Lab, name, qdeviceIP, node0IP string, numNodes int, hasQdevice bool,
+) ([]qdeviceStepResult, error) {
+	var steps []qdeviceStepResult
+
+	alreadyInstalled, err := ensureGuestPackage(deps, qdeviceIP, qdeviceQnetdPackage)
+	if err != nil {
+		return nil, fmt.Errorf("lab %q: %w", name, err)
+	}
+	steps = append(steps, qdeviceStepResult{
+		desc: fmt.Sprintf("install %s on QDevice VM (%s)", qdeviceQnetdPackage, qdeviceIP), skip: alreadyInstalled})
+
+	for i := 0; i < numNodes; i++ {
+		nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
+		if ierr != nil {
+			return nil, fmt.Errorf("resolve node %d mgmt IP: %w", i, ierr)
+		}
+		already, perr := ensureGuestPackage(deps, nodeIP, qdeviceClientPackage)
+		if perr != nil {
+			return nil, fmt.Errorf("lab %q: %w", name, perr)
+		}
+		steps = append(steps, qdeviceStepResult{
+			desc: fmt.Sprintf("install %s on node %d (%s)", qdeviceClientPackage, i, nodeIP), skip: already})
+	}
+
+	if hasQdevice {
+		steps = append(steps, qdeviceStepResult{
+			desc: fmt.Sprintf("pvecm qdevice setup %s on node 0", qdeviceIP), skip: true})
+	} else {
+		setupCmd := fmt.Sprintf("pvecm qdevice setup %s", qdeviceIP)
+		if _, serr := runGuestSSH(deps, node0IP, setupCmd); serr != nil {
+			return nil, fmt.Errorf("lab %q: qdevice setup against node 0 (%s): %w", name, node0IP, serr)
+		}
+		steps = append(steps, qdeviceStepResult{desc: fmt.Sprintf("pvecm qdevice setup %s on node 0", qdeviceIP)})
+	}
+
+	return steps, nil
 }
 
 // ensureGuestPackage probes host for pkg via `dpkg -s`, installing it via
@@ -263,21 +282,36 @@ func runQdeviceRemove(cmd *cobra.Command, name string, dryRun bool) error {
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 
+	message, err := ensureQdeviceRemoved(deps, lab, name, node0IP)
+	if err != nil {
+		return err
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format)
+}
+
+// ensureQdeviceRemoved performs `qdevice remove`'s actual work — probe,
+// then `pvecm qdevice remove` if a QDevice is registered — without any
+// cobra/rendering coupling, so `pmx lab scale`'s QDevice-parity-first step
+// can reuse the identical idempotent logic runQdeviceRemove's RunE wraps.
+// The returned message distinguishes "removed" from "already absent" (its
+// text differs, matching runQdeviceRemove's original two outcomes exactly)
+// for callers that want to report which one happened.
+func ensureQdeviceRemoved(deps *cli.Deps, lab *config.Lab, name, node0IP string) (message string, err error) {
+	removeCmd := "pvecm qdevice remove"
+
 	probe, perr := runGuestSSH(deps, node0IP, "pvecm status")
 	if perr != nil && guestCommandTransportFailed(perr) {
-		return fmt.Errorf("probe node 0 (%s) cluster state: %w", node0IP, perr)
+		return "", fmt.Errorf("probe node 0 (%s) cluster state: %w", node0IP, perr)
 	}
 	st := parsePvecmStatus(probe.Stdout)
 	if !st.HasQdevice {
-		res := output.Result{Message: fmt.Sprintf(
-			"lab %q: node 0 (%s) reports no registered QDevice; nothing to do.", name, node0IP)}
-		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		return fmt.Sprintf(
+			"lab %q: node 0 (%s) reports no registered QDevice; nothing to do.", name, node0IP), nil
 	}
 
 	if _, err := runGuestSSH(deps, node0IP, removeCmd); err != nil {
-		return fmt.Errorf("lab %q: remove qdevice from node 0 (%s): %w", name, node0IP, err)
+		return "", fmt.Errorf("lab %q: remove qdevice from node 0 (%s): %w", name, node0IP, err)
 	}
 
-	res := output.Result{Message: fmt.Sprintf("lab %q: QDevice removed from cluster %q.", name, lab.Name)}
-	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+	return fmt.Sprintf("lab %q: QDevice removed from cluster %q.", name, lab.Name), nil
 }

@@ -164,15 +164,24 @@ func guestCommandTransportFailed(err error) bool {
 
 // pvecmStatus is the subset of `pvecm status`'s plain-text output this
 // package parses: whether the node is clustered at all, the cluster name (if
-// clustered), quorum state, vote counts, and whether a QDevice is currently
-// registered.
+// clustered), quorum state, vote counts, the live corosync membership node
+// count, and whether a QDevice is currently registered.
 type pvecmStatus struct {
 	Clustered     bool
 	ClusterName   string
 	Quorate       bool
 	ExpectedVotes int
 	TotalVotes    int
-	HasQdevice    bool
+	// NodeCount is the "Nodes:" field of the Quorum information section —
+	// the number of real cluster NODES currently in the corosync
+	// membership, distinct from ExpectedVotes/TotalVotes (which also
+	// include the QDevice's vote when one is registered). `pmx lab scale`
+	// uses this as the ground-truth "current node count" for its delta
+	// computation and re-run idempotency (see scaleCurrentMembership) — VM
+	// shell existence alone cannot distinguish "joined" from "created but
+	// never joined."
+	NodeCount  int
+	HasQdevice bool
 }
 
 var (
@@ -180,6 +189,7 @@ var (
 	pvecmQuorateRE       = regexp.MustCompile(`(?m)^Quorate:\s*(\S+)`)
 	pvecmExpectedVotesRE = regexp.MustCompile(`(?m)^Expected votes:\s*(\d+)`)
 	pvecmTotalVotesRE    = regexp.MustCompile(`(?m)^Total votes:\s*(\d+)`)
+	pvecmNodesRE         = regexp.MustCompile(`(?m)^Nodes:\s*(\d+)`)
 )
 
 // parsePvecmStatus parses the plain-text output of `pvecm status` (the only
@@ -207,6 +217,9 @@ func parsePvecmStatus(output string) pvecmStatus {
 	}
 	if m := pvecmTotalVotesRE.FindStringSubmatch(output); m != nil {
 		st.TotalVotes, _ = strconv.Atoi(m[1])
+	}
+	if m := pvecmNodesRE.FindStringSubmatch(output); m != nil {
+		st.NodeCount, _ = strconv.Atoi(m[1])
 	}
 	// "Qdevice" appears both in the Flags line ("Flags: Quorate Qdevice")
 	// and as a synthetic membership-list row once `pvecm qdevice setup` has

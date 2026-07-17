@@ -161,12 +161,17 @@ const samplePctListNonEmpty = `VMID       Status     Lock         Name
 111        running                 ct-11
 `
 
+// samplePvecmStatusWithQdevice describes a 2-real-node cluster plus a
+// registered QDevice (2 node votes + 1 QDevice vote = 3 total/expected);
+// Nodes: 2 is the real corosync membership count, distinct from the
+// QDevice-inclusive vote totals.
 const samplePvecmStatusWithQdevice = `Cluster information
 -------------------
 Name:             wayne
 
 Quorum information
 ------------------
+Nodes:            2
 Quorate:          Yes
 
 Votequorum information

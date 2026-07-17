@@ -155,12 +155,6 @@ func runSdnApply(cmd *cobra.Command, name string, dryRun bool) error {
 	// idempotency against real PVE state.
 	peers := strings.Join(peerIPs, ",")
 
-	createCmd := fmt.Sprintf(
-		"pvesh create /cluster/sdn/zones --zone %s --type %s --peers %q --mtu %d",
-		labInnerZoneName, labInnerZoneType, peers, labInnerZoneMTU)
-	updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/zones/%s --peers %q", labInnerZoneName, peers)
-	commitCmd := "pvesh set /cluster/sdn"
-
 	// dry-run never touches deps.Runner (see cluster.go's runClusterInit for
 	// the same convention): it previews the zone this run would ensure,
 	// without probing live remote state to decide create-vs-update.
@@ -174,6 +168,28 @@ func runSdnApply(cmd *cobra.Command, name string, dryRun bool) error {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 	}
 
+	rows, err := sdnEnsureZoneApplied(deps, name, node0IP, peers)
+	if err != nil {
+		return err
+	}
+
+	headers := []string{"STEP", "STATUS"}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+}
+
+// sdnEnsureZoneApplied performs `sdn apply`'s actual work — probe, create
+// or update the peers, commit if anything changed — without any cobra/
+// rendering coupling, so `pmx lab scale`'s reconcile step can reuse the
+// identical idempotent logic runSdnApply's RunE wraps. Returns the same
+// two-row STEP/STATUS table runSdnApply's original inline version rendered
+// (zone row, then commit row).
+func sdnEnsureZoneApplied(deps *cli.Deps, name, node0IP, peers string) ([][]string, error) {
+	createCmd := fmt.Sprintf(
+		"pvesh create /cluster/sdn/zones --zone %s --type %s --peers %q --mtu %d",
+		labInnerZoneName, labInnerZoneType, peers, labInnerZoneMTU)
+	updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/zones/%s --peers %q", labInnerZoneName, peers)
+	commitCmd := "pvesh set /cluster/sdn"
+
 	probe, perr := runGuestSSH(deps, node0IP, fmt.Sprintf(
 		"pvesh get /cluster/sdn/zones/%s --output-format json", labInnerZoneName))
 
@@ -186,11 +202,11 @@ func runSdnApply(cmd *cobra.Command, name string, dryRun bool) error {
 	case perr == nil:
 		var existing sdnInnerZone
 		if uerr := json.Unmarshal([]byte(probe.Stdout), &existing); uerr != nil {
-			return fmt.Errorf("lab %q: decode existing inner sdn zone %q on node 0: %w", name, labInnerZoneName, uerr)
+			return nil, fmt.Errorf("lab %q: decode existing inner sdn zone %q on node 0: %w", name, labInnerZoneName, uerr)
 		}
 		if !peersEqual(existing.Peers, peers) {
 			if _, uerr := runGuestSSH(deps, node0IP, updateCmd); uerr != nil {
-				return fmt.Errorf("lab %q: update inner sdn zone %q peers on node 0: %w", name, labInnerZoneName, uerr)
+				return nil, fmt.Errorf("lab %q: update inner sdn zone %q peers on node 0: %w", name, labInnerZoneName, uerr)
 			}
 			changed = true
 			stepDesc = fmt.Sprintf("sdn zone %q peers updated on node 0", labInnerZoneName)
@@ -198,12 +214,12 @@ func runSdnApply(cmd *cobra.Command, name string, dryRun bool) error {
 			stepDesc = fmt.Sprintf("sdn zone %q already matches on node 0", labInnerZoneName)
 		}
 	case guestCommandTransportFailed(perr):
-		return fmt.Errorf("lab %q: probe inner sdn zone %q on node 0 (%s): %w", name, labInnerZoneName, node0IP, perr)
+		return nil, fmt.Errorf("lab %q: probe inner sdn zone %q on node 0 (%s): %w", name, labInnerZoneName, node0IP, perr)
 	default:
 		// Non-zero exit with a reachable node: pvesh reports the zone does
 		// not exist yet.
 		if _, cerr := runGuestSSH(deps, node0IP, createCmd); cerr != nil {
-			return fmt.Errorf("lab %q: create inner sdn zone %q on node 0: %w", name, labInnerZoneName, cerr)
+			return nil, fmt.Errorf("lab %q: create inner sdn zone %q on node 0: %w", name, labInnerZoneName, cerr)
 		}
 		changed = true
 		stepDesc = fmt.Sprintf("sdn zone %q created on node 0", labInnerZoneName)
@@ -212,16 +228,13 @@ func runSdnApply(cmd *cobra.Command, name string, dryRun bool) error {
 	commitStatus := "skip (no pending changes)"
 	if changed {
 		if _, cerr := runGuestSSH(deps, node0IP, commitCmd); cerr != nil {
-			return fmt.Errorf("lab %q: commit inner sdn changes on node 0: %w", name, cerr)
+			return nil, fmt.Errorf("lab %q: commit inner sdn changes on node 0: %w", name, cerr)
 		}
 		commitStatus = "committed"
 	}
 
-	headers := []string{"STEP", "STATUS"}
-	rows := [][]string{
+	return [][]string{
 		{fmt.Sprintf("sdn zone %q (peers %q)", labInnerZoneName, peers), stepDesc},
 		{"commit pending sdn changes on node 0", commitStatus},
-	}
-
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+	}, nil
 }

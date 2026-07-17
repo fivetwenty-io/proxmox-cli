@@ -102,42 +102,58 @@ func runClusterInit(cmd *cobra.Command, name string, dryRun bool) error {
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 
+	message, err := ensureClusterInit(deps, lab, name, node0IP)
+	if err != nil {
+		return err
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format)
+}
+
+// ensureClusterInit performs `cluster init`'s actual work — probe, create,
+// verify — without any cobra/rendering coupling, so `pmx lab scale`'s grow
+// path can reuse the identical idempotent logic runClusterInit's RunE
+// wraps. Every returned message/error string is already fully formed
+// (including the "lab %q:" prefix where runClusterInit's original inline
+// version had one, and without it where it did not), so callers only need
+// to render message on success or propagate err on failure — see
+// runClusterInit for the byte-for-byte equivalence this preserves.
+func ensureClusterInit(deps *cli.Deps, lab *config.Lab, name, node0IP string) (message string, err error) {
+	createCmd := fmt.Sprintf("pvecm create %s --link0 %s", lab.Name, node0IP)
+
 	probe, perr := runGuestSSH(deps, node0IP, "pvecm status")
 	if perr != nil && guestCommandTransportFailed(perr) {
-		return fmt.Errorf("probe node 0 (%s) cluster state: %w", node0IP, perr)
+		return "", fmt.Errorf("probe node 0 (%s) cluster state: %w", node0IP, perr)
 	}
 	st := parsePvecmStatus(probe.Stdout)
 
 	if st.Clustered && st.ClusterName == lab.Name {
-		res := output.Result{Message: fmt.Sprintf(
-			"lab %q: node 0 (%s) is already clustered as %q; nothing to do.", name, node0IP, st.ClusterName)}
-		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		return fmt.Sprintf(
+			"lab %q: node 0 (%s) is already clustered as %q; nothing to do.", name, node0IP, st.ClusterName), nil
 	}
 	if st.Clustered && st.ClusterName != lab.Name {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"lab %q: node 0 (%s) is already part of a DIFFERENT cluster (%q); refusing to overwrite it",
 			name, node0IP, st.ClusterName)
 	}
 
 	if _, err := runGuestSSH(deps, node0IP, createCmd); err != nil {
-		return fmt.Errorf("create cluster %q on node 0 (%s): %w", lab.Name, node0IP, err)
+		return "", fmt.Errorf("create cluster %q on node 0 (%s): %w", lab.Name, node0IP, err)
 	}
 
 	verify, verr := runGuestSSH(deps, node0IP, "pvecm status")
 	if verr != nil {
-		return fmt.Errorf("verify cluster %q after create: %w", lab.Name, verr)
+		return "", fmt.Errorf("verify cluster %q after create: %w", lab.Name, verr)
 	}
 	vst := parsePvecmStatus(verify.Stdout)
 	if !vst.Clustered || !vst.Quorate || vst.ExpectedVotes != 1 || vst.TotalVotes != 1 {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"lab %q: cluster create ran but node 0 does not report a quorate 1-of-1-vote cluster "+
 				"(clustered=%v quorate=%v expected=%d total=%d)",
 			name, vst.Clustered, vst.Quorate, vst.ExpectedVotes, vst.TotalVotes)
 	}
 
-	res := output.Result{Message: fmt.Sprintf(
-		"lab %q: cluster %q created on node 0 (%s), quorate 1/1 votes.", name, lab.Name, node0IP)}
-	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+	return fmt.Sprintf(
+		"lab %q: cluster %q created on node 0 (%s), quorate 1/1 votes.", name, lab.Name, node0IP), nil
 }
 
 // newClusterJoinCmd builds `pmx lab cluster join <name> --node <i>`.
@@ -215,18 +231,35 @@ func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) erro
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 
+	message, err := ensureClusterJoin(deps, lab, name, idx, node0IP, nodeIP)
+	if err != nil {
+		return err
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format)
+}
+
+// ensureClusterJoin performs `cluster join`'s actual work — probe, guest-
+// free check, pvecm add, wait-for-quorum — without any cobra/rendering
+// coupling, so `pmx lab scale`'s grow path can reuse the identical
+// idempotent logic runClusterJoin's RunE wraps. Every returned message/
+// error string is already fully formed exactly as runClusterJoin's original
+// inline version produced it — see runClusterJoin for the byte-for-byte
+// equivalence this preserves.
+func ensureClusterJoin(deps *cli.Deps, lab *config.Lab, name string, idx int, node0IP, nodeIP string) (message string, err error) {
+	joinCmd := fmt.Sprintf("pvecm add %s --link0 %s --use_ssh", node0IP, nodeIP)
+
 	probe, perr := runGuestSSH(deps, nodeIP, "pvecm status")
 	if perr != nil && guestCommandTransportFailed(perr) {
-		return fmt.Errorf("probe node %d (%s) cluster state: %w", idx, nodeIP, perr)
+		return "", fmt.Errorf("probe node %d (%s) cluster state: %w", idx, nodeIP, perr)
 	}
 	st := parsePvecmStatus(probe.Stdout)
 	if st.Clustered && st.ClusterName == lab.Name {
-		res := output.Result{Message: fmt.Sprintf(
-			"lab %q: node %d (%s) is already joined to cluster %q; nothing to do.", name, idx, nodeIP, st.ClusterName)}
-		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		return fmt.Sprintf(
+			"lab %q: node %d (%s) is already joined to cluster %q; nothing to do.",
+			name, idx, nodeIP, st.ClusterName), nil
 	}
 	if st.Clustered && st.ClusterName != lab.Name {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"lab %q: node %d (%s) is already part of a DIFFERENT cluster (%q); refusing to join it into %q",
 			name, idx, nodeIP, st.ClusterName, lab.Name)
 	}
@@ -236,21 +269,20 @@ func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) erro
 	// create but not join)". Refuse before pvecm add ever runs, rather than
 	// letting a guest-hosting node join and silently violate the invariant.
 	if err := clusterEnsureGuestFree(deps, idx, nodeIP); err != nil {
-		return fmt.Errorf("lab %q: %w", name, err)
+		return "", fmt.Errorf("lab %q: %w", name, err)
 	}
 
 	if _, err := runGuestSSH(deps, nodeIP, joinCmd); err != nil {
-		return fmt.Errorf("join node %d (%s) to cluster %q: %w", idx, nodeIP, lab.Name, err)
+		return "", fmt.Errorf("join node %d (%s) to cluster %q: %w", idx, nodeIP, lab.Name, err)
 	}
 
 	if err := clusterWaitForJoin(deps, node0IP, idx+1); err != nil {
-		return fmt.Errorf("lab %q: node %d joined, but %w", name, idx, err)
+		return "", fmt.Errorf("lab %q: node %d joined, but %w", name, idx, err)
 	}
 
-	res := output.Result{Message: fmt.Sprintf(
+	return fmt.Sprintf(
 		"lab %q: node %d (%s) joined cluster %q; %d/%d votes quorate, all corosync links up.",
-		name, idx, nodeIP, lab.Name, idx+1, idx+1)}
-	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+		name, idx, nodeIP, lab.Name, idx+1, idx+1), nil
 }
 
 // clusterEnsureGuestFree refuses to proceed if node idx (at nodeIP) hosts

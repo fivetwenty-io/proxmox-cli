@@ -37,9 +37,12 @@ cluster init'/'join'/'status' form and inspect the nested PVE cluster;
 tie-breaker a 2-node (mandatory) or 4-node (recommended) topology needs;
 'pmx lab sdn apply' reconciles the inner VXLAN zone spanning the nested
 cluster's own nodes; 'pmx lab nfs attach'/'status'/'detach' register the
-shared NFS service's exports as storage inside the nested cluster. Every
-one of these six verb groups is transported entirely over ssh into the lab
-guest's own mgmt IP, never against the outer Proxmox VE API.`,
+shared NFS service's exports as storage inside the nested cluster; 'pmx lab
+scale --nodes N' orchestrates a full topology migration (grow or shrink,
+with correct QDevice-parity sequencing) by driving all of the above in the
+right order. Every one of these seven verb groups is transported entirely
+over ssh into the lab guest's own mgmt IP, never against the outer Proxmox
+VE API.`,
 		Example: `  pmx lab create wayne --node sm-0
   pmx lab status wayne
   pmx lab list
@@ -52,7 +55,8 @@ guest's own mgmt IP, never against the outer Proxmox VE API.`,
   pmx lab cluster join wayne --node 1
   pmx lab qdevice add wayne
   pmx lab sdn apply wayne
-  pmx lab nfs attach wayne`,
+  pmx lab nfs attach wayne
+  pmx lab scale wayne --nodes 3`,
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPVE},
 	}
 
@@ -71,6 +75,7 @@ guest's own mgmt IP, never against the outer Proxmox VE API.`,
 		newQdeviceCmd(),
 		newSdnCmd(),
 		newNfsCmd(),
+		newScaleCmd(),
 	)
 
 	return cmd
