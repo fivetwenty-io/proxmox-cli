@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,11 @@ import (
 var (
 	inlineLiteralOnce sync.Once
 )
+
+// ErrKeychainUnsupported is returned by StoreKeychainSecret/DeleteKeychainSecret
+// on platforms without a macOS keychain backend. Callers detect it with
+// errors.Is to fall back to a literal-secret config entry rather than failing.
+var ErrKeychainUnsupported = errors.New("keychain support is only available on macOS")
 
 // ResolveSecret resolves a secret string into its plaintext value.
 //
