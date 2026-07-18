@@ -913,6 +913,140 @@ func TestContextSyncCommand_WritesContextAndRenders(t *testing.T) {
 	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"])
 }
 
+// contextRmDeps builds a *cli.Deps carrying a persisted config.yml. When
+// withContext is true it pre-seeds a lab-<name> pmx token context whose secret
+// is a keychain reference, mirroring what auto-registration writes; when false
+// the config has no context, exercising the orphaned-secret cleanup path.
+func contextRmDeps(t *testing.T, name string, withContext bool) *cli.Deps {
+	t.Helper()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("contexts: {}\n"), 0o600))
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	if withContext {
+		cfg.Contexts["lab-"+name] = &config.Context{
+			Host:     "10.10.1.10",
+			Port:     8006,
+			Protocol: "https",
+			Product:  config.ProductPVE,
+			Auth: config.AuthBlock{
+				Type:     "token",
+				Username: "pmx@pve",
+				TokenID:  "pmx",
+				Secret:   "keychain:pmx-lab-" + name + "/pmx@pve!pmx",
+			},
+		}
+	}
+	return &cli.Deps{Cfg: cfg, ConfigPath: cfgPath, Out: output.New(), Format: output.FormatPlain}
+}
+
+func TestContextRm_RemovesContextAndSecret(t *testing.T) {
+	var svc, acct string
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(service, account string) error {
+		svc, acct = service, account
+		return nil
+	}
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	deps := contextRmDeps(t, "demo", true)
+	root := newContextCmd()
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+
+	out, err := runGuestCmd(t, root, "rm", "demo")
+	require.NoError(t, err)
+
+	assert.Nil(t, deps.Cfg.Contexts["lab-demo"], "context must be removed from config")
+	assert.Equal(t, "pmx-lab-demo", svc)
+	assert.Equal(t, "pmx@pve!pmx", acct)
+	assert.Contains(t, out, `removed context "lab-demo" and its keychain secret`)
+
+	// Persisted to disk.
+	reloaded, err := config.Load(deps.ConfigPath)
+	require.NoError(t, err)
+	assert.Nil(t, reloaded.Contexts["lab-demo"], "removal must be saved")
+}
+
+func TestContextRm_ClearsActiveContext(t *testing.T) {
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(string, string) error { return nil }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	deps := contextRmDeps(t, "demo", true)
+	deps.Cfg.CurrentContext = "lab-demo"
+	root := newContextCmd()
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+
+	_, err := runGuestCmd(t, root, "rm", "demo")
+	require.NoError(t, err)
+	assert.Equal(t, "", deps.Cfg.CurrentContext,
+		"removing the active lab context must unset CurrentContext")
+
+	reloaded, err := config.Load(deps.ConfigPath)
+	require.NoError(t, err)
+	assert.Equal(t, "", reloaded.CurrentContext, "unset CurrentContext must be persisted")
+}
+
+// TestContextRm_KeychainFailureLeavesContext covers the error path: a real
+// keychain-delete failure (not ErrKeychainUnsupported) must propagate as a
+// wrapped error with the context left intact, matching cleanupLabContext's
+// keychain-first ordering — on darwin the secret lives in the keychain, so the
+// config reference is kept as the trail to a secret that could not be deleted.
+func TestContextRm_KeychainFailureLeavesContext(t *testing.T) {
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(string, string) error { return fmt.Errorf("keychain locked") }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	deps := contextRmDeps(t, "demo", true)
+	root := newContextCmd()
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+
+	_, err := runGuestCmd(t, root, "rm", "demo")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `remove context for lab "demo"`)
+	assert.NotNil(t, deps.Cfg.Contexts["lab-demo"],
+		"a real keychain failure must not remove the context")
+}
+
+// TestContextRm_RejectsInvalidName covers the charset guard: rm validates its
+// argument directly (it never routes through resolveLabForMutate) so a name
+// that could reach a remote command line is refused before any mutation.
+func TestContextRm_RejectsInvalidName(t *testing.T) {
+	called := false
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(string, string) error { called = true; return nil }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	deps := contextRmDeps(t, "demo", false)
+	root := newContextCmd()
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+
+	_, err := runGuestCmd(t, root, "rm", "bad name")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "charset")
+	assert.False(t, called, "an invalid name must be rejected before any keychain call")
+}
+
+// TestContextRm_AbsentContext covers the orphaned-secret path: no lab-<name>
+// context exists in config, but rm must still attempt the keychain delete
+// (the secret may outlive its context) and report the absence without error.
+func TestContextRm_AbsentContext(t *testing.T) {
+	called := false
+	orig := labDeleteSecretFn
+	labDeleteSecretFn = func(string, string) error { called = true; return nil }
+	t.Cleanup(func() { labDeleteSecretFn = orig })
+
+	deps := contextRmDeps(t, "demo", false)
+	root := newContextCmd()
+	root.SetContext(cli.WithDeps(context.Background(), deps))
+
+	out, err := runGuestCmd(t, root, "rm", "demo")
+	require.NoError(t, err)
+	assert.True(t, called, "rm must still attempt to clear a possibly-stray keychain secret")
+	assert.Contains(t, out, `context "lab-demo" not found`)
+}
+
 // writeLabConfig writes a minimal config.yml at path containing one inline lab
 // named name with a resolvable mgmt /24, so resolveLabForMutate succeeds.
 func writeLabConfig(t *testing.T, path, name string) {

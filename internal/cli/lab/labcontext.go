@@ -407,7 +407,60 @@ func newContextCmd() *cobra.Command {
 			"TLS fingerprint.",
 	}
 	cmd.AddCommand(newContextSyncCmd())
+	cmd.AddCommand(newContextRmCmd())
 	return cmd
+}
+
+// newContextRmCmd builds `pmx lab context rm <name>`. It removes the lab-<name>
+// pmx context from config and deletes its keychain secret, reusing the same
+// cleanupLabContext helper that `lab destroy` runs. Unlike destroy it touches
+// no VMs and does not need the lab to still be defined, so it is the primitive
+// for cleaning up a context orphaned by removing its lab definition (or a
+// partially-registered lab that has a stray context or keychain secret).
+// Reversible while the lab's node 0 is running: `context sync` re-registers.
+func newContextRmCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "rm <name>",
+		Aliases: []string{"remove", "delete"},
+		Short:   "Remove a lab's pmx context and keychain secret",
+		Long: "Remove the lab-<name> pmx context from config and delete its token " +
+			"secret from the macOS keychain. Unlike `pmx lab destroy` this touches no " +
+			"VMs and does not need the lab to still be defined, so it cleans up a " +
+			"context left orphaned by removing its lab. If lab-<name> is the active " +
+			"context it is unset. Re-register at any time with `pmx lab context sync " +
+			"<name>` while the lab's node 0 is running.",
+		Example: `  pmx lab context rm demo`,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			name := args[0]
+
+			// Unlike sync, rm never routes through resolveLabForMutate (the lab
+			// may be gone), so validate the name here to uphold labContextName's
+			// charset invariant and keep a derived value off any remote path.
+			if err := validateLabNameCharset(name); err != nil {
+				return err
+			}
+			ctxName := labContextName(name)
+
+			// Match cleanupLabContext's own comma-ok presence test (a nil-valued
+			// map entry still counts as present and is removed) so the success
+			// message never claims "not found" for a context it just deleted.
+			present := false
+			if deps.Cfg != nil && deps.Cfg.Contexts != nil {
+				_, present = deps.Cfg.Contexts[ctxName]
+			}
+			if err := cleanupLabContext(deps, name); err != nil {
+				return fmt.Errorf("remove context for lab %q: %w", name, err)
+			}
+
+			msg := fmt.Sprintf("removed context %q and its keychain secret", ctxName)
+			if !present {
+				msg = fmt.Sprintf("context %q not found; cleared any keychain secret for it", ctxName)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+		},
+	}
 }
 
 // newContextSyncCmd builds `pmx lab context sync <name>`.
