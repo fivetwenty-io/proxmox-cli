@@ -999,7 +999,12 @@ func Execute(persona string, factories []GroupFactory) error {
 				fmt.Fprintln(os.Stderr, hint)
 			}
 			if deps := peekDeps(c); deps != nil && deps.Ctx != nil {
+				// Port convention is the more specific diagnosis ("right host,
+				// wrong product port"), so it wins; the unreachable hint covers
+				// every other connection failure.
 				if hint := PortConventionHint(err, deps.Ctx, deps.CtxName, CommandPrefix(c)); hint != "" {
+					fmt.Fprintln(os.Stderr, hint)
+				} else if hint := UnreachableHint(err, deps.Ctx, deps.CtxName, CommandPrefix(c)); hint != "" {
 					fmt.Fprintln(os.Stderr, hint)
 				}
 			}

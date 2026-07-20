@@ -114,3 +114,33 @@ func TestPortConventionHint_TLSRecordError_Fires(t *testing.T) {
 
 	require.Contains(t, hint, "Proxmox Datacenter Manager default")
 }
+
+func TestUnreachableHint_Fires(t *testing.T) {
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("i/o timeout")}
+	wrapped := fmt.Errorf("GET /version: %w", dialErr)
+
+	hint := cli.UnreachableHint(wrapped, connCtx("pve", 8006), "lab", "pmx")
+
+	require.Contains(t, hint, "could not reach h:8006")
+	require.Contains(t, hint, "dig +short h")
+	require.Contains(t, hint, "nc -vz h 8006")
+	require.Contains(t, hint, "pmx context show lab")
+	require.Contains(t, hint, "pmx context update lab --host <address>")
+}
+
+func TestUnreachableHint_ZeroPortUsesProductDefault(t *testing.T) {
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("refused")}
+
+	hint := cli.UnreachableHint(dialErr, connCtx("pbs", 0), "backup", "pbs")
+
+	require.Contains(t, hint, "could not reach h:8007")
+	require.Contains(t, hint, "pbs context show backup")
+}
+
+func TestUnreachableHint_NonConnectionError_Silent(t *testing.T) {
+	require.Empty(t, cli.UnreachableHint(errors.New("HTTP 500"), connCtx("pve", 8006), "lab", "pmx"))
+	require.Empty(t, cli.UnreachableHint(nil, connCtx("pve", 8006), "lab", "pmx"))
+
+	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("refused")}
+	require.Empty(t, cli.UnreachableHint(dialErr, nil, "lab", "pmx"))
+}

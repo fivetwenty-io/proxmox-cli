@@ -92,6 +92,42 @@ func PortConventionHint(err error, ctx *config.Context, contextName, cmdPrefix s
 	return ""
 }
 
+// UnreachableHint returns a multi-line hint when err is a connection-level
+// failure, naming the address that was actually dialed and how to check it. It
+// is the general case behind PortConventionHint: callers should prefer the
+// port hint when it fires, because "right host, wrong product port" is a more
+// specific diagnosis than "unreachable".
+//
+// A hostname that resolves to a CDN or reverse proxy is a common cause: the
+// name answers, but nothing accepts the API port, so the dial is dropped rather
+// than refused and the failure looks like a hang.
+func UnreachableHint(err error, ctx *config.Context, contextName, cmdPrefix string) string {
+	if err == nil || ctx == nil || !isConnectionError(err) {
+		return ""
+	}
+
+	port := ctx.Port
+	if port == 0 {
+		port = config.DefaultPortForProduct(ctx.ProductOrDefault())
+	}
+
+	return fmt.Sprintf(`hint: could not reach %s:%d — the connection was never established.
+  Nothing is listening there, or a firewall or proxy is dropping the connection.
+  Confirm the name resolves to the node itself, not a CDN or reverse proxy:
+    dig +short %s
+  Check that the API port accepts connections:
+    nc -vz %s %d
+  Inspect or repoint the context:
+    %s context show %s
+    %s context update %s --host <address>`,
+		ctx.Host, port,
+		ctx.Host,
+		ctx.Host, port,
+		cmdPrefix, contextName,
+		cmdPrefix, contextName,
+	)
+}
+
 // isConnectionError reports whether err is a connection-level failure: a
 // dial/socket error, a TLS record-header failure (HTTPS spoken to a non-TLS
 // or wrong-protocol port), or a network timeout. HTTP-status errors are

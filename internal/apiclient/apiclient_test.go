@@ -532,3 +532,20 @@ func TestWaitTask_NilStatus_Error(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "nil status")
 }
+
+// TestBuildOptions_BoundsConnectionEstablishment asserts the transport knobs are
+// set. Left at zero the library applies no dial deadline, so a host that drops
+// SYNs burns the whole request timeout on every attempt instead of failing fast.
+func TestBuildOptions_BoundsConnectionEstablishment(t *testing.T) {
+	t.Parallel()
+	opts := apiclient.BuildOptions(
+		"pve.example.com", 8006, "https",
+		"root", "pam",
+		"mytoken=supersecret",
+		"", "", "",
+		false, "",
+	)
+
+	require.Equal(t, 5, opts.DialTimeoutSec)
+	require.Equal(t, 10, opts.TLSHandshakeTimeoutSec)
+}

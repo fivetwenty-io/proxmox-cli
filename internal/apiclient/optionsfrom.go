@@ -6,6 +6,19 @@ import (
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
+// defaultDialTimeoutSec bounds TCP connection establishment. Without it the
+// library leaves the dial at Go's default (effectively unbounded until the OS
+// gives up), so a host that silently drops SYNs — a firewall, a blackholing
+// reverse proxy, a powered-off node — consumes the whole request timeout on
+// every attempt. It matches the 5s bound 'pmx context validate --connect'
+// already applies (internal/cli/context/probe.go).
+const defaultDialTimeoutSec = 5
+
+// defaultTLSHandshakeTimeoutSec bounds the TLS handshake. It is deliberately
+// looser than the dial bound: the peer has already answered, so the handshake
+// is a live-but-slow server rather than an unreachable one.
+const defaultTLSHandshakeTimeoutSec = 10
+
 // BuildOptions maps individual configuration fields onto a pve.Options value
 // ready for pve.NewClient.
 //
@@ -40,9 +53,11 @@ func BuildOptions(
 	fingerprint string,
 ) pve.Options {
 	opts := pve.Options{
-		Host:     host,
-		Port:     port,
-		Protocol: protocol,
+		Host:                   host,
+		Port:                   port,
+		Protocol:               protocol,
+		DialTimeoutSec:         defaultDialTimeoutSec,
+		TLSHandshakeTimeoutSec: defaultTLSHandshakeTimeoutSec,
 	}
 
 	switch {
