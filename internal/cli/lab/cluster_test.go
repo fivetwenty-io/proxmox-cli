@@ -114,8 +114,8 @@ func TestClusterInit_DryRun_NoRunnerCalls(t *testing.T) {
 func TestClusterInit_AlreadyClustered_Skip(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 3, "")
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
-	cmd, fake := buildGuestSSHCmd(t, path, newClusterCmd())
-	fake = exec.Fake(exec.FakeResponse{Stdout: samplePvecmStatusQuorate3of3})
+	cmd, _ := buildGuestSSHCmd(t, path, newClusterCmd())
+	fake := exec.Fake(exec.FakeResponse{Stdout: samplePvecmStatusQuorate3of3})
 	cli.GetDeps(cmd).Runner = fake
 
 	out, err := runGuestCmd(t, cmd, "init", "wayne")

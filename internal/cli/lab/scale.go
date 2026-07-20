@@ -817,7 +817,10 @@ func scaleValidateNode(deps *cli.Deps, nodeIP string) (summary string, healthy b
 		}
 	}
 
-	storageSummary := "n/a"
+	// Every branch below assigns storageSummary, so it carries no default:
+	// a placeholder here would only ever mask a path that forgot to set it.
+	var storageSummary string
+
 	storageOK := true
 	pvesmRes, perr := runGuestSSH(deps, nodeIP, "pvesm status")
 	if perr != nil {
