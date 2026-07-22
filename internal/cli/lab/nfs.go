@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -48,12 +49,19 @@ type nfsAttachTarget struct {
 // transient NFS hiccup should stall the guest, not silently error its I/O),
 // and the shared, read-only ISO/template export (soft-mounted, the one
 // deliberate exception).
+//
+// nfs-images carries the full "images,import,snippets,iso" content list, not
+// just "images": the extra types are inert metadata for a plain guest-disk
+// lab, but a lab serving as a BOSH CPI target rejects stemcell/qcow2 uploads
+// ("storage 'nfs-images' does not support 'import' content") without them —
+// a failure that used to surface weeks after attach, at first stemcell
+// upload, gated on a manual runbook step.
 func nfsAttachTargets(labName string) []nfsAttachTarget {
 	return []nfsAttachTarget{
 		{
 			id:      nfsImagesStorageID,
 			export:  fmt.Sprintf("%s/labs/%s/images", nfsExportRoot, labName),
-			content: "images",
+			content: "images,import,snippets,iso",
 			options: "vers=4.1",
 		},
 		{
@@ -131,15 +139,23 @@ func newNfsAttachCmd() *cobra.Command {
 			"scripts/60-nfs-service as the remediation, if the shared/iso export itself has no " +
 			"usable sharenfs value yet — it can only ensure lab-subnet MEMBERSHIP in an " +
 			"already-built list, never construct one from scratch.\n\n" +
+			"Also ensures the outer node's host firewall carries an enabled ACCEPT rule for " +
+			"2049/tcp (NFS) and 111/tcp (rpcbind — PVE's storage online-probe) scoped to this " +
+			"lab's mgmt /24, matched by the same comment key scripts/60-nfs-service's firewall " +
+			"group uses, so neither path duplicates the other's rules. A rule that exists but is " +
+			"disabled is a loud failure, never silently skipped or force-enabled.\n\n" +
 			"Then runs `pvesm add nfs ...` over ssh on node 0 for each of the lab's three fixed " +
-			"exports: nfs-images and nfs-backup (rw, hard-mounted, scoped to this lab under " +
-			"tank/nfs/labs/<name>), and shared-iso (ro, soft-mounted, the one ISO/template " +
-			"export every lab shares). Every step is idempotent: an already-satisfied dataset/ " +
-			"property/storage entry is skipped, not re-created or re-added, so re-running attach " +
-			"against a partially-built lab is safe. Requires the shared NFS service's own host " +
-			"software (nfs-kernel-server, firewall rules) to already be built and healthy (lab " +
-			"repo scripts/60-nfs-service's nfsd/firewall/health groups) — attach provisions only " +
-			"this lab's own export objects, never the shared NFS host service itself.",
+			"exports: nfs-images (content images,import,snippets,iso — full BOSH-CPI-target " +
+			"parity from day one) and nfs-backup (both rw, hard-mounted, scoped to this lab " +
+			"under tank/nfs/labs/<name>), and shared-iso (ro, soft-mounted, the one ISO/template " +
+			"export every lab shares). An already-attached entry whose content-type list lacks " +
+			"any of these types is widened in place (`pvesm set`), only ever adding types. Every " +
+			"step is idempotent: an already-satisfied dataset/property/rule/storage entry is " +
+			"skipped, not re-created or re-added, so re-running attach against a partially-built " +
+			"lab is safe. Requires the shared NFS service's own host software " +
+			"(nfs-kernel-server) to already be built and healthy (lab repo " +
+			"scripts/60-nfs-service's nfsd/health groups) — attach provisions this lab's own " +
+			"export objects and firewall rules, never the shared NFS host service itself.",
 		Example: `  pmx lab nfs attach wayne
   pmx lab nfs attach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -176,14 +192,16 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 	targets := nfsAttachTargets(lab.Name)
 
 	// dry-run never touches deps.Runner (see cluster.go's runClusterInit for
-	// the same convention): it previews both the server-side ensure phase's
-	// steps and the pvesm add commands this run would issue, without probing
-	// which datasets/properties/storage entries already exist, and without
-	// resolving the server-side ssh host at all (that resolution is itself a
-	// live API call this preview has no need to depend on).
+	// the same convention): it previews the server-side ensure phase's steps,
+	// the host-firewall rules, and the pvesm add commands this run would
+	// issue, without probing which datasets/properties/rules/storage entries
+	// already exist, and without resolving the server-side ssh host at all
+	// (that resolution is itself a live API call this preview has no need to
+	// depend on).
 	if dryRun {
 		headers := []string{"STEP", "STATUS"}
 		rows := nfsServerDryRunSteps(serverPlan)
+		rows = append(rows, nfsFirewallDryRunSteps(serverPlan)...)
 		for _, t := range targets {
 			rows = append(rows, []string{nfsAddCommand(t, server), "would run"})
 		}
@@ -215,6 +233,16 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 		return fmt.Errorf("lab %q: server-side NFS export ensure phase: %w", name, serr)
 	}
 
+	// The host-firewall rules are ensured BEFORE the pvesm-add loop for the
+	// same reason the ZFS phase is: without them, pvesm add reaches a live
+	// PVE host whose online-probe then fails (or, with 111/tcp dropped,
+	// hangs) against a server that is exporting correctly but unreachable.
+	fwRows, ferr := nfsEnsureFirewallRules(cmd.Context(), deps, serverPlan)
+	if ferr != nil {
+		return fmt.Errorf("lab %q: host firewall ensure phase: %w", name, ferr)
+	}
+	serverRows = append(serverRows, fwRows...)
+
 	rows, err := nfsEnsureAttached(deps, name, node0IP, server, targets)
 	if err != nil {
 		return err
@@ -227,9 +255,10 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 }
 
 // nfsEnsureAttached performs `nfs attach`'s actual work — probe each
-// target's existing storage config, add it if missing — without any cobra/
-// rendering coupling, so `pmx lab scale`'s reconcile step can reuse the
-// identical idempotent logic runNfsAttach's RunE wraps. Returns one
+// target's existing storage config, add it if missing, and widen an existing
+// entry's content-type list when it lacks any of the target's types — without
+// any cobra/rendering coupling, so `pmx lab scale`'s reconcile step can reuse
+// the identical idempotent logic runNfsAttach's RunE wraps. Returns one
 // STORAGE/STATUS row per target, in order (no trailing "summary" row —
 // callers append their own, since scale.go's summary text differs from
 // runNfsAttach's).
@@ -237,10 +266,14 @@ func nfsEnsureAttached(deps *cli.Deps, name, node0IP, server string, targets []n
 	rows := make([][]string, 0, len(targets))
 
 	for _, t := range targets {
-		_, perr := runGuestSSH(deps, node0IP, fmt.Sprintf("pvesh get /storage/%s --output-format json", t.id))
+		res, perr := runGuestSSH(deps, node0IP, fmt.Sprintf("pvesh get /storage/%s --output-format json", t.id))
 		switch {
 		case perr == nil:
-			rows = append(rows, []string{t.id, "skip (already attached)"})
+			row, uerr := nfsEnsureContent(deps, name, node0IP, t, res.Stdout)
+			if uerr != nil {
+				return nil, uerr
+			}
+			rows = append(rows, row)
 			continue
 		case guestCommandTransportFailed(perr):
 			return nil, fmt.Errorf("lab %q: probe storage %q on node 0 (%s): %w", name, t.id, node0IP, perr)
@@ -253,6 +286,70 @@ func nfsEnsureAttached(deps *cli.Deps, name, node0IP, server string, targets []n
 	}
 
 	return rows, nil
+}
+
+// nfsEnsureContent widens an already-attached storage entry's content-type
+// list to include every type in t.content, via `pvesm set` on node 0. The
+// probe's own pvesh JSON supplies the current list; any type already present
+// beyond the target's (an operator addition) is preserved, never removed —
+// this step only ever ADDS types. A probe payload without a readable
+// `content` field is a skip, not a mutation: with no positive reading of the
+// current list, guessing a `pvesm set` could silently clobber operator state.
+func nfsEnsureContent(deps *cli.Deps, name, node0IP string, t nfsAttachTarget, probeJSON string) ([]string, error) {
+	var cfg struct {
+		Content *string `json:"content"`
+	}
+	if err := json.Unmarshal([]byte(probeJSON), &cfg); err != nil || cfg.Content == nil {
+		return []string{t.id, "skip (already attached)"}, nil
+	}
+
+	merged, missing := nfsMergeContent(t.content, *cfg.Content)
+	if !missing {
+		return []string{t.id, "skip (already attached)"}, nil
+	}
+
+	if _, serr := runGuestSSH(deps, node0IP, fmt.Sprintf("pvesm set %s --content %s", t.id, merged)); serr != nil {
+		return nil, fmt.Errorf("lab %q: widen content types on storage %q on node 0 (%s): %w", name, t.id, node0IP, serr)
+	}
+	return []string{t.id, fmt.Sprintf("content widened (%s)", merged)}, nil
+}
+
+// nfsMergeContent merges a target content-type list into an existing one.
+// missing reports whether existing lacks any of want's types; when it does,
+// merged is want's types in want's canonical order followed by existing's
+// extra types in their original order (preserved, never dropped). When
+// existing already covers want, missing is false and merged is empty — an
+// order-only difference is deliberately NOT a mutation (nothing functional
+// to fix, and churning a shared entry's config invites needless drift).
+func nfsMergeContent(want, existing string) (merged string, missing bool) {
+	wantList := strings.Split(want, ",")
+	existingList := strings.Split(existing, ",")
+
+	have := make(map[string]bool, len(existingList))
+	for _, e := range existingList {
+		if e = strings.TrimSpace(e); e != "" {
+			have[e] = true
+		}
+	}
+
+	inWant := make(map[string]bool, len(wantList))
+	out := make([]string, 0, len(wantList)+len(existingList))
+	for _, w := range wantList {
+		inWant[w] = true
+		out = append(out, w)
+		if !have[w] {
+			missing = true
+		}
+	}
+	if !missing {
+		return "", false
+	}
+	for _, e := range existingList {
+		if e = strings.TrimSpace(e); e != "" && !inWant[e] {
+			out = append(out, e)
+		}
+	}
+	return strings.Join(out, ","), true
 }
 
 // nfsAddCommand renders the `pvesm add nfs` command for t against server.

@@ -1,6 +1,11 @@
 package lab
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -32,14 +37,17 @@ const (
 	nfsServerTestRwSharenfs       = "rw=@10.10.1.0/24,no_root_squash,no_subtree_check,sec=sys"
 )
 
-// buildNfsServerCmd is buildGuestSSHAndAPICmd plus a GET /cluster/status
-// fixture mapping nfsServerTestNode to nfsServerTestNodeIP (the address
-// createDatasetSSHHost's nodeaddr.Resolve call resolves it to — mirroring
-// create_test.go's createRegisterDatasetNodeAddr/buildCreateCmdWithZFSFake
-// for the identical ssh-host-resolution mechanism) and deps.Node set to
-// nfsServerTestNode, both of which `nfs attach`'s server-side ensure phase
-// now requires for any non-dry-run invocation.
-func buildNfsServerCmd(t *testing.T, configPath string, fake *exec.FakeRunner) *cobra.Command {
+// buildNfsServerCmdWithPVE is buildGuestSSHAndAPICmd plus a GET
+// /cluster/status fixture mapping nfsServerTestNode to nfsServerTestNodeIP
+// (the address createDatasetSSHHost's nodeaddr.Resolve call resolves it to —
+// mirroring create_test.go's createRegisterDatasetNodeAddr/
+// buildCreateCmdWithZFSFake for the identical ssh-host-resolution mechanism)
+// and deps.Node set to nfsServerTestNode, both of which `nfs attach`'s
+// server-side ensure phase now requires for any non-dry-run invocation. It
+// registers NO firewall-rules route — callers needing the firewall ensure
+// phase register their own fixture (or use buildNfsServerCmd, whose default
+// is "both rules already present and enabled").
+func buildNfsServerCmdWithPVE(t *testing.T, configPath string, fake *exec.FakeRunner) (*cobra.Command, *testhelper.FakePVE) {
 	t.Helper()
 
 	f := testhelper.NewFakePVE(t)
@@ -52,6 +60,29 @@ func buildNfsServerCmd(t *testing.T, configPath string, fake *exec.FakeRunner) *
 	deps := cli.GetDeps(cmd)
 	deps.Runner = fake
 	deps.Node = nfsServerTestNode
+	return cmd, f
+}
+
+// nfsTestFirewallRulesEnabled is the host-firewall list fixture for a lab
+// ("wayne") whose two NFS rules already exist and are enabled — the
+// firewall ensure phase's fully-idempotent skip case.
+func nfsTestFirewallRulesEnabled() []any {
+	return []any{
+		map[string]any{"pos": 0, "type": "in", "action": "ACCEPT", "enable": 1,
+			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
+		map[string]any{"pos": 1, "type": "in", "action": "ACCEPT", "enable": 1,
+			"comment": nfsFirewallRuleComment("wayne", "rpcbind", "111")},
+	}
+}
+
+// buildNfsServerCmd is buildNfsServerCmdWithPVE with the default firewall
+// fixture: both of the lab's host-firewall rules already present and
+// enabled, so the firewall ensure phase is a pure skip.
+func buildNfsServerCmd(t *testing.T, configPath string, fake *exec.FakeRunner) *cobra.Command {
+	t.Helper()
+
+	cmd, f := buildNfsServerCmdWithPVE(t, configPath, fake)
+	f.HandleJSON("GET /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules", nfsTestFirewallRulesEnabled())
 	return cmd
 }
 
@@ -74,7 +105,9 @@ func TestNfsAttach_DryRun_NoRunnerCalls(t *testing.T) {
 	assert.Contains(t, out, "zfs set sharenfs="+nfsServerTestRwSharenfs+" "+nfsServerTestImagesDataset)
 	assert.Contains(t, out, "zfs set sharenfs="+nfsServerTestRwSharenfs+" "+nfsServerTestBackupDataset)
 	assert.Contains(t, out, "ensure "+nfsServerTestSharedIsoDataset+"'s sharenfs ro= list includes @"+nfsServerTestMgmtCIDR)
-	assert.Contains(t, out, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images --options vers=4.1")
+	assert.Contains(t, out, "node firewall: ACCEPT tcp dport 2049 from "+nfsServerTestMgmtCIDR+" (tank/nfs: wayne mgmt subnet -> NFS (2049/tcp))")
+	assert.Contains(t, out, "node firewall: ACCEPT tcp dport 111 from "+nfsServerTestMgmtCIDR+" (tank/nfs: wayne mgmt subnet -> rpcbind (111/tcp))")
+	assert.Contains(t, out, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images,import,snippets,iso --options vers=4.1")
 	assert.Contains(t, out, "pvesm add nfs nfs-backup --server 10.10.1.1 --export /tank/nfs/labs/wayne/backup --content backup --options vers=4.1")
 	assert.Contains(t, out, "pvesm add nfs shared-iso --server 10.10.1.1 --export /tank/nfs/shared/iso --content iso,vztmpl --options vers=4.1,ro,soft")
 	assert.Empty(t, fake.Calls, "dry-run must never touch ssh for the server-side ensure phase either")
@@ -150,6 +183,8 @@ func TestNfsAttach_HappyPath_AttachesAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "created")
 	assert.Contains(t, out, "attached")
+	assert.Contains(t, out, "skip (already present)",
+		"the default fixture's firewall rules already exist and are enabled")
 
 	require.Len(t, fake.Calls, 18)
 	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "create", "-p", "-o", "recordsize=128K", nfsServerTestImagesDataset), fake.Calls[1].Args)
@@ -158,7 +193,7 @@ func TestNfsAttach_HappyPath_AttachesAll(t *testing.T) {
 	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "sharenfs="+nfsServerTestRwSharenfs, nfsServerTestImagesDataset), fake.Calls[7].Args)
 	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "sharenfs="+nfsServerTestRwSharenfs, nfsServerTestBackupDataset), fake.Calls[9].Args)
 	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "sharenfs=ro=@10.108.0.0/24:@10.10.1.0/24,sec=sys", nfsServerTestSharedIsoDataset), fake.Calls[11].Args)
-	assert.Contains(t, fake.Calls[13].Args, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images --options vers=4.1")
+	assert.Contains(t, fake.Calls[13].Args, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images,import,snippets,iso --options vers=4.1")
 	assert.Contains(t, fake.Calls[15].Args, "pvesm add nfs nfs-backup --server 10.10.1.1 --export /tank/nfs/labs/wayne/backup --content backup --options vers=4.1")
 	assert.Contains(t, fake.Calls[17].Args, "pvesm add nfs shared-iso --server 10.10.1.1 --export /tank/nfs/shared/iso --content iso,vztmpl --options vers=4.1,ro,soft")
 }
@@ -179,9 +214,9 @@ func TestNfsAttach_Idempotent_ReRun_NoMutations(t *testing.T) {
 		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs},                   // zfs get sharenfs images: already correct
 		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs},                   // zfs get sharenfs backup: already correct
 		exec.FakeResponse{Stdout: "ro=@10.108.0.0/24:@10.10.1.0/24,sec=sys"}, // zfs get sharenfs shared/iso: already includes our subnet
-		exec.FakeResponse{Stdout: `{"storage":"nfs-images"}`},                // probe nfs-images: already attached
-		exec.FakeResponse{Stdout: `{"storage":"nfs-backup"}`},                // probe nfs-backup: already attached
-		exec.FakeResponse{Stdout: `{"storage":"shared-iso"}`},                // probe shared-iso: already attached
+		exec.FakeResponse{Stdout: `{"storage":"nfs-images","content":"images,import,snippets,iso"}`}, // probe nfs-images: attached, content full
+		exec.FakeResponse{Stdout: `{"storage":"nfs-backup","content":"backup"}`},                     // probe nfs-backup: attached, content full
+		exec.FakeResponse{Stdout: `{"storage":"shared-iso","content":"iso,vztmpl"}`},                 // probe shared-iso: attached, content full
 	)
 	cmd := buildNfsServerCmd(t, path, fake)
 
@@ -191,6 +226,7 @@ func TestNfsAttach_Idempotent_ReRun_NoMutations(t *testing.T) {
 	assert.Contains(t, out, "skip (already 200G)")
 	assert.Contains(t, out, "skip (already "+nfsServerTestRwSharenfs+")")
 	assert.Contains(t, out, "skip (already includes @"+nfsServerTestMgmtCIDR+")")
+	assert.Contains(t, out, "skip (already present)")
 	assert.Contains(t, out, "skip (already attached)")
 
 	require.Len(t, fake.Calls, 9, "every step must be a read-only probe; no create/set/add calls at all")
@@ -200,6 +236,10 @@ func TestNfsAttach_Idempotent_ReRun_NoMutations(t *testing.T) {
 	}
 }
 
+// TestNfsAttach_SkipsAlreadyAttached also covers the content-ensure step's
+// no-positive-reading guard: these probe payloads carry NO `content` field,
+// and with no readable current list the step must skip rather than guess a
+// `pvesm set` (which could silently clobber operator state).
 func TestNfsAttach_SkipsAlreadyAttached(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 1, "")
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
@@ -220,6 +260,161 @@ func TestNfsAttach_SkipsAlreadyAttached(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "skip (already attached)")
 	require.Len(t, fake.Calls, 9, "no add calls when every storage is already configured")
+}
+
+// nfsTestIdempotentServerSSH returns the six read-only ssh responses for a
+// fully-converged server-side ZFS phase (datasets exist, quota/sharenfs
+// already correct, shared-iso list already includes the lab's subnet) —
+// shared by the firewall/content tests below so each isolates its assertion
+// to its own phase.
+func nfsTestIdempotentServerSSH() []exec.FakeResponse {
+	return []exec.FakeResponse{
+		{},                                   // zfs list images: exists
+		{},                                   // zfs list backup: exists
+		{Stdout: "200G"},                     // zfs get quota: already correct
+		{Stdout: nfsServerTestRwSharenfs},    // zfs get sharenfs images: already correct
+		{Stdout: nfsServerTestRwSharenfs},    // zfs get sharenfs backup: already correct
+		{Stdout: "ro=@10.10.1.0/24,sec=sys"}, // zfs get sharenfs shared/iso: already includes our subnet
+	}
+}
+
+// TestNfsAttach_FirewallRules_CreatedWhenMissing covers the firewall ensure
+// phase's create path: with no matching rules on the node, attach must POST
+// exactly two rule creates — 2049/tcp and 111/tcp, in that order — each an
+// enabled ("enable":1 explicit; the PVE API default for an omitted enable is
+// 0, a disabled no-op rule) ACCEPT scoped to the lab's mgmt /24, carrying
+// the script-parity comment key.
+func TestNfsAttach_FirewallRules_CreatedWhenMissing(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(append(nfsTestIdempotentServerSSH(),
+		exec.FakeResponse{Stdout: `{"storage":"nfs-images","content":"images,import,snippets,iso"}`},
+		exec.FakeResponse{Stdout: `{"storage":"nfs-backup","content":"backup"}`},
+		exec.FakeResponse{Stdout: `{"storage":"shared-iso","content":"iso,vztmpl"}`},
+	)...)
+	cmd, f := buildNfsServerCmdWithPVE(t, path, fake)
+
+	f.HandleJSON("GET /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules", []any{})
+	var created []map[string]any
+	f.HandleFunc("POST /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules",
+		func(w http.ResponseWriter, r *http.Request) {
+			body, rerr := io.ReadAll(r.Body)
+			require.NoError(t, rerr)
+			m := map[string]any{}
+			if uerr := json.Unmarshal(body, &m); uerr != nil {
+				vals, perr := url.ParseQuery(string(body))
+				require.NoError(t, perr, "rule-create body neither JSON nor form-encoded: %s", body)
+				for k, v := range vals {
+					m[k] = v[0]
+				}
+			}
+			created = append(created, m)
+			testhelper.WriteData(w, nil)
+		})
+
+	out, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, out, "created (ACCEPT tcp/2049 from "+nfsServerTestMgmtCIDR+")")
+	assert.Contains(t, out, "created (ACCEPT tcp/111 from "+nfsServerTestMgmtCIDR+")")
+
+	require.Len(t, created, 2)
+	for i, port := range []string{"2049", "111"} {
+		m := created[i]
+		assert.Equal(t, "in", fmt.Sprint(m["type"]))
+		assert.Equal(t, "ACCEPT", fmt.Sprint(m["action"]))
+		assert.Equal(t, "tcp", fmt.Sprint(m["proto"]))
+		assert.Equal(t, port, fmt.Sprint(m["dport"]))
+		assert.Equal(t, nfsServerTestMgmtCIDR, fmt.Sprint(m["source"]))
+		assert.Equal(t, "1", fmt.Sprint(m["enable"]), "enable must be explicit — the API default is a disabled rule")
+		assert.Equal(t, "nolog", fmt.Sprint(m["log"]))
+		if port == "2049" {
+			assert.Equal(t, "tank/nfs: wayne mgmt subnet -> NFS (2049/tcp)", fmt.Sprint(m["comment"]))
+		} else {
+			assert.Equal(t, "tank/nfs: wayne mgmt subnet -> rpcbind (111/tcp)", fmt.Sprint(m["comment"]))
+		}
+	}
+}
+
+// TestNfsAttach_FirewallRuleDisabled_LoudFailure covers the
+// present-but-disabled case: silently skipping would recreate the exact
+// dead-mount symptom the phase exists to kill, and force-enabling would
+// override a possibly deliberate operator action — so attach must refuse
+// loudly, naming the remediation command with the rule's actual position,
+// before the pvesm phase ever runs.
+func TestNfsAttach_FirewallRuleDisabled_LoudFailure(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(nfsTestIdempotentServerSSH()...)
+	cmd, f := buildNfsServerCmdWithPVE(t, path, fake)
+
+	f.HandleJSON("GET /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules", []any{
+		map[string]any{"pos": 3, "type": "in", "action": "ACCEPT", "enable": 0,
+			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
+	})
+
+	_, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "disabled")
+	assert.ErrorContains(t, err, "rules update 3 --enable 1")
+
+	require.Len(t, fake.Calls, 6, "the pvesm phase must never be reached past a disabled firewall rule")
+}
+
+// TestNfsAttach_ContentWidened_NfsImages covers the content-ensure step's
+// mutation path: an nfs-images entry attached before the full content list
+// became the default (content "images" only) must be widened in place via
+// `pvesm set`, and an operator-added extra type must ride along, never be
+// dropped.
+func TestNfsAttach_ContentWidened_NfsImages(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(append(nfsTestIdempotentServerSSH(),
+		exec.FakeResponse{Stdout: `{"storage":"nfs-images","content":"images,rootdir"}`}, // attached pre-widening, plus an operator extra
+		exec.FakeResponse{}, // pvesm set nfs-images
+		exec.FakeResponse{Stdout: `{"storage":"nfs-backup","content":"backup"}`},
+		exec.FakeResponse{Stdout: `{"storage":"shared-iso","content":"iso,vztmpl"}`},
+	)...)
+	cmd := buildNfsServerCmd(t, path, fake)
+
+	out, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, out, "content widened (images,import,snippets,iso,rootdir)")
+
+	require.Len(t, fake.Calls, 10)
+	assert.Contains(t, fake.Calls[7].Args, "pvesm set nfs-images --content images,import,snippets,iso,rootdir")
+}
+
+func TestNfsMergeContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		want     string
+		existing string
+		merged   string
+		missing  bool
+	}{
+		{name: "widens and preserves extras",
+			want: "images,import,snippets,iso", existing: "images,rootdir",
+			merged: "images,import,snippets,iso,rootdir", missing: true},
+		{name: "already full is not a mutation",
+			want: "images,import,snippets,iso", existing: "images,import,snippets,iso",
+			merged: "", missing: false},
+		{name: "order-only difference is not a mutation",
+			want: "images,import,snippets,iso", existing: "iso,images,snippets,import",
+			merged: "", missing: false},
+		{name: "empty existing gets the full want list",
+			want: "images,import,snippets,iso", existing: "",
+			merged: "images,import,snippets,iso", missing: true},
+		{name: "single-type target already satisfied",
+			want: "backup", existing: "backup",
+			merged: "", missing: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			merged, missing := nfsMergeContent(tc.want, tc.existing)
+			assert.Equal(t, tc.missing, missing)
+			assert.Equal(t, tc.merged, merged)
+		})
+	}
 }
 
 func TestNfsAttach_PeppiGuardRefusesBeforeAnyCall(t *testing.T) {
