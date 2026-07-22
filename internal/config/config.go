@@ -87,6 +87,12 @@ type ConfigLog struct {
 	// (default), "warn", or "error". Overridable via $PMX_LOG_LEVEL; the
 	// --debug/--verbose/--trace flags force debug regardless.
 	Level string `yaml:"level,omitempty" json:"level,omitempty"`
+
+	// Retention is the number of days to keep log files. When positive it
+	// supplies the default cutoff for `pmx logs prune` and enables a
+	// best-effort automatic prune at most once per 24 hours after a command
+	// completes. Zero or negative disables both.
+	Retention int `yaml:"retention,omitempty" json:"retention,omitempty"`
 }
 
 // EffectiveLogLayout returns the configured log layout, defaulting to
@@ -106,6 +112,15 @@ func EffectiveLogLevel(cfg *Config) string {
 		return cfg.Log.Level
 	}
 	return DefaultLogLevel
+}
+
+// EffectiveLogRetention returns the configured log retention in days, or 0
+// when unset, non-positive, or cfg is nil (retention disabled).
+func EffectiveLogRetention(cfg *Config) int {
+	if cfg != nil && cfg.Log.Retention > 0 {
+		return cfg.Log.Retention
+	}
+	return 0
 }
 
 // DefaultNFSReservedGB is the fallback ZFS quota (in GB) EffectiveNFSReservedGB

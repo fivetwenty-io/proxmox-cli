@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -67,6 +68,10 @@ type Deps struct {
 
 	// Log is the slog.Logger for this invocation.
 	Log *slog.Logger
+
+	// Started is when persistentPreRunE began this invocation; Execute uses
+	// it for the exit audit record's duration_ms attribute.
+	Started time.Time
 
 	// Node is the resolved --node flag value (flag > PMX_NODE > context DefaultNode).
 	Node string
@@ -150,6 +155,17 @@ func WithDeps(ctx context.Context, deps *Deps) context.Context {
 // rejects a context whose product does not match, so a PVE command can never
 // silently talk to a PBS or PDM host, or vice versa.
 const ProductAnnotation = "product"
+
+// AnnotationPassthroughArgs is the cobra Annotations key a command sets to
+// "true" to declare that its positional arguments carry a foreign command
+// line passed through to another program (ssh remote commands, rsync argv,
+// guest-agent exec argv). Such argv can embed credentials in forms no
+// key=value scan recognises (e.g. `mysql -pSECRET`), so the invocation audit
+// record replaces the whole args list with a redaction placeholder instead
+// of logging it. Commands whose DisableFlagParsing is set are treated the
+// same way without needing the annotation, since their raw argv (flags
+// included) reaches PersistentPreRunE unparsed.
+const AnnotationPassthroughArgs = "passthroughArgs"
 
 // ProductFromContext is the ProductAnnotation value a shared command sets to
 // declare that its client should target whichever product the active context
@@ -352,7 +368,9 @@ func resolveOutputDefault() string {
 // PersistentPreRunE closure in NewRootCmd) captures the closer so that
 // Execute() can defer it after root.Execute() returns — ensuring log records
 // written during RunE are flushed before the fd is released.
-func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.Closer, error) {
+func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (io.Closer, error) {
+	started := time.Now()
+
 	// Load config file; an absent file is not an error (empty Config returned).
 	cfg, err := config.Load(pf.config)
 	if err != nil {
@@ -407,6 +425,18 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	// Close() fires after root.Execute() returns, not when PreRunE returns.
 	// Do NOT defer here — deferring here was the F-01 regression.
 
+	// Invocation audit record: every log file opens with what ran, against
+	// which context, from which build; Execute writes the matching exit
+	// record. Together they guarantee a log file is never empty and turn the
+	// log into a per-invocation audit trail even for commands that make no
+	// API calls.
+	logger.Info("invocation",
+		slog.String("command_path", cmd.CommandPath()),
+		slog.Any("args", invocationArgs(cmd, args)),
+		slog.String("context", config.Resolve(pf.context, "PMX_CONTEXT", cfg.CurrentContext, "")),
+		slog.String("version", version.Version),
+	)
+
 	renderer := output.New()
 
 	deps := &Deps{
@@ -414,12 +444,21 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		Format:     format,
 		Async:      pf.async,
 		Log:        logger,
+		Started:    started,
 		Node:       pf.node,
 		Cfg:        cfg,
 		ConfigPath: pf.config,
 		Runner:     exec.Real(),
 		Insecure:   pf.insecure,
 	}
+
+	// Stash deps NOW, before any client construction can fail: Execute's
+	// exit-record and auto-prune hooks reach these deps via peekDeps after
+	// ExecuteC returns, and the invocation record above must always be paired
+	// with an exit record — including when context resolution or client build
+	// below errors out. deps is a pointer, so the client/context fields
+	// filled in further down remain visible to those hooks.
+	setDeps(cmd, deps)
 
 	// Commands that set Annotations["noClient"]="true" skip API client build.
 	// This applies to: version (build-info only), context group verbs.
@@ -444,7 +483,6 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	// real flag values) and its own ValidArgsFunction, which builds any
 	// client it needs itself via BuildContextClient.
 	if cmd.Annotations["noClient"] == "true" || cmd.Name() == cobra.ShellCompRequestCmd {
-		setDeps(cmd, deps)
 		return logCloser, nil
 	}
 
@@ -524,7 +562,6 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 		deps.PDM = dc
 	}
 
-	setDeps(cmd, deps)
 	return logCloser, nil
 }
 
@@ -878,6 +915,115 @@ func WarnInsecureTLS(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "WARN: TLS certificate verification disabled (--insecure); connection is vulnerable to interception")
 }
 
+// sensitiveArgMarkers are the lowercase substrings that mark the key of a
+// key=value positional argument as containing a credential; redactArgs masks
+// the value of any match.
+var sensitiveArgMarkers = []string{
+	"password", "passwd", "passphrase", "secret", "token", "ticket", "csrf",
+	"credential", "apikey", "privatekey",
+}
+
+// redactArgs returns a copy of args with the value of every sensitive
+// key=value pair replaced by "***". Only positional arguments reach this
+// function — cobra has already consumed flags — and no current command
+// accepts a credential positionally (`pmx api` form params travel via
+// -d/--data, and `access password set` refuses a positional password), so
+// this is defence in depth for future commands and operator typos, not a
+// hot path. Over-matching is deliberate: masking a non-secret costs
+// nothing, leaking a secret into the audit log is unrecoverable. Passthrough
+// argv (ssh/rsync/guest exec) never reaches this function — see
+// invocationArgs and AnnotationPassthroughArgs.
+func redactArgs(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = a
+		key, _, ok := strings.Cut(a, "=")
+		if !ok {
+			continue
+		}
+		lower := strings.ToLower(key)
+		for _, marker := range sensitiveArgMarkers {
+			if strings.Contains(lower, marker) {
+				out[i] = key + "=***"
+				break
+			}
+		}
+	}
+	return out
+}
+
+// invocationArgs returns the args slice to embed in the invocation audit
+// record. For passthrough commands — DisableFlagParsing set, or
+// AnnotationPassthroughArgs declared — the entire argv is replaced with a
+// count-only placeholder, because a foreign command line can embed secrets
+// in forms redactArgs cannot recognise (`mysql -pSECRET`, `curl -u u:p`).
+// Everything else gets key=value masking via redactArgs.
+func invocationArgs(cmd *cobra.Command, args []string) []string {
+	if cmd.DisableFlagParsing || cmd.Annotations[AnnotationPassthroughArgs] == "true" {
+		return []string{fmt.Sprintf("(%d passthrough args redacted)", len(args))}
+	}
+	return redactArgs(args)
+}
+
+// logInvocationExit writes the exit audit record matching the invocation
+// record persistentPreRunE opened the log with: the semantic exit code,
+// the wall-clock duration, and (on failure, at error level so it survives
+// any configured log.level) the error text.
+func logInvocationExit(c *cobra.Command, err error) {
+	deps := peekDeps(c)
+	if deps == nil || deps.Log == nil {
+		return
+	}
+
+	attrs := []any{slog.Int("exit_code", exitcode.FromError(err))}
+	if !deps.Started.IsZero() {
+		attrs = append(attrs, slog.Int64("duration_ms", time.Since(deps.Started).Milliseconds()))
+	}
+
+	if err != nil {
+		deps.Log.Error("exit", append(attrs, slog.String("error", err.Error()))...)
+		return
+	}
+	deps.Log.Info("exit", attrs...)
+}
+
+// maybeAutoPrune runs the best-effort daily log prune when the loaded config
+// sets a positive log.retention. Outcomes land only in the invocation log;
+// pruning must never change the command's own result or output.
+func maybeAutoPrune(c *cobra.Command) {
+	deps := peekDeps(c)
+	if deps == nil {
+		return
+	}
+	retention := config.EffectiveLogRetention(deps.Cfg)
+	if retention <= 0 {
+		return
+	}
+
+	dir, err := logx.DefaultDir()
+	if err != nil {
+		return
+	}
+
+	stats, ran, err := logx.AutoPrune(dir, retention)
+	if !ran || deps.Log == nil {
+		return
+	}
+	if err != nil {
+		deps.Log.Warn("log auto-prune", slog.String("error", err.Error()))
+		return
+	}
+	deps.Log.Info("log auto-prune",
+		slog.Int("files", stats.Files),
+		slog.Int("empty", stats.Empty),
+		slog.Int64("bytes", stats.Bytes),
+		slog.Int("dirs", stats.Dirs),
+	)
+}
+
 // commandLabels extracts the command and subcommand names from the full cobra
 // chain for use as log attributes.
 //
@@ -1008,6 +1154,13 @@ func Execute(persona string, factories []GroupFactory) error {
 	AddGroups(root, &Deps{}, factories)
 
 	c, err := root.ExecuteC()
+
+	// Exit audit record first (so duration reflects the command itself),
+	// then the daily retention prune; both write to the still-open log file
+	// closed by the deferred cleanup above.
+	logInvocationExit(c, err)
+	maybeAutoPrune(c)
+
 	if err != nil {
 		// A child process (ssh, rsync) that had our real stdout/stderr wired
 		// to it directly (RunInteractive, or a Run call passed

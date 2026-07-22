@@ -1311,3 +1311,30 @@ func TestLogBlock_RoundTrip(t *testing.T) {
 	require.Equal(t, config.LogLayoutFlat, loaded.Log.Layout)
 	require.Equal(t, "debug", loaded.Log.Level)
 }
+
+// TestEffectiveLogRetention verifies the log.retention default and override.
+func TestEffectiveLogRetention(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, 0, config.EffectiveLogRetention(nil))
+	require.Equal(t, 0, config.EffectiveLogRetention(&config.Config{}))
+	require.Equal(t, 0,
+		config.EffectiveLogRetention(&config.Config{Log: config.ConfigLog{Retention: -5}}),
+		"negative retention must read as disabled")
+	require.Equal(t, 30,
+		config.EffectiveLogRetention(&config.Config{Log: config.ConfigLog{Retention: 30}}))
+}
+
+// TestLogRetention_RoundTrip verifies log.retention survives Save/Load.
+func TestLogRetention_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := sampleConfig()
+	cfg.Log = config.ConfigLog{Retention: 45}
+	require.NoError(t, config.Save(path, cfg))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, 45, loaded.Log.Retention)
+}

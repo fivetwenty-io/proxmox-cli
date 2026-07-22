@@ -180,6 +180,29 @@ The minimum level defaults to `info` and is set with `log.level` or
 `PMX_LOG_LEVEL`. Pass `--no-log` to suppress the log file; `--verbose`,
 `--debug`, or `--trace` raise the slog level to debug.
 
+Every file is a per-invocation audit trail: it opens with an `invocation`
+record (command path, positional args with sensitive `key=value` pairs
+masked, context name, CLI version) and closes with an `exit` record
+(semantic exit code, duration; written at error level with the error text
+on failure so it survives any configured `log.level`). The exit record is
+written even when the failure happens before the command body runs (context
+resolution or client construction). HTTP activity from the API client lands
+between the two. No log file is ever empty.
+
+Passthrough commands whose positional arguments are a foreign command line
+— `pmx ssh`, `pmx rsync`, `pmx pve node ssh`/`exec`, `pmx pve qemu ssh`, and
+`pmx pve qemu agent exec` — log only an argument count in place of the argv
+(via the `passthroughArgs` annotation, or implicitly when a command sets
+`DisableFlagParsing`), since a remote command can embed credentials in forms
+no `key=value` scan recognises (for example `mysql -pSECRET`).
+
+`pmx logs prune [--older-than <days>] [--empty] [--dry-run]` deletes aged
+log files (cutoff from the flag or the `log.retention` config key), 0-byte
+files older than one hour with `--empty`, and any directories the removals
+empty out. A positive `log.retention` also runs the equivalent prune
+automatically at most once per 24 hours after a command completes, gated by
+the `~/.pmx/logs/.last-prune` sentinel's mtime.
+
 ## Asynchronous tasks
 
 Commands that trigger PVE background tasks (VM/CT lifecycle, snapshots,

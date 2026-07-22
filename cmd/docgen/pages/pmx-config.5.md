@@ -107,7 +107,7 @@ schema of a lab block.
   **include**.
 
 **log**
-: A mapping of JSONL command-log preferences with two optional keys.
+: A mapping of JSONL command-log preferences with three optional keys.
   **log.layout** selects where log files are written under **~/.pmx/logs**:
   **nested** (the default) writes each command's log into a per-command
   directory tree named after the full command path with a bare timestamp
@@ -122,7 +122,12 @@ schema of a lab block.
   (the default), **warn**, or **error**. The **PMX_LOG_LEVEL** environment
   variable overrides this key, and the **--debug**, **--verbose**, and
   **--trace** flags force debug-level logging regardless of it.
-  **--no-log** suppresses log files entirely.
+  **--no-log** suppresses log files entirely. **log.retention** sets the
+  number of days to keep log files: when positive it supplies the default
+  cutoff for **pmx logs prune** and enables an automatic equivalent prune
+  (including removal of empty log files and emptied directories) at most
+  once per 24 hours after a command completes. Unset, zero, or negative
+  disables both.
 
 # CONTEXT KEYS
 

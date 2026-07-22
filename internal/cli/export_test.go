@@ -7,3 +7,13 @@ package cli
 // cli_test) exercise requiredProduct against commands built by those
 // packages' ChildFactories.
 var RequiredProduct = requiredProduct
+
+// RedactArgs exposes the unexported redactArgs for cli_test's audit-record
+// redaction tests.
+var RedactArgs = redactArgs
+
+// InvocationArgs exposes the unexported invocationArgs so cli_test can cover
+// the passthrough-args redaction branch (DisableFlagParsing and the
+// AnnotationPassthroughArgs annotation) without wiring a full rsync-style
+// delegating command.
+var InvocationArgs = invocationArgs

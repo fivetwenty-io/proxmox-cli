@@ -522,6 +522,18 @@ set `log.level` (`trace`, `debug`, `info`, `warn`, `error`) or
 `PMX_LOG_LEVEL` to change it. Suppress log files with `--no-log`; raise
 verbosity with `--verbose`, `--debug`, or `--trace`.
 
+Each file is a self-contained audit trail: it opens with an `invocation`
+record (command path, positional args with sensitive `key=value` pairs
+masked, context, CLI version) and closes with an `exit` record (semantic
+exit code, duration, and the error text on failure), so no log file is ever
+empty. Passthrough commands whose arguments carry a foreign command line
+(`pmx ssh`, `pmx rsync`, `node ssh`/`exec`, `qemu ssh`, `qemu agent exec`)
+log only an argument count in place of the argv, since a remote command can
+embed credentials in forms no `key=value` scan recognises. Clean up old files with `pmx logs prune --older-than <days>`
+(add `--empty` for 0-byte files from older releases, `--dry-run` to
+preview), or set `log.retention: <days>` in the config file to both default
+that cutoff and run an automatic prune once per day.
+
 `pmx --version` (or `-v`) prints the CLI's own build information — release tag,
 short commit, build date, Go toolchain, and OS/arch — without contacting any
 server. `make build` and release binaries inject these via ldflags; ad-hoc
@@ -547,6 +559,7 @@ persona (see [Personas](#personas)); everything else lives under `pmx pve`
 | `rsync` | Top-level `rsync` wrapper: sync files to/from a resolved node over SSH (`node:path` operands) | `--ssh-user`, `--ssh-port`, `--ssh-identity`, `--ssh-agent`, `--no-strict` |
 | `ssh` | Top-level `ssh` wrapper: open an SSH session to a resolved node | `-l/--user`, `-i/--identity`, `-p/--port`, `-A/--agent`, `--no-strict` |
 | `api` | Raw API passthrough against the active context | `get`, `post`, `put`, `delete` |
+| `logs` | Local invocation-log maintenance | `prune` |
 
 The top-level alias `pmx ctx` resolves to `pmx context`.
 

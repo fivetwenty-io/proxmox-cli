@@ -26,7 +26,8 @@ func newSSHCmd() *cobra.Command {
 			"--host to connect to a specific address when the agent is unavailable.",
 		Example: `  pmx pve qemu ssh 100
   pmx pve qemu ssh 100 -- uptime`,
-		Args: cobra.MinimumNArgs(1),
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: map[string]string{cli.AnnotationPassthroughArgs: "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			target := args[0]

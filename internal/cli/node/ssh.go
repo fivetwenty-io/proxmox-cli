@@ -56,7 +56,8 @@ func newSSHCmd() *cobra.Command {
 			"flag; use \"--\" to disambiguate when needed.",
 		Example: `  pmx pve node ssh pve1
   pmx pve node ssh pve1 -- uptime`,
-		Args: cobra.MinimumNArgs(1),
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: map[string]string{cli.AnnotationPassthroughArgs: "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return remote.RunSSH(cmd, cli.GetDeps(cmd), &f, args[0], args[1:])
 		},
@@ -128,8 +129,9 @@ func newExecCmd() *cobra.Command {
 		Short: "Run a command on a node over SSH",
 		Long: "Resolve <node> to an SSH address and run <cmd> on it over SSH, passing " +
 			"through its output. Use \"--\" to separate the remote command from pmx flags.",
-		Example: `  pmx pve node exec pve1 -- uptime`,
-		Args:    cobra.MinimumNArgs(2),
+		Example:     `  pmx pve node exec pve1 -- uptime`,
+		Args:        cobra.MinimumNArgs(2),
+		Annotations: map[string]string{cli.AnnotationPassthroughArgs: "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]

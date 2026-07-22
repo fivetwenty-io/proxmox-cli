@@ -30,8 +30,10 @@ ENVIRONMENT / FILES / EXIT STATUS sections into each root page.
 
 **~/.pmx/logs/**
 : Per-invocation JSONL logs, nested under per-command directories by
-  default (configurable via the **log** key in **pmx-config(5)**);
-  suppress with **--no-log**.
+  default (configurable via the **log** key in **pmx-config(5)**); every
+  file opens with an invocation audit record and closes with an exit
+  record. Suppress with **--no-log**; delete old files with
+  **pmx logs prune** or the **log.retention** config key.
 
 # EXIT STATUS
 

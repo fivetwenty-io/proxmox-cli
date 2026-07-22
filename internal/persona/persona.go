@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/context"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/initcmd"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/lab"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/logs"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pbs"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pdm"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pve"
@@ -21,7 +22,7 @@ import (
 func Shared() []cli.GroupFactory {
 	return []cli.GroupFactory{
 		context.Group, context.CtxAlias, initcmd.Group,
-		api.Auth, api.Group, version.Group, remote.SSH, remote.Rsync,
+		api.Auth, api.Group, version.Group, logs.Group, remote.SSH, remote.Rsync,
 	}
 }
 

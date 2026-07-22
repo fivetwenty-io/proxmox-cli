@@ -34,7 +34,8 @@ func newAgentExecCmd() *cobra.Command {
 			"`pmx pve qemu agent exec-status` to poll for completion and output.",
 		Example: `  pmx pve qemu agent exec 100 -- uptime
   pmx pve qemu agent exec 100 --command uptime`,
-		Args: cobra.MinimumNArgs(1),
+		Args:        cobra.MinimumNArgs(1),
+		Annotations: map[string]string{cli.AnnotationPassthroughArgs: "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])

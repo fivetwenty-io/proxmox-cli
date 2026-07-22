@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -1387,6 +1389,259 @@ func TestLogLayout_NestedDefaultAndFlatOverride(t *testing.T) {
 		}
 		require.Regexp(t, `^probe-\d{8}-\d{6}\.jsonl$`, entries[0].Name())
 	})
+}
+
+// readLogRecords parses every JSONL record found under logDir into maps.
+func readLogRecords(t *testing.T, logDir string) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	walkErr := filepath.WalkDir(logDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+			return err
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for line := range bytes.SplitSeq(data, []byte("\n")) {
+			if len(bytes.TrimSpace(line)) == 0 {
+				continue
+			}
+			var rec map[string]any
+			require.NoError(t, json.Unmarshal(line, &rec), "log line must be valid JSON: %s", line)
+			records = append(records, rec)
+		}
+		return nil
+	})
+	require.NoError(t, walkErr)
+	return records
+}
+
+// findRecord returns the first record whose msg equals want, or nil.
+func findRecord(records []map[string]any, want string) map[string]any {
+	for _, r := range records {
+		if r["msg"] == want {
+			return r
+		}
+	}
+	return nil
+}
+
+// TestInvocationAuditRecords verifies that every invocation writes an
+// "invocation" record at open (command path, redacted args, context,
+// version) and that cli.Execute writes the matching "exit" record
+// (exit_code, duration_ms) — so no log file is ever empty, even for
+// commands that make no API calls.
+func TestInvocationAuditRecords(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_LOG_LAYOUT", "")
+	t.Setenv("PMX_LOG_LEVEL", "")
+
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			Args:        cobra.ArbitraryArgs,
+			RunE:        func(*cobra.Command, []string) error { return nil },
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", filepath.Join(tmpDir, "c.yml"),
+		"probe", "vm-101", "password=supersecret"}
+	defer func() { os.Args = oldArgs }()
+
+	require.NoError(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
+
+	records := readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs"))
+	require.NotEmpty(t, records, "log file must never be empty")
+
+	inv := findRecord(records, "invocation")
+	require.NotNil(t, inv, "invocation record must open the log")
+	require.Equal(t, "pmx probe", inv["command_path"])
+	require.Contains(t, inv, "version")
+
+	args, ok := inv["args"].([]any)
+	require.True(t, ok, "invocation record must carry args")
+	require.Contains(t, args, "vm-101")
+	require.Contains(t, args, "password=***", "sensitive key=value args must be masked")
+	for _, a := range args {
+		require.NotContains(t, a.(string), "supersecret", "secret value must never reach the log")
+	}
+
+	exit := findRecord(records, "exit")
+	require.NotNil(t, exit, "exit record must close the audit trail")
+	require.Equal(t, float64(0), exit["exit_code"])
+	require.Contains(t, exit, "duration_ms")
+}
+
+// TestInvocationExitRecord_Error verifies a failing command writes the exit
+// record at error level with the semantic exit code and the error text.
+func TestInvocationExitRecord_Error(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_LOG_LEVEL", "error")
+
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(*cobra.Command, []string) error {
+				return errors.New("probe boom")
+			},
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", filepath.Join(tmpDir, "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	require.Error(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
+
+	records := readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs"))
+	exit := findRecord(records, "exit")
+	require.NotNil(t, exit,
+		"exit record must be written at error level so it survives log.level=error")
+	require.Equal(t, "ERROR", exit["level"])
+	require.Equal(t, float64(1), exit["exit_code"])
+	require.Contains(t, exit["error"], "probe boom")
+}
+
+// TestRedactArgs covers the sensitive key=value masking table.
+func TestRedactArgs(t *testing.T) {
+	got := cli.RedactArgs([]string{
+		"vm-101",
+		"password=hunter2",
+		"new-secret=abc",
+		"API-Token=xyz",
+		"ticket=PVE:...",
+		"CSRFPreventionToken=tok",
+		"comment=plain",
+		"noequals",
+	})
+	require.Equal(t, []string{
+		"vm-101",
+		"password=***",
+		"new-secret=***",
+		"API-Token=***",
+		"ticket=***",
+		"CSRFPreventionToken=***",
+		"comment=plain",
+		"noequals",
+	}, got)
+
+	require.Nil(t, cli.RedactArgs(nil))
+}
+
+// TestInvocationArgs_PassthroughRedaction verifies that commands carrying a
+// foreign command line — the passthroughArgs annotation (ssh/exec wrappers)
+// or DisableFlagParsing (rsync) — never get their argv logged verbatim: the
+// invocation record carries only a count placeholder, since inline secrets
+// like `mysql -pSECRET` are invisible to key=value masking.
+func TestInvocationArgs_PassthroughRedaction(t *testing.T) {
+	annotated := &cobra.Command{
+		Use:         "ssh",
+		Annotations: map[string]string{cli.AnnotationPassthroughArgs: "true"},
+	}
+	require.Equal(t, []string{"(3 passthrough args redacted)"},
+		cli.InvocationArgs(annotated, []string{"pve1", "mysql", "-pSECRET"}))
+
+	flagless := &cobra.Command{Use: "rsync", DisableFlagParsing: true}
+	require.Equal(t, []string{"(2 passthrough args redacted)"},
+		cli.InvocationArgs(flagless, []string{"-av", "pve1:/etc/pve/"}))
+
+	plain := &cobra.Command{Use: "start"}
+	require.Equal(t, []string{"vm-101", "password=***"},
+		cli.InvocationArgs(plain, []string{"vm-101", "password=hunter2"}))
+}
+
+// TestInvocationExitRecord_ClientBuildFailure guards the paired-audit
+// invariant on the pre-RunE error path: when context resolution / client
+// construction fails in PersistentPreRunE (expired token, unreachable host,
+// no context at all), the log must still close with an exit record — deps
+// are stashed before the client build precisely so Execute's exit hook can
+// find the logger.
+func TestInvocationExitRecord_ClientBuildFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_LOG_LEVEL", "")
+
+	// No noClient annotation: PersistentPreRunE attempts the client build,
+	// which fails against an empty config with no context configured.
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:  "probe",
+			RunE: func(*cobra.Command, []string) error { return nil },
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", filepath.Join(tmpDir, "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	require.Error(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
+
+	records := readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs"))
+	require.NotNil(t, findRecord(records, "invocation"))
+
+	exit := findRecord(records, "exit")
+	require.NotNil(t, exit,
+		"a pre-RunE failure (client build) must still write the exit record")
+	require.Equal(t, "ERROR", exit["level"])
+	require.NotEqual(t, float64(0), exit["exit_code"])
+	require.NotEmpty(t, exit["error"])
+}
+
+// TestAutoPrune_RunsWithRetentionConfigured verifies the post-command daily
+// prune fires when log.retention is set: an aged log file disappears and the
+// sentinel is stamped.
+func TestAutoPrune_RunsWithRetentionConfigured(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	logDir := filepath.Join(tmpDir, ".pmx", "logs")
+	old := filepath.Join(logDir, "pve", "task", "ls", "20250101-000000.jsonl")
+	require.NoError(t, os.MkdirAll(filepath.Dir(old), 0o700))
+	require.NoError(t, os.WriteFile(old, []byte(`{"msg":"old"}`+"\n"), 0o600))
+	stale := time.Now().Add(-90 * 24 * time.Hour)
+	require.NoError(t, os.Chtimes(old, stale, stale))
+
+	cfgPath := filepath.Join(tmpDir, "c.yml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("log:\n  retention: 30\n"), 0o600))
+
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE:        func(*cobra.Command, []string) error { return nil },
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", cfgPath, "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	require.NoError(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
+
+	require.NoFileExists(t, old, "aged log must be auto-pruned when log.retention is set")
+	require.FileExists(t, filepath.Join(logDir, ".last-prune"))
+
+	// This invocation's own log survives (fresh and non-empty).
+	records := readLogRecords(t, logDir)
+	require.NotNil(t, findRecord(records, "invocation"))
 }
 
 // ---------------------------------------------------------------------------

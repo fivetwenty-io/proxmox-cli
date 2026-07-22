@@ -54,8 +54,11 @@ and the first token that is not an option starts the remote command. Use
   pmx ssh pve1 -l root -- uptime
   pmx ssh --context backup
   pmx ssh -i ~/.ssh/lab_ed25519 pve1`,
-		Args:        cobra.ArbitraryArgs,
-		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
+		Args: cobra.ArbitraryArgs,
+		Annotations: map[string]string{
+			cli.ProductAnnotation:         cli.ProductFromContext,
+			cli.AnnotationPassthroughArgs: "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			var product string
