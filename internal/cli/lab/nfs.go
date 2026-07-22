@@ -44,11 +44,18 @@ type nfsAttachTarget struct {
 }
 
 // nfsAttachTargets returns the three fixed storage entries a lab needs
-// (multi-node lab plan §8.5): the lab's own images/backup exports (rw,
-// vers=4.1, hard-mounted — the PVE default, deliberately not "soft": a
-// transient NFS hiccup should stall the guest, not silently error its I/O),
-// and the shared, read-only ISO/template export (soft-mounted, the one
-// deliberate exception).
+// (multi-node lab plan §8.5): the images/backup exports (rw, vers=4.1,
+// hard-mounted — the PVE default, deliberately not "soft": a transient NFS
+// hiccup should stall the guest, not silently error its I/O), and the
+// shared, read-only ISO/template export (soft-mounted, the one deliberate
+// exception).
+//
+// exportOwnerName names the lab whose export tree the images/backup paths
+// point at: the attaching lab's own name in today's shape, or another lab's
+// name when this lab aliases a shared export (storage.nfs_export — see
+// resolveNfsExportOwner). The three storage IDs themselves (nfs-images,
+// nfs-backup, shared-iso) are always local to the ATTACHING lab's own node
+// 0 regardless of aliasing — only the export PATH they point at changes.
 //
 // nfs-images carries the full "images,import,snippets,iso" content list, not
 // just "images": the extra types are inert metadata for a plain guest-disk
@@ -56,17 +63,17 @@ type nfsAttachTarget struct {
 // ("storage 'nfs-images' does not support 'import' content") without them —
 // a failure that used to surface weeks after attach, at first stemcell
 // upload, gated on a manual runbook step.
-func nfsAttachTargets(labName string) []nfsAttachTarget {
+func nfsAttachTargets(exportOwnerName string) []nfsAttachTarget {
 	return []nfsAttachTarget{
 		{
 			id:      nfsImagesStorageID,
-			export:  fmt.Sprintf("%s/labs/%s/images", nfsExportRoot, labName),
+			export:  fmt.Sprintf("%s/labs/%s/images", nfsExportRoot, exportOwnerName),
 			content: "images,import,snippets,iso",
 			options: "vers=4.1",
 		},
 		{
 			id:      nfsBackupStorageID,
-			export:  fmt.Sprintf("%s/labs/%s/backup", nfsExportRoot, labName),
+			export:  fmt.Sprintf("%s/labs/%s/backup", nfsExportRoot, exportOwnerName),
 			content: "backup",
 			options: "vers=4.1",
 		},
@@ -155,7 +162,13 @@ func newNfsAttachCmd() *cobra.Command {
 			"lab is safe. Requires the shared NFS service's own host software " +
 			"(nfs-kernel-server) to already be built and healthy (lab repo " +
 			"scripts/60-nfs-service's nfsd/health groups) — attach provisions this lab's own " +
-			"export objects and firewall rules, never the shared NFS host service itself.",
+			"export objects and firewall rules, never the shared NFS host service itself.\n\n" +
+			"When this lab's storage.nfs_export names ANOTHER lab, the server-side ensure phase " +
+			"operates on that named lab's dataset/quota instead of this lab's own, and the rw " +
+			"sharenfs ACL becomes the union of every lab (across the loaded config) whose own " +
+			"nfs_export resolves to the same owner — attaching any one member converges the " +
+			"whole group's ACL. The named owner lab must exist and must not itself set " +
+			"nfs_export to a third lab.",
 		Example: `  pmx lab nfs attach wayne
   pmx lab nfs attach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -175,6 +188,15 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 		return err
 	}
 
+	labs, err := resolveAllLabs(cmd)
+	if err != nil {
+		return err
+	}
+	exportOwner, err := resolveNfsExportOwner(labs, lab)
+	if err != nil {
+		return err
+	}
+
 	node0IP, err := labNodeMgmtIP(lab.Network, 0)
 	if err != nil {
 		return fmt.Errorf("resolve node 0 mgmt IP: %w", err)
@@ -184,12 +206,12 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 		return fmt.Errorf("resolve NFS server IP: %w", err)
 	}
 
-	serverPlan, err := buildNfsServerEnsurePlan(lab)
+	serverPlan, err := buildNfsServerEnsurePlan(lab, exportOwner)
 	if err != nil {
 		return err
 	}
 
-	targets := nfsAttachTargets(lab.Name)
+	targets := nfsAttachTargets(exportOwner.owner.Name)
 
 	// dry-run never touches deps.Runner (see cluster.go's runClusterInit for
 	// the same convention): it previews the server-side ensure phase's steps,
@@ -380,7 +402,9 @@ func newNfsStatusCmd() *cobra.Command {
 		Short: "Show a lab's NFS storage attachment state",
 		Long: "Run `pvesm status` over ssh on node 0 and report whether each of the lab's three " +
 			"fixed NFS storage entries (nfs-images, nfs-backup, shared-iso) is configured and, " +
-			"if so, its live status (active/inactive/...). Read-only: never mutates anything.",
+			"if so, its live status (active/inactive/...), plus the resolved NFS export owner " +
+			"(this lab's own name unless storage.nfs_export aliases another lab) and every other " +
+			"lab currently sharing that same export. Read-only: never mutates anything.",
 		Example: `  pmx lab nfs status wayne`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -398,6 +422,15 @@ func runNfsStatus(cmd *cobra.Command, name string) error {
 		return err
 	}
 
+	labs, err := resolveAllLabs(cmd)
+	if err != nil {
+		return err
+	}
+	exportOwner, err := resolveNfsExportOwner(labs, lab)
+	if err != nil {
+		return err
+	}
+
 	node0IP, err := labNodeMgmtIP(lab.Network, 0)
 	if err != nil {
 		return fmt.Errorf("resolve node 0 mgmt IP: %w", err)
@@ -410,7 +443,7 @@ func runNfsStatus(cmd *cobra.Command, name string) error {
 	statuses := parsePvesmStatus(res.Stdout)
 
 	headers := []string{"STORAGE", "CONFIGURED", "STATUS"}
-	rows := make([][]string, 0, len(nfsAttachTargets(lab.Name)))
+	rows := make([][]string, 0, len(nfsAttachTargets(lab.Name))+2)
 	for _, t := range nfsAttachTargets(lab.Name) {
 		if status, ok := statuses[t.id]; ok {
 			rows = append(rows, []string{t.id, "yes", status})
@@ -418,6 +451,10 @@ func runNfsStatus(cmd *cobra.Command, name string) error {
 			rows = append(rows, []string{t.id, "no", "n/a"})
 		}
 	}
+	rows = append(rows,
+		[]string{"export owner", exportOwner.owner.Name, ""},
+		[]string{"export members", strings.Join(nfsExportMemberNames(exportOwner.members), ", "), ""},
+	)
 
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 }
@@ -443,7 +480,14 @@ func newNfsDetachCmd() *cobra.Command {
 			"lab's entry in the shared/iso export's ro= list) — those carry this lab's actual " +
 			"data and shared-export state, and this command never deletes data implicitly. " +
 			"Remove them by hand over ssh (e.g. `zfs destroy -r tank/nfs/labs/<name>`) only once " +
-			"you have confirmed the lab's data is no longer needed.",
+			"you have confirmed the lab's data is no longer needed.\n\n" +
+			"ONE EXCEPTION when this lab shares a storage.nfs_export-aliased export with other " +
+			"labs: detaching a non-owner member also narrows the export owner's rw sharenfs ACL " +
+			"to exclude this lab's own mgmt /24 (the owner's dataset and quota are still never " +
+			"touched). Detaching the export OWNER while other members still depend on it is " +
+			"refused outright — repoint or detach every member first. A lab that owns and is the " +
+			"sole member of its own export (today's non-aliased shape) is unaffected: detach never " +
+			"touches server-side state for it, exactly as before this feature existed.",
 		Example: `  pmx lab nfs detach wayne --yes
   pmx lab nfs detach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -464,6 +508,32 @@ func runNfsDetach(cmd *cobra.Command, name string, dryRun, yes bool) error {
 		return err
 	}
 
+	labs, err := resolveAllLabs(cmd)
+	if err != nil {
+		return err
+	}
+	exportOwner, err := resolveNfsExportOwner(labs, lab)
+	if err != nil {
+		return err
+	}
+
+	remainingMembers := nfsExportMembersExcluding(exportOwner.members, lab.Name)
+	sharesExport := len(exportOwner.members) > 1
+	isOwner := exportOwner.owner.Name == lab.Name
+
+	// Refusing an owner detach while other members still depend on its
+	// export tree is a pure config-level decision, checked (and refused)
+	// before dry-run, before any confirmation prompt, and before any ssh
+	// call — a doomed detach must never even preview as though it would
+	// succeed.
+	if sharesExport && isOwner {
+		return fmt.Errorf(
+			"lab %q: cannot detach — it owns the shared NFS export tank/nfs/labs/%s, still shared by "+
+				"%s; repoint each member's storage.nfs_export elsewhere (or detach them first) before "+
+				"detaching the owner",
+			name, lab.Name, strings.Join(nfsExportMemberNames(remainingMembers), ", "))
+	}
+
 	node0IP, err := labNodeMgmtIP(lab.Network, 0)
 	if err != nil {
 		return fmt.Errorf("resolve node 0 mgmt IP: %w", err)
@@ -475,14 +545,44 @@ func runNfsDetach(cmd *cobra.Command, name string, dryRun, yes bool) error {
 		ids[i] = t.id
 	}
 
+	// recomputeACL is true only for a NON-owner member of a shared export
+	// that still has other members after this lab leaves (always true
+	// whenever sharesExport && !isOwner: the owner itself is always a
+	// member of its own export, per resolveNfsExportOwner, so remaining
+	// members can never be empty on this branch): the owner's rw sharenfs
+	// ACL must narrow to exclude this lab's own subnet. A solo
+	// (non-aliased) lab's detach — sharesExport false — stays
+	// BYTE-IDENTICAL to detach's pre-alias behavior: no server-side ssh
+	// call at all, matching this command's own "never touches SERVER-side
+	// state" contract for that (today's default) case.
+	recomputeACL := sharesExport && !isOwner
+
+	var remainingCIDRs []string
+	if recomputeACL {
+		remainingCIDRs, err = nfsMemberMgmtCIDRs(remainingMembers)
+		if err != nil {
+			return err
+		}
+	}
+
 	// dry-run never touches deps.Runner (see cluster.go's runClusterInit for
-	// the same convention): it previews the pvesm remove commands this run
-	// would issue, without probing or prompting.
+	// the same convention): it previews the pvesm remove commands (and, for
+	// a shared-export member, the rw ACL narrowing) this run would issue,
+	// without probing or prompting.
 	if dryRun {
 		headers := []string{"STEP", "STATUS"}
-		rows := make([][]string, 0, len(targets))
+		rows := make([][]string, 0, len(targets)+2)
 		for _, id := range ids {
 			rows = append(rows, []string{fmt.Sprintf("pvesm remove %s", id), "would run"})
+		}
+		if recomputeACL {
+			rw := nfsLabRwSharenfs(remainingCIDRs)
+			for _, kind := range []string{"images", "backup"} {
+				rows = append(rows, []string{
+					fmt.Sprintf("zfs set sharenfs=%s %s", rw, nfsServerDetachExportDataset(exportOwner.owner.Name, kind)),
+					"would run (if different)",
+				})
+			}
 		}
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 	}
@@ -500,7 +600,7 @@ func runNfsDetach(cmd *cobra.Command, name string, dryRun, yes bool) error {
 	}
 
 	headers := []string{"STORAGE", "STATUS"}
-	rows := make([][]string, 0, len(targets))
+	rows := make([][]string, 0, len(targets)+2)
 
 	for _, t := range targets {
 		_, perr := runGuestSSH(deps, node0IP, fmt.Sprintf("pvesh get /storage/%s --output-format json", t.id))
@@ -516,6 +616,31 @@ func runNfsDetach(cmd *cobra.Command, name string, dryRun, yes bool) error {
 			return fmt.Errorf("lab %q: remove storage %q on node 0 (%s): %w", name, t.id, node0IP, rerr)
 		}
 		rows = append(rows, []string{t.id, "removed"})
+	}
+
+	if recomputeACL {
+		if deps.Node == "" {
+			return fmt.Errorf(
+				"lab %q: narrowing the shared export owner %q's rw ACL needs the outer PVE node hosting "+
+					"tank/nfs; pass --node, set $PMX_NODE, or configure a context default node",
+				name, exportOwner.owner.Name)
+		}
+		if deps.Ctx == nil || deps.Runner == nil {
+			return fmt.Errorf(
+				"lab %q: narrowing the shared export owner %q's rw ACL requires an active pmx context/ssh runner",
+				name, exportOwner.owner.Name)
+		}
+
+		serverHost, herr := createDatasetSSHHost(cmd.Context(), deps.API, deps.Node)
+		if herr != nil {
+			return fmt.Errorf("lab %q: resolve ssh host for NFS export ACL narrowing (node %q): %w", name, deps.Node, herr)
+		}
+
+		aclRows, aerr := nfsServerDetachRecomputeACL(deps, serverHost, exportOwner.owner.Name, remainingCIDRs)
+		if aerr != nil {
+			return fmt.Errorf("lab %q: narrow shared export owner %q's rw ACL: %w", name, exportOwner.owner.Name, aerr)
+		}
+		rows = append(rows, aclRows...)
 	}
 
 	rows = append(rows, []string{"summary", fmt.Sprintf("lab %q: NFS storage detached.", name)})

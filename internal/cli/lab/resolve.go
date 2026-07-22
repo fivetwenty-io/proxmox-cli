@@ -46,11 +46,9 @@ func validateLabNameCharset(name string) error {
 // verb (list, status) calls this directly; every mutating verb calls
 // resolveLabForMutate instead, which additionally peppi-guards the result.
 func resolveLab(cmd *cobra.Command, name string) (*config.Lab, error) {
-	deps := cli.GetDeps(cmd)
-
-	labs, err := config.ResolveLabs(deps.Cfg, deps.ConfigPath)
+	labs, err := resolveAllLabs(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("resolve labs: %w", err)
+		return nil, err
 	}
 
 	lab, ok := labs[name]
@@ -59,6 +57,24 @@ func resolveLab(cmd *cobra.Command, name string) (*config.Lab, error) {
 	}
 
 	return lab, nil
+}
+
+// resolveAllLabs loads the active config via cli.GetDeps(cmd) and resolves
+// every configured lab (inline cfg.Labs plus cfg.Include/cfg.LabsDir
+// includes, see config.ResolveLabs) — the same full map resolveLab itself
+// resolves before picking out the one lab it was asked for. Callers that
+// need to reason about every OTHER lab too (not just the one named on the
+// command line) — e.g. NFS export alias resolution, which must find every
+// lab whose storage.nfs_export resolves to a given owner — call this
+// directly instead of resolveLab.
+func resolveAllLabs(cmd *cobra.Command) (map[string]*config.Lab, error) {
+	deps := cli.GetDeps(cmd)
+
+	labs, err := config.ResolveLabs(deps.Cfg, deps.ConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve labs: %w", err)
+	}
+	return labs, nil
 }
 
 // availableLabNames returns the sorted, comma-joined names of labs, for use

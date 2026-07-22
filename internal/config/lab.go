@@ -439,6 +439,26 @@ type LabStorage struct {
 	// historical scripts/60-nfs-service --lab-quota default) instead.
 	NFSQuotaGB int `yaml:"nfs_quota_gb,omitempty" json:"nfs_quota_gb,omitempty"`
 
+	// NFSExport names ANOTHER lab whose NFS export tree this lab mounts
+	// instead of owning its own: a shared-export alias, for two (or more)
+	// clusters that should mimic a client environment where one export tree
+	// is shared to every member. When set, `pmx lab nfs attach` runs its
+	// SERVER-side ZFS dataset-ensure phase against the NAMED lab's dataset
+	// (tank/nfs/labs/<NFSExport>) rather than this lab's own, governed by
+	// the named lab's own NFSQuotaGB (this lab's own NFSQuotaGB is ignored
+	// once aliased), and the rw sharenfs ACL on that dataset becomes the
+	// union of every lab's mgmt /24 whose NFSExport (or lack of one)
+	// resolves to that same owner. This lab still mounts the export via its
+	// OWN mgmt gateway IP — only the SERVER-side export tree and its ACL
+	// are shared; nfsServerIP is unaffected. Empty means today's shape: the
+	// lab owns its own export tree keyed by its own name. Setting this to
+	// the lab's own name is a harmless no-op, identical to leaving it
+	// empty. The named lab must exist in the loaded config and must not
+	// itself set NFSExport to a third lab (chained aliases are refused) —
+	// see internal/cli/lab's resolveNfsExportOwner, the only place these
+	// two rules are enforced (this field carries no validation of its own).
+	NFSExport string `yaml:"nfs_export,omitempty" json:"nfs_export,omitempty"`
+
 	// Controller is the disk controller type (e.g. "virtio-scsi-single").
 	Controller string `yaml:"controller" json:"controller"`
 
@@ -774,6 +794,21 @@ func EffectiveNFSQuotaGB(lab *Lab) int {
 		return lab.Storage.NFSQuotaGB
 	}
 	return DefaultNFSQuotaGB
+}
+
+// EffectiveNFSExport returns the name of the lab whose NFS export tree
+// lab.Storage.NFSExport aliases: lab.Storage.NFSExport itself when the
+// operator set it (naming another lab whose exports this one shares — see
+// LabStorage.NFSExport's doc comment), else lab.Name (today's shape: every
+// lab owns its own export tree, keyed by its own name). This performs no
+// validation that the named lab exists or is not itself aliased to a third
+// lab — those checks need the full loaded-labs map, which this per-lab
+// accessor does not have; see internal/cli/lab's resolveNfsExportOwner.
+func EffectiveNFSExport(lab *Lab) string {
+	if lab.Storage.NFSExport != "" {
+		return lab.Storage.NFSExport
+	}
+	return lab.Name
 }
 
 // MaxVnetIDLen is the Proxmox VE SDN vnet ID length limit: at most 8

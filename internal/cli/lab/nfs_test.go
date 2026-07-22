@@ -579,7 +579,9 @@ func TestBuildNfsServerEnsurePlan_QuotaGB_DefaultsTo200WhenUnset(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 1, "")
 	lab.Storage.NFSQuotaGB = 0
 
-	plan, err := buildNfsServerEnsurePlan(lab)
+	eo, eerr := resolveNfsExportOwner(map[string]*config.Lab{"wayne": lab}, lab)
+	require.NoError(t, eerr)
+	plan, err := buildNfsServerEnsurePlan(lab, eo)
 	require.NoError(t, err)
 	assert.Equal(t, 200, plan.quotaGB)
 }
@@ -588,7 +590,9 @@ func TestBuildNfsServerEnsurePlan_QuotaGB_ConfiguredOverridesDefault(t *testing.
 	lab := multiNodeTestLab("wayne", 1, "")
 	lab.Storage.NFSQuotaGB = 600
 
-	plan, err := buildNfsServerEnsurePlan(lab)
+	eo, eerr := resolveNfsExportOwner(map[string]*config.Lab{"wayne": lab}, lab)
+	require.NoError(t, eerr)
+	plan, err := buildNfsServerEnsurePlan(lab, eo)
 	require.NoError(t, err)
 	assert.Equal(t, 600, plan.quotaGB)
 }

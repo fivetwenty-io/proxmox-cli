@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -44,47 +45,89 @@ var nfsServerRootDataset = strings.TrimPrefix(nfsExportRoot, "/")
 // sec=sys (AUTH_SYS, this platform's only supported NFS auth mode).
 const nfsServerLabRwSharenfsOpts = "no_root_squash,no_subtree_check,sec=sys"
 
-// nfsLabRwSharenfs renders one lab's images/backup sharenfs value:
-// "rw=@<mgmtCIDR>,no_root_squash,no_subtree_check,sec=sys" — byte-identical
-// to scripts/60-nfs-service's build_lab_rw_sharenfs output for the same
-// subnet, so a lab attached via pmx and one built by the script converge to
-// the same live sharenfs value.
-func nfsLabRwSharenfs(mgmtCIDR string) string {
-	return fmt.Sprintf("rw=@%s,%s", mgmtCIDR, nfsServerLabRwSharenfsOpts)
+// nfsLabRwSharenfs renders the rw sharenfs value for an export tree's
+// images/backup datasets: "rw=@<cidr1>:@<cidr2>:...,no_root_squash,
+// no_subtree_check,sec=sys", one "@cidr" token per entry of mgmtCIDRs (which
+// callers must have already sorted — nfsMemberMgmtCIDRs does — so the
+// rendered value is deterministic regardless of map-iteration order). A
+// single-entry mgmtCIDRs (today's non-alias shape: a lab is the sole member
+// of its own export) renders byte-identical to this function's pre-alias
+// form, matching scripts/60-nfs-service's build_lab_rw_sharenfs output for
+// the same subnet.
+func nfsLabRwSharenfs(mgmtCIDRs []string) string {
+	tokens := make([]string, len(mgmtCIDRs))
+	for i, c := range mgmtCIDRs {
+		tokens[i] = "@" + c
+	}
+	return fmt.Sprintf("rw=%s,%s", strings.Join(tokens, ":"), nfsServerLabRwSharenfsOpts)
+}
+
+// nfsMemberMgmtCIDRs resolves each lab in members to its own mgmt /24 CIDR
+// (labMgmtCIDR), sorted lexicographically. Sorting is what makes the
+// resulting nfsLabRwSharenfs value deterministic: two labs attaching in
+// either order against the same shared export must converge to the exact
+// same rw= list, not one that differs only in token order (which would
+// otherwise churn the live sharenfs property on every alternating attach).
+func nfsMemberMgmtCIDRs(members []*config.Lab) ([]string, error) {
+	cidrs := make([]string, 0, len(members))
+	for _, m := range members {
+		c, err := labMgmtCIDR(m.Network)
+		if err != nil {
+			return nil, fmt.Errorf("resolve lab %q's mgmt /24 for NFS export ACLs: %w", m.Name, err)
+		}
+		cidrs = append(cidrs, c)
+	}
+	sort.Strings(cidrs)
+	return cidrs, nil
 }
 
 // nfsServerEnsurePlan is the resolved, host-independent description of the
 // server-side phase runNfsAttach performs before its existing pvesm-add
 // loop: every dataset path, the desired sharenfs values, and the resolved
-// quota, all computed once per invocation from lab so every step (both the
-// --dry-run preview and the real ensure phase) reads off identical values.
+// quota, all computed once per invocation so every step (both the --dry-run
+// preview and the real ensure phase) reads off identical values.
 type nfsServerEnsurePlan struct {
-	labName          string
-	labDataset       string // tank/nfs/labs/<lab> — the quota parent
-	imagesDataset    string // tank/nfs/labs/<lab>/images
-	backupDataset    string // tank/nfs/labs/<lab>/backup
-	sharedIsoDataset string // tank/nfs/shared/iso
-	mgmtCIDR         string // this lab's mgmt /24, e.g. "10.254.0.0/24"
-	quotaGB          int    // EffectiveNFSQuotaGB(lab)
+	labName          string   // the ATTACHING lab's own name — used only for the firewall/shared-iso steps, which stay per-attaching-lab regardless of export aliasing
+	ownerName        string   // the export-OWNER lab's name (== labName when this lab owns its own export, today's shape)
+	labDataset       string   // tank/nfs/labs/<ownerName> — the quota parent
+	imagesDataset    string   // tank/nfs/labs/<ownerName>/images
+	backupDataset    string   // tank/nfs/labs/<ownerName>/backup
+	sharedIsoDataset string   // tank/nfs/shared/iso
+	mgmtCIDR         string   // the ATTACHING lab's own mgmt /24, e.g. "10.254.0.0/24" — used for the firewall/shared-iso steps only
+	rwMemberCIDRs    []string // sorted union of every export member's mgmt /24 (nfsMemberMgmtCIDRs) — the rw sharenfs ACL's actual content
+	quotaGB          int      // EffectiveNFSQuotaGB(owner lab)
 }
 
-// buildNfsServerEnsurePlan resolves lab's server-side ensure plan. The only
-// failure mode is an unresolvable mgmt /24 (labMgmtCIDR) — every other field
-// is a pure string/int derivation from already-validated lab data.
-func buildNfsServerEnsurePlan(lab *config.Lab) (nfsServerEnsurePlan, error) {
+// buildNfsServerEnsurePlan resolves lab's server-side ensure plan against
+// eo, the already-resolved NFS export ownership (resolveNfsExportOwner):
+// every dataset path and the quota are derived from eo.owner (which equals
+// lab itself in today's non-alias shape), while the rw ACL is the union of
+// every lab in eo.members. Failure modes: an unresolvable mgmt /24 for lab
+// itself, or for any member whose CIDR feeds the union ACL (labMgmtCIDR) —
+// every other field is a pure string/int derivation from already-validated
+// data.
+func buildNfsServerEnsurePlan(lab *config.Lab, eo *nfsExportOwner) (nfsServerEnsurePlan, error) {
 	mgmtCIDR, err := labMgmtCIDR(lab.Network)
 	if err != nil {
 		return nfsServerEnsurePlan{}, fmt.Errorf("resolve lab %q's mgmt /24 for NFS export ACLs: %w", lab.Name, err)
 	}
 
+	rwMemberCIDRs, err := nfsMemberMgmtCIDRs(eo.members)
+	if err != nil {
+		return nfsServerEnsurePlan{}, err
+	}
+
+	owner := eo.owner
 	return nfsServerEnsurePlan{
 		labName:          lab.Name,
-		labDataset:       fmt.Sprintf("%s/labs/%s", nfsServerRootDataset, lab.Name),
-		imagesDataset:    fmt.Sprintf("%s/labs/%s/images", nfsServerRootDataset, lab.Name),
-		backupDataset:    fmt.Sprintf("%s/labs/%s/backup", nfsServerRootDataset, lab.Name),
+		ownerName:        owner.Name,
+		labDataset:       fmt.Sprintf("%s/labs/%s", nfsServerRootDataset, owner.Name),
+		imagesDataset:    fmt.Sprintf("%s/labs/%s/images", nfsServerRootDataset, owner.Name),
+		backupDataset:    fmt.Sprintf("%s/labs/%s/backup", nfsServerRootDataset, owner.Name),
 		sharedIsoDataset: fmt.Sprintf("%s/shared/iso", nfsServerRootDataset),
 		mgmtCIDR:         mgmtCIDR,
-		quotaGB:          config.EffectiveNFSQuotaGB(lab),
+		rwMemberCIDRs:    rwMemberCIDRs,
+		quotaGB:          config.EffectiveNFSQuotaGB(owner),
 	}, nil
 }
 
@@ -96,7 +139,7 @@ func buildNfsServerEnsurePlan(lab *config.Lab) (nfsServerEnsurePlan, error) {
 // of time (it depends on the export's live ro= list, only readable over
 // ssh); its row states the ensured OUTCOME instead of a literal command.
 func nfsServerDryRunSteps(plan nfsServerEnsurePlan) [][]string {
-	rw := nfsLabRwSharenfs(plan.mgmtCIDR)
+	rw := nfsLabRwSharenfs(plan.rwMemberCIDRs)
 	return [][]string{
 		{fmt.Sprintf("zfs create -p -o recordsize=128K %s", plan.imagesDataset), "would run (if missing)"},
 		{fmt.Sprintf("zfs create -p -o recordsize=1M %s", plan.backupDataset), "would run (if missing)"},
@@ -309,7 +352,7 @@ func nfsServerEnsure(deps *cli.Deps, host string, plan nfsServerEnsurePlan) ([][
 	}
 	rows = append(rows, []string{plan.labDataset + " quota", nfsServerPropStatus(quotaChanged, quotaValue)})
 
-	rw := nfsLabRwSharenfs(plan.mgmtCIDR)
+	rw := nfsLabRwSharenfs(plan.rwMemberCIDRs)
 
 	imagesShareChanged, err := nfsZfsEnsureProp(deps, host, plan.imagesDataset, "sharenfs", rw)
 	if err != nil {
@@ -392,4 +435,36 @@ func nfsServerPropStatus(changed bool, value string) string {
 		return fmt.Sprintf("set (%s)", value)
 	}
 	return fmt.Sprintf("skip (already %s)", value)
+}
+
+// nfsServerDetachExportDataset renders ownerName's images or backup dataset
+// path — the same "tank/nfs/labs/<owner>/<kind>" shape buildNfsServerEnsurePlan
+// derives, computed directly from ownerName since detach's ACL-recompute step
+// has no full nfsServerEnsurePlan of its own (it never touches the dataset
+// or quota, only the sharenfs property).
+func nfsServerDetachExportDataset(ownerName, kind string) string {
+	return fmt.Sprintf("%s/labs/%s/%s", nfsServerRootDataset, ownerName, kind)
+}
+
+// nfsServerDetachRecomputeACL narrows ownerName's images/backup rw sharenfs
+// ACL to remainingCIDRs (sorted — callers pass nfsMemberMgmtCIDRs' own
+// output) over ssh against host, via the same read-then-skip-or-set
+// idempotency nfsZfsEnsureProp uses for attach. Called only when a NON-owner
+// member of a still-multi-member shared export detaches (see runNfsDetach):
+// the owner's dataset and quota are never touched here — only the sharenfs
+// property, narrowed to exclude the detaching lab's own subnet. Returns one
+// STEP/STATUS row per dataset (images, then backup), in that order.
+func nfsServerDetachRecomputeACL(deps *cli.Deps, host, ownerName string, remainingCIDRs []string) ([][]string, error) {
+	rw := nfsLabRwSharenfs(remainingCIDRs)
+
+	rows := make([][]string, 0, 2)
+	for _, kind := range []string{"images", "backup"} {
+		dataset := nfsServerDetachExportDataset(ownerName, kind)
+		changed, err := nfsZfsEnsureProp(deps, host, dataset, "sharenfs", rw)
+		if err != nil {
+			return nil, fmt.Errorf("recompute rw ACL on %q: %w", dataset, err)
+		}
+		rows = append(rows, []string{dataset + " sharenfs", nfsServerPropStatus(changed, rw)})
+	}
+	return rows, nil
 }
