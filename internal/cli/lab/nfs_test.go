@@ -64,13 +64,14 @@ func buildNfsServerCmdWithPVE(t *testing.T, configPath string, fake *exec.FakeRu
 }
 
 // nfsTestFirewallRulesEnabled is the host-firewall list fixture for a lab
-// ("wayne") whose two NFS rules already exist and are enabled — the
-// firewall ensure phase's fully-idempotent skip case.
+// ("wayne") whose two NFS rules already exist, enabled and scoped to the
+// lab's own mgmt /24 — the firewall ensure phase's fully-idempotent skip
+// case.
 func nfsTestFirewallRulesEnabled() []any {
 	return []any{
-		map[string]any{"pos": 0, "type": "in", "action": "ACCEPT", "enable": 1,
+		map[string]any{"pos": 0, "type": "in", "action": "ACCEPT", "enable": 1, "source": nfsServerTestMgmtCIDR,
 			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
-		map[string]any{"pos": 1, "type": "in", "action": "ACCEPT", "enable": 1,
+		map[string]any{"pos": 1, "type": "in", "action": "ACCEPT", "enable": 1, "source": nfsServerTestMgmtCIDR,
 			"comment": nfsFirewallRuleComment("wayne", "rpcbind", "111")},
 	}
 }
@@ -348,7 +349,7 @@ func TestNfsAttach_FirewallRuleDisabled_LoudFailure(t *testing.T) {
 	cmd, f := buildNfsServerCmdWithPVE(t, path, fake)
 
 	f.HandleJSON("GET /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules", []any{
-		map[string]any{"pos": 3, "type": "in", "action": "ACCEPT", "enable": 0,
+		map[string]any{"pos": 3, "type": "in", "action": "ACCEPT", "enable": 0, "source": nfsServerTestMgmtCIDR,
 			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
 	})
 
@@ -358,6 +359,69 @@ func TestNfsAttach_FirewallRuleDisabled_LoudFailure(t *testing.T) {
 	assert.ErrorContains(t, err, "rules update 3 --enable 1")
 
 	require.Len(t, fake.Calls, 6, "the pvesm phase must never be reached past a disabled firewall rule")
+}
+
+// TestNfsAttach_FirewallRuleStaleSource_LoudFailure covers the mis-scoped
+// case a comment-only match would silently accept: after a lab re-IP the
+// comment (keyed on the lab name) still matches while the rule's source
+// scopes the OLD subnet — NFS from the new subnet stays dropped even though
+// the sharenfs half of the doubled ACL reconciled. Attach must refuse
+// loudly, naming both subnets, never skip or edit the rule itself.
+func TestNfsAttach_FirewallRuleStaleSource_LoudFailure(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(nfsTestIdempotentServerSSH()...)
+	cmd, f := buildNfsServerCmdWithPVE(t, path, fake)
+
+	f.HandleJSON("GET /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules", []any{
+		map[string]any{"pos": 5, "type": "in", "action": "ACCEPT", "enable": 1, "source": "10.99.0.0/24",
+			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
+	})
+
+	_, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `scopes source "10.99.0.0/24"`)
+	assert.ErrorContains(t, err, nfsServerTestMgmtCIDR)
+	assert.ErrorContains(t, err, "rules update 5")
+
+	require.Len(t, fake.Calls, 6, "the pvesm phase must never be reached past a mis-scoped firewall rule")
+}
+
+// TestNfsAttach_FirewallRules_TolerantDecodeAndDuplicates covers three
+// payload-shape hazards at once: `enable` arriving as a quoted string
+// (PVE's firewall endpoints are inconsistent about numeric encoding — the
+// single-rule GET returns pos as a string), `enable` absent entirely
+// (disabled is pve-firewall's MARKED state, so an unmarked listed rule is
+// live and must not fail attach), and two rules sharing one comment where
+// only the later one satisfies (any satisfying match counts — no
+// last-wins order dependence).
+func TestNfsAttach_FirewallRules_TolerantDecodeAndDuplicates(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(append(nfsTestIdempotentServerSSH(),
+		exec.FakeResponse{Stdout: `{"storage":"nfs-images","content":"images,import,snippets,iso"}`},
+		exec.FakeResponse{Stdout: `{"storage":"nfs-backup","content":"backup"}`},
+		exec.FakeResponse{Stdout: `{"storage":"shared-iso","content":"iso,vztmpl"}`},
+	)...)
+	cmd, f := buildNfsServerCmdWithPVE(t, path, fake)
+
+	f.HandleJSON("GET /api2/json/nodes/"+nfsServerTestNode+"/firewall/rules", []any{
+		// 2049: a disabled duplicate first, then a satisfying one with a
+		// string-encoded enable.
+		map[string]any{"pos": 0, "type": "in", "action": "ACCEPT", "enable": 0, "source": nfsServerTestMgmtCIDR,
+			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
+		map[string]any{"pos": "1", "type": "in", "action": "ACCEPT", "enable": "1", "source": nfsServerTestMgmtCIDR,
+			"comment": nfsFirewallRuleComment("wayne", "NFS", "2049")},
+		// 111: no enable field at all — an unmarked (live) rule.
+		map[string]any{"pos": 2, "type": "in", "action": "ACCEPT", "source": nfsServerTestMgmtCIDR,
+			"comment": nfsFirewallRuleComment("wayne", "rpcbind", "111")},
+	})
+
+	out, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "created (ACCEPT", "both ports must be satisfied by existing rules")
+	assert.Contains(t, out, "skip (already present)")
+	require.Len(t, fake.Calls, 9, "no mutations anywhere: zfs reads, storage probes, nothing else")
 }
 
 // TestNfsAttach_ContentWidened_NfsImages covers the content-ensure step's
@@ -407,6 +471,9 @@ func TestNfsMergeContent(t *testing.T) {
 		{name: "single-type target already satisfied",
 			want: "backup", existing: "backup",
 			merged: "", missing: false},
+		{name: "repeated existing extra is deduped",
+			want: "images,import,snippets,iso", existing: "images,rootdir,rootdir",
+			merged: "images,import,snippets,iso,rootdir", missing: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

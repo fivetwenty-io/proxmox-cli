@@ -347,6 +347,7 @@ func nfsMergeContent(want, existing string) (merged string, missing bool) {
 	for _, e := range existingList {
 		if e = strings.TrimSpace(e); e != "" && !inWant[e] {
 			out = append(out, e)
+			inWant[e] = true // dedupe a repeated extra
 		}
 	}
 	return strings.Join(out, ","), true
