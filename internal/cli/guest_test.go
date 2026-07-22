@@ -146,6 +146,53 @@ func TestResolveGuest_DuplicateNameAcrossNodes(t *testing.T) {
 	require.ErrorContains(t, err, "pve2")
 }
 
+// TestResolveGuestSource_IgnoresAmbientDefaultNode verifies migration source
+// resolution consults the cluster even when a default node is configured: the
+// ambient deps.Node says pve1 but the VM runs on pve2, and pve2 must win.
+func TestResolveGuestSource_IgnoresAmbientDefaultNode(t *testing.T) {
+	f, ac := newGuestFakeClient(t)
+	guestResources(f, []map[string]any{
+		{"type": "qemu", "vmid": 100, "name": "web", "node": "pve2"},
+	})
+	deps := &cli.Deps{API: ac, Node: "pve1"}
+
+	vmid, node, err := cli.ResolveGuestSource(context.Background(), deps, "100", cli.GuestQemu, false)
+	require.NoError(t, err)
+	require.Equal(t, "100", vmid)
+	require.Equal(t, "pve2", node)
+}
+
+// TestResolveGuestSource_ExplicitNodePinsSource verifies an explicit --node
+// keeps today's behavior: the pinned node is used as-is with no cluster lookup.
+func TestResolveGuestSource_ExplicitNodePinsSource(t *testing.T) {
+	f, ac := newGuestFakeClient(t)
+	hit := guestResources(f, nil)
+	deps := &cli.Deps{API: ac, Node: "pve1"}
+
+	vmid, node, err := cli.ResolveGuestSource(context.Background(), deps, "100", cli.GuestQemu, true)
+	require.NoError(t, err)
+	require.Equal(t, "100", vmid)
+	require.Equal(t, "pve1", node)
+	require.False(t, *hit, "explicit --node must not query cluster resources")
+}
+
+// TestResolveGuestSource_DuplicateVMIDAmbiguous guards the shouldn't-happen
+// case of one VMID appearing on two nodes: resolution must refuse and ask for
+// an explicit --node rather than pick one arbitrarily.
+func TestResolveGuestSource_DuplicateVMIDAmbiguous(t *testing.T) {
+	f, ac := newGuestFakeClient(t)
+	guestResources(f, []map[string]any{
+		{"type": "qemu", "vmid": 100, "name": "a", "node": "pve1"},
+		{"type": "qemu", "vmid": 100, "name": "b", "node": "pve2"},
+	})
+	deps := &cli.Deps{API: ac}
+
+	_, _, err := cli.ResolveGuestSource(context.Background(), deps, "100", cli.GuestQemu, false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "ambiguous")
+	require.ErrorContains(t, err, "pass --node to disambiguate")
+}
+
 // TestResolveGuest_VMIDFromIDSuffix verifies the VMID is derived from the id
 // field (e.g. "qemu/100") when the entry omits an explicit vmid.
 func TestResolveGuest_VMIDFromIDSuffix(t *testing.T) {

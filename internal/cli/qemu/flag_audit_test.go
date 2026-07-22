@@ -252,6 +252,7 @@ func TestQemuClone_FormatBwlimit(t *testing.T) {
 // TestQemuMigrate_NewFlags asserts the new migrate flags reach the POST body.
 func TestQemuMigrate_NewFlags(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 
 	var body string
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, r *http.Request) {

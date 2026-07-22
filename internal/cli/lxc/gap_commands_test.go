@@ -287,6 +287,7 @@ func TestSnapshotUpdate_ServerError(t *testing.T) {
 
 func TestMigrateCheck_Table(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	var gotMethod, gotPath string
 	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/101/migrate", func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
@@ -310,6 +311,7 @@ func TestMigrateCheck_Table(t *testing.T) {
 
 func TestMigrateCheck_WithTargetNode(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	var gotQuery string
 	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/101/migrate", func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
@@ -325,6 +327,7 @@ func TestMigrateCheck_WithTargetNode(t *testing.T) {
 
 func TestMigrateCheck_ServerError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/101/migrate", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "forbidden")
 	})
@@ -339,6 +342,7 @@ func TestMigrateCheck_ServerError(t *testing.T) {
 // Ensure existing migrate (POST) still works as a leaf alongside the check subcommand.
 func TestMigratePost_StillWorks(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	upid := "UPID:pve1:0:0:0:vzmigrate:101:root@pam:"
 	var gotMethod string
 	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/migrate", func(w http.ResponseWriter, r *http.Request) {
@@ -504,6 +508,7 @@ func TestRemoteMigrate_RequiresFlag(t *testing.T) {
 
 func TestRemoteMigrate_WithYes_SendsBody(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	var gotMethod string
 	var body map[string]any
 	upid := "UPID:pve1:0:0:0:vzrelocate:101:root@pam:"

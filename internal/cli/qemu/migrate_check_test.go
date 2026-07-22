@@ -14,6 +14,7 @@ import (
 
 func TestQemuMigrateCheck_Success(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 	var gotMethod, gotPath string
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
@@ -41,6 +42,7 @@ func TestQemuMigrateCheck_Success(t *testing.T) {
 
 func TestQemuMigrateCheck_WithTargetNode(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 	var gotQuery string
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
@@ -63,6 +65,7 @@ func TestQemuMigrateCheck_WithTargetNode(t *testing.T) {
 
 func TestQemuMigrateCheck_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})

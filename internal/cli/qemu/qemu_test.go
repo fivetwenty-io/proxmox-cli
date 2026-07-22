@@ -76,6 +76,15 @@ func depsFor(t *testing.T, ac *apiclient.APIClient, format output.Format, node s
 	return &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, Async: async}
 }
 
+// handleClusterResources registers a cluster/resources inventory placing one
+// qemu VM on the given node, so migration source resolution (which does not
+// trust the ambient deps.Node default as the VM's location) can find the guest.
+func handleClusterResources(f *testhelper.FakePVE, vmid int, node string) {
+	f.HandleJSON("GET /api2/json/cluster/resources", []any{
+		map[string]any{"type": "qemu", "vmid": vmid, "node": node},
+	})
+}
+
 // handleTaskStatus registers a terminal "stopped/OK" task-status response so a
 // blocking lifecycle command completes immediately.
 func handleTaskStatus(f *testhelper.FakePVE, upid string) {

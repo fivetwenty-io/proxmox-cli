@@ -46,15 +46,10 @@ func newRemoteMigrateCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
-			if err != nil {
-				return err
-			}
-
 			if !yes {
 				return fmt.Errorf(
 					"refusing to remote-migrate container %s without confirmation: pass --yes to proceed",
-					vmid,
+					args[0],
 				)
 			}
 
@@ -67,6 +62,11 @@ func newRemoteMigrateCmd() *cobra.Command {
 			}
 			if !fl.Changed("target-bridge") {
 				return fmt.Errorf("--target-bridge is required: provide a target bridge ID or mapping")
+			}
+
+			vmid, node, err := resolveGuestSource(cmd, deps, args[0])
+			if err != nil {
+				return err
 			}
 
 			if fl.Changed("async") {

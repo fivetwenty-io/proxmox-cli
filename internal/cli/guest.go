@@ -55,11 +55,33 @@ func (g guestResource) vmidString() string {
 // duplicate names across nodes. A target that matches no guest, or an unqualified
 // name that matches guests on more than one node, is an error.
 func ResolveGuest(ctx context.Context, deps *Deps, target, guestType string) (vmid, node string, err error) {
+	return resolveGuestOn(ctx, deps, target, guestType, deps.Node)
+}
+
+// ResolveGuestSource maps a <vmid|name> migration source to a numeric VMID and
+// the node the guest actually runs on. Migration must be submitted on the
+// guest's current node, and an ambient default node (PMX_NODE or the context
+// default-node) describes where commands run by default — not where an
+// arbitrary guest lives — so deps.Node is trusted as the source only when
+// nodeExplicit reports that --node was passed on the command line. Otherwise
+// the cluster inventory is consulted regardless of any default; a guest that
+// resolves to more than one node is an error asking for an explicit --node.
+func ResolveGuestSource(ctx context.Context, deps *Deps, target, guestType string, nodeExplicit bool) (vmid, node string, err error) {
+	if nodeExplicit {
+		return resolveGuestOn(ctx, deps, target, guestType, deps.Node)
+	}
+	return resolveGuestOn(ctx, deps, target, guestType, "")
+}
+
+// resolveGuestOn implements guest resolution with pinnedNode as the known/
+// filter node (see ResolveGuest for semantics; ResolveGuestSource passes ""
+// to force a cluster lookup even when a default node is configured).
+func resolveGuestOn(ctx context.Context, deps *Deps, target, guestType, pinnedNode string) (vmid, node string, err error) {
 	numeric := isNumericVMID(target)
 
 	// Fast path: numeric VMID with a node already known needs no API call.
-	if numeric && deps.Node != "" {
-		return target, deps.Node, nil
+	if numeric && pinnedNode != "" {
+		return target, pinnedNode, nil
 	}
 
 	typeVM := "vm"
@@ -78,7 +100,7 @@ func ResolveGuest(ctx context.Context, deps *Deps, target, guestType string) (vm
 			if g.Type != guestType {
 				continue
 			}
-			if deps.Node != "" && g.Node != deps.Node {
+			if pinnedNode != "" && g.Node != pinnedNode {
 				continue
 			}
 			if numeric {
@@ -101,9 +123,13 @@ func ResolveGuest(ctx context.Context, deps *Deps, target, guestType string) (vm
 		for _, m := range matches {
 			nodes = append(nodes, m.Node)
 		}
+		hint := "pass --node or the VMID to disambiguate"
+		if numeric {
+			hint = "pass --node to disambiguate"
+		}
 		return "", "", fmt.Errorf(
-			"%s guest %q is ambiguous: found on nodes %s; pass --node or the VMID to disambiguate",
-			guestType, target, strings.Join(nodes, ", "))
+			"%s guest %q is ambiguous: found on nodes %s; %s",
+			guestType, target, strings.Join(nodes, ", "), hint)
 	}
 }
 

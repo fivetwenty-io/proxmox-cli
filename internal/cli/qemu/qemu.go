@@ -92,6 +92,15 @@ func resolveGuest(ctx context.Context, deps *cli.Deps, target string) (vmid, nod
 	return cli.ResolveGuest(ctx, deps, target, cli.GuestQemu)
 }
 
+// resolveGuestSource maps a migration source <vmid|name> to its VMID and the
+// node the VM actually runs on. Unlike resolveGuest, an ambient default node
+// (PMX_NODE or the context default-node) is not trusted as the VM's location;
+// the cluster inventory is consulted unless --node was passed explicitly.
+// See cli.ResolveGuestSource for the full semantics.
+func resolveGuestSource(cmd *cobra.Command, deps *cli.Deps, target string) (vmid, node string, err error) {
+	return cli.ResolveGuestSource(cmd.Context(), deps, target, cli.GuestQemu, cmd.Flags().Changed("node"))
+}
+
 // finishAsync renders the outcome of an asynchronous task. When deps.Async is
 // set it prints the UPID immediately; otherwise it blocks until the task
 // completes and prints msg. The raw response carries the UPID JSON string.

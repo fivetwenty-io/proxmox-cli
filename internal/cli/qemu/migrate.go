@@ -28,7 +28,7 @@ func newMigrateCheckCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			vmid, node, err := resolveGuestSource(cmd, deps, args[0])
 			if err != nil {
 				return err
 			}
@@ -87,7 +87,9 @@ func newMigrateCmd() *cobra.Command {
 		Use:   "migrate <vmid|name>",
 		Short: "Migrate a QEMU virtual machine to another node",
 		Long: "Migrate a QEMU VM to a different cluster node. " +
-			"--target-node is required. For running VMs pass --online to perform a " +
+			"--target-node is required. The source node is detected automatically " +
+			"from the cluster (an explicit --node pins it instead). " +
+			"For running VMs pass --online to perform a " +
 			"live migration; without it PVE will refuse to migrate a running VM " +
 			"unless --force is also set. " +
 			"The command blocks until the migration task completes unless --async is set.",
@@ -96,12 +98,12 @@ func newMigrateCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
-			if err != nil {
-				return err
-			}
 			if !cmd.Flags().Changed("target-node") {
 				return fmt.Errorf("--target-node is required: provide the destination node name")
+			}
+			vmid, node, err := resolveGuestSource(cmd, deps, args[0])
+			if err != nil {
+				return err
 			}
 			if cmd.Flags().Changed("async") {
 				deps.Async = async

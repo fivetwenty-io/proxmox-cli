@@ -105,6 +105,7 @@ func TestQemuClone_ServerError(t *testing.T) {
 
 func TestQemuMigrate_Blocking(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 
 	var gotMethod, gotPath string
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +126,7 @@ func TestQemuMigrate_Blocking(t *testing.T) {
 
 func TestQemuMigrate_FlagParams(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 
 	var gotQuery, body string
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/migrate", func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +145,27 @@ func TestQemuMigrate_FlagParams(t *testing.T) {
 	require.Equal(t, "pve2", form.Get("target"))
 	require.Equal(t, "1", form.Get("online"))
 	require.Equal(t, "1", form.Get("with-local-disks"))
+}
+
+// TestQemuMigrate_ResolvesSourceNodeFromCluster verifies the migration is
+// submitted on the node the VM actually runs on, not the ambient default node
+// (context default-node / PMX_NODE): deps.Node says pve1 but the cluster
+// inventory places VM 100 on pve3, so the POST must go to pve3.
+func TestQemuMigrate_ResolvesSourceNodeFromCluster(t *testing.T) {
+	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve3")
+
+	var gotPath string
+	f.HandleFunc("POST /api2/json/nodes/pve3/qemu/100/migrate", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, validUPID)
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2"))
+	require.Equal(t, "/api2/json/nodes/pve3/qemu/100/migrate", gotPath)
 }
 
 // TestQemuCloneMigrate_NoLocalTargetFlag guards against a regression where

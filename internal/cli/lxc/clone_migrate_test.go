@@ -120,6 +120,7 @@ func TestClone_ServerError(t *testing.T) {
 
 func TestMigrate_BlockByDefault(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	upid := "UPID:pve1:0:0:0:vzmigrate:101:root@pam:"
 	var gotMethod, gotPath string
 	var body map[string]any
@@ -167,6 +168,7 @@ func TestMigrate_RequiresTarget(t *testing.T) {
 
 func TestMigrate_FlagParams(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	upid := "UPID:pve1:0:0:0:vzmigrate:101:root@pam:"
 	var body map[string]any
 	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/migrate", func(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +192,7 @@ func TestMigrate_FlagParams(t *testing.T) {
 
 func TestMigrate_ServerError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve1")
 	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/migrate",
 		func(w http.ResponseWriter, _ *http.Request) {
 			testhelper.WriteError(w, http.StatusForbidden, "denied")

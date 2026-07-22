@@ -84,6 +84,7 @@ func TestQemuRemoteMigrate_RequiredFlags(t *testing.T) {
 
 func TestQemuRemoteMigrate_SuccessAsync(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 	var gotMethod, gotPath, body string
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/remote_migrate", func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
@@ -110,6 +111,7 @@ func TestQemuRemoteMigrate_SuccessAsync(t *testing.T) {
 
 func TestQemuRemoteMigrate_OptionalFlagsOmitted(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 	var body string
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/remote_migrate", func(w http.ResponseWriter, r *http.Request) {
 		body = readBody(t, r)
@@ -130,6 +132,7 @@ func TestQemuRemoteMigrate_OptionalFlagsOmitted(t *testing.T) {
 
 func TestQemuRemoteMigrate_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
 	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/remote_migrate", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteError(w, http.StatusForbidden, "denied")
 	})

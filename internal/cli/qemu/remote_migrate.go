@@ -41,15 +41,15 @@ func newRemoteMigrateCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
-			if err != nil {
-				return err
-			}
 			if !yes {
 				return fmt.Errorf(
 					"refusing to remote-migrate VM %s without confirmation: pass --yes/-y",
-					vmid,
+					args[0],
 				)
+			}
+			vmid, node, err := resolveGuestSource(cmd, deps, args[0])
+			if err != nil {
+				return err
 			}
 			if cmd.Flags().Changed("async") {
 				deps.Async = async

@@ -77,3 +77,12 @@ func resolveNode(deps *cli.Deps) (string, error) {
 func resolveGuest(ctx context.Context, deps *cli.Deps, target string) (vmid, node string, err error) {
 	return cli.ResolveGuest(ctx, deps, target, cli.GuestLXC)
 }
+
+// resolveGuestSource maps a migration source <vmid|name> to its VMID and the
+// node the container actually runs on. Unlike resolveGuest, an ambient default
+// node (PMX_NODE or the context default-node) is not trusted as the container's
+// location; the cluster inventory is consulted unless --node was passed
+// explicitly. See cli.ResolveGuestSource for the full semantics.
+func resolveGuestSource(cmd *cobra.Command, deps *cli.Deps, target string) (vmid, node string, err error) {
+	return cli.ResolveGuestSource(cmd.Context(), deps, target, cli.GuestLXC, cmd.Flags().Changed("node"))
+}

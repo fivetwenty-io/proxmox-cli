@@ -59,6 +59,16 @@ func fakeOptions(t *testing.T, f *testhelper.FakePVE) pve.Options {
 	return opts
 }
 
+// handleClusterResources registers a cluster/resources inventory placing one
+// lxc container on the given node, so migration source resolution (which does
+// not trust the ambient deps.Node default as the container's location) can
+// find the guest.
+func handleClusterResources(f *testhelper.FakePVE, vmid int, node string) {
+	f.HandleJSON("GET /api2/json/cluster/resources", []any{
+		map[string]any{"type": "lxc", "vmid": vmid, "node": node},
+	})
+}
+
 // recordBody reads a form-encoded request body and returns its values as a map.
 // The PVE client submits POST/PUT bodies as application/x-www-form-urlencoded;
 // each first value is decoded into a typed any (numbers and booleans coerced).
