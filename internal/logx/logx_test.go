@@ -365,6 +365,11 @@ func TestLevelVar(t *testing.T) {
 		{name: "level trace string", cfg: logx.Config{Level: "trace"}, level: slog.LevelDebug},
 		{name: "level verbose string", cfg: logx.Config{Level: "verbose"}, level: slog.LevelDebug},
 		{name: "level info string", cfg: logx.Config{Level: "info"}, level: slog.LevelInfo},
+		{name: "level warn string", cfg: logx.Config{Level: "warn"}, level: slog.LevelWarn},
+		{name: "level warning string", cfg: logx.Config{Level: "warning"}, level: slog.LevelWarn},
+		{name: "level error string", cfg: logx.Config{Level: "error"}, level: slog.LevelError},
+		{name: "level err string", cfg: logx.Config{Level: "err"}, level: slog.LevelError},
+		{name: "level unknown string", cfg: logx.Config{Level: "bogus"}, level: slog.LevelInfo},
 	}
 
 	for _, tc := range tests {
@@ -374,6 +379,135 @@ func TestLevelVar(t *testing.T) {
 			v := logx.LevelVar(tc.cfg)
 			require.NotNil(t, v)
 			require.Equal(t, tc.level, v.Level())
+		})
+	}
+}
+
+// TestInit_NestedLayout verifies the default nested layout: with CommandPath
+// set the file lands under per-segment subdirectories and the filename is
+// just the timestamp.
+func TestInit_NestedLayout(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	before := time.Now().Truncate(time.Second)
+	_, closer, err := logx.Init(logx.Config{
+		LogDir:      dir,
+		CommandPath: []string{"pve", "storage", "volume", "copy"},
+		Command:     "pve",
+		Subcommand:  "storage-volume-copy",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
+
+	nested := filepath.Join(dir, "pve", "storage", "volume", "copy")
+	entries, err := os.ReadDir(nested)
+	require.NoError(t, err, "nested log directory must exist")
+	require.Len(t, entries, 1)
+
+	name := entries[0].Name()
+	require.True(t, strings.HasSuffix(name, ".jsonl"),
+		"filename %q must end with .jsonl", name)
+
+	ts := strings.TrimSuffix(name, ".jsonl")
+	parsed, err := time.ParseInLocation("20060102-150405", ts, time.Local)
+	require.NoError(t, err, "nested filename %q must be a bare timestamp", name)
+	require.False(t, parsed.Before(before))
+
+	// Intermediate directories are created with mode 0700.
+	info, err := os.Stat(filepath.Join(dir, "pve"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+}
+
+// TestInit_FlatLayoutOverride verifies that Flat=true keeps the flat filename
+// layout even when CommandPath is set.
+func TestInit_FlatLayoutOverride(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	_, closer, err := logx.Init(logx.Config{
+		LogDir:      dir,
+		Flat:        true,
+		CommandPath: []string{"pve", "storage", "volume", "copy"},
+		Command:     "pve",
+		Subcommand:  "storage-volume-copy",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.False(t, entries[0].IsDir(), "flat layout must not create subdirectories")
+	require.True(t, strings.HasPrefix(entries[0].Name(), "pve-storage-volume-copy-"),
+		"flat filename must encode the command path, got %q", entries[0].Name())
+}
+
+// TestInit_NestedSkipsUnsafeSegments verifies that empty or path-unsafe
+// CommandPath segments are dropped from the nested directory path.
+func TestInit_NestedSkipsUnsafeSegments(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	_, closer, err := logx.Init(logx.Config{
+		LogDir:      dir,
+		CommandPath: []string{"", "..", "pve", "a/b", "status"},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
+
+	entries, err := os.ReadDir(filepath.Join(dir, "pve", "status"))
+	require.NoError(t, err, "only safe segments must form the nested path")
+	require.Len(t, entries, 1)
+}
+
+// TestInit_WarnLevelSuppressesInfo verifies that Level="warn" drops info
+// records but keeps warnings, and Level="error" keeps only errors.
+func TestInit_WarnLevelSuppressesInfo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		level       string
+		wantPresent string
+		wantAbsent  []string
+	}{
+		{level: "warn", wantPresent: "warn record", wantAbsent: []string{"info record", "debug record"}},
+		{level: "error", wantPresent: "error record", wantAbsent: []string{"info record", "warn record"}},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.level, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+
+			logger, closer, err := logx.Init(logx.Config{
+				LogDir:  dir,
+				Command: "level-filter",
+				Level:   tc.level,
+			})
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = closer.Close() })
+
+			logger.Debug("debug record")
+			logger.Info("info record")
+			logger.Warn("warn record")
+			logger.Error("error record")
+
+			entries, err := os.ReadDir(dir)
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+
+			data, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+			require.NoError(t, err)
+			content := string(data)
+
+			require.Contains(t, content, tc.wantPresent)
+			for _, absent := range tc.wantAbsent {
+				require.NotContains(t, content, absent,
+					"%q must be suppressed at level %q", absent, tc.level)
+			}
 		})
 	}
 }

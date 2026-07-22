@@ -1272,3 +1272,42 @@ func TestLabConfig_EmptyConfig_StillLoads(t *testing.T) {
 	require.Nil(t, loaded.Include)
 	require.Nil(t, loaded.Labs)
 }
+
+// TestEffectiveLogLayout verifies the log.layout default and override.
+func TestEffectiveLogLayout(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, config.LogLayoutNested, config.EffectiveLogLayout(nil))
+	require.Equal(t, config.LogLayoutNested, config.EffectiveLogLayout(&config.Config{}))
+	require.Equal(t, config.LogLayoutNested,
+		config.EffectiveLogLayout(&config.Config{Log: config.ConfigLog{Layout: "bogus"}}),
+		"unrecognised layout must fall back to nested")
+	require.Equal(t, config.LogLayoutFlat,
+		config.EffectiveLogLayout(&config.Config{Log: config.ConfigLog{Layout: config.LogLayoutFlat}}))
+}
+
+// TestEffectiveLogLevel verifies the log.level default and override.
+func TestEffectiveLogLevel(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, config.DefaultLogLevel, config.EffectiveLogLevel(nil))
+	require.Equal(t, config.DefaultLogLevel, config.EffectiveLogLevel(&config.Config{}))
+	require.Equal(t, "warn",
+		config.EffectiveLogLevel(&config.Config{Log: config.ConfigLog{Level: "warn"}}))
+}
+
+// TestLogBlock_RoundTrip verifies the log block survives Save/Load and that
+// an absent block loads as zero values.
+func TestLogBlock_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := sampleConfig()
+	cfg.Log = config.ConfigLog{Layout: config.LogLayoutFlat, Level: "debug"}
+	require.NoError(t, config.Save(path, cfg))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, config.LogLayoutFlat, loaded.Log.Layout)
+	require.Equal(t, "debug", loaded.Log.Level)
+}

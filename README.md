@@ -512,10 +512,15 @@ pmx pve qemu list -o ascii         # ASCII-only table borders
 ```
 
 Diagnostic logs are written as JSON Lines to
-`~/.pmx/logs/{command}[-{subcommand}]-{timestamp}.jsonl`. Authorization, cookie,
-and CSRF headers and `password`/`token`/`secret` parameters are redacted.
-Suppress log files with `--no-log`; raise verbosity with `--verbose`, `--debug`,
-or `--trace`.
+`~/.pmx/logs/{command}/{subcommand…}/{timestamp}.jsonl` (for example
+`~/.pmx/logs/pve/storage/volume/copy/20260714-132051.jsonl`). Set
+`log.layout: flat` in the config file (or `PMX_LOG_LAYOUT=flat`) for the
+single-directory `{command}[-{subcommand}]-{timestamp}.jsonl` layout instead.
+Authorization, cookie, and CSRF headers and `password`/`token`/`secret`
+parameters are redacted. The minimum recorded level defaults to `info`;
+set `log.level` (`trace`, `debug`, `info`, `warn`, `error`) or
+`PMX_LOG_LEVEL` to change it. Suppress log files with `--no-log`; raise
+verbosity with `--verbose`, `--debug`, or `--trace`.
 
 `pmx --version` (or `-v`) prints the CLI's own build information — release tag,
 short commit, build date, Go toolchain, and OS/arch — without contacting any

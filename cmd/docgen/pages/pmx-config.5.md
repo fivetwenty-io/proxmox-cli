@@ -106,6 +106,24 @@ schema of a lab block.
   CONFIGURATION** for how this map combines with **labs_dir** and
   **include**.
 
+**log**
+: A mapping of JSONL command-log preferences with two optional keys.
+  **log.layout** selects where log files are written under **~/.pmx/logs**:
+  **nested** (the default) writes each command's log into a per-command
+  directory tree named after the full command path with a bare timestamp
+  filename (for example
+  **~/.pmx/logs/pve/storage/volume/copy/20260714-132051.jsonl**), while
+  **flat** writes every log directly into **~/.pmx/logs** with the command
+  path encoded in the filename (for example
+  **~/.pmx/logs/pve-storage-volume-copy-20260714-132051.jsonl**). The
+  **PMX_LOG_LAYOUT** environment variable overrides this key; any value
+  other than **flat** means **nested**. **log.level** sets the minimum
+  record level written to the log: one of **trace**, **debug**, **info**
+  (the default), **warn**, or **error**. The **PMX_LOG_LEVEL** environment
+  variable overrides this key, and the **--debug**, **--verbose**, and
+  **--trace** flags force debug-level logging regardless of it.
+  **--no-log** suppresses log files entirely.
+
 # CONTEXT KEYS
 
 Each entry under **contexts** is a mapping with the following keys.

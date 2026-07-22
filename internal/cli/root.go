@@ -365,14 +365,35 @@ func persistentPreRunE(cmd *cobra.Command, _ []string, pf *persistentFlags) (io.
 	// Derive command + subcommand labels for the logger from the cobra chain.
 	cmdName, subName := commandLabels(cmd)
 
+	// Full command path below the root (e.g. ["pve","storage","volume","copy"])
+	// drives the nested log directory layout.
+	var cmdPath []string
+	if chain := commandChain(cmd); len(chain) > 1 {
+		cmdPath = chain[1:]
+	}
+
+	// Log level: --trace flag > $PMX_LOG_LEVEL > config log.level > "info".
+	// (--debug/--verbose force debug inside logx regardless of this string.)
+	var flagLevel string
+	if pf.trace {
+		flagLevel = "trace"
+	}
+	logLevel := config.Resolve(flagLevel, "PMX_LOG_LEVEL", cfg.Log.Level, config.DefaultLogLevel)
+
+	// Log layout: $PMX_LOG_LAYOUT > config log.layout > nested default.
+	logLayout := config.Resolve("", "PMX_LOG_LAYOUT", cfg.Log.Layout, config.LogLayoutNested)
+
 	// Initialise slog JSONL logger.
 	logger, logCloser, err := logx.Init(logx.Config{
-		Debug:      pf.debug,
-		Verbose:    pf.verbose,
-		NoLog:      pf.noLog,
-		Command:    cmdName,
-		Subcommand: subName,
-		Node:       pf.node,
+		Level:       logLevel,
+		Debug:       pf.debug,
+		Verbose:     pf.verbose,
+		NoLog:       pf.noLog,
+		Flat:        logLayout == config.LogLayoutFlat,
+		CommandPath: cmdPath,
+		Command:     cmdName,
+		Subcommand:  subName,
+		Node:        pf.node,
 	})
 	if err != nil {
 		// Non-fatal: fall back to a discard logger so the command can still run.

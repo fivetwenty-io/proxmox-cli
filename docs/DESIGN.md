@@ -171,10 +171,14 @@ the result to stdout. JSON and YAML preserve native API types.
 
 ## Audit logging
 
-All commands write a JSONL log to `~/.pmx/logs/`. Authorization, cookie, CSRF,
-`password`, `token`, and `secret` fields are redacted before writing. Pass
-`--no-log` to suppress the log file; `--verbose`, `--debug`, or `--trace` raise
-the slog level.
+All commands write a JSONL log under `~/.pmx/logs/`, nested by command path
+(`pve/storage/volume/copy/{timestamp}.jsonl`) by default; `log.layout: flat`
+in config.yml (or `PMX_LOG_LAYOUT=flat`) restores the flat
+`{command}[-{subcommand}]-{timestamp}.jsonl` layout. Authorization, cookie,
+CSRF, `password`, `token`, and `secret` fields are redacted before writing.
+The minimum level defaults to `info` and is set with `log.level` or
+`PMX_LOG_LEVEL`. Pass `--no-log` to suppress the log file; `--verbose`,
+`--debug`, or `--trace` raise the slog level to debug.
 
 ## Asynchronous tasks
 

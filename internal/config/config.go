@@ -56,6 +56,56 @@ type Config struct {
 	// quota), read by `pmx lab create`'s capacity gate alongside per-lab
 	// refquotas.
 	Storage ConfigStorage `yaml:"storage,omitempty" json:"storage,omitempty"`
+
+	// Log holds JSONL command-log preferences (layout and level).
+	Log ConfigLog `yaml:"log,omitempty" json:"log,omitempty"`
+}
+
+// Log layout values for ConfigLog.Layout.
+const (
+	// LogLayoutNested writes each command's log under per-command
+	// subdirectories: ~/.pmx/logs/pve/storage/volume/copy/{ts}.jsonl.
+	LogLayoutNested = "nested"
+
+	// LogLayoutFlat writes all logs directly under ~/.pmx/logs with the
+	// command path encoded in the filename:
+	// pve-storage-volume-copy-{ts}.jsonl.
+	LogLayoutFlat = "flat"
+)
+
+// DefaultLogLevel is the log level used when log.level is unset.
+const DefaultLogLevel = "info"
+
+// ConfigLog holds logging preferences for the JSONL command logs written
+// under ~/.pmx/logs.
+type ConfigLog struct {
+	// Layout selects the log file layout: "nested" (default) or "flat".
+	// Overridable via $PMX_LOG_LAYOUT.
+	Layout string `yaml:"layout,omitempty" json:"layout,omitempty"`
+
+	// Level is the minimum level recorded: "trace", "debug", "info"
+	// (default), "warn", or "error". Overridable via $PMX_LOG_LEVEL; the
+	// --debug/--verbose/--trace flags force debug regardless.
+	Level string `yaml:"level,omitempty" json:"level,omitempty"`
+}
+
+// EffectiveLogLayout returns the configured log layout, defaulting to
+// LogLayoutNested when unset or unrecognised. A nil cfg also returns the
+// default, so callers need not nil-check cfg first.
+func EffectiveLogLayout(cfg *Config) string {
+	if cfg != nil && cfg.Log.Layout == LogLayoutFlat {
+		return LogLayoutFlat
+	}
+	return LogLayoutNested
+}
+
+// EffectiveLogLevel returns the configured log level, defaulting to
+// DefaultLogLevel when unset. A nil cfg also returns the default.
+func EffectiveLogLevel(cfg *Config) string {
+	if cfg != nil && cfg.Log.Level != "" {
+		return cfg.Log.Level
+	}
+	return DefaultLogLevel
 }
 
 // DefaultNFSReservedGB is the fallback ZFS quota (in GB) EffectiveNFSReservedGB

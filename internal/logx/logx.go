@@ -7,14 +7,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 // Config mirrors the OCFP logger config adapted for pmx (R3).
 // All fields are optional; zero values produce sensible defaults.
 type Config struct {
-	// Level is the log level string: "trace", "verbose", "debug", "info", "warn", "error".
-	// "trace", "verbose", and "debug" all map to slog.LevelDebug.
+	// Level is the log level string: "trace", "verbose", "debug", "info",
+	// "warn"/"warning", "error"/"err". "trace", "verbose", and "debug" all map
+	// to slog.LevelDebug; empty or unrecognised values map to slog.LevelInfo.
 	Level string
 
 	// Debug enables DEBUG-level logging regardless of Level.
@@ -29,6 +31,19 @@ type Config struct {
 	// LogDir overrides the default log directory (~/.pmx/logs).
 	// Ignored when NoLog is true.
 	LogDir string
+
+	// CommandPath is the full cobra command chain below the root (e.g.
+	// ["pve", "storage", "volume", "copy"]). When non-empty and Flat is
+	// false, the log file is written to the nested directory
+	// {LogDir}/pve/storage/volume/copy/{YYYYMMDD-HHMMSS}.jsonl. When empty,
+	// the flat filename layout is used regardless of Flat.
+	CommandPath []string
+
+	// Flat forces the flat single-directory filename layout
+	// ({Command}[-{Subcommand}]-{YYYYMMDD-HHMMSS}.jsonl directly under
+	// LogDir) even when CommandPath is set. The default (false) nests log
+	// files under per-command subdirectories.
+	Flat bool
 
 	// Command is the top-level cobra command name (e.g. "qemu").
 	Command string
@@ -58,16 +73,21 @@ func (nopCloser) Close() error { return nil }
 // caller must call Close() (typically via defer) to flush buffered data and
 // release the file descriptor.  The closer is always non-nil on a nil error.
 //
-// The log file is named:
+// The log file location depends on the layout:
 //
-//	{Command}[-{Subcommand}]-{YYYYMMDD-HHMMSS}.jsonl
+//   - nested (default, requires CommandPath):
+//     {LogDir}/{CommandPath[0]}/…/{CommandPath[n]}/{YYYYMMDD-HHMMSS}.jsonl
+//   - flat (cfg.Flat true, or CommandPath empty):
+//     {LogDir}/{Command}[-{Subcommand}]-{YYYYMMDD-HHMMSS}.jsonl
 //
-// The directory is created with mode 0700; the file is opened with mode 0600.
+// Directories are created with mode 0700; the file is opened with mode 0600.
 // Base attributes command, node, and vmid (non-empty values only) are
 // attached to every log record via logger.With.
 //
 // Level precedence: cfg.Debug || cfg.Verbose || cfg.Level in
-// {"trace","verbose","debug"} → slog.LevelDebug; anything else → slog.LevelInfo.
+// {"trace","verbose","debug"} → slog.LevelDebug; "warn"/"warning" →
+// slog.LevelWarn; "error"/"err" → slog.LevelError; anything else →
+// slog.LevelInfo.
 func Init(cfg Config) (*slog.Logger, io.Closer, error) {
 	level := levelFromCfg(cfg)
 
@@ -81,12 +101,13 @@ func Init(cfg Config) (*slog.Logger, io.Closer, error) {
 		return nil, nil, fmt.Errorf("logx: resolve log dir: %w", err)
 	}
 
-	if err := os.MkdirAll(logDir, 0o700); err != nil {
-		return nil, nil, fmt.Errorf("logx: mkdir %s: %w", logDir, err)
+	dir, filename := buildLogPath(cfg, logDir, time.Now())
+
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, nil, fmt.Errorf("logx: mkdir %s: %w", dir, err)
 	}
 
-	filename := buildFilename(cfg.Command, cfg.Subcommand, time.Now())
-	path := filepath.Join(logDir, filename)
+	path := filepath.Join(dir, filename)
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // G304: path is logDir+timestamped-filename under ~/.pmx/logs, not untrusted input
 	if err != nil {
@@ -106,7 +127,9 @@ func LevelVar(cfg Config) *slog.LevelVar {
 }
 
 // levelFromCfg maps the Config fields to a slog.Level.
-// Debug/Verbose flags and the "trace"/"verbose"/"debug" strings all select LevelDebug.
+// Debug/Verbose flags and the "trace"/"verbose"/"debug" strings all select
+// LevelDebug; "warn"/"warning" select LevelWarn; "error"/"err" select
+// LevelError; empty or unrecognised strings fall back to LevelInfo.
 func levelFromCfg(cfg Config) slog.Level {
 	if cfg.Debug || cfg.Verbose {
 		return slog.LevelDebug
@@ -114,6 +137,10 @@ func levelFromCfg(cfg Config) slog.Level {
 	switch cfg.Level {
 	case "trace", "verbose", "debug":
 		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error", "err":
+		return slog.LevelError
 	default:
 		return slog.LevelInfo
 	}
@@ -130,6 +157,29 @@ func resolveLogDir(override string) (string, error) {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
 	return filepath.Join(home, ".pmx", "logs"), nil
+}
+
+// buildLogPath returns the directory and filename for the log file.
+//
+// Nested layout (default when CommandPath is non-empty and Flat is false):
+// the directory is logDir joined with each CommandPath segment and the
+// filename is just the timestamp. Path-unsafe or empty segments are skipped
+// defensively; if none survive, the flat layout is used instead.
+func buildLogPath(cfg Config, logDir string, ts time.Time) (dir, filename string) {
+	if !cfg.Flat {
+		var segments []string
+		for _, s := range cfg.CommandPath {
+			if s == "" || s == "." || s == ".." || strings.ContainsAny(s, `/\`) {
+				continue
+			}
+			segments = append(segments, s)
+		}
+		if len(segments) > 0 {
+			return filepath.Join(append([]string{logDir}, segments...)...),
+				ts.Format("20060102-150405") + ".jsonl"
+		}
+	}
+	return logDir, buildFilename(cfg.Command, cfg.Subcommand, ts)
 }
 
 // buildFilename returns the log filename for the given command, optional

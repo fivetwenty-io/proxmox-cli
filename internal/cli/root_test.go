@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1310,26 +1311,82 @@ func TestLogCloser_RunERecordsSurvive_F01(t *testing.T) {
 	// *os.File returns error; the nolint:errcheck suppresses it in production code).
 	// The defer above is still safe: noopLogCloser.Close() is idempotent.
 
+	// Default layout is nested: the probe command's log lands under
+	// ~/.pmx/logs/probe/{ts}.jsonl, so walk the tree rather than reading a
+	// single flat directory.
 	logDir := filepath.Join(tmpDir, ".pmx", "logs")
-	entries, err := os.ReadDir(logDir)
-	require.NoError(t, err, "log directory must exist after Execute")
-	require.NotEmpty(t, entries, "at least one log file must be created")
-
 	var found bool
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	walkErr := filepath.WalkDir(logDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || found {
+			return err
 		}
-		data, readErr := os.ReadFile(filepath.Join(logDir, e.Name()))
-		require.NoError(t, readErr)
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
 		if bytes.Contains(data, []byte(sentinel)) {
 			found = true
-			break
 		}
-	}
+		return nil
+	})
+	require.NoError(t, walkErr, "log directory must exist after Execute")
 	require.True(t, found,
 		"sentinel log record emitted during RunE must be present in the JSONL log file after Execute returns; "+
 			"if missing, the log closer fired before RunE (F-01 regression)")
+}
+
+// TestLogLayout_NestedDefaultAndFlatOverride verifies the log destination
+// layout wiring: nested per-command directories by default, flat filenames
+// when PMX_LOG_LAYOUT=flat.
+func TestLogLayout_NestedDefaultAndFlatOverride(t *testing.T) {
+	run := func(t *testing.T, layoutEnv string) string {
+		t.Helper()
+		tmpDir := t.TempDir()
+		t.Setenv("HOME", tmpDir)
+		t.Setenv("PMX_OUTPUT", "table")
+		t.Setenv("PMX_NODE", "")
+		t.Setenv("PMX_CONTEXT", "")
+		t.Setenv("PMX_LOG_LAYOUT", layoutEnv)
+
+		root, cleanup := cli.NewRootCmd("pmx")
+		defer cleanup()
+		root.SetContext(context.Background())
+
+		probe := &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE:        func(*cobra.Command, []string) error { return nil },
+		}
+		root.AddCommand(probe)
+
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetErr(&buf)
+		root.SetArgs([]string{"--config", filepath.Join(tmpDir, "config.yml"), "probe"})
+		require.NoError(t, root.Execute())
+
+		return filepath.Join(tmpDir, ".pmx", "logs")
+	}
+
+	t.Run("nested default", func(t *testing.T) {
+		logDir := run(t, "")
+		entries, err := os.ReadDir(filepath.Join(logDir, "probe"))
+		require.NoError(t, err, "nested layout must create a per-command subdirectory")
+		require.NotEmpty(t, entries)
+		require.Regexp(t, `^\d{8}-\d{6}\.jsonl$`, entries[0].Name(),
+			"nested filenames must be bare timestamps")
+	})
+
+	t.Run("flat via PMX_LOG_LAYOUT", func(t *testing.T) {
+		logDir := run(t, "flat")
+		entries, err := os.ReadDir(logDir)
+		require.NoError(t, err)
+		require.NotEmpty(t, entries)
+		for _, e := range entries {
+			require.False(t, e.IsDir(), "flat layout must not create subdirectories")
+		}
+		require.Regexp(t, `^probe-\d{8}-\d{6}\.jsonl$`, entries[0].Name())
+	})
 }
 
 // ---------------------------------------------------------------------------
