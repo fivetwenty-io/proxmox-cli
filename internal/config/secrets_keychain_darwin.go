@@ -85,13 +85,43 @@ func keychainFieldSafe(s string) bool {
 	return true
 }
 
+// maxKeychainDuplicates bounds purgeKeychainItems' delete loop. Real
+// accumulations are a handful of items (one per orphaning event); the cap only
+// guards against security(1) reporting success without deleting, which would
+// otherwise loop forever.
+const maxKeychainDuplicates = 32
+
+// purgeKeychainItems deletes every generic-password item matching (service,
+// account) from the login keychain and returns nil once none remain.
+// delete-generic-password removes only the first match per invocation, and
+// duplicates for one (service, account) do accumulate: an add cannot update an
+// existing item whose ACL is bound to a signing identity the current binary no
+// longer has (each ad-hoc-signed local rebuild mints a new one), so -U falls
+// back to inserting a second item. Deleting needs no ACL access to the secret,
+// so this loop clears orphaned items the current build cannot read.
+func purgeKeychainItems(service, account string) error {
+	for range maxKeychainDuplicates {
+		stderr, err := keychainRun("", "delete-generic-password", "-s", service, "-a", account)
+		if err != nil {
+			if strings.Contains(strings.ToLower(stderr), "could not be found") {
+				return nil
+			}
+			return fmt.Errorf("keychain delete for service %q account %q failed: %s: %w",
+				service, account, strings.TrimSpace(stderr), err)
+		}
+	}
+	return fmt.Errorf("keychain delete for service %q account %q: items still present after %d deletions",
+		service, account, maxKeychainDuplicates)
+}
+
 // StoreKeychainSecret stores secret in the macOS login keychain under the
-// generic-password item (service, account), creating it or updating it in
-// place (-U). The security(1) "add-generic-password" line — including the
-// -w <secret> argument — is fed to `security -i` on stdin, so the secret
-// never appears on any process's argv (which is world-readable via `ps`).
-// Lab token secrets are UUID-form (no whitespace), so the interactive line
-// parses unambiguously.
+// generic-password item (service, account). It first purges every existing
+// item for that (service, account) — including ACL-orphaned ones -U could not
+// update — so exactly one item exists afterwards, then adds the fresh value.
+// The security(1) "add-generic-password" line — including the -w <secret>
+// argument — is fed to `security -i` on stdin, so the secret never appears on
+// any process's argv (which is world-readable via `ps`). Lab token secrets are
+// UUID-form (no whitespace), so the interactive line parses unambiguously.
 func StoreKeychainSecret(service, account, secret string) error {
 	if !keychainFieldSafe(service) || !keychainFieldSafe(account) {
 		return fmt.Errorf("keychain store requires non-empty, whitespace-free service and account")
@@ -100,6 +130,10 @@ func StoreKeychainSecret(service, account, secret string) error {
 		// Never echo the secret; report only the shape violation.
 		return fmt.Errorf("keychain store: secret must be non-empty and free of whitespace and control characters")
 	}
+	if err := purgeKeychainItems(service, account); err != nil {
+		return fmt.Errorf("keychain store: clear existing items: %w", err)
+	}
+	// -U stays as a guard against a concurrent add between the purge and here.
 	line := fmt.Sprintf("add-generic-password -U -s %s -a %s -w %s\n", service, account, secret)
 	if stderr, err := keychainRun(line, "-i"); err != nil {
 		return fmt.Errorf("keychain store for service %q account %q failed: %s: %w",
@@ -108,18 +142,11 @@ func StoreKeychainSecret(service, account, secret string) error {
 	return nil
 }
 
-// DeleteKeychainSecret removes the generic-password item (service, account)
-// from the macOS login keychain. A "not found" result (the item was never
-// created, or was already removed) is treated as success, so cleanup is
+// DeleteKeychainSecret removes all generic-password items (service, account)
+// from the macOS login keychain, including duplicates left behind by adds that
+// could not see an ACL-orphaned original. A "not found" result (the item was
+// never created, or was already removed) is treated as success, so cleanup is
 // idempotent.
 func DeleteKeychainSecret(service, account string) error {
-	stderr, err := keychainRun("", "delete-generic-password", "-s", service, "-a", account)
-	if err != nil {
-		if strings.Contains(strings.ToLower(stderr), "could not be found") {
-			return nil
-		}
-		return fmt.Errorf("keychain delete for service %q account %q failed: %s: %w",
-			service, account, strings.TrimSpace(stderr), err)
-	}
-	return nil
+	return purgeKeychainItems(service, account)
 }

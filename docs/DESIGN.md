@@ -139,6 +139,16 @@ release). Exit status is 0 when all validated contexts pass, 1 when any fail.
 Password login persists a live session (ticket + CSRF + expiry) back into the
 context entry; `pmx auth logout` invalidates and removes it.
 
+Known limitation for local development builds on macOS: keychain item ACLs bind
+to the binary's signing identity, and an ad-hoc-signed local build gets a new
+identity on every rebuild, so items stored by the previous build surface as
+"item could not be found" to the next one. Installed, consistently-signed
+binaries (the released Homebrew/pkg builds are Developer ID-signed) are
+unaffected. Recovery is `pmx lab context sync <name>`, which rotates the token
+and rewrites the keychain item; the store path purges every existing item for
+the (service, account) pair before adding, so repeated recoveries never
+accumulate duplicate entries.
+
 ## Dependency wiring
 
 `internal/cli/root.go` registers a `PersistentPreRunE` hook that:
