@@ -2,6 +2,7 @@ package lab
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,6 +81,258 @@ func TestLabNetworkPlanIssues_ContainmentViolations(t *testing.T) {
 			assert.Contains(t, issues[0], tc.wantSub)
 		})
 	}
+}
+
+// planNetworkMultiVnet returns a coherent multi-vnet reference plan: the
+// primary /16 with mgmt/bosh_bloc reservations (planNetwork's shape) plus a
+// storage vnet (subnetted) and a workload vnet (pure L2, no subnet) and the
+// 6-NIC HostNICs set the multi-node lab plan's pve-cpi example uses.
+func planNetworkMultiVnet() config.LabNetwork {
+	n := planNetwork()
+	n.VnetID = "pvecpi"
+	n.Vnets = []config.LabVnet{
+		{ID: "pvecpist", Tag: 5011, CIDR: "10.253.32.0/24", Gateway: "10.253.32.1", Purpose: "storage"},
+		{ID: "pvecpiwk", Tag: 5012, Purpose: "workload"},
+	}
+	n.HostNICs = []config.LabHostNIC{
+		{Index: 1, VnetID: "pvecpi"},
+		{Index: 2, VnetID: "pvecpist"},
+		{Index: 3, VnetID: "pvecpist"},
+		{Index: 4, VnetID: "pvecpiwk"},
+		{Index: 5, VnetID: "pvecpiwk"},
+	}
+	return n
+}
+
+func TestLabNetworkPlanIssues_MultiVnetCoherentPlanIsClean(t *testing.T) {
+	assert.Empty(t, labNetworkPlanIssues(planNetworkMultiVnet()))
+}
+
+func TestLabNetworkPlanIssues_VnetIDCharsetAndUniqueness(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(*config.LabNetwork)
+		wantSub string
+	}{
+		{
+			name:    "empty vnet id",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].ID = "" },
+			wantSub: "network.vnets[0].id is required",
+		},
+		{
+			name:    "vnet id too long",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].ID = "toolongvnetid" },
+			wantSub: `network.vnets[0].id "toolongvnetid" must be 1-8 alphanumeric characters with no hyphen`,
+		},
+		{
+			name:    "vnet id has hyphen",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].ID = "st-vnet" },
+			wantSub: `network.vnets[0].id "st-vnet" must be 1-8 alphanumeric characters with no hyphen`,
+		},
+		{
+			name:    "vnet id collides with primary vnet_id",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].ID = n.VnetID },
+			wantSub: `network.vnets[0].id "pvecpi" collides with the primary vnet_id or an earlier network.vnets[] entry`,
+		},
+		{
+			name:    "vnet id collides with another vnets entry",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[1].ID = n.Vnets[0].ID },
+			wantSub: `network.vnets[1].id "pvecpist" collides with the primary vnet_id or an earlier network.vnets[] entry`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := planNetworkMultiVnet()
+			tc.mutate(&n)
+			issues := labNetworkPlanIssues(n)
+			require.NotEmpty(t, issues)
+			found := false
+			for _, issue := range issues {
+				if strings.Contains(issue, tc.wantSub) {
+					found = true
+				}
+			}
+			assert.True(t, found, "issues %v do not contain %q", issues, tc.wantSub)
+		})
+	}
+}
+
+func TestLabNetworkPlanIssues_VnetCIDROverlaps(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(*config.LabNetwork)
+		wantSub string
+	}{
+		{
+			name:    "vnet cidr not contained in primary cidr",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].CIDR = "10.254.32.0/24" },
+			wantSub: "network.vnets[0].cidr 10.254.32.0/24 is not contained in network.cidr 10.253.0.0/16",
+		},
+		{
+			name:    "vnet cidr overlaps mgmt subnet",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].CIDR = "10.253.0.0/25" },
+			wantSub: "network.vnets[0].cidr 10.253.0.0/25 overlaps network.mgmt.subnet 10.253.0.0/24",
+		},
+		{
+			name:    "vnet cidr overlaps bosh_bloc",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].CIDR = "10.253.16.0/24" },
+			wantSub: "network.vnets[0].cidr 10.253.16.0/24 overlaps network.bosh_bloc 10.253.16.0/20",
+		},
+		{
+			name:    "vnet cidr overlaps another vnets entry",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[1].CIDR = "10.253.32.0/25" },
+			wantSub: "network.vnets[0].cidr 10.253.32.0/24 overlaps network.vnets[1].cidr 10.253.32.0/25",
+		},
+		{
+			name:    "invalid vnet cidr reports itself",
+			mutate:  func(n *config.LabNetwork) { n.Vnets[0].CIDR = "not-a-cidr" },
+			wantSub: `network.vnets[0].cidr "not-a-cidr" is invalid`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := planNetworkMultiVnet()
+			tc.mutate(&n)
+			issues := labNetworkPlanIssues(n)
+			require.NotEmpty(t, issues)
+			found := false
+			for _, issue := range issues {
+				if strings.Contains(issue, tc.wantSub) {
+					found = true
+				}
+			}
+			assert.True(t, found, "issues %v do not contain %q", issues, tc.wantSub)
+		})
+	}
+}
+
+func TestLabNetworkPlanIssues_VnetWithNoCIDRIsPassthrough(t *testing.T) {
+	// A workload vnet with no cidr is a pure L2 trunk: no containment or
+	// overlap check applies to it at all.
+	n := planNetworkMultiVnet()
+	n.Vnets[1].CIDR = ""
+	assert.Empty(t, labNetworkPlanIssues(n))
+}
+
+func TestLabNetworkPlanIssues_HostNICIndexIssues(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(*config.LabNetwork)
+		wantSub string
+	}{
+		{
+			name:    "index zero",
+			mutate:  func(n *config.LabNetwork) { n.HostNICs[0].Index = 0 },
+			wantSub: "network.host_nics[0].index 0 must be >= 1 (net0 is reserved for the primary vnet)",
+		},
+		{
+			name:    "negative index",
+			mutate:  func(n *config.LabNetwork) { n.HostNICs[0].Index = -1 },
+			wantSub: "network.host_nics[0].index -1 must be >= 1 (net0 is reserved for the primary vnet)",
+		},
+		{
+			name:    "duplicate index",
+			mutate:  func(n *config.LabNetwork) { n.HostNICs[2].Index = n.HostNICs[1].Index },
+			wantSub: "network.host_nics[2].index 2 collides with network.host_nics[1].index (every netN index must be unique)",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := planNetworkMultiVnet()
+			tc.mutate(&n)
+			issues := labNetworkPlanIssues(n)
+			require.NotEmpty(t, issues)
+			found := false
+			for _, issue := range issues {
+				if strings.Contains(issue, tc.wantSub) {
+					found = true
+				}
+			}
+			assert.True(t, found, "issues %v do not contain %q", issues, tc.wantSub)
+		})
+	}
+}
+
+func TestLabNetworkPlanIssues_HostNICVnetIDIssues(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(*config.LabNetwork)
+		wantSub string
+	}{
+		{
+			name:    "empty vnet_id",
+			mutate:  func(n *config.LabNetwork) { n.HostNICs[0].VnetID = "" },
+			wantSub: "network.host_nics[0].vnet_id is required",
+		},
+		{
+			name:   "unresolvable vnet_id",
+			mutate: func(n *config.LabNetwork) { n.HostNICs[0].VnetID = "ghost" },
+			wantSub: `network.host_nics[0].vnet_id "ghost" does not resolve to the primary vnet_id "pvecpi" ` +
+				"or any network.vnets[] entry",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := planNetworkMultiVnet()
+			tc.mutate(&n)
+			issues := labNetworkPlanIssues(n)
+			require.NotEmpty(t, issues)
+			found := false
+			for _, issue := range issues {
+				if strings.Contains(issue, tc.wantSub) {
+					found = true
+				}
+			}
+			assert.True(t, found, "issues %v do not contain %q", issues, tc.wantSub)
+		})
+	}
+}
+
+func TestLabNestedNetworkPlanIssues_ZeroValueIsClean(t *testing.T) {
+	assert.Empty(t, labNestedNetworkPlanIssues("pve-cpi", config.LabNestedNetwork{}))
+}
+
+func TestLabNestedNetworkPlanIssues_WrapsConfigValidateNestedNetwork(t *testing.T) {
+	nn := config.LabNestedNetwork{
+		Bonds: []config.LabNestedBond{
+			{Name: "bond0", NICs: []string{"nic0", "nic1"}, Mode: config.NestedBondModeActiveBackup, Bridge: "vmbr0"},
+		},
+	}
+	assert.Equal(t, config.ValidateNestedNetwork("pve-cpi", nn), labNestedNetworkPlanIssues("pve-cpi", nn))
+}
+
+func TestLabNestedNetworkPlanIssues_InvalidModeIsHardError(t *testing.T) {
+	nn := config.LabNestedNetwork{
+		Bonds: []config.LabNestedBond{
+			{Name: "bond0", NICs: []string{"nic0", "nic1"}, Mode: "round-robin", Bridge: "vmbr0"},
+		},
+	}
+	issues := labNestedNetworkPlanIssues("pve-cpi", nn)
+	require.Len(t, issues, 1)
+	assert.Contains(t, issues[0], `mode "round-robin" must be "active-backup" or "802.3ad"`)
+}
+
+func TestLabNestedNetworkPlanIssues_VlanZoneBridgeWithNoMatchingVlanAwareBond(t *testing.T) {
+	nn := config.LabNestedNetwork{
+		Bonds: []config.LabNestedBond{
+			{Name: "bond0", NICs: []string{"nic0", "nic1"}, Mode: config.NestedBondModeActiveBackup, Bridge: "vmbr0"},
+		},
+		VlanZone: &config.LabNestedVlanZone{
+			Bridge:   "vmbr2",
+			ZoneName: "clivlan",
+			Vnets: []config.LabNestedVlanVnet{
+				{ID: "cli40", Tag: 40, CIDR: "10.61.136.0/24"},
+			},
+		},
+	}
+	issues := labNestedNetworkPlanIssues("pve-cpi", nn)
+	require.Len(t, issues, 1)
+	assert.Contains(t, issues[0],
+		`nested_network.vlan_zone.bridge "vmbr2" has no matching nested_network.bonds[] entry with that bridge and vlan_aware: true`)
 }
 
 func TestLabNetworkPlanIssues_MalformedFields(t *testing.T) {

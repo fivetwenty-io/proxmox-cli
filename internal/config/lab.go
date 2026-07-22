@@ -89,6 +89,244 @@ type LabNetwork struct {
 	// ZoneType (effective) is "vxlan"; ignored for "simple", which has no
 	// peers concept.
 	ZonePeers string `yaml:"zone_peers,omitempty" json:"zone_peers,omitempty"`
+
+	// Vnets holds additional outer SDN vnets beyond the primary VnetID/CIDR
+	// pair, e.g. separate storage and workload L2 domains for a multi-bond
+	// nested topology. Empty means today's single-vnet lab shape, unchanged.
+	// The primary vnet is always net0 from HostNICs' point of view and is
+	// never repeated here.
+	Vnets []LabVnet `yaml:"vnets,omitempty" json:"vnets,omitempty"`
+
+	// HostNICs describes additional outer qm NICs (net1..netN) beyond the
+	// always-present net0, which always attaches to VnetID exactly as today
+	// (createVM/createQdeviceVM). Empty means today's single-NIC shape.
+	// Every entry's VnetID must resolve to either the primary VnetID or one
+	// of Vnets[].ID — checked by labNetworkPlanIssues (internal/cli/lab).
+	HostNICs []LabHostNIC `yaml:"host_nics,omitempty" json:"host_nics,omitempty"`
+
+	// NestedNetwork describes in-guest bonding/bridging and an inner SDN
+	// vlan-type zone for the lab's own nested PVE node OS — distinct from
+	// the always-present inner VXLAN zone sdninner.go manages for cross-node
+	// BOSH/CF L2 (`pmx lab sdn apply`, unchanged). Zero value means no
+	// bonding: nested nodes use their NICs unbonded, today's shape.
+	NestedNetwork LabNestedNetwork `yaml:"nested_network,omitempty" json:"nested_network,omitempty"`
+}
+
+// LabVnet describes one additional outer SDN vnet, beyond the primary
+// LabNetwork.VnetID/CIDR pair, that a lab's nodes attach a NIC to.
+type LabVnet struct {
+	// ID is the SDN vnet identifier: at most MaxVnetIDLen alphanumeric
+	// characters, no hyphen — same constraint as LabNetwork.VnetID
+	// (enforced by validation, not by this type).
+	ID string `yaml:"id" json:"id"`
+
+	// Alias is a human-readable label for the vnet.
+	Alias string `yaml:"alias,omitempty" json:"alias,omitempty"`
+
+	// Tag is the vnet's VLAN/VXLAN tag within LabNetwork.EffectiveZoneName()'s
+	// zone.
+	Tag int `yaml:"tag" json:"tag"`
+
+	// CIDR is the subnet ensured for this vnet. Empty means no subnet is
+	// ensured — a pure L2 passthrough vnet.
+	CIDR string `yaml:"cidr,omitempty" json:"cidr,omitempty"`
+
+	// Gateway is the vnet's subnet gateway address, when CIDR is set.
+	Gateway string `yaml:"gateway,omitempty" json:"gateway,omitempty"`
+
+	// Purpose is a free-form label, e.g. "storage" or "workload". Never read
+	// by reconciliation; documentation only.
+	Purpose string `yaml:"purpose,omitempty" json:"purpose,omitempty"`
+}
+
+// LabHostNIC describes one additional outer qm NIC (netN, N>=1), beyond the
+// always-present net0.
+type LabHostNIC struct {
+	// Index is the qm netN index, >=1 (net0 is reserved for the primary
+	// vnet and must not be repeated here).
+	Index int `yaml:"index" json:"index"`
+
+	// VnetID is the target vnet: the lab's primary LabNetwork.VnetID, or one
+	// of LabNetwork.Vnets[].ID.
+	VnetID string `yaml:"vnet_id" json:"vnet_id"`
+
+	// MTU is this NIC's maximum transmission unit. Zero means the same
+	// default net0 already uses (LabNetwork.MTU).
+	MTU int `yaml:"mtu,omitempty" json:"mtu,omitempty"`
+}
+
+// LabNestedNetwork describes a lab's nested PVE node's own in-guest
+// bonding/bridging and inner SDN vlan zone. Zero value: no bonding — today's
+// shape, unbonded NICs.
+type LabNestedNetwork struct {
+	// Bonds lists the guest-OS bonds (and the bridge on top of each) to
+	// configure inside the lab's nested PVE nodes.
+	Bonds []LabNestedBond `yaml:"bonds,omitempty" json:"bonds,omitempty"`
+
+	// VlanZone describes an inner Proxmox SDN "vlan"-type zone layered on
+	// one of the bonds' bridges above. Nil means no inner vlan zone.
+	VlanZone *LabNestedVlanZone `yaml:"vlan_zone,omitempty" json:"vlan_zone,omitempty"`
+}
+
+// Valid LabNestedBond.Mode values. D-04: active-backup is the only mode
+// that actually aggregates when nested — LACPDUs (01:80:C2:00:00:02) sit in
+// the Linux bridge's reserved multicast range and are never forwarded, so
+// nested 802.3ad can never negotiate. 802.3ad may still be written for
+// syntax parity/future bare-metal reuse; ValidateNestedNetwork flags it as a
+// warning, not a hard error.
+const (
+	NestedBondModeActiveBackup = "active-backup"
+	NestedBondMode8023ad       = "802.3ad"
+)
+
+// LabNestedBond describes one guest-OS bond and the bridge on top of it,
+// inside a lab's nested PVE node (D-04: active-backup is the only mode that
+// actually aggregates nested; other modes may be written for syntax
+// coverage but are non-functional — see ValidateNestedNetwork).
+type LabNestedBond struct {
+	// Name is the guest-OS bond interface name, e.g. "bond0".
+	Name string `yaml:"name" json:"name"`
+
+	// NICs lists the guest-visible interface names bonded together, e.g.
+	// ["nic0","nic1"].
+	NICs []string `yaml:"nics" json:"nics"`
+
+	// Mode is the bond mode: NestedBondModeActiveBackup (functional) or
+	// NestedBondMode8023ad (syntax-only, D-04). No other value is valid —
+	// see ValidateNestedNetwork.
+	Mode string `yaml:"mode" json:"mode"`
+
+	// Primary is the bond's primary/preferred slave interface name, when
+	// Mode is active-backup. Empty means no explicit primary.
+	Primary string `yaml:"primary,omitempty" json:"primary,omitempty"`
+
+	// Bridge is the guest-OS bridge built on top of this bond, e.g.
+	// "vmbr0".
+	Bridge string `yaml:"bridge" json:"bridge"`
+
+	// VlanAware marks Bridge as VLAN-aware, allowing a LabNestedVlanZone to
+	// reference it.
+	VlanAware bool `yaml:"vlan_aware,omitempty" json:"vlan_aware,omitempty"`
+}
+
+// LabNestedVlanZone describes an inner Proxmox SDN "vlan"-type zone on one
+// of a lab's nested node's own bridges (typically the workload bridge).
+type LabNestedVlanZone struct {
+	// Bridge must match a LabNestedBond.Bridge entry with VlanAware true.
+	Bridge string `yaml:"bridge" json:"bridge"`
+
+	// ZoneName is the inner SDN zone identifier: at most MaxVnetIDLen
+	// alphanumeric characters, no hyphen.
+	ZoneName string `yaml:"zone_name" json:"zone_name"`
+
+	// Vnets lists the zone's client-VLAN vnets.
+	Vnets []LabNestedVlanVnet `yaml:"vnets" json:"vnets"`
+}
+
+// LabNestedVlanVnet describes one vnet of a lab's inner SDN vlan zone: one
+// 802.1Q tag, one subnet.
+type LabNestedVlanVnet struct {
+	// ID is the inner vnet identifier: at most MaxVnetIDLen alphanumeric
+	// characters, no hyphen.
+	ID string `yaml:"id" json:"id"`
+
+	// Alias is a human-readable label for the vnet.
+	Alias string `yaml:"alias,omitempty" json:"alias,omitempty"`
+
+	// Tag is the 802.1Q VLAN ID carried on this vnet — a client-VLAN
+	// number, an entirely separate numbering space from the outer SDN
+	// zone's VxlanTag/LabVnet.Tag values.
+	Tag int `yaml:"tag" json:"tag"`
+
+	// CIDR is the subnet ensured for this vnet.
+	CIDR string `yaml:"cidr" json:"cidr"`
+
+	// Gateway is the vnet's subnet gateway address.
+	Gateway string `yaml:"gateway,omitempty" json:"gateway,omitempty"`
+}
+
+// EffectiveHostNICs returns n.HostNICs verbatim (nil-safe passthrough; kept
+// for symmetry with the other Effective* accessors and as the one place a
+// future default could land without touching call sites).
+func (n LabNetwork) EffectiveHostNICs() []LabHostNIC {
+	return n.HostNICs
+}
+
+// nestedNetworkWarningPrefix marks a ValidateNestedNetwork issue string as
+// warning-class rather than a hard error: an operator-visible caution
+// (currently only D-04's 802.3ad non-functionality note) that a caller may
+// choose to surface without refusing the config, unlike every other issue
+// string this function returns. Mirrors the CLI's existing "warning: "
+// convention (e.g. internal/cli/context/warnings.go).
+const nestedNetworkWarningPrefix = "warning: "
+
+// ValidateNestedNetwork checks nn for internal coherence and returns one
+// message per problem found, or nil when nn is valid. name is the lab's
+// name, used to prefix every message, mirroring ValidateTopology's per-lab
+// issue-list convention. A zero-value nn (no Bonds, no VlanZone) always
+// returns nil — that is today's unbonded-NIC shape, so labs written before
+// this field existed keep validating cleanly.
+//
+// Four checks, matching the multi-node lab plan §1:
+//  1. A bond's Mode outside {NestedBondModeActiveBackup, NestedBondMode8023ad}
+//     is a hard error.
+//  2. A NestedBondMode8023ad bond is flagged with a nestedNetworkWarningPrefix
+//     issue string noting D-04 non-functionality — not a hard error, since an
+//     operator may legitimately author it for later real-hardware parity.
+//  3. A NestedNetwork.VlanZone.Bridge with no matching Bonds[].Bridge entry
+//     that also has VlanAware true is a hard error (the vlan zone would have
+//     nothing to attach to).
+//  4. A bond whose NICs has fewer than 2 entries is a hard error (nothing to
+//     bond).
+//
+// Broader cross-referencing against the lab's outer Network.Vnets/HostNICs
+// (e.g. HostNICs[].VnetID resolution, Vnets[].ID charset/uniqueness) is out
+// of this function's scope by design — it lives in
+// internal/cli/lab/netplan.go's labNestedNetworkPlanIssues wrapper, which
+// has access to the full LabNetwork, not just NestedNetwork.
+func ValidateNestedNetwork(name string, nn LabNestedNetwork) []string {
+	var issues []string
+
+	// bridgesVlanAware tracks every VlanAware bridge declared by a bond, so
+	// VlanZone's cross-reference check below can look it up in one pass.
+	bridgesVlanAware := make(map[string]bool, len(nn.Bonds))
+
+	for i, b := range nn.Bonds {
+		if b.VlanAware && b.Bridge != "" {
+			bridgesVlanAware[b.Bridge] = true
+		}
+
+		switch b.Mode {
+		case NestedBondModeActiveBackup:
+			// functional when nested — no issue.
+		case NestedBondMode8023ad:
+			issues = append(issues, fmt.Sprintf(
+				"%slab %q: nested_network.bonds[%d] (%q) mode %q is non-functional when nested (D-04): "+
+					"LACPDUs (01:80:C2:00:00:02) sit in the outer Linux bridge's reserved multicast range "+
+					"and are never forwarded, so this bond can never aggregate; kept for syntax parity/"+
+					"future bare-metal reuse only, not an error",
+				nestedNetworkWarningPrefix, name, i, b.Name, b.Mode))
+		default:
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: nested_network.bonds[%d] (%q) mode %q must be %q or %q",
+				name, i, b.Name, b.Mode, NestedBondModeActiveBackup, NestedBondMode8023ad))
+		}
+
+		if len(b.NICs) < 2 {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: nested_network.bonds[%d] (%q) has %d nics, need at least 2 to bond",
+				name, i, b.Name, len(b.NICs)))
+		}
+	}
+
+	if nn.VlanZone != nil && !bridgesVlanAware[nn.VlanZone.Bridge] {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: nested_network.vlan_zone.bridge %q has no matching nested_network.bonds[] entry "+
+				"with that bridge and vlan_aware: true",
+			name, nn.VlanZone.Bridge))
+	}
+
+	return issues
 }
 
 // Defaults for LabNetwork's SDN zone fields, applied whenever the
@@ -191,6 +429,15 @@ type LabStorage struct {
 
 	// RefquotaGB is the ZFS refquota enforced on the lab's dataset, in gigabytes.
 	RefquotaGB int `yaml:"refquota_gb" json:"refquota_gb"`
+
+	// NFSQuotaGB is the ZFS `quota` (never `refquota` — `quota` constrains a
+	// dataset's descendants, which is what caps this lab's images+backup
+	// exports combined) `pmx lab nfs attach`'s server-side ensure phase sets
+	// on the lab's NFS parent dataset (tank/nfs/labs/<lab>, distinct from
+	// this lab's own compute dataset RefquotaGB targets). Zero means unset:
+	// EffectiveNFSQuotaGB then applies DefaultNFSQuotaGB (200, matching the
+	// historical scripts/60-nfs-service --lab-quota default) instead.
+	NFSQuotaGB int `yaml:"nfs_quota_gb,omitempty" json:"nfs_quota_gb,omitempty"`
 
 	// Controller is the disk controller type (e.g. "virtio-scsi-single").
 	Controller string `yaml:"controller" json:"controller"`
@@ -508,6 +755,25 @@ func EffectiveRefquotaGB(lab *Lab) int {
 		return DefaultSingleRefquotaGB
 	}
 	return EffectiveTopologyNodes(lab.Topology) * DefaultClusterRefquotaPerNodeGB
+}
+
+// DefaultNFSQuotaGB is the fallback ZFS `quota` EffectiveNFSQuotaGB applies
+// when a lab leaves storage.nfs_quota_gb unset (0). Matches the historical
+// scripts/60-nfs-service (lab repo) script's own --lab-quota default
+// exactly, so a lab attached via `pmx lab nfs attach` with no explicit
+// override gets the same quota that script's fleet-wide default run applied.
+const DefaultNFSQuotaGB = 200
+
+// EffectiveNFSQuotaGB returns lab.Storage.NFSQuotaGB when the operator set
+// it (a positive value), else DefaultNFSQuotaGB. This is the ZFS `quota`
+// `pmx lab nfs attach`'s server-side ensure phase sets on the lab's
+// tank/nfs/labs/<lab> parent dataset — distinct from EffectiveRefquotaGB,
+// which sizes this lab's own compute dataset instead.
+func EffectiveNFSQuotaGB(lab *Lab) int {
+	if lab.Storage.NFSQuotaGB > 0 {
+		return lab.Storage.NFSQuotaGB
+	}
+	return DefaultNFSQuotaGB
 }
 
 // MaxVnetIDLen is the Proxmox VE SDN vnet ID length limit: at most 8

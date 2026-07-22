@@ -91,7 +91,11 @@ func LabFileTemplate(lab *Lab) []byte {
 	fmt.Fprintf(&b, "    host_ip: %s\n", yamlQuote(lab.Network.Mgmt.HostIP))
 	fmt.Fprintf(&b, "    gateway: %s\n", yamlQuote(lab.Network.Mgmt.Gateway))
 	fmt.Fprintf(&b, "  bosh_bloc: %s\n", yamlQuote(lab.Network.BoshBloc))
-	fmt.Fprintf(&b, "  mtu: %d\n\n", lab.Network.MTU)
+	fmt.Fprintf(&b, "  mtu: %d\n", lab.Network.MTU)
+	appendLabVnetsBlock(&b, lab.Network.Vnets)
+	appendLabHostNICsBlock(&b, lab.Network.HostNICs)
+	appendLabNestedNetworkBlock(&b, lab.Network.NestedNetwork)
+	fmt.Fprint(&b, "\n")
 
 	fmt.Fprint(&b, "# compute: CPU and memory sizing for the lab's VM.\n")
 	fmt.Fprint(&b, "compute:\n")
@@ -113,7 +117,9 @@ func LabFileTemplate(lab *Lab) []byte {
 	fmt.Fprintf(&b, "  controller: %s\n", yamlQuote(lab.Storage.Controller))
 	fmt.Fprintf(&b, "  iothread: %t\n", lab.Storage.IOThread)
 	fmt.Fprintf(&b, "  discard: %t\n", lab.Storage.Discard)
-	fmt.Fprintf(&b, "  ssd: %t\n\n", lab.Storage.SSD)
+	fmt.Fprintf(&b, "  ssd: %t\n", lab.Storage.SSD)
+	appendLabNFSQuotaLine(&b, lab.Storage.NFSQuotaGB)
+	fmt.Fprint(&b, "\n")
 
 	fmt.Fprint(&b, "# dns: DNS zone associated with the lab.\n")
 	fmt.Fprint(&b, "dns:\n")
@@ -140,6 +146,132 @@ func LabFileTemplate(lab *Lab) []byte {
 	fmt.Fprintf(&b, "  role: %s\n", yamlQuote(lab.Access.Role))
 
 	return []byte(b.String())
+}
+
+// appendLabNFSQuotaLine documents storage.nfs_quota_gb with a short comment,
+// unconditionally, then renders the key only when set (> 0) — the same
+// comment-always/key-only-when-set convention appendLabVnetsBlock uses, so a
+// lab that leaves it unset round-trips through ResolveLabs at its true zero
+// value rather than an explicit "nfs_quota_gb: 0" that would misread as "no
+// quota" instead of "use the default".
+func appendLabNFSQuotaLine(b *strings.Builder, nfsQuotaGB int) {
+	fmt.Fprint(b, "  # nfs_quota_gb: ZFS 'quota' pmx lab nfs attach's server-side\n")
+	fmt.Fprint(b, "  # ensure phase sets on this lab's NFS parent dataset\n")
+	fmt.Fprint(b, "  # (tank/nfs/labs/<lab>). Omitted means the default (200G).\n")
+	if nfsQuotaGB > 0 {
+		fmt.Fprintf(b, "  nfs_quota_gb: %d\n", nfsQuotaGB)
+	}
+}
+
+// appendLabVnetsBlock documents network.vnets with a short comment,
+// unconditionally, then renders the list only when non-empty. Rendering
+// nothing but the comment for an empty/nil vnets keeps the field's
+// zero-value round trip through ResolveLabs a nil slice rather than an
+// empty-but-non-nil one — goccy/go-yaml unmarshals an explicit `vnets: []`
+// to a non-nil empty slice, which would fail a struct-equality comparison
+// against a Lab built without setting the field at all.
+func appendLabVnetsBlock(b *strings.Builder, vnets []LabVnet) {
+	fmt.Fprint(b, "  # vnets: additional outer SDN vnets beyond the primary vnet_id/cidr\n")
+	fmt.Fprint(b, "  # pair, e.g. separate storage and workload L2 domains for a\n")
+	fmt.Fprint(b, "  # multi-bond nested topology. Omitted entirely means today's\n")
+	fmt.Fprint(b, "  # single-vnet shape.\n")
+	if len(vnets) == 0 {
+		return
+	}
+	fmt.Fprint(b, "  vnets:\n")
+	for _, v := range vnets {
+		fmt.Fprintf(b, "    - id: %s\n", yamlQuote(v.ID))
+		if v.Alias != "" {
+			fmt.Fprintf(b, "      alias: %s\n", yamlQuote(v.Alias))
+		}
+		fmt.Fprintf(b, "      tag: %d\n", v.Tag)
+		if v.CIDR != "" {
+			fmt.Fprintf(b, "      cidr: %s\n", yamlQuote(v.CIDR))
+		}
+		if v.Gateway != "" {
+			fmt.Fprintf(b, "      gateway: %s\n", yamlQuote(v.Gateway))
+		}
+		if v.Purpose != "" {
+			fmt.Fprintf(b, "      purpose: %s\n", yamlQuote(v.Purpose))
+		}
+	}
+}
+
+// appendLabHostNICsBlock documents network.host_nics the same way
+// appendLabVnetsBlock documents network.vnets: comment always, list only
+// when non-empty, for the same nil-vs-empty-slice round-trip reason.
+func appendLabHostNICsBlock(b *strings.Builder, nics []LabHostNIC) {
+	fmt.Fprint(b, "  # host_nics: additional outer qm NICs (net1..netN) beyond the\n")
+	fmt.Fprint(b, "  # always-present net0; each vnet_id must resolve to the primary\n")
+	fmt.Fprint(b, "  # vnet_id above or one of vnets[].id. Omitted entirely means\n")
+	fmt.Fprint(b, "  # today's single-NIC shape.\n")
+	if len(nics) == 0 {
+		return
+	}
+	fmt.Fprint(b, "  host_nics:\n")
+	for _, hn := range nics {
+		fmt.Fprintf(b, "    - index: %d\n", hn.Index)
+		fmt.Fprintf(b, "      vnet_id: %s\n", yamlQuote(hn.VnetID))
+		if hn.MTU != 0 {
+			fmt.Fprintf(b, "      mtu: %d\n", hn.MTU)
+		}
+	}
+}
+
+// appendLabNestedNetworkBlock documents network.nested_network the same way
+// appendLabVnetsBlock documents network.vnets: comment always, the
+// nested_network key (and its bonds/vlan_zone sub-keys) only when at least
+// one of Bonds or VlanZone is set, for the same nil-vs-empty-slice
+// round-trip reason. Bonds and VlanZone are rendered independently — a lab
+// may legitimately set one without the other while iterating on its plan.
+func appendLabNestedNetworkBlock(b *strings.Builder, nn LabNestedNetwork) {
+	fmt.Fprint(b, "  # nested_network: in-guest bonding/bridging plus an inner SDN\n")
+	fmt.Fprint(b, "  # vlan zone for the lab's own nested PVE node OS. Omitted\n")
+	fmt.Fprint(b, "  # entirely means no bonding: nested nodes use their NICs\n")
+	fmt.Fprint(b, "  # unbonded, today's shape.\n")
+	if len(nn.Bonds) == 0 && nn.VlanZone == nil {
+		return
+	}
+	fmt.Fprint(b, "  nested_network:\n")
+
+	if len(nn.Bonds) > 0 {
+		fmt.Fprint(b, "    bonds:\n")
+		for _, bond := range nn.Bonds {
+			fmt.Fprintf(b, "      - name: %s\n", yamlQuote(bond.Name))
+			fmt.Fprint(b, "        nics:\n")
+			for _, nic := range bond.NICs {
+				fmt.Fprintf(b, "          - %s\n", yamlQuote(nic))
+			}
+			fmt.Fprintf(b, "        mode: %s\n", yamlQuote(bond.Mode))
+			if bond.Primary != "" {
+				fmt.Fprintf(b, "        primary: %s\n", yamlQuote(bond.Primary))
+			}
+			fmt.Fprintf(b, "        bridge: %s\n", yamlQuote(bond.Bridge))
+			if bond.VlanAware {
+				fmt.Fprintf(b, "        vlan_aware: %t\n", bond.VlanAware)
+			}
+		}
+	}
+
+	if nn.VlanZone != nil {
+		fmt.Fprint(b, "    vlan_zone:\n")
+		fmt.Fprintf(b, "      bridge: %s\n", yamlQuote(nn.VlanZone.Bridge))
+		fmt.Fprintf(b, "      zone_name: %s\n", yamlQuote(nn.VlanZone.ZoneName))
+		if len(nn.VlanZone.Vnets) > 0 {
+			fmt.Fprint(b, "      vnets:\n")
+			for _, vv := range nn.VlanZone.Vnets {
+				fmt.Fprintf(b, "        - id: %s\n", yamlQuote(vv.ID))
+				if vv.Alias != "" {
+					fmt.Fprintf(b, "          alias: %s\n", yamlQuote(vv.Alias))
+				}
+				fmt.Fprintf(b, "          tag: %d\n", vv.Tag)
+				fmt.Fprintf(b, "          cidr: %s\n", yamlQuote(vv.CIDR))
+				if vv.Gateway != "" {
+					fmt.Fprintf(b, "          gateway: %s\n", yamlQuote(vv.Gateway))
+				}
+			}
+		}
+	}
 }
 
 // WriteLabFile writes lab as a commented YAML document to <dir>/<name>.yaml

@@ -87,6 +87,7 @@ func newSdnCmd() *cobra.Command {
 			"ssh/pvesh against node 0; a single-node lab has nothing to reconcile.",
 	}
 	cmd.AddCommand(newSdnApplyCmd())
+	cmd.AddCommand(newSdnVlanCmd())
 	return cmd
 }
 
@@ -237,4 +238,326 @@ func sdnEnsureZoneApplied(deps *cli.Deps, name, node0IP, peers string) ([][]stri
 		{fmt.Sprintf("sdn zone %q (peers %q)", labInnerZoneName, peers), stepDesc},
 		{"commit pending sdn changes on node 0", commitStatus},
 	}, nil
+}
+
+// labInnerVlanZoneType is the PVE SDN zone plugin type this command
+// provisions for a lab's nested-node client-VLAN zone — distinct from
+// labInnerZoneType (the always-present cross-node BOSH/CF VXLAN zone above),
+// and from the outer host's own zone type (net.go's config-driven
+// EffectiveZoneType). Neither the zone's name nor its member vnets are
+// hardcoded here: both come from config.LabNestedVlanZone (multi-AZ
+// topology plan §2).
+const labInnerVlanZoneType = "vlan"
+
+// newSdnVlanCmd builds `pmx lab sdn vlan` and its subcommands.
+func newSdnVlanCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "vlan",
+		Short: "Manage a lab's nested-node client-VLAN SDN zone",
+		Long: "Reconcile the inner Proxmox VE SDN \"vlan\"-type zone layered on one of a lab's " +
+			"nested PVE node's own VLAN-aware bridges (network.nested_network.vlan_zone) — " +
+			"distinct from `pmx lab sdn apply`'s always-present cross-node BOSH/CF VXLAN zone " +
+			"above it. Applied over ssh/pvesh against node 0.",
+	}
+	cmd.AddCommand(newSdnVlanApplyCmd())
+	return cmd
+}
+
+// newSdnVlanApplyCmd builds `pmx lab sdn vlan apply <name>`.
+func newSdnVlanApplyCmd() *cobra.Command {
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "apply <name>",
+		Short: "Reconcile a lab's nested-node client-VLAN SDN zone against its config",
+		Long: "Ensure the lab's inner \"vlan\"-type SDN zone (network.nested_network.vlan_zone) " +
+			"exists on the bridge it names, then ensure every one of its configured vnets and " +
+			"subnets exist and match, each independently idempotent (probe-before-create/update, " +
+			"mirroring `pmx lab sdn apply`'s zone-reconciliation pattern), then commit via " +
+			"`pvesh set /cluster/sdn` iff anything changed. Run over ssh against node 0; must run " +
+			"after the nested cluster's bonds/bridges exist (`pmx lab hostnet apply`), since the " +
+			"zone's bridge must already exist for PVE to accept it. A lab with no " +
+			"network.nested_network.vlan_zone configured is a no-op with a notice.",
+		Example: `  pmx lab sdn vlan apply pve-cpi
+  pmx lab sdn vlan apply pve-cpi --dry-run`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSdnVlanApply(cmd, args[0], dryRun)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the pvesh commands that would run, without executing them")
+	return cmd
+}
+
+func runSdnVlanApply(cmd *cobra.Command, name string, dryRun bool) error {
+	deps := cli.GetDeps(cmd)
+
+	lab, err := resolveLabForMutate(cmd, name)
+	if err != nil {
+		return err
+	}
+
+	vz := lab.Network.NestedNetwork.VlanZone
+	if vz == nil {
+		res := output.Result{Message: fmt.Sprintf(
+			"lab %q has no network.nested_network.vlan_zone configured; nothing to do.", name)}
+		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+	}
+
+	node0IP, err := labNodeMgmtIP(lab.Network, 0)
+	if err != nil {
+		return fmt.Errorf("resolve node 0 mgmt IP: %w", err)
+	}
+
+	// dry-run never touches deps.Runner (see runSdnApply's identical
+	// convention above): it previews the zone/vnets/subnets this run would
+	// ensure, without probing live remote state to decide create-vs-update.
+	if dryRun {
+		headers := []string{"STEP", "STATUS"}
+		rows := [][]string{
+			{fmt.Sprintf("ensure sdn zone %q (type %s, bridge %s) on node 0",
+				vz.ZoneName, labInnerVlanZoneType, vz.Bridge), "would run"},
+		}
+		for _, v := range vz.Vnets {
+			rows = append(rows, []string{
+				fmt.Sprintf("ensure sdn vnet %q (zone %s, tag %d) on node 0", v.ID, vz.ZoneName, v.Tag), "would run"})
+			if v.CIDR != "" {
+				rows = append(rows, []string{
+					fmt.Sprintf("ensure sdn subnet %q on vnet %q on node 0", v.CIDR, v.ID), "would run"})
+			}
+		}
+		rows = append(rows, []string{"commit pending sdn changes on node 0", "would run (if anything changed)"})
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+	}
+
+	rows, err := sdnEnsureVlanZoneApplied(deps, name, node0IP, vz)
+	if err != nil {
+		return err
+	}
+
+	headers := []string{"STEP", "STATUS"}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
+}
+
+// sdnInnerVlanZoneState is the subset of a `pvesh get /cluster/sdn/zones/<z>
+// --output-format json` response this command needs to decide whether an
+// inner "vlan"-type zone's bridge has drifted.
+type sdnInnerVlanZoneState struct {
+	Bridge string `json:"bridge"`
+}
+
+// sdnInnerVlanVnetState is the subset of a `pvesh get
+// /cluster/sdn/vnets/<id> --output-format json` response this command needs
+// to decide whether an inner vlan-zone vnet has drifted.
+type sdnInnerVlanVnetState struct {
+	Zone  string `json:"zone"`
+	Tag   int    `json:"tag"`
+	Alias string `json:"alias"`
+}
+
+// sdnInnerVlanSubnetState is the subset of one element of a `pvesh get
+// /cluster/sdn/vnets/<vnet>/subnets --output-format json` response this
+// command needs to decide whether an inner vlan-zone vnet's subnet has
+// drifted. Subnet is the PVE-assigned subnet identifier (distinct from
+// Cidr, the plain CIDR string from config) — an update must address the
+// subnet by Subnet, not by Cidr, mirroring net.go's sdnSubnetState/
+// findSdnSubnet convention for the outer (API-driven) subnet ensure path.
+type sdnInnerVlanSubnetState struct {
+	Subnet  string `json:"subnet"`
+	Cidr    string `json:"cidr"`
+	Gateway string `json:"gateway"`
+}
+
+// sdnEnsureVlanZoneApplied performs `sdn vlan apply`'s actual work — ensure
+// the zone, then every configured vnet and its subnet, then commit iff
+// anything changed — without any cobra/rendering coupling, mirroring
+// sdnEnsureZoneApplied's shape above. vz must be non-nil; callers (only
+// runSdnVlanApply today) must have already handled the nil/no-op case.
+// Returns one STEP/STATUS row per zone/vnet/subnet ensured, plus a final
+// commit row.
+func sdnEnsureVlanZoneApplied(deps *cli.Deps, name, node0IP string, vz *config.LabNestedVlanZone) ([][]string, error) {
+	var rows [][]string
+	changed := false
+
+	zoneChanged, zoneRow, err := sdnEnsureVlanZone(deps, name, node0IP, vz)
+	if err != nil {
+		return nil, err
+	}
+	rows = append(rows, zoneRow)
+	changed = changed || zoneChanged
+
+	for _, v := range vz.Vnets {
+		vnetChanged, vnetRow, verr := sdnEnsureVlanVnet(deps, name, node0IP, vz.ZoneName, v)
+		if verr != nil {
+			return nil, verr
+		}
+		rows = append(rows, vnetRow)
+		changed = changed || vnetChanged
+
+		// LabNestedVlanVnet.CIDR is a required field (config/lab.go); the
+		// empty-CIDR guard here is defensive only, against a hand-edited
+		// config that bypassed schema validation, not an expected shape.
+		if v.CIDR == "" {
+			continue
+		}
+		subnetChanged, subnetRow, serr := sdnEnsureVlanSubnet(deps, name, node0IP, v)
+		if serr != nil {
+			return nil, serr
+		}
+		rows = append(rows, subnetRow)
+		changed = changed || subnetChanged
+	}
+
+	commitCmd := "pvesh set /cluster/sdn"
+	commitStatus := "skip (no pending changes)"
+	if changed {
+		if _, cerr := runGuestSSH(deps, node0IP, commitCmd); cerr != nil {
+			return nil, fmt.Errorf("lab %q: commit inner sdn changes on node 0: %w", name, cerr)
+		}
+		commitStatus = "committed"
+	}
+	rows = append(rows, []string{"commit pending sdn changes on node 0", commitStatus})
+
+	return rows, nil
+}
+
+// sdnEnsureVlanZone ensures vz's zone exists as a "vlan"-type zone on
+// vz.Bridge, probing by zone name exactly as sdnEnsureZoneApplied's VXLAN
+// zone does above: a non-zero, non-transport-failure exit from `pvesh get`
+// means the zone does not exist yet (create); a zero exit decodes the
+// existing bridge and updates only on drift. Returns whether anything
+// changed and this step's STEP/STATUS row.
+func sdnEnsureVlanZone(deps *cli.Deps, name, node0IP string, vz *config.LabNestedVlanZone) (bool, []string, error) {
+	stepLabel := fmt.Sprintf("vlan sdn zone %q (bridge %s)", vz.ZoneName, vz.Bridge)
+
+	probe, perr := runGuestSSH(deps, node0IP, fmt.Sprintf(
+		"pvesh get /cluster/sdn/zones/%s --output-format json", vz.ZoneName))
+
+	switch {
+	case perr == nil:
+		var existing sdnInnerVlanZoneState
+		if uerr := json.Unmarshal([]byte(probe.Stdout), &existing); uerr != nil {
+			return false, nil, fmt.Errorf("lab %q: decode existing inner vlan sdn zone %q on node 0: %w", name, vz.ZoneName, uerr)
+		}
+		if existing.Bridge == vz.Bridge {
+			return false, []string{stepLabel, fmt.Sprintf("sdn zone %q already matches on node 0", vz.ZoneName)}, nil
+		}
+		updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/zones/%s --bridge %s", vz.ZoneName, vz.Bridge)
+		if _, uerr := runGuestSSH(deps, node0IP, updateCmd); uerr != nil {
+			return false, nil, fmt.Errorf("lab %q: update inner vlan sdn zone %q bridge on node 0: %w", name, vz.ZoneName, uerr)
+		}
+		return true, []string{stepLabel, fmt.Sprintf("sdn zone %q bridge updated on node 0", vz.ZoneName)}, nil
+	case guestCommandTransportFailed(perr):
+		return false, nil, fmt.Errorf("lab %q: probe inner vlan sdn zone %q on node 0 (%s): %w", name, vz.ZoneName, node0IP, perr)
+	default:
+		createCmd := fmt.Sprintf("pvesh create /cluster/sdn/zones --zone %s --type %s --bridge %s",
+			vz.ZoneName, labInnerVlanZoneType, vz.Bridge)
+		if _, cerr := runGuestSSH(deps, node0IP, createCmd); cerr != nil {
+			return false, nil, fmt.Errorf("lab %q: create inner vlan sdn zone %q on node 0: %w", name, vz.ZoneName, cerr)
+		}
+		return true, []string{stepLabel, fmt.Sprintf("sdn zone %q created on node 0", vz.ZoneName)}, nil
+	}
+}
+
+// sdnEnsureVlanVnet ensures v exists as a vnet of zoneName, probing by vnet
+// ID exactly as sdnEnsureVlanZone probes by zone name: a non-zero,
+// non-transport-failure exit means the vnet does not exist yet (create); a
+// zero exit decodes the existing zone/tag/alias and updates only on drift.
+// An empty v.Alias never triggers a drift update on its own (mirrors
+// ensureLabSdnVnet's own "only compare when the config sets a value"
+// convention) — a vnet already carrying a server-assigned alias must not be
+// blanked out by a config that simply never set one.
+func sdnEnsureVlanVnet(deps *cli.Deps, name, node0IP, zoneName string, v config.LabNestedVlanVnet) (bool, []string, error) {
+	stepLabel := fmt.Sprintf("vlan sdn vnet %q (zone %s, tag %d)", v.ID, zoneName, v.Tag)
+
+	probe, perr := runGuestSSH(deps, node0IP, fmt.Sprintf(
+		"pvesh get /cluster/sdn/vnets/%s --output-format json", v.ID))
+
+	switch {
+	case perr == nil:
+		var existing sdnInnerVlanVnetState
+		if uerr := json.Unmarshal([]byte(probe.Stdout), &existing); uerr != nil {
+			return false, nil, fmt.Errorf("lab %q: decode existing inner vlan sdn vnet %q on node 0: %w", name, v.ID, uerr)
+		}
+		drift := existing.Zone != zoneName || existing.Tag != v.Tag || (v.Alias != "" && existing.Alias != v.Alias)
+		if !drift {
+			return false, []string{stepLabel, fmt.Sprintf("sdn vnet %q already matches on node 0", v.ID)}, nil
+		}
+
+		args := []string{fmt.Sprintf("--zone %s", zoneName), fmt.Sprintf("--tag %d", v.Tag)}
+		if v.Alias != "" {
+			args = append(args, fmt.Sprintf("--alias %s", v.Alias))
+		}
+		updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/vnets/%s %s", v.ID, strings.Join(args, " "))
+		if _, uerr := runGuestSSH(deps, node0IP, updateCmd); uerr != nil {
+			return false, nil, fmt.Errorf("lab %q: update inner vlan sdn vnet %q on node 0: %w", name, v.ID, uerr)
+		}
+		return true, []string{stepLabel, fmt.Sprintf("sdn vnet %q updated on node 0", v.ID)}, nil
+	case guestCommandTransportFailed(perr):
+		return false, nil, fmt.Errorf("lab %q: probe inner vlan sdn vnet %q on node 0 (%s): %w", name, v.ID, node0IP, perr)
+	default:
+		createCmd := fmt.Sprintf("pvesh create /cluster/sdn/vnets --vnet %s --zone %s --tag %d", v.ID, zoneName, v.Tag)
+		if v.Alias != "" {
+			createCmd += fmt.Sprintf(" --alias %s", v.Alias)
+		}
+		if _, cerr := runGuestSSH(deps, node0IP, createCmd); cerr != nil {
+			return false, nil, fmt.Errorf("lab %q: create inner vlan sdn vnet %q on node 0: %w", name, v.ID, cerr)
+		}
+		return true, []string{stepLabel, fmt.Sprintf("sdn vnet %q created on node 0", v.ID)}, nil
+	}
+}
+
+// sdnEnsureVlanSubnet ensures v's CIDR exists as a subnet of vnet v.ID,
+// matched by CIDR against the vnet's subnet list — mirroring net.go's
+// findSdnSubnet convention (matched by CIDR, not a guessed subnet
+// identifier, since the lab config only ever states the CIDR) — rather
+// than probing a single guessed subnet-ID path the way the zone and vnet
+// steps above probe by their own (config-known) IDs. A non-transport-
+// failure error listing subnets is treated as "no subnets yet" (the vnet
+// was just created moments earlier and may not yet have any), falling
+// through to create.
+func sdnEnsureVlanSubnet(deps *cli.Deps, name, node0IP string, v config.LabNestedVlanVnet) (bool, []string, error) {
+	stepLabel := fmt.Sprintf("vlan sdn subnet %q on vnet %q", v.CIDR, v.ID)
+
+	list, lerr := runGuestSSH(deps, node0IP, fmt.Sprintf(
+		"pvesh get /cluster/sdn/vnets/%s/subnets --output-format json", v.ID))
+	if lerr != nil && guestCommandTransportFailed(lerr) {
+		return false, nil, fmt.Errorf("lab %q: list subnets on inner vlan sdn vnet %q on node 0 (%s): %w", name, v.ID, node0IP, lerr)
+	}
+
+	var existing []sdnInnerVlanSubnetState
+	if lerr == nil && list.Stdout != "" {
+		if uerr := json.Unmarshal([]byte(list.Stdout), &existing); uerr != nil {
+			return false, nil, fmt.Errorf("lab %q: decode inner vlan sdn subnets on vnet %q on node 0: %w", name, v.ID, uerr)
+		}
+	}
+
+	var found *sdnInnerVlanSubnetState
+	for i := range existing {
+		if existing[i].Cidr == v.CIDR {
+			found = &existing[i]
+			break
+		}
+	}
+
+	if found == nil {
+		createCmd := fmt.Sprintf("pvesh create /cluster/sdn/vnets/%s/subnets --subnet %s --type subnet", v.ID, v.CIDR)
+		if v.Gateway != "" {
+			createCmd += fmt.Sprintf(" --gateway %s", v.Gateway)
+		}
+		if _, cerr := runGuestSSH(deps, node0IP, createCmd); cerr != nil {
+			return false, nil, fmt.Errorf("lab %q: create subnet %q on inner vlan sdn vnet %q on node 0: %w", name, v.CIDR, v.ID, cerr)
+		}
+		return true, []string{stepLabel, fmt.Sprintf("sdn subnet %q created on node 0", v.CIDR)}, nil
+	}
+
+	if v.Gateway == "" || found.Gateway == v.Gateway {
+		return false, []string{stepLabel, fmt.Sprintf("sdn subnet %q already matches on node 0", v.CIDR)}, nil
+	}
+
+	updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/vnets/%s/subnets/%s --gateway %s", v.ID, found.Subnet, v.Gateway)
+	if _, uerr := runGuestSSH(deps, node0IP, updateCmd); uerr != nil {
+		return false, nil, fmt.Errorf("lab %q: update subnet %q gateway on inner vlan sdn vnet %q on node 0: %w", name, v.CIDR, v.ID, uerr)
+	}
+	return true, []string{stepLabel, fmt.Sprintf("sdn subnet %q gateway updated on node 0", v.CIDR)}, nil
 }

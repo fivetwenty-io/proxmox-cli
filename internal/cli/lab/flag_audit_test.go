@@ -24,7 +24,7 @@ import (
 // dedicated test file of its own.
 
 // TestLabGroup_CommandTreeAndAnnotation verifies Group(nil) assembles the
-// full `pmx lab` command tree — every one of the ten sub-command groups this
+// full `pmx lab` command tree — every one of the sub-command groups this
 // package exports — under the pve product annotation, without requiring a
 // live *cli.Deps.
 func TestLabGroup_CommandTreeAndAnnotation(t *testing.T) {
@@ -41,11 +41,11 @@ func TestLabGroup_CommandTreeAndAnnotation(t *testing.T) {
 	for _, want := range []string{
 		"create", "destroy", "list", "status", "start", "stop",
 		"net", "access", "quota", "config", "context",
-		"cluster", "qdevice", "sdn", "nfs", "scale",
+		"cluster", "qdevice", "sdn", "nfs", "scale", "hostnet",
 	} {
 		assert.True(t, names[want], "expected %q sub-command to be registered", want)
 	}
-	assert.Len(t, root.Commands(), 16, "expected exactly sixteen lab sub-commands")
+	assert.Len(t, root.Commands(), 17, "expected exactly seventeen lab sub-commands")
 }
 
 // TestCreateAuditFields_NetworkStorageAndPoolOverrides covers the five

@@ -145,6 +145,46 @@ func configExampleLab() *config.Lab {
 			},
 			BoshBloc: "10.108.16.0/20",
 			MTU:      1450,
+			// Vnets/HostNICs/NestedNetwork document the multi-bond nested
+			// topology fields (P1-T11): two extra outer vnets (storage,
+			// workload), the qm NICs that attach to them, and the matching
+			// in-guest bonds plus an inner client-VLAN zone on the
+			// vlan-aware workload bridge. A lab with none of these keys set
+			// still resolves exactly as it does today (single NIC, no
+			// bonds) — this example exists to document the shape, not to
+			// imply it is required.
+			Vnets: []config.LabVnet{
+				{ID: "examplst", Alias: "lab-example-storage", Tag: 5002,
+					CIDR: "10.108.32.0/24", Gateway: "10.108.32.1", Purpose: "storage"},
+				{ID: "examplwk", Alias: "lab-example-workload", Tag: 5003, Purpose: "workload"},
+			},
+			HostNICs: []config.LabHostNIC{
+				{Index: 1, VnetID: "example"},  // bond0 2nd member (mgmt)
+				{Index: 2, VnetID: "examplst"}, // bond1 1st member (storage)
+				{Index: 3, VnetID: "examplst"}, // bond1 2nd member
+				{Index: 4, VnetID: "examplwk"}, // bond2 1st member (workload)
+				{Index: 5, VnetID: "examplwk"}, // bond2 2nd member
+			},
+			NestedNetwork: config.LabNestedNetwork{
+				Bonds: []config.LabNestedBond{
+					{Name: "bond0", NICs: []string{"nic0", "nic1"},
+						Mode: config.NestedBondModeActiveBackup, Primary: "nic0", Bridge: "vmbr0"},
+					{Name: "bond1", NICs: []string{"nic2", "nic3"},
+						Mode: config.NestedBondModeActiveBackup, Primary: "nic2", Bridge: "vmbr1"},
+					{Name: "bond2", NICs: []string{"nic4", "nic5"},
+						Mode: config.NestedBondModeActiveBackup, Primary: "nic4", Bridge: "vmbr2", VlanAware: true},
+				},
+				VlanZone: &config.LabNestedVlanZone{
+					Bridge:   "vmbr2",
+					ZoneName: "clivlan",
+					Vnets: []config.LabNestedVlanVnet{
+						{ID: "cli40", Alias: "client-vlan40", Tag: 40, CIDR: "10.61.136.0/24", Gateway: "10.61.136.1"},
+						{ID: "cli38", Alias: "client-vlan38", Tag: 38, CIDR: "10.61.137.0/24", Gateway: "10.61.137.1"},
+						{ID: "cli59", Alias: "client-vlan59", Tag: 59, CIDR: "10.61.138.0/24", Gateway: "10.61.138.1"},
+						{ID: "cli60", Alias: "client-vlan60", Tag: 60, CIDR: "10.61.139.0/24", Gateway: "10.61.139.1"},
+					},
+				},
+			},
 		},
 		Compute: config.LabCompute{
 			VCPU:     configDefaultVCPU,
@@ -162,6 +202,10 @@ func configExampleLab() *config.Lab {
 			OSDiskGB:   configDefaultOSDiskGB,
 			DataDiskGB: configDefaultDataDiskGB,
 			RefquotaGB: configDefaultRefquotaGB,
+			// NFSQuotaGB documents the shape only; left at config.DefaultNFSQuotaGB's
+			// value explicitly (rather than 0/omitted) so the rendered example.yaml
+			// shows the field in use, even though a real lab may safely leave it unset.
+			NFSQuotaGB: config.DefaultNFSQuotaGB,
 			Controller: "virtio-scsi-single",
 			IOThread:   true,
 			Discard:    true,
@@ -412,6 +456,27 @@ func validateConfigAddLab(lab *config.Lab) error {
 		return fmt.Errorf("network plan is incoherent:\n  %s", strings.Join(issues, "\n  "))
 	}
 
+	// labNestedNetworkPlanIssues (config.ValidateNestedNetwork) may report
+	// warning-class issues alongside hard errors — currently only D-04's
+	// 802.3ad non-functionality note, prefixed "warning: " — for a bond mode
+	// an operator may legitimately author for later real-hardware parity.
+	// Only hard errors refuse the write here; `add` has no flags that set
+	// nested_network today, so this is zero-value (no issues) for every
+	// config add call in practice, and only becomes reachable once a future
+	// flag or --force-equivalent lets a caller pass a populated
+	// NestedNetwork through configSchemaDefaultLab.
+	if issues := labNestedNetworkPlanIssues(lab.Name, lab.Network.NestedNetwork); len(issues) > 0 {
+		var hardIssues []string
+		for _, issue := range issues {
+			if !strings.HasPrefix(issue, "warning: ") {
+				hardIssues = append(hardIssues, issue)
+			}
+		}
+		if len(hardIssues) > 0 {
+			return fmt.Errorf("nested network plan is incoherent:\n  %s", strings.Join(hardIssues, "\n  "))
+		}
+	}
+
 	if lab.Compute.VCPU <= 0 {
 		return fmt.Errorf("vcpu must be > 0, got %d", lab.Compute.VCPU)
 	}
@@ -423,6 +488,9 @@ func validateConfigAddLab(lab *config.Lab) error {
 	}
 	if lab.Storage.RefquotaGB <= 0 {
 		return fmt.Errorf("refquota-gb must be > 0, got %d", lab.Storage.RefquotaGB)
+	}
+	if lab.Storage.NFSQuotaGB < 0 {
+		return fmt.Errorf("storage.nfs_quota_gb must be >= 0, got %d", lab.Storage.NFSQuotaGB)
 	}
 
 	return nil

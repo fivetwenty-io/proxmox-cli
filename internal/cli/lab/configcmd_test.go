@@ -110,6 +110,116 @@ func TestConfigInit_ForceOverwrites(t *testing.T) {
 	assert.Contains(t, out, "example.yaml")
 }
 
+// TestConfigInit_ExampleDocumentsNewNetworkFields is P1-T11's own acceptance
+// case: `pmx lab config init`'s rendered example.yaml must document the
+// three new LabNetwork fields (vnets, host_nics, nested_network), not just
+// carry them silently in the struct.
+func TestConfigInit_ExampleDocumentsNewNetworkFields(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{})
+
+	_, err := runConfigCmd(t, cfgPath, "init")
+	require.NoError(t, err)
+
+	examplePath := filepath.Join(filepath.Dir(cfgPath), "labs.d", "example.yaml")
+	data, err := os.ReadFile(examplePath)
+	require.NoError(t, err)
+
+	content := string(data)
+	assert.Contains(t, content, "vnets:")
+	assert.Contains(t, content, "host_nics:")
+	assert.Contains(t, content, "nested_network:")
+	assert.Contains(t, content, "bonds:")
+	assert.Contains(t, content, "vlan_zone:")
+}
+
+// TestConfigInit_ExampleNewNetworkFieldsRoundTrip confirms the example lab's
+// new-field example values are not just rendered as text but parse back
+// correctly through the real ResolveLabs path.
+func TestConfigInit_ExampleNewNetworkFieldsRoundTrip(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "init")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	labs, err := config.ResolveLabs(cfg, cfgPath)
+	require.NoError(t, err)
+
+	got := labs["example"]
+	require.NotNil(t, got)
+	require.Len(t, got.Network.Vnets, 2)
+	assert.Equal(t, "examplst", got.Network.Vnets[0].ID)
+	require.Len(t, got.Network.HostNICs, 5)
+	assert.Equal(t, 1, got.Network.HostNICs[0].Index)
+	require.Len(t, got.Network.NestedNetwork.Bonds, 3)
+	require.NotNil(t, got.Network.NestedNetwork.VlanZone)
+	assert.Equal(t, "clivlan", got.Network.NestedNetwork.VlanZone.ZoneName)
+	require.Len(t, got.Network.NestedNetwork.VlanZone.Vnets, 4)
+
+	assert.Empty(t, config.ValidateNestedNetwork("example", got.Network.NestedNetwork),
+		"the shipped example must itself be a valid nested_network plan")
+}
+
+// TestConfigAdd_ZeroValueNewNetworkFieldsRoundTrip confirms `config add` (no
+// flags exist yet for vnets/host_nics/nested_network) writes a file whose
+// new fields stay nil/zero-value after a full write-then-resolve round
+// trip — the "absent means today's shape, unchanged" backward-compat rule
+// applied to config add's own output, not just a hand-authored file.
+func TestConfigAdd_ZeroValueNewNetworkFieldsRoundTrip(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "xi", "--vxlan-tag", "5020", "--cidr", "10.121.0.0/16")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	labs, err := config.ResolveLabs(cfg, cfgPath)
+	require.NoError(t, err)
+
+	got := labs["xi"]
+	require.NotNil(t, got)
+	assert.Nil(t, got.Network.Vnets)
+	assert.Nil(t, got.Network.HostNICs)
+	assert.Equal(t, config.LabNestedNetwork{}, got.Network.NestedNetwork)
+}
+
+// TestValidateConfigAddLab_NestedNetworkHardError_Refuses is a direct
+// unit-level check of the wiring the CLI-level tests above cannot exercise
+// (config add has no flags yet that populate nested_network): a hard-error
+// nested_network issue (too few NICs on a bond) must refuse the write.
+func TestValidateConfigAddLab_NestedNetworkHardError_Refuses(t *testing.T) {
+	lab := configSchemaDefaultLab("nestbad")
+	lab.Network.VxlanTag = 5021
+	lab.Network.CIDR = "10.122.0.0/16"
+	lab.Network.NestedNetwork = config.LabNestedNetwork{
+		Bonds: []config.LabNestedBond{
+			{Name: "bond0", NICs: []string{"nic0"}, Mode: config.NestedBondModeActiveBackup, Bridge: "vmbr0"},
+		},
+	}
+
+	err := validateConfigAddLab(lab)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nested network plan is incoherent")
+	assert.Contains(t, err.Error(), "need at least 2")
+}
+
+// TestValidateConfigAddLab_NestedNetworkWarningOnly_DoesNotRefuse confirms
+// a warning-class nested_network issue (D-04's 802.3ad non-functionality
+// note) does not block the write — only hard errors do.
+func TestValidateConfigAddLab_NestedNetworkWarningOnly_DoesNotRefuse(t *testing.T) {
+	lab := configSchemaDefaultLab("nestwarn")
+	lab.Network.VxlanTag = 5022
+	lab.Network.CIDR = "10.123.0.0/16"
+	lab.Network.NestedNetwork = config.LabNestedNetwork{
+		Bonds: []config.LabNestedBond{
+			{Name: "bond0", NICs: []string{"nic0", "nic1"}, Mode: config.NestedBondMode8023ad, Bridge: "vmbr0"},
+		},
+	}
+
+	require.NoError(t, validateConfigAddLab(lab))
+}
+
 func TestConfigInit_LabsDirFlagOverridesDefault(t *testing.T) {
 	cfgPath := writeConfigCmdYAML(t, &config.Config{})
 	custom := filepath.Join(filepath.Dir(cfgPath), "custom-labs")

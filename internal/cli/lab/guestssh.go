@@ -66,14 +66,37 @@ func labGuestSSHFlags(deps *cli.Deps) (sshcmd.Flags, error) {
 // StrictHostKeyChecking=accept-new (silently trusting a guest's host key on
 // its first connection, rather than either prompting — impossible
 // non-interactively — or refusing every never-before-seen lab guest
-// outright), then the "user@host" destination. The remote command, if any,
-// is appended by the caller.
+// outright), plus ForwardAgent=no, then the "user@host" destination. The
+// remote command, if any, is appended by the caller.
+//
+// ForwardAgent=no (live pve-cpi-az2 finding): every guest-side command this
+// package runs must authenticate as the GUEST's own /root/.ssh/id_rsa —
+// nothing else. Without this override, an operator whose own ~/.ssh/config
+// sets `ForwardAgent yes` (a common `Host *` default) gets their local
+// ssh-agent forwarded straight into the guest session; any ssh call the
+// guest itself then makes (notably `pvecm add`'s own ssh-fallback join path,
+// and this package's own clusterSeedJoinTrust preflight — see cluster.go)
+// offers every key in that forwarded agent before ever trying the guest's
+// own key, and a large keyring (dozens of unrelated operator keys) blows
+// through the remote sshd's MaxAuthTries and gets disconnected with no
+// output on either stream: "Received disconnect ...: Too many
+// authentication failures". A command-line -o always overrides a matching
+// ssh_config directive (command-line options take precedence over config
+// files), so this is sufficient regardless of the operator's own
+// ~/.ssh/config. Deliberately NOT paired with -o IdentityAgent=none: that
+// option only changes which agent socket THIS OUTER ssh call (operator ->
+// guest) uses to authenticate itself, which is unrelated to the forwarding
+// bug above (which is about an agent socket appearing *inside* the guest
+// session) and would risk breaking an operator whose key material lives
+// only in an agent (e.g. a hardware token) rather than an on-disk identity
+// file.
 func labGuestSSHArgs(f sshcmd.Flags, host string) []string {
 	args := sshcmd.OptionArgs(&f)
 	args = append(args,
 		"-o", "BatchMode=yes",
 		"-o", fmt.Sprintf("ConnectTimeout=%d", guestConnectTimeoutSec),
 		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ForwardAgent=no",
 	)
 	args = append(args, sshcmd.Dest(&f, host))
 	return args
@@ -106,6 +129,16 @@ type guestSSHResult struct {
 // exec.ExitCodeOf(err) — this is exactly what the idempotency probes in this
 // package do to tell "not yet clustered" from "ssh to the node itself is
 // broken").
+//
+// A non-nil err is always wrapped in exec.CapturedError: this call wires
+// ssh's stdout/stderr to in-memory buffers (never to the real terminal), so
+// unlike an interactive/pass-through ssh call, nothing here has ever been
+// shown to the user — the top-level error handler (internal/cli.Execute)
+// must print it rather than assume, as it does for *exec.ExitError from a
+// pass-through call, that the child already displayed its own diagnostics
+// (see internal/exec.CapturedError's doc comment for the live failure this
+// prevents: a swallowed "Too many authentication failures" that exited 255
+// with zero output on either stream).
 func runGuestSSH(deps *cli.Deps, host, remoteCmd string) (guestSSHResult, error) {
 	f, ferr := labGuestSSHFlags(deps)
 	if ferr != nil {
@@ -121,7 +154,8 @@ func runGuestSSH(deps *cli.Deps, host, remoteCmd string) (guestSSHResult, error)
 	res := guestSSHResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	if err != nil {
 		res.ExitCode = exec.ExitCodeOf(err)
-		return res, fmt.Errorf("ssh %s@%s %q: %w (stderr: %s)", f.User, host, remoteCmd, err, strings.TrimSpace(stderr.String()))
+		wrapped := fmt.Errorf("ssh %s@%s %q: %w (stderr: %s)", f.User, host, remoteCmd, err, strings.TrimSpace(stderr.String()))
+		return res, exec.NewCapturedError(wrapped)
 	}
 	return res, nil
 }
@@ -231,7 +265,19 @@ func parsePvecmStatus(output string) pvecmStatus {
 
 // --- corosync-cfgtool -s parsing ------------------------------------------
 
-var corosyncNodeStatusRE = regexp.MustCompile(`(?m)^\s*nodeid\s+\d+:\s*(\S+)`)
+// corosyncNodeStatusRE matches a "nodeid" status line in `corosync-cfgtool
+// -s` output in either shape corosync is known to emit it in: the live
+// PVE 9.2/corosync 3.x knet-transport shape, where the label itself carries
+// a trailing colon and the id/status pair is tab-separated ("nodeid:
+// 1:\tlocalhost"), and the previously-assumed shape with no colon on the
+// label and space-separated fields ("nodeid 1: connected"). The `:?` after
+// "nodeid" and `\s+` (matching either spaces or tabs) before the captured
+// status cover both without needing two separate patterns. (M-COROLINK: the
+// unmatched live shape previously made parseCorosyncLinks return (false,
+// nil) unconditionally — clusterWaitForJoin and scaleValidateNode then timed
+// out waiting for "all corosync links up" on an already-healthy cluster, and
+// `pmx lab cluster status` always reported "no link status parsed".)
+var corosyncNodeStatusRE = regexp.MustCompile(`(?m)^\s*nodeid:?\s+\d+:\s*(\S+)`)
 
 // parseCorosyncLinks parses the plain-text output of `corosync-cfgtool -s`
 // and reports whether every reported link status is either "connected" (a

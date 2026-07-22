@@ -196,28 +196,109 @@ func legacyLabVMName(name string) string {
 // of a lab's mgmt /24: the subnet's network address plus 10+i (".10"-".14"
 // for i in 0..4). i must be in [0, maxLabNodeIndex]; any other value is a
 // caller error, not a config error, since every call site loops i over an
-// already-validated topology's node range.
+// already-validated topology's node range. This is a one-line wrapper around
+// the vnet-generalized labVnetNodeIP, called against the lab's resolved
+// primary mgmt CIDR (labMgmtCIDR) — byte-identical output to before this
+// helper was generalized.
 func labNodeMgmtIP(n config.LabNetwork, i int) (string, error) {
-	if i < 0 || i > maxLabNodeIndex {
-		return "", fmt.Errorf("node index %d is out of range [0, %d]", i, maxLabNodeIndex)
+	cidr, err := labMgmtCIDR(n)
+	if err != nil {
+		return "", err
 	}
-	return labMgmtOffsetIP(n, 10+i)
+	return labVnetNodeIP(cidr, i)
 }
 
 // labQdeviceMgmtIP returns the QDevice VM's management IP address: the lab's
 // mgmt /24 base plus ".15" (multi-node lab plan §3.3).
 func labQdeviceMgmtIP(n config.LabNetwork) (string, error) {
-	return labMgmtOffsetIP(n, 15)
+	cidr, err := labMgmtCIDR(n)
+	if err != nil {
+		return "", err
+	}
+	return labVnetOffsetIP(cidr, 15)
 }
 
 // labMgmtOffsetIP returns the IPv4 address at offset (the last octet) within
-// a lab's mgmt /24, derived from labMgmtBaseIP(n).
+// a lab's mgmt /24, derived from labMgmtCIDR(n). Kept as a thin wrapper
+// (rather than removed outright) since nfs.go's NFS-gateway addressing
+// (offset 1, not a node index) still calls it directly.
 func labMgmtOffsetIP(n config.LabNetwork, offset int) (string, error) {
-	if offset < 0 || offset > 255 {
-		return "", fmt.Errorf("mgmt IP offset %d is out of range [0, 255]", offset)
+	cidr, err := labMgmtCIDR(n)
+	if err != nil {
+		return "", err
+	}
+	return labVnetOffsetIP(cidr, offset)
+}
+
+// labMgmtCIDR resolves a lab's mgmt subnet to an IPv4 CIDR string (e.g.
+// "10.10.1.0/24"): n.Mgmt.Subnet verbatim when it is set (after validating
+// it parses as an IPv4 CIDR), else n.Mgmt.HostIP masked to /24 and
+// re-expressed as a CIDR (today's convention: HostIP is always node 0's own
+// ".10" address, so masking it to /24 yields the same network base an
+// explicit Subnet would state). Both fields empty, or set but unparsable, is
+// an error: node/QDevice IP derivation has no other source of truth for the
+// mgmt subnet's base address.
+func labMgmtCIDR(n config.LabNetwork) (string, error) {
+	if n.Mgmt.Subnet != "" {
+		_, parsed, err := net.ParseCIDR(n.Mgmt.Subnet)
+		if err != nil {
+			return "", fmt.Errorf("network.mgmt.subnet %q is invalid: %w", n.Mgmt.Subnet, err)
+		}
+		if parsed.IP.To4() == nil {
+			return "", fmt.Errorf("network.mgmt.subnet %q is not an IPv4 subnet", n.Mgmt.Subnet)
+		}
+		// parsed.String() re-expresses through the masked network base
+		// (host bits zeroed), not n.Mgmt.Subnet verbatim: a subnet authored
+		// with host bits set (e.g. "10.254.0.5/24") must still agree with
+		// the node/QDevice IP derivation below, which always masks to the
+		// network base — otherwise the NFS export ACL (nfsLabRwSharenfs)
+		// diverges from the actual node subnet.
+		return parsed.String(), nil
 	}
 
-	base, err := labMgmtBaseIP(n)
+	if n.Mgmt.HostIP != "" {
+		ip := net.ParseIP(n.Mgmt.HostIP)
+		if ip == nil {
+			return "", fmt.Errorf("network.mgmt.host_ip %q is not a valid IP address", n.Mgmt.HostIP)
+		}
+		v4 := ip.To4()
+		if v4 == nil {
+			return "", fmt.Errorf("network.mgmt.host_ip %q is not a valid IPv4 address", n.Mgmt.HostIP)
+		}
+		base := v4.Mask(net.CIDRMask(24, 32))
+		return fmt.Sprintf("%s/24", base.String()), nil
+	}
+
+	return "", fmt.Errorf(
+		"lab network has neither mgmt.subnet nor mgmt.host_ip set; cannot derive a node management IP")
+}
+
+// labVnetBaseIP parses cidr (e.g. "10.254.32.0/24") and returns its IPv4
+// network address (all-zero host bits). cidr must be a valid IPv4 CIDR;
+// anything else is an error.
+func labVnetBaseIP(cidr string) (net.IP, error) {
+	_, parsed, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("cidr %q is invalid: %w", cidr, err)
+	}
+	v4 := parsed.IP.To4()
+	if v4 == nil {
+		return nil, fmt.Errorf("cidr %q is not an IPv4 subnet", cidr)
+	}
+	return v4, nil
+}
+
+// labVnetOffsetIP returns the IPv4 address at offset (the last octet) within
+// the subnet described by cidr: the network address (labVnetBaseIP) plus
+// offset. This is the vnet-agnostic form the old mgmt-only offset helper was
+// generalized into, usable against any LabVnet.CIDR, not only a lab's mgmt
+// subnet.
+func labVnetOffsetIP(cidr string, offset int) (string, error) {
+	if offset < 0 || offset > 255 {
+		return "", fmt.Errorf("IP offset %d is out of range [0, 255]", offset)
+	}
+
+	base, err := labVnetBaseIP(cidr)
 	if err != nil {
 		return "", err
 	}
@@ -228,38 +309,16 @@ func labMgmtOffsetIP(n config.LabNetwork, offset int) (string, error) {
 	return ip.String(), nil
 }
 
-// labMgmtBaseIP returns the network address (all-zero host bits) of a lab's
-// mgmt /24: parsed from n.Mgmt.Subnet when it is set, else derived from
-// n.Mgmt.HostIP masked to /24 (today's convention: HostIP is always node 0's
-// own ".10" address, so masking it to /24 yields the same network base an
-// explicit Subnet would state). Both fields empty, or set but unparsable, is
-// an error: node/QDevice IP derivation has no other source of truth for the
-// mgmt subnet's base address.
-func labMgmtBaseIP(n config.LabNetwork) (net.IP, error) {
-	if n.Mgmt.Subnet != "" {
-		_, cidr, err := net.ParseCIDR(n.Mgmt.Subnet)
-		if err != nil {
-			return nil, fmt.Errorf("network.mgmt.subnet %q is invalid: %w", n.Mgmt.Subnet, err)
-		}
-		v4 := cidr.IP.To4()
-		if v4 == nil {
-			return nil, fmt.Errorf("network.mgmt.subnet %q is not an IPv4 subnet", n.Mgmt.Subnet)
-		}
-		return v4, nil
+// labVnetNodeIP returns node index i's (0-based) address within an arbitrary
+// vnet subnet cidr: the network address plus 10+i (".10"-".14" for i in
+// 0..4) — the same offset rule labNodeMgmtIP has always applied to a lab's
+// mgmt subnet, generalized here to any LabVnet.CIDR (e.g. a storage vnet's
+// own per-node addressing, multi-AZ topology plan §2/§4). i must be in [0,
+// maxLabNodeIndex]; any other value is a caller error, not a config error,
+// mirroring labNodeMgmtIP's own contract.
+func labVnetNodeIP(cidr string, i int) (string, error) {
+	if i < 0 || i > maxLabNodeIndex {
+		return "", fmt.Errorf("node index %d is out of range [0, %d]", i, maxLabNodeIndex)
 	}
-
-	if n.Mgmt.HostIP != "" {
-		ip := net.ParseIP(n.Mgmt.HostIP)
-		if ip == nil {
-			return nil, fmt.Errorf("network.mgmt.host_ip %q is not a valid IP address", n.Mgmt.HostIP)
-		}
-		v4 := ip.To4()
-		if v4 == nil {
-			return nil, fmt.Errorf("network.mgmt.host_ip %q is not a valid IPv4 address", n.Mgmt.HostIP)
-		}
-		return v4.Mask(net.CIDRMask(24, 32)), nil
-	}
-
-	return nil, fmt.Errorf(
-		"lab network has neither mgmt.subnet nor mgmt.host_ip set; cannot derive a node management IP")
+	return labVnetOffsetIP(cidr, 10+i)
 }

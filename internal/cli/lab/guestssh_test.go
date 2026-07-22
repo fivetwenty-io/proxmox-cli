@@ -192,6 +192,11 @@ LINK ID 0
 		nodeid  3:	connected
 `
 
+// sampleRootPubKey is a syntactically-plausible (but not cryptographically
+// real) OpenSSH public key line, standing in for the joining node's `cat
+// /root/.ssh/id_rsa.pub` output in cluster-join trust-seeding tests.
+const sampleRootPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeTestKeyMaterialOnlyNotARealKeyXX root@lab-node"
+
 const sampleCorosyncCfgtoolDegraded = `Local node ID 1, transport knet
 LINK ID 0
 	addr	= 10.10.1.10
@@ -200,6 +205,31 @@ LINK ID 0
 		nodeid  2:	connected
 		nodeid  3:	disconnected
 `
+
+// sampleCorosyncCfgtoolLiveKnetColon is VERBATIM live `corosync-cfgtool -s`
+// output captured against az2 node 0 (PVE 9.2, corosync 3.x, knet
+// transport): unlike sampleCorosyncCfgtoolAllUp above, the "nodeid" label
+// itself carries a trailing colon and the id/status pair is tab-separated
+// rather than space-separated (M-COROLINK — see corosyncNodeStatusRE's doc
+// comment). Kept byte-for-byte as captured, tabs included, so this fixture
+// is the actual regression lock for that live shape rather than a
+// reconstruction of it.
+const sampleCorosyncCfgtoolLiveKnetColon = "Local node ID 1, transport knet\n" +
+	"LINK ID 0 udp\n" +
+	"\taddr\t= 10.255.0.10\n" +
+	"\tstatus:\n" +
+	"\t\tnodeid:          1:\tlocalhost\n" +
+	"\t\tnodeid:          2:\tconnected\n"
+
+// sampleCorosyncCfgtoolLiveKnetColonDisconnected is the same live knet-colon
+// shape with node 2's link reporting "disconnected" instead of "connected",
+// covering the degraded case for that shape.
+const sampleCorosyncCfgtoolLiveKnetColonDisconnected = "Local node ID 1, transport knet\n" +
+	"LINK ID 0 udp\n" +
+	"\taddr\t= 10.255.0.10\n" +
+	"\tstatus:\n" +
+	"\t\tnodeid:          1:\tlocalhost\n" +
+	"\t\tnodeid:          2:\tdisconnected\n"
 
 func TestParsePvecmStatus_NotClustered(t *testing.T) {
 	st := parsePvecmStatus(samplePvecmStatusNotClustered)
@@ -235,6 +265,27 @@ func TestParseCorosyncLinks_Degraded(t *testing.T) {
 	assert.Contains(t, statuses, "disconnected")
 }
 
+// TestParseCorosyncLinks_LiveKnetColonShape_AllUp is the regression lock for
+// M-COROLINK: the live PVE 9.2/corosync 3.x knet shape ("nodeid:" with a
+// trailing colon on the label, tab-separated id/status) must parse
+// correctly — before the corosyncNodeStatusRE fix this returned (false,
+// nil) on a fully healthy, already-joined cluster, so clusterWaitForJoin and
+// scaleValidateNode could never converge and `pmx lab cluster status` always
+// reported "no link status parsed".
+func TestParseCorosyncLinks_LiveKnetColonShape_AllUp(t *testing.T) {
+	allUp, statuses := parseCorosyncLinks(sampleCorosyncCfgtoolLiveKnetColon)
+	assert.True(t, allUp)
+	assert.Equal(t, []string{"localhost", "connected"}, statuses)
+}
+
+// TestParseCorosyncLinks_LiveKnetColonShape_Disconnected covers the degraded
+// case for the same live knet-colon shape.
+func TestParseCorosyncLinks_LiveKnetColonShape_Disconnected(t *testing.T) {
+	allUp, statuses := parseCorosyncLinks(sampleCorosyncCfgtoolLiveKnetColonDisconnected)
+	assert.False(t, allUp)
+	assert.Contains(t, statuses, "disconnected")
+}
+
 func TestParseCorosyncLinks_UnparsableOutput(t *testing.T) {
 	allUp, statuses := parseCorosyncLinks("garbage, not corosync-cfgtool output at all")
 	assert.False(t, allUp, "unparsable output must never be treated as vacuously all-up")
@@ -254,6 +305,22 @@ func TestLabGuestSSHArgs_IncludesBatchModeAndAcceptNewHostKey(t *testing.T) {
 	assert.Contains(t, args, "-i")
 	assert.Contains(t, args, "/id")
 	assert.Equal(t, "root@10.10.1.10", args[len(args)-1])
+}
+
+// TestLabGuestSSHArgs_DisablesAgentForwarding locks in the live pve-cpi-az2
+// fix: ForwardAgent=no must always be present, overriding any `ForwardAgent
+// yes` the operator's own ~/.ssh/config sets (a command-line -o always wins
+// over a matching ssh_config directive), so a forwarded operator agent never
+// leaks into a guest session and poisons a nested ssh call (e.g. pvecm add's
+// own ssh-fallback join path, or clusterSeedJoinTrust's preflight) with
+// unrelated keys past the remote sshd's MaxAuthTries.
+func TestLabGuestSSHArgs_DisablesAgentForwarding(t *testing.T) {
+	deps := &cli.Deps{Ctx: &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}}
+	f, err := labGuestSSHFlags(deps)
+	require.NoError(t, err)
+
+	args := labGuestSSHArgs(f, "10.10.1.10")
+	assert.Contains(t, args, "ForwardAgent=no")
 }
 
 func TestLabGuestSSHFlags_RequiresContext(t *testing.T) {

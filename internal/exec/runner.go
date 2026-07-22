@@ -61,6 +61,45 @@ func ExitCodeOf(err error) int {
 	return -1
 }
 
+// CapturedError marks an error as originating from a Run call whose
+// stdout/stderr were captured into in-memory buffers rather than passed
+// through to the real terminal (as RunInteractive does, and as a Run call
+// wired directly to e.g. cmd.OutOrStdout()/cmd.ErrOrStderr() does). The
+// distinction matters to the CLI's top-level error handler (internal/cli.
+// Execute): when a child process's own stdout/stderr WAS the real terminal,
+// whatever it printed is already visible to the user, so re-printing a
+// wrapped *ExitError on top would just duplicate that output — but when a
+// caller captured the child's streams into buffers instead (e.g. this
+// package's callers that build their own error message folding captured
+// stderr into it), the user has been shown NOTHING; silently swallowing
+// that error under the same "already printed" assumption hides it entirely.
+//
+// A caller that captures output and constructs its own ready-to-print error
+// (already including whatever captured output it wants shown) should wrap
+// that error with NewCapturedError so Execute knows to print it after all.
+type CapturedError struct {
+	err error
+}
+
+// NewCapturedError wraps err as a CapturedError. Returns nil for a nil err,
+// so callers can use it unconditionally on a possibly-nil error return
+// without an extra nil check.
+func NewCapturedError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &CapturedError{err: err}
+}
+
+// Error returns the wrapped error's message unchanged — CapturedError is a
+// pure marker, not a distinct error message.
+func (e *CapturedError) Error() string { return e.err.Error() }
+
+// Unwrap returns the wrapped error so errors.Is/errors.As (e.g. ExitCodeOf,
+// exitcode.FromError's *ExitError lookup) still see through this marker to
+// whatever real error/exit-code information is underneath it.
+func (e *CapturedError) Unwrap() error { return e.err }
+
 // realRunner is the production Runner backed by os/exec.
 type realRunner struct{}
 

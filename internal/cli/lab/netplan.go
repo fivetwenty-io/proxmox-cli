@@ -69,6 +69,9 @@ func labNetworkPlanIssues(n config.LabNetwork) []string {
 		}
 	}
 
+	issues = append(issues, labVnetsPlanIssues(n, cidr)...)
+	issues = append(issues, labHostNICsPlanIssues(n)...)
+
 	return issues
 }
 
@@ -79,6 +82,176 @@ func cidrContains(outer, inner *net.IPNet) bool {
 	outerOnes, _ := outer.Mask.Size()
 	innerOnes, _ := inner.Mask.Size()
 	return outer.Contains(inner.IP) && innerOnes >= outerOnes
+}
+
+// cidrsOverlap reports whether a and b's address ranges intersect at all.
+// CIDR blocks are power-of-two aligned, so any two either are fully disjoint
+// or one is fully contained in the other — there is no partial-overlap case
+// to special-case — which means checking each network's base address against
+// the other's range is a complete test in either direction.
+func cidrsOverlap(a, b *net.IPNet) bool {
+	return a.Contains(b.IP) || b.Contains(a.IP)
+}
+
+// labVnetsPlanIssues checks n.Vnets for internal coherence against n itself:
+// every vnet ID (together with the primary n.VnetID) must be unique and fit
+// PVE's vnet ID charset/length constraint, and every vnet's CIDR (when set —
+// a vnet may be a pure L2 passthrough with no subnet, e.g. a workload vnet)
+// must nest inside the lab's overall network.cidr the same way
+// network.mgmt.subnet and network.bosh_bloc already must, and must not
+// double-book address space already claimed by network.mgmt.subnet,
+// network.bosh_bloc, or another network.vnets[] entry. cidr is n.CIDR
+// already parsed by the caller (only called once n.CIDR itself is known
+// valid).
+func labVnetsPlanIssues(n config.LabNetwork, cidr *net.IPNet) []string {
+	var issues []string
+
+	seenIDs := make(map[string]bool, len(n.Vnets)+1)
+	if n.VnetID != "" {
+		seenIDs[n.VnetID] = true
+	}
+
+	type parsedVnet struct {
+		idx   int
+		vnet  config.LabVnet
+		block *net.IPNet
+	}
+	parsed := make([]parsedVnet, 0, len(n.Vnets))
+
+	for i, v := range n.Vnets {
+		if v.ID == "" {
+			issues = append(issues, fmt.Sprintf("network.vnets[%d].id is required", i))
+		} else {
+			if !configVnetIDPattern.MatchString(v.ID) {
+				issues = append(issues, fmt.Sprintf(
+					"network.vnets[%d].id %q must be 1-8 alphanumeric characters with no hyphen", i, v.ID))
+			}
+			if seenIDs[v.ID] {
+				issues = append(issues, fmt.Sprintf(
+					"network.vnets[%d].id %q collides with the primary vnet_id or an earlier network.vnets[] entry",
+					i, v.ID))
+			}
+			seenIDs[v.ID] = true
+		}
+
+		if v.CIDR == "" {
+			continue
+		}
+		_, block, err := net.ParseCIDR(v.CIDR)
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("network.vnets[%d].cidr %q is invalid: %v", i, v.CIDR, err))
+			continue
+		}
+		if !cidrContains(cidr, block) {
+			issues = append(issues, fmt.Sprintf(
+				"network.vnets[%d].cidr %s is not contained in network.cidr %s", i, v.CIDR, n.CIDR))
+		}
+		parsed = append(parsed, parsedVnet{idx: i, vnet: v, block: block})
+	}
+
+	// Overlap checks below only run against fields already confirmed
+	// parseable by the caller's own mgmt/bosh_bloc checks above; a mgmt or
+	// bosh_bloc field that is itself malformed already produced its own
+	// issue there; re-parsing here and silently skipping on error (rather
+	// than erroring a second time) avoids a duplicate report for the same
+	// root cause.
+	var mgmt, bosh *net.IPNet
+	if n.Mgmt.Subnet != "" {
+		if _, m, err := net.ParseCIDR(n.Mgmt.Subnet); err == nil {
+			mgmt = m
+		}
+	}
+	if n.BoshBloc != "" {
+		if _, b, err := net.ParseCIDR(n.BoshBloc); err == nil {
+			bosh = b
+		}
+	}
+
+	for i, p := range parsed {
+		if mgmt != nil && cidrsOverlap(p.block, mgmt) {
+			issues = append(issues, fmt.Sprintf(
+				"network.vnets[%d].cidr %s overlaps network.mgmt.subnet %s", p.idx, p.vnet.CIDR, n.Mgmt.Subnet))
+		}
+		if bosh != nil && cidrsOverlap(p.block, bosh) {
+			issues = append(issues, fmt.Sprintf(
+				"network.vnets[%d].cidr %s overlaps network.bosh_bloc %s", p.idx, p.vnet.CIDR, n.BoshBloc))
+		}
+		for j := i + 1; j < len(parsed); j++ {
+			q := parsed[j]
+			if cidrsOverlap(p.block, q.block) {
+				issues = append(issues, fmt.Sprintf(
+					"network.vnets[%d].cidr %s overlaps network.vnets[%d].cidr %s",
+					p.idx, p.vnet.CIDR, q.idx, q.vnet.CIDR))
+			}
+		}
+	}
+
+	return issues
+}
+
+// labHostNICsPlanIssues checks n.HostNICs for internal coherence against n
+// itself: every entry's index must be >=1 (net0 is always the primary vnet
+// and is never repeated in this list) and unique, and every entry's VnetID
+// must resolve to either the primary n.VnetID or one of n.Vnets[].ID — a
+// HostNIC naming any other vnet ID would ask createVM/createQdeviceVM to
+// attach a qm net line to a vnet this lab never ensures, which PVE would
+// reject at VM-create time with a much less actionable error.
+func labHostNICsPlanIssues(n config.LabNetwork) []string {
+	var issues []string
+
+	validVnetIDs := make(map[string]bool, len(n.Vnets)+1)
+	if n.VnetID != "" {
+		validVnetIDs[n.VnetID] = true
+	}
+	for _, v := range n.Vnets {
+		if v.ID != "" {
+			validVnetIDs[v.ID] = true
+		}
+	}
+
+	seenIndex := make(map[int]int, len(n.HostNICs))
+	for i, hn := range n.HostNICs {
+		switch {
+		case hn.Index < 1:
+			issues = append(issues, fmt.Sprintf(
+				"network.host_nics[%d].index %d must be >= 1 (net0 is reserved for the primary vnet)",
+				i, hn.Index))
+		default:
+			if prior, dup := seenIndex[hn.Index]; dup {
+				issues = append(issues, fmt.Sprintf(
+					"network.host_nics[%d].index %d collides with network.host_nics[%d].index "+
+						"(every netN index must be unique)", i, hn.Index, prior))
+			} else {
+				seenIndex[hn.Index] = i
+			}
+		}
+
+		switch {
+		case hn.VnetID == "":
+			issues = append(issues, fmt.Sprintf("network.host_nics[%d].vnet_id is required", i))
+		case !validVnetIDs[hn.VnetID]:
+			issues = append(issues, fmt.Sprintf(
+				"network.host_nics[%d].vnet_id %q does not resolve to the primary vnet_id %q "+
+					"or any network.vnets[] entry", i, hn.VnetID, n.VnetID))
+		}
+	}
+
+	return issues
+}
+
+// labNestedNetworkPlanIssues checks a lab's nested in-guest bonding/bridging
+// and inner SDN vlan-zone plan for internal coherence. It wraps
+// config.ValidateNestedNetwork verbatim — including that function's own
+// VlanZone.Bridge-vs-Bonds[].Bridge+VlanAware cross-reference check — rather
+// than reimplementing it, so this file has one canonical place a caller
+// (config add, create, scale) reaches for the "is this lab's network plan
+// coherent" gate that already covers both the outer SDN plan
+// (labNetworkPlanIssues) and the inner nested-node plan. name is the lab's
+// name, threaded straight through to config.ValidateNestedNetwork's own
+// per-lab message prefix. A zero-value nn (no Bonds, no VlanZone) always
+// returns nil, matching config.ValidateNestedNetwork's own contract.
+func labNestedNetworkPlanIssues(name string, nn config.LabNestedNetwork) []string {
+	return config.ValidateNestedNetwork(name, nn)
 }
 
 // guestPrefixWarning inspects the guest-agent-reported interface addresses

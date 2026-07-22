@@ -77,6 +77,7 @@ VE API.`,
 		newSdnCmd(),
 		newNfsCmd(),
 		newScaleCmd(),
+		newHostnetCmd(),
 	)
 
 	return cmd

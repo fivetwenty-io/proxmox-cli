@@ -102,7 +102,12 @@ func newNfsCmd() *cobra.Command {
 		Long: "Register (or remove) the shared NFS service's per-lab images/backup exports and " +
 			"the cluster-wide read-only ISO/template export as PVE storage on a lab's nested " +
 			"cluster (or single-node lab — NFS attach applies regardless of node count), over " +
-			"ssh/pvesm against node 0.",
+			"ssh/pvesm against node 0.\n\n" +
+			"`attach` also ensures the SERVER-side ZFS dataset/export objects these storage " +
+			"entries point at (tank/nfs/labs/<lab>/{images,backup}, plus this lab's mgmt /24 " +
+			"membership in the shared tank/nfs/shared/iso export's ro= list) exist on the outer " +
+			"PVE node hosting tank/nfs, over ssh via --node/$PMX_NODE/the context default node. " +
+			"`detach` never touches any of that server-side state — see its own Long text.",
 	}
 	cmd.AddCommand(newNfsAttachCmd(), newNfsStatusCmd(), newNfsDetachCmd())
 	return cmd
@@ -115,13 +120,26 @@ func newNfsAttachCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "attach <name>",
 		Short: "Register the shared NFS exports as PVE storage on a lab",
-		Long: "Run `pvesm add nfs ...` over ssh on node 0 for each of the lab's three fixed " +
+		Long: "First ensures this lab's SERVER-side NFS export objects exist on the outer PVE " +
+			"node hosting tank/nfs (resolved via --node/$PMX_NODE/the context default node, the " +
+			"same resolution `pmx pve node ssh` uses): the tank/nfs/labs/<name>/{images,backup} " +
+			"datasets (created if missing, with their recordsize), a ZFS `quota` on their " +
+			"tank/nfs/labs/<name> parent (storage.nfs_quota_gb, default 200G), a `rw` sharenfs " +
+			"ACL on images/backup scoped to this lab's own mgmt /24, and this lab's mgmt /24 " +
+			"membership in the shared tank/nfs/shared/iso export's `ro=` subnet list (inserted, " +
+			"never replacing any other lab's entry). This step refuses loudly, naming lab repo " +
+			"scripts/60-nfs-service as the remediation, if the shared/iso export itself has no " +
+			"usable sharenfs value yet — it can only ensure lab-subnet MEMBERSHIP in an " +
+			"already-built list, never construct one from scratch.\n\n" +
+			"Then runs `pvesm add nfs ...` over ssh on node 0 for each of the lab's three fixed " +
 			"exports: nfs-images and nfs-backup (rw, hard-mounted, scoped to this lab under " +
 			"tank/nfs/labs/<name>), and shared-iso (ro, soft-mounted, the one ISO/template " +
-			"export every lab shares). Idempotent: an already-registered storage entry is " +
-			"skipped, not re-added. Requires the shared NFS service to already be built and " +
-			"healthy on the host (lab repo scripts/60-nfs-service) — this command only registers " +
-			"the client side.",
+			"export every lab shares). Every step is idempotent: an already-satisfied dataset/ " +
+			"property/storage entry is skipped, not re-created or re-added, so re-running attach " +
+			"against a partially-built lab is safe. Requires the shared NFS service's own host " +
+			"software (nfs-kernel-server, firewall rules) to already be built and healthy (lab " +
+			"repo scripts/60-nfs-service's nfsd/firewall/health groups) — attach provisions only " +
+			"this lab's own export objects, never the shared NFS host service itself.",
 		Example: `  pmx lab nfs attach wayne
   pmx lab nfs attach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -150,24 +168,58 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 		return fmt.Errorf("resolve NFS server IP: %w", err)
 	}
 
+	serverPlan, err := buildNfsServerEnsurePlan(lab)
+	if err != nil {
+		return err
+	}
+
 	targets := nfsAttachTargets(lab.Name)
 
 	// dry-run never touches deps.Runner (see cluster.go's runClusterInit for
-	// the same convention): it previews the pvesm add commands this run
-	// would issue, without probing which storage entries already exist.
+	// the same convention): it previews both the server-side ensure phase's
+	// steps and the pvesm add commands this run would issue, without probing
+	// which datasets/properties/storage entries already exist, and without
+	// resolving the server-side ssh host at all (that resolution is itself a
+	// live API call this preview has no need to depend on).
 	if dryRun {
 		headers := []string{"STEP", "STATUS"}
-		rows := make([][]string, 0, len(targets))
+		rows := nfsServerDryRunSteps(serverPlan)
 		for _, t := range targets {
 			rows = append(rows, []string{nfsAddCommand(t, server), "would run"})
 		}
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 	}
 
+	// The server-side ensure phase runs BEFORE the client-side pvesm-add
+	// loop: pvesm add would otherwise reach a live PVE host, fail deep in
+	// its own online-probe ("storage 'nfs-images' is not online"), and leave
+	// the operator with no indication the SERVER export never existed at
+	// all — the exact live failure this phase exists to fix.
+	if deps.Node == "" {
+		return fmt.Errorf(
+			"lab %q: the server-side NFS export-ensure phase needs the outer PVE node hosting "+
+				"tank/nfs; pass --node, set $PMX_NODE, or configure a context default node", name)
+	}
+	if deps.Ctx == nil || deps.Runner == nil {
+		return fmt.Errorf(
+			"lab %q: the server-side NFS export-ensure phase requires an active pmx context/ssh runner", name)
+	}
+
+	serverHost, herr := createDatasetSSHHost(cmd.Context(), deps.API, deps.Node)
+	if herr != nil {
+		return fmt.Errorf("lab %q: resolve ssh host for NFS server-side ensure phase (node %q): %w", name, deps.Node, herr)
+	}
+
+	serverRows, serr := nfsServerEnsure(deps, serverHost, serverPlan)
+	if serr != nil {
+		return fmt.Errorf("lab %q: server-side NFS export ensure phase: %w", name, serr)
+	}
+
 	rows, err := nfsEnsureAttached(deps, name, node0IP, server, targets)
 	if err != nil {
 		return err
 	}
+	rows = append(serverRows, rows...)
 	rows = append(rows, []string{"summary", fmt.Sprintf("lab %q: NFS storage reconciled against server %s.", name, server)})
 
 	headers := []string{"STORAGE", "STATUS"}
@@ -286,7 +338,14 @@ func newNfsDetachCmd() *cobra.Command {
 			"storage entries. Idempotent: an entry that is not configured is skipped, not " +
 			"treated as an error. Removal is safe only once no VM disk still references the " +
 			"storage — PVE itself refuses to remove a storage entry with in-use content. " +
-			"Refuses to run without --yes/-y or an interactive 'y' confirmation.",
+			"Refuses to run without --yes/-y or an interactive 'y' confirmation.\n\n" +
+			"IMPORTANT ASYMMETRY: detach ONLY removes the CLIENT-side pvesm storage entries. " +
+			"It never touches the SERVER-side ZFS datasets/exports `attach` ensures " +
+			"(tank/nfs/labs/<name>/{images,backup}, their quota/sharenfs properties, or this " +
+			"lab's entry in the shared/iso export's ro= list) — those carry this lab's actual " +
+			"data and shared-export state, and this command never deletes data implicitly. " +
+			"Remove them by hand over ssh (e.g. `zfs destroy -r tank/nfs/labs/<name>`) only once " +
+			"you have confirmed the lab's data is no longer needed.",
 		Example: `  pmx lab nfs detach wayne --yes
   pmx lab nfs detach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),

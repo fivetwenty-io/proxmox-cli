@@ -988,12 +988,27 @@ func Execute(persona string, factories []GroupFactory) error {
 
 	c, err := root.ExecuteC()
 	if err != nil {
-		// A child process (ssh, rsync) that exits non-zero has already written
-		// its own diagnostics to stderr; printing the wrapped *exec.ExitError
-		// here too would duplicate that output with a redundant second line.
-		// Every other error still prints exactly as before.
+		// A child process (ssh, rsync) that had our real stdout/stderr wired
+		// to it directly (RunInteractive, or a Run call passed
+		// cmd.OutOrStdout()/cmd.ErrOrStderr()) has already written its own
+		// diagnostics to stderr; printing the wrapped *exec.ExitError here
+		// too would duplicate that output with a redundant second line.
+		//
+		// But a Run call that captured the child's stdout/stderr into its
+		// own in-memory buffers instead of passing them through (e.g.
+		// internal/cli/lab.runGuestSSH) has NOT shown the user anything —
+		// suppressing it here under the same assumption would silently
+		// swallow the entire error, captured stderr and all. Such callers
+		// mark their returned error with exec.CapturedError specifically so
+		// this path knows to print it after all, in full, rather than
+		// assume a captured-but-never-displayed diagnostic was already
+		// shown (see TestExecute_CapturedGuestSSHExitErrorIsPrinted for the
+		// exact silent-255-with-zero-output failure this fixes).
+		var captured *exec.CapturedError
+		isCaptured := errors.As(err, &captured)
+
 		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
+		if isCaptured || !errors.As(err, &exitErr) {
 			fmt.Fprintln(os.Stderr, err)
 			if hint := AuthHint(err); hint != "" {
 				fmt.Fprintln(os.Stderr, hint)

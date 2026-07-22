@@ -407,3 +407,102 @@ func TestLabQdeviceMgmtIP_IsDotFifteen(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "10.10.1.15", ip)
 }
+
+// --- labMgmtCIDR: the mgmt /24 used to build NFS export ACLs ---------------
+
+// TestLabMgmtCIDR_SubnetAlreadyCanonical_ReturnsUnchanged covers the
+// already-clean case: an explicit mgmt.subnet whose host bits are already
+// zero must come back byte-identical, not merely equivalent.
+func TestLabMgmtCIDR_SubnetAlreadyCanonical_ReturnsUnchanged(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "10.254.0.0/24"}}
+
+	cidr, err := labMgmtCIDR(net)
+	require.NoError(t, err)
+	assert.Equal(t, "10.254.0.0/24", cidr)
+}
+
+// TestLabMgmtCIDR_SubnetHostBitsSet_MasksToNetworkBase covers R1-PMXCLI
+// MINOR-2: a mgmt.subnet authored with host bits set (accepted by
+// validation, since net.ParseCIDR itself does not reject it) must mask down
+// to the network base, matching the node/QDevice IP derivation
+// (labVnetBaseIP/labVnetOffsetIP), which always masks. Before the fix,
+// labMgmtCIDR echoed n.Mgmt.Subnet verbatim, so the NFS export ACL
+// (nfsLabRwSharenfs's "rw=@<mgmtCIDR>") and the shared-iso membership token
+// diverged from the actual node subnet.
+func TestLabMgmtCIDR_SubnetHostBitsSet_MasksToNetworkBase(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "10.254.0.5/24"}}
+
+	cidr, err := labMgmtCIDR(net)
+	require.NoError(t, err)
+	assert.Equal(t, "10.254.0.0/24", cidr,
+		"host bits in the authored subnet must be masked off, matching the node-IP derivation")
+}
+
+// TestLabMgmtCIDR_InvalidSubnet_Errors covers existing error handling: an
+// unparseable mgmt.subnet must still error exactly as before the fix (the
+// masking change must not alter this path).
+func TestLabMgmtCIDR_InvalidSubnet_Errors(t *testing.T) {
+	net := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "not-a-cidr"}}
+
+	_, err := labMgmtCIDR(net)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "network.mgmt.subnet")
+}
+
+// --- labVnetNodeIP: the vnet-generalized offset helper ---------------------
+
+// TestLabVnetNodeIP_DerivesFromArbitraryVnetCIDR exercises labVnetNodeIP
+// directly against a LabVnet.CIDR (e.g. a storage vnet, not the lab's mgmt
+// subnet), confirming the generalized helper applies the identical
+// network-address-plus-10+i rule labNodeMgmtIP has always used.
+func TestLabVnetNodeIP_DerivesFromArbitraryVnetCIDR(t *testing.T) {
+	storageVnet := config.LabVnet{ID: "pvecpist", CIDR: "10.254.32.0/24"}
+
+	for i, want := range map[int]string{0: "10.254.32.10", 1: "10.254.32.11", 4: "10.254.32.14"} {
+		ip, err := labVnetNodeIP(storageVnet.CIDR, i)
+		require.NoError(t, err)
+		assert.Equal(t, want, ip, "node index %d", i)
+	}
+}
+
+// TestLabVnetNodeIP_MatchesLabNodeMgmtIPForSameCIDR confirms
+// labNodeMgmtIP's refactor into a one-line wrapper around labVnetNodeIP is
+// byte-identical: calling labVnetNodeIP directly against the same CIDR
+// labNodeMgmtIP resolves from Mgmt.Subnet must produce the exact same
+// address.
+func TestLabVnetNodeIP_MatchesLabNodeMgmtIPForSameCIDR(t *testing.T) {
+	n := config.LabNetwork{Mgmt: config.LabMgmt{Subnet: "10.254.0.0/24"}}
+
+	for i := 0; i <= maxLabNodeIndex; i++ {
+		viaMgmt, err := labNodeMgmtIP(n, i)
+		require.NoError(t, err)
+
+		viaVnet, err := labVnetNodeIP(n.Mgmt.Subnet, i)
+		require.NoError(t, err)
+
+		assert.Equal(t, viaMgmt, viaVnet, "node index %d", i)
+	}
+}
+
+// TestLabVnetNodeIP_InvalidCIDR_Errors covers a malformed cidr argument: the
+// generalized helper has no lab-network fallback to fall back on (unlike
+// labNodeMgmtIP's Mgmt.Subnet/Mgmt.HostIP dual source), so it must error
+// directly on an unparsable cidr string.
+func TestLabVnetNodeIP_InvalidCIDR_Errors(t *testing.T) {
+	_, err := labVnetNodeIP("not-a-cidr", 0)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "invalid")
+}
+
+// TestLabVnetNodeIP_OutOfRangeIndex_Errors mirrors
+// TestLabNodeMgmtIP_OutOfRangeIndex_Errors for the generalized helper's own
+// [0, maxLabNodeIndex] bound.
+func TestLabVnetNodeIP_OutOfRangeIndex_Errors(t *testing.T) {
+	_, err := labVnetNodeIP("10.254.32.0/24", maxLabNodeIndex+1)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "out of range")
+
+	_, err = labVnetNodeIP("10.254.32.0/24", -1)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "out of range")
+}

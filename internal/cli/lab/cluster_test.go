@@ -287,14 +287,19 @@ Quorum:           2
 Flags:            Quorate
 `
 	fake := exec.Fake(
-		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // probe on joining node: not yet joined
-		exec.FakeResponse{Stdout: sampleQmListEmpty},                          // guest-free check: qm list (empty)
-		exec.FakeResponse{Stdout: samplePctListEmpty},                         // guest-free check: pct list (empty)
-		exec.FakeResponse{},                                   // pvecm add
-		exec.FakeResponse{Stdout: notYet},                     // poll attempt 1: pvecm status (not yet 2/2)
-		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp}, // poll attempt 1: corosync-cfgtool -s
-		exec.FakeResponse{Stdout: quorate2of2},                // poll attempt 2: pvecm status (2/2, quorate)
-		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp}, // poll attempt 2: corosync-cfgtool -s (all up)
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // 0: probe on joining node: not yet joined
+		exec.FakeResponse{Stdout: sampleQmListEmpty},                          // 1: guest-free check: qm list (empty)
+		exec.FakeResponse{Stdout: samplePctListEmpty},                         // 2: guest-free check: pct list (empty)
+		exec.FakeResponse{}, // 3: trust seed: ensure root keypair (node 1)
+		exec.FakeResponse{Stdout: sampleRootPubKey + "\n"}, // 4: trust seed: read public key (node 1)
+		exec.FakeResponse{},                                   // 5: trust seed: append to node 0's authorized_keys
+		exec.FakeResponse{},                                   // 6: trust seed: apiver preflight (node 1 -> node 0)
+		exec.FakeResponse{},                                   // 7: pvecm add
+		exec.FakeResponse{Stdout: quorate2of2},                // 8: join verification: pvecm status on node 1
+		exec.FakeResponse{Stdout: notYet},                     // 9: poll attempt 1: pvecm status (not yet 2/2)
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp}, // 10: poll attempt 1: corosync-cfgtool -s
+		exec.FakeResponse{Stdout: quorate2of2},                // 11: poll attempt 2: pvecm status (2/2, quorate)
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp}, // 12: poll attempt 2: corosync-cfgtool -s (all up)
 	)
 	cli.GetDeps(cmd).Runner = fake
 
@@ -303,10 +308,85 @@ Flags:            Quorate
 	assert.Contains(t, out, "joined cluster")
 	assert.Contains(t, out, "2/2 votes quorate")
 
-	require.Len(t, fake.Calls, 8)
+	require.Len(t, fake.Calls, 13)
 	assert.Contains(t, fake.Calls[1].Args, "qm list")
 	assert.Contains(t, fake.Calls[2].Args, "pct list")
-	assert.Contains(t, fake.Calls[3].Args, "pvecm add 10.10.1.10 --link0 10.10.1.11 --use_ssh")
+	assert.Contains(t, fake.Calls[3].Args, clusterEnsureRootKeypairCmd)
+	assert.Contains(t, fake.Calls[3].Args, "root@10.10.1.11")
+	assert.Contains(t, fake.Calls[4].Args, "cat /root/.ssh/id_rsa.pub")
+	assert.Contains(t, fake.Calls[4].Args, "root@10.10.1.11")
+	assert.Contains(t, fake.Calls[5].Args, "root@10.10.1.10")
+	require.NotEmpty(t, fake.Calls[5].Args)
+	assert.Contains(t, fake.Calls[5].Args[len(fake.Calls[5].Args)-1], "authorized_keys",
+		"trust seed step 5 must append the joining node's pubkey into node 0's authorized_keys")
+	assert.Contains(t, fake.Calls[5].Args[len(fake.Calls[5].Args)-1], sampleRootPubKey)
+	assert.Contains(t, fake.Calls[6].Args, "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@10.10.1.10 pvecm apiver")
+	assert.Contains(t, fake.Calls[6].Args, "root@10.10.1.11")
+	assert.Contains(t, fake.Calls[7].Args, "pvecm add 10.10.1.10 --link0 10.10.1.11 --use_ssh")
+	assert.Contains(t, fake.Calls[8].Args, "pvecm status")
+	assert.Contains(t, fake.Calls[8].Args, "root@10.10.1.11", "join verification probes the JOINING node, not node 0")
+}
+
+// TestClusterJoin_TrustSeedPreflightFails_AbortsBeforeJoin covers
+// clusterSeedJoinTrust's final verification step: even after the keypair is
+// ensured and the public key pushed to node 0, the non-interactive ssh
+// preflight itself can still fail (e.g. sshd misconfiguration, a stale
+// authorized_keys mount) — this must abort with an error naming both nodes,
+// and `pvecm add` must never run.
+func TestClusterJoin_TrustSeedPreflightFails_AbortsBeforeJoin(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 3, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildGuestSSHCmd(t, path, newClusterCmd())
+
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // probe: not yet joined
+		exec.FakeResponse{Stdout: sampleQmListEmpty},                          // guest-free: qm list
+		exec.FakeResponse{Stdout: samplePctListEmpty},                         // guest-free: pct list
+		exec.FakeResponse{}, // trust seed: ensure root keypair
+		exec.FakeResponse{Stdout: sampleRootPubKey + "\n"}, // trust seed: read public key
+		exec.FakeResponse{},              // trust seed: append to authorized_keys
+		exec.FakeResponse{ExitCode: 255}, // trust seed: apiver preflight FAILS
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	_, err := runGuestCmd(t, cmd, "join", "wayne", "--node", "1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "10.10.1.11", "error must name the joining node")
+	assert.ErrorContains(t, err, "10.10.1.10", "error must name node 0")
+	assert.ErrorContains(t, err, "trust")
+	require.Len(t, fake.Calls, 7, "pvecm add must never be invoked after the trust preflight fails")
+}
+
+// TestClusterJoin_ExitZeroButNotJoined_ErrorsWithPvecmAddOutput is the
+// regression test for the exact live failure this change fixes: `pvecm add`
+// exits 0 (and would otherwise be treated as success) while its stderr
+// carries the real failure ("unable to copy ssh ID: exit code 1") and the
+// joining node never actually joined. The post-add re-probe must catch this,
+// surface the captured pvecm add stdout/stderr verbatim in the error, and
+// never enter clusterWaitForJoin (node 0 is never polled).
+func TestClusterJoin_ExitZeroButNotJoined_ErrorsWithPvecmAddOutput(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 3, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildGuestSSHCmd(t, path, newClusterCmd())
+
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // probe: not yet joined
+		exec.FakeResponse{Stdout: sampleQmListEmpty},                          // guest-free: qm list
+		exec.FakeResponse{Stdout: samplePctListEmpty},                         // guest-free: pct list
+		exec.FakeResponse{}, // trust seed: ensure root keypair
+		exec.FakeResponse{Stdout: sampleRootPubKey + "\n"}, // trust seed: read public key
+		exec.FakeResponse{}, // trust seed: append to authorized_keys
+		exec.FakeResponse{}, // trust seed: apiver preflight OK
+		exec.FakeResponse{Stderr: "unable to copy ssh ID: exit code 1\n"},     // pvecm add: exit 0, but warns on stderr
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // join verification: still not clustered
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	_, err := runGuestCmd(t, cmd, "join", "wayne", "--node", "1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "unable to copy ssh ID: exit code 1")
+	assert.ErrorContains(t, err, "did not actually join")
+	require.Len(t, fake.Calls, 9, "clusterWaitForJoin must never be entered when the post-add re-probe shows unclustered")
 }
 
 func TestClusterJoin_RefusesWhenJoiningNodeHostsVMs(t *testing.T) {
@@ -439,6 +519,80 @@ func TestClusterStatus_NotClustered(t *testing.T) {
 	out, err := runGuestCmd(t, cmd, "status", "wayne")
 	require.NoError(t, err)
 	assert.Contains(t, out, "n/a (not clustered)")
+}
+
+// TestCluster_TwoIndependentLabs is P1-T9's regression coverage for the
+// "2 HA clusters == 2 independent `pmx lab` config entries" design (P1 plan
+// §0): two differently-named labs, each with its own mgmt subnet (mirroring
+// the real pve-cpi/pve-cpi-az2 shape, 10.254.0.0/24 vs 10.255.0.0/24), must
+// never produce colliding `pvecm create`/`pvecm add` command strings or
+// colliding node mgmt IPs when cluster init/join is run against each in
+// turn — confirming runClusterInit/runClusterJoin derive every value from
+// the single resolved lab argument, with zero state shared between two
+// labs resolved out of the same config.
+func TestCluster_TwoIndependentLabs(t *testing.T) {
+	az1 := cleanLab("pve-cpi")
+	az1.Network.Mgmt = config.LabMgmt{Subnet: "10.254.0.0/24", Gateway: "10.254.0.1"}
+	az1.Topology = config.LabTopology{Nodes: 3}
+
+	az2 := cleanLab("pve-cpi-az2")
+	az2.Network.Mgmt = config.LabMgmt{Subnet: "10.255.0.0/24", Gateway: "10.255.0.1"}
+	az2.Topology = config.LabTopology{Nodes: 3}
+
+	cfg := &config.Config{Labs: map[string]*config.Lab{
+		"pve-cpi":     az1,
+		"pve-cpi-az2": az2,
+	}}
+	path := writeConfig(t, cfg)
+
+	// cluster init --dry-run against both labs: distinct cluster-init
+	// command strings, each carrying its own lab name and node 0 mgmt IP.
+	initCmd1, fake1 := buildGuestSSHCmd(t, path, newClusterCmd())
+	initOut1, err := runGuestCmd(t, initCmd1, "init", "pve-cpi", "--dry-run")
+	require.NoError(t, err)
+	assert.Empty(t, fake1.Calls, "dry-run must never invoke the runner")
+
+	initCmd2, fake2 := buildGuestSSHCmd(t, path, newClusterCmd())
+	initOut2, err := runGuestCmd(t, initCmd2, "init", "pve-cpi-az2", "--dry-run")
+	require.NoError(t, err)
+	assert.Empty(t, fake2.Calls, "dry-run must never invoke the runner")
+
+	assert.Contains(t, initOut1, "pvecm create pve-cpi --link0 10.254.0.10")
+	assert.Contains(t, initOut2, "pvecm create pve-cpi-az2 --link0 10.255.0.10")
+	assert.NotEqual(t, initOut1, initOut2,
+		"two independently-named labs must never produce identical cluster-init commands")
+
+	// cluster join --dry-run against both labs: distinct join command
+	// strings, each carrying its own node 0 and joining-node mgmt IPs.
+	joinCmd1, fake3 := buildGuestSSHCmd(t, path, newClusterCmd())
+	joinOut1, err := runGuestCmd(t, joinCmd1, "join", "pve-cpi", "--node", "1", "--dry-run")
+	require.NoError(t, err)
+	assert.Empty(t, fake3.Calls, "dry-run must never invoke the runner")
+
+	joinCmd2, fake4 := buildGuestSSHCmd(t, path, newClusterCmd())
+	joinOut2, err := runGuestCmd(t, joinCmd2, "join", "pve-cpi-az2", "--node", "1", "--dry-run")
+	require.NoError(t, err)
+	assert.Empty(t, fake4.Calls, "dry-run must never invoke the runner")
+
+	assert.Contains(t, joinOut1, "pvecm add 10.254.0.10 --link0 10.254.0.11 --use_ssh")
+	assert.Contains(t, joinOut2, "pvecm add 10.255.0.10 --link0 10.255.0.11 --use_ssh")
+	assert.NotEqual(t, joinOut1, joinOut2,
+		"two independently-named labs must never produce identical cluster-join commands")
+
+	// Belt-and-suspenders: assert the underlying derived mgmt IPs themselves
+	// never collide, independent of the rendered command string's exact
+	// formatting.
+	node0AZ1, err := labNodeMgmtIP(az1.Network, 0)
+	require.NoError(t, err)
+	node0AZ2, err := labNodeMgmtIP(az2.Network, 0)
+	require.NoError(t, err)
+	assert.NotEqual(t, node0AZ1, node0AZ2, "two labs' node 0 mgmt IPs must never collide")
+
+	node1AZ1, err := labNodeMgmtIP(az1.Network, 1)
+	require.NoError(t, err)
+	node1AZ2, err := labNodeMgmtIP(az2.Network, 1)
+	require.NoError(t, err)
+	assert.NotEqual(t, node1AZ1, node1AZ2, "two labs' node 1 mgmt IPs must never collide")
 }
 
 // TestClusterInit_RefreshesExistingContextFingerprint covers cluster init's

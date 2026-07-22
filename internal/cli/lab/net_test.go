@@ -114,6 +114,11 @@ func runNetCmd(t *testing.T, cmd *cobra.Command, args ...string) (string, error)
 // subnet do not exist yet: every create must be issued with the values from
 // the lab's config, ListSdnDryRun must run before UpdateSdn, and UpdateSdn
 // itself must run since the preview reports a non-empty pending changeset.
+// netTestLab's zone is the config default ("simple"), which PVE never
+// accepts a vnet tag on, so the vnet-create body must carry no "tag" field
+// at all despite the lab's nonzero VxlanTag (see
+// TestNetApplyTagCapableZoneStillSendsTagOnCreate for the vlan/vxlan/qinq/
+// evpn-type-zone counterpart, which does send it).
 func TestNetApplyFreshCreatesZoneVnetSubnet(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := netTestLab("wayne")
@@ -153,7 +158,7 @@ func TestNetApplyFreshCreatesZoneVnetSubnet(t *testing.T) {
 	assert.Equal(t, http.MethodPost, vc.method)
 	assert.Equal(t, "labwayne", vc.body["vnet"])
 	assert.Equal(t, lab.Network.EffectiveZoneName(), vc.body["zone"])
-	assert.Equal(t, "5001", vc.body["tag"])
+	assert.Empty(t, vc.body["tag"], "a simple-zone vnet-create must omit tag; PVE rejects it")
 	assert.Equal(t, "lab-wayne", vc.body["alias"])
 
 	require.Len(t, subnetRec, 2, "expected one subnet list + one subnet create")
@@ -257,9 +262,14 @@ func TestNetApplyDryRunSkipsApply(t *testing.T) {
 // TestNetApplyDriftUpdatesVnetNotCreate covers a vnet that already exists
 // but with a VXLAN tag that no longer matches the lab's config: the
 // mismatch must produce an UpdateSdnVnets call, never a CreateSdnVnets call.
+// The lab's zone is overridden to a tag-capable type ("vxlan") since a
+// "simple"-type zone (netTestLab's default) never manages tag at all — see
+// TestNetApplySimpleZoneTagDriftNeverUpdates for that zone type's coverage
+// of the same scenario.
 func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := netTestLab("wayne")
+	lab.Network.ZoneType = "vxlan"
 	var order []string
 	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
 
@@ -301,6 +311,89 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 	require.Len(t, applyRec, 1)
 }
 
+// TestNetApplyTagCapableZoneStillSendsTagOnCreate covers a lab whose zone is
+// a tag-capable type (here "vlan"): the vnet-create body must still carry
+// the config's tag, exactly as before sdnZoneAllowsVnetTag was introduced —
+// the fix that omits tag for a "simple"-type zone (see
+// TestNetApplyFreshCreatesZoneVnetSubnet) must not affect any other zone
+// type.
+func TestNetApplyTagCapableZoneStillSendsTagOnCreate(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := netTestLab("wayne")
+	lab.Network.ZoneType = "vlan"
+	var order []string
+	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
+
+	netRecord(f, &zoneRec, &order, "zone-list", "GET /api2/json/cluster/sdn/zones", []any{}, 200)
+	netRecord(f, &zoneRec, &order, "zone-create", "POST /api2/json/cluster/sdn/zones", map[string]any{}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-list", "GET /api2/json/cluster/sdn/vnets", []any{}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
+	netRecord(f, &subnetRec, &order, "subnet-list",
+		"GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{}, 200)
+	netRecord(f, &subnetRec, &order, "subnet-create",
+		"POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
+	netRecord(f, &dryRunRec, &order, "dry-run", "GET /api2/json/cluster/sdn/dry-run",
+		map[string]any{"frr-diff": "+lab wayne zone", "interfaces-diff": ""}, 200)
+	netRecord(f, &applyRec, &order, "apply", "PUT /api2/json/cluster/sdn", nil, 200)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildNetCmd(t, path, f, "node1")
+
+	out, err := runNetCmd(t, cmd, "apply", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, out, "applied")
+
+	require.Len(t, vnetRec, 2, "expected one vnet list + one vnet create")
+	vc := vnetRec[1]
+	assert.Equal(t, http.MethodPost, vc.method)
+	assert.Equal(t, "5001", vc.body["tag"], "a tag-capable zone must still receive tag on create")
+}
+
+// TestNetApplySimpleZoneTagDriftNeverUpdates covers a vnet that already
+// exists, in a "simple"-type zone, with a live tag that differs from the
+// lab's config: since PVE never accepts tag on a simple-zone vnet, that
+// mismatch must never be treated as drift — no UpdateSdnVnets call at all,
+// only the list.
+func TestNetApplySimpleZoneTagDriftNeverUpdates(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := netTestLab("wayne")
+	var order []string
+	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
+
+	netRecord(f, &zoneRec, &order, "zone-list", "GET /api2/json/cluster/sdn/zones", []any{
+		map[string]any{"zone": lab.Network.EffectiveZoneName(), "type": lab.Network.EffectiveZoneType(), "mtu": 1450, "nodes": "node1", "peers": lab.Network.EffectiveZonePeers()},
+	}, 200)
+	netRecord(f, &zoneRec, &order, "zone-update", "PUT /api2/json/cluster/sdn/zones/"+lab.Network.EffectiveZoneName(), map[string]any{}, 200)
+
+	// Existing vnet's live tag (9999) differs from the lab's config (5001);
+	// alias and zone already match. In a simple zone this must be ignored
+	// entirely, not treated as drift.
+	netRecord(f, &vnetRec, &order, "vnet-list", "GET /api2/json/cluster/sdn/vnets", []any{
+		map[string]any{"vnet": "labwayne", "zone": lab.Network.EffectiveZoneName(), "tag": 9999, "alias": "lab-wayne"},
+	}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-update", "PUT /api2/json/cluster/sdn/vnets/labwayne", map[string]any{}, 200)
+
+	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+	}, 200)
+	netRecord(f, &subnetRec, &order, "subnet-update",
+		"PUT /api2/json/cluster/sdn/vnets/labwayne/subnets/labwayne-10.10.1.0-24", map[string]any{}, 200)
+
+	netRecord(f, &dryRunRec, &order, "dry-run", "GET /api2/json/cluster/sdn/dry-run",
+		map[string]any{"frr-diff": "", "interfaces-diff": ""}, 200)
+	netRecord(f, &applyRec, &order, "apply", "PUT /api2/json/cluster/sdn", nil, 200)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildNetCmd(t, path, f, "node1")
+
+	out, err := runNetCmd(t, cmd, "apply", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, out, "No pending SDN configuration changes")
+
+	require.Len(t, vnetRec, 1, "only the list call — tag drift must never trigger an update in a simple zone")
+}
+
 // TestNetApplyPeppiRefusesBeforeAnySdnCall covers a lab whose vnet ID matches
 // a peppi-protected pattern: net apply must refuse before issuing any SDN
 // request at all, not merely before the destructive ones.
@@ -327,6 +420,136 @@ func TestNetApplyPeppiRefusesBeforeAnySdnCall(t *testing.T) {
 	assert.ErrorContains(t, err, "peppi guard")
 	assert.ErrorContains(t, err, "peppivn0")
 	require.Empty(t, rec, "no SDN request may be issued before the peppi guard runs")
+}
+
+// TestNetApplyMultiVnetsCreatesExtraVnetsAndSkipsSubnetWhenCIDREmpty covers a
+// lab whose network declares two extra Network.Vnets entries beyond its
+// primary vnet: a storage vnet with a CIDR (gets its own subnet ensured,
+// same as the primary) and a workload vnet with no CIDR (a pure L2
+// passthrough vnet — no subnet call at all). net apply must issue one
+// CreateSdnVnets + one CreateSdnVnetsSubnets for the primary vnet, the same
+// pair for the storage vnet, and exactly one CreateSdnVnets (no subnet call)
+// for the workload vnet. netTestLab's zone is the config default ("simple"),
+// so none of the three vnet-create bodies may carry a "tag" field despite
+// each entry's nonzero configured tag.
+func TestNetApplyMultiVnetsCreatesExtraVnetsAndSkipsSubnetWhenCIDREmpty(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := netTestLab("wayne")
+	lab.Network.Vnets = []config.LabVnet{
+		{ID: "vnst", Alias: "lab-wayne-storage", Tag: 5011, CIDR: "10.10.2.0/24", Gateway: "10.10.2.1", Purpose: "storage"},
+		{ID: "vnwk", Alias: "lab-wayne-workload", Tag: 5012, Purpose: "workload"},
+	}
+
+	var order []string
+	var zoneRec, vnetRec, primarySubnetRec, storageSubnetRec, dryRunRec, applyRec []netRecordedRequest
+
+	netRecord(f, &zoneRec, &order, "zone-list", "GET /api2/json/cluster/sdn/zones", []any{}, 200)
+	netRecord(f, &zoneRec, &order, "zone-create", "POST /api2/json/cluster/sdn/zones", map[string]any{}, 200)
+
+	netRecord(f, &vnetRec, &order, "vnet-list", "GET /api2/json/cluster/sdn/vnets", []any{}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
+
+	netRecord(f, &primarySubnetRec, &order, "primary-subnet-list",
+		"GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{}, 200)
+	netRecord(f, &primarySubnetRec, &order, "primary-subnet-create",
+		"POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
+
+	netRecord(f, &storageSubnetRec, &order, "storage-subnet-list",
+		"GET /api2/json/cluster/sdn/vnets/vnst/subnets", []any{}, 200)
+	netRecord(f, &storageSubnetRec, &order, "storage-subnet-create",
+		"POST /api2/json/cluster/sdn/vnets/vnst/subnets", map[string]any{}, 200)
+
+	// The workload vnet's subnet endpoint (vnets/vnwk/subnets) is
+	// deliberately never registered: if net apply issued a request there
+	// despite the empty CIDR, the fake server would 404 and the command
+	// would fail, which the require.NoError below would catch.
+
+	netRecord(f, &dryRunRec, &order, "dry-run", "GET /api2/json/cluster/sdn/dry-run",
+		map[string]any{"frr-diff": "+multivnet", "interfaces-diff": ""}, 200)
+	netRecord(f, &applyRec, &order, "apply", "PUT /api2/json/cluster/sdn", nil, 200)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildNetCmd(t, path, f, "node1")
+
+	out, err := runNetCmd(t, cmd, "apply", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, out, "applied")
+
+	require.Len(t, zoneRec, 2, "the shared zone is ensured once regardless of how many vnets exist")
+
+	require.Len(t, vnetRec, 6, "expected 3 vnet lists + 3 vnet creates (primary, storage, workload)")
+	var creates []netRecordedRequest
+	for _, r := range vnetRec {
+		if r.method == http.MethodPost {
+			creates = append(creates, r)
+		}
+	}
+	require.Len(t, creates, 3)
+
+	byVnet := map[string]netRecordedRequest{}
+	for _, c := range creates {
+		id, _ := c.body["vnet"].(string)
+		byVnet[id] = c
+	}
+
+	require.Contains(t, byVnet, "labwayne")
+	assert.Empty(t, byVnet["labwayne"].body["tag"], "a simple-zone vnet-create must omit tag")
+	assert.Equal(t, lab.Network.EffectiveZoneName(), byVnet["labwayne"].body["zone"])
+
+	require.Contains(t, byVnet, "vnst")
+	assert.Equal(t, lab.Network.EffectiveZoneName(), byVnet["vnst"].body["zone"])
+	assert.Empty(t, byVnet["vnst"].body["tag"], "a simple-zone vnet-create must omit tag")
+	assert.Equal(t, "lab-wayne-storage", byVnet["vnst"].body["alias"])
+
+	require.Contains(t, byVnet, "vnwk")
+	assert.Equal(t, lab.Network.EffectiveZoneName(), byVnet["vnwk"].body["zone"])
+	assert.Empty(t, byVnet["vnwk"].body["tag"], "a simple-zone vnet-create must omit tag")
+	assert.Equal(t, "lab-wayne-workload", byVnet["vnwk"].body["alias"])
+
+	require.Len(t, primarySubnetRec, 2, "primary vnet gets one subnet list + one subnet create")
+	assert.Equal(t, "10.10.1.0/24", primarySubnetRec[1].body["subnet"])
+
+	require.Len(t, storageSubnetRec, 2, "storage vnet gets one subnet list + one subnet create")
+	assert.Equal(t, "10.10.2.0/24", storageSubnetRec[1].body["subnet"])
+	assert.Equal(t, "10.10.2.1", storageSubnetRec[1].body["gateway"])
+
+	require.Len(t, dryRunRec, 1)
+	require.Len(t, applyRec, 1)
+}
+
+// TestNetApplyMultiVnetsEmptyExtraVnetIDRefuses covers a lab whose
+// network.vnets entry has an empty id: net apply must refuse before issuing
+// any request for that entry (the primary vnet, already reconciled earlier
+// in the loop, is unaffected by the later entry's error).
+func TestNetApplyMultiVnetsEmptyExtraVnetIDRefuses(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := netTestLab("wayne")
+	lab.Network.Vnets = []config.LabVnet{{Tag: 5011, CIDR: "10.10.2.0/24"}}
+
+	var order []string
+	var zoneRec, vnetRec, subnetRec, dryRunRec, applyRec []netRecordedRequest
+
+	netRecord(f, &zoneRec, &order, "zone-list", "GET /api2/json/cluster/sdn/zones", []any{}, 200)
+	netRecord(f, &zoneRec, &order, "zone-create", "POST /api2/json/cluster/sdn/zones", map[string]any{}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-list", "GET /api2/json/cluster/sdn/vnets", []any{}, 200)
+	netRecord(f, &vnetRec, &order, "vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
+	netRecord(f, &subnetRec, &order, "subnet-list",
+		"GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{}, 200)
+	netRecord(f, &subnetRec, &order, "subnet-create",
+		"POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
+	netRecord(f, &dryRunRec, &order, "dry-run", "GET /api2/json/cluster/sdn/dry-run", map[string]any{}, 200)
+	netRecord(f, &applyRec, &order, "apply", "PUT /api2/json/cluster/sdn", nil, 200)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildNetCmd(t, path, f, "node1")
+
+	_, err := runNetCmd(t, cmd, "apply", "wayne")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "network.vnets[0]")
+	assert.ErrorContains(t, err, "empty id")
+
+	require.Empty(t, dryRunRec, "the preview must never run once ensuring vnets has failed")
+	require.Empty(t, applyRec)
 }
 
 // indexOf returns the index of the first occurrence of s in list, or -1.

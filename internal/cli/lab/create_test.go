@@ -189,6 +189,7 @@ func buildCreateCmdWithSSH(
 
 	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
 	fake := exec.Fake(
+		exec.FakeResponse{}, // buildCreatePlan's zfs dataset existence probe
 		exec.FakeResponse{}, // wait-for-ssh probe (hostname)
 		exec.FakeResponse{}, // ensure user
 		exec.FakeResponse{}, // ensure ACL
@@ -1858,4 +1859,449 @@ func TestCreateCapacityGate_CapacityStorageIDOverride(t *testing.T) {
 	assert.ErrorContains(t, err, "--force")
 	assert.Len(t, storageListRec, 1,
 		"the capacity gate must skip its own /cluster/storage discovery call once storage.capacity_storage_id is set")
+}
+
+// createMultiNICLab returns a "pve-cpi"-shaped lab (multi-AZ topology plan
+// §1's concrete example, single-node here to keep every fixture below
+// focused on NIC wiring rather than multi-node cluster mechanics): a /16
+// primary CIDR (wide enough to nest the storage vnet's own /24), 2 extra
+// network.vnets[] entries (a storage vnet with a subnet, a workload vnet
+// without one — a pure L2 passthrough), and 5 network.host_nics[] entries
+// (net1..net5) spanning both. Mirrors P1's example.yaml storage/workload
+// vnet IDs and tags verbatim.
+func createMultiNICLab(name string) *config.Lab {
+	lab := createTestLab(name)
+	lab.Network.VnetID = "pvecpi"
+	lab.Network.CIDR = "10.254.0.0/16"
+	lab.Network.Mgmt = config.LabMgmt{Subnet: "10.254.0.0/24", Gateway: "10.254.0.1"}
+	lab.Network.Vnets = []config.LabVnet{
+		{ID: "pvecpist", Tag: 5011, CIDR: "10.254.32.0/24", Gateway: "10.254.32.1", Purpose: "storage"},
+		{ID: "pvecpiwk", Tag: 5012, Purpose: "workload"},
+	}
+	lab.Network.HostNICs = []config.LabHostNIC{
+		{Index: 1, VnetID: "pvecpi"},
+		{Index: 2, VnetID: "pvecpist"},
+		{Index: 3, VnetID: "pvecpist"},
+		{Index: 4, VnetID: "pvecpiwk"},
+		{Index: 5, VnetID: "pvecpiwk"},
+	}
+	return lab
+}
+
+// TestCreateFreshLab_MultiNIC_BuildsFullNetMap covers create.go's HostNICs
+// wiring (multi-AZ topology plan §2, task P1-T5): a fresh lab with 5
+// network.host_nics entries configured creates a VM whose Net map carries
+// all 6 entries — net0 (the primary vnet, unchanged) plus every configured
+// HostNICs entry, each resolved to its target vnet's bridge name (the vnet
+// ID itself — no separate bridge-name table exists) and MTU (falling back to
+// the lab's net0 MTU when the entry leaves its own unset, exactly as net0
+// itself already does). The lab's 2 extra network.vnets[] entries are
+// pre-registered as already existing, isolating this test to the VM's Net
+// map rather than also exercising the SDN-vnet-ensure steps net_test.go
+// already covers (task P1-T4).
+func TestCreateFreshLab_MultiNIC_BuildsFullNetMap(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createMultiNICLab("pve-cpi")
+	poolID := lab.Access.Pool // "lab-pve-cpi"
+
+	createSharedResourcesExist(f, t, lab, "pve-cpi", poolID)
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{
+		map[string]any{"vnet": "pvecpi"},
+		map[string]any{"vnet": "pvecpist"},
+		map[string]any{"vnet": "pvecpiwk"},
+	})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets",
+		[]any{map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24"}})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpist/subnets")
+
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createHandleNextIDSequence(f, "9500")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"pve-cpi": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "pve-cpi", "--node", "node1")
+	require.NoError(t, err)
+
+	require.Len(t, qemuCreateRec, 1, "single-node lab: one qemu-create call")
+	body := qemuCreateRec[0].body
+	assert.Equal(t, "virtio,bridge=pvecpi,mtu=1450", body["net0"])
+	assert.Equal(t, "virtio,bridge=pvecpi,mtu=1450", body["net1"])
+	assert.Equal(t, "virtio,bridge=pvecpist,mtu=1450", body["net2"])
+	assert.Equal(t, "virtio,bridge=pvecpist,mtu=1450", body["net3"])
+	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net4"])
+	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net5"])
+}
+
+// TestCreateIdempotent_ReconcilesMissingHostNICs covers the NIC-reconciliation
+// step (multi-AZ topology plan §2/§3, task P1-T5): an already-existing VM
+// whose live config reports only net0 (the already-installed pve-cpi az1
+// shape this step exists for), against a lab configuring 5
+// network.host_nics entries, gets exactly one UpdateQemuConfig call carrying
+// every missing net1..net5 entry — never touching net0, which the
+// reconciliation step never reads or writes.
+func TestCreateIdempotent_ReconcilesMissingHostNICs(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createMultiNICLab("pve-cpi")
+	poolID := lab.Access.Pool // "lab-pve-cpi"
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/zones")
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{
+		map[string]any{"vnet": "pvecpi"},
+		map[string]any{"vnet": "pvecpist"},
+		map[string]any{"vnet": "pvecpiwk"},
+	})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
+		[]any{map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets",
+		[]any{map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24"}})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpi/subnets")
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpist/subnets")
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-pve-cpi", "type": "zfspool", "pool": "tank/labs/pve-cpi"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
+	createForbid(f, t, "POST /api2/json/storage")
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": poolID}})
+	createForbid(f, t, "POST /api2/json/pools")
+
+	f.HandleFunc("GET /api2/json/pools/"+poolID, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"members": []map[string]any{
+				{"id": "qemu/9500", "node": "node1", "type": "qemu", "vmid": 9500, "name": "lab-pve-cpi-0"},
+			},
+		})
+	})
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{map[string]any{"vmid": 9500, "name": "lab-pve-cpi-0"}})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	// Live config reports only net0 — the already-installed az1 shape this
+	// reconciliation step exists for (multi-AZ topology plan §3 step 3).
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/config", map[string]any{
+		"net0": "virtio=BC:24:11:00:00:01,bridge=pvecpi,mtu=1450",
+	})
+
+	var updateRec []createRecordedRequest
+	createRecord(f, &updateRec, nil, "qemu-update", "PUT /api2/json/nodes/node1/qemu/9500/config", map[string]any{}, 200)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"pve-cpi": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "pve-cpi", "--node", "node1")
+	require.NoError(t, err)
+
+	require.Len(t, updateRec, 1, "exactly one UpdateQemuConfig call reconciling every missing NIC at once")
+	body := updateRec[0].body
+	assert.Equal(t, "virtio,bridge=pvecpi,mtu=1450", body["net1"])
+	assert.Equal(t, "virtio,bridge=pvecpist,mtu=1450", body["net2"])
+	assert.Equal(t, "virtio,bridge=pvecpist,mtu=1450", body["net3"])
+	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net4"])
+	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net5"])
+	assert.NotContains(t, body, "net0", "reconciliation must never touch the already-converged net0")
+	assert.Contains(t, out, "reconcile host NICs")
+}
+
+// TestCreateIdempotent_HostNICsFullyConverged_NoReconcileStep covers the
+// no-op case: when an already-existing VM's live config already matches
+// every configured network.host_nics entry exactly (bridge + MTU), no
+// UpdateQemuConfig call is issued at all — create's STEP table must stay
+// free of no-op reconciliation rows on a re-run against an already-wired
+// lab.
+func TestCreateIdempotent_HostNICsFullyConverged_NoReconcileStep(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createMultiNICLab("pve-cpi")
+	poolID := lab.Access.Pool
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/zones")
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{
+		map[string]any{"vnet": "pvecpi"},
+		map[string]any{"vnet": "pvecpist"},
+		map[string]any{"vnet": "pvecpiwk"},
+	})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
+		[]any{map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets",
+		[]any{map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24"}})
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpi/subnets")
+	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpist/subnets")
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-pve-cpi", "type": "zfspool", "pool": "tank/labs/pve-cpi"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
+	createForbid(f, t, "POST /api2/json/storage")
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": poolID}})
+	createForbid(f, t, "POST /api2/json/pools")
+
+	f.HandleFunc("GET /api2/json/pools/"+poolID, func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"members": []map[string]any{
+				{"id": "qemu/9500", "node": "node1", "type": "qemu", "vmid": 9500, "name": "lab-pve-cpi-0"},
+			},
+		})
+	})
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{map[string]any{"vmid": 9500, "name": "lab-pve-cpi-0"}})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	// Live config already matches every configured HostNICs entry (bridge +
+	// MTU); the MAC-carrying model value differs from what this CLI would
+	// send, which must NOT itself count as drift (createNetConfigMatches
+	// ignores it by design).
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/config", map[string]any{
+		"net0": "virtio=BC:24:11:00:00:00,bridge=pvecpi,mtu=1450",
+		"net1": "virtio=BC:24:11:00:00:01,bridge=pvecpi,mtu=1450",
+		"net2": "virtio=BC:24:11:00:00:02,bridge=pvecpist,mtu=1450",
+		"net3": "virtio=BC:24:11:00:00:03,bridge=pvecpist,mtu=1450",
+		"net4": "virtio=BC:24:11:00:00:04,bridge=pvecpiwk,mtu=1450",
+		"net5": "virtio=BC:24:11:00:00:05,bridge=pvecpiwk,mtu=1450",
+	})
+	createForbid(f, t, "PUT /api2/json/nodes/node1/qemu/9500/config")
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"pve-cpi": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "pve-cpi", "--node", "node1")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "reconcile host NICs")
+}
+
+// --- ZFS dataset ensure (live-bug fix: PVE's zfspool storage-create API
+// accepts a "pool" dataset path that does not exist, and there is no PVE API
+// for ZFS dataset operations, so buildCreatePlan must ensure the backing
+// dataset exists over ssh, the same transport runQuotaSet uses) ------------
+
+// createDatasetTestNodeIP is the address `pmx pve node ssh`-style resolution
+// (nodeaddr.Resolve against GET /cluster/status, createDatasetSSHHost)
+// resolves "node1" to in every test in this section — deliberately distinct
+// from both "node1" itself and from createDatasetTestWrongCtxHost, so an
+// assertion that the dataset-ensure step's ssh destination equals this value
+// fails loudly if the step ever regresses to using either the bare node name
+// or the pmx context's own host instead of the resolved node address.
+const createDatasetTestNodeIP = "192.168.1.180"
+
+// createDatasetTestWrongCtxHost is deps.Ctx.Host in every test in this
+// section: a value that must NEVER appear in any recorded ssh call. This is
+// the regression case for the live-bug fix's first defect — deps.Ctx.Host is
+// the pmx CONTEXT's own host (an outer multi-node fleet cluster's API
+// entrypoint), not the node hosting this lab's ZFS pool; the dataset-ensure
+// step must resolve node's own address instead (createDatasetSSHHost).
+const createDatasetTestWrongCtxHost = "pve-0.taile80fe.ts.net"
+
+// createRegisterDatasetNodeAddr registers a GET /cluster/status response
+// mapping "node1" to createDatasetTestNodeIP (overriding testhelper's
+// default, which only maps "pve1"), so createDatasetSSHHost's
+// nodeaddr.Resolve call in every test below resolves to a known, assertable
+// address instead of silently falling back to the bare node name.
+func createRegisterDatasetNodeAddr(f *testhelper.FakePVE) {
+	f.HandleJSON("GET /api2/json/cluster/status", []any{
+		map[string]any{"type": "cluster", "name": "testcluster", "id": "testcluster", "quorate": 1, "nodes": 1, "online": 1},
+		map[string]any{"type": "node", "name": "node1", "id": "node/node1", "ip": createDatasetTestNodeIP, "online": 1},
+	})
+}
+
+// buildCreateCmdWithZFSFake is buildCreateCmd plus an active ssh context
+// (host createDatasetTestWrongCtxHost, deliberately never the ssh
+// destination any of these tests expect — see its doc comment — default
+// root/22) and fake, wired the same way quota_test.go's wireQuotaDeps wires
+// runQuotaSet's ssh dependencies. Also registers
+// createRegisterDatasetNodeAddr so the dataset-ensure step's node-address
+// resolution has a real target to resolve. Unlike buildCreateCmdWithSSH, no
+// context-hook stub/response is installed: none of these tests pass
+// --start, so runCreateContextHook (create.go) never reaches ssh on its
+// own, leaving the dataset-ensure step's own calls as the only entries fake
+// ever records.
+func buildCreateCmdWithZFSFake(
+	t *testing.T, configPath string, f *testhelper.FakePVE, node string, fake *exec.FakeRunner,
+) *cobra.Command {
+	t.Helper()
+	createRegisterDatasetNodeAddr(f)
+	cmd := buildCreateCmd(t, configPath, f, node)
+	deps := cli.GetDeps(cmd)
+	deps.Runner = fake
+	deps.Ctx = &config.Context{Host: createDatasetTestWrongCtxHost, SSH: config.SSHBlock{User: "root", Port: 22}}
+	return cmd
+}
+
+// TestCreate_ZfsDatasetEnsure_AbsentProbesThenCreatesWithRefquota covers the
+// live-bug fix's core path: the dataset does not exist yet (probe's remote
+// "zfs list" exits 1, a normal remote-command result, not an ssh transport
+// failure), so buildCreatePlan must issue "zfs create -p -o refquota=<N>G
+// <dataset>" over ssh before storage/VM creation proceeds — createTestLab
+// (via cleanLab) sets storage.refquota_gb to 50, so the create call must
+// carry "-o refquota=50G". Both calls must target node1's RESOLVED address
+// (createDatasetTestNodeIP), never deps.Ctx.Host
+// (createDatasetTestWrongCtxHost) — the defect a live run against a
+// multi-node outer fleet cluster surfaced (ctx.Host was the cluster's API
+// entrypoint, not the lab-hosting node, and was not even ssh-reachable).
+func TestCreate_ZfsDatasetEnsure_AbsentProbesThenCreatesWithRefquota(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne") // Storage.RefquotaGB: 50 (cleanLab)
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "wayne", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu", createTestUPID)
+	createHandleTaskStatus(f)
+
+	fake := exec.Fake(
+		exec.FakeResponse{ExitCode: 1}, // remote "zfs list": dataset absent
+		exec.FakeResponse{},            // zfs create
+	)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmdWithZFSFake(t, path, f, "node1", fake)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.NoError(t, err)
+	assert.Contains(t, out, "created")
+
+	require.Len(t, fake.Calls, 2)
+	probe, create := fake.Calls[0], fake.Calls[1]
+	assert.Equal(t, "ssh", probe.Name)
+	assert.Equal(t, []string{
+		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "list", "-H", "-o", "name", "tank/labs/wayne",
+	}, probe.Args)
+	assert.Equal(t, "ssh", create.Name)
+	assert.Equal(t, []string{
+		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p", "-o", "refquota=50G", "tank/labs/wayne",
+	}, create.Args)
+	assert.NotContains(t, probe.Args, "root@"+createDatasetTestWrongCtxHost)
+	assert.NotContains(t, create.Args, "root@"+createDatasetTestWrongCtxHost)
+}
+
+// TestCreate_ZfsDatasetEnsure_AlreadyExists_NoCreateCall covers idempotency:
+// when the probe reports the dataset already exists (exit 0), buildCreatePlan
+// must skip the ensure step outright — "zfs create" must never be issued.
+func TestCreate_ZfsDatasetEnsure_AlreadyExists_NoCreateCall(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "wayne", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu", createTestUPID)
+	createHandleTaskStatus(f)
+
+	fake := exec.Fake(
+		exec.FakeResponse{}, // zfs list: dataset already exists (exit 0)
+	)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmdWithZFSFake(t, path, f, "node1", fake)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.NoError(t, err)
+	assert.Contains(t, out, "created")
+
+	require.Len(t, fake.Calls, 1, "only the probe must run; no zfs create call")
+	assert.Contains(t, fake.Calls[0].Args, "list")
+	assert.Contains(t, fake.Calls[0].Args, "root@"+createDatasetTestNodeIP)
+}
+
+// TestCreate_ZfsDatasetEnsure_NoRefquotaConfigured_OmitsRefquotaOption covers
+// a lab that leaves storage.refquota_gb unset (0): the "zfs create" call must
+// omit "-o refquota=..." entirely rather than sending a bogus zero-valued
+// quota.
+func TestCreate_ZfsDatasetEnsure_NoRefquotaConfigured_OmitsRefquotaOption(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 0
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "wayne", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+	f.HandleJSON("POST /api2/json/nodes/node1/qemu", createTestUPID)
+	createHandleTaskStatus(f)
+
+	fake := exec.Fake(
+		exec.FakeResponse{ExitCode: 1}, // zfs list: dataset absent
+		exec.FakeResponse{},            // zfs create
+	)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmdWithZFSFake(t, path, f, "node1", fake)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.NoError(t, err)
+	assert.Contains(t, out, "created")
+
+	require.Len(t, fake.Calls, 2)
+	assert.Equal(t, []string{
+		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p", "tank/labs/wayne",
+	}, fake.Calls[1].Args, "no refquota configured: no -o refquota=... option")
+}
+
+// TestCreate_ZfsDatasetEnsure_DryRun_NeverTouchesSSH covers --dry-run: even
+// with a fully-wired ssh context/runner, the dataset-ensure step must never
+// probe or mutate over ssh during a preview — matching the same "no runner
+// calls under --dry-run" contract every other buildCreatePlan step already
+// honors for the PVE API.
+func TestCreate_ZfsDatasetEnsure_DryRun_NeverTouchesSSH(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "wayne", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	fake := exec.Fake() // any call at all fails this test via fake.Calls below
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmdWithZFSFake(t, path, f, "node1", fake)
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, out, "would create")
+
+	assert.Empty(t, fake.Calls, "dry-run must never touch ssh for the dataset-ensure step")
+}
+
+// TestCreate_ZfsDatasetEnsure_SSHTransportFailure_AbortsWithoutCreate covers
+// the live-bug fix's second defect: a probe that fails with ssh's OWN
+// transport exit code (255 — connection refused/unreachable/auth failure,
+// never reaching the remote shell at all) must NOT be misread as "dataset
+// absent". buildCreatePlan must abort the whole plan with a loud error
+// naming the dataset, ssh destination, exit code, and stderr, and "zfs
+// create" must never be attempted — the earlier, since-fixed behavior
+// silently proceeded to a create call that failed the same way with no
+// visible error at all.
+func TestCreate_ZfsDatasetEnsure_SSHTransportFailure_AbortsWithoutCreate(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "wayne", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	fake := exec.Fake(
+		exec.FakeResponse{
+			Stderr:   "ssh: connect to host 192.168.1.180 port 22: Connection refused\r\n",
+			ExitCode: 255,
+		},
+	)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmdWithZFSFake(t, path, f, "node1", fake)
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.Error(t, err, "an ssh transport failure (255) must abort the command, not silently proceed")
+
+	assert.ErrorContains(t, err, "tank/labs/wayne")
+	assert.ErrorContains(t, err, createDatasetTestNodeIP)
+	assert.ErrorContains(t, err, "255")
+	assert.ErrorContains(t, err, "Connection refused")
+
+	require.Len(t, fake.Calls, 1, "the probe ran once; the transport failure must abort before any zfs create attempt")
 }

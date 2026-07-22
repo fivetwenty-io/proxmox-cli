@@ -1,11 +1,14 @@
 package lab
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,8 +23,11 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/nodeaddr"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
 // createSubnetType is the fixed "type" value the PVE API requires when
@@ -865,6 +871,165 @@ type createTargetSpec struct {
 	storage   config.LabStorage
 }
 
+// createZfsDatasetProbeArgs builds the remote argv (after the ssh
+// destination) that checks whether dataset already exists: "zfs list" of
+// exactly that name, "-H" for script-friendly (unheadered, tab-separated)
+// output. A nonzero exit means PVE will find no such dataset either.
+func createZfsDatasetProbeArgs(dataset string) []string {
+	return []string{"zfs", "list", "-H", "-o", "name", dataset}
+}
+
+// createZfsDatasetCreateArgs builds the remote argv (after the ssh
+// destination) that creates dataset: "-p" creates any missing parent
+// datasets (e.g. "tank/labs" ahead of "tank/labs/wayne"), matching the
+// historical lab-provisioning script this step supersedes. refquotaGB is
+// included as "-o refquota=<N>G" only when positive; a lab that leaves
+// storage.refquota_gb unset gets a dataset with no refquota enforced at
+// creation time (an operator can still set one later via `pmx lab quota
+// set`).
+func createZfsDatasetCreateArgs(dataset string, refquotaGB int) []string {
+	args := []string{"zfs", "create", "-p"}
+	if refquotaGB > 0 {
+		args = append(args, "-o", fmt.Sprintf("refquota=%dG", refquotaGB))
+	}
+	return append(args, dataset)
+}
+
+// createDatasetSSHFlags resolves the ssh connection flags (user/port/
+// identity) used to reach the dataset-ensure step's ssh target: the same
+// root/22-default-with-context-override precedence runQuotaSet (quota.go)
+// uses for its own "zfs set refquota" call — the operator's ssh key/user
+// material lives on the pmx context (deps.Ctx.SSH), same as every other lab
+// verb that shells out. Callers must check deps.Ctx != nil first; this
+// function dereferences it unconditionally.
+func createDatasetSSHFlags(deps *cli.Deps) sshcmd.Flags {
+	f := sshcmd.Flags{User: "root", Port: 22}
+	if deps.Ctx.SSH.User != "" {
+		f.User = deps.Ctx.SSH.User
+	}
+	if deps.Ctx.SSH.Port != 0 {
+		f.Port = deps.Ctx.SSH.Port
+	}
+	if deps.Ctx.SSH.Identity != "" {
+		f.Identity = deps.Ctx.SSH.Identity
+	}
+	return f
+}
+
+// createDatasetSSHHost resolves the ssh destination HOST for the dataset-
+// ensure step: the target PVE node's own address (via nodeaddr.Resolve
+// against GET /cluster/status — the exact mechanism `pmx pve node ssh`
+// uses, internal/cli/node/ssh.go's resolveHost), NOT deps.Ctx.Host.
+//
+// deps.Ctx.Host is the pmx CONTEXT's own configured host (quota.go's ssh
+// target), which on a multi-node outer fleet cluster is only the cluster's
+// API entrypoint — a different machine from the node a lab's VMs (and its
+// ZFS pool) actually live on. A live run confirmed this the hard way:
+// deps.Ctx.Host ("pve-0.taile80fe.ts.net") was not even ssh-reachable from
+// the operator's machine, while the target node's own resolved address
+// worked and returned a clean "dataset does not exist" (exit 1). node is
+// buildCreatePlan's own node parameter — the same node every VM/QDevice
+// target in this plan is created on — so the dataset is always probed and
+// created on the machine that will actually host it.
+func createDatasetSSHHost(ctx context.Context, ac *apiclient.APIClient, node string) (string, error) {
+	host, err := nodeaddr.Resolve(ctx, ac.Cluster, node)
+	if err != nil {
+		return "", fmt.Errorf("resolve ssh address for node %q: %w", node, err)
+	}
+	return host, nil
+}
+
+// createDatasetSSHArgs builds the full ssh argv (connection flags +
+// "user@host" destination + remoteCmd) for reaching host using f
+// (createDatasetSSHFlags's result). The remote command, if any, is appended
+// by the caller via remoteCmd.
+func createDatasetSSHArgs(f sshcmd.Flags, host string, remoteCmd []string) []string {
+	argv := sshcmd.BaseArgs(&f, host)
+	return append(argv, remoteCmd...)
+}
+
+// sshTransportExitCode is the exit status ssh(1) itself uses when it could
+// not establish or maintain the connection (refused, host unreachable, auth
+// failure, ...) — distinct from a REMOTE command's own nonzero exit, which
+// ssh passes through verbatim. "zfs list" against a missing dataset exits 1
+// (a remote-command result); ssh exits 255 when it never got far enough to
+// run any remote command at all. See ssh_config(5)/ssh(1): "ssh exits with
+// the exit status of the remote command or with 255 if an error occurred."
+const sshTransportExitCode = 255
+
+// createZfsDatasetExists probes whether dataset already exists on host by
+// running "zfs list -H -o name <dataset>" over ssh via deps.Runner — the
+// same exec seam runQuotaSet uses, so tests substitute exec.Fake() the same
+// way. The three outcomes are NOT collapsed into a single "nonzero exit ->
+// absent" reading (the earlier revision of this step did that, and a live
+// run showed why it is wrong: it silently misread an unreachable ssh target
+// as "dataset absent" and proceeded to a "zfs create" that failed the exact
+// same way, with no visible error):
+//
+//   - exit 0: dataset exists -> (true, nil).
+//   - ssh's own transport exit code (255, sshTransportExitCode): ssh never
+//     reached the remote shell at all (refused, unreachable, auth failure,
+//     ...) -> (false, error) carrying dataset, ssh destination, exit code,
+//     and stderr, so the caller aborts the whole plan instead of silently
+//     treating a broken connection as "go ahead and create it".
+//   - any other nonzero exit (e.g. zfs list's own exit 1 for "dataset does
+//     not exist", or any other code returned by a remote command that DID
+//     run): the remote host was reached and zfs itself reported absence ->
+//     (false, nil).
+//
+// A process that could not even be started (no *exec.ExitError at all,
+// e.g. the local ssh binary missing) is treated the same as a transport
+// failure, not "absent" — exec.ExitCodeOf returns -1 for that case, folded
+// into the same branch as the explicit 255 check below.
+func createZfsDatasetExists(deps *cli.Deps, host, dataset string) (bool, error) {
+	f := createDatasetSSHFlags(deps)
+	argv := createDatasetSSHArgs(f, host, createZfsDatasetProbeArgs(dataset))
+
+	var stdout, stderr bytes.Buffer
+	err := deps.Runner.Run("ssh", argv, nil, nil, &stdout, &stderr)
+	if err == nil {
+		return true, nil
+	}
+
+	code := exec.ExitCodeOf(err)
+	if code != sshTransportExitCode && code > 0 {
+		// The remote host was reached and ran "zfs list"; its own nonzero
+		// exit (1 for "no such dataset", possibly another code for a
+		// different zfs-level failure) means "does not exist".
+		return false, nil
+	}
+
+	wrapped := fmt.Errorf(
+		"probe zfs dataset %q via ssh %s@%s: transport failure (exit %d): %w (stderr: %s)",
+		dataset, f.User, host, code, err, strings.TrimSpace(stderr.String()))
+	return false, exec.NewCapturedError(wrapped)
+}
+
+// createZfsDatasetEnsure runs "zfs create -p [-o refquota=<N>G] <dataset>"
+// over ssh against host via deps.Runner. Called only when
+// createZfsDatasetExists has already reported dataset absent (buildCreatePlan
+// wires this as a createStep's apply, itself only reachable when the step
+// was not skipped), so this never races an already-existing dataset under
+// normal operation; "zfs create" without "-f" still fails loudly against an
+// already-existing leaf dataset if that assumption is ever wrong (e.g. a
+// concurrent creation from elsewhere), rather than silently doing nothing.
+// On failure, the returned error carries the dataset path, ssh destination,
+// exit code, and captured stderr — a live run against an unreachable host
+// otherwise printed nothing at all, leaving the operator with no signal.
+func createZfsDatasetEnsure(deps *cli.Deps, host, dataset string, refquotaGB int) error {
+	f := createDatasetSSHFlags(deps)
+	argv := createDatasetSSHArgs(f, host, createZfsDatasetCreateArgs(dataset, refquotaGB))
+
+	var stdout, stderr bytes.Buffer
+	if err := deps.Runner.Run("ssh", argv, nil, nil, &stdout, &stderr); err != nil {
+		wrapped := fmt.Errorf(
+			"create zfs dataset %q via ssh %s@%s (exit %d): %w (stderr: %s)",
+			dataset, f.User, host, exec.ExitCodeOf(err), err, strings.TrimSpace(stderr.String()))
+		return exec.NewCapturedError(wrapped)
+	}
+	return nil
+}
+
 // buildCreatePlan queries live PVE state for every resource `pmx lab create`
 // composes (SDN zone/vnet/subnet, storage, pool, and one VM per configured
 // node plus, when applicable, the QDevice) and returns the full ordered plan
@@ -905,10 +1070,22 @@ func buildCreatePlan(
 	if err != nil {
 		return nil, fmt.Errorf("list SDN zones: %w", err)
 	}
-	_, zoneExists, err := findSdnZone(*zones, zoneName)
+	existingZone, zoneExists, err := findSdnZone(*zones, zoneName)
 	if err != nil {
 		return nil, fmt.Errorf("decode SDN zone list: %w", err)
 	}
+	// zoneType is the zone's resolved plugin type: the live type when it
+	// already exists, else labZoneType(eff.Network) — the type step 1 below
+	// creates it as. tagAllowed (sdnZoneAllowsVnetTag, net.go) gates every
+	// vnet-create/update Tag param this plan builds (steps 2 and 3b) the same
+	// way ensureLabSdnVnets gates `pmx lab net apply`'s: a "simple"-type zone
+	// rejects the tag parameter outright, so it must never be sent for any
+	// vnet in that zone, primary or extra.
+	zoneType := labZoneType(eff.Network)
+	if zoneExists {
+		zoneType = existingZone.Type
+	}
+	tagAllowed := sdnZoneAllowsVnetTag(zoneType)
 	plan.steps = append(plan.steps, createStep{
 		desc:       fmt.Sprintf("sdn zone %q (%s)", zoneName, labZoneType(eff.Network)),
 		skip:       zoneExists,
@@ -938,7 +1115,9 @@ func buildCreatePlan(
 			params := &cluster.CreateSdnVnetsParams{
 				Vnet: eff.Network.VnetID,
 				Zone: zoneName,
-				Tag:  createPtr(int64(eff.Network.VxlanTag)),
+			}
+			if tagAllowed && eff.Network.VxlanTag != 0 {
+				params.Tag = createPtr(int64(eff.Network.VxlanTag))
 			}
 			if eff.Network.VnetAlias != "" {
 				params.Alias = createPtr(eff.Network.VnetAlias)
@@ -974,7 +1153,124 @@ func buildCreatePlan(
 		},
 	})
 
-	// 4. Storage (per-lab zfspool, shared by every node's disks).
+	// 3b. Additional outer SDN vnets/subnets (network.vnets[], multi-AZ
+	// topology plan §1/§2): one step per entry, ensured via net.go's
+	// vnet-agnostic ensureLabSdnVnetSubnet — the same helper `pmx lab net
+	// apply` uses to reconcile the primary vnet, so the two verbs can never
+	// provision an extra vnet with diverging Zone/Tag/Alias/CIDR/Gateway
+	// values. A vnet with an empty CIDR (a pure L2 passthrough vnet, e.g. a
+	// workload vnet) has no subnet sub-step: its step is skipped whenever
+	// the vnet alone already exists, matching ensureLabSdnVnetSubnet's own
+	// skip-if-cidr-empty rule. The vnets list already fetched for the
+	// primary vnet's existence check (above) is reused here rather than
+	// re-listing per entry; only the subnet lookup needs its own call, one
+	// per vnet that declares a CIDR.
+	for _, v := range eff.Network.Vnets {
+		v := v
+		_, extraVnetExists, verr := findSdnVnet(*vnets, v.ID)
+		if verr != nil {
+			return nil, fmt.Errorf("decode SDN vnet list: %w", verr)
+		}
+		extraSubnetExists := v.CIDR == ""
+		if v.CIDR != "" {
+			extraSubnets, serr := ac.Cluster.ListSdnVnetsSubnets(ctx, v.ID, &cluster.ListSdnVnetsSubnetsParams{})
+			if serr != nil {
+				return nil, fmt.Errorf("list subnets of vnet %q: %w", v.ID, serr)
+			}
+			_, extraSubnetExists, serr = findSdnSubnet(*extraSubnets, v.CIDR)
+			if serr != nil {
+				return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
+			}
+		}
+
+		desc := fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", v.ID, zoneName, v.Tag)
+		if v.CIDR != "" {
+			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnet %q", v.ID, zoneName, v.Tag, v.CIDR)
+		}
+		plan.steps = append(plan.steps, createStep{
+			desc:       desc,
+			skip:       extraVnetExists && extraSubnetExists,
+			skipReason: "already exists",
+			apply: func(ctx context.Context) error {
+				return ensureLabSdnVnetSubnet(ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, tagAllowed)
+			},
+		})
+	}
+
+	// 4. ZFS dataset backing the storage step below. PVE's storage-create API
+	// (step 5) accepts a "pool" dataset path that does not exist yet with no
+	// complaint of its own — there is no PVE API for ZFS dataset operations at
+	// all (quota.go's doc comment) — so without this step, qmcreate later
+	// fails deep inside disk allocation with a raw "zfs error: cannot open
+	// '<dataset>': dataset does not exist" the first time it tries to
+	// allocate a disk on that storage. Every lab's storage is a zfspool
+	// rooted at zfsBasePool(eff) (config.LabStorage has no other storage kind
+	// today), so this step always applies. --dry-run never reaches ssh at
+	// all here (unlike the PVE-API-backed existence checks above, which
+	// --dry-run already depends on to render an accurate preview): a preview
+	// should not carry a live ssh round trip as a hard dependency, so its
+	// existence is reported as "verified at apply time" instead of probed.
+	//
+	// The ssh target is node's OWN resolved address (createDatasetSSHHost,
+	// via nodeaddr.Resolve against GET /cluster/status — the exact mechanism
+	// `pmx pve node ssh` uses), never deps.Ctx.Host: on a multi-node outer
+	// fleet cluster, deps.Ctx.Host is only the cluster's API entrypoint,
+	// which is not necessarily reachable at all and is not necessarily the
+	// machine hosting this lab's ZFS pool — node is. The connection
+	// credentials (user/port/identity) still come from deps.Ctx.SSH, same as
+	// runQuotaSet (quota.go). Both the probe and the create call go through
+	// deps.Runner — the same exec seam runQuotaSet uses, so tests substitute
+	// exec.Fake() the same way. deps.Ctx or deps.Runner is nil only when a
+	// caller builds *cli.Deps directly, bypassing PersistentPreRunE (e.g.
+	// this package's own unit tests that never exercise ssh);
+	// persistentPreRunE (root.go) always resolves deps.Ctx and sets
+	// deps.Runner to exec.Real() before any lab verb's RunE runs, so that
+	// branch is never taken on a real `pmx lab create`/`pmx lab scale`
+	// invocation.
+	//
+	// A transport-level ssh failure (exit 255, or no process launched at
+	// all) reaching the probe aborts the whole plan build with a loud error
+	// naming the dataset, ssh destination, exit code, and stderr — it is
+	// NEVER read as "dataset absent" (a live run against an unreachable ctx
+	// host once did exactly that, silently proceeding to a "zfs create" that
+	// failed the same way with no visible error at all). Only a REMOTE
+	// command's own nonzero exit (the host was reached; zfs itself reported
+	// no such dataset) is read as absent; see createZfsDatasetExists.
+	dataset := zfsDatasetPath(eff)
+	refquotaGB := eff.Storage.RefquotaGB
+	datasetDesc := fmt.Sprintf("zfs dataset %q", dataset)
+	var datasetStep createStep
+	switch {
+	case deps.Ctx == nil || deps.Runner == nil:
+		datasetStep = createStep{
+			desc: datasetDesc, skip: true,
+			skipReason: "no active ssh context/runner to verify",
+		}
+	case dryRun:
+		datasetStep = createStep{desc: datasetDesc + " (verified at apply time, not previewed)"}
+	default:
+		datasetHost, herr := createDatasetSSHHost(ctx, ac, node)
+		if herr != nil {
+			return nil, herr
+		}
+		exists, perr := createZfsDatasetExists(deps, datasetHost, dataset)
+		if perr != nil {
+			return nil, perr
+		}
+		if exists {
+			datasetStep = createStep{desc: datasetDesc, skip: true, skipReason: "already exists"}
+		} else {
+			datasetStep = createStep{
+				desc: datasetDesc,
+				apply: func(context.Context) error {
+					return createZfsDatasetEnsure(deps, datasetHost, dataset, refquotaGB)
+				},
+			}
+		}
+	}
+	plan.steps = append(plan.steps, datasetStep)
+
+	// 5. Storage (per-lab zfspool, shared by every node's disks).
 	storages, err := ac.ClusterStorage.ListStorage(ctx, &clusterstorage.ListStorageParams{})
 	if err != nil {
 		return nil, fmt.Errorf("list storage: %w", err)
@@ -999,7 +1295,7 @@ func buildCreatePlan(
 		},
 	})
 
-	// 5. Resource pool. poolID falls back to "lab-<name>" when access.pool is
+	// 6. Resource pool. poolID falls back to "lab-<name>" when access.pool is
 	// unset, the same labPoolID convention destroy/lifecycle/access grant use,
 	// so a lab that omits access.pool resolves to the identical pool
 	// everywhere rather than an empty pool here alone.
@@ -1025,7 +1321,7 @@ func buildCreatePlan(
 		},
 	})
 
-	// 6. Capacity gate: before reserving any VMID for any node/QDevice
+	// 7. Capacity gate: before reserving any VMID for any node/QDevice
 	// target, check the aggregate lab refquota reservation against the
 	// shared pool's live size (multi-node lab plan §3.4). A refusal aborts
 	// here; a warning is carried through to the rendered summary.
@@ -1035,7 +1331,7 @@ func buildCreatePlan(
 	}
 	plan.capacityWarning = capNote
 
-	// 7. One VM per configured node, plus the QDevice when the lab's
+	// 8. One VM per configured node, plus the QDevice when the lab's
 	// topology calls for one. Existing VMs are located once via pool
 	// membership (multi-VM-aware) and once via a name-match fallback on
 	// node, shared across every target's lookup.
@@ -1180,6 +1476,21 @@ func planCreateTarget(
 		},
 	})
 
+	// Idempotent NIC-reconciliation step: only meaningful for a target that
+	// already exists (a not-yet-created VM's Net map, above, already carries
+	// every configured HostNICs entry from the start) and only when the lab
+	// actually configures HostNICs at all — the mechanism an
+	// already-installed lab (e.g. pve-cpi's 3 az1 nodes) needs to pick up
+	// newly-added net1..netN without a destroy/recreate (multi-AZ topology
+	// plan §2/§3). Runs during planning (a non-mutating live-config read),
+	// even under --dry-run, so the preview reflects real drift; only the
+	// resulting UpdateQemuConfig call itself is deferred to apply time.
+	if vmExists && len(eff.Network.HostNICs) > 0 {
+		if err := planHostNICReconcileStep(ctx, deps, plan, eff, vmNode, vmid, vmidStr); err != nil {
+			return createNodePlan{}, err
+		}
+	}
+
 	// Optional start + guest-agent verification. The start targets vmNode,
 	// not the --node flag value: an already-existing VM found via pool
 	// membership may live on a different node than the one create was told
@@ -1219,6 +1530,41 @@ func planCreateTarget(
 	return createNodePlan{label: spec.label, vmName: spec.vmName, vmid: vmid, vmidKnown: vmidKnown, node: vmNode}, nil
 }
 
+// createHostNICNetString renders one configured HostNICs entry as a PVE net
+// device string, e.g. "virtio,bridge=pvecpist,mtu=1500": bridge is the
+// entry's VnetID verbatim — an SDN vnet ID *is* its PVE bridge name, so no
+// separate bridge-name resolution table is needed — and mtu falls back to
+// defaultMTU (the lab's net0 MTU) when the entry itself leaves MTU unset,
+// mirroring net0's own MTU rule.
+func createHostNICNetString(nic config.LabHostNIC, defaultMTU int) string {
+	s := fmt.Sprintf("virtio,bridge=%s", nic.VnetID)
+	mtu := nic.MTU
+	if mtu == 0 {
+		mtu = defaultMTU
+	}
+	if mtu > 0 {
+		s = fmt.Sprintf("%s,mtu=%d", s, mtu)
+	}
+	return s
+}
+
+// createExtraNetMap builds the net1..netN map[int]string entries a lab's
+// network.host_nics declares, each rendered via createHostNICNetString.
+// Returns nil (not an empty non-nil map) when net.HostNICs is empty, so a
+// caller merging this into an existing {0: net0} map with a simple loop
+// never iterates when there is nothing to add — today's single-NIC shape,
+// unchanged.
+func createExtraNetMap(net config.LabNetwork) map[int]string {
+	if len(net.HostNICs) == 0 {
+		return nil
+	}
+	m := make(map[int]string, len(net.HostNICs))
+	for _, nic := range net.HostNICs {
+		m[nic.Index] = createHostNICNetString(nic, net.MTU)
+	}
+	return m
+}
+
 // createVM creates or clones a node's VM once its VMID has been resolved and
 // peppi-guarded, using the given vmName/compute/storage (config.EffectiveNodeSizing's
 // per-node result — not necessarily eff.Compute/eff.Storage verbatim). When
@@ -1235,6 +1581,10 @@ func createVM(
 	net0 := fmt.Sprintf("virtio,bridge=%s", eff.Network.VnetID)
 	if eff.Network.MTU > 0 {
 		net0 = fmt.Sprintf("%s,mtu=%d", net0, eff.Network.MTU)
+	}
+	netMap := map[int]string{0: net0}
+	for idx, s := range createExtraNetMap(eff.Network) {
+		netMap[idx] = s
 	}
 
 	if cloneFrom == "" {
@@ -1254,7 +1604,7 @@ func createVM(
 				0: fmt.Sprintf("%s:%d%s", stID, storage.OSDiskGB, createDiskOptions(storage)),
 				1: fmt.Sprintf("%s:%d%s", stID, storage.DataDiskGB, createDiskOptions(storage)),
 			},
-			Net: map[int]string{0: net0},
+			Net: netMap,
 		}
 		if compute.CPUType != "" {
 			params.Cpu = createPtr(compute.CPUType)
@@ -1325,7 +1675,7 @@ func createVM(
 	if storage.Controller != "" {
 		updateParams.Scsihw = createPtr(storage.Controller)
 	}
-	updateParams.Net = map[int]string{0: net0}
+	updateParams.Net = netMap
 
 	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {
 		return fmt.Errorf("update cloned VM %d config on node %q: %w", vmid, node, err)
@@ -1352,6 +1702,10 @@ func createQdeviceVM(
 	if eff.Network.MTU > 0 {
 		net0 = fmt.Sprintf("%s,mtu=%d", net0, eff.Network.MTU)
 	}
+	netMap := map[int]string{0: net0}
+	for idx, s := range createExtraNetMap(eff.Network) {
+		netMap[idx] = s
+	}
 	memKiB := strconv.Itoa(qdeviceMemoryGB * 1024)
 	vmName := labQdeviceVMName(eff.Name)
 
@@ -1369,7 +1723,7 @@ func createQdeviceVM(
 			Scsi: map[int]string{
 				0: fmt.Sprintf("%s:%d", stID, qdeviceDiskGB),
 			},
-			Net: map[int]string{0: net0},
+			Net: netMap,
 		}
 
 		resp, err := ac.Nodes.CreateQemu(ctx, node, params)
@@ -1414,11 +1768,163 @@ func createQdeviceVM(
 		Cores:   createPtr(int64(qdeviceVCPU)),
 		Memory:  createPtr(memKiB),
 		Balloon: createPtr(int64(qdeviceMemoryGB * 1024)),
-		Net:     map[int]string{0: net0},
+		Net:     netMap,
 	}
 	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {
 		return fmt.Errorf("update cloned QDevice VM %d config on node %q: %w", vmid, node, err)
 	}
+	return nil
+}
+
+// createLiveNetConfig fetches vmidStr's current config on node and returns
+// the live "netN" strings for exactly the given indices. The raw endpoint is
+// read directly (deps.API.Raw.GetCtx) instead of through
+// nodes.ListQemuConfig/ListQemuConfigResponse because that generated struct
+// cannot represent PVE's dynamically-indexed net0/net1/... keys at all — its
+// field for the whole family is a literal placeholder (Netn, tagged
+// json:"net[n]") that never matches a real response key such as "net1"; see
+// internal/cli/qemu/config.go's newConfigGetCmd doc comment for the same
+// documented caveat. An index with no corresponding live key (never
+// configured) is simply absent from the returned map, not an error — that
+// is exactly the "missing, needs to be added" case
+// planHostNICReconcileStep's caller must detect.
+func createLiveNetConfig(ctx context.Context, deps *cli.Deps, node, vmidStr string, indices []int) (map[int]string, error) {
+	path := fmt.Sprintf("/nodes/%s/qemu/%s/config", url.PathEscape(node), url.PathEscape(vmidStr))
+	data, err := deps.API.Raw.GetCtx(ctx, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get live config for VM %s on node %q: %w", vmidStr, node, err)
+	}
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("get live config for VM %s on node %q: unexpected response shape %T", vmidStr, node, data)
+	}
+
+	live := make(map[int]string, len(indices))
+	for _, idx := range indices {
+		key := fmt.Sprintf("net%d", idx)
+		raw, present := m[key]
+		if !present {
+			continue
+		}
+		s, ok := raw.(string)
+		if !ok {
+			return nil, fmt.Errorf("get live config for VM %s on node %q: %s is not a string (%T)", vmidStr, node, key, raw)
+		}
+		live[idx] = s
+	}
+	return live, nil
+}
+
+// createNetConfigMatches reports whether a live PVE net device string (e.g.
+// "virtio=BC:24:11:AA:BB:CC,bridge=vmbr1,mtu=1500") already matches the
+// bridge and MTU this CLI would configure for a HostNICs entry. The
+// comparison is deliberately narrower than a full string equality check:
+// PVE always injects and persists a MAC address into the model=MAC
+// component this CLI never sends on create (net0's own params never set a
+// MAC either), so a live value can never equal the CLI's own
+// "virtio,bridge=...[,mtu=...]" string byte-for-byte even once fully
+// converged — comparing only the two fields this CLI actually manages is
+// the only way to detect true convergence rather than perpetual "drift".
+// mtu of 0 means "no MTU asserted" on both sides (net.MTU unset and no
+// mtu= component in live), matching createHostNICNetString's own
+// zero-means-omit convention.
+func createNetConfigMatches(live, bridge string, mtu int) bool {
+	var gotBridge string
+	var gotMTU int
+	for _, part := range strings.Split(live, ",") {
+		switch {
+		case strings.HasPrefix(part, "bridge="):
+			gotBridge = strings.TrimPrefix(part, "bridge=")
+		case strings.HasPrefix(part, "mtu="):
+			if v, err := strconv.Atoi(strings.TrimPrefix(part, "mtu=")); err == nil {
+				gotMTU = v
+			}
+		}
+	}
+	return gotBridge == bridge && gotMTU == mtu
+}
+
+// createHostNICDrift returns the map[int]string of net device strings (one
+// per createHostNICNetString-rendered value) for exactly the
+// net.HostNICs entries that are missing from live (never configured) or
+// present but not matching the configured bridge/MTU (createNetConfigMatches
+// returns false). An empty (nil) result means every configured HostNICs
+// entry already matches the VM's live config: fully converged, nothing to
+// reconcile.
+func createHostNICDrift(net config.LabNetwork, live map[int]string) map[int]string {
+	var diff map[int]string
+	for _, nic := range net.HostNICs {
+		desiredMTU := nic.MTU
+		if desiredMTU == 0 {
+			desiredMTU = net.MTU
+		}
+		liveVal, ok := live[nic.Index]
+		if ok && createNetConfigMatches(liveVal, nic.VnetID, desiredMTU) {
+			continue
+		}
+		if diff == nil {
+			diff = make(map[int]string, len(net.HostNICs))
+		}
+		diff[nic.Index] = createHostNICNetString(nic, net.MTU)
+	}
+	return diff
+}
+
+// planHostNICReconcileStep appends, for an already-existing target whose lab
+// configures Network.HostNICs, an idempotent NIC-reconciliation createStep:
+// it reads the VM's live net1..netN config (createLiveNetConfig, at planning
+// time — a non-mutating read, run even under --dry-run so the preview
+// reflects real drift), diffs it against the configured HostNICs
+// (createHostNICDrift), and — only when at least one entry is missing or
+// drifted — appends exactly one step whose apply issues exactly one
+// UpdateQemuConfig call carrying every drifted/missing index at once. This
+// is the mechanism an already-installed lab (e.g. pve-cpi's 3 az1 nodes)
+// needs to pick up newly-added HostNICs entries without a destroy/recreate
+// (multi-AZ topology plan §2/§3). A fully-converged VM (every configured
+// index already matches) appends no step at all, keeping create's STEP
+// table free of no-op rows for the common re-run case. Callers must only
+// invoke this when the target's VM already exists (vmExists) and
+// eff.Network.HostNICs is non-empty — a not-yet-created target's Net map,
+// built by createVM/createQdeviceVM, already carries every configured
+// HostNICs entry from the start.
+func planHostNICReconcileStep(
+	ctx context.Context, deps *cli.Deps, plan *createPlan, eff *config.Lab, vmNode string, vmid int64, vmidStr string,
+) error {
+	indices := make([]int, 0, len(eff.Network.HostNICs))
+	for _, nic := range eff.Network.HostNICs {
+		indices = append(indices, nic.Index)
+	}
+
+	live, err := createLiveNetConfig(ctx, deps, vmNode, vmidStr, indices)
+	if err != nil {
+		return fmt.Errorf("read live NIC config for VM %d on node %q: %w", vmid, vmNode, err)
+	}
+
+	diff := createHostNICDrift(eff.Network, live)
+	if len(diff) == 0 {
+		return nil
+	}
+
+	diffIdx := make([]int, 0, len(diff))
+	for idx := range diff {
+		diffIdx = append(diffIdx, idx)
+	}
+	sort.Ints(diffIdx)
+	diffLabels := make([]string, 0, len(diffIdx))
+	for _, idx := range diffIdx {
+		diffLabels = append(diffLabels, fmt.Sprintf("net%d", idx))
+	}
+
+	ac := deps.API
+	plan.steps = append(plan.steps, createStep{
+		desc: fmt.Sprintf("reconcile host NICs %s on VM %d (node %q)", strings.Join(diffLabels, ","), vmid, vmNode),
+		apply: func(ctx context.Context) error {
+			if err := ac.Nodes.UpdateQemuConfig(ctx, vmNode, vmidStr, &nodes.UpdateQemuConfigParams{Net: diff}); err != nil {
+				return fmt.Errorf("reconcile host NICs on VM %d (node %q): %w", vmid, vmNode, err)
+			}
+			return nil
+		},
+	})
 	return nil
 }
 

@@ -4,13 +4,62 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
+
+// --- server-side ensure phase test fixtures --------------------------------
+//
+// multiNodeTestLab("wayne", ...) resolves to mgmt /24 "10.10.1.0/24" (its
+// own Mgmt.Subnet), so every dataset path/sharenfs value below is derived
+// from that lab exactly the way buildNfsServerEnsurePlan derives it in
+// nfsserver.go — kept as named constants so every test in this section
+// asserts against the same values nfsserver.go's own doc comments describe.
+const (
+	nfsServerTestNode             = "sm-0"
+	nfsServerTestNodeIP           = "192.168.9.180"
+	nfsServerTestImagesDataset    = "tank/nfs/labs/wayne/images"
+	nfsServerTestBackupDataset    = "tank/nfs/labs/wayne/backup"
+	nfsServerTestLabDataset       = "tank/nfs/labs/wayne"
+	nfsServerTestSharedIsoDataset = "tank/nfs/shared/iso"
+	nfsServerTestMgmtCIDR         = "10.10.1.0/24"
+	nfsServerTestRwSharenfs       = "rw=@10.10.1.0/24,no_root_squash,no_subtree_check,sec=sys"
+)
+
+// buildNfsServerCmd is buildGuestSSHAndAPICmd plus a GET /cluster/status
+// fixture mapping nfsServerTestNode to nfsServerTestNodeIP (the address
+// createDatasetSSHHost's nodeaddr.Resolve call resolves it to — mirroring
+// create_test.go's createRegisterDatasetNodeAddr/buildCreateCmdWithZFSFake
+// for the identical ssh-host-resolution mechanism) and deps.Node set to
+// nfsServerTestNode, both of which `nfs attach`'s server-side ensure phase
+// now requires for any non-dry-run invocation.
+func buildNfsServerCmd(t *testing.T, configPath string, fake *exec.FakeRunner) *cobra.Command {
+	t.Helper()
+
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/cluster/status", []any{
+		map[string]any{"type": "cluster", "name": "testcluster", "id": "testcluster", "quorate": 1, "nodes": 1, "online": 1},
+		map[string]any{"type": "node", "name": nfsServerTestNode, "id": "node/" + nfsServerTestNode, "ip": nfsServerTestNodeIP, "online": 1},
+	})
+
+	cmd, _ := buildGuestSSHAndAPICmd(t, configPath, f, newNfsCmd())
+	deps := cli.GetDeps(cmd)
+	deps.Runner = fake
+	deps.Node = nfsServerTestNode
+	return cmd
+}
+
+// nfsServerSSHDest is the leading ssh argv prefix (options + destination)
+// every server-side ensure-phase call in this section carries, mirroring
+// create_test.go's own "-p", "22", "root@<ip>" assertions for the identical
+// createDatasetSSHFlags/createDatasetSSHArgs convention.
+var nfsServerSSHDest = []string{"-p", "22", "root@" + nfsServerTestNodeIP}
 
 func TestNfsAttach_DryRun_NoRunnerCalls(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 1, "")
@@ -19,10 +68,16 @@ func TestNfsAttach_DryRun_NoRunnerCalls(t *testing.T) {
 
 	out, err := runGuestCmd(t, cmd, "attach", "wayne", "--dry-run")
 	require.NoError(t, err)
+	assert.Contains(t, out, "zfs create -p -o recordsize=128K "+nfsServerTestImagesDataset)
+	assert.Contains(t, out, "zfs create -p -o recordsize=1M "+nfsServerTestBackupDataset)
+	assert.Contains(t, out, "zfs set quota=200G "+nfsServerTestLabDataset)
+	assert.Contains(t, out, "zfs set sharenfs="+nfsServerTestRwSharenfs+" "+nfsServerTestImagesDataset)
+	assert.Contains(t, out, "zfs set sharenfs="+nfsServerTestRwSharenfs+" "+nfsServerTestBackupDataset)
+	assert.Contains(t, out, "ensure "+nfsServerTestSharedIsoDataset+"'s sharenfs ro= list includes @"+nfsServerTestMgmtCIDR)
 	assert.Contains(t, out, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images --options vers=4.1")
 	assert.Contains(t, out, "pvesm add nfs nfs-backup --server 10.10.1.1 --export /tank/nfs/labs/wayne/backup --content backup --options vers=4.1")
 	assert.Contains(t, out, "pvesm add nfs shared-iso --server 10.10.1.1 --export /tank/nfs/shared/iso --content iso,vztmpl --options vers=4.1,ro,soft")
-	assert.Empty(t, fake.Calls)
+	assert.Empty(t, fake.Calls, "dry-run must never touch ssh for the server-side ensure phase either")
 }
 
 // TestNfsServerIP_RejectsInvalidGateway covers M3-R03: a malformed
@@ -61,45 +116,110 @@ func TestNfsAttach_RefusesInvalidGatewayBeforeAnyCall(t *testing.T) {
 	assert.Empty(t, fake.Calls)
 }
 
+// TestNfsAttach_HappyPath_AttachesAll covers a fully fresh lab: every
+// server-side dataset/property is absent/different, so the ensure phase
+// must issue its full ordered command sequence (dataset creates with their
+// recordsize, quota set, both sharenfs sets, shared-iso ro-list append)
+// BEFORE the existing pvesm-add phase runs.
 func TestNfsAttach_HappyPath_AttachesAll(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 1, "")
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
-	cmd, _ := buildGuestSSHCmd(t, path, newNfsCmd())
 	fake := exec.Fake(
-		exec.FakeResponse{ExitCode: 1}, // probe nfs-images: not configured
-		exec.FakeResponse{},            // add nfs-images
-		exec.FakeResponse{ExitCode: 1}, // probe nfs-backup: not configured
-		exec.FakeResponse{},            // add nfs-backup
-		exec.FakeResponse{ExitCode: 1}, // probe shared-iso: not configured
-		exec.FakeResponse{},            // add shared-iso
+		exec.FakeResponse{ExitCode: 1},                         // zfs list images: absent
+		exec.FakeResponse{},                                    // zfs create images
+		exec.FakeResponse{ExitCode: 1},                         // zfs list backup: absent
+		exec.FakeResponse{},                                    // zfs create backup
+		exec.FakeResponse{Stdout: "100G"},                      // zfs get quota: differs from 200G default
+		exec.FakeResponse{},                                    // zfs set quota=200G
+		exec.FakeResponse{Stdout: "off"},                       // zfs get sharenfs images: differs
+		exec.FakeResponse{},                                    // zfs set sharenfs images
+		exec.FakeResponse{Stdout: "off"},                       // zfs get sharenfs backup: differs
+		exec.FakeResponse{},                                    // zfs set sharenfs backup
+		exec.FakeResponse{Stdout: "ro=@10.108.0.0/24,sec=sys"}, // zfs get sharenfs shared/iso: missing our subnet
+		exec.FakeResponse{},                                    // zfs set sharenfs shared/iso (appended)
+		exec.FakeResponse{ExitCode: 1},                         // probe nfs-images: not configured
+		exec.FakeResponse{},                                    // add nfs-images
+		exec.FakeResponse{ExitCode: 1},                         // probe nfs-backup: not configured
+		exec.FakeResponse{},                                    // add nfs-backup
+		exec.FakeResponse{ExitCode: 1},                         // probe shared-iso: not configured
+		exec.FakeResponse{},                                    // add shared-iso
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cmd := buildNfsServerCmd(t, path, fake)
 
 	out, err := runGuestCmd(t, cmd, "attach", "wayne")
 	require.NoError(t, err)
+	assert.Contains(t, out, "created")
 	assert.Contains(t, out, "attached")
 
-	require.Len(t, fake.Calls, 6)
-	assert.Contains(t, fake.Calls[1].Args, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images --options vers=4.1")
-	assert.Contains(t, fake.Calls[3].Args, "pvesm add nfs nfs-backup --server 10.10.1.1 --export /tank/nfs/labs/wayne/backup --content backup --options vers=4.1")
-	assert.Contains(t, fake.Calls[5].Args, "pvesm add nfs shared-iso --server 10.10.1.1 --export /tank/nfs/shared/iso --content iso,vztmpl --options vers=4.1,ro,soft")
+	require.Len(t, fake.Calls, 18)
+	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "create", "-p", "-o", "recordsize=128K", nfsServerTestImagesDataset), fake.Calls[1].Args)
+	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "create", "-p", "-o", "recordsize=1M", nfsServerTestBackupDataset), fake.Calls[3].Args)
+	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "quota=200G", nfsServerTestLabDataset), fake.Calls[5].Args)
+	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "sharenfs="+nfsServerTestRwSharenfs, nfsServerTestImagesDataset), fake.Calls[7].Args)
+	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "sharenfs="+nfsServerTestRwSharenfs, nfsServerTestBackupDataset), fake.Calls[9].Args)
+	assert.Equal(t, append(append([]string{}, nfsServerSSHDest...), "zfs", "set", "sharenfs=ro=@10.108.0.0/24:@10.10.1.0/24,sec=sys", nfsServerTestSharedIsoDataset), fake.Calls[11].Args)
+	assert.Contains(t, fake.Calls[13].Args, "pvesm add nfs nfs-images --server 10.10.1.1 --export /tank/nfs/labs/wayne/images --content images --options vers=4.1")
+	assert.Contains(t, fake.Calls[15].Args, "pvesm add nfs nfs-backup --server 10.10.1.1 --export /tank/nfs/labs/wayne/backup --content backup --options vers=4.1")
+	assert.Contains(t, fake.Calls[17].Args, "pvesm add nfs shared-iso --server 10.10.1.1 --export /tank/nfs/shared/iso --content iso,vztmpl --options vers=4.1,ro,soft")
+}
+
+// TestNfsAttach_Idempotent_ReRun_NoMutations covers a lab whose server-side
+// datasets/properties are already at their desired state (and whose pvesm
+// storage entries are already registered): the whole run must issue zero
+// "zfs create"/"zfs set"/pvesm-add calls, only the read-side probes,
+// confirming the ensure phase still proceeds through to (and completes) the
+// pvesm phase rather than short-circuiting.
+func TestNfsAttach_Idempotent_ReRun_NoMutations(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(
+		exec.FakeResponse{},                                                  // zfs list images: exists
+		exec.FakeResponse{},                                                  // zfs list backup: exists
+		exec.FakeResponse{Stdout: "200G"},                                    // zfs get quota: already correct
+		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs},                   // zfs get sharenfs images: already correct
+		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs},                   // zfs get sharenfs backup: already correct
+		exec.FakeResponse{Stdout: "ro=@10.108.0.0/24:@10.10.1.0/24,sec=sys"}, // zfs get sharenfs shared/iso: already includes our subnet
+		exec.FakeResponse{Stdout: `{"storage":"nfs-images"}`},                // probe nfs-images: already attached
+		exec.FakeResponse{Stdout: `{"storage":"nfs-backup"}`},                // probe nfs-backup: already attached
+		exec.FakeResponse{Stdout: `{"storage":"shared-iso"}`},                // probe shared-iso: already attached
+	)
+	cmd := buildNfsServerCmd(t, path, fake)
+
+	out, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, out, "skip (already exists)")
+	assert.Contains(t, out, "skip (already 200G)")
+	assert.Contains(t, out, "skip (already "+nfsServerTestRwSharenfs+")")
+	assert.Contains(t, out, "skip (already includes @"+nfsServerTestMgmtCIDR+")")
+	assert.Contains(t, out, "skip (already attached)")
+
+	require.Len(t, fake.Calls, 9, "every step must be a read-only probe; no create/set/add calls at all")
+	for _, call := range fake.Calls {
+		assert.NotContains(t, call.Args, "create", "no zfs create call on a fully idempotent re-run")
+		assert.NotContains(t, call.Args, "set", "no zfs set call on a fully idempotent re-run")
+	}
 }
 
 func TestNfsAttach_SkipsAlreadyAttached(t *testing.T) {
 	lab := multiNodeTestLab("wayne", 1, "")
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
-	cmd, _ := buildGuestSSHCmd(t, path, newNfsCmd())
 	fake := exec.Fake(
+		exec.FakeResponse{},                                   // zfs list images: exists
+		exec.FakeResponse{},                                   // zfs list backup: exists
+		exec.FakeResponse{Stdout: "200G"},                     // zfs get quota: already correct
+		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs},    // zfs get sharenfs images: already correct
+		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs},    // zfs get sharenfs backup: already correct
+		exec.FakeResponse{Stdout: "ro=@10.10.1.0/24,sec=sys"}, // zfs get sharenfs shared/iso: already includes our subnet
 		exec.FakeResponse{Stdout: `{"storage":"nfs-images"}`},
 		exec.FakeResponse{Stdout: `{"storage":"nfs-backup"}`},
 		exec.FakeResponse{Stdout: `{"storage":"shared-iso"}`},
 	)
-	cli.GetDeps(cmd).Runner = fake
+	cmd := buildNfsServerCmd(t, path, fake)
 
 	out, err := runGuestCmd(t, cmd, "attach", "wayne")
 	require.NoError(t, err)
 	assert.Contains(t, out, "skip (already attached)")
-	require.Len(t, fake.Calls, 3, "no add calls when every storage is already configured")
+	require.Len(t, fake.Calls, 9, "no add calls when every storage is already configured")
 }
 
 func TestNfsAttach_PeppiGuardRefusesBeforeAnyCall(t *testing.T) {
@@ -112,6 +232,131 @@ func TestNfsAttach_PeppiGuardRefusesBeforeAnyCall(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "peppi guard")
 	assert.Empty(t, fake.Calls)
+}
+
+// TestNfsAttach_RefusesWithoutNode covers the server-side ensure phase's own
+// precondition: with no --node/$PMX_NODE/context-default node resolvable
+// (deps.Node == ""), attach must refuse loudly before touching ssh at all,
+// rather than let createDatasetSSHHost fail deeper with a less actionable
+// message.
+func TestNfsAttach_RefusesWithoutNode(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, fake := buildGuestSSHCmd(t, path, newNfsCmd()) // deps.Node left unset
+
+	_, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "outer PVE node")
+	assert.Empty(t, fake.Calls)
+}
+
+// TestNfsAttach_SharedIsoSharenfsOff_LoudFailure covers the shared/iso
+// export's own precondition: this phase can only ensure lab-subnet
+// MEMBERSHIP in an already-built ro= list, never construct one from
+// scratch (it cannot know every other lab's subnet) — a sharenfs value of
+// "off" means the shared NFS service's host build (lab repo
+// scripts/60-nfs-service) was never run, and attach must refuse loudly,
+// naming that script, rather than silently do nothing or guess a value.
+// Every dataset/property step before the shared/iso step is idempotent
+// no-ops here, isolating the assertion to the failing step alone.
+func TestNfsAttach_SharedIsoSharenfsOff_LoudFailure(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(
+		exec.FakeResponse{},                                // zfs list images: exists
+		exec.FakeResponse{},                                // zfs list backup: exists
+		exec.FakeResponse{Stdout: "200G"},                  // zfs get quota: already correct
+		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs}, // zfs get sharenfs images: already correct
+		exec.FakeResponse{Stdout: nfsServerTestRwSharenfs}, // zfs get sharenfs backup: already correct
+		exec.FakeResponse{Stdout: "off"},                   // zfs get sharenfs shared/iso: never built
+	)
+	cmd := buildNfsServerCmd(t, path, fake)
+
+	_, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "60-nfs-service")
+	assert.ErrorContains(t, err, nfsServerTestSharedIsoDataset)
+
+	require.Len(t, fake.Calls, 6, "nothing mutated, and the pvesm phase must never be reached")
+}
+
+// TestNfsAttach_TransportFailure_AbortsWithoutFurtherCalls covers ssh's own
+// transport exit code (255 — connection refused/unreachable/auth failure,
+// never reaching the remote shell at all) reaching the very first
+// server-side probe: it must abort the whole command loudly, naming the
+// dataset, ssh destination, exit code, and stderr, rather than being
+// misread as "dataset absent" (which would proceed straight to a "zfs
+// create" that fails the same way with no visible error).
+func TestNfsAttach_TransportFailure_AbortsWithoutFurtherCalls(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	fake := exec.Fake(
+		exec.FakeResponse{
+			Stderr:   "ssh: connect to host 192.168.9.180 port 22: Connection refused\r\n",
+			ExitCode: 255,
+		},
+	)
+	cmd := buildNfsServerCmd(t, path, fake)
+
+	_, err := runGuestCmd(t, cmd, "attach", "wayne")
+	require.Error(t, err, "an ssh transport failure (255) must abort the command, not silently proceed")
+	assert.ErrorContains(t, err, nfsServerTestImagesDataset)
+	assert.ErrorContains(t, err, nfsServerTestNodeIP)
+	assert.ErrorContains(t, err, "255")
+	assert.ErrorContains(t, err, "Connection refused")
+
+	require.Len(t, fake.Calls, 1, "the probe ran once; the transport failure must abort before any other call")
+}
+
+// TestBuildNfsServerEnsurePlan_QuotaGB_DefaultsTo200WhenUnset and
+// TestBuildNfsServerEnsurePlan_QuotaGB_ConfiguredOverridesDefault cover
+// config.EffectiveNFSQuotaGB's wiring into the server-side plan directly
+// (no ssh needed): storage.nfs_quota_gb unset resolves to the documented
+// 200G default; set, it overrides that default verbatim.
+func TestBuildNfsServerEnsurePlan_QuotaGB_DefaultsTo200WhenUnset(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	lab.Storage.NFSQuotaGB = 0
+
+	plan, err := buildNfsServerEnsurePlan(lab)
+	require.NoError(t, err)
+	assert.Equal(t, 200, plan.quotaGB)
+}
+
+func TestBuildNfsServerEnsurePlan_QuotaGB_ConfiguredOverridesDefault(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 1, "")
+	lab.Storage.NFSQuotaGB = 600
+
+	plan, err := buildNfsServerEnsurePlan(lab)
+	require.NoError(t, err)
+	assert.Equal(t, 600, plan.quotaGB)
+}
+
+// TestNfsSharedIsoContainsSubnet_AlreadyPresent_NoAppendNeeded and
+// TestNfsSharedIsoAppendSubnet_PreservesOrderAndSuffix cover the shared/iso
+// ro= list parser directly: a subnet already present is detected without
+// needing any ssh round trip, and appending preserves every existing
+// token's order plus the ",sec=sys" suffix byte-for-byte.
+func TestNfsSharedIsoContainsSubnet_AlreadyPresent_NoAppendNeeded(t *testing.T) {
+	contains, err := nfsSharedIsoContainsSubnet("ro=@10.108.0.0/24:@10.10.1.0/24,sec=sys", "10.10.1.0/24")
+	require.NoError(t, err)
+	assert.True(t, contains)
+}
+
+func TestNfsSharedIsoContainsSubnet_Absent(t *testing.T) {
+	contains, err := nfsSharedIsoContainsSubnet("ro=@10.108.0.0/24,sec=sys", "10.10.1.0/24")
+	require.NoError(t, err)
+	assert.False(t, contains)
+}
+
+func TestNfsSharedIsoAppendSubnet_PreservesOrderAndSuffix(t *testing.T) {
+	got, err := nfsSharedIsoAppendSubnet("ro=@10.108.0.0/24:@10.109.0.0/24,sec=sys", "10.10.1.0/24")
+	require.NoError(t, err)
+	assert.Equal(t, "ro=@10.108.0.0/24:@10.109.0.0/24:@10.10.1.0/24,sec=sys", got)
+}
+
+func TestNfsSharedIsoContainsSubnet_UnrecognizedShape_Errors(t *testing.T) {
+	_, err := nfsSharedIsoContainsSubnet("off", "10.10.1.0/24")
+	require.Error(t, err)
 }
 
 const samplePvesmStatus = `Name             Type     Status           Total            Used       Available        %

@@ -2,6 +2,7 @@ package lab
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -837,27 +838,37 @@ func TestScale_Grow_RemovesStaleQdeviceBeforeJoin_2PlusQTo3(t *testing.T) {
 		// 1-2: qdevice remove: probe (has qdevice), then pvecm qdevice remove.
 		exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice},
 		exec.FakeResponse{},
-		// 3: ensure node 0 clustered: already clustered as wayne, 2/2, no qdevice.
+		// 3: buildCreatePlan's zfs dataset existence probe (grow's node VM
+		// shell(s) step) — dataset already exists.
+		exec.FakeResponse{},
+		// 4: ensure node 0 clustered: already clustered as wayne, 2/2, no qdevice.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
-		// 4-10: join node 2: reachable probe, not-yet-clustered probe,
-		// guest-free (qm list, pct list), pvecm add, poll (pvecm status,
+		// 5-16: join node 2: reachable probe, not-yet-clustered probe,
+		// guest-free (qm list, pct list), trust seed (ensure keypair, read
+		// pubkey, append to node 0's authorized_keys, apiver preflight),
+		// pvecm add, join verification probe, poll (pvecm status,
 		// corosync-cfgtool).
 		exec.FakeResponse{},
 		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1},
 		exec.FakeResponse{Stdout: sampleQmListEmpty},
 		exec.FakeResponse{Stdout: samplePctListEmpty},
 		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: sampleRootPubKey + "\n"},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
-		// 11-13: reconcile sdn: probe (missing), create, commit.
+		// 17-19: reconcile sdn: probe (missing), create, commit.
 		exec.FakeResponse{ExitCode: 1},
 		exec.FakeResponse{},
 		exec.FakeResponse{},
-		// 14-19: reconcile nfs: 3x (probe missing, add).
+		// 20-25: reconcile nfs: 3x (probe missing, add).
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
-		// 20-28: final validation, every target node (0, 1, 2): pvecm
+		// 26-34: final validation, every target node (0, 1, 2): pvecm
 		// status, corosync-cfgtool -s, pvesm status.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
@@ -877,9 +888,9 @@ func TestScale_Grow_RemovesStaleQdeviceBeforeJoin_2PlusQTo3(t *testing.T) {
 	assert.Contains(t, out, "VM 9299 destroyed", "the orphaned QDevice VM must be destroyed (M4-04)")
 	assert.Contains(t, out, "PDM remote", "a node-count change must surface the PDM reminder row")
 
-	require.Len(t, fake.Calls, 29)
+	require.Len(t, fake.Calls, 35)
 	assert.Contains(t, fake.Calls[2].Args, "pvecm qdevice remove")
-	assert.Contains(t, fake.Calls[8].Args, "pvecm add 10.10.1.10 --link0 10.10.1.12 --use_ssh")
+	assert.Contains(t, fake.Calls[13].Args, "pvecm add 10.10.1.10 --link0 10.10.1.12 --use_ssh")
 }
 
 // TestScale_Grow_ReRunJoinsAlreadyExistingShells covers M4-02(a): live
@@ -920,23 +931,35 @@ func TestScale_Grow_ReRunJoinsAlreadyExistingShells(t *testing.T) {
 		// 0: preflight membership probe: LIVE membership is only 2/2 —
 		// node 2's shell exists but was never joined.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
-		// 1: ensure node 0 clustered: already clustered (idempotent skip).
+		// 1: buildCreatePlan's zfs dataset existence probe (grow's node VM
+		// shell(s) step) — dataset already exists.
+		exec.FakeResponse{},
+		// 2: ensure node 0 clustered: already clustered (idempotent skip).
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
-		// 2-8: join node 2.
+		// 3-14: join node 2: reachable probe, not-yet-clustered probe,
+		// guest-free (qm list, pct list), trust seed (ensure keypair, read
+		// pubkey, append to node 0's authorized_keys, apiver preflight),
+		// pvecm add, join verification probe, poll (pvecm status,
+		// corosync-cfgtool).
 		exec.FakeResponse{},
 		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1},
 		exec.FakeResponse{Stdout: sampleQmListEmpty},
 		exec.FakeResponse{Stdout: samplePctListEmpty},
 		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: sampleRootPubKey + "\n"},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
-		// 9-11: sdn.
+		// 15-17: sdn.
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{}, exec.FakeResponse{},
-		// 12-17: nfs.
+		// 18-23: nfs.
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
-		// 18-26: final validation, 3 nodes.
+		// 24-32: final validation, 3 nodes.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
@@ -953,8 +976,8 @@ func TestScale_Grow_ReRunJoinsAlreadyExistingShells(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "node 2 (10.10.1.12) joined cluster")
 
-	require.Len(t, fake.Calls, 27)
-	assert.Contains(t, fake.Calls[6].Args, "pvecm add 10.10.1.10 --link0 10.10.1.12 --use_ssh")
+	require.Len(t, fake.Calls, 33)
+	assert.Contains(t, fake.Calls[11].Args, "pvecm add 10.10.1.10 --link0 10.10.1.12 --use_ssh")
 }
 
 // TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell covers M4-02(b): the
@@ -991,23 +1014,26 @@ func TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell(t *testing.T) {
 		// 0: preflight membership probe: clustered 2/2, corosync shows NO
 		// registered qdevice (deferred on the previous run).
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
-		// 1: qdevice reachable probe.
+		// 1: buildCreatePlan's zfs dataset existence probe (QDevice VM
+		// shell step) — dataset already exists.
 		exec.FakeResponse{},
-		// 2: qdeviceAdd's own cluster-state probe.
+		// 2: qdevice reachable probe.
+		exec.FakeResponse{},
+		// 3: qdeviceAdd's own cluster-state probe.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
-		// 3-5: package probes (already installed on the shell + both nodes).
+		// 4-6: package probes (already installed on the shell + both nodes).
 		exec.FakeResponse{},
 		exec.FakeResponse{},
 		exec.FakeResponse{},
-		// 6: pvecm qdevice setup.
+		// 7: pvecm qdevice setup.
 		exec.FakeResponse{},
-		// 7-9: sdn.
+		// 8-10: sdn.
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{}, exec.FakeResponse{},
-		// 10-15: nfs.
+		// 11-16: nfs.
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
-		// 16-21: final validation, 2 nodes.
+		// 17-22: final validation, 2 nodes.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
@@ -1021,8 +1047,8 @@ func TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "pvecm qdevice setup")
 
-	require.Len(t, fake.Calls, 22)
-	assert.Contains(t, fake.Calls[6].Args, "pvecm qdevice setup 10.10.1.15")
+	require.Len(t, fake.Calls, 23)
+	assert.Contains(t, fake.Calls[7].Args, "pvecm qdevice setup 10.10.1.15")
 }
 
 // --- shrink integration (2 -> 1) --------------------------------------------
@@ -1400,4 +1426,224 @@ func TestScale_Grow_RefreshesContextFingerprintAfterClusterInit(t *testing.T) {
 	assert.Equal(t, fp, deps.Cfg.Contexts["lab-wayne"].TLS.Fingerprint,
 		"the grow path's ensureClusterInit reissues node 0's API cert; the pinned lab-wayne context's "+
 			"fingerprint must be refreshed afterward, exactly like `pmx lab cluster init` already does")
+}
+
+// --- Multi-AZ topology plan P1-T6: scale's grow path passes HostNICs/Vnets
+// through unmodified ------------------------------------------------------
+
+// scaleMultiNICLab returns createMultiNICLab's "pve-cpi"-shaped fixture (2
+// extra network.vnets[] entries — a storage vnet with a subnet, a workload
+// vnet without one — and 5 network.host_nics[] entries spanning both,
+// multi-AZ topology plan §1) named "wayne" so this file's existing
+// "wayne"-clustered pvecm-status fixtures (samplePvecmStatusWithQdevice,
+// scaleClusteredNoQdevice*) still apply unmodified — the multi-NIC network
+// shape and the cluster-name fixtures are independent axes, no new pvecm
+// output needs inventing for this test. topology.nodes is forced to nodes;
+// qdevice is left unset (the caller's exec.Fake sequence drives whichever
+// qdevice state is needed).
+func scaleMultiNICLab(nodes int) *config.Lab {
+	lab := createMultiNICLab("wayne")
+	lab.Topology = config.LabTopology{Nodes: nodes}
+	return lab
+}
+
+// scaleGrowMultiNICFixture registers the buildCreatePlan resource-discovery
+// routes for a scaleMultiNICLab-shaped grow: the primary vnet ("pvecpi")
+// already exists (so its zone/vnet/subnet steps skip, isolating this test to
+// the grow-specific delta), while both extra network.vnets[] entries
+// ("pvecpist", "pvecpiwk") do NOT exist yet, so buildCreatePlan's own extra-
+// vnet steps actually create them — this is what proves the "and SDN vnet
+// steps" half of P1-T6's acceptance, not just the per-node NIC map half.
+// existingMembers/existingQemus describe the pool/node-qemu-list members
+// already present, so buildCreatePlan skips creating their VM shells.
+func scaleGrowMultiNICFixture(f *testhelper.FakePVE, poolID string, existingMembers, existingQemus []map[string]any) {
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "pvecpi"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
+		[]any{map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets", []any{})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{
+		"storage": "tank-" + poolID, "type": "zfspool", "pool": "tank/labs/wayne",
+	}})
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": poolID}})
+	members := make([]any, len(existingMembers))
+	for i, m := range existingMembers {
+		members[i] = m
+	}
+	f.HandleJSON("GET /api2/json/pools/"+poolID, map[string]any{"members": members})
+	qemus := make([]any, len(existingQemus))
+	for i, q := range existingQemus {
+		qemus[i] = q
+	}
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", qemus)
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 100*1024*1024*1024)
+
+	// Every already-existing target (node 0, node 1) gets its own
+	// NIC-reconciliation createStep once network.host_nics is non-empty
+	// (create.go's planCreateTarget, multi-AZ topology plan §2) — both
+	// report a live config that already matches every configured entry
+	// exactly, so no PUT is ever issued for them; this isolates node 2 (the
+	// only genuinely new target) as the sole source of a qemu-create/
+	// UpdateQemuConfig call in this test.
+	convergedNet := map[string]any{
+		"net0": "virtio=BC:24:11:00:00:00,bridge=pvecpi,mtu=1450",
+		"net1": "virtio=BC:24:11:00:00:01,bridge=pvecpi,mtu=1450",
+		"net2": "virtio=BC:24:11:00:00:02,bridge=pvecpist,mtu=1450",
+		"net3": "virtio=BC:24:11:00:00:03,bridge=pvecpist,mtu=1450",
+		"net4": "virtio=BC:24:11:00:00:04,bridge=pvecpiwk,mtu=1450",
+		"net5": "virtio=BC:24:11:00:00:05,bridge=pvecpiwk,mtu=1450",
+	}
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9500/config", convergedNet)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9501/config", convergedNet)
+}
+
+// TestScaleGrow_MultiNIC covers P1-T6: `pmx lab scale`'s grow path
+// (executeScalePlan's growIndices branch, scale.go unmodified per P1-T5's
+// own finding) reuses create.go's buildCreatePlan as-is, so a lab
+// configuring network.vnets[]/network.host_nics[] (the multi-AZ topology
+// plan §1 shape) growing a NEW node gets the exact same full multi-NIC Net
+// map create.go's own TestCreateFreshLab_MultiNIC already proves for `pmx
+// lab create`, plus the same extra-SDN-vnet-ensure steps — with ZERO
+// scale.go code touched to make it so (scaleCopyLabWithTopology is a plain
+// struct copy; Network.Vnets/HostNICs ride along for free).
+//
+// Scenario: lab "wayne" is currently a 2-node + QDevice cluster (mandatory
+// at 2 nodes, §3.1) growing to 3 nodes — QDevice removal (unrelated to this
+// test's HostNICs focus) exercises the SAME qdevice-parity-first sequencing
+// TestScale_Grow_RemovesStaleQdeviceBeforeJoin_2PlusQTo3 already covers, so
+// this test's own fake exec sequence is a direct copy of that one; the only
+// new thing under test is node 2's create-time Net map and the extra vnet
+// steps, both asserted from the recorded API request bodies.
+func TestScaleGrow_MultiNIC(t *testing.T) {
+	lab := scaleMultiNICLab(2)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	f := testhelper.NewFakePVE(t)
+	poolID := lab.Access.Pool // "lab-wayne"
+
+	handleClusterResources(f,
+		map[string]any{"vmid": 9500, "node": "node1", "pool": poolID, "status": "running", "type": "qemu", "name": "lab-wayne-0"},
+		map[string]any{"vmid": 9501, "node": "node1", "pool": poolID, "status": "running", "type": "qemu", "name": "lab-wayne-1"},
+		map[string]any{"vmid": 9599, "node": "node1", "pool": poolID, "status": "running", "type": "qemu", "name": "lab-wayne-q"},
+	)
+	scaleGrowMultiNICFixture(f, poolID,
+		[]map[string]any{
+			{"id": "qemu/9500", "node": "node1", "type": "qemu", "vmid": 9500, "name": "lab-wayne-0"},
+			{"id": "qemu/9501", "node": "node1", "type": "qemu", "vmid": 9501, "name": "lab-wayne-1"},
+		},
+		[]map[string]any{
+			{"vmid": 9500, "name": "lab-wayne-0"},
+			{"vmid": 9501, "name": "lab-wayne-1"},
+		},
+	)
+
+	// Extra SDN vnets (pvecpist, pvecpiwk) and pvecpist's subnet: both
+	// missing (scaleGrowMultiNICFixture), so buildCreatePlan's own extra-
+	// vnet steps issue exactly these creates.
+	var vnetCreateRec []createRecordedRequest
+	createRecord(f, &vnetCreateRec, nil, "sdn-vnet-create", "POST /api2/json/cluster/sdn/vnets", map[string]any{}, 200)
+	var subnetCreateRec []createRecordedRequest
+	createRecord(f, &subnetCreateRec, nil, "sdn-subnet-create", "POST /api2/json/cluster/sdn/vnets/pvecpist/subnets", map[string]any{}, 200)
+
+	// Node 2's VM shell: brand new (only node 0/1 already exist), so
+	// createVM builds its Net map from scratch and issues one qemu-create.
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9502")
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	// QDevice VM destroy (M4-04), after the corosync-level removal below.
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9599/status/current", map[string]any{"status": "stopped", "vmid": 9599})
+	qdeviceDeleteUPID := "UPID:node1:00000099:00000099:65000000:qmdestroy:9599:root@pam:"
+	f.HandleFunc("DELETE /api2/json/nodes/node1/qemu/9599", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, qdeviceDeleteUPID)
+	})
+	destroyHandleTaskStatus(f, "node1", qdeviceDeleteUPID)
+
+	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
+
+	fake := exec.Fake(
+		// 0: preflight membership probe (2+Q).
+		exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice},
+		// 1-2: qdevice remove: probe (has qdevice), then pvecm qdevice remove.
+		exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice},
+		exec.FakeResponse{},
+		// 3: buildCreatePlan's zfs dataset existence probe (grow's node VM
+		// shell(s) step) — dataset already exists.
+		exec.FakeResponse{},
+		// 4: ensure node 0 clustered: already clustered as wayne, 2/2, no qdevice.
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
+		// 5-16: join node 2: reachable probe, not-yet-clustered probe,
+		// guest-free (qm list, pct list), trust seed (ensure keypair, read
+		// pubkey, append to node 0's authorized_keys, apiver preflight),
+		// pvecm add, join verification probe, poll (pvecm status,
+		// corosync-cfgtool).
+		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1},
+		exec.FakeResponse{Stdout: sampleQmListEmpty},
+		exec.FakeResponse{Stdout: samplePctListEmpty},
+		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: sampleRootPubKey + "\n"},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
+		// 17-19: reconcile sdn: probe (missing), create, commit.
+		exec.FakeResponse{ExitCode: 1},
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+		// 20-25: reconcile nfs: 3x (probe missing, add).
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		// 26-34: final validation, every target node (0, 1, 2): pvecm
+		// status, corosync-cfgtool -s, pvesm status.
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
+		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
+		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice3of3},
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
+		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	out, err := runGuestCmd(t, cmd, "wayne", "--nodes", "3", "--node", "node1", "--yes")
+	require.NoError(t, err)
+	assert.Contains(t, out, "scale requested")
+	require.Len(t, fake.Calls, 35)
+
+	// --- SDN vnet steps: both extra vnets created, storage vnet's subnet
+	// created, workload vnet's subnet never even attempted (empty CIDR). ---
+	require.Len(t, vnetCreateRec, 2, "both extra network.vnets[] entries (pvecpist, pvecpiwk) must be created")
+	byVnet := make(map[string]createRecordedRequest, len(vnetCreateRec))
+	for _, rec := range vnetCreateRec {
+		byVnet[fmt.Sprint(rec.body["vnet"])] = rec
+	}
+	assert.Equal(t, "labs", byVnet["pvecpist"].body["zone"])
+	assert.Equal(t, "5011", byVnet["pvecpist"].body["tag"])
+	assert.Equal(t, "labs", byVnet["pvecpiwk"].body["zone"])
+	assert.Equal(t, "5012", byVnet["pvecpiwk"].body["tag"])
+	require.Len(t, subnetCreateRec, 1, "only the storage vnet (CIDR set) gets a subnet ensure; the workload vnet (no CIDR) never does")
+	assert.Equal(t, "10.254.32.0/24", subnetCreateRec[0].body["subnet"])
+	assert.Equal(t, "10.254.32.1", subnetCreateRec[0].body["gateway"])
+
+	// --- Node 2's Net map: net0 (primary) plus all 5 configured
+	// network.host_nics[] entries (net1..net5), each resolved to its target
+	// vnet's bridge name and the lab's own net0 MTU (multi-AZ topology plan
+	// §2, task P1-T5) — proving scale's grow path renders the SAME full
+	// multi-NIC map `pmx lab create` renders for a fresh lab, via the
+	// shared buildCreatePlan. ---
+	require.Len(t, qemuCreateRec, 1, "exactly one qemu-create call, for node 2 (nodes 0/1 already exist)")
+	body := qemuCreateRec[0].body
+	assert.Equal(t, "virtio,bridge=pvecpi,mtu=1450", body["net0"])
+	assert.Equal(t, "virtio,bridge=pvecpi,mtu=1450", body["net1"])
+	assert.Equal(t, "virtio,bridge=pvecpist,mtu=1450", body["net2"])
+	assert.Equal(t, "virtio,bridge=pvecpist,mtu=1450", body["net3"])
+	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net4"])
+	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net5"])
+	assert.Equal(t, "lab-wayne-2", body["name"])
 }

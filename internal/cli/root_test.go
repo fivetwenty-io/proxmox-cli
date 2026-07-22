@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -1118,6 +1119,107 @@ func TestExecute_NonExitError_StillPrintsStderr(t *testing.T) {
 	require.Error(t, execErr)
 	require.Contains(t, stderrOut, sentinel,
 		"a non-exec error must still be printed to stderr exactly as before")
+}
+
+// TestExecute_CapturedGuestSSHExitErrorIsPrinted covers the live pve-cpi-az2
+// finding: internal/cli/lab.runGuestSSH wires ssh's stdout/stderr to its own
+// in-memory buffers (never the real terminal), so unlike the pass-through
+// case TestExecute_ExitError_SuppressesStderr covers, nothing has been shown
+// to the user by the time its wrapped *exec.ExitError reaches Execute — an
+// error whose chain contains *exec.ExitError AND exec.CapturedError must
+// still be printed in full (including whatever captured child output the
+// caller folded into its message), not silently swallowed by the same
+// "the child already printed this" assumption that correctly suppresses a
+// pass-through *exec.ExitError.
+func TestExecute_CapturedGuestSSHExitErrorIsPrinted(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	const capturedStderrText = "Received disconnect from 10.255.0.10 port 22:2: Too many authentication failures"
+	factory := func(_ *cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(_ *cobra.Command, _ []string) error {
+				exitErr := &exec.ExitError{Code: 255, Err: errors.New("exit status 255")}
+				wrapped := fmt.Errorf("ssh root@10.255.0.11 %q: %w (stderr: %s)", "pvecm apiver", exitErr, capturedStderrText)
+				return exec.NewCapturedError(wrapped)
+			},
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	var execErr error
+	stderrOut := captureStderr(t, func() {
+		execErr = cli.Execute("pmx", []cli.GroupFactory{factory})
+	})
+
+	require.Error(t, execErr, "the child exit code must still be returned as an error")
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, execErr, &exitErr, "the underlying *exec.ExitError must still be reachable through the CapturedError wrapper")
+	require.Equal(t, 255, exitErr.Code)
+	require.NotEmpty(t, stderrOut,
+		"a CapturedError-wrapped *exec.ExitError must be printed — its captured output was never shown any other way")
+	require.Contains(t, stderrOut, capturedStderrText,
+		"the captured stderr the caller folded into its error message must reach the user")
+}
+
+// TestExecute_CapturedDatasetEnsureExitErrorIsPrinted covers the
+// internal/cli/lab.createZfsDatasetEnsure/createZfsDatasetExists fix
+// (R1-PMXCLI MAJOR-1): both helpers capture ssh's stdout/stderr into their
+// own in-memory buffers (never the real terminal) while probing/creating a
+// lab's ZFS dataset, so — exactly like runGuestSSH's captured ssh calls —
+// nothing has been shown to the user by the time their wrapped
+// *exec.ExitError reaches Execute. Before the fix, both returned a plain
+// fmt.Errorf-wrapped *exec.ExitError with no exec.CapturedError marker, so
+// `pmx lab create`/`pmx lab scale` exited non-zero with a blank terminal on
+// any ssh transport failure or "zfs create" failure. This test reproduces
+// the exact error shape createZfsDatasetEnsure now returns (message format
+// and exec.NewCapturedError wrapping) and asserts Execute prints it in
+// full, mirroring TestExecute_CapturedGuestSSHExitErrorIsPrinted.
+func TestExecute_CapturedDatasetEnsureExitErrorIsPrinted(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	const capturedStderrText = "ssh: connect to host 192.168.1.180 port 22: Connection refused"
+	factory := func(_ *cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(_ *cobra.Command, _ []string) error {
+				exitErr := &exec.ExitError{Code: 255, Err: errors.New("exit status 255")}
+				wrapped := fmt.Errorf(
+					"create zfs dataset %q via ssh %s@%s (exit %d): %w (stderr: %s)",
+					"tank/labs/wayne", "root", "192.168.1.180", 255, exitErr, capturedStderrText)
+				return exec.NewCapturedError(wrapped)
+			},
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", filepath.Join(t.TempDir(), "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	var execErr error
+	stderrOut := captureStderr(t, func() {
+		execErr = cli.Execute("pmx", []cli.GroupFactory{factory})
+	})
+
+	require.Error(t, execErr, "the child exit code must still be returned as an error")
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, execErr, &exitErr, "the underlying *exec.ExitError must still be reachable through the CapturedError wrapper")
+	require.Equal(t, 255, exitErr.Code)
+	require.NotEmpty(t, stderrOut,
+		"a CapturedError-wrapped dataset-ensure *exec.ExitError must be printed — its captured output was never shown any other way")
+	require.Contains(t, stderrOut, capturedStderrText,
+		"the captured ssh stderr createZfsDatasetEnsure folded into its error message must reach the user")
+	require.Contains(t, stderrOut, "tank/labs/wayne",
+		"the dataset path createZfsDatasetEnsure names must reach the user")
 }
 
 // ---------------------------------------------------------------------------
