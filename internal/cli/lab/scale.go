@@ -720,7 +720,18 @@ func executeScalePlan(
 	if err != nil {
 		return nil, fmt.Errorf("resolve NFS server IP: %w", err)
 	}
-	nfsRows, err := nfsEnsureAttached(deps, name, node0IP, server, nfsAttachTargets(lab.Name))
+	// The export paths must come from the lab's export owner (which is the
+	// lab itself unless storage.nfs_export aliases another lab's tree) —
+	// the same resolution `pmx lab nfs attach` performs.
+	labs, err := resolveAllLabs(cmd)
+	if err != nil {
+		return nil, err
+	}
+	exportOwner, err := resolveNfsExportOwner(labs, lab)
+	if err != nil {
+		return nil, err
+	}
+	nfsRows, err := nfsEnsureAttached(deps, name, node0IP, server, nfsAttachTargets(exportOwner.owner.Name))
 	if err != nil {
 		return nil, err
 	}

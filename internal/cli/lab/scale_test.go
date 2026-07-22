@@ -1647,3 +1647,64 @@ func TestScaleGrow_MultiNIC(t *testing.T) {
 	assert.Equal(t, "virtio,bridge=pvecpiwk,mtu=1450", body["net5"])
 	assert.Equal(t, "lab-wayne-2", body["name"])
 }
+
+// TestScale_NfsReconcile_AliasedExportUsesOwnerPaths covers the scale
+// orchestrator's NFS reconcile step for a lab whose storage.nfs_export
+// aliases another lab's export tree: the pvesm add commands must point at
+// the OWNER's export paths (tank/nfs/labs/<owner>/...), exactly as
+// `pmx lab nfs attach` would build them — never at the aliasing lab's own
+// name, which has no dataset on the server at all.
+func TestScale_NfsReconcile_AliasedExportUsesOwnerPaths(t *testing.T) {
+	lab := scaleTestLab("wayne", 1, "")
+	lab.Storage.NFSExport = "pvecpi"
+	owner := scaleTestLab("pvecpi", 1, "")
+	owner.Network.Mgmt.Subnet = "10.20.1.0/24"
+	owner.Network.VxlanTag = 5002
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab, "pvecpi": owner}})
+	f := testhelper.NewFakePVE(t)
+
+	handleClusterResources(f,
+		map[string]any{"vmid": 9200, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-0"},
+		map[string]any{"vmid": 9201, "node": "node1", "pool": "lab-wayne", "status": "stopped", "type": "qemu", "name": "lab-wayne-1"},
+	)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu/9201/status/current", map[string]any{"status": "stopped", "vmid": 9201})
+	deleteUPID := "UPID:node1:00000003:00000003:65000000:qmdestroy:9201:root@pam:"
+	f.HandleFunc("DELETE /api2/json/nodes/node1/qemu/9201", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, deleteUPID)
+	})
+	destroyHandleTaskStatus(f, "node1", deleteUPID)
+
+	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newScaleCmd())
+
+	fake := exec.Fake(
+		// 0: preflight membership probe.
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
+		// 1-2: shrink node 1: evacuate (qm list: empty), delnode.
+		exec.FakeResponse{Stdout: sampleQmListEmpty},
+		exec.FakeResponse{},
+		// 3-8: reconcile nfs: 3x (probe missing, add).
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
+		// 9-11: final validation, node 0 alone.
+		exec.FakeResponse{Stdout: scaleClusteredNoQdevice1of1},
+		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolSingleNode},
+		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	_, err := runGuestCmd(t, cmd, "wayne", "--nodes", "1", "--yes")
+	require.NoError(t, err)
+
+	sawOwnerImages := false
+	for _, c := range fake.Calls {
+		joined := strings.Join(c.Args, " ")
+		assert.NotContains(t, joined, "/tank/nfs/labs/wayne/",
+			"aliased lab must never mount its own (nonexistent) export tree")
+		if strings.Contains(joined, "pvesm add nfs nfs-images") {
+			assert.Contains(t, joined, "/tank/nfs/labs/pvecpi/images")
+			sawOwnerImages = true
+		}
+	}
+	assert.True(t, sawOwnerImages, "expected a pvesm add for the owner's images export")
+}
