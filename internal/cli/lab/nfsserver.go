@@ -223,25 +223,25 @@ func nfsZfsEnsureProp(deps *cli.Deps, host, dataset, prop, want string) (changed
 // lab's subnet, only insert this lab's into whatever list already exists.
 var nfsSharedIsoSharenfsRE = regexp.MustCompile(`^ro=([^,]*)(,.*)?$`)
 
-// nfsSharedIsoUnrecognizedShape is returned by nfsSharedIsoContainsSubnet/
+// errNFSSharedIsoUnrecognizedShape is returned by nfsSharedIsoContainsSubnet/
 // nfsSharedIsoAppendSubnet when current does not match nfsSharedIsoSharenfsRE
 // (e.g. sharenfs is "off"/"-", or has been hand-edited into some other
 // shape) — the caller must refuse loudly rather than guess, per the shared
 // ISO dataset's ensure-step contract (see nfsServerEnsure).
-var nfsSharedIsoUnrecognizedShape = fmt.Errorf(
+var errNFSSharedIsoUnrecognizedShape = fmt.Errorf(
 	"sharenfs value is not a recognized \"ro=@subnet[:@subnet...][,...]\" shape")
 
 // nfsSharedIsoContainsSubnet reports whether current (the shared/iso
 // dataset's live sharenfs value) already lists "@mgmtCIDR" in its ro=
 // colon-separated subnet list. err is non-nil only when current does not
-// match the expected "ro=..." shape at all (nfsSharedIsoUnrecognizedShape) —
+// match the expected "ro=..." shape at all (errNFSSharedIsoUnrecognizedShape) —
 // this phase never falls back to constructing a value from scratch, since
 // it has no knowledge of every other lab's subnet already present in a
 // hand-or-script-built list.
 func nfsSharedIsoContainsSubnet(current, mgmtCIDR string) (bool, error) {
 	m := nfsSharedIsoSharenfsRE.FindStringSubmatch(current)
 	if m == nil {
-		return false, nfsSharedIsoUnrecognizedShape
+		return false, errNFSSharedIsoUnrecognizedShape
 	}
 	token := "@" + mgmtCIDR
 	for _, t := range strings.Split(m[1], ":") {
@@ -260,7 +260,7 @@ func nfsSharedIsoContainsSubnet(current, mgmtCIDR string) (bool, error) {
 func nfsSharedIsoAppendSubnet(current, mgmtCIDR string) (string, error) {
 	m := nfsSharedIsoSharenfsRE.FindStringSubmatch(current)
 	if m == nil {
-		return "", nfsSharedIsoUnrecognizedShape
+		return "", errNFSSharedIsoUnrecognizedShape
 	}
 	list, rest := m[1], m[2]
 	token := "@" + mgmtCIDR
