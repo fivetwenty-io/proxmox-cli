@@ -95,10 +95,18 @@ func resolveGuest(ctx context.Context, deps *cli.Deps, target string) (vmid, nod
 // resolveGuestSource maps a migration source <vmid|name> to its VMID and the
 // node the VM actually runs on. Unlike resolveGuest, an ambient default node
 // (PMX_NODE or the context default-node) is not trusted as the VM's location;
-// the cluster inventory is consulted unless --node was passed explicitly.
-// See cli.ResolveGuestSource for the full semantics.
+// the cluster inventory is consulted unless --node was passed explicitly. When
+// the node was auto-resolved (not pinned by an explicit --node), a note is
+// printed to stderr naming the resolved node, so the operator can see where
+// the migration is about to run. See cli.ResolveGuestSource for the full
+// semantics.
 func resolveGuestSource(cmd *cobra.Command, deps *cli.Deps, target string) (vmid, node string, err error) {
-	return cli.ResolveGuestSource(cmd.Context(), deps, target, cli.GuestQemu, cmd.Flags().Changed("node"))
+	nodeExplicit := cmd.Flags().Changed("node")
+	vmid, node, err = cli.ResolveGuestSource(cmd.Context(), deps, target, cli.GuestQemu, nodeExplicit)
+	if err == nil && !nodeExplicit {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "note: auto-resolved source node %q for VM %s\n", node, vmid)
+	}
+	return vmid, node, err
 }
 
 // finishAsync renders the outcome of an asynchronous task. When deps.Async is

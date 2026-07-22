@@ -2,6 +2,7 @@ package lxc
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"testing"
 
@@ -203,6 +204,65 @@ func TestMigrate_ServerError(t *testing.T) {
 	err := run()
 	require.Error(t, err)
 	require.ErrorContains(t, err, "migrate container")
+}
+
+// TestMigrate_AutoResolveNotePrinted verifies that when the source node is
+// auto-resolved from the cluster inventory (no explicit --node), a "note:"
+// line naming the resolved node is printed, so the operator can see where the
+// migration is about to run before it starts.
+func TestMigrate_AutoResolveNotePrinted(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve3")
+	upid := "UPID:pve3:0:0:0:vzmigrate:101:root@pam:"
+	f.HandleFunc("POST /api2/json/nodes/pve3/lxc/101/migrate", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve3/tasks/"+upid+"/status",
+		func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, map[string]any{
+				"upid": upid, "status": "stopped", "exitstatus": "OK",
+				"type": "vzmigrate", "node": "pve3",
+			})
+		})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "migrate", "101", "--target-node", "pve2")
+	require.NoError(t, run())
+	require.Contains(t, buf.String(), `note: auto-resolved source node "pve3" for container 101`)
+}
+
+// TestResolveGuestSource_ExplicitNodeSuppressesNote verifies that when --node
+// was passed explicitly (pinning the source, no cluster lookup), the
+// auto-resolve note is suppressed, since nothing was actually auto-resolved.
+// The lxc package's Group() command tree does not register a --node flag (it
+// is a persistent flag owned by the real root command), so this drives
+// resolveGuestSource directly against a minimal cobra.Command carrying a
+// "node" flag marked Changed, mirroring how root.go wires deps.Node/--node in
+// production.
+func TestResolveGuestSource_ExplicitNodeSuppressesNote(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	hit := false
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		testhelper.WriteData(w, []any{})
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+
+	cmd := &cobra.Command{Use: "migrate"}
+	cmd.SetContext(context.Background())
+	var buf bytes.Buffer
+	cmd.SetErr(&buf)
+	var nodeFlag string
+	cmd.Flags().StringVar(&nodeFlag, "node", "", "")
+	require.NoError(t, cmd.Flags().Set("node", "pve1"))
+
+	vmid, node, err := resolveGuestSource(cmd, deps, "101")
+	require.NoError(t, err)
+	require.Equal(t, "101", vmid)
+	require.Equal(t, "pve1", node)
+	require.False(t, hit, "explicit --node must not query cluster resources")
+	require.NotContains(t, buf.String(), "note: auto-resolved source node")
 }
 
 // TestCloneMigrate_NoLocalTargetFlag guards against re-introducing a local

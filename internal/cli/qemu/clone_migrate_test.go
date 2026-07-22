@@ -2,6 +2,7 @@ package qemu
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"testing"
 
@@ -166,6 +167,59 @@ func TestQemuMigrate_ResolvesSourceNodeFromCluster(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2"))
 	require.Equal(t, "/api2/json/nodes/pve3/qemu/100/migrate", gotPath)
+}
+
+// TestQemuMigrate_AutoResolveNotePrinted verifies that when the source node is
+// auto-resolved from the cluster inventory (no explicit --node), a "note:"
+// line naming the resolved node is printed, so the operator can see where the
+// migration is about to run before it starts.
+func TestQemuMigrate_AutoResolveNotePrinted(t *testing.T) {
+	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve3")
+
+	f.HandleFunc("POST /api2/json/nodes/pve3/qemu/100/migrate", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, validUPID)
+	})
+	handleTaskStatus(f, validUPID)
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2"))
+	require.Contains(t, buf.String(), `note: auto-resolved source node "pve3" for VM 100`)
+}
+
+// TestResolveGuestSource_ExplicitNodeSuppressesNote verifies that when --node
+// was passed explicitly (pinning the source, no cluster lookup), the
+// auto-resolve note is suppressed, since nothing was actually auto-resolved.
+// The qemu package's Group() command tree does not register a --node flag
+// (it is a persistent flag owned by the real root command), so this drives
+// resolveGuestSource directly against a minimal cobra.Command carrying a
+// "node" flag marked Changed, mirroring how root.go wires deps.Node/--node in
+// production.
+func TestResolveGuestSource_ExplicitNodeSuppressesNote(t *testing.T) {
+	f, ac := newFakeClient(t)
+	hit := false
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		testhelper.WriteData(w, []any{})
+	})
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	cmd := &cobra.Command{Use: "migrate"}
+	cmd.SetContext(context.Background())
+	var buf bytes.Buffer
+	cmd.SetErr(&buf)
+	var nodeFlag string
+	cmd.Flags().StringVar(&nodeFlag, "node", "", "")
+	require.NoError(t, cmd.Flags().Set("node", "pve1"))
+
+	vmid, node, err := resolveGuestSource(cmd, deps, "100")
+	require.NoError(t, err)
+	require.Equal(t, "100", vmid)
+	require.Equal(t, "pve1", node)
+	require.False(t, hit, "explicit --node must not query cluster resources")
+	require.NotContains(t, buf.String(), "note: auto-resolved source node")
 }
 
 // TestQemuCloneMigrate_NoLocalTargetFlag guards against a regression where
