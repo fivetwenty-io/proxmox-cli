@@ -231,15 +231,17 @@ homebrew_casks:
     skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
     binaries:
       - pmx
-    manpages:
-      - share/man/man1/*.1
-      - share/man/man5/*.5
+    # NB: no `manpages:` stanza on purpose. goreleaser expands its globs into
+    # one cask `manpage` artifact per file (~3k for pmx), and Homebrew Cask
+    # prints an ohai line per artifact on every link AND unlink — thousands
+    # of "Linking/Unlinking Manpage" lines on each install/upgrade. The
+    # postflight hook below bulk-symlinks the staged share/man tree silently
+    # instead, and the uninstall hook sweeps the links back out.
     # goreleaser's cask `completions:` stanza takes exactly one file per
     # shell (a single path, not a list), so the pve/pbs/pdm persona
-    # completions generated for the archives/deb/rpm cannot be attached
-    # here too — the cask ships pmx completions only. The persona binaries
-    # themselves are still installed (see the postflight hook below), just
-    # without their own shell completions via Homebrew.
+    # completions cannot be attached via the stanza — the pmx completions
+    # ship through it, and the persona completions are symlinked by the
+    # same postflight hook that creates the persona bin aliases.
     completions:
       bash: share/bash-completion/completions/pmx.bash
       zsh: share/zsh/site-functions/_pmx
@@ -252,10 +254,52 @@ homebrew_casks:
             link.delete if link.symlink? || link.exist?
             link.make_symlink("pmx")
           end
+          # Bulk-link man pages and persona completions from the staged
+          # cask content. Everything links into HOMEBREW_PREFIX in one quiet
+          # pass; the uninstall hook removes any symlink in these dirs that
+          # points back into this cask's Caskroom.
+          %w[
+            share/man/man1
+            share/man/man5
+            share/bash-completion/completions
+            share/zsh/site-functions
+            share/fish/vendor_completions.d
+          ].each do |reldir|
+            src = staged_path/reldir
+            next unless src.directory?
+
+            dst = HOMEBREW_PREFIX/reldir
+            dst.mkpath
+            src.children.each do |file|
+              # pmx completions are already linked by the `completions:`
+              # artifact stanza; skip them so the two mechanisms don't fight.
+              next if %w[pmx.bash _pmx pmx.fish].include?(file.basename.to_s)
+
+              link = dst/file.basename
+              link.delete if link.symlink? || link.exist?
+              link.make_symlink(file)
+            end
+          end
         uninstall: |
           %w[pve pbs pdm].each do |persona|
             link = HOMEBREW_PREFIX/"bin"/persona
             link.delete if link.symlink?
+          end
+          %w[
+            share/man/man1
+            share/man/man5
+            share/bash-completion/completions
+            share/zsh/site-functions
+            share/fish/vendor_completions.d
+          ].each do |reldir|
+            dir = HOMEBREW_PREFIX/reldir
+            next unless dir.directory?
+
+            dir.children.each do |link|
+              next unless link.symlink?
+
+              link.delete if link.readlink.to_s.include?("/Caskroom/pmx/")
+            end
           end
 
 snapshot:
