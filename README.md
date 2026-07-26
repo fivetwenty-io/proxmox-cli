@@ -200,7 +200,7 @@ pmx context add lab \
   --host pve.example.com \
   --username root@pam \
   --token-id automation \
-  --secret ${PMX_TOKEN} \
+  --secret '${PMX_TOKEN}' \
   --select
 
 # 2. Use it. (Proxmox VE commands live under `pve` — see Personas below;
@@ -217,7 +217,7 @@ The same flow works for the other products — pass `--product pbs` or
 ```bash
 pmx context add backup --product pbs --host pbs.example.com \
   --username root@pam --token-id automation
-pmx auth set-token --context backup --token-id automation --secret ${PBS_TOKEN}
+pmx auth set-token --context backup --token-id automation --secret '${PBS_TOKEN}'
 pmx pbs datastore ls --context backup
 ```
 
@@ -386,7 +386,7 @@ the configured endpoint live.
 # Add a context. (Or paste the full token id: --token-id 'root@pam!automation')
 pmx context add lab \
   --host pve.example.com --username root@pam \
-  --token-id automation --secret ${PMX_TOKEN} --select
+  --token-id automation --secret '${PMX_TOKEN}' --select
 
 # List all contexts (* marks the active one).
 pmx context ls
@@ -447,18 +447,20 @@ pmx context add backup \
   --product pbs \
   --host pbs.example.com --username root@pam \
   --token-id automation --select
-pmx auth set-token --context backup --token-id automation --secret ${PBS_TOKEN}
+pmx auth set-token --context backup --token-id automation --secret '${PBS_TOKEN}'
 
 # Add a PDM context (defaults to port 8443).
 pmx context add dcmgr \
   --product pdm --host pdm.example.com \
   --username root@pam --token-id automation --select
-pmx auth set-token --context dcmgr --token-id automation --secret ${PDM_TOKEN}
+pmx auth set-token --context dcmgr --token-id automation --secret '${PDM_TOKEN}'
 ```
 
-Passing `--secret ${VAR}` directly to `context add` also works; prefer an
+Passing `--secret '${VAR}'` directly to `context add` also works; prefer an
 env or `keychain:` reference over a literal, which lands in shell history
-and the config file in plaintext.
+and the config file in plaintext. Single-quote the reference — unquoted,
+the shell expands `${VAR}` before `pmx` ever sees it, and the plaintext
+secret is what gets stored.
 
 Per-context `ssh.user`, `ssh.port`, and `ssh.identity` fields supply defaults
 for `pmx ssh`/`pmx rsync` (and `pmx pve node ssh`/`pmx pve node rsync`):
