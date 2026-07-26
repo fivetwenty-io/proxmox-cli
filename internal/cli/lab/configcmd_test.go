@@ -184,6 +184,49 @@ func TestConfigAdd_ZeroValueNewNetworkFieldsRoundTrip(t *testing.T) {
 	assert.Equal(t, config.LabNestedNetwork{}, got.Network.NestedNetwork)
 }
 
+// TestConfigScaffolds_WriteZoneKeys covers both scaffolds writing the lab's
+// SDN zone explicitly: the zone is per-lab config, not fixed architecture,
+// so a generated file must name the zone it joins rather than leaving the
+// reader to infer the default. zone_peers stays out of both: it is
+// meaningful only for a "vxlan" zone, and the template documents it in a
+// comment.
+func TestConfigScaffolds_WriteZoneKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		file string
+	}{
+		{"init", []string{"init"}, "example.yaml"},
+		{"add", []string{"add", "zed", "--vxlan-tag", "5030", "--cidr", "10.130.0.0/16"}, "zed.yaml"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+			_, err := runConfigCmd(t, cfgPath, tc.args...)
+			require.NoError(t, err)
+
+			data, err := os.ReadFile(filepath.Join(filepath.Dir(cfgPath), "labs.d", tc.file))
+			require.NoError(t, err)
+
+			content := string(data)
+			assert.Contains(t, content, "\n  zone_name: \""+config.DefaultZoneName+"\"")
+			assert.Contains(t, content, "\n  zone_type: \""+config.DefaultZoneType+"\"")
+			assert.NotContains(t, content, "\n  zone_peers:")
+
+			cfg, err := config.Load(cfgPath)
+			require.NoError(t, err)
+			labs, err := config.ResolveLabs(cfg, cfgPath)
+			require.NoError(t, err)
+
+			got := labs[strings.TrimSuffix(tc.file, ".yaml")]
+			require.NotNil(t, got)
+			assert.Equal(t, config.DefaultZoneName, got.Network.ZoneName)
+			assert.Equal(t, config.DefaultZoneType, got.Network.ZoneType)
+			assert.Empty(t, got.Network.EffectiveZonePeers())
+		})
+	}
+}
+
 // TestValidateConfigAddLab_NestedNetworkHardError_Refuses is a direct
 // unit-level check of the wiring the CLI-level tests above cannot exercise
 // (config add has no flags yet that populate nested_network): a hard-error

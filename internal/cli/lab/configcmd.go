@@ -89,7 +89,14 @@ func configSchemaDefaultLab(name string) *config.Lab {
 		Network: config.LabNetwork{
 			VnetID:    name,
 			VnetAlias: "lab-" + name,
-			MTU:       1450,
+			// ZoneName/ZoneType are written explicitly, at the same values
+			// EffectiveZoneName/EffectiveZoneType would resolve them to, so a
+			// generated lab file states which zone it joins instead of leaving
+			// it to a default the reader has to know. ZonePeers stays unset:
+			// it is meaningful only for a "vxlan" zone.
+			ZoneName: config.DefaultZoneName,
+			ZoneType: config.DefaultZoneType,
+			MTU:      1450,
 		},
 		Compute: config.LabCompute{
 			VCPU:     configDefaultVCPU,
@@ -136,8 +143,15 @@ func configExampleLab() *config.Lab {
 		Network: config.LabNetwork{
 			VnetID:    "example",
 			VnetAlias: "lab-example",
-			VxlanTag:  5001,
-			CIDR:      "10.108.0.0/16",
+			// The zone keys are shown at their defaults rather than at a
+			// vxlan zone's values: "labs"/"simple" is the deployed shape, and
+			// zone_peers — meaningful only for a "vxlan" zone — is documented
+			// by the template's comment instead, since rendering it beside
+			// zone_type "simple" would describe a lab that cannot exist.
+			ZoneName: config.DefaultZoneName,
+			ZoneType: config.DefaultZoneType,
+			VxlanTag: 5001,
+			CIDR:     "10.108.0.0/16",
 			Mgmt: config.LabMgmt{
 				Subnet:  "10.108.0.0/24",
 				HostIP:  "10.108.0.10",
@@ -532,6 +546,8 @@ func newConfigShowCmd() *cobra.Command {
 				"mode":          lab.Mode,
 				"owner":         lab.Owner,
 				"vnet_id":       lab.Network.VnetID,
+				"zone_name":     lab.Network.EffectiveZoneName(),
+				"zone_type":     lab.Network.EffectiveZoneType(),
 				"vxlan_tag":     strconv.Itoa(lab.Network.VxlanTag),
 				"cidr":          lab.Network.CIDR,
 				"vcpu":          strconv.Itoa(lab.Compute.VCPU),

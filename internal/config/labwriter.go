@@ -80,10 +80,11 @@ func LabFileTemplate(lab *Lab) []byte {
 	fmt.Fprintf(&b, "mode: %s\n", yamlQuote(lab.Mode))
 	fmt.Fprintf(&b, "owner: %s\n\n", yamlQuote(lab.Owner))
 
-	fmt.Fprint(&b, "# network: SDN vnet, VXLAN tag, and subnet layout for the lab.\n")
+	fmt.Fprint(&b, "# network: SDN zone, vnet, vnet tag, and subnet layout for the lab.\n")
 	fmt.Fprint(&b, "network:\n")
 	fmt.Fprintf(&b, "  vnet_id: %s\n", yamlQuote(lab.Network.VnetID))
 	fmt.Fprintf(&b, "  vnet_alias: %s\n", yamlQuote(lab.Network.VnetAlias))
+	appendLabZoneBlock(&b, lab.Network)
 	fmt.Fprintf(&b, "  vxlan_tag: %d\n", lab.Network.VxlanTag)
 	fmt.Fprintf(&b, "  cidr: %s\n", yamlQuote(lab.Network.CIDR))
 	fmt.Fprint(&b, "  mgmt:\n")
@@ -160,6 +161,33 @@ func appendLabNFSQuotaLine(b *strings.Builder, nfsQuotaGB int) {
 	fmt.Fprint(b, "  # (tank/nfs/labs/<lab>). Omitted means the default (200G).\n")
 	if nfsQuotaGB > 0 {
 		fmt.Fprintf(b, "  nfs_quota_gb: %d\n", nfsQuotaGB)
+	}
+}
+
+// appendLabZoneBlock documents network.zone_name, network.zone_type, and
+// network.zone_peers with a short comment, unconditionally, then renders
+// each key only when set — the same comment-always/key-only-when-set
+// convention appendLabVnetsBlock uses, so a lab that leaves the zone at its
+// default round-trips through ResolveLabs at its true zero value rather than
+// pinning "labs"/"simple" into the file. The rendered defaults quoted in the
+// comment are DefaultZoneName/DefaultZoneType, the same constants
+// EffectiveZoneName/EffectiveZoneType apply at resolve time.
+func appendLabZoneBlock(b *strings.Builder, net LabNetwork) {
+	fmt.Fprintf(b, "  # zone_name: SDN zone this lab's vnet joins. Omitted means %q,\n", DefaultZoneName)
+	fmt.Fprint(b, "  # the shared outer zone; labs may sit in different zones.\n")
+	fmt.Fprint(b, "  # zone_type: PVE zone plugin used when that zone is created (only\n")
+	fmt.Fprintf(b, "  # consulted when it does not exist yet). Omitted means %q;\n", DefaultZoneType)
+	fmt.Fprint(b, "  # \"vxlan\" is the other type the lab verbs model, and it takes\n")
+	fmt.Fprint(b, "  # zone_peers, the underlay peer list (ignored for a simple zone,\n")
+	fmt.Fprint(b, "  # which also has no vnet tag: vxlan_tag below is skipped there).\n")
+	if net.ZoneName != "" {
+		fmt.Fprintf(b, "  zone_name: %s\n", yamlQuote(net.ZoneName))
+	}
+	if net.ZoneType != "" {
+		fmt.Fprintf(b, "  zone_type: %s\n", yamlQuote(net.ZoneType))
+	}
+	if net.ZonePeers != "" {
+		fmt.Fprintf(b, "  zone_peers: %s\n", yamlQuote(net.ZonePeers))
 	}
 }
 

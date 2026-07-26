@@ -302,7 +302,10 @@ existing file, or to write a name that already resolves via config.yml,
 unless **--force**. It never rewrites config.yml itself, so any comments an
 operator has added there are preserved. **pmx lab config init** scaffolds
 **<labs_dir>/example.yaml**, a fully-commented reference covering every
-field in **LAB KEYS**, without requiring **labs_dir** to already be set.
+field in **LAB KEYS**, without requiring **labs_dir** to already be set. A
+field that would contradict the example's own shape — **network.zone_peers**,
+which belongs to a **vxlan** zone, while the example is a **simple** one —
+is documented in a comment instead of being rendered as a key.
 
 # LAB KEYS
 
@@ -311,7 +314,8 @@ Each lab block, whether inline under **labs** or the top level of a
 are the lab schema's own zero-value behavior; **pmx lab config add**
 additionally applies its own fleet-wide starting values (vcpu 16, memory
 32-96 GB, 64 GB OS disk, 400 GB data disk, 480 GB refquota, pool **tank**,
-mode **nested**, role **PVEVMUser**) before any **--flag** override, and
+mode **nested**, role **PVEVMUser**, zone **labs** of type **simple**)
+before any **--flag** override, and
 those are documented on **pmx-lab-config-add(1)**, not repeated here.
 
 **name**
@@ -336,9 +340,29 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 **network.vnet_alias**
 : Human-readable label for the vnet.
 
+**network.zone_name**
+: SDN zone this lab's vnet lives in. Defaults to **labs**, the shared
+  outer zone; the zone is not fixed by the tool, and two labs may sit in
+  different zones. **pmx lab create** and **pmx lab net apply** create the
+  zone when it is absent and otherwise update only the fields that have
+  drifted (MTU, peers, node membership).
+
+**network.zone_type**
+: PVE SDN zone plugin used when this lab's zone is created. Defaults to
+  **simple**; **vxlan** is the other type the lab verbs model. Only
+  consulted when the zone does not yet exist — an existing zone keeps its
+  live type.
+
+**network.zone_peers**
+: Underlay peer list for a **vxlan** zone. Ignored when the effective
+  **network.zone_type** is **simple**, whose plugin has no peers field.
+
 **network.vxlan_tag**
 : VXLAN tag assigned to the vnet. Must be unique across every lab on a
-  given fleet; **pmx lab config add** requires this to be set and > 0.
+  given fleet; **pmx lab config add** requires this to be set and > 0. It
+  is omitted from the vnet's create and update calls when the zone is a
+  **simple** zone: that plugin has no vnet-level tag concept and PVE
+  rejects the parameter outright.
 
 **network.cidr**
 : Overall subnet CIDR allocated to the lab (for example
@@ -559,6 +583,8 @@ labs:
     network:
       vnet_id: wayne
       vnet_alias: lab-wayne
+      zone_name: labs
+      zone_type: simple
       vxlan_tag: 5001
       cidr: 10.108.0.0/16
       mgmt:

@@ -202,6 +202,44 @@ func TestWriteLabFile_NameWithControlCharacter_Errors(t *testing.T) {
 	require.ErrorContains(t, err, "control character")
 }
 
+func TestLabFileTemplate_ZoneKeys_RenderedOnlyWhenSet(t *testing.T) {
+	// Unset: documented by comment, but no key written, so the lab keeps its
+	// zero value (and with it EffectiveZoneName/Type's defaults) on reload.
+	plain := string(config.LabFileTemplate(fullLab()))
+	require.Contains(t, plain, "# zone_name: SDN zone this lab's vnet joins.")
+	require.NotContains(t, plain, "\n  zone_name:")
+	require.NotContains(t, plain, "\n  zone_type:")
+	require.NotContains(t, plain, "\n  zone_peers:")
+
+	// Set: each key is written verbatim, including a vxlan zone's peers.
+	lab := fullLab()
+	lab.Network.ZoneName = "labsvx"
+	lab.Network.ZoneType = "vxlan"
+	lab.Network.ZonePeers = "10.0.0.1,10.0.0.2"
+
+	rendered := string(config.LabFileTemplate(lab))
+	require.Contains(t, rendered, "\n  zone_name: \"labsvx\"")
+	require.Contains(t, rendered, "\n  zone_type: \"vxlan\"")
+	require.Contains(t, rendered, "\n  zone_peers: \"10.0.0.1,10.0.0.2\"")
+}
+
+func TestWriteLabFile_ZoneKeysRoundTripThroughResolveLabs(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := writeConfigFile(t, configDir, "config.yml", 0o600)
+
+	want := fullLab()
+	want.Network.ZoneName = "labsvx"
+	want.Network.ZoneType = "vxlan"
+	want.Network.ZonePeers = "10.0.0.1,10.0.0.2"
+
+	_, err := config.WriteLabFile(filepath.Join(configDir, "labs.d"), want, false)
+	require.NoError(t, err)
+
+	labs, err := config.ResolveLabs(&config.Config{LabsDir: "labs.d"}, configPath)
+	require.NoError(t, err)
+	require.Equal(t, want, labs["wayne"])
+}
+
 func TestLabFileTemplate_NeverContainsPasswordSubstring(t *testing.T) {
 	template := config.LabFileTemplate(fullLab())
 	require.NotContains(t, strings.ToLower(string(template)), "password")

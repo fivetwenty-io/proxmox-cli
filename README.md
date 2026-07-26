@@ -985,10 +985,10 @@ read verbs above need only the API.
 
 `pmx lab` manages per-member nested lab environments running inside a
 Proxmox VE cluster. Each lab is a self-contained slice of the cluster: its
-own SDN vnet and subnet (carved out of a single shared VXLAN zone,
-`labsvxlan`), a VM, storage derived from that VM's disks, a resource pool,
-a pve-realm user's access grant on that pool, and a ZFS `refquota` on the
-lab's dataset. `pmx lab` is only available when the binary runs as `pmx`
+own SDN vnet and subnet (carved out of a shared SDN zone), a VM, storage
+derived from that VM's disks, a resource pool, a pve-realm user's access
+grant on that pool, and a ZFS `refquota` on the lab's dataset. `pmx lab`
+is only available when the binary runs as `pmx`
 (or an unrecognized `argv[0]`) — it is not hoisted onto the `pve`, `pbs`,
 or `pdm` persona roots the way `pve`'s own groups are (see
 [Personas](#personas)).
@@ -999,6 +999,18 @@ directory of one-lab-per-file YAML (sugar for one more `include:` glob).
 Every mutating verb accepts flags that override individual resolved fields
 for that single invocation, without touching the underlying config.
 
+The zone each lab's vnet lives in is part of that config, not fixed
+architecture. `network.zone_name` names the zone and defaults to `labs`;
+`network.zone_type` selects the PVE zone plugin and defaults to `simple`,
+with `vxlan` the other type the lab verbs model; `network.zone_peers` is
+the VXLAN underlay peer list, meaningful only for a `vxlan` zone and
+ignored for a `simple` one. `pmx lab create` and `pmx lab net apply` reconcile that zone
+idempotently — creating it when absent, otherwise updating only the fields
+that have drifted (MTU, peers on a `vxlan` zone, node membership). A
+`simple` zone has no vnet-level tag concept and PVE rejects one, so
+`network.vxlan_tag` is omitted from the vnet call for that zone type and
+applies only to a tag-capable zone such as `vxlan`.
+
 ```yaml
 labs_dir: labs.d/
 default_user_password: changeme-example   # bootstrap password for new grantees; setting it requires config.yml to be mode 0600
@@ -1007,7 +1019,9 @@ labs:
   wayne:
     network:
       vnet_id: wayne
-      vxlan_tag: 5001
+      zone_name: labs        # default; the shared outer zone this vnet joins
+      zone_type: simple      # default; "vxlan" also supported (adds zone_peers)
+      vxlan_tag: 5001        # vnet tag — used by tag-capable zones, ignored on "simple"
       cidr: 10.108.0.0/16
       mgmt:
         gateway: 10.108.0.1
