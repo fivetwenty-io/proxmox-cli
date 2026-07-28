@@ -2,12 +2,16 @@
 
 The read-only verbs (`list`, `status`) run live against the configured
 cluster. The config verbs (`config init/add/show`) operate on a throwaway
-scratch `--config` file, never the real config.yml. Every mutating verb
-(create, destroy, start, stop, net apply, access grant, quota set) has its
-error contract exercised with an unresolvable lab name — each fails during
-config resolution, before any API call — and its happy path deferred: those
-verbs provision/destroy SDN, storage, pools, and VMs, and need the dedicated
-lab-pmx destructive test lab as a standing target.
+scratch `--config` file, never the real config.yml. Every mutating verb has
+its error contract exercised with an unresolvable lab name — each fails
+during config resolution, before any API call or ssh — and its happy path
+deferred: those verbs provision, reshape, or destroy SDN, storage, pools,
+clusters, and VMs, and need the dedicated lab-pmx destructive test lab as a
+standing target.
+
+`context rm` is the one verb that does not resolve a lab (it exists to clean
+up a context whose lab is already gone), so its error contract is driven
+through the lab-name charset guard instead.
 """
 
 from __future__ import annotations
@@ -140,6 +144,38 @@ def _mutating_error_contracts(ctx: Ctx) -> None:
     ctx.expect_fail("quota set (unknown lab)", "lab", "quota", "set", ABSENT,
                     "--refquota-gb", "600", "--yes",
                     must_contain="not found")
+    ctx.expect_fail("cluster init (unknown lab)", "lab", "cluster", "init", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("cluster join (unknown lab)", "lab", "cluster", "join", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("cluster status (unknown lab)", "lab", "cluster", "status", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("context sync (unknown lab)", "lab", "context", "sync", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("hostnet apply (unknown lab)", "lab", "hostnet", "apply", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("nfs attach (unknown lab)", "lab", "nfs", "attach", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("nfs detach (unknown lab)", "lab", "nfs", "detach", ABSENT, "--yes",
+                    must_contain="not found")
+    ctx.expect_fail("nfs status (unknown lab)", "lab", "nfs", "status", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("qdevice add (unknown lab)", "lab", "qdevice", "add", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("qdevice remove (unknown lab)", "lab", "qdevice", "remove", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("scale (unknown lab)", "lab", "scale", ABSENT, "--yes",
+                    must_contain="not found")
+    ctx.expect_fail("sdn apply (unknown lab)", "lab", "sdn", "apply", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("sdn vlan apply (unknown lab)", "lab", "sdn", "vlan", "apply", ABSENT,
+                    must_contain="not found")
+
+    # `context rm` deliberately accepts a name no lab defines, so the only
+    # failure it can be driven into without deleting a real context is the
+    # charset guard that keeps a lab name off any remote command line.
+    ctx.expect_fail("context rm (bad lab name)", "lab", "context", "rm", "bad name!",
+                    must_contain="charset")
 
 
 def _deferred_mutations(ctx: Ctx) -> None:
@@ -191,5 +227,117 @@ def _deferred_mutations(ctx: Ctx) -> None:
         "runs `zfs set refquota` over ssh on the real host's dataset; no PVE "
         "API endpoint exists for it",
         "pmx lab quota set pmx --refquota-gb 600 --yes",
+        isolation=True,
+    )
+    ctx.defer(
+        "cluster init",
+        "runs `pvecm create` over ssh on a lab's node 0, forming a corosync "
+        "cluster; needs the dedicated lab-pmx destructive test lab as the "
+        "standing target",
+        "pmx lab cluster init pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "cluster join",
+        "runs `pvecm add` over ssh on each non-zero lab node, joining it to "
+        "node 0's cluster; needs the dedicated lab-pmx destructive test lab as "
+        "the standing target",
+        "pmx lab cluster join pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "cluster status",
+        "reads corosync quorum and link state over ssh on a lab's nodes, so it "
+        "needs a provisioned and running lab; needs the dedicated lab-pmx "
+        "destructive test lab as the standing target",
+        "pmx lab cluster status pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "context sync",
+        "creates the pmx@pve token user and ACL on a lab's nested cluster and "
+        "rewrites the local `lab-<name>` context and its keychain secret; needs "
+        "the dedicated lab-pmx destructive test lab as the standing target",
+        "pmx lab context sync pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "context rm",
+        "deletes a `lab-<name>` context from the operator's own config.yml and "
+        "its keychain secret; needs the dedicated lab-pmx destructive test lab "
+        "as the standing target",
+        "pmx lab context rm pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "hostnet apply",
+        "rewrites the outer node's bridge and bond configuration, which can "
+        "sever the suite's own connection to it; needs the dedicated lab-pmx "
+        "destructive test lab as the standing target",
+        "pmx lab hostnet apply pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "nfs attach",
+        "creates ZFS datasets, quotas, and sharenfs ACLs on the outer node, "
+        "opens 2049/111 in its firewall, and adds pvesm storage entries on the "
+        "lab; needs the dedicated lab-pmx destructive test lab as the standing "
+        "target",
+        "pmx lab nfs attach pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "nfs detach",
+        "removes a lab's pvesm storage entries and can narrow an aliased "
+        "export's sharenfs ACL; needs the dedicated lab-pmx destructive test "
+        "lab as the standing target",
+        "pmx lab nfs detach pmx --yes",
+        isolation=True,
+    )
+    ctx.defer(
+        "nfs status",
+        "runs `pvesm status` over ssh on a lab's node 0, so it needs a "
+        "provisioned and running lab; needs the dedicated lab-pmx destructive "
+        "test lab as the standing target",
+        "pmx lab nfs status pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "qdevice add",
+        "provisions a QDevice VM and runs `pvecm qdevice setup` against the "
+        "lab's cluster; needs the dedicated lab-pmx destructive test lab as the "
+        "standing target",
+        "pmx lab qdevice add pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "qdevice remove",
+        "tears the QDevice out of the lab's cluster and destroys its VM; needs "
+        "the dedicated lab-pmx destructive test lab as the standing target",
+        "pmx lab qdevice remove pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "scale",
+        "creates or destroys lab node VMs, joins or removes them from the "
+        "cluster, and moves the QDevice; needs the dedicated lab-pmx "
+        "destructive test lab as the standing target",
+        "pmx lab scale pmx --yes",
+        isolation=True,
+    )
+    ctx.defer(
+        "sdn apply",
+        "reconciles the inner VXLAN zone, vnet, and subnet inside a lab's own "
+        "nested cluster; needs the dedicated lab-pmx destructive test lab as "
+        "the standing target",
+        "pmx lab sdn apply pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "sdn vlan apply",
+        "reconciles the inner vlan-type zone and its vnets inside a lab's own "
+        "nested cluster; needs the dedicated lab-pmx destructive test lab as "
+        "the standing target",
+        "pmx lab sdn vlan apply pmx",
         isolation=True,
     )

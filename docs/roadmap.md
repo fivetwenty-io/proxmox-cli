@@ -206,6 +206,8 @@ Each feature ships only after it:
 
 - passes end-to-end tests against a live lab environment using an isolated, namespaced set of resources that never disrupt other workloads,
 
+- classifies every leaf it adds in [the coverage matrix](test-coverage-matrix.md) — exercised by a suite, or deferred with a rationale — which `make check-coverage-matrix` enforces in CI,
+
 - and clears quality review and test-coverage review.
 
 Destructive operations require explicit confirmation, and long-running operations support asynchronous task handling via the standard task UPID flow.

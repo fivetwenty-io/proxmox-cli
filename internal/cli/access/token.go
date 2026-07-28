@@ -32,7 +32,7 @@ func newTokenCmd() *cobra.Command {
 type tokenListEntry struct {
 	Tokenid string  `json:"tokenid"`
 	Expire  *int64  `json:"expire,omitempty"`
-	Privsep pveBool `json:"privsep,omitempty"`
+	Privsep pveBool `json:"privsep"`
 	Comment string  `json:"comment,omitempty"`
 }
 

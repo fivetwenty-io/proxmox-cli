@@ -1,11 +1,12 @@
 # Test Coverage Matrix
 
 > **Generated file — do not edit by hand.** Regenerate with
-> `go build -o ./dist/pmx ./cmd/pmx && python3 scripts/coverage_matrix.py`.
-> The classification is derived statically from the built command tree, the
-> read-only sweep definitions in `scripts/e2e_lib/trees/*.py`, and the mutate
-> phase in `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and
-> tests change.
+> `make coverage-matrix`; CI runs `make check-coverage-matrix` and fails if
+> this file is stale. The classification is derived statically from the built
+> command tree, the read-only sweep definitions in
+> `scripts/e2e_lib/trees/*.py`, and the mutate phase in
+> `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and tests
+> change.
 
 This document maps every invocable leaf command to its automated test coverage
 across the two live suites:
@@ -74,16 +75,17 @@ swept clean before the next provisions.
 | `auth` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `context` | 11 | 9 | 0 | 0 | 0 | 0 | 1 | 1 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lab` | 12 | 4 | 1 | 0 | 0 | 6 | 1 | 0 |
+| `lab` | 26 | 4 | 1 | 0 | 0 | 20 | 1 | 0 |
+| `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 270 | 0 | 122 | 0 | 0 | 132 | 16 | 0 |
 | `pdm` | 260 | 0 | 15 | 0 | 0 | 97 | 3 | 145 |
 | `pve` | 676 | 80 | 180 | 354 | 4 | 97 | 7 | 5 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1246** | **99** | **321** | **357** | **4** | **334** | **31** | **151** |
+| **Total** | **1261** | **100** | **321** | **357** | **4** | **348** | **31** | **151** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1246** leaves, **730** are exercised by at least one live suite, **334** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **31** are n/a by design, and **151** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **731** are exercised by at least one live suite, **348** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **31** are n/a by design, and **151** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -133,17 +135,37 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `lab access grant` | — | — | deferred — creates a pve user and grants pool ACLs cluster-wide; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab cluster init` | — | — | deferred — runs `pvecm create` over ssh on a lab's node 0, forming a corosync cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab cluster join` | — | — | deferred — runs `pvecm add` over ssh on each non-zero lab node, joining it to node 0's cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab cluster status` | — | — | deferred — reads corosync quorum and link state over ssh on a lab's nodes, so it needs a provisioned and running lab; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab config add` | ✓ | — |  |
 | `lab config init` | ✓ | — |  |
 | `lab config show` | ✓ | — |  |
+| `lab context rm` | — | — | deferred — deletes a `lab-<name>` context from the operator's own config.yml and its keychain secret; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab context sync` | — | — | deferred — creates the pmx@pve token user and ACL on a lab's nested cluster and rewrites the local `lab-<name>` context and its keychain secret; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab create` | — | — | deferred — provisions SDN zone/vnet/subnet, storage, pool, and a VM on the cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab destroy` | — | — | deferred — deletes a lab's VM, pool, storage, and SDN resources; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab hostnet apply` | — | — | deferred — rewrites the outer node's bridge and bond configuration, which can sever the suite's own connection to it; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab list` | ✓ | — |  |
 | `lab net apply` | — | — | deferred — reconciles and commits cluster-wide SDN configuration; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab nfs attach` | — | — | deferred — creates ZFS datasets, quotas, and sharenfs ACLs on the outer node, opens 2049/111 in its firewall, and adds pvesm storage entries on the lab; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab nfs detach` | — | — | deferred — removes a lab's pvesm storage entries and can narrow an aliased export's sharenfs ACL; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab nfs status` | — | — | deferred — runs `pvesm status` over ssh on a lab's node 0, so it needs a provisioned and running lab; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab qdevice add` | — | — | deferred — provisions a QDevice VM and runs `pvecm qdevice setup` against the lab's cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab qdevice remove` | — | — | deferred — tears the QDevice out of the lab's cluster and destroys its VM; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab quota set` | — | — | n/a — runs `zfs set refquota` over ssh on the real host's dataset; no PVE API endpoint exists for it |
+| `lab scale` | — | — | deferred — creates or destroys lab node VMs, joins or removes them from the cluster, and moves the QDevice; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab sdn apply` | — | — | deferred — reconciles the inner VXLAN zone, vnet, and subnet inside a lab's own nested cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab sdn vlan apply` | — | — | deferred — reconciles the inner vlan-type zone and its vnets inside a lab's own nested cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab start` | — | — | deferred — powers on a lab VM; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab status` | ◑ | — |  |
 | `lab stop` | — | — | deferred — hard powers off a lab VM; needs the dedicated lab-pmx destructive test lab as the standing target |
+
+## `logs`
+
+| Leaf | e2e | mutate | Notes |
+|------|-----|--------|-------|
+| `logs prune` | ✓ | — |  |
 
 ## `pbs`
 

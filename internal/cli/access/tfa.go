@@ -95,7 +95,7 @@ type tfaEntry struct {
 	Type        string  `json:"type"`
 	Description string  `json:"description,omitempty"`
 	Created     int64   `json:"created,omitempty"`
-	Enable      pveBool `json:"enable,omitempty"`
+	Enable      pveBool `json:"enable"`
 }
 
 // newTfaGetCmd builds `pmx pve access tfa get <userid>`, listing one user's entries.

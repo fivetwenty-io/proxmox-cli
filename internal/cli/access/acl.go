@@ -28,7 +28,7 @@ type aclEntry struct {
 	Type      string  `json:"type"`
 	Ugid      string  `json:"ugid"`
 	Roleid    string  `json:"roleid"`
-	Propagate pveBool `json:"propagate,omitempty"`
+	Propagate pveBool `json:"propagate"`
 }
 
 // newACLListCmd builds `pmx pve access acl list`.

@@ -79,6 +79,24 @@ check-docs: ## Smoke-test man page generation (CI gate; not part of `check`)
 	@tmp=$$(mktemp -d) && go run ./cmd/docgen -out "$$tmp/man" -version dev -date 1970-01-01 >/dev/null && \
 		rm -rf "$$tmp" && echo "check-docs: man generation ok"
 
+.PHONY: coverage-matrix
+coverage-matrix: ## Regenerate docs/test-coverage-matrix.md from the built command tree
+	@go build -o ./dist/pmx ./cmd/pmx && python3 scripts/coverage_matrix.py
+
+.PHONY: check-coverage-matrix
+check-coverage-matrix: ## Fail if docs/test-coverage-matrix.md is stale (CI gate; not part of `check`)
+	@go build -o ./dist/pmx ./cmd/pmx
+	@cp docs/test-coverage-matrix.md docs/.test-coverage-matrix.stamp
+	@python3 scripts/coverage_matrix.py >/dev/null
+	@if ! diff -q docs/.test-coverage-matrix.stamp docs/test-coverage-matrix.md >/dev/null; then \
+		diff -u docs/.test-coverage-matrix.stamp docs/test-coverage-matrix.md | head -60; \
+		mv docs/.test-coverage-matrix.stamp docs/test-coverage-matrix.md; \
+		echo "check-coverage-matrix: stale — run 'make coverage-matrix' and commit the result"; \
+		exit 1; \
+	fi
+	@rm -f docs/.test-coverage-matrix.stamp
+	@echo "check-coverage-matrix: up to date"
+
 .PHONY: install
 install: build man completions ## Install pmx + personas, man pages, completions under $(DESTDIR)$(PREFIX) (default /usr/local; may need sudo)
 	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"

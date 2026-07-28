@@ -5,6 +5,7 @@ import (
 	"net"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -92,11 +93,7 @@ func availableLabNames(labs map[string]*config.Lab) string {
 	}
 	sort.Strings(names)
 
-	joined := names[0]
-	for _, n := range names[1:] {
-		joined += ", " + n
-	}
-	return joined
+	return strings.Join(names, ", ")
 }
 
 // resolveLabForMutate resolves the named lab exactly as resolveLab does,

@@ -47,7 +47,9 @@ type Lab struct {
 	// value means a single node with no QDevice, today's shape — see
 	// EffectiveTopologyNodes and EffectiveTopologyQdevice for the defaulting
 	// rules every caller must use instead of reading the fields directly.
-	Topology LabTopology `yaml:"topology,omitempty" json:"topology,omitempty"`
+	// omitzero on the json side, since encoding/json's omitempty does
+	// nothing for a struct field — see Config.Storage for the full note.
+	Topology LabTopology `yaml:"topology,omitempty" json:"topology,omitzero"`
 }
 
 // LabNetwork describes the SDN vnet, VXLAN tag, and subnet layout for a lab.
@@ -109,7 +111,9 @@ type LabNetwork struct {
 	// the always-present inner VXLAN zone sdninner.go manages for cross-node
 	// BOSH/CF L2 (`pmx lab sdn apply`, unchanged). Zero value means no
 	// bonding: nested nodes use their NICs unbonded, today's shape.
-	NestedNetwork LabNestedNetwork `yaml:"nested_network,omitempty" json:"nested_network,omitempty"`
+	// omitzero on the json side, since encoding/json's omitempty does
+	// nothing for a struct field — see Config.Storage for the full note.
+	NestedNetwork LabNestedNetwork `yaml:"nested_network,omitempty" json:"nested_network,omitzero"`
 }
 
 // LabVnet describes one additional outer SDN vnet, beyond the primary

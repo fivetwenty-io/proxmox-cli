@@ -41,3 +41,9 @@ jobs:
 
       - name: Man generation smoke
         run: go run ./cmd/docgen -out "${RUNNER_TEMP}/man" -version dev -date 1970-01-01
+
+      # docs/test-coverage-matrix.md is generated from the built command tree
+      # and the e2e tree definitions, so a new leaf that nobody classified
+      # silently makes it stale. Regenerating here catches that at review time.
+      - name: Coverage matrix up to date
+        run: make check-coverage-matrix

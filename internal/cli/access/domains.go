@@ -42,7 +42,7 @@ type domainListEntry struct {
 	Type    string  `json:"type"`
 	Comment string  `json:"comment,omitempty"`
 	Tfa     string  `json:"tfa,omitempty"`
-	Default pveBool `json:"default,omitempty"`
+	Default pveBool `json:"default"`
 }
 
 // newDomainListCmd builds `pmx pve access domain list`.

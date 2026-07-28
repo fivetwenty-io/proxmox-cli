@@ -3,6 +3,7 @@ package access
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -33,7 +34,7 @@ func newUserCmd() *cobra.Command {
 // generated client returns as a slice of raw JSON objects.
 type userListEntry struct {
 	Userid    string  `json:"userid"`
-	Enable    pveBool `json:"enable,omitempty"`
+	Enable    pveBool `json:"enable"`
 	Expire    *int64  `json:"expire,omitempty"`
 	Firstname string  `json:"firstname,omitempty"`
 	Lastname  string  `json:"lastname,omitempty"`
@@ -282,14 +283,7 @@ func setIfChanged(cmd *cobra.Command, name string, dst **string, val string) {
 	}
 }
 
-// joinComma joins a string slice with commas without importing strings.
+// joinComma joins a string slice with commas.
 func joinComma(parts []string) string {
-	out := ""
-	for i, p := range parts {
-		if i > 0 {
-			out += ","
-		}
-		out += p
-	}
-	return out
+	return strings.Join(parts, ",")
 }

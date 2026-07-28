@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	yaml "github.com/goccy/go-yaml"
@@ -403,4 +404,35 @@ func TestLabNetwork_EffectiveHostNICs_NilSafePassthrough(t *testing.T) {
 
 	n.HostNICs = []config.LabHostNIC{{Index: 1, VnetID: "pvecpi"}}
 	assert.Equal(t, n.HostNICs, n.EffectiveHostNICs())
+}
+
+// --- json rendering: unset nested sections stay out of `-o json` ----------
+
+// TestZeroSections_AbsentFromJSON guards the omitzero tags on Lab.Topology,
+// LabNetwork.NestedNetwork, Config.Storage, and Config.Log. encoding/json's
+// omitempty has no effect on a struct field, so with omitempty these rendered
+// as empty objects in every `-o json` view of a lab or the config — `pmx lab
+// config show -o json` puts the whole Lab under "lab".
+func TestZeroSections_AbsentFromJSON(t *testing.T) {
+	b, err := json.Marshal(&config.Lab{Name: "probe"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), `"topology"`)
+	assert.NotContains(t, string(b), `"nested_network"`)
+
+	b, err = json.Marshal(&config.Config{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), `"storage"`)
+	assert.NotContains(t, string(b), `"log"`)
+}
+
+// TestSetSections_PresentInJSON is the other half: omitzero must not hide a
+// section the operator actually configured.
+func TestSetSections_PresentInJSON(t *testing.T) {
+	b, err := json.Marshal(&config.Lab{Name: "probe", Topology: config.LabTopology{Nodes: 3}})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"topology"`)
+
+	b, err = json.Marshal(&config.Config{Log: config.ConfigLog{Layout: config.LogLayoutFlat}})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"log"`)
 }

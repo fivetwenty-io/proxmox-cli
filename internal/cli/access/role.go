@@ -32,7 +32,7 @@ func newRoleCmd() *cobra.Command {
 // roleListEntry is a single row of the GET /access/roles response.
 type roleListEntry struct {
 	Roleid  string  `json:"roleid"`
-	Special pveBool `json:"special,omitempty"`
+	Special pveBool `json:"special"`
 	Privs   string  `json:"privs,omitempty"`
 }
 

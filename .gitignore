@@ -24,3 +24,7 @@ coverage.html
 # Local lab/stack configuration (holds addresses and context names)
 /config/stack.toml
 /config/.env.test
+
+# check-coverage-matrix's comparison copy; removed on success, restored over
+# the generated file on failure, so it only survives an interrupted run
+/docs/.test-coverage-matrix.stamp

@@ -55,10 +55,14 @@ type Config struct {
 	// attributable to any single lab (e.g. the shared NFS service's
 	// quota), read by `pmx lab create`'s capacity gate alongside per-lab
 	// refquotas.
-	Storage ConfigStorage `yaml:"storage,omitempty" json:"storage,omitempty"`
+	// omitzero rather than omitempty on the json side: encoding/json's
+	// omitempty has no effect on a struct field, so an unconfigured section
+	// rendered `"storage":{}` into every `-o json` view. yaml.v3 has no
+	// omitzero and already omits a zero struct, so it keeps omitempty.
+	Storage ConfigStorage `yaml:"storage,omitempty" json:"storage,omitzero"`
 
 	// Log holds JSONL command-log preferences (layout and level).
-	Log ConfigLog `yaml:"log,omitempty" json:"log,omitempty"`
+	Log ConfigLog `yaml:"log,omitempty" json:"log,omitzero"`
 }
 
 // Log layout values for ConfigLog.Layout.

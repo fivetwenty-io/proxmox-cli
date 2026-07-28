@@ -440,11 +440,12 @@ def render(leaves, e2e, mut, defers, errpath) -> str:
 HEADER = """# Test Coverage Matrix
 
 > **Generated file — do not edit by hand.** Regenerate with
-> `go build -o ./dist/pmx ./cmd/pmx && python3 scripts/coverage_matrix.py`.
-> The classification is derived statically from the built command tree, the
-> read-only sweep definitions in `scripts/e2e_lib/trees/*.py`, and the mutate
-> phase in `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and
-> tests change.
+> `make coverage-matrix`; CI runs `make check-coverage-matrix` and fails if
+> this file is stale. The classification is derived statically from the built
+> command tree, the read-only sweep definitions in
+> `scripts/e2e_lib/trees/*.py`, and the mutate phase in
+> `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and tests
+> change.
 
 This document maps every invocable leaf command to its automated test coverage
 across the two live suites:
