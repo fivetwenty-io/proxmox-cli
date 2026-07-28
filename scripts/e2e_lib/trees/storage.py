@@ -19,10 +19,18 @@ def run(ctx: Ctx) -> None:
     ctx.check("describe", "pve", "storage", "describe")
     ctx.check("describe --type", "pve", "storage", "describe", "--type", "zfspool")
 
+    # Subject storage for the per-storage reads below. On a lab shared between
+    # members the first row is likely somebody else's dataset, so prefer one of
+    # ours (Isolation.STORAGE_TOKEN) and fall back to the first row only when
+    # the cluster has none — a dedicated lab, where every storage is ours.
     sid = None
     if lst.rc == 0:
         try:
-            sid = ctx.first(lst.json(), "storage")
+            rows = lst.json()
+            ours = [s for s in rows
+                    if isinstance(s, dict)
+                    and Isolation.STORAGE_TOKEN in str(s.get("storage", ""))]
+            sid = ctx.first(ours or rows, "storage")
         except ValueError:
             sid = None
 

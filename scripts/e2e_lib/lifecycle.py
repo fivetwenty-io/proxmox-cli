@@ -68,7 +68,9 @@ CL_FW_COMMENT = "pmx-cli-e2e"   # marks the throwaway top-level cluster rule
 # Storage picks. These defaults describe a stock PVE install; `resolve_storages`
 # rebinds them at run start to whatever the target cluster actually offers, so
 # the suite runs unchanged on a lab whose layout differs — zfspool instead of
-# lvmthin, an NFS export for backups, and so on. Setting any of
+# lvmthin, an NFS export for backups, and so on. On a shared lab discovery is
+# confined to this project's own storages (see Isolation.STORAGE_TOKEN), so a
+# pick can never land in another member's dataset. Setting any of
 # $PMX_E2E_ROOTDIR_STORAGE, $PMX_E2E_TMPL_STORAGE, or $PMX_E2E_BACKUP_STORAGE
 # pins that one by hand.
 ROOTDIR_STORAGE = "local-lvm"   # supports rootdir/images (+ snapshots)
@@ -338,8 +340,37 @@ _VOLUME_TYPE_RANK = ("zfspool", "lvmthin", "rbd", "btrfs", "dir", "nfs", "cifs")
 _FILE_TYPE_RANK = ("dir", "btrfs", "nfs", "cifs", "cephfs", "glusterfs")
 
 
+def _ours(rows: list[dict]) -> list[dict]:
+    """The subset of `rows` whose storage id carries this project's token."""
+    return [s for s in rows if Isolation.STORAGE_TOKEN in str(s.get("storage", ""))]
+
+
+def _foreign_ids(rows: list[dict]) -> set[str]:
+    """Storage ids that belong to another member of a shared lab.
+
+    Members name their storages after themselves off a common stem, so
+    `tank-lab-pmx` implies the stem `tank-lab-` and everything else built on it
+    — `tank-lab-dbell`, `tank-lab-drgao` — is somebody else's dataset. Those
+    are dropped from every candidate list before any ranking happens, which is
+    what makes it impossible for a pick to land outside this project's lab.
+    """
+    foreign: set[str] = set()
+    for s in _ours(rows):
+        sid = str(s["storage"])
+        stem = sid[: sid.rindex(Isolation.STORAGE_TOKEN)]
+        if not stem:
+            continue
+        foreign.update(str(o.get("storage", "")) for o in rows
+                       if str(o.get("storage", "")) != sid
+                       and str(o.get("storage", "")).startswith(stem))
+    return foreign
+
+
 def _storage_rows(r: Runner) -> list[dict]:
-    """Cluster storages usable on the run's node, as decoded config rows."""
+    """Cluster storages usable on the run's node, as decoded config rows.
+
+    Storages owned by another member of a shared lab are excluded outright.
+    """
     res = r.pmx("pve", "storage", "list", json_out=True, node=False)
     if res.rc != 0:
         return []
@@ -350,9 +381,12 @@ def _storage_rows(r: Runner) -> list[dict]:
     if not isinstance(rows, list):
         return []
 
+    rows = [s for s in rows if isinstance(s, dict) and s.get("storage")]
+    foreign = _foreign_ids(rows)
+
     usable = []
     for s in rows:
-        if not isinstance(s, dict) or not s.get("storage"):
+        if str(s["storage"]) in foreign:
             continue
         if str(s.get("disable", "0")) not in ("0", "", "False"):
             continue
@@ -365,15 +399,25 @@ def _storage_rows(r: Runner) -> list[dict]:
 
 
 def _pick_storage(rows: list[dict], needs: tuple[str, ...], rank: tuple[str, ...]) -> str:
-    """Id of the best-ranked storage carrying every content type in `needs`."""
+    """Id of the best-ranked storage carrying every content type in `needs`.
+
+    When any candidate is one of this project's own storages the rest are
+    dropped rather than merely outranked, so a shared lab resolves to
+    `tank-lab-pmx` and never to a neighbour's pool that happens to rank higher
+    or sort earlier. A lab whose storages carry no token at all — the dedicated
+    one, with its stock `local`/`local-lvm` — ranks every candidate normally.
+    """
+    candidates = [s for s in rows
+                  if all(need in [c.strip() for c in str(s.get("content", "")).split(",")]
+                         for need in needs)]
+    candidates = _ours(candidates) or candidates
+
     def key(s: dict) -> tuple[int, str]:
         kind = str(s.get("type", ""))
         return (rank.index(kind) if kind in rank else len(rank), str(s.get("storage", "")))
 
-    for s in sorted(rows, key=key):
-        content = [c.strip() for c in str(s.get("content", "")).split(",")]
-        if all(need in content for need in needs):
-            return str(s["storage"])
+    for s in sorted(candidates, key=key):
+        return str(s["storage"])
     return ""
 
 
@@ -399,53 +443,29 @@ def resolve_storages(r: Runner) -> None:
                       or BACKUP_STORAGE)
 
 
+def _alt_storage(r: Runner, exclude: str, need: str) -> str:
+    """Id of a second storage carrying `need` content, or "" if there is none.
+
+    Used by the disk/volume `move` verbs so the relocation lands somewhere
+    genuinely different. A move is a write, so it goes through the same
+    ownership rule as the primary pick: on a shared lab the choice is confined
+    to this project's own storages, and when there is only one of those the
+    caller gets "" and records the move as skipped rather than relocating a
+    volume into a neighbour's dataset.
+    """
+    rows = _storage_rows(r)
+    pool = [s for s in (_ours(rows) or rows) if str(s.get("storage", "")) != exclude]
+    return _pick_storage(pool, (need,), _VOLUME_TYPE_RANK)
+
+
 def _alt_image_storage(r: Runner, exclude: str) -> str:
-    """Return the id of an enabled storage that supports `images` content other
-    than `exclude`, or "" if none exists (single-storage lab). Used so the disk
-    `move` verb relocates to a genuinely different storage."""
-    res = r.pmx("pve", "storage", "list", json_out=True, node=False)
-    if res.rc != 0:
-        return ""
-    try:
-        rows = res.json()
-    except ValueError:
-        return ""
-    if isinstance(rows, dict) and isinstance(rows.get("rows"), list):
-        # table shape: skip, we need typed content — fall back to no alt.
-        return ""
-    if not isinstance(rows, list):
-        return ""
-    for s in rows:
-        if not isinstance(s, dict):
-            continue
-        sid = str(s.get("storage", ""))
-        content = str(s.get("content", ""))
-        if sid and sid != exclude and "images" in content:
-            return sid
-    return ""
+    """Alternate storage for the qemu disk `move` verb."""
+    return _alt_storage(r, exclude, "images")
 
 
 def _alt_rootdir_storage(r: Runner, exclude: str) -> str:
-    """Return the id of an enabled storage that supports `rootdir` content other
-    than `exclude`, or "" if none exists. Used so the CT volume `move` verb
-    relocates a container rootfs to a genuinely different storage."""
-    res = r.pmx("pve", "storage", "list", json_out=True, node=False)
-    if res.rc != 0:
-        return ""
-    try:
-        rows = res.json()
-    except ValueError:
-        return ""
-    if not isinstance(rows, list):
-        return ""
-    for s in rows:
-        if not isinstance(s, dict):
-            continue
-        sid = str(s.get("storage", ""))
-        content = str(s.get("content", ""))
-        if sid and sid != exclude and "rootdir" in content:
-            return sid
-    return ""
+    """Alternate storage for the lxc volume `move` verb."""
+    return _alt_storage(r, exclude, "rootdir")
 
 
 def _next_id(r: Runner) -> str:

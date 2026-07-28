@@ -26,6 +26,12 @@ class Isolation:
     POOL = "pmx-cli"
     # Names are prefixed so a stray resource is obviously ours.
     NAME_PREFIX = "pmx-cli-"
+    # On a shared lab each member's storage is named after its owner off a
+    # common stem — tank-lab-pmx, tank-lab-dbell, tank-lab-drgao. Storage
+    # discovery treats an id carrying this token as this project's, and refuses
+    # to consider the siblings that carry somebody else's: no verb may write
+    # into another member's dataset.
+    STORAGE_TOKEN = "pmx"
     # A dedicated SDN simple zone + vnet keeps test NICs off the host bridge and
     # off the 172.x management subnet entirely.
     SDN_ZONE = "pmxcli"          # PVE zone id: <=8 chars, alnum
