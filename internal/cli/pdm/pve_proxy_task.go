@@ -21,7 +21,7 @@ import (
 // so the generated binding is used directly here.
 func pveTaskStatusPoller(svc pdmpve.Service) remoteTaskStatusFunc {
 	return func(ctx context.Context, remote, upid string) (*remoteTaskStatus, error) {
-		status, err := svc.ListRemotesTasksStatus(ctx, remote, upid, nil)
+		status, err := svc.ListRemotesTasksStatus(ctx, remote, remoteUpid(remote, upid), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func newPveTaskStatusCmd() *cobra.Command {
 				params.Wait = &wait
 			}
 
-			resp, err := deps.PDM.Pve.ListRemotesTasksStatus(cmd.Context(), remote, upid, params)
+			resp, err := deps.PDM.Pve.ListRemotesTasksStatus(cmd.Context(), remote, remoteUpid(remote, upid), params)
 			if err != nil {
 				return fmt.Errorf("get status of task %q on PVE remote %q: %w", upid, remote, err)
 			}
@@ -199,7 +199,7 @@ func newPveTaskLogCmd() *cobra.Command {
 				params.Download = &download
 			}
 
-			resp, err := deps.PDM.Pve.ListRemotesTasksLog(cmd.Context(), remote, upid, params)
+			resp, err := deps.PDM.Pve.ListRemotesTasksLog(cmd.Context(), remote, remoteUpid(remote, upid), params)
 			if err != nil {
 				return fmt.Errorf("read log of task %q on PVE remote %q: %w", upid, remote, err)
 			}
@@ -250,7 +250,7 @@ func newPveTaskStopCmd() *cobra.Command {
 				return fmt.Errorf("refusing to stop task %q on PVE remote %q without confirmation: pass --yes/-y", upid, remote)
 			}
 
-			err := deps.PDM.Pve.DeleteRemotesTasks(cmd.Context(), remote, upid)
+			err := deps.PDM.Pve.DeleteRemotesTasks(cmd.Context(), remote, remoteUpid(remote, upid))
 			if err != nil {
 				return fmt.Errorf("stop task %q on PVE remote %q: %w", upid, remote, err)
 			}

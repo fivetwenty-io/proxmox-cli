@@ -278,7 +278,7 @@ func TestPveGuestLifecycle_StopWaitsForRemoteTask(t *testing.T) {
 			deps := depsFor(t, pc, output.FormatJSON, false)
 
 			f.HandleJSON("POST /api2/json/pve/remotes/cluster1/"+gf.kind.noun+"/104/stop", validUPID)
-			f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+			f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 				"id": "vmstop", "node": "pdm-host", "pid": 1, "pstart": 1, "starttime": 1, "type": "vmstop",
 				"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 			})
@@ -366,7 +366,7 @@ func TestPveGuestSnapshotDelete_WaitsForRemoteTask(t *testing.T) {
 			deps := depsFor(t, pc, output.FormatJSON, false)
 
 			f.HandleJSON("DELETE /api2/json/pve/remotes/cluster1/"+gf.kind.noun+"/104/snapshot/snap1", validUPID)
-			f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+			f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 				"id": "delsnapshot", "node": "pdm-host", "pid": 1, "pstart": 1, "starttime": 1, "type": "delsnapshot",
 				"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 			})
@@ -448,7 +448,7 @@ func TestPveGuestSnapshotRollback_WaitsForRemoteTask(t *testing.T) {
 
 			var rec recordedRequest
 			recordJSON(f, "POST /api2/json/pve/remotes/cluster1/"+gf.kind.noun+"/104/snapshot/snap1/rollback", &rec, validUPID)
-			f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+			f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 				"id": "rollback", "node": "pdm-host", "pid": 1, "pstart": 1, "starttime": 1, "type": "rollback",
 				"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 			})

@@ -186,7 +186,7 @@ func TestFinishRemoteAsync_WaitsForRemoteTaskAndPrintsMessage(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/pbs/remotes/backup1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pbs/remotes/backup1/tasks/"+remoteUpid("backup1", validUPID)+"/status", map[string]any{
 		"node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})
@@ -210,7 +210,7 @@ func TestFinishRemoteAsync_FailsOnBadExitStatus(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/pbs/remotes/backup1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pbs/remotes/backup1/tasks/"+remoteUpid("backup1", validUPID)+"/status", map[string]any{
 		"node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "unable to connect",
 	})

@@ -101,7 +101,7 @@ func newPbsTaskStatusCmd() *cobra.Command {
 				params.Wait = &wait
 			}
 
-			resp, err := deps.PDM.Pbs.ListRemotesTasksStatus(cmd.Context(), remote, upid, params)
+			resp, err := deps.PDM.Pbs.ListRemotesTasksStatus(cmd.Context(), remote, remoteUpid(remote, upid), params)
 			if err != nil {
 				return fmt.Errorf("get status of task %q on PBS remote %q: %w", upid, remote, err)
 			}
@@ -153,7 +153,7 @@ func newPbsTaskLogCmd() *cobra.Command {
 				params.Download = new(download)
 			}
 
-			resp, err := deps.PDM.Pbs.ListRemotesTasksLog(cmd.Context(), remote, upid, params)
+			resp, err := deps.PDM.Pbs.ListRemotesTasksLog(cmd.Context(), remote, remoteUpid(remote, upid), params)
 			if err != nil {
 				return fmt.Errorf("read log of task %q on PBS remote %q: %w", upid, remote, err)
 			}
@@ -203,7 +203,7 @@ func newPbsTaskStopCmd() *cobra.Command {
 				return fmt.Errorf("refusing to stop task %q on PBS remote %q without confirmation: pass --yes/-y", upid, remote)
 			}
 
-			err := deps.PDM.Pbs.DeleteRemotesTasks(cmd.Context(), remote, upid)
+			err := deps.PDM.Pbs.DeleteRemotesTasks(cmd.Context(), remote, remoteUpid(remote, upid))
 			if err != nil {
 				return fmt.Errorf("stop task %q on PBS remote %q: %w", upid, remote, err)
 			}

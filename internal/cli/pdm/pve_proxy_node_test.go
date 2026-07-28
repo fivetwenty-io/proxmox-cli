@@ -163,7 +163,7 @@ func TestPveNodeAptUpdateDatabase_BlocksUntilRemoteTaskFinishes(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "POST /api2/json/pve/remotes/cluster1/nodes/pve1/apt/update", &rec, validUPID)
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 		"id": "aptupdate", "node": "pve1", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})

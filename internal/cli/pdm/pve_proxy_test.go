@@ -327,7 +327,7 @@ func TestFinishPveRemoteAsync_WaitsForRemoteTaskAndPrintsMessage(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 		"id": "aptupdate", "node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "ok",
 	})
@@ -352,7 +352,7 @@ func TestFinishPveRemoteAsync_FailsOnBadExitStatus(t *testing.T) {
 	f, pc := newFakeClient(t)
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 		"id": "aptupdate", "node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "unable to connect",
 	})

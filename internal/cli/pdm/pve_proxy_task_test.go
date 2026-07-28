@@ -44,7 +44,7 @@ func TestPveTaskStatus_SendsWaitFlag(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
 	var rec recordedRequest
-	recordJSON(f, "GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", &rec, map[string]any{
+	recordJSON(f, "GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", &rec, map[string]any{
 		"id": "aptupdate", "node": "pve1", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})
@@ -57,6 +57,29 @@ func TestPveTaskStatus_SendsWaitFlag(t *testing.T) {
 	require.Contains(t, buf.String(), "stopped")
 }
 
+// TestPveTaskStatus_QualifiesBareUpidWithTheRemote asserts that a UPID taken
+// straight out of `pve task ls` — which reports the bare form — is addressed
+// as the `<remote>!UPID:...` remote UPID the endpoint requires, and that a
+// UPID that already carries its remote is passed through unchanged rather
+// than qualified twice.
+func TestPveTaskStatus_QualifiesBareUpidWithTheRemote(t *testing.T) {
+	for _, given := range []string{validUPID, "cluster1!" + validUPID} {
+		f, pc := newFakeClient(t)
+		deps := depsFor(t, pc, output.FormatJSON, false)
+
+		var rec recordedRequest
+		recordJSON(f, "GET /api2/json/pve/remotes/cluster1/tasks/cluster1!"+validUPID+"/status", &rec, map[string]any{
+			"id": "aptupdate", "node": "pve1", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
+			"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
+		})
+
+		var buf bytes.Buffer
+		err := run(deps, &buf, newPveTaskStatusCmd(), "status", "cluster1", given)
+		require.NoError(t, err, "upid %q", given)
+		require.Contains(t, buf.String(), "stopped")
+	}
+}
+
 // TestPveTaskLog_ReadsLines asserts that `pve task log` decodes the
 // {n, t} log-line array and forwards --start/--limit on the wire.
 func TestPveTaskLog_ReadsLines(t *testing.T) {
@@ -64,7 +87,7 @@ func TestPveTaskLog_ReadsLines(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var rec recordedRequest
-	recordJSON(f, "GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/log", &rec, []map[string]any{
+	recordJSON(f, "GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/log", &rec, []map[string]any{
 		{"n": 1, "t": "starting apt update"},
 		{"n": 2, "t": "done"},
 	})
@@ -99,7 +122,7 @@ func TestPveTaskStop_SendsRequestWithConfirmation(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var rec recordedRequest
-	recordJSON(f, "DELETE /api2/json/pve/remotes/cluster1/tasks/"+validUPID, &rec, nil)
+	recordJSON(f, "DELETE /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID), &rec, nil)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newPveTaskStopCmd(), "stop", "cluster1", validUPID, "--yes")

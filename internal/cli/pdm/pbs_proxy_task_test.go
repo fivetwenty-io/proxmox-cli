@@ -41,7 +41,7 @@ func TestPbsTaskStatus_SendsWaitFlag(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
 	var rec recordedRequest
-	recordJSON(f, "GET /api2/json/pbs/remotes/backup1/tasks/"+validUPID+"/status", &rec, map[string]any{
+	recordJSON(f, "GET /api2/json/pbs/remotes/backup1/tasks/"+remoteUpid("backup1", validUPID)+"/status", &rec, map[string]any{
 		"node": "pbs-node1", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})
@@ -61,7 +61,7 @@ func TestPbsTaskLog_ReadsLines(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var rec recordedRequest
-	recordJSON(f, "GET /api2/json/pbs/remotes/backup1/tasks/"+validUPID+"/log", &rec, []map[string]any{
+	recordJSON(f, "GET /api2/json/pbs/remotes/backup1/tasks/"+remoteUpid("backup1", validUPID)+"/log", &rec, []map[string]any{
 		{"n": 1, "t": "starting apt update"},
 		{"n": 2, "t": "done"},
 	})
@@ -96,7 +96,7 @@ func TestPbsTaskStop_SendsRequestWithConfirmation(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 
 	var rec recordedRequest
-	recordJSON(f, "DELETE /api2/json/pbs/remotes/backup1/tasks/"+validUPID, &rec, nil)
+	recordJSON(f, "DELETE /api2/json/pbs/remotes/backup1/tasks/"+remoteUpid("backup1", validUPID), &rec, nil)
 
 	var buf bytes.Buffer
 	err := run(deps, &buf, newPbsTaskStopCmd(), "stop", "backup1", validUPID, "--yes")

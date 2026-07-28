@@ -76,7 +76,7 @@ func TestPveLxcMigrate_WaitsForRemoteTaskAndSendsLxcFlags(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "POST /api2/json/pve/remotes/cluster1/lxc/104/migrate", &rec, validUPID)
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 		"id": "vzmigrate", "node": "pdm-host", "pid": 1, "pstart": 1, "starttime": 1, "type": "vzmigrate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})
@@ -113,7 +113,7 @@ func TestPveLxcRemoteMigrate_WaitsForRemoteTask(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "POST /api2/json/pve/remotes/cluster1/lxc/104/remote-migrate", &rec, validUPID)
-	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pve/remotes/cluster1/tasks/"+remoteUpid("cluster1", validUPID)+"/status", map[string]any{
 		"id": "vzmigrate", "node": "pdm-host", "pid": 1, "pstart": 1, "starttime": 1, "type": "vzmigrate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})

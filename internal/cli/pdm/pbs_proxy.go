@@ -430,11 +430,26 @@ type remoteTaskStatus struct {
 // means the server returned an empty response.
 type remoteTaskStatusFunc func(ctx context.Context, remote, upid string) (*remoteTaskStatus, error)
 
+// remoteUpid qualifies a task UPID with the remote it runs on. PDM's
+// remote-task endpoints (/pbs|pve/remotes/{remote}/tasks/{upid}/...) address
+// tasks by a *remote* UPID — `<remote>!UPID:...` — and reject a bare one with
+// "expected valid remote upid". The sibling task listings hand back the bare
+// UPID, so qualifying here is what lets a UPID copied straight out of `pmx
+// pdm pve task ls <remote>` be passed to `status`, `log`, and `stop`. A UPID
+// that is already qualified does not start with "UPID:" and is left alone.
+func remoteUpid(remote, upid string) string {
+	if !strings.HasPrefix(upid, "UPID:") {
+		return upid
+	}
+
+	return remote + "!" + upid
+}
+
 // pbsTaskStatusPoller adapts pdmpbs.Service.ListRemotesTasksStatus to a
 // remoteTaskStatusFunc.
 func pbsTaskStatusPoller(svc pdmpbs.Service) remoteTaskStatusFunc {
 	return func(ctx context.Context, remote, upid string) (*remoteTaskStatus, error) {
-		status, err := svc.ListRemotesTasksStatus(ctx, remote, upid, nil)
+		status, err := svc.ListRemotesTasksStatus(ctx, remote, remoteUpid(remote, upid), nil)
 		if err != nil {
 			return nil, err
 		}

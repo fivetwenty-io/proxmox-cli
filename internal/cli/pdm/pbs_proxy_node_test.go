@@ -38,7 +38,7 @@ func TestPbsNodeAptUpdateDatabase_BlocksUntilRemoteTaskFinishes(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "POST /api2/json/pbs/remotes/backup1/nodes/pbs-node1/apt/update", &rec, validUPID)
-	f.HandleJSON("GET /api2/json/pbs/remotes/backup1/tasks/"+validUPID+"/status", map[string]any{
+	f.HandleJSON("GET /api2/json/pbs/remotes/backup1/tasks/"+remoteUpid("backup1", validUPID)+"/status", map[string]any{
 		"node": "pbs-node1", "pid": 100, "pstart": 1, "starttime": 1, "type": "aptupdate",
 		"upid": validUPID, "user": "root@pam", "status": "stopped", "exitstatus": "OK",
 	})
