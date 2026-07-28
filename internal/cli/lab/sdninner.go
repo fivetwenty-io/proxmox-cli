@@ -145,7 +145,7 @@ func runSdnApply(cmd *cobra.Command, name string, dryRun bool) error {
 	}
 
 	peerIPs := make([]string, 0, numNodes)
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		ip, ierr := labNodeMgmtIP(lab.Network, i)
 		if ierr != nil {
 			return fmt.Errorf("resolve node %d mgmt IP: %w", i, ierr)

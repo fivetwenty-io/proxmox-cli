@@ -62,10 +62,10 @@ func newVnetShowCmd() *cobra.Command {
 			params := &cluster.GetSdnVnetsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.GetSdnVnets(cmd.Context(), vnet, params)
 			if err != nil {
@@ -113,7 +113,7 @@ func newVnetIpsCreateCmd() *cobra.Command {
 			params := &cluster.CreateSdnVnetsIpsParams{Ip: ip, Zone: zone}
 			fl := cmd.Flags()
 			if fl.Changed("mac") {
-				params.Mac = strPtr(mac)
+				params.Mac = new(mac)
 			}
 			if err := deps.API.Cluster.CreateSdnVnetsIps(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("create IP mapping in vnet %q: %w", vnet, err)
@@ -157,10 +157,10 @@ func newVnetIpsSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnVnetsIpsParams{Ip: ip, Zone: zone}
 			if fl.Changed("mac") {
-				params.Mac = strPtr(mac)
+				params.Mac = new(mac)
 			}
 			if fl.Changed("vmid") {
-				params.Vmid = int64Ptr(vmid)
+				params.Vmid = new(vmid)
 			}
 			if err := deps.API.Cluster.UpdateSdnVnetsIps(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("update IP mapping in vnet %q: %w", vnet, err)
@@ -203,7 +203,7 @@ func newVnetIpsDeleteCmd() *cobra.Command {
 			params := &cluster.DeleteSdnVnetsIpsParams{Ip: ip, Zone: zone}
 			fl := cmd.Flags()
 			if fl.Changed("mac") {
-				params.Mac = strPtr(mac)
+				params.Mac = new(mac)
 			}
 			if err := deps.API.Cluster.DeleteSdnVnetsIps(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("delete IP mapping %q from vnet %q: %w", ip, vnet, err)
@@ -254,28 +254,28 @@ func newVnetSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnVnetsParams{}
 			if fl.Changed("zone") {
-				params.Zone = strPtr(zone)
+				params.Zone = new(zone)
 			}
 			if fl.Changed("tag") {
-				params.Tag = int64Ptr(tag)
+				params.Tag = new(tag)
 			}
 			if fl.Changed("alias") {
-				params.Alias = strPtr(alias)
+				params.Alias = new(alias)
 			}
 			if fl.Changed("vlanaware") {
-				params.Vlanaware = boolPtr(vlanaware)
+				params.Vlanaware = new(vlanaware)
 			}
 			if fl.Changed("isolate-ports") {
-				params.IsolatePorts = boolPtr(isolatePorts)
+				params.IsolatePorts = new(isolatePorts)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("update SDN vnet %q: %w", vnet, err)
@@ -315,10 +315,10 @@ func newVnetListCmd() *cobra.Command {
 			params := &cluster.ListSdnVnetsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnVnets(cmd.Context(), params)
 			if err != nil {
@@ -377,22 +377,22 @@ func newVnetCreateCmd() *cobra.Command {
 			params := &cluster.CreateSdnVnetsParams{Vnet: vnet, Zone: zone}
 			fl := cmd.Flags()
 			if fl.Changed("tag") {
-				params.Tag = int64Ptr(tag)
+				params.Tag = new(tag)
 			}
 			if fl.Changed("alias") {
-				params.Alias = strPtr(alias)
+				params.Alias = new(alias)
 			}
 			if fl.Changed("vlanaware") {
-				params.Vlanaware = boolPtr(vlanaware)
+				params.Vlanaware = new(vlanaware)
 			}
 			if fl.Changed("isolate-ports") {
-				params.IsolatePorts = boolPtr(isolatePorts)
+				params.IsolatePorts = new(isolatePorts)
 			}
 			if fl.Changed("type") {
-				params.Type = strPtr(vnetType)
+				params.Type = new(vnetType)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 
 			if err := deps.API.Cluster.CreateSdnVnets(cmd.Context(), params); err != nil {
@@ -435,7 +435,7 @@ func newVnetDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnVnetsParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.DeleteSdnVnets(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("delete SDN vnet %q: %w", vnet, err)

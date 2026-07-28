@@ -45,7 +45,7 @@ func newCpuListCmd() *cobra.Command {
 
 			params := &nodes.ListCapabilitiesQemuCpuParams{}
 			if cmd.Flags().Changed("arch") {
-				params.Arch = strPtr(arch)
+				params.Arch = new(arch)
 			}
 
 			resp, err := deps.API.Nodes.ListCapabilitiesQemuCpu(cmd.Context(), node, params)
@@ -97,7 +97,7 @@ func newMachineListCmd() *cobra.Command {
 
 			params := &nodes.ListCapabilitiesQemuMachinesParams{}
 			if cmd.Flags().Changed("arch") {
-				params.Arch = strPtr(arch)
+				params.Arch = new(arch)
 			}
 
 			resp, err := deps.API.Nodes.ListCapabilitiesQemuMachines(cmd.Context(), node, params)
@@ -140,10 +140,10 @@ func newCpuFlagsCmd() *cobra.Command {
 
 			params := &nodes.ListCapabilitiesQemuCpuFlagsParams{}
 			if cmd.Flags().Changed("arch") {
-				params.Arch = strPtr(arch)
+				params.Arch = new(arch)
 			}
 			if cmd.Flags().Changed("accel") {
-				params.Accel = strPtr(accel)
+				params.Accel = new(accel)
 			}
 
 			resp, err := deps.API.Nodes.ListCapabilitiesQemuCpuFlags(cmd.Context(), node, params)

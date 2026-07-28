@@ -127,7 +127,7 @@ func runHostnetApply(cmd *cobra.Command, name string, dryRun bool) error {
 	// create-vs-update.
 	if dryRun {
 		var rows [][]string
-		for idx := 0; idx < numNodes; idx++ {
+		for idx := range numNodes {
 			nodeName := hostnetNodeName(lab.Name, idx)
 			rows = append(rows, []string{nodeName,
 				fmt.Sprintf("ensure NIC naming (nic0-nic%d)", hostnetRequiredNICCount-1), "would run"})
@@ -147,7 +147,7 @@ func runHostnetApply(cmd *cobra.Command, name string, dryRun bool) error {
 	ctx := cmd.Context()
 	var allRows [][]string
 	anyRebootPending := false
-	for idx := 0; idx < numNodes; idx++ {
+	for idx := range numNodes {
 		nodeName := hostnetNodeName(lab.Name, idx)
 
 		nodeIP, err := labNodeMgmtIP(lab.Network, idx)
@@ -318,7 +318,7 @@ var hostnetIfaceNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 // etc.), not a legitimate "no NICs" signal that should be papered over.
 func hostnetParseNICEnumeration(output string) ([]hostnetPhysicalNIC, error) {
 	var nics []hostnetPhysicalNIC
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -603,7 +603,7 @@ func hostnetBuildInterfacesRewriteScript(pairs []hostnetRenamePair) string {
 // paths named on them, in the order the remote script printed them.
 func hostnetParseRewrittenFiles(output string) []string {
 	var files []string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if rest, ok := strings.CutPrefix(line, hostnetRewrittenPrefix); ok && rest != "" {
 			files = append(files, rest)
@@ -1037,7 +1037,7 @@ func hostnetRestageBridgeIfSlaveConflict(ctx context.Context, api *apiclient.API
 	stepLabel := fmt.Sprintf(
 		"restage bridge %q (bridge_ports %q -> \"\", freeing its slave nics before bond %q is created)",
 		b.Bridge, bridge.BridgePorts, b.Name)
-	params := &nodes.UpdateNetwork2Params{Type: "bridge", BridgePorts: netPtr("")}
+	params := &nodes.UpdateNetwork2Params{Type: "bridge", BridgePorts: new("")}
 	// This PUT's own opinion is BridgePorts only — every other field
 	// (addressing, autostart, vlan_aware) must be carried forward from the
 	// bridge's current state exactly as read, or PVE defaults it away (see
@@ -1084,22 +1084,22 @@ func hostnetRestageBridgeIfSlaveConflict(ctx context.Context, api *apiclient.API
 // deliberately address-less VLAN-trunk bridge).
 func hostnetPreserveUntouchedBridgeFields(cur hostnetIfaceState, params *nodes.UpdateNetwork2Params) {
 	if params.Cidr == nil && cur.Cidr != "" {
-		params.Cidr = netPtr(cur.Cidr)
+		params.Cidr = new(cur.Cidr)
 	}
 	if params.Address == nil && cur.Address != "" {
-		params.Address = netPtr(cur.Address)
+		params.Address = new(cur.Address)
 	}
 	if params.Netmask == nil && cur.Netmask != "" {
-		params.Netmask = netPtr(cur.Netmask)
+		params.Netmask = new(cur.Netmask)
 	}
 	if params.Gateway == nil && cur.Gateway != "" {
-		params.Gateway = netPtr(cur.Gateway)
+		params.Gateway = new(cur.Gateway)
 	}
 	if params.Autostart == nil && cur.Autostart != 0 {
-		params.Autostart = netPtr(true)
+		params.Autostart = new(true)
 	}
 	if params.BridgeVlanAware == nil && cur.BridgeVlanAware != 0 {
-		params.BridgeVlanAware = netPtr(true)
+		params.BridgeVlanAware = new(true)
 	}
 }
 
@@ -1126,11 +1126,11 @@ func hostnetEnsureBond(ctx context.Context, api *apiclient.APIClient, nodeName s
 		// of ITS OWN `auto` line, not because its slave bond has one) —
 		// bond1/bond2 and vmbr1/vmbr2 stayed down entirely in that state.
 		params := &nodes.CreateNetworkParams{
-			Iface: b.Name, Type: "bond", Slaves: netPtr(wantSlaves), BondMode: netPtr(b.Mode),
-			Autostart: netPtr(true),
+			Iface: b.Name, Type: "bond", Slaves: new(wantSlaves), BondMode: new(b.Mode),
+			Autostart: new(true),
 		}
 		if b.Primary != "" {
-			params.BondPrimary = netPtr(b.Primary)
+			params.BondPrimary = new(b.Primary)
 		}
 		if err := api.Nodes.CreateNetwork(ctx, nodeName, params); err != nil {
 			return false, nil, fmt.Errorf("node %q: create bond %q: %w", nodeName, b.Name, err)
@@ -1147,19 +1147,19 @@ func hostnetEnsureBond(ctx context.Context, api *apiclient.APIClient, nodeName s
 	params := &nodes.UpdateNetwork2Params{Type: "bond"}
 	drifted := false
 	if !hostnetFieldsEqual(cur.Slaves, wantSlaves) {
-		params.Slaves = netPtr(wantSlaves)
+		params.Slaves = new(wantSlaves)
 		drifted = true
 	}
 	if cur.BondMode != b.Mode {
-		params.BondMode = netPtr(b.Mode)
+		params.BondMode = new(b.Mode)
 		drifted = true
 	}
 	if b.Primary != "" && cur.BondPrimary != b.Primary {
-		params.BondPrimary = netPtr(b.Primary)
+		params.BondPrimary = new(b.Primary)
 		drifted = true
 	}
 	if cur.Autostart == 0 {
-		params.Autostart = netPtr(true)
+		params.Autostart = new(true)
 		drifted = true
 	}
 	if !drifted {
@@ -1191,10 +1191,10 @@ func hostnetEnsureBridge(ctx context.Context, api *apiclient.APIClient, nodeName
 		// on az1: vmbr1/vmbr2 existed as correct stanzas but had no `auto`
 		// line and no live link at all).
 		params := &nodes.CreateNetworkParams{
-			Iface: b.Bridge, Type: "bridge", BridgePorts: netPtr(b.Name), Autostart: netPtr(true),
+			Iface: b.Bridge, Type: "bridge", BridgePorts: new(b.Name), Autostart: new(true),
 		}
 		if b.VlanAware {
-			params.BridgeVlanAware = netPtr(true)
+			params.BridgeVlanAware = new(true)
 		}
 		if err := api.Nodes.CreateNetwork(ctx, nodeName, params); err != nil {
 			return false, nil, fmt.Errorf("node %q: create bridge %q: %w", nodeName, b.Bridge, err)
@@ -1211,15 +1211,15 @@ func hostnetEnsureBridge(ctx context.Context, api *apiclient.APIClient, nodeName
 	params := &nodes.UpdateNetwork2Params{Type: "bridge"}
 	drifted := false
 	if !hostnetFieldsEqual(cur.BridgePorts, b.Name) {
-		params.BridgePorts = netPtr(b.Name)
+		params.BridgePorts = new(b.Name)
 		drifted = true
 	}
 	if (cur.BridgeVlanAware != 0) != b.VlanAware {
-		params.BridgeVlanAware = netPtr(b.VlanAware)
+		params.BridgeVlanAware = new(b.VlanAware)
 		drifted = true
 	}
 	if cur.Autostart == 0 {
-		params.Autostart = netPtr(true)
+		params.Autostart = new(true)
 		drifted = true
 	}
 	if !drifted {

@@ -115,10 +115,10 @@ func newPbsDatastoreNamespacesCmd() *cobra.Command {
 
 			params := &pdmpbs.ListRemotesDatastoreNamespacesParams{}
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 			if fl.Changed("parent") {
-				params.Parent = strPtr(parent)
+				params.Parent = new(parent)
 			}
 
 			resp, err := deps.PDM.Pbs.ListRemotesDatastoreNamespaces(cmd.Context(), remote, datastore, params)
@@ -187,7 +187,7 @@ func newPbsDatastoreSnapshotsCmd() *cobra.Command {
 
 			params := &pdmpbs.ListRemotesDatastoreSnapshotsParams{}
 			if cmd.Flags().Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			resp, err := deps.PDM.Pbs.ListRemotesDatastoreSnapshots(cmd.Context(), remote, datastore, params)

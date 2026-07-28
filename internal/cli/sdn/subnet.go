@@ -93,10 +93,10 @@ func newSubnetShowCmd() *cobra.Command {
 			params := &cluster.GetSdnVnetsSubnetsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.GetSdnVnetsSubnets(cmd.Context(), vnet, subnet, params)
 			if err != nil {
@@ -144,28 +144,28 @@ func newSubnetSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnVnetsSubnetsParams{}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("dhcp-dns-server") {
-				params.DhcpDnsServer = strPtr(dhcpDnsServer)
+				params.DhcpDnsServer = new(dhcpDnsServer)
 			}
 			if fl.Changed("dhcp-range") {
 				params.DhcpRange = dhcpRange
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("dnszoneprefix") {
-				params.Dnszoneprefix = strPtr(dnszoneprefix)
+				params.Dnszoneprefix = new(dnszoneprefix)
 			}
 			if fl.Changed("gateway") {
-				params.Gateway = strPtr(gateway)
+				params.Gateway = new(gateway)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if fl.Changed("snat") {
-				params.Snat = boolPtr(snat)
+				params.Snat = new(snat)
 			}
 			if err := deps.API.Cluster.UpdateSdnVnetsSubnets(cmd.Context(), vnet, subnet, params); err != nil {
 				return fmt.Errorf("update subnet %q on vnet %q: %w", subnet, vnet, err)
@@ -208,10 +208,10 @@ func newSubnetListCmd() *cobra.Command {
 			params := &cluster.ListSdnVnetsSubnetsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnVnetsSubnets(cmd.Context(), vnet, params)
 			if err != nil {
@@ -265,22 +265,22 @@ func newSubnetCreateCmd() *cobra.Command {
 			params := &cluster.CreateSdnVnetsSubnetsParams{Subnet: cidr, Type: "subnet"}
 			fl := cmd.Flags()
 			if fl.Changed("gateway") {
-				params.Gateway = strPtr(gateway)
+				params.Gateway = new(gateway)
 			}
 			if fl.Changed("snat") {
-				params.Snat = boolPtr(snat)
+				params.Snat = new(snat)
 			}
 			if fl.Changed("dhcp-dns-server") {
-				params.DhcpDnsServer = strPtr(dhcpDnsServer)
+				params.DhcpDnsServer = new(dhcpDnsServer)
 			}
 			if fl.Changed("dhcp-range") {
 				params.DhcpRange = dhcpRange
 			}
 			if fl.Changed("dnszoneprefix") {
-				params.Dnszoneprefix = strPtr(dnszoneprefix)
+				params.Dnszoneprefix = new(dnszoneprefix)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 
 			if err := deps.API.Cluster.CreateSdnVnetsSubnets(cmd.Context(), vnet, params); err != nil {
@@ -327,7 +327,7 @@ func newSubnetDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnVnetsSubnetsParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			err = deps.API.Cluster.DeleteSdnVnetsSubnets(cmd.Context(), vnet, subnet, params)
 			if err != nil {

@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -66,39 +67,39 @@ func newVerifyRunCmd() *cobra.Command {
 			params := &pbsadmin.CreateDatastoreVerifyParams{}
 
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			if fl.Changed("backup-type") {
-				params.BackupType = strPtr(backupType)
+				params.BackupType = new(backupType)
 			}
 
 			if fl.Changed("backup-id") {
-				params.BackupId = strPtr(backupID)
+				params.BackupId = new(backupID)
 			}
 
 			if fl.Changed("backup-time") {
-				params.BackupTime = int64Ptr(backupTime)
+				params.BackupTime = new(backupTime)
 			}
 
 			if fl.Changed("ignore-verified") {
-				params.IgnoreVerified = boolPtr(ignoreVerified)
+				params.IgnoreVerified = new(ignoreVerified)
 			}
 
 			if fl.Changed("outdated-after") {
-				params.OutdatedAfter = int64Ptr(outdatedAfter)
+				params.OutdatedAfter = new(outdatedAfter)
 			}
 
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 
 			if fl.Changed("read-threads") {
-				params.ReadThreads = int64Ptr(readThreads)
+				params.ReadThreads = new(readThreads)
 			}
 
 			if fl.Changed("verify-threads") {
-				params.VerifyThreads = int64Ptr(verifyThreads)
+				params.VerifyThreads = new(verifyThreads)
 			}
 
 			resp, err := deps.PBS.Admin.CreateDatastoreVerify(cmd.Context(), store, params)
@@ -351,35 +352,35 @@ func newVerifyJobAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("schedule") {
-				params.Schedule = strPtr(schedule)
+				params.Schedule = new(schedule)
 			}
 
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 
 			if fl.Changed("outdated-after") {
-				params.OutdatedAfter = int64Ptr(outdatedAfter)
+				params.OutdatedAfter = new(outdatedAfter)
 			}
 
 			if fl.Changed("read-threads") {
-				params.ReadThreads = int64Ptr(readThreads)
+				params.ReadThreads = new(readThreads)
 			}
 
 			if fl.Changed("verify-threads") {
-				params.VerifyThreads = int64Ptr(verifyThreads)
+				params.VerifyThreads = new(verifyThreads)
 			}
 
 			if fl.Changed("ignore-verified") {
-				params.IgnoreVerified = boolPtr(ignoreVerified)
+				params.IgnoreVerified = new(ignoreVerified)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			err := deps.PBS.Config.CreateVerify(cmd.Context(), params)
@@ -442,50 +443,48 @@ func newVerifyJobUpdateCmd() *cobra.Command {
 			params := &pbsconfig.UpdateVerifyParams{}
 
 			if fl.Changed("store") {
-				params.Store = strPtr(store)
+				params.Store = new(store)
 			}
 
 			if fl.Changed("schedule") {
-				params.Schedule = strPtr(schedule)
+				params.Schedule = new(schedule)
 			}
 
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 
 			if fl.Changed("outdated-after") {
-				params.OutdatedAfter = int64Ptr(outdatedAfter)
+				params.OutdatedAfter = new(outdatedAfter)
 			}
 
 			if fl.Changed("read-threads") {
-				params.ReadThreads = int64Ptr(readThreads)
+				params.ReadThreads = new(readThreads)
 			}
 
 			if fl.Changed("verify-threads") {
-				params.VerifyThreads = int64Ptr(verifyThreads)
+				params.VerifyThreads = new(verifyThreads)
 			}
 
 			if fl.Changed("ignore-verified") {
-				params.IgnoreVerified = boolPtr(ignoreVerified)
+				params.IgnoreVerified = new(ignoreVerified)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("delete") {
-				for _, name := range del {
-					if name == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 
 				params.Delete = del
@@ -541,7 +540,7 @@ func newVerifyJobDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteVerifyParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteVerify(cmd.Context(), id, params)

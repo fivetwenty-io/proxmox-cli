@@ -157,7 +157,7 @@ func newTapeDriveOpUnloadCmd() *cobra.Command {
 
 			params := &pbstape.CreateDriveUnloadParams{}
 			if cmd.Flags().Changed("slot") {
-				params.TargetSlot = int64Ptr(slot)
+				params.TargetSlot = new(slot)
 			}
 
 			resp, err := deps.PBS.Tape.CreateDriveUnload(cmd.Context(), drive, params)
@@ -325,15 +325,15 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 			fl := cmd.Flags()
 			params := &pbstape.CreateDriveFormatMediaParams{}
 			if fl.Changed("fast") {
-				params.Fast = boolPtr(fast)
+				params.Fast = new(fast)
 			}
 
 			if fl.Changed("label-text") {
-				params.LabelText = strPtr(labelText)
+				params.LabelText = new(labelText)
 			}
 
 			if fl.Changed("load-barcode") {
-				params.LoadBarcode = strPtr(loadBarcode)
+				params.LoadBarcode = new(loadBarcode)
 			}
 
 			resp, err := deps.PBS.Tape.CreateDriveFormatMedia(cmd.Context(), drive, params)
@@ -386,7 +386,7 @@ func newTapeDriveOpLabelCmd() *cobra.Command {
 
 			params := &pbstape.CreateDriveLabelMediaParams{LabelText: labelText}
 			if cmd.Flags().Changed("pool") {
-				params.Pool = strPtr(pool)
+				params.Pool = new(pool)
 			}
 
 			resp, err := deps.PBS.Tape.CreateDriveLabelMedia(cmd.Context(), drive, params)
@@ -435,7 +435,7 @@ func newTapeDriveOpBarcodeLabelCmd() *cobra.Command {
 
 			params := &pbstape.CreateDriveBarcodeLabelMediaParams{}
 			if cmd.Flags().Changed("pool") {
-				params.Pool = strPtr(pool)
+				params.Pool = new(pool)
 			}
 
 			resp, err := deps.PBS.Tape.CreateDriveBarcodeLabelMedia(cmd.Context(), drive, params)
@@ -485,15 +485,15 @@ func newTapeDriveOpCatalogCmd() *cobra.Command {
 			fl := cmd.Flags()
 			params := &pbstape.CreateDriveCatalogParams{}
 			if fl.Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 
 			if fl.Changed("scan") {
-				params.Scan = boolPtr(scan)
+				params.Scan = new(scan)
 			}
 
 			if fl.Changed("verbose") {
-				params.Verbose = boolPtr(verbose)
+				params.Verbose = new(verbose)
 			}
 
 			resp, err := deps.PBS.Tape.CreateDriveCatalog(cmd.Context(), drive, params)
@@ -612,11 +612,11 @@ func newTapeDriveOpUpdateInventoryCmd() *cobra.Command {
 			fl := cmd.Flags()
 			params := &pbstape.UpdateDriveInventoryParams{}
 			if fl.Changed("catalog") {
-				params.Catalog = boolPtr(catalog)
+				params.Catalog = new(catalog)
 			}
 
 			if fl.Changed("read-all-labels") {
-				params.ReadAllLabels = boolPtr(readAllLabels)
+				params.ReadAllLabels = new(readAllLabels)
 			}
 
 			resp, err := deps.PBS.Tape.UpdateDriveInventory(cmd.Context(), drive, params)

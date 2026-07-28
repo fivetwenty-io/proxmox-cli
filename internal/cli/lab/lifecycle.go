@@ -188,7 +188,7 @@ func (t lifecycleTarget) lookup(classified []classifiedLabVM) (labVM, bool) {
 func lifecycleTargetsForLab(l *config.Lab) []lifecycleTarget {
 	n := config.EffectiveTopologyNodes(l.Topology)
 	targets := make([]lifecycleTarget, 0, n+1)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		targets = append(targets, lifecycleTarget{label: strconv.Itoa(i), isNode: true, index: i})
 	}
 	if config.QdeviceRequired(l.Topology) {

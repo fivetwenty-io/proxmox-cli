@@ -297,13 +297,13 @@ func labZoneCreateParams(net config.LabNetwork, node string, mtu int64) *cluster
 	params := &cluster.CreateSdnZonesParams{
 		Zone:  labZoneName(net),
 		Type:  labZoneType(net),
-		Nodes: netPtr(node),
+		Nodes: new(node),
 	}
 	if peers := labZonePeers(net); peers != "" {
-		params.Peers = netPtr(peers)
+		params.Peers = new(peers)
 	}
 	if mtu > 0 {
-		params.Mtu = netPtr(mtu)
+		params.Mtu = new(mtu)
 	}
 	return params
 }
@@ -344,15 +344,15 @@ func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, net config.
 	changed := false
 
 	if mtu > 0 && existing.Mtu != mtu {
-		params.Mtu = netPtr(mtu)
+		params.Mtu = new(mtu)
 		changed = true
 	}
 	if peers := labZonePeers(net); peers != "" && existing.Peers != peers {
-		params.Peers = netPtr(peers)
+		params.Peers = new(peers)
 		changed = true
 	}
 	if node != "" && !nodeListContains(existing.Nodes, node) {
-		params.Nodes = netPtr(nodeListAdd(existing.Nodes, node))
+		params.Nodes = new(nodeListAdd(existing.Nodes, node))
 		changed = true
 	}
 	if !changed {
@@ -419,10 +419,10 @@ func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneN
 	if !found {
 		params := &cluster.CreateSdnVnetsParams{Vnet: vnetID, Zone: zoneName}
 		if tagAllowed && tag64 != 0 {
-			params.Tag = netPtr(tag64)
+			params.Tag = new(tag64)
 		}
 		if alias != "" {
-			params.Alias = netPtr(alias)
+			params.Alias = new(alias)
 		}
 		if err := api.Cluster.CreateSdnVnets(ctx, params); err != nil {
 			return fmt.Errorf("create SDN vnet %q: %w", vnetID, err)
@@ -432,15 +432,15 @@ func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneN
 		changed := false
 
 		if existing.Zone != zoneName {
-			params.Zone = netPtr(zoneName)
+			params.Zone = new(zoneName)
 			changed = true
 		}
 		if tagAllowed && tag64 != 0 && existing.Tag != tag64 {
-			params.Tag = netPtr(tag64)
+			params.Tag = new(tag64)
 			changed = true
 		}
 		if alias != "" && existing.Alias != alias {
-			params.Alias = netPtr(alias)
+			params.Alias = new(alias)
 			changed = true
 		}
 		if changed {
@@ -478,7 +478,7 @@ func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID,
 	if !found {
 		params := &cluster.CreateSdnVnetsSubnetsParams{Subnet: cidr, Type: "subnet"}
 		if gateway != "" {
-			params.Gateway = netPtr(gateway)
+			params.Gateway = new(gateway)
 		}
 		if err := api.Cluster.CreateSdnVnetsSubnets(ctx, vnetID, params); err != nil {
 			return fmt.Errorf("create subnet %q on vnet %q: %w", cidr, vnetID, err)
@@ -490,7 +490,7 @@ func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID,
 		return nil
 	}
 
-	params := &cluster.UpdateSdnVnetsSubnetsParams{Gateway: netPtr(gateway)}
+	params := &cluster.UpdateSdnVnetsSubnetsParams{Gateway: new(gateway)}
 	if err := api.Cluster.UpdateSdnVnetsSubnets(ctx, vnetID, existing.Subnet, params); err != nil {
 		return fmt.Errorf("update subnet %q on vnet %q: %w", existing.Subnet, vnetID, err)
 	}
@@ -538,7 +538,7 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 // nodeListContains reports whether node appears verbatim in a
 // comma-separated PVE node-name list (e.g. a zone's "nodes" field).
 func nodeListContains(nodes, node string) bool {
-	for _, n := range strings.Split(nodes, ",") {
+	for n := range strings.SplitSeq(nodes, ",") {
 		if strings.TrimSpace(n) == node {
 			return true
 		}
@@ -556,11 +556,4 @@ func nodeListAdd(nodes, node string) string {
 		return nodes
 	}
 	return nodes + "," + node
-}
-
-// netPtr returns a pointer to a copy of v, for populating the optional
-// *T-typed fields of the generated SDN request param structs from a plain
-// value.
-func netPtr[T any](v T) *T {
-	return &v
 }

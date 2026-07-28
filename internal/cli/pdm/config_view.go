@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -151,10 +152,10 @@ func newConfigViewAddCmd() *cobra.Command {
 				params.Exclude = exclude
 			}
 			if fl.Changed("include-all") {
-				params.IncludeAll = boolPtr(includeAll)
+				params.IncludeAll = new(includeAll)
 			}
 			if fl.Changed("layout") {
-				params.Layout = strPtr(layout)
+				params.Layout = new(layout)
 			}
 
 			err := deps.PDM.Config.CreateViews(cmd.Context(), params)
@@ -204,10 +205,8 @@ func newConfigViewUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -219,16 +218,16 @@ func newConfigViewUpdateCmd() *cobra.Command {
 				params.Exclude = exclude
 			}
 			if fl.Changed("include-all") {
-				params.IncludeAll = boolPtr(includeAll)
+				params.IncludeAll = new(includeAll)
 			}
 			if fl.Changed("layout") {
-				params.Layout = strPtr(layout)
+				params.Layout = new(layout)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.UpdateViews(cmd.Context(), id, params)
@@ -274,7 +273,7 @@ func newConfigViewDeleteCmd() *cobra.Command {
 
 			params := &pdmconfig.DeleteViewsParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.DeleteViews(cmd.Context(), id, params)

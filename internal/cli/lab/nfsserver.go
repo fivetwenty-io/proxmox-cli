@@ -287,7 +287,7 @@ func nfsSharedIsoContainsSubnet(current, mgmtCIDR string) (bool, error) {
 		return false, errNFSSharedIsoUnrecognizedShape
 	}
 	token := "@" + mgmtCIDR
-	for _, t := range strings.Split(m[1], ":") {
+	for t := range strings.SplitSeq(m[1], ":") {
 		if t == token {
 			return true, nil
 		}

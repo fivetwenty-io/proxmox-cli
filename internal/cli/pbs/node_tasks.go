@@ -78,34 +78,34 @@ func newNodeTasksLsCmd(nf *nodeFlags) *cobra.Command {
 
 			params := &pbsnodes.ListTasksParams{}
 			if fl.Changed("errors") {
-				params.Errors = boolPtr(errorsOnly)
+				params.Errors = new(errorsOnly)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			if fl.Changed("limit") {
-				params.Limit = int64Ptr(limit)
+				params.Limit = new(limit)
 			}
 			if fl.Changed("start") {
-				params.Start = int64Ptr(start)
+				params.Start = new(start)
 			}
 			if fl.Changed("since") {
-				params.Since = int64Ptr(since)
+				params.Since = new(since)
 			}
 			if fl.Changed("until") {
-				params.Until = int64Ptr(until)
+				params.Until = new(until)
 			}
 			if fl.Changed("status") {
 				params.Statusfilter = statusfilter
 			}
 			if fl.Changed("store") {
-				params.Store = strPtr(store)
+				params.Store = new(store)
 			}
 			if fl.Changed("type") {
-				params.Typefilter = strPtr(typefilter)
+				params.Typefilter = new(typefilter)
 			}
 			if fl.Changed("user") {
-				params.Userfilter = strPtr(userfilter)
+				params.Userfilter = new(userfilter)
 			}
 
 			resp, err := deps.PBS.Nodes.ListTasks(cmd.Context(), nf.node, params)
@@ -218,7 +218,7 @@ func newNodeTasksLogCmd(nf *nodeFlags) *cobra.Command {
 			upid := args[0]
 			fl := cmd.Flags()
 
-			body := map[string]interface{}{}
+			body := map[string]any{}
 			if fl.Changed("start") {
 				body["start"] = start
 			}

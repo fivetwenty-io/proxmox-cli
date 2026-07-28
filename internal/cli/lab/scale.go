@@ -3,6 +3,7 @@ package lab
 import (
 	"context"
 	"fmt"
+	"maps"
 	"regexp"
 	"sort"
 	"strconv"
@@ -276,9 +277,7 @@ func scaleEffectiveLab(lab *config.Lab, targetNodes int, qdeviceFlag string, qde
 	eff := *lab
 	if lab.Topology.NodeOverrides != nil {
 		eff.Topology.NodeOverrides = make(map[int]config.LabNodeOverride, len(lab.Topology.NodeOverrides))
-		for k, v := range lab.Topology.NodeOverrides {
-			eff.Topology.NodeOverrides[k] = v
-		}
+		maps.Copy(eff.Topology.NodeOverrides, lab.Topology.NodeOverrides)
 	}
 	eff.Topology.Nodes = targetNodes
 	if qdeviceChanged {
@@ -298,9 +297,7 @@ func scaleCopyLabWithTopology(lab *config.Lab, nodes int, qdevice string) *confi
 	lc := *lab
 	if lab.Topology.NodeOverrides != nil {
 		lc.Topology.NodeOverrides = make(map[int]config.LabNodeOverride, len(lab.Topology.NodeOverrides))
-		for k, v := range lab.Topology.NodeOverrides {
-			lc.Topology.NodeOverrides[k] = v
-		}
+		maps.Copy(lc.Topology.NodeOverrides, lab.Topology.NodeOverrides)
 	}
 	lc.Topology.Nodes = nodes
 	lc.Topology.Qdevice = qdevice
@@ -375,10 +372,7 @@ func scaleCurrentMembership(deps *cli.Deps, lab *config.Lab, node0IP string) (cu
 			"node 0 (%s) is already part of a DIFFERENT cluster (%q); refusing to scale", node0IP, st.ClusterName)
 	}
 
-	n := st.NodeCount
-	if n < 1 {
-		n = 1
-	}
+	n := max(st.NodeCount, 1)
 	return n, st.HasQdevice, st.Quorate, nil
 }
 
@@ -412,7 +406,7 @@ func scaleRenameLegacyNodeZero(ctx context.Context, deps *cli.Deps, lab *config.
 	}
 
 	vmidStr := strconv.FormatInt(vm.VMID, 10)
-	if err := deps.API.Nodes.UpdateQemuConfig(ctx, vm.Node, vmidStr, &nodes.UpdateQemuConfigParams{Name: createPtr(newName)}); err != nil {
+	if err := deps.API.Nodes.UpdateQemuConfig(ctx, vm.Node, vmidStr, &nodes.UpdateQemuConfigParams{Name: new(newName)}); err != nil {
 		return "", fmt.Errorf("rename legacy VM %d (%q) to %q on node %q: %w", vm.VMID, legacyName, newName, vm.Node, err)
 	}
 
@@ -717,7 +711,7 @@ func executeScalePlan(
 	finalN := config.EffectiveTopologyNodes(eff.Topology)
 	if finalN >= 2 {
 		peerIPs := make([]string, 0, finalN)
-		for i := 0; i < finalN; i++ {
+		for i := range finalN {
 			ip, err := labNodeMgmtIP(lab.Network, i)
 			if err != nil {
 				return nil, fmt.Errorf("resolve node %d mgmt IP: %w", i, err)
@@ -759,7 +753,7 @@ func executeScalePlan(
 	// names is deliberately not automated here (milestone QA, first live
 	// exercise: the M6 pve-cpi capstone — see this command's Long help).
 	allHealthy := true
-	for i := 0; i < finalN; i++ {
+	for i := range finalN {
 		nodeIP, err := labNodeMgmtIP(lab.Network, i)
 		if err != nil {
 			return nil, fmt.Errorf("resolve node %d mgmt IP: %w", i, err)

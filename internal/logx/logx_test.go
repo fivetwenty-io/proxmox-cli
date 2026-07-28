@@ -239,7 +239,6 @@ func TestInit_LevelStringDebug(t *testing.T) {
 	t.Parallel()
 
 	for _, lvl := range []string{"trace", "verbose", "debug"} {
-		lvl := lvl
 		t.Run(lvl, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -282,7 +281,6 @@ func TestLogPath(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.wantPrefix, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -373,7 +371,6 @@ func TestLevelVar(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			v := logx.LevelVar(tc.cfg)
@@ -477,7 +474,6 @@ func TestInit_WarnLevelSuppressesInfo(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.level, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()

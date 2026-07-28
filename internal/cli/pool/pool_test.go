@@ -389,7 +389,6 @@ func TestPoolDeleteConfirmPromptToStderr(t *testing.T) {
 // library's delete method cannot express member destruction.
 func TestPoolDeleteRejectsDestroyFlags(t *testing.T) {
 	for _, flag := range []string{"--destroy-vms", "--destroy-storage"} {
-		flag := flag
 		t.Run(flag, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
 			var rec []recordedRequest

@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -367,10 +368,8 @@ func newRealmOpenidUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, key := range of.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(of.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -417,7 +416,7 @@ func newRealmOpenidDeleteCmd() *cobra.Command {
 
 			params := &pdmconfig.DeleteAccessOpenidParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.DeleteAccessOpenid(cmd.Context(), realm, params)

@@ -43,7 +43,7 @@ func newBulkCmd() *cobra.Command {
 // fields are ignored so trailing commas and spacing do not cause errors.
 func parseVMIDs(s string) ([]int64, error) {
 	var out []int64
-	for _, part := range strings.Split(s, ",") {
+	for part := range strings.SplitSeq(s, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

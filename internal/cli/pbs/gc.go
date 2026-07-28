@@ -230,7 +230,7 @@ func newGcLsCmd() *cobra.Command {
 
 			params := &pbsadmin.ListGcParams{}
 			if cmd.Flags().Changed("store") {
-				params.Store = strPtr(store)
+				params.Store = new(store)
 			}
 
 			resp, err := deps.PBS.Admin.ListGc(cmd.Context(), params)

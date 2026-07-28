@@ -221,7 +221,7 @@ func newNodeRrdCmd(nf *nodeFlags) *cobra.Command {
 			}
 
 			path := fmt.Sprintf("/nodes/%s/rrd", url.PathEscape(nf.node))
-			params := map[string]interface{}{"cf": cf, "timeframe": timeframe}
+			params := map[string]any{"cf": cf, "timeframe": timeframe}
 
 			resp, err := deps.PBS.Raw.GetRawCtx(cmd.Context(), path, params)
 			if err != nil {
@@ -292,7 +292,7 @@ func newNodeReportCmd(nf *nodeFlags) *cobra.Command {
 // "null" rather than an error, since some endpoints legitimately return no
 // data on success.
 func nodeRawCall(
-	ctx context.Context, deps *cli.Deps, method, path string, body map[string]interface{},
+	ctx context.Context, deps *cli.Deps, method, path string, body map[string]any,
 ) (json.RawMessage, error) {
 	var (
 		resp *pve.Response
@@ -391,7 +391,7 @@ func nodeDecodeText(raw json.RawMessage) (string, error) {
 // endpoints whose generated binding discards the response body) and renders
 // the outcome through finishAsync, honouring --async.
 func nodeFinishAsync(
-	cmd *cobra.Command, deps *cli.Deps, method, path string, body map[string]interface{}, msg string,
+	cmd *cobra.Command, deps *cli.Deps, method, path string, body map[string]any, msg string,
 ) error {
 	raw, err := nodeRawCall(cmd.Context(), deps, method, path, body)
 	if err != nil {

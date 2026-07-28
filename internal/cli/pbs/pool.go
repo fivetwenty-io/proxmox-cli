@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -180,23 +181,23 @@ func (pf *tapePoolFlags) registerUpdate(cmd *cobra.Command) {
 func (pf *tapePoolFlags) applyAdd(cmd *cobra.Command, p *pbsconfig.CreateMediaPoolParams) {
 	fl := cmd.Flags()
 	if fl.Changed("allocation") {
-		p.Allocation = strPtr(pf.allocation)
+		p.Allocation = new(pf.allocation)
 	}
 
 	if fl.Changed("comment") {
-		p.Comment = strPtr(pf.comment)
+		p.Comment = new(pf.comment)
 	}
 
 	if fl.Changed("encrypt") {
-		p.Encrypt = strPtr(pf.encrypt)
+		p.Encrypt = new(pf.encrypt)
 	}
 
 	if fl.Changed("retention") {
-		p.Retention = strPtr(pf.retention)
+		p.Retention = new(pf.retention)
 	}
 
 	if fl.Changed("template") {
-		p.Template = strPtr(pf.template)
+		p.Template = new(pf.template)
 	}
 }
 
@@ -204,23 +205,23 @@ func (pf *tapePoolFlags) applyAdd(cmd *cobra.Command, p *pbsconfig.CreateMediaPo
 func (pf *tapePoolFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateMediaPoolParams) {
 	fl := cmd.Flags()
 	if fl.Changed("allocation") {
-		p.Allocation = strPtr(pf.allocation)
+		p.Allocation = new(pf.allocation)
 	}
 
 	if fl.Changed("comment") {
-		p.Comment = strPtr(pf.comment)
+		p.Comment = new(pf.comment)
 	}
 
 	if fl.Changed("encrypt") {
-		p.Encrypt = strPtr(pf.encrypt)
+		p.Encrypt = new(pf.encrypt)
 	}
 
 	if fl.Changed("retention") {
-		p.Retention = strPtr(pf.retention)
+		p.Retention = new(pf.retention)
 	}
 
 	if fl.Changed("template") {
-		p.Template = strPtr(pf.template)
+		p.Template = new(pf.template)
 	}
 
 	if fl.Changed("delete") {
@@ -288,10 +289,8 @@ func newTapePoolUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, prop := range pf.del {
-					if prop == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(pf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 

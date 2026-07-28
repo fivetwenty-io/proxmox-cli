@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -757,10 +758,5 @@ func anyCell(v any) string {
 
 // anyFlagChanged reports whether at least one of the named flags was set.
 func anyFlagChanged(fl interface{ Changed(string) bool }, names ...string) bool {
-	for _, n := range names {
-		if fl.Changed(n) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(names, fl.Changed)
 }

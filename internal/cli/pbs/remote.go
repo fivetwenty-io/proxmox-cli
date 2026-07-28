@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -289,10 +290,8 @@ func newRemoteUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, key := range rf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(rf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -336,7 +335,7 @@ func newRemoteDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteRemoteParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteRemote(cmd.Context(), name, params)
@@ -461,7 +460,7 @@ func newRemoteScanGroupsCmd() *cobra.Command {
 
 			params := &pbsconfig.ListRemoteScanGroupsParams{}
 			if cmd.Flags().Changed("namespace") {
-				params.Namespace = strPtr(namespace)
+				params.Namespace = new(namespace)
 			}
 
 			resp, err := deps.PBS.Config.ListRemoteScanGroups(cmd.Context(), name, store, params)

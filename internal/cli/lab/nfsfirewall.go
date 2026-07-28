@@ -191,12 +191,12 @@ func nfsEnsureFirewallRules(ctx context.Context, deps *cli.Deps, plan nfsServerE
 		params := &nodes.CreateFirewallRulesParams{
 			Type:    "in",
 			Action:  "ACCEPT",
-			Proto:   createPtr("tcp"),
-			Dport:   createPtr(p.port),
-			Source:  createPtr(plan.mgmtCIDR),
-			Enable:  createPtr(int64(1)),
-			Log:     createPtr("nolog"),
-			Comment: createPtr(comment),
+			Proto:   new("tcp"),
+			Dport:   new(p.port),
+			Source:  new(plan.mgmtCIDR),
+			Enable:  new(int64(1)),
+			Log:     new("nolog"),
+			Comment: new(comment),
 		}
 		if cerr := deps.API.Nodes.CreateFirewallRules(ctx, deps.Node, params); cerr != nil {
 			return nil, fmt.Errorf("create host firewall rule %q on node %q: %w", comment, deps.Node, cerr)

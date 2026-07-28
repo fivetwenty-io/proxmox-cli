@@ -324,7 +324,7 @@ func TestNodeSpiceshell_APIError(t *testing.T) {
 // file path value. Returns empty string when not found.
 func extractVVPath(t *testing.T, out string) string {
 	t.Helper()
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(line, "vv-file") {
 			// Table format: "vv-file   /tmp/pve-spice-*.vv"
 			// Single format: key = value

@@ -650,7 +650,6 @@ func TestNodeServices_BlockingSuccessMessagePerVerb(t *testing.T) {
 		{"reload", "srvreload", "reloaded"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.verb, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
 			upid := "UPID:pve1:00000001:00000002:AABBCCDD:" + tc.taskType + ":pveproxy:root@pam:"

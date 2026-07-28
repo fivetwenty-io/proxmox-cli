@@ -408,7 +408,7 @@ func (sf *storageFlags) applyCreate(cmd *cobra.Command, p *clusterstorage.Create
 	str("nodes", &sf.nodes, &p.Nodes)
 	bl("shared", &sf.shared, &p.Shared)
 	if fl.Changed("enabled") {
-		p.Disable = boolptr(!sf.enabled)
+		p.Disable = new(!sf.enabled)
 	}
 	str("username", &sf.username, &p.Username)
 	str("password", &sf.password, &p.Password)
@@ -481,7 +481,7 @@ func (sf *storageFlags) applyUpdate(cmd *cobra.Command, p *clusterstorage.Update
 	str("nodes", &sf.nodes, &p.Nodes)
 	bl("shared", &sf.shared, &p.Shared)
 	if fl.Changed("enabled") {
-		p.Disable = boolptr(!sf.enabled)
+		p.Disable = new(!sf.enabled)
 	}
 	str("username", &sf.username, &p.Username)
 	str("password", &sf.password, &p.Password)
@@ -640,9 +640,6 @@ func newDeleteCmd() *cobra.Command {
 }
 
 // --- helpers ---
-
-// boolptr returns a pointer to b.
-func boolptr(b bool) *bool { return &b }
 
 // boolCell renders a boolean as the conventional table cell text.
 func boolCell(b bool) string {

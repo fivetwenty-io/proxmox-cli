@@ -144,13 +144,13 @@ func newPbsTaskLogCmd() *cobra.Command {
 
 			params := &pdmpbs.ListRemotesTasksLogParams{}
 			if fl.Changed("start") {
-				params.Start = int64Ptr(start)
+				params.Start = new(start)
 			}
 			if fl.Changed("limit") {
-				params.Limit = int64Ptr(limit)
+				params.Limit = new(limit)
 			}
 			if fl.Changed("download") {
-				params.Download = boolPtr(download)
+				params.Download = new(download)
 			}
 
 			resp, err := deps.PDM.Pbs.ListRemotesTasksLog(cmd.Context(), remote, upid, params)

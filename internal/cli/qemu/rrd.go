@@ -36,7 +36,7 @@ func newRrdCmd() *cobra.Command {
 
 			params := &nodes.ListQemuRrdParams{Ds: ds, Timeframe: timeframe}
 			if cmd.Flags().Changed("cf") {
-				params.Cf = strPtr(cf)
+				params.Cf = new(cf)
 			}
 
 			resp, err := deps.API.Nodes.ListQemuRrd(cmd.Context(), node, vmid, params)

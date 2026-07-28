@@ -151,7 +151,7 @@ func TestStoragePrune_NullResult(t *testing.T) {
 	// row. A null result must produce neither: exactly one "│" line (the header)
 	// and no "├" separator, proving zero data rows were rendered.
 	var contentLines, separatorLines int
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(line, "│") {
 			contentLines++
 		}

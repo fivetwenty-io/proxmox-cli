@@ -3,6 +3,7 @@ package pdm
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,12 +23,7 @@ func anyFlagChanged(fl *pflag.FlagSet) bool {
 
 // stringInSlice reports whether v equals one of allowed.
 func stringInSlice(v string, allowed []string) bool {
-	for _, a := range allowed {
-		if v == a {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, v)
 }
 
 // rawItemsOf dereferences a *[]json.RawMessage-shaped response type, returning
@@ -143,9 +139,6 @@ func float64PtrString(p *float64) string {
 	return strconv.FormatFloat(*p, 'f', -1, 64)
 }
 
-// boolPtr returns a pointer to v.
-func boolPtr(v bool) *bool { return &v }
-
 // boolPtrString renders a possibly-nil *bool for a table cell.
 func boolPtrString(p *bool) string {
 	if p == nil {
@@ -153,12 +146,6 @@ func boolPtrString(p *bool) string {
 	}
 	return strconv.FormatBool(*p)
 }
-
-// strPtr returns a pointer to v.
-func strPtr(v string) *string { return &v }
-
-// int64Ptr returns a pointer to v.
-func int64Ptr(v int64) *int64 { return &v }
 
 // pveBoolPtrString renders a possibly-nil *pveclient.PVEBool for a table
 // cell. PVEBool tolerantly decodes both native JSON booleans and the PVE

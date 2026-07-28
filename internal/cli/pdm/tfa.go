@@ -181,9 +181,9 @@ func newTfaUpdateCmd() *cobra.Command {
 				return fmt.Errorf("update tfa entry %q for user %q: no changes requested: pass --description", id, userid)
 			}
 
-			params := &pdmaccess.UpdateTfaParams{Description: strPtr(description)}
+			params := &pdmaccess.UpdateTfaParams{Description: new(description)}
 			if cmd.Flags().Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PDM.Access.UpdateTfa(cmd.Context(), userid, id, params)
@@ -226,7 +226,7 @@ func newTfaDeleteCmd() *cobra.Command {
 
 			params := &pdmaccess.DeleteTfaParams{}
 			if cmd.Flags().Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PDM.Access.DeleteTfa(cmd.Context(), userid, id, params)

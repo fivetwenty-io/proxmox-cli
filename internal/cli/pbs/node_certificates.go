@@ -135,7 +135,7 @@ func newNodeCertificatesAcmeOrderCmd(nf *nodeFlags) *cobra.Command {
 					nf.node)
 			}
 
-			body := map[string]interface{}{}
+			body := map[string]any{}
 			if cmd.Flags().Changed("force") {
 				body["force"] = force
 			}
@@ -186,7 +186,7 @@ func newNodeCertificatesAcmeRenewCmd(nf *nodeFlags) *cobra.Command {
 					nf.node)
 			}
 
-			body := map[string]interface{}{}
+			body := map[string]any{}
 			if cmd.Flags().Changed("force") {
 				body["force"] = force
 			}

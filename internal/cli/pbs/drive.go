@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -82,10 +83,10 @@ func newTapeDriveLsCmd() *cobra.Command {
 
 			params := &pbstape.ListDriveParams{}
 			if fl.Changed("changer") {
-				params.Changer = strPtr(changer)
+				params.Changer = new(changer)
 			}
 			if fl.Changed("query-activity") {
-				params.QueryActivity = boolPtr(queryActivity)
+				params.QueryActivity = new(queryActivity)
 			}
 
 			resp, err := deps.PBS.Tape.ListDrive(cmd.Context(), params)
@@ -172,10 +173,10 @@ func newTapeDriveAddCmd() *cobra.Command {
 
 			params := &pbsconfig.CreateDriveParams{Name: name, Path: path}
 			if fl.Changed("changer") {
-				params.Changer = strPtr(changer)
+				params.Changer = new(changer)
 			}
 			if fl.Changed("changer-drivenum") {
-				params.ChangerDrivenum = int64Ptr(changerDrivenum)
+				params.ChangerDrivenum = new(changerDrivenum)
 			}
 
 			err := deps.PBS.Config.CreateDrive(cmd.Context(), params)
@@ -223,28 +224,26 @@ func newTapeDriveUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateDriveParams{}
 			if fl.Changed("path") {
-				params.Path = strPtr(path)
+				params.Path = new(path)
 			}
 			if fl.Changed("changer") {
-				params.Changer = strPtr(changer)
+				params.Changer = new(changer)
 			}
 			if fl.Changed("changer-drivenum") {
-				params.ChangerDrivenum = int64Ptr(changerDrivenum)
+				params.ChangerDrivenum = new(changerDrivenum)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.UpdateDrive(cmd.Context(), name, params)
@@ -488,7 +487,7 @@ func newTapeDriveReadLabelCmd() *cobra.Command {
 
 			params := &pbstape.ListDriveReadLabelParams{}
 			if cmd.Flags().Changed("inventorize") {
-				params.Inventorize = boolPtr(inventorize)
+				params.Inventorize = new(inventorize)
 			}
 
 			resp, err := deps.PBS.Tape.ListDriveReadLabel(cmd.Context(), drive, params)

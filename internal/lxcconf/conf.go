@@ -2,6 +2,7 @@ package lxcconf
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -44,7 +45,7 @@ func GetCaps(content string) (CapsState, error) {
 
 	var keep, drop []string
 	var sawKeep, sawDrop bool
-	for _, ln := range strings.Split(head, "\n") {
+	for ln := range strings.SplitSeq(head, "\n") {
 		key, val, ok := parseConfLine(ln)
 		if !ok {
 			continue
@@ -165,15 +166,15 @@ func splitHead(content string) (head, tail string) {
 // key, the value with only its leading separator space removed, and whether the
 // line is a well-formed key/value pair. Comment and blank lines return ok=false.
 func parseConfLine(line string) (key, val string, ok bool) {
-	colon := strings.IndexByte(line, ':')
-	if colon < 0 {
+	before, after, ok := strings.Cut(line, ":")
+	if !ok {
 		return "", "", false
 	}
-	key = strings.TrimSpace(line[:colon])
+	key = strings.TrimSpace(before)
 	if key == "" || strings.HasPrefix(key, "#") {
 		return "", "", false
 	}
-	val = strings.TrimSpace(line[colon+1:])
+	val = strings.TrimSpace(after)
 	return key, val, true
 }
 
@@ -197,7 +198,7 @@ func accumulateDrop(list []string, value string) []string {
 // token "none" resets the accumulated list (the LXC sentinel for "keep
 // nothing"); other tokens append, dropping duplicates.
 func accumulateKeep(list []string, value string) []string {
-	for _, tok := range strings.Fields(value) {
+	for tok := range strings.FieldsSeq(value) {
 		if tok == "none" {
 			list = nil
 			continue
@@ -210,13 +211,7 @@ func accumulateKeep(list []string, value string) []string {
 // appendUnique appends each item not already present, preserving order.
 func appendUnique(list []string, items ...string) []string {
 	for _, it := range items {
-		found := false
-		for _, existing := range list {
-			if existing == it {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(list, it)
 		if !found {
 			list = append(list, it)
 		}

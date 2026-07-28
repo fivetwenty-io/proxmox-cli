@@ -190,12 +190,6 @@ func TestRunHarness_ExecutesSubcommandAgainstFake(t *testing.T) {
 	require.Contains(t, buf.String(), "pong=true")
 }
 
-func TestPtrHelpers(t *testing.T) {
-	require.Equal(t, "x", *strPtr("x"))
-	require.True(t, *boolPtr(true))
-	require.Equal(t, int64(42), *int64Ptr(42))
-}
-
 func TestChildFactories_MatchesGroupChildrenAndExcludesShared(t *testing.T) {
 	deps := &cli.Deps{}
 	group := Group(deps)

@@ -66,7 +66,7 @@ func newEncKeyLsCmd() *cobra.Command {
 
 			params := &pbsconfig.ListEncryptionKeysParams{}
 			if cmd.Flags().Changed("include-archived") {
-				params.IncludeArchived = boolPtr(includeArchived)
+				params.IncludeArchived = new(includeArchived)
 			}
 
 			resp, err := deps.PBS.Config.ListEncryptionKeys(cmd.Context(), params)
@@ -127,7 +127,7 @@ func newEncKeyAddCmd() *cobra.Command {
 
 			params := &pbsconfig.CreateEncryptionKeysParams{Id: id}
 			if cmd.Flags().Changed("key") {
-				params.Key = strPtr(key)
+				params.Key = new(key)
 			}
 
 			err := deps.PBS.Config.CreateEncryptionKeys(cmd.Context(), params)
@@ -168,7 +168,7 @@ func newEncKeyDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteEncryptionKeysParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteEncryptionKeys(cmd.Context(), id, params)
@@ -213,7 +213,7 @@ func newEncKeyToggleArchiveCmd() *cobra.Command {
 
 			params := &pbsconfig.CreateEncryptionKeys2Params{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.CreateEncryptionKeys2(cmd.Context(), id, params)

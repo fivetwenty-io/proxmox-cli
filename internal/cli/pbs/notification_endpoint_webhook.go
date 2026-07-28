@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -239,15 +240,15 @@ func newNotifEndpointWebhookAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("body") {
-				params.Body = strPtr(wf.body)
+				params.Body = new(wf.body)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(wf.comment)
+				params.Comment = new(wf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(wf.disable)
+				params.Disable = new(wf.disable)
 			}
 
 			if fl.Changed("header") {
@@ -255,7 +256,7 @@ func newNotifEndpointWebhookAddCmd() *cobra.Command {
 			}
 
 			if fl.Changed("origin") {
-				params.Origin = strPtr(wf.origin)
+				params.Origin = new(wf.origin)
 			}
 
 			if fl.Changed("secret") {
@@ -304,33 +305,31 @@ func newNotifEndpointWebhookUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range wf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(wf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateNotificationsEndpointsWebhookParams{}
 
 			if fl.Changed("method") {
-				params.Method = strPtr(wf.method)
+				params.Method = new(wf.method)
 			}
 
 			if fl.Changed("url") {
-				params.Url = strPtr(wf.url)
+				params.Url = new(wf.url)
 			}
 
 			if fl.Changed("body") {
-				params.Body = strPtr(wf.body)
+				params.Body = new(wf.body)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(wf.comment)
+				params.Comment = new(wf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(wf.disable)
+				params.Disable = new(wf.disable)
 			}
 
 			if fl.Changed("header") {
@@ -346,7 +345,7 @@ func newNotifEndpointWebhookUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(wf.digest)
+				params.Digest = new(wf.digest)
 			}
 
 			err := deps.PBS.Config.UpdateNotificationsEndpointsWebhook(cmd.Context(), name, params)

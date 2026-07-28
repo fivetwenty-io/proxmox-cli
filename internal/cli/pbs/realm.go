@@ -149,16 +149,16 @@ func newRealmSyncCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("dry-run") {
-				params.DryRun = boolPtr(dryRun)
+				params.DryRun = new(dryRun)
 			}
 			if fl.Changed("enable-new") {
-				params.EnableNew = boolPtr(enableNew)
+				params.EnableNew = new(enableNew)
 			}
 			if fl.Changed("remove-vanished") {
 				if removeVanished == "" {
 					return fmt.Errorf("--remove-vanished: value must not be empty")
 				}
-				params.RemoveVanished = strPtr(removeVanished)
+				params.RemoveVanished = new(removeVanished)
 			}
 
 			resp, err := deps.PBS.Access.CreateDomainsSync(cmd.Context(), realm, params)

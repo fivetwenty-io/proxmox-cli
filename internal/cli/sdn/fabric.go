@@ -58,13 +58,13 @@ func (ff *fabricFlags) register(cmd *cobra.Command) {
 func (ff *fabricFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsFabricParams) {
 	f := fl.Flags()
 	if f.Changed("area") {
-		p.Area = strPtr(ff.area)
+		p.Area = new(ff.area)
 	}
 	if f.Changed("ip-prefix") {
-		p.IpPrefix = strPtr(ff.ipPrefix)
+		p.IpPrefix = new(ff.ipPrefix)
 	}
 	if f.Changed("ip6-prefix") {
-		p.Ip6Prefix = strPtr(ff.ip6Prefix)
+		p.Ip6Prefix = new(ff.ip6Prefix)
 	}
 	if f.Changed("hello-interval") {
 		p.HelloInterval = &ff.helloInterval
@@ -76,10 +76,10 @@ func (ff *fabricFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabric
 		p.PersistentKeepalive = &ff.persistentKeepalive
 	}
 	if f.Changed("route-filter") {
-		p.RouteFilter = strPtr(ff.routeFilter)
+		p.RouteFilter = new(ff.routeFilter)
 	}
 	if f.Changed("lock-token") {
-		p.LockToken = strPtr(ff.lockToken)
+		p.LockToken = new(ff.lockToken)
 	}
 	if f.Changed("redistribute") {
 		p.Redistribute = rawStringList(ff.redistVals)
@@ -89,13 +89,13 @@ func (ff *fabricFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabric
 func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsFabricParams) {
 	f := fl.Flags()
 	if f.Changed("area") {
-		p.Area = strPtr(ff.area)
+		p.Area = new(ff.area)
 	}
 	if f.Changed("ip-prefix") {
-		p.IpPrefix = strPtr(ff.ipPrefix)
+		p.IpPrefix = new(ff.ipPrefix)
 	}
 	if f.Changed("ip6-prefix") {
-		p.Ip6Prefix = strPtr(ff.ip6Prefix)
+		p.Ip6Prefix = new(ff.ip6Prefix)
 	}
 	if f.Changed("hello-interval") {
 		p.HelloInterval = &ff.helloInterval
@@ -107,10 +107,10 @@ func (ff *fabricFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabric
 		p.PersistentKeepalive = &ff.persistentKeepalive
 	}
 	if f.Changed("route-filter") {
-		p.RouteFilter = strPtr(ff.routeFilter)
+		p.RouteFilter = new(ff.routeFilter)
 	}
 	if f.Changed("lock-token") {
-		p.LockToken = strPtr(ff.lockToken)
+		p.LockToken = new(ff.lockToken)
 	}
 	if f.Changed("redistribute") {
 		p.Redistribute = rawStringList(ff.redistVals)
@@ -156,10 +156,10 @@ func newFabricListAllCmd() *cobra.Command {
 			params := &cluster.ListSdnFabricsAllParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnFabricsAll(cmd.Context(), params)
 			if err != nil {
@@ -200,10 +200,10 @@ func newFabricListCmd() *cobra.Command {
 			params := &cluster.ListSdnFabricsFabricParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnFabricsFabric(cmd.Context(), params)
 			if err != nil {
@@ -292,7 +292,7 @@ func newFabricSetCmd() *cobra.Command {
 				params.Delete = rawStringList(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if err := deps.API.Cluster.UpdateSdnFabricsFabric(cmd.Context(), id, params); err != nil {
 				return fmt.Errorf("update SDN fabric %q: %w", id, err)
@@ -368,19 +368,19 @@ func (nf *nodeFlags) register(cmd *cobra.Command) {
 func (nf *nodeFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsNodeParams) {
 	f := fl.Flags()
 	if f.Changed("ip") {
-		p.Ip = strPtr(nf.ip)
+		p.Ip = new(nf.ip)
 	}
 	if f.Changed("ip6") {
-		p.Ip6 = strPtr(nf.ip6)
+		p.Ip6 = new(nf.ip6)
 	}
 	if f.Changed("endpoint") {
-		p.Endpoint = strPtr(nf.endpoint)
+		p.Endpoint = new(nf.endpoint)
 	}
 	if f.Changed("public-key") {
-		p.PublicKey = strPtr(nf.publicKey)
+		p.PublicKey = new(nf.publicKey)
 	}
 	if f.Changed("role") {
-		p.Role = strPtr(nf.role)
+		p.Role = new(nf.role)
 	}
 	if f.Changed("allowed-ip") {
 		p.AllowedIps = nf.allowedIps
@@ -389,7 +389,7 @@ func (nf *nodeFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsN
 		p.Peers = nf.peers
 	}
 	if f.Changed("lock-token") {
-		p.LockToken = strPtr(nf.lockToken)
+		p.LockToken = new(nf.lockToken)
 	}
 	if f.Changed("interface") {
 		p.Interfaces = rawStringList(nf.ifaceVals)
@@ -399,19 +399,19 @@ func (nf *nodeFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnFabricsN
 func (nf *nodeFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsNodeParams) {
 	f := fl.Flags()
 	if f.Changed("ip") {
-		p.Ip = strPtr(nf.ip)
+		p.Ip = new(nf.ip)
 	}
 	if f.Changed("ip6") {
-		p.Ip6 = strPtr(nf.ip6)
+		p.Ip6 = new(nf.ip6)
 	}
 	if f.Changed("endpoint") {
-		p.Endpoint = strPtr(nf.endpoint)
+		p.Endpoint = new(nf.endpoint)
 	}
 	if f.Changed("public-key") {
-		p.PublicKey = strPtr(nf.publicKey)
+		p.PublicKey = new(nf.publicKey)
 	}
 	if f.Changed("role") {
-		p.Role = strPtr(nf.role)
+		p.Role = new(nf.role)
 	}
 	if f.Changed("allowed-ip") {
 		p.AllowedIps = nf.allowedIps
@@ -420,7 +420,7 @@ func (nf *nodeFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnFabricsN
 		p.Peers = nf.peers
 	}
 	if f.Changed("lock-token") {
-		p.LockToken = strPtr(nf.lockToken)
+		p.LockToken = new(nf.lockToken)
 	}
 	if f.Changed("interface") {
 		p.Interfaces = rawStringList(nf.ifaceVals)
@@ -468,10 +468,10 @@ func newFabricNodeListCmd() *cobra.Command {
 			if fl.Changed("fabric") {
 				params := &cluster.GetSdnFabricsNodeParams{}
 				if fl.Changed("pending") {
-					params.Pending = boolPtr(pending)
+					params.Pending = new(pending)
 				}
 				if fl.Changed("running") {
-					params.Running = boolPtr(running)
+					params.Running = new(running)
 				}
 				resp, err := deps.API.Cluster.GetSdnFabricsNode(cmd.Context(), fabric, params)
 				if err != nil {
@@ -481,10 +481,10 @@ func newFabricNodeListCmd() *cobra.Command {
 			} else {
 				params := &cluster.ListSdnFabricsNodeParams{}
 				if fl.Changed("pending") {
-					params.Pending = boolPtr(pending)
+					params.Pending = new(pending)
 				}
 				if fl.Changed("running") {
-					params.Running = boolPtr(running)
+					params.Running = new(running)
 				}
 				resp, err := deps.API.Cluster.ListSdnFabricsNode(cmd.Context(), params)
 				if err != nil {
@@ -575,7 +575,7 @@ func newFabricNodeSetCmd() *cobra.Command {
 				params.Delete = rawStringList(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if err := deps.API.Cluster.UpdateSdnFabricsNode(cmd.Context(), fabric, node, params); err != nil {
 				return fmt.Errorf("update node %q of SDN fabric %q: %w", node, fabric, err)

@@ -153,7 +153,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 				if fl.Changed("sev-no-key-sharing") {
 					list.Set("no-key-sharing", boolToStr(sevNoKeySharing))
 				}
-				params.AmdSev = strPtr(list.String())
+				params.AmdSev = new(list.String())
 				t, _ := list.Get("type")
 				msg = fmt.Sprintf("VM %s amd-sev configured (type=%s).", vmid, t)
 			} else {
@@ -186,7 +186,7 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 					list.Set("attestation", "0")
 					attestationDefaulted = true
 				}
-				params.IntelTdx = strPtr(list.String())
+				params.IntelTdx = new(list.String())
 				t, _ := list.Get("type")
 				msg = fmt.Sprintf("VM %s intel-tdx configured (type=%s).", vmid, t)
 				if attestationDefaulted {
@@ -269,7 +269,7 @@ func newSecurityConfidentialClearCmd() *cobra.Command {
 					"existing attestation workflows will break\n",
 				cp.Platform, vmid)
 
-			params := &nodes.UpdateQemuConfigParams{Delete: strPtr(cp.Platform)}
+			params := &nodes.UpdateQemuConfigParams{Delete: new(cp.Platform)}
 			applyDigest(params, fl, digest, autoDigest)
 
 			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {

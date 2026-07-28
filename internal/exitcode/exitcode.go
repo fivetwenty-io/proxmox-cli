@@ -51,8 +51,7 @@ func FromError(err error) int {
 	// 0. Child process exit code takes precedence over every API-error mapping
 	// below: once a subprocess (ssh, rsync) has run and exited non-zero, its
 	// own exit code IS the semantically correct code to propagate.
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.Code
 	}
 
@@ -71,8 +70,7 @@ func FromError(err error) int {
 	if errors.As(err, &authErr) {
 		return Auth
 	}
-	var permErr *pveerrors.PermissionError
-	if errors.As(err, &permErr) {
+	if _, ok := errors.AsType[*pveerrors.PermissionError](err); ok {
 		return Auth
 	}
 	// ErrUnauthorized / ErrForbidden sentinels (may be wrapped without typed structs).
@@ -81,8 +79,7 @@ func FromError(err error) int {
 	}
 
 	// 3. Parameter / bad-argument errors.
-	var paramErr *pveerrors.ParameterError
-	if errors.As(err, &paramErr) {
+	if _, ok := errors.AsType[*pveerrors.ParameterError](err); ok {
 		return BadArgs
 	}
 

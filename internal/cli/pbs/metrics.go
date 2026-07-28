@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -268,31 +269,31 @@ func newMetricsInfluxdbHTTPAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("bucket") {
-				params.Bucket = strPtr(a.bucket)
+				params.Bucket = new(a.bucket)
 			}
 
 			if fl.Changed("organization") {
-				params.Organization = strPtr(a.organization)
+				params.Organization = new(a.organization)
 			}
 
 			if fl.Changed("token") {
-				params.Token = strPtr(a.token)
+				params.Token = new(a.token)
 			}
 
 			if fl.Changed("max-body-size") {
-				params.MaxBodySize = int64Ptr(a.maxBodySize)
+				params.MaxBodySize = new(a.maxBodySize)
 			}
 
 			if fl.Changed("verify-tls") {
-				params.VerifyTls = boolPtr(a.verifyTls)
+				params.VerifyTls = new(a.verifyTls)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(a.enable)
+				params.Enable = new(a.enable)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(a.comment)
+				params.Comment = new(a.comment)
 			}
 
 			err := deps.PBS.Config.CreateMetricsInfluxdbHttp(cmd.Context(), params)
@@ -340,49 +341,47 @@ func newMetricsInfluxdbHTTPUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, propName := range del {
-					if propName == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateMetricsInfluxdbHttpParams{}
 
 			if fl.Changed("url") {
-				params.Url = strPtr(a.url)
+				params.Url = new(a.url)
 			}
 
 			if fl.Changed("bucket") {
-				params.Bucket = strPtr(a.bucket)
+				params.Bucket = new(a.bucket)
 			}
 
 			if fl.Changed("organization") {
-				params.Organization = strPtr(a.organization)
+				params.Organization = new(a.organization)
 			}
 
 			if fl.Changed("token") {
-				params.Token = strPtr(a.token)
+				params.Token = new(a.token)
 			}
 
 			if fl.Changed("max-body-size") {
-				params.MaxBodySize = int64Ptr(a.maxBodySize)
+				params.MaxBodySize = new(a.maxBodySize)
 			}
 
 			if fl.Changed("verify-tls") {
-				params.VerifyTls = boolPtr(a.verifyTls)
+				params.VerifyTls = new(a.verifyTls)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(a.enable)
+				params.Enable = new(a.enable)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(a.comment)
+				params.Comment = new(a.comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("delete") {
@@ -431,7 +430,7 @@ func newMetricsInfluxdbHTTPDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteMetricsInfluxdbHttpParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteMetricsInfluxdbHttp(cmd.Context(), name, params)
@@ -632,15 +631,15 @@ func newMetricsInfluxdbUDPAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("mtu") {
-				params.Mtu = int64Ptr(a.mtu)
+				params.Mtu = new(a.mtu)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(a.enable)
+				params.Enable = new(a.enable)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(a.comment)
+				params.Comment = new(a.comment)
 			}
 
 			err := deps.PBS.Config.CreateMetricsInfluxdbUdp(cmd.Context(), params)
@@ -688,33 +687,31 @@ func newMetricsInfluxdbUDPUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, propName := range del {
-					if propName == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateMetricsInfluxdbUdpParams{}
 
 			if fl.Changed("host") {
-				params.Host = strPtr(a.host)
+				params.Host = new(a.host)
 			}
 
 			if fl.Changed("mtu") {
-				params.Mtu = int64Ptr(a.mtu)
+				params.Mtu = new(a.mtu)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(a.enable)
+				params.Enable = new(a.enable)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(a.comment)
+				params.Comment = new(a.comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("delete") {
@@ -763,7 +760,7 @@ func newMetricsInfluxdbUDPDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteMetricsInfluxdbUdpParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteMetricsInfluxdbUdp(cmd.Context(), name, params)
@@ -827,7 +824,7 @@ func newMetricsDataCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 
-			params := map[string]interface{}{}
+			params := map[string]any{}
 			if fl.Changed("history") {
 				params["history"] = history
 			}

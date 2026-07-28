@@ -44,13 +44,13 @@ func newDeleteCmd() *cobra.Command {
 
 			params := &nodes.DeleteQemuParams{}
 			if cmd.Flags().Changed("purge") {
-				params.Purge = boolPtr(purge)
+				params.Purge = new(purge)
 			}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			if cmd.Flags().Changed("destroy-unreferenced-disks") {
-				params.DestroyUnreferencedDisks = boolPtr(destroyUnreferencedDisks)
+				params.DestroyUnreferencedDisks = new(destroyUnreferencedDisks)
 			}
 
 			resp, err := deps.API.Nodes.DeleteQemu(cmd.Context(), node, vmid, params)

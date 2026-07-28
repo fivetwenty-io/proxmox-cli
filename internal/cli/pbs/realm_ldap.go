@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -392,10 +393,8 @@ func newRealmLdapUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, key := range lf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(lf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -439,7 +438,7 @@ func newRealmLdapDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteAccessLdapParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteAccessLdap(cmd.Context(), realm, params)

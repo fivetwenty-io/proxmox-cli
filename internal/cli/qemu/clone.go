@@ -57,31 +57,31 @@ func newCloneCmd() *cobra.Command {
 			params := &nodes.CreateQemuCloneParams{Newid: newid}
 			fl := cmd.Flags()
 			if fl.Changed("name") {
-				params.Name = strPtr(name)
+				params.Name = new(name)
 			}
 			if fl.Changed("target-node") {
-				params.Target = strPtr(target)
+				params.Target = new(target)
 			}
 			if fl.Changed("full") {
-				params.Full = boolPtr(full)
+				params.Full = new(full)
 			}
 			if fl.Changed("pool") {
-				params.Pool = strPtr(pool)
+				params.Pool = new(pool)
 			}
 			if fl.Changed("storage") {
-				params.Storage = strPtr(storage)
+				params.Storage = new(storage)
 			}
 			if fl.Changed("format") {
-				params.Format = strPtr(format)
+				params.Format = new(format)
 			}
 			if fl.Changed("bwlimit") {
-				params.Bwlimit = int64Ptr(bwlimit)
+				params.Bwlimit = new(bwlimit)
 			}
 			if fl.Changed("description") {
-				params.Description = strPtr(description)
+				params.Description = new(description)
 			}
 			if fl.Changed("snapname") {
-				params.Snapname = strPtr(snapname)
+				params.Snapname = new(snapname)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuClone(cmd.Context(), node, vmid, params)

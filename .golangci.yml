@@ -1,0 +1,14 @@
+# Until now this repo ran golangci-lint with no config, i.e. the standard
+# linter set. This file keeps that set and adds one more.
+#
+# modernize flags constructs that a newer language or stdlib feature expresses
+# directly: new(x) for the &v-returning pointer helpers, slices.Contains for a
+# hand-rolled search loop, range-over-int, maps.Copy, strings.Cut, and so on.
+# Roughly 1200 of these had accumulated because nothing checked for them, so
+# gating it here keeps the tree from drifting back.
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - modernize

@@ -143,19 +143,19 @@ func newTokenAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			resp, err := deps.PDM.Access.CreateUsersToken(cmd.Context(), userid, name, params)
@@ -215,7 +215,7 @@ func newTokenUpdateCmd() *cobra.Command {
 
 			params := &pdmaccess.UpdateUsersTokenParams{}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("delete") {
@@ -223,19 +223,19 @@ func newTokenUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			if fl.Changed("regenerate") {
-				params.Regenerate = boolPtr(regenerate)
+				params.Regenerate = new(regenerate)
 			}
 
 			resp, err := deps.PDM.Access.UpdateUsersToken(cmd.Context(), userid, name, params)
@@ -294,7 +294,7 @@ func newTokenDeleteCmd() *cobra.Command {
 
 			params := &pdmaccess.DeleteUsersTokenParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Access.DeleteUsersToken(cmd.Context(), userid, name, params)

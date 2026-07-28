@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
 	"sort"
@@ -147,10 +148,6 @@ type createPlan struct {
 	capacityWarning string
 	contextNote     string
 }
-
-// createPtr returns a pointer to v, for building the many optional pointer
-// fields the generated API client params types expose.
-func createPtr[T any](v T) *T { return &v }
 
 // newCreateCmd builds `pmx lab create <name>`.
 func newCreateCmd() *cobra.Command {
@@ -309,9 +306,7 @@ func applyCreateOverrides(fl interface{ Changed(string) bool }, lab *config.Lab,
 
 	if lab.Topology.NodeOverrides != nil {
 		eff.Topology.NodeOverrides = make(map[int]config.LabNodeOverride, len(lab.Topology.NodeOverrides))
-		for k, v := range lab.Topology.NodeOverrides {
-			eff.Topology.NodeOverrides[k] = v
-		}
+		maps.Copy(eff.Topology.NodeOverrides, lab.Topology.NodeOverrides)
 	}
 
 	if fl.Changed("vcpu") {
@@ -422,7 +417,7 @@ func createStorageAvailableOnNode(nodesAttr, node string) bool {
 	if nodesAttr == "" {
 		return true
 	}
-	for _, n := range strings.Split(nodesAttr, ",") {
+	for n := range strings.SplitSeq(nodesAttr, ",") {
 		if strings.TrimSpace(n) == node {
 			return true
 		}
@@ -1122,10 +1117,10 @@ func buildCreatePlan(
 				Zone: zoneName,
 			}
 			if tagAllowed && eff.Network.VxlanTag != 0 {
-				params.Tag = createPtr(int64(eff.Network.VxlanTag))
+				params.Tag = new(int64(eff.Network.VxlanTag))
 			}
 			if eff.Network.VnetAlias != "" {
-				params.Alias = createPtr(eff.Network.VnetAlias)
+				params.Alias = new(eff.Network.VnetAlias)
 			}
 			return ac.Cluster.CreateSdnVnets(ctx, params)
 		},
@@ -1152,7 +1147,7 @@ func buildCreatePlan(
 		apply: func(ctx context.Context) error {
 			params := &cluster.CreateSdnVnetsSubnetsParams{Subnet: eff.Network.CIDR, Type: createSubnetType}
 			if eff.Network.Mgmt.Gateway != "" {
-				params.Gateway = createPtr(eff.Network.Mgmt.Gateway)
+				params.Gateway = new(eff.Network.Mgmt.Gateway)
 			}
 			return ac.Cluster.CreateSdnVnetsSubnets(ctx, eff.Network.VnetID, params)
 		},
@@ -1171,7 +1166,6 @@ func buildCreatePlan(
 	// re-listing per entry; only the subnet lookup needs its own call, one
 	// per vnet that declares a CIDR.
 	for _, v := range eff.Network.Vnets {
-		v := v
 		_, extraVnetExists, verr := findSdnVnet(*vnets, v.ID)
 		if verr != nil {
 			return nil, fmt.Errorf("decode SDN vnet list: %w", verr)
@@ -1292,8 +1286,8 @@ func buildCreatePlan(
 			params := &clusterstorage.CreateStorageParams{
 				Storage: plan.storageID,
 				Type:    "zfspool",
-				Pool:    createPtr(zfsDatasetPath(eff)),
-				Content: createPtr("images,rootdir"),
+				Pool:    new(zfsDatasetPath(eff)),
+				Content: new("images,rootdir"),
 			}
 			_, err := ac.ClusterStorage.CreateStorage(ctx, params)
 			return err
@@ -1320,7 +1314,7 @@ func buildCreatePlan(
 		apply: func(ctx context.Context) error {
 			params := &pools.CreatePoolsParams{
 				Poolid:  poolID,
-				Comment: createPtr(fmt.Sprintf("Lab %q resource pool", eff.Name)),
+				Comment: new(fmt.Sprintf("Lab %q resource pool", eff.Name)),
 			}
 			return ac.Pools.CreatePools(ctx, params)
 		},
@@ -1351,7 +1345,7 @@ func buildCreatePlan(
 
 	numNodes := config.EffectiveTopologyNodes(eff.Topology)
 	specs := make([]createTargetSpec, 0, numNodes+1)
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		compute, storage := config.EffectiveNodeSizing(eff, i)
 		specs = append(specs, createTargetSpec{
 			label:     strconv.Itoa(i),
@@ -1588,23 +1582,21 @@ func createVM(
 		net0 = fmt.Sprintf("%s,mtu=%d", net0, eff.Network.MTU)
 	}
 	netMap := map[int]string{0: net0}
-	for idx, s := range createExtraNetMap(eff.Network) {
-		netMap[idx] = s
-	}
+	maps.Copy(netMap, createExtraNetMap(eff.Network))
 
 	if cloneFrom == "" {
 		params := &nodes.CreateQemuParams{
 			Vmid:     vmid,
-			Name:     createPtr(vmName),
-			Pool:     createPtr(labPoolID(eff)),
-			Cores:    createPtr(int64(compute.VCPU)),
-			Sockets:  createPtr(int64(1)),
-			Numa:     createPtr(compute.NUMA),
-			Memory:   createPtr(strconv.Itoa(compute.Memory.MaxGB * 1024)),
-			Balloon:  createPtr(int64(compute.Memory.MinGB * 1024)),
-			Agent:    createPtr("enabled=1"),
-			Ostype:   createPtr("l26"),
-			Efidisk0: createPtr(fmt.Sprintf("%s:1,efitype=4m,pre-enrolled-keys=1", stID)),
+			Name:     new(vmName),
+			Pool:     new(labPoolID(eff)),
+			Cores:    new(int64(compute.VCPU)),
+			Sockets:  new(int64(1)),
+			Numa:     new(compute.NUMA),
+			Memory:   new(strconv.Itoa(compute.Memory.MaxGB * 1024)),
+			Balloon:  new(int64(compute.Memory.MinGB * 1024)),
+			Agent:    new("enabled=1"),
+			Ostype:   new("l26"),
+			Efidisk0: new(fmt.Sprintf("%s:1,efitype=4m,pre-enrolled-keys=1", stID)),
 			Scsi: map[int]string{
 				0: fmt.Sprintf("%s:%d%s", stID, storage.OSDiskGB, createDiskOptions(storage)),
 				1: fmt.Sprintf("%s:%d%s", stID, storage.DataDiskGB, createDiskOptions(storage)),
@@ -1612,16 +1604,16 @@ func createVM(
 			Net: netMap,
 		}
 		if compute.CPUType != "" {
-			params.Cpu = createPtr(compute.CPUType)
+			params.Cpu = new(compute.CPUType)
 		}
 		if compute.Machine != "" {
-			params.Machine = createPtr(compute.Machine)
+			params.Machine = new(compute.Machine)
 		}
 		if compute.Firmware != "" {
-			params.Bios = createPtr(compute.Firmware)
+			params.Bios = new(compute.Firmware)
 		}
 		if storage.Controller != "" {
-			params.Scsihw = createPtr(storage.Controller)
+			params.Scsihw = new(storage.Controller)
 		}
 
 		resp, err := ac.Nodes.CreateQemu(ctx, node, params)
@@ -1645,10 +1637,10 @@ func createVM(
 
 	cloneParams := &nodes.CreateQemuCloneParams{
 		Newid:   vmid,
-		Name:    createPtr(vmName),
-		Pool:    createPtr(labPoolID(eff)),
-		Storage: createPtr(stID),
-		Full:    createPtr(true),
+		Name:    new(vmName),
+		Pool:    new(labPoolID(eff)),
+		Storage: new(stID),
+		Full:    new(true),
 	}
 	resp, err := ac.Nodes.CreateQemuClone(ctx, node, strconv.FormatInt(sourceVMID, 10), cloneParams)
 	if err != nil {
@@ -1663,22 +1655,22 @@ func createVM(
 	}
 
 	updateParams := &nodes.UpdateQemuConfigParams{
-		Cores:   createPtr(int64(compute.VCPU)),
-		Numa:    createPtr(compute.NUMA),
-		Memory:  createPtr(strconv.Itoa(compute.Memory.MaxGB * 1024)),
-		Balloon: createPtr(int64(compute.Memory.MinGB * 1024)),
+		Cores:   new(int64(compute.VCPU)),
+		Numa:    new(compute.NUMA),
+		Memory:  new(strconv.Itoa(compute.Memory.MaxGB * 1024)),
+		Balloon: new(int64(compute.Memory.MinGB * 1024)),
 	}
 	if compute.CPUType != "" {
-		updateParams.Cpu = createPtr(compute.CPUType)
+		updateParams.Cpu = new(compute.CPUType)
 	}
 	if compute.Machine != "" {
-		updateParams.Machine = createPtr(compute.Machine)
+		updateParams.Machine = new(compute.Machine)
 	}
 	if compute.Firmware != "" {
-		updateParams.Bios = createPtr(compute.Firmware)
+		updateParams.Bios = new(compute.Firmware)
 	}
 	if storage.Controller != "" {
-		updateParams.Scsihw = createPtr(storage.Controller)
+		updateParams.Scsihw = new(storage.Controller)
 	}
 	updateParams.Net = netMap
 
@@ -1708,23 +1700,21 @@ func createQdeviceVM(
 		net0 = fmt.Sprintf("%s,mtu=%d", net0, eff.Network.MTU)
 	}
 	netMap := map[int]string{0: net0}
-	for idx, s := range createExtraNetMap(eff.Network) {
-		netMap[idx] = s
-	}
+	maps.Copy(netMap, createExtraNetMap(eff.Network))
 	memKiB := strconv.Itoa(qdeviceMemoryGB * 1024)
 	vmName := labQdeviceVMName(eff.Name)
 
 	if cloneFrom == "" {
 		params := &nodes.CreateQemuParams{
 			Vmid:    vmid,
-			Name:    createPtr(vmName),
-			Pool:    createPtr(labPoolID(eff)),
-			Cores:   createPtr(int64(qdeviceVCPU)),
-			Sockets: createPtr(int64(1)),
-			Memory:  createPtr(memKiB),
-			Balloon: createPtr(int64(qdeviceMemoryGB * 1024)),
-			Agent:   createPtr("enabled=1"),
-			Ostype:  createPtr("l26"),
+			Name:    new(vmName),
+			Pool:    new(labPoolID(eff)),
+			Cores:   new(int64(qdeviceVCPU)),
+			Sockets: new(int64(1)),
+			Memory:  new(memKiB),
+			Balloon: new(int64(qdeviceMemoryGB * 1024)),
+			Agent:   new("enabled=1"),
+			Ostype:  new("l26"),
 			Scsi: map[int]string{
 				0: fmt.Sprintf("%s:%d", stID, qdeviceDiskGB),
 			},
@@ -1752,10 +1742,10 @@ func createQdeviceVM(
 
 	cloneParams := &nodes.CreateQemuCloneParams{
 		Newid:   vmid,
-		Name:    createPtr(vmName),
-		Pool:    createPtr(labPoolID(eff)),
-		Storage: createPtr(stID),
-		Full:    createPtr(true),
+		Name:    new(vmName),
+		Pool:    new(labPoolID(eff)),
+		Storage: new(stID),
+		Full:    new(true),
 	}
 	resp, err := ac.Nodes.CreateQemuClone(ctx, node, strconv.FormatInt(sourceVMID, 10), cloneParams)
 	if err != nil {
@@ -1770,9 +1760,9 @@ func createQdeviceVM(
 	}
 
 	updateParams := &nodes.UpdateQemuConfigParams{
-		Cores:   createPtr(int64(qdeviceVCPU)),
-		Memory:  createPtr(memKiB),
-		Balloon: createPtr(int64(qdeviceMemoryGB * 1024)),
+		Cores:   new(int64(qdeviceVCPU)),
+		Memory:  new(memKiB),
+		Balloon: new(int64(qdeviceMemoryGB * 1024)),
 		Net:     netMap,
 	}
 	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {
@@ -1836,7 +1826,7 @@ func createLiveNetConfig(ctx context.Context, deps *cli.Deps, node, vmidStr stri
 func createNetConfigMatches(live, bridge string, mtu int) bool {
 	var gotBridge string
 	var gotMTU int
-	for _, part := range strings.Split(live, ",") {
+	for part := range strings.SplitSeq(live, ",") {
 		switch {
 		case strings.HasPrefix(part, "bridge="):
 			gotBridge = strings.TrimPrefix(part, "bridge=")

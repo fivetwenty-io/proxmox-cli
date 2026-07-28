@@ -46,10 +46,10 @@ func newApplyCmd() *cobra.Command {
 
 			params := &cluster.UpdateSdnParams{}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if fl.Changed("release-lock") {
-				params.ReleaseLock = boolPtr(releaseLock)
+				params.ReleaseLock = new(releaseLock)
 			}
 
 			cli.WarnIfInquorate(cmd.Context(), deps, cmd.ErrOrStderr(), "the SDN reload")

@@ -113,7 +113,7 @@ func newListCmd() *cobra.Command {
 				}
 				params := &nodes.ListQemuParams{}
 				if cmd.Flags().Changed("full") {
-					params.Full = boolPtr(full)
+					params.Full = new(full)
 				}
 				resp, err := deps.API.Nodes.ListQemu(cmd.Context(), node, params)
 				if err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -103,11 +104,11 @@ func newSyncLsCmd() *cobra.Command {
 
 			params := &pbsadmin.ListSyncParams{}
 			if fl.Changed("store") {
-				params.Store = strPtr(store)
+				params.Store = new(store)
 			}
 
 			if fl.Changed("sync-direction") {
-				params.SyncDirection = strPtr(syncDirection)
+				params.SyncDirection = new(syncDirection)
 			}
 
 			resp, err := deps.PBS.Admin.ListSync(cmd.Context(), params)
@@ -220,7 +221,7 @@ func newSyncJobLsCmd() *cobra.Command {
 
 			params := &pbsconfig.ListSyncParams{}
 			if fl.Changed("sync-direction") {
-				params.SyncDirection = strPtr(syncDirection)
+				params.SyncDirection = new(syncDirection)
 			}
 
 			resp, err := deps.PBS.Config.ListSync(cmd.Context(), params)
@@ -619,10 +620,8 @@ func newSyncJobUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, name := range sf.del {
-					if name == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(sf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -666,7 +665,7 @@ func newSyncJobDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteSyncParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteSync(cmd.Context(), id, params)
@@ -780,7 +779,7 @@ func newSyncPullCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			body := map[string]interface{}{
+			body := map[string]any{
 				"remote-store": remoteStore,
 				"store":        store,
 			}
@@ -932,7 +931,7 @@ func newSyncPushCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			body := map[string]interface{}{
+			body := map[string]any{
 				"remote":       remote,
 				"remote-store": remoteStore,
 				"store":        store,

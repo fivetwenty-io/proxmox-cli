@@ -84,12 +84,3 @@ func finishAsync(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, msg st
 
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
 }
-
-// boolPtr returns a pointer to v.
-func boolPtr(v bool) *bool { return &v }
-
-// strPtr returns a pointer to v.
-func strPtr(v string) *string { return &v }
-
-// int64Ptr returns a pointer to v.
-func int64Ptr(v int64) *int64 { return &v }

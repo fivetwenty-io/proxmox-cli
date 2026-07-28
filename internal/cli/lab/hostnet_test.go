@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func hostnetTestLab(name string) *config.Lab {
 // kernel-reported NAME field for sorted position i.
 func hostnetFakeNICEnumerationLines(count int, name func(i int) string) string {
 	var b strings.Builder
-	for i := 0; i < count; i++ {
+	for i := range count {
 		mac := fmt.Sprintf("52:54:00:00:00:%02x", i)
 		devpath := fmt.Sprintf("/sys/devices/pci0000:00/0000:00:1c.%x/virtio%d", i, i)
 		fmt.Fprintf(&b, "%s\t%s\t%s\n", name(i), mac, devpath)
@@ -730,9 +731,9 @@ func TestHostnetSortNICs_OrdersByLastPCIFunction_NotByVirtioOrdinal(t *testing.T
 	var input []hostnetPhysicalNIC
 	// Built in REVERSE index order too, so neither input order nor virtio
 	// ordinal order happens to already match the correct output order.
-	for i := len(virtioOrdinals) - 1; i >= 0; i-- {
+	for i, virtioOrdinal := range slices.Backward(virtioOrdinals) {
 		devpath := fmt.Sprintf(
-			"/sys/devices/pci0000:00/0000:00:1c.4/0000:06:10.%x/virtio%d", i, virtioOrdinals[i])
+			"/sys/devices/pci0000:00/0000:00:1c.4/0000:06:10.%x/virtio%d", i, virtioOrdinal)
 		input = append(input, hostnetPhysicalNIC{
 			Name:    fmt.Sprintf("kernelname%d", i),
 			MAC:     fmt.Sprintf("52:54:00:00:01:%02x", i),
@@ -799,7 +800,7 @@ func TestHostnetPreserveUntouchedBridgeFields(t *testing.T) {
 	t.Run("never overwrites a field the caller already set an opinion on", func(t *testing.T) {
 		cur := hostnetIfaceState{Gateway: "10.254.0.1", Autostart: 1, BridgeVlanAware: 1}
 		params := &nodes.UpdateNetwork2Params{
-			Type: "bridge", Gateway: netPtr("10.254.0.99"), Autostart: netPtr(false), BridgeVlanAware: netPtr(false),
+			Type: "bridge", Gateway: new("10.254.0.99"), Autostart: new(false), BridgeVlanAware: new(false),
 		}
 		hostnetPreserveUntouchedBridgeFields(cur, params)
 

@@ -12,7 +12,6 @@ func TestGuard_ProtectedVMID(t *testing.T) {
 	t.Parallel()
 
 	for _, vmid := range []int{50000, 50001, 50010, 50020} {
-		vmid := vmid
 		t.Run(fmt.Sprintf("vmid=%d", vmid), func(t *testing.T) {
 			t.Parallel()
 			err := peppi.Guard(peppi.Target{VMID: vmid})
@@ -47,7 +46,6 @@ func TestGuard_ProtectedNamePattern(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := peppi.Guard(peppi.Target{Names: tc.names})
@@ -79,7 +77,6 @@ func TestGuard_CleanTargetPasses(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			require.NoError(t, peppi.Guard(tc.target))

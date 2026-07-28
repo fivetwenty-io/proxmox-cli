@@ -46,7 +46,7 @@ func TestMustMarkRequired_UndefinedFlag(t *testing.T) {
 	cmd := newTestCmd("vmid")
 
 	missingFlag := "nonexistent"
-	var recovered interface{}
+	var recovered any
 
 	func() {
 		defer func() {

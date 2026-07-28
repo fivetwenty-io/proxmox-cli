@@ -132,7 +132,7 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 
 	for path, verbs := range nested {
 		sub := root
-		for _, name := range strings.Fields(path) {
+		for name := range strings.FieldsSeq(path) {
 			sub = findSubcommand(t, sub, name)
 		}
 

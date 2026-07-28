@@ -77,8 +77,8 @@ func newRsyncCmd() *cobra.Command {
 // prefix matches the target node name. Paths without that prefix are returned
 // unchanged.
 func rewriteNodeRef(path, node, prefix string) string {
-	if strings.HasPrefix(path, node+":") {
-		return prefix + strings.TrimPrefix(path, node+":")
+	if after, ok := strings.CutPrefix(path, node+":"); ok {
+		return prefix + after
 	}
 	return path
 }

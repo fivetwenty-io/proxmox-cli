@@ -86,15 +86,15 @@ func newTapeMediaLsCmd() *cobra.Command {
 			fl := cmd.Flags()
 
 			if fl.Changed("pool") {
-				params.Pool = strPtr(pool)
+				params.Pool = new(pool)
 			}
 
 			if fl.Changed("update-status") {
-				params.UpdateStatus = boolPtr(updateStatus)
+				params.UpdateStatus = new(updateStatus)
 			}
 
 			if fl.Changed("update-status-changer") {
-				params.UpdateStatusChanger = strPtr(updateStatusChanger)
+				params.UpdateStatusChanger = new(updateStatusChanger)
 			}
 
 			resp, err := deps.PBS.Tape.ListMediaList(cmd.Context(), params)
@@ -186,27 +186,27 @@ func newTapeMediaContentCmd() *cobra.Command {
 			fl := cmd.Flags()
 
 			if fl.Changed("backup-id") {
-				params.BackupId = strPtr(backupId)
+				params.BackupId = new(backupId)
 			}
 
 			if fl.Changed("backup-type") {
-				params.BackupType = strPtr(backupType)
+				params.BackupType = new(backupType)
 			}
 
 			if fl.Changed("label-text") {
-				params.LabelText = strPtr(labelText)
+				params.LabelText = new(labelText)
 			}
 
 			if fl.Changed("media") {
-				params.Media = strPtr(media)
+				params.Media = new(media)
 			}
 
 			if fl.Changed("media-set") {
-				params.MediaSet = strPtr(mediaSet)
+				params.MediaSet = new(mediaSet)
 			}
 
 			if fl.Changed("pool") {
-				params.Pool = strPtr(pool)
+				params.Pool = new(pool)
 			}
 
 			resp, err := deps.PBS.Tape.ListMediaContent(cmd.Context(), params)
@@ -349,15 +349,15 @@ func newTapeMediaMoveCmd() *cobra.Command {
 			params := &pbstape.CreateMediaMoveParams{}
 
 			if fl.Changed("label-text") {
-				params.LabelText = strPtr(labelText)
+				params.LabelText = new(labelText)
 			}
 
 			if fl.Changed("uuid") {
-				params.Uuid = strPtr(uuid)
+				params.Uuid = new(uuid)
 			}
 
 			if fl.Changed("vault-name") {
-				params.VaultName = strPtr(vaultName)
+				params.VaultName = new(vaultName)
 			}
 
 			err := deps.PBS.Tape.CreateMediaMove(cmd.Context(), params)
@@ -421,15 +421,15 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 			params := &pbstape.ListMediaDestroyParams{}
 
 			if fl.Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 
 			if fl.Changed("label-text") {
-				params.LabelText = strPtr(labelText)
+				params.LabelText = new(labelText)
 			}
 
 			if fl.Changed("uuid") {
-				params.Uuid = strPtr(uuid)
+				params.Uuid = new(uuid)
 			}
 
 			err := deps.PBS.Tape.ListMediaDestroy(cmd.Context(), params)
@@ -478,7 +478,7 @@ func newTapeMediaSetStatusCmd() *cobra.Command {
 					return fmt.Errorf("--status: value must not be empty")
 				}
 
-				params.Status = strPtr(status)
+				params.Status = new(status)
 			}
 
 			err := deps.PBS.Tape.CreateMediaListStatus(cmd.Context(), uuid, params)

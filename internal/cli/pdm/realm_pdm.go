@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -88,10 +89,8 @@ func newRealmPdmUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -99,16 +98,16 @@ func newRealmPdmUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if fl.Changed("default") {
-				params.Default = boolPtr(isDefault)
+				params.Default = new(isDefault)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			_, err := deps.PDM.Config.UpdateAccessPdm(cmd.Context(), params)

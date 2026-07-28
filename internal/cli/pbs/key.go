@@ -184,7 +184,7 @@ func newTapeKeyAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("hint") {
-				params.Hint = strPtr(hint)
+				params.Hint = new(hint)
 			}
 
 			if fl.Changed("kdf") {
@@ -192,11 +192,11 @@ func newTapeKeyAddCmd() *cobra.Command {
 					return fmt.Errorf("--kdf must be one of none, scrypt, pbkdf2 (got %q)", kdf)
 				}
 
-				params.Kdf = strPtr(kdf)
+				params.Kdf = new(kdf)
 			}
 
 			if fl.Changed("key") {
-				params.Key = strPtr(key)
+				params.Key = new(key)
 			}
 
 			resp, err := deps.PBS.Config.CreateTapeEncryptionKeys(cmd.Context(), params)
@@ -285,11 +285,11 @@ func newTapeKeyUpdateCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 
 			if fl.Changed("kdf") {
@@ -297,11 +297,11 @@ func newTapeKeyUpdateCmd() *cobra.Command {
 					return fmt.Errorf("--kdf must be one of none, scrypt, pbkdf2 (got %q)", kdf)
 				}
 
-				params.Kdf = strPtr(kdf)
+				params.Kdf = new(kdf)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PBS.Config.UpdateTapeEncryptionKeys(cmd.Context(), fingerprint, params)
@@ -355,7 +355,7 @@ func newTapeKeyDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteTapeEncryptionKeysParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteTapeEncryptionKeys(cmd.Context(), fingerprint, params)

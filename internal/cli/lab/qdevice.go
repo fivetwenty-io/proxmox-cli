@@ -103,7 +103,7 @@ func runQdeviceAdd(cmd *cobra.Command, name string, dryRun bool) error {
 		rows := [][]string{
 			{fmt.Sprintf("install %s on QDevice VM (%s)", qdeviceQnetdPackage, qdeviceIP), "would run"},
 		}
-		for i := 0; i < numNodes; i++ {
+		for i := range numNodes {
 			nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
 			if ierr != nil {
 				return fmt.Errorf("resolve node %d mgmt IP: %w", i, ierr)
@@ -189,7 +189,7 @@ func qdeviceEnsureWired(
 	steps = append(steps, qdeviceStepResult{
 		desc: fmt.Sprintf("install %s on QDevice VM (%s)", qdeviceQnetdPackage, qdeviceIP), skip: alreadyInstalled})
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
 		if ierr != nil {
 			return nil, fmt.Errorf("resolve node %d mgmt IP: %w", i, ierr)

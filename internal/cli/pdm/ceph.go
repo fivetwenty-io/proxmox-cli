@@ -120,7 +120,7 @@ func newCephStatusCmd() *cobra.Command {
 
 			params := &pdmceph.ListClustersStatusParams{}
 			if cmd.Flags().Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 
 			resp, err := deps.PDM.Ceph.ListClustersStatus(cmd.Context(), cluster, params)
@@ -163,7 +163,7 @@ func newCephSummaryCmd() *cobra.Command {
 
 			params := &pdmceph.ListClustersSummaryParams{}
 			if cmd.Flags().Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 
 			resp, err := deps.PDM.Ceph.ListClustersSummary(cmd.Context(), cluster, params)

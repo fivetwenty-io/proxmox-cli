@@ -58,7 +58,7 @@ func newAgentExecCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuAgentExecParams{Command: argv}
 			if cmd.Flags().Changed("input-data") {
-				params.InputData = strPtr(inputData)
+				params.InputData = new(inputData)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuAgentExec(cmd.Context(), node, vmid, params)
@@ -163,10 +163,10 @@ func newAgentFileReadCmd() *cobra.Command {
 
 			params := &nodes.ListQemuAgentFileReadParams{File: file}
 			if cmd.Flags().Changed("offset") {
-				params.Offset = int64Ptr(offset)
+				params.Offset = new(offset)
 			}
 			if cmd.Flags().Changed("count") {
-				params.Count = int64Ptr(count)
+				params.Count = new(count)
 			}
 
 			resp, err := deps.API.Nodes.ListQemuAgentFileRead(cmd.Context(), node, vmid, params)
@@ -287,7 +287,7 @@ func newAgentSetUserPasswordCmd() *cobra.Command {
 				Password: password,
 			}
 			if cmd.Flags().Changed("crypted") {
-				params.Crypted = boolPtr(crypted)
+				params.Crypted = new(crypted)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuAgentSetUserPassword(cmd.Context(), node, vmid, params)

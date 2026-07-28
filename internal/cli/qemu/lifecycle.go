@@ -75,37 +75,37 @@ func newStartCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusStartParams{}
 			if cmd.Flags().Changed("timeout") {
-				params.Timeout = int64Ptr(timeout)
+				params.Timeout = new(timeout)
 			}
 			if cmd.Flags().Changed("migratedfrom") {
-				params.Migratedfrom = strPtr(migratedfrom)
+				params.Migratedfrom = new(migratedfrom)
 			}
 			if cmd.Flags().Changed("stateuri") {
-				params.Stateuri = strPtr(stateuri)
+				params.Stateuri = new(stateuri)
 			}
 			if cmd.Flags().Changed("force-cpu") {
-				params.ForceCpu = strPtr(forceCPU)
+				params.ForceCpu = new(forceCPU)
 			}
 			if cmd.Flags().Changed("machine") {
-				params.Machine = strPtr(machine)
+				params.Machine = new(machine)
 			}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			if cmd.Flags().Changed("migration-network") {
-				params.MigrationNetwork = strPtr(migrationNetwork)
+				params.MigrationNetwork = new(migrationNetwork)
 			}
 			if cmd.Flags().Changed("migration-type") {
-				params.MigrationType = strPtr(migrationType)
+				params.MigrationType = new(migrationType)
 			}
 			if cmd.Flags().Changed("targetstorage") {
-				params.Targetstorage = strPtr(targetstorage)
+				params.Targetstorage = new(targetstorage)
 			}
 			if cmd.Flags().Changed("nets-host-mtu") {
-				params.NetsHostMtu = strPtr(netsHostMtu)
+				params.NetsHostMtu = new(netsHostMtu)
 			}
 			if cmd.Flags().Changed("with-conntrack-state") {
-				params.WithConntrackState = boolPtr(withConntrackState)
+				params.WithConntrackState = new(withConntrackState)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStart(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -154,19 +154,19 @@ func newStopCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusStopParams{}
 			if cmd.Flags().Changed("timeout") {
-				params.Timeout = int64Ptr(timeout)
+				params.Timeout = new(timeout)
 			}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			if cmd.Flags().Changed("keepActive") {
-				params.KeepActive = boolPtr(keepActive)
+				params.KeepActive = new(keepActive)
 			}
 			if cmd.Flags().Changed("overrule-shutdown") {
-				params.OverruleShutdown = boolPtr(overruleShutdown)
+				params.OverruleShutdown = new(overruleShutdown)
 			}
 			if cmd.Flags().Changed("migratedfrom") {
-				params.Migratedfrom = strPtr(migratedfrom)
+				params.Migratedfrom = new(migratedfrom)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusStop(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -199,7 +199,7 @@ func newRebootCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusRebootParams{}
 			if cmd.Flags().Changed("timeout") {
-				params.Timeout = int64Ptr(timeout)
+				params.Timeout = new(timeout)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusReboot(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -232,16 +232,16 @@ func newShutdownCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusShutdownParams{}
 			if cmd.Flags().Changed("timeout") {
-				params.Timeout = int64Ptr(timeout)
+				params.Timeout = new(timeout)
 			}
 			if cmd.Flags().Changed("force-stop") {
-				params.ForceStop = boolPtr(forceStop)
+				params.ForceStop = new(forceStop)
 			}
 			if cmd.Flags().Changed("keepActive") {
-				params.KeepActive = boolPtr(keepActive)
+				params.KeepActive = new(keepActive)
 			}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusShutdown(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -272,7 +272,7 @@ func newResetCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusResetParams{}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusReset(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -306,13 +306,13 @@ func newSuspendCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusSuspendParams{}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			if cmd.Flags().Changed("todisk") {
-				params.Todisk = boolPtr(todisk)
+				params.Todisk = new(todisk)
 			}
 			if cmd.Flags().Changed("statestorage") {
-				params.Statestorage = strPtr(statestorage)
+				params.Statestorage = new(statestorage)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusSuspend(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -345,10 +345,10 @@ func newResumeCmd() *cobra.Command {
 		func(cmd *cobra.Command, deps *cli.Deps, node, vmid string) (json.RawMessage, error) {
 			params := &nodes.CreateQemuStatusResumeParams{}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			if cmd.Flags().Changed("nocheck") {
-				params.Nocheck = boolPtr(nocheck)
+				params.Nocheck = new(nocheck)
 			}
 			resp, err := deps.API.Nodes.CreateQemuStatusResume(cmd.Context(), node, vmid, params)
 			if err != nil {

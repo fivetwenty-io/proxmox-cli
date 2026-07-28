@@ -28,3 +28,8 @@ coverage.html
 # check-coverage-matrix's comparison copy; removed on success, restored over
 # the generated file on failure, so it only survives an interrupted run
 /docs/.test-coverage-matrix.stamp
+
+# Scratch directories some local tooling creates. They hold intermediate
+# working state, never anything this repo should carry.
+/.superpowers/
+/.agents/

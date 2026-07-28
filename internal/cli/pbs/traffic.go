@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -285,19 +286,19 @@ func newTrafficAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("rate-in") {
-				params.RateIn = strPtr(a.rateIn)
+				params.RateIn = new(a.rateIn)
 			}
 
 			if fl.Changed("rate-out") {
-				params.RateOut = strPtr(a.rateOut)
+				params.RateOut = new(a.rateOut)
 			}
 
 			if fl.Changed("burst-in") {
-				params.BurstIn = strPtr(a.burstIn)
+				params.BurstIn = new(a.burstIn)
 			}
 
 			if fl.Changed("burst-out") {
-				params.BurstOut = strPtr(a.burstOut)
+				params.BurstOut = new(a.burstOut)
 			}
 
 			if fl.Changed("timeframe") {
@@ -309,7 +310,7 @@ func newTrafficAddCmd() *cobra.Command {
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(a.comment)
+				params.Comment = new(a.comment)
 			}
 
 			err := deps.PBS.Config.CreateTrafficControl(cmd.Context(), params)
@@ -354,19 +355,19 @@ func newTrafficUpdateCmd() *cobra.Command {
 			params := &pbsconfig.UpdateTrafficControlParams{}
 
 			if fl.Changed("rate-in") {
-				params.RateIn = strPtr(a.rateIn)
+				params.RateIn = new(a.rateIn)
 			}
 
 			if fl.Changed("rate-out") {
-				params.RateOut = strPtr(a.rateOut)
+				params.RateOut = new(a.rateOut)
 			}
 
 			if fl.Changed("burst-in") {
-				params.BurstIn = strPtr(a.burstIn)
+				params.BurstIn = new(a.burstIn)
 			}
 
 			if fl.Changed("burst-out") {
-				params.BurstOut = strPtr(a.burstOut)
+				params.BurstOut = new(a.burstOut)
 			}
 
 			if fl.Changed("network") {
@@ -382,18 +383,16 @@ func newTrafficUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(a.comment)
+				params.Comment = new(a.comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("delete") {
-				for _, propName := range del {
-					if propName == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 
 				params.Delete = del
@@ -439,7 +438,7 @@ func newTrafficDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteTrafficControlParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteTrafficControl(cmd.Context(), name, params)

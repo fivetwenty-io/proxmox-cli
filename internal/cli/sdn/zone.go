@@ -66,10 +66,10 @@ func newZoneShowCmd() *cobra.Command {
 			params := &cluster.GetSdnZonesParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.GetSdnZones(cmd.Context(), zone, params)
 			if err != nil {
@@ -132,88 +132,88 @@ func newZoneSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnZonesParams{}
 			if fl.Changed("advertise-subnets") {
-				params.AdvertiseSubnets = boolPtr(advertiseSubnets)
+				params.AdvertiseSubnets = new(advertiseSubnets)
 			}
 			if fl.Changed("bridge") {
-				params.Bridge = strPtr(bridge)
+				params.Bridge = new(bridge)
 			}
 			if fl.Changed("bridge-disable-mac-learning") {
-				params.BridgeDisableMacLearning = boolPtr(bridgeDisableMacLearning)
+				params.BridgeDisableMacLearning = new(bridgeDisableMacLearning)
 			}
 			if fl.Changed("controller") {
-				params.Controller = strPtr(controller)
+				params.Controller = new(controller)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("dhcp") {
-				params.Dhcp = strPtr(dhcp)
+				params.Dhcp = new(dhcp)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("disable-arp-nd-suppression") {
-				params.DisableArpNdSuppression = boolPtr(disableArpNdSuppression)
+				params.DisableArpNdSuppression = new(disableArpNdSuppression)
 			}
 			if fl.Changed("dns") {
-				params.Dns = strPtr(dns)
+				params.Dns = new(dns)
 			}
 			if fl.Changed("dnszone") {
-				params.Dnszone = strPtr(dnszone)
+				params.Dnszone = new(dnszone)
 			}
 			if fl.Changed("dp-id") {
-				params.DpId = int64Ptr(dpID)
+				params.DpId = new(dpID)
 			}
 			if fl.Changed("exitnodes") {
-				params.Exitnodes = strPtr(exitnodes)
+				params.Exitnodes = new(exitnodes)
 			}
 			if fl.Changed("exitnodes-local-routing") {
-				params.ExitnodesLocalRouting = boolPtr(exitnodesLocalRouting)
+				params.ExitnodesLocalRouting = new(exitnodesLocalRouting)
 			}
 			if fl.Changed("exitnodes-primary") {
-				params.ExitnodesPrimary = strPtr(exitnodesPrimary)
+				params.ExitnodesPrimary = new(exitnodesPrimary)
 			}
 			if fl.Changed("fabric") {
-				params.Fabric = strPtr(fabric)
+				params.Fabric = new(fabric)
 			}
 			if fl.Changed("ipam") {
-				params.Ipam = strPtr(ipam)
+				params.Ipam = new(ipam)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if fl.Changed("mac") {
-				params.Mac = strPtr(mac)
+				params.Mac = new(mac)
 			}
 			if fl.Changed("mtu") {
-				params.Mtu = int64Ptr(mtu)
+				params.Mtu = new(mtu)
 			}
 			if fl.Changed("nodes") {
-				params.Nodes = strPtr(nodes)
+				params.Nodes = new(nodes)
 			}
 			if fl.Changed("peers") {
-				params.Peers = strPtr(peers)
+				params.Peers = new(peers)
 			}
 			if fl.Changed("reversedns") {
-				params.Reversedns = strPtr(reversedns)
+				params.Reversedns = new(reversedns)
 			}
 			if fl.Changed("rt-import") {
-				params.RtImport = strPtr(rtImport)
+				params.RtImport = new(rtImport)
 			}
 			if fl.Changed("secondary-controller") {
 				params.SecondaryControllers = secondaryControllers
 			}
 			if fl.Changed("tag") {
-				params.Tag = int64Ptr(tag)
+				params.Tag = new(tag)
 			}
 			if fl.Changed("vlan-protocol") {
-				params.VlanProtocol = strPtr(vlanProtocol)
+				params.VlanProtocol = new(vlanProtocol)
 			}
 			if fl.Changed("vrf-vxlan") {
-				params.VrfVxlan = int64Ptr(vrfVxlan)
+				params.VrfVxlan = new(vrfVxlan)
 			}
 			if fl.Changed("vxlan-port") {
-				params.VxlanPort = int64Ptr(vxlanPort)
+				params.VxlanPort = new(vxlanPort)
 			}
 			if err := deps.API.Cluster.UpdateSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("update SDN zone %q: %w", zone, err)
@@ -275,13 +275,13 @@ func newZoneListCmd() *cobra.Command {
 			params := &cluster.ListSdnZonesParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			if fl.Changed("type") {
-				params.Type = strPtr(zoneType)
+				params.Type = new(zoneType)
 			}
 			resp, err := deps.API.Cluster.ListSdnZones(cmd.Context(), params)
 			if err != nil {
@@ -360,82 +360,82 @@ func newZoneCreateCmd() *cobra.Command {
 			params := &cluster.CreateSdnZonesParams{Zone: zone, Type: zoneType}
 			fl := cmd.Flags()
 			if fl.Changed("advertise-subnets") {
-				params.AdvertiseSubnets = boolPtr(advertiseSubnets)
+				params.AdvertiseSubnets = new(advertiseSubnets)
 			}
 			if fl.Changed("bridge") {
-				params.Bridge = strPtr(bridge)
+				params.Bridge = new(bridge)
 			}
 			if fl.Changed("bridge-disable-mac-learning") {
-				params.BridgeDisableMacLearning = boolPtr(bridgeDisableMacLearning)
+				params.BridgeDisableMacLearning = new(bridgeDisableMacLearning)
 			}
 			if fl.Changed("controller") {
-				params.Controller = strPtr(controller)
+				params.Controller = new(controller)
 			}
 			if fl.Changed("dhcp") {
-				params.Dhcp = strPtr(dhcp)
+				params.Dhcp = new(dhcp)
 			}
 			if fl.Changed("disable-arp-nd-suppression") {
-				params.DisableArpNdSuppression = boolPtr(disableArpNdSuppression)
+				params.DisableArpNdSuppression = new(disableArpNdSuppression)
 			}
 			if fl.Changed("dns") {
-				params.Dns = strPtr(dns)
+				params.Dns = new(dns)
 			}
 			if fl.Changed("dnszone") {
-				params.Dnszone = strPtr(dnszone)
+				params.Dnszone = new(dnszone)
 			}
 			if fl.Changed("dp-id") {
-				params.DpId = int64Ptr(dpID)
+				params.DpId = new(dpID)
 			}
 			if fl.Changed("exitnodes") {
-				params.Exitnodes = strPtr(exitnodes)
+				params.Exitnodes = new(exitnodes)
 			}
 			if fl.Changed("exitnodes-local-routing") {
-				params.ExitnodesLocalRouting = boolPtr(exitnodesLocalRouting)
+				params.ExitnodesLocalRouting = new(exitnodesLocalRouting)
 			}
 			if fl.Changed("exitnodes-primary") {
-				params.ExitnodesPrimary = strPtr(exitnodesPrimary)
+				params.ExitnodesPrimary = new(exitnodesPrimary)
 			}
 			if fl.Changed("fabric") {
-				params.Fabric = strPtr(fabric)
+				params.Fabric = new(fabric)
 			}
 			if fl.Changed("ipam") {
-				params.Ipam = strPtr(ipam)
+				params.Ipam = new(ipam)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if fl.Changed("mac") {
-				params.Mac = strPtr(mac)
+				params.Mac = new(mac)
 			}
 			if fl.Changed("mtu") {
-				params.Mtu = int64Ptr(mtu)
+				params.Mtu = new(mtu)
 			}
 			if fl.Changed("nodes") {
-				params.Nodes = strPtr(nodes)
+				params.Nodes = new(nodes)
 			}
 			if fl.Changed("peers") {
-				params.Peers = strPtr(peers)
+				params.Peers = new(peers)
 			}
 			if fl.Changed("reversedns") {
-				params.Reversedns = strPtr(reversedns)
+				params.Reversedns = new(reversedns)
 			}
 			if fl.Changed("rt-import") {
-				params.RtImport = strPtr(rtImport)
+				params.RtImport = new(rtImport)
 			}
 			if fl.Changed("secondary-controller") {
 				params.SecondaryControllers = secondaryControllers
 			}
 			if fl.Changed("tag") {
-				params.Tag = int64Ptr(tag)
+				params.Tag = new(tag)
 			}
 			if fl.Changed("vlan-protocol") {
-				params.VlanProtocol = strPtr(vlanProtocol)
+				params.VlanProtocol = new(vlanProtocol)
 			}
 			if fl.Changed("vrf-vxlan") {
-				params.VrfVxlan = int64Ptr(vrfVxlan)
+				params.VrfVxlan = new(vrfVxlan)
 			}
 			if fl.Changed("vxlan-port") {
-				params.VxlanPort = int64Ptr(vxlanPort)
+				params.VxlanPort = new(vxlanPort)
 			}
 
 			if err := deps.API.Cluster.CreateSdnZones(cmd.Context(), params); err != nil {
@@ -497,7 +497,7 @@ func newZoneDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnZonesParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.DeleteSdnZones(cmd.Context(), zone, params); err != nil {
 				return fmt.Errorf("delete SDN zone %q: %w", zone, err)

@@ -123,10 +123,10 @@ func newSnapshotCreateCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuSnapshotParams{Snapname: snapname}
 			if cmd.Flags().Changed("description") {
-				params.Description = strPtr(description)
+				params.Description = new(description)
 			}
 			if cmd.Flags().Changed("vmstate") {
-				params.Vmstate = boolPtr(vmstate)
+				params.Vmstate = new(vmstate)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuSnapshot(cmd.Context(), node, vmid, params)
@@ -177,7 +177,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 
 			params := &nodes.DeleteQemuSnapshotParams{}
 			if cmd.Flags().Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 
 			resp, err := deps.API.Nodes.DeleteQemuSnapshot(cmd.Context(), node, vmid, snapname, params)
@@ -270,7 +270,7 @@ func newSnapshotUpdateCmd() *cobra.Command {
 
 			params := &nodes.UpdateQemuSnapshotConfigParams{}
 			if cmd.Flags().Changed("description") {
-				params.Description = strPtr(description)
+				params.Description = new(description)
 			}
 
 			if err := deps.API.Nodes.UpdateQemuSnapshotConfig(cmd.Context(), node, vmid, snapname, params); err != nil {
@@ -323,7 +323,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuSnapshotRollbackParams{}
 			if cmd.Flags().Changed("start") {
-				params.Start = boolPtr(start)
+				params.Start = new(start)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuSnapshotRollback(cmd.Context(), node, vmid, snapname, params)

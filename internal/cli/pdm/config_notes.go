@@ -87,7 +87,7 @@ func newConfigNotesUpdateCmd() *cobra.Command {
 
 			params := &pdmconfig.UpdateNotesParams{Notes: notes}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.UpdateNotes(cmd.Context(), params)

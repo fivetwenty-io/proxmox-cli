@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -218,23 +219,23 @@ func newNotifEndpointSendmailAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("author") {
-				params.Author = strPtr(sf.author)
+				params.Author = new(sf.author)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(sf.comment)
+				params.Comment = new(sf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(sf.disable)
+				params.Disable = new(sf.disable)
 			}
 
 			if fl.Changed("filter") {
-				params.Filter = strPtr(sf.filter)
+				params.Filter = new(sf.filter)
 			}
 
 			if fl.Changed("from-address") {
-				params.FromAddress = strPtr(sf.fromAddress)
+				params.FromAddress = new(sf.fromAddress)
 			}
 
 			if fl.Changed("mailto") {
@@ -246,7 +247,7 @@ func newNotifEndpointSendmailAddCmd() *cobra.Command {
 			}
 
 			if fl.Changed("origin") {
-				params.Origin = strPtr(sf.origin)
+				params.Origin = new(sf.origin)
 			}
 
 			err := deps.PBS.Config.CreateNotificationsEndpointsSendmail(cmd.Context(), params)
@@ -289,29 +290,27 @@ func newNotifEndpointSendmailUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range sf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(sf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateNotificationsEndpointsSendmailParams{}
 
 			if fl.Changed("author") {
-				params.Author = strPtr(sf.author)
+				params.Author = new(sf.author)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(sf.comment)
+				params.Comment = new(sf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(sf.disable)
+				params.Disable = new(sf.disable)
 			}
 
 			if fl.Changed("from-address") {
-				params.FromAddress = strPtr(sf.fromAddress)
+				params.FromAddress = new(sf.fromAddress)
 			}
 
 			if fl.Changed("mailto") {
@@ -327,7 +326,7 @@ func newNotifEndpointSendmailUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(sf.digest)
+				params.Digest = new(sf.digest)
 			}
 
 			err := deps.PBS.Config.UpdateNotificationsEndpointsSendmail(cmd.Context(), name, params)

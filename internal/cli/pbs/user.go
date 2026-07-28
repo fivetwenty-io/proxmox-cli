@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -82,7 +83,7 @@ func newUserLsCmd() *cobra.Command {
 
 			params := &pbsaccess.ListUsersParams{}
 			if cmd.Flags().Changed("include-tokens") {
-				params.IncludeTokens = boolPtr(includeTokens)
+				params.IncludeTokens = new(includeTokens)
 			}
 
 			resp, err := deps.PBS.Access.ListUsers(cmd.Context(), params)
@@ -178,31 +179,31 @@ func newUserAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("email") {
-				params.Email = strPtr(email)
+				params.Email = new(email)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			if fl.Changed("firstname") {
-				params.Firstname = strPtr(firstname)
+				params.Firstname = new(firstname)
 			}
 
 			if fl.Changed("lastname") {
-				params.Lastname = strPtr(lastname)
+				params.Lastname = new(lastname)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PBS.Access.CreateUsers(cmd.Context(), params)
@@ -252,16 +253,14 @@ func newUserUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsaccess.UpdateUsersParams{}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("delete") {
@@ -269,31 +268,31 @@ func newUserUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("email") {
-				params.Email = strPtr(email)
+				params.Email = new(email)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			if fl.Changed("firstname") {
-				params.Firstname = strPtr(firstname)
+				params.Firstname = new(firstname)
 			}
 
 			if fl.Changed("lastname") {
-				params.Lastname = strPtr(lastname)
+				params.Lastname = new(lastname)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PBS.Access.UpdateUsers(cmd.Context(), userid, params)
@@ -341,7 +340,7 @@ func newUserDeleteCmd() *cobra.Command {
 
 			params := &pbsaccess.DeleteUsersParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Access.DeleteUsers(cmd.Context(), userid, params)
@@ -424,7 +423,7 @@ func newUserPasswdCmd() *cobra.Command {
 
 			params := &pbsaccess.UpdatePasswordParams{Userid: userid, Password: password}
 			if cmd.Flags().Changed("confirmation-password") {
-				params.ConfirmationPassword = strPtr(confirmationPassword)
+				params.ConfirmationPassword = new(confirmationPassword)
 			}
 
 			err := deps.PBS.Access.UpdatePassword(cmd.Context(), params)

@@ -558,5 +558,5 @@ func TestRawParamsFromData_EmptyReturnsNilMap(t *testing.T) {
 func TestRawParamsFromData_BuildsMap(t *testing.T) {
 	params, err := rawParamsFromData([]string{"a=1", "b=two"})
 	require.NoError(t, err)
-	require.Equal(t, map[string]interface{}{"a": "1", "b": "two"}, params)
+	require.Equal(t, map[string]any{"a": "1", "b": "two"}, params)
 }

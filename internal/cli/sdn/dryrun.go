@@ -69,10 +69,10 @@ func newRollbackCmd() *cobra.Command {
 			params := &cluster.CreateSdnRollbackParams{}
 			fl := cmd.Flags()
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if fl.Changed("release-lock") {
-				params.ReleaseLock = boolPtr(releaseLock)
+				params.ReleaseLock = new(releaseLock)
 			}
 
 			if err := deps.API.Cluster.CreateSdnRollback(cmd.Context(), params); err != nil {

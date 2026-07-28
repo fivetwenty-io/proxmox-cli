@@ -61,16 +61,16 @@ func newRemoteMigrateCmd() *cobra.Command {
 				TargetBridge:   targetBridge,
 			}
 			if cmd.Flags().Changed("online") {
-				params.Online = boolPtr(online)
+				params.Online = new(online)
 			}
 			if cmd.Flags().Changed("delete") {
-				params.Delete = boolPtr(deleteSource)
+				params.Delete = new(deleteSource)
 			}
 			if cmd.Flags().Changed("bwlimit") {
-				params.Bwlimit = int64Ptr(bwlimit)
+				params.Bwlimit = new(bwlimit)
 			}
 			if cmd.Flags().Changed("target-vmid") {
-				params.TargetVmid = int64Ptr(targetVmid)
+				params.TargetVmid = new(targetVmid)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuRemoteMigrate(cmd.Context(), node, vmid, params)

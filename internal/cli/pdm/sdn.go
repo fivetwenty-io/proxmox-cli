@@ -83,13 +83,13 @@ func newSdnControllerLsCmd() *cobra.Command {
 
 			params := &pdmsdn.ListControllersParams{}
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			if fl.Changed("ty") {
-				params.Ty = strPtr(ty)
+				params.Ty = new(ty)
 			}
 			if fl.Changed("remote") {
 				params.Remotes = remotes
@@ -178,10 +178,10 @@ func newSdnVnetLsCmd() *cobra.Command {
 
 			params := &pdmsdn.ListVnetsParams{}
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			if fl.Changed("remote") {
 				params.Remotes = remotes
@@ -277,7 +277,7 @@ func newSdnVnetAddCmd() *cobra.Command {
 
 			params := &pdmsdn.CreateVnetsParams{Vnet: vnet, Remotes: remotes}
 			if fl.Changed("tag") {
-				params.Tag = int64Ptr(tag)
+				params.Tag = new(tag)
 			}
 
 			resp, err := deps.PDM.Sdn.CreateVnets(cmd.Context(), params)
@@ -347,13 +347,13 @@ func newSdnZoneLsCmd() *cobra.Command {
 
 			params := &pdmsdn.ListZonesParams{}
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			if fl.Changed("ty") {
-				params.Ty = strPtr(ty)
+				params.Ty = new(ty)
 			}
 			if fl.Changed("remote") {
 				params.Remotes = remotes
@@ -458,7 +458,7 @@ func newSdnZoneAddCmd() *cobra.Command {
 
 			params := &pdmsdn.CreateZonesParams{Zone: zone, Remotes: remotes}
 			if fl.Changed("vrf-vxlan") {
-				params.VrfVxlan = int64Ptr(vrfVxlan)
+				params.VrfVxlan = new(vrfVxlan)
 			}
 
 			resp, err := deps.PDM.Sdn.CreateZones(cmd.Context(), params)

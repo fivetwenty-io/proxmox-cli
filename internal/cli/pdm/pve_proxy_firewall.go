@@ -190,7 +190,7 @@ func newPveFirewallOptionsUpdateCmd() *cobra.Command {
 				params.Ebtables = &ff.ebtables
 			}
 			if fl.Changed("enable") {
-				params.Enable = int64Ptr(map[bool]int64{true: 1, false: 0}[ff.enable])
+				params.Enable = new(map[bool]int64{true: 1, false: 0}[ff.enable])
 			}
 			if fl.Changed("log-ratelimit") {
 				params.LogRatelimit = &ff.logRatelimit

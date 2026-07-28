@@ -35,7 +35,7 @@ func newSendkeyCmd() *cobra.Command {
 
 			params := &nodes.UpdateQemuSendkeyParams{Key: key}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 
 			if err := deps.API.Nodes.UpdateQemuSendkey(cmd.Context(), node, vmid, params); err != nil {

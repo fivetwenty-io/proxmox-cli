@@ -72,104 +72,104 @@ func (cf *controllerFlags) register(cmd *cobra.Command) {
 // applyCreate forwards changed flags onto a create params struct.
 func (cf *controllerFlags) applyCreate(fl interface{ Changed(string) bool }, p *cluster.CreateSdnControllersParams) {
 	if fl.Changed("asn") {
-		p.Asn = int64Ptr(cf.asn)
+		p.Asn = new(cf.asn)
 	}
 	if fl.Changed("bgp-mode") {
-		p.BgpMode = strPtr(cf.bgpMode)
+		p.BgpMode = new(cf.bgpMode)
 	}
 	if fl.Changed("bgp-multipath-as-path-relax") {
-		p.BgpMultipathAsPathRelax = boolPtr(cf.bgpMultipathAsPathRelax)
+		p.BgpMultipathAsPathRelax = new(cf.bgpMultipathAsPathRelax)
 	}
 	if fl.Changed("ebgp") {
-		p.Ebgp = boolPtr(cf.ebgp)
+		p.Ebgp = new(cf.ebgp)
 	}
 	if fl.Changed("ebgp-multihop") {
-		p.EbgpMultihop = int64Ptr(cf.ebgpMultihop)
+		p.EbgpMultihop = new(cf.ebgpMultihop)
 	}
 	if fl.Changed("fabric") {
-		p.Fabric = strPtr(cf.fabric)
+		p.Fabric = new(cf.fabric)
 	}
 	if fl.Changed("isis-domain") {
-		p.IsisDomain = strPtr(cf.isisDomain)
+		p.IsisDomain = new(cf.isisDomain)
 	}
 	if fl.Changed("isis-ifaces") {
-		p.IsisIfaces = strPtr(cf.isisIfaces)
+		p.IsisIfaces = new(cf.isisIfaces)
 	}
 	if fl.Changed("isis-net") {
-		p.IsisNet = strPtr(cf.isisNet)
+		p.IsisNet = new(cf.isisNet)
 	}
 	if fl.Changed("loopback") {
-		p.Loopback = strPtr(cf.loopback)
+		p.Loopback = new(cf.loopback)
 	}
 	if fl.Changed("node") {
-		p.Node = strPtr(cf.node)
+		p.Node = new(cf.node)
 	}
 	if fl.Changed("nodes") {
-		p.Nodes = strPtr(cf.nodes)
+		p.Nodes = new(cf.nodes)
 	}
 	if fl.Changed("peer-group-name") {
-		p.PeerGroupName = strPtr(cf.peerGroupName)
+		p.PeerGroupName = new(cf.peerGroupName)
 	}
 	if fl.Changed("peers") {
-		p.Peers = strPtr(cf.peers)
+		p.Peers = new(cf.peers)
 	}
 	if fl.Changed("route-map-in") {
-		p.RouteMapIn = strPtr(cf.routeMapIn)
+		p.RouteMapIn = new(cf.routeMapIn)
 	}
 	if fl.Changed("route-map-out") {
-		p.RouteMapOut = strPtr(cf.routeMapOut)
+		p.RouteMapOut = new(cf.routeMapOut)
 	}
 }
 
 // applyUpdate forwards changed flags onto an update params struct.
 func (cf *controllerFlags) applyUpdate(fl interface{ Changed(string) bool }, p *cluster.UpdateSdnControllersParams) {
 	if fl.Changed("asn") {
-		p.Asn = int64Ptr(cf.asn)
+		p.Asn = new(cf.asn)
 	}
 	if fl.Changed("bgp-mode") {
-		p.BgpMode = strPtr(cf.bgpMode)
+		p.BgpMode = new(cf.bgpMode)
 	}
 	if fl.Changed("bgp-multipath-as-path-relax") {
-		p.BgpMultipathAsPathRelax = boolPtr(cf.bgpMultipathAsPathRelax)
+		p.BgpMultipathAsPathRelax = new(cf.bgpMultipathAsPathRelax)
 	}
 	if fl.Changed("ebgp") {
-		p.Ebgp = boolPtr(cf.ebgp)
+		p.Ebgp = new(cf.ebgp)
 	}
 	if fl.Changed("ebgp-multihop") {
-		p.EbgpMultihop = int64Ptr(cf.ebgpMultihop)
+		p.EbgpMultihop = new(cf.ebgpMultihop)
 	}
 	if fl.Changed("fabric") {
-		p.Fabric = strPtr(cf.fabric)
+		p.Fabric = new(cf.fabric)
 	}
 	if fl.Changed("isis-domain") {
-		p.IsisDomain = strPtr(cf.isisDomain)
+		p.IsisDomain = new(cf.isisDomain)
 	}
 	if fl.Changed("isis-ifaces") {
-		p.IsisIfaces = strPtr(cf.isisIfaces)
+		p.IsisIfaces = new(cf.isisIfaces)
 	}
 	if fl.Changed("isis-net") {
-		p.IsisNet = strPtr(cf.isisNet)
+		p.IsisNet = new(cf.isisNet)
 	}
 	if fl.Changed("loopback") {
-		p.Loopback = strPtr(cf.loopback)
+		p.Loopback = new(cf.loopback)
 	}
 	if fl.Changed("node") {
-		p.Node = strPtr(cf.node)
+		p.Node = new(cf.node)
 	}
 	if fl.Changed("nodes") {
-		p.Nodes = strPtr(cf.nodes)
+		p.Nodes = new(cf.nodes)
 	}
 	if fl.Changed("peer-group-name") {
-		p.PeerGroupName = strPtr(cf.peerGroupName)
+		p.PeerGroupName = new(cf.peerGroupName)
 	}
 	if fl.Changed("peers") {
-		p.Peers = strPtr(cf.peers)
+		p.Peers = new(cf.peers)
 	}
 	if fl.Changed("route-map-in") {
-		p.RouteMapIn = strPtr(cf.routeMapIn)
+		p.RouteMapIn = new(cf.routeMapIn)
 	}
 	if fl.Changed("route-map-out") {
-		p.RouteMapOut = strPtr(cf.routeMapOut)
+		p.RouteMapOut = new(cf.routeMapOut)
 	}
 }
 
@@ -212,13 +212,13 @@ func newControllerListCmd() *cobra.Command {
 			params := &cluster.ListSdnControllersParams{}
 			fl := cmd.Flags()
 			if fl.Changed("type") {
-				params.Type = strPtr(typ)
+				params.Type = new(typ)
 			}
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnControllers(cmd.Context(), params)
 			if err != nil {
@@ -262,7 +262,7 @@ func newControllerCreateCmd() *cobra.Command {
 			fl := cmd.Flags()
 			cf.applyCreate(fl, params)
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.CreateSdnControllers(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN controller %q: %w", controller, err)
@@ -298,10 +298,10 @@ func newControllerGetCmd() *cobra.Command {
 			params := &cluster.GetSdnControllersParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.GetSdnControllers(cmd.Context(), controller, params)
 			if err != nil {
@@ -339,13 +339,13 @@ func newControllerSetCmd() *cobra.Command {
 			params := &cluster.UpdateSdnControllersParams{}
 			cf.applyUpdate(fl, params)
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnControllers(cmd.Context(), controller, params); err != nil {
 				return fmt.Errorf("update SDN controller %q: %w", controller, err)
@@ -382,7 +382,7 @@ func newControllerDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnControllersParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			err := deps.API.Cluster.DeleteSdnControllers(cmd.Context(), controller, params)
 			if err != nil {

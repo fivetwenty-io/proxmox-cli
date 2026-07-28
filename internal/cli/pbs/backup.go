@@ -56,34 +56,34 @@ func newTapeBackupCmd() *cobra.Command {
 
 			params := &pbstape.CreateBackupParams{Drive: drive, Pool: pool, Store: store}
 			if fl.Changed("eject-media") {
-				params.EjectMedia = boolPtr(ejectMedia)
+				params.EjectMedia = new(ejectMedia)
 			}
 			if fl.Changed("export-media-set") {
-				params.ExportMediaSet = boolPtr(exportMediaSet)
+				params.ExportMediaSet = new(exportMediaSet)
 			}
 			if fl.Changed("force-media-set") {
-				params.ForceMediaSet = boolPtr(forceMediaSet)
+				params.ForceMediaSet = new(forceMediaSet)
 			}
 			if fl.Changed("group-filter") {
 				params.GroupFilter = groupFilter
 			}
 			if fl.Changed("latest-only") {
-				params.LatestOnly = boolPtr(latestOnly)
+				params.LatestOnly = new(latestOnly)
 			}
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 			if fl.Changed("notification-mode") {
-				params.NotificationMode = strPtr(notificationMode)
+				params.NotificationMode = new(notificationMode)
 			}
 			if fl.Changed("notify-user") {
-				params.NotifyUser = strPtr(notifyUser)
+				params.NotifyUser = new(notifyUser)
 			}
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 			if fl.Changed("worker-threads") {
-				params.WorkerThreads = int64Ptr(workerThreads)
+				params.WorkerThreads = new(workerThreads)
 			}
 
 			resp, err := deps.PBS.Tape.CreateBackup(cmd.Context(), params)

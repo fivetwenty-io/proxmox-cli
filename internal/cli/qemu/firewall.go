@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -66,16 +67,16 @@ func newFirewallLogCmd() *cobra.Command {
 			fl := cmd.Flags()
 			params := &nodes.ListQemuFirewallLogParams{}
 			if fl.Changed("limit") {
-				params.Limit = int64Ptr(limit)
+				params.Limit = new(limit)
 			}
 			if fl.Changed("since") {
-				params.Since = int64Ptr(since)
+				params.Since = new(since)
 			}
 			if fl.Changed("start") {
-				params.Start = int64Ptr(start)
+				params.Start = new(start)
 			}
 			if fl.Changed("until") {
-				params.Until = int64Ptr(until)
+				params.Until = new(until)
 			}
 			resp, err := deps.API.Nodes.ListQemuFirewallLog(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -135,7 +136,7 @@ func newFirewallRefsCmd() *cobra.Command {
 			}
 			params := &nodes.ListQemuFirewallRefsParams{}
 			if cmd.Flags().Changed("type") {
-				params.Type = strPtr(refType)
+				params.Type = new(refType)
 			}
 			resp, err := deps.API.Nodes.ListQemuFirewallRefs(cmd.Context(), node, vmid, params)
 			if err != nil {
@@ -340,37 +341,37 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 			params := &nodes.CreateQemuFirewallRulesParams{Action: action, Type: ruleType}
 			fl := cmd.Flags()
 			if fl.Changed("source") {
-				params.Source = strPtr(source)
+				params.Source = new(source)
 			}
 			if fl.Changed("dest") {
-				params.Dest = strPtr(dest)
+				params.Dest = new(dest)
 			}
 			if fl.Changed("proto") {
-				params.Proto = strPtr(proto)
+				params.Proto = new(proto)
 			}
 			if fl.Changed("dport") {
-				params.Dport = strPtr(dport)
+				params.Dport = new(dport)
 			}
 			if fl.Changed("sport") {
-				params.Sport = strPtr(sport)
+				params.Sport = new(sport)
 			}
 			if fl.Changed("iface") {
-				params.Iface = strPtr(iface)
+				params.Iface = new(iface)
 			}
 			if fl.Changed("macro") {
-				params.Macro = strPtr(macro)
+				params.Macro = new(macro)
 			}
 			if fl.Changed("log") {
-				params.Log = strPtr(logLevel)
+				params.Log = new(logLevel)
 			}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if fl.Changed("enable") {
-				params.Enable = int64Ptr(enable)
+				params.Enable = new(enable)
 			}
 			if fl.Changed("pos") {
-				params.Pos = int64Ptr(pos)
+				params.Pos = new(pos)
 			}
 
 			if err := deps.API.Nodes.CreateQemuFirewallRules(cmd.Context(), node, vmid, params); err != nil {
@@ -435,46 +436,46 @@ func newFirewallRulesUpdateCmd() *cobra.Command {
 			params := &nodes.UpdateQemuFirewallRulesParams{}
 			fl := cmd.Flags()
 			if fl.Changed("type") {
-				params.Type = strPtr(ruleType)
+				params.Type = new(ruleType)
 			}
 			if fl.Changed("action") {
-				params.Action = strPtr(action)
+				params.Action = new(action)
 			}
 			if fl.Changed("source") {
-				params.Source = strPtr(source)
+				params.Source = new(source)
 			}
 			if fl.Changed("dest") {
-				params.Dest = strPtr(dest)
+				params.Dest = new(dest)
 			}
 			if fl.Changed("proto") {
-				params.Proto = strPtr(proto)
+				params.Proto = new(proto)
 			}
 			if fl.Changed("dport") {
-				params.Dport = strPtr(dport)
+				params.Dport = new(dport)
 			}
 			if fl.Changed("sport") {
-				params.Sport = strPtr(sport)
+				params.Sport = new(sport)
 			}
 			if fl.Changed("iface") {
-				params.Iface = strPtr(iface)
+				params.Iface = new(iface)
 			}
 			if fl.Changed("macro") {
-				params.Macro = strPtr(macro)
+				params.Macro = new(macro)
 			}
 			if fl.Changed("log") {
-				params.Log = strPtr(logLevel)
+				params.Log = new(logLevel)
 			}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if fl.Changed("enable") {
-				params.Enable = int64Ptr(enable)
+				params.Enable = new(enable)
 			}
 			if fl.Changed("moveto") {
-				params.Moveto = int64Ptr(moveto)
+				params.Moveto = new(moveto)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 
 			if err := deps.API.Nodes.UpdateQemuFirewallRules(cmd.Context(), node, vmid, pos, params); err != nil {
@@ -635,13 +636,13 @@ func newFirewallIpsetUpdateMemberCmd() *cobra.Command {
 			params := &nodes.UpdateQemuFirewallIpsetParams{}
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if fl.Changed("nomatch") {
-				params.Nomatch = boolPtr(nomatch)
+				params.Nomatch = new(nomatch)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if err := deps.API.Nodes.UpdateQemuFirewallIpset(cmd.Context(), node, vmid, name, cidr, params); err != nil {
 				return fmt.Errorf("update %s in IP set %q for VM %s on node %q: %w", cidr, name, vmid, node, err)
@@ -733,7 +734,7 @@ func newFirewallIpsetCreateCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuFirewallIpsetParams{Name: name}
 			if cmd.Flags().Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if err := deps.API.Nodes.CreateQemuFirewallIpset(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("create IP set %q for VM %s on node %q: %w", name, vmid, node, err)
@@ -772,7 +773,7 @@ func newFirewallIpsetDeleteCmd() *cobra.Command {
 
 			params := &nodes.DeleteQemuFirewallIpsetParams{}
 			if cmd.Flags().Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 			if err := deps.API.Nodes.DeleteQemuFirewallIpset(cmd.Context(), node, vmid, name, params); err != nil {
 				return fmt.Errorf("delete IP set %q for VM %s on node %q: %w", name, vmid, node, err)
@@ -808,10 +809,10 @@ func newFirewallIpsetAddCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuFirewallIpset2Params{Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if cmd.Flags().Changed("nomatch") {
-				params.Nomatch = boolPtr(nomatch)
+				params.Nomatch = new(nomatch)
 			}
 			if err := deps.API.Nodes.CreateQemuFirewallIpset2(cmd.Context(), node, vmid, name, params); err != nil {
 				return fmt.Errorf("add %s to IP set %q for VM %s on node %q: %w", cidr, name, vmid, node, err)
@@ -979,7 +980,7 @@ func newFirewallAliasCreateCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuFirewallAliasesParams{Name: name, Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if err := deps.API.Nodes.CreateQemuFirewallAliases(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("create alias %q for VM %s on node %q: %w", name, vmid, node, err)
@@ -1015,10 +1016,10 @@ func newFirewallAliasUpdateCmd() *cobra.Command {
 
 			params := &nodes.UpdateQemuFirewallAliasesParams{Cidr: cidr}
 			if cmd.Flags().Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if cmd.Flags().Changed("rename") {
-				params.Rename = strPtr(rename)
+				params.Rename = new(rename)
 			}
 			if err := deps.API.Nodes.UpdateQemuFirewallAliases(cmd.Context(), node, vmid, name, params); err != nil {
 				return fmt.Errorf("update alias %q for VM %s on node %q: %w", name, vmid, node, err)
@@ -1166,37 +1167,37 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 			params := &nodes.UpdateQemuFirewallOptionsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 			if fl.Changed("dhcp") {
-				params.Dhcp = boolPtr(dhcp)
+				params.Dhcp = new(dhcp)
 			}
 			if fl.Changed("macfilter") {
-				params.Macfilter = boolPtr(macfilter)
+				params.Macfilter = new(macfilter)
 			}
 			if fl.Changed("ndp") {
-				params.Ndp = boolPtr(ndp)
+				params.Ndp = new(ndp)
 			}
 			if fl.Changed("radv") {
-				params.Radv = boolPtr(radv)
+				params.Radv = new(radv)
 			}
 			if fl.Changed("ipfilter") {
-				params.Ipfilter = boolPtr(ipfilter)
+				params.Ipfilter = new(ipfilter)
 			}
 			if fl.Changed("policy-in") {
-				params.PolicyIn = strPtr(policyIn)
+				params.PolicyIn = new(policyIn)
 			}
 			if fl.Changed("policy-out") {
-				params.PolicyOut = strPtr(policyOut)
+				params.PolicyOut = new(policyOut)
 			}
 			if fl.Changed("log-level-in") {
-				params.LogLevelIn = strPtr(logLevelIn)
+				params.LogLevelIn = new(logLevelIn)
 			}
 			if fl.Changed("log-level-out") {
-				params.LogLevelOut = strPtr(logLevelOut)
+				params.LogLevelOut = new(logLevelOut)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 
 			if !anyFlagChanged(fl, "enable", "dhcp", "macfilter", "ndp", "radv", "ipfilter",
@@ -1237,10 +1238,5 @@ func newFirewallOptionsSetCmd() *cobra.Command {
 
 // anyFlagChanged reports whether at least one of the named flags was set.
 func anyFlagChanged(fl interface{ Changed(string) bool }, names ...string) bool {
-	for _, n := range names {
-		if fl.Changed(n) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(names, fl.Changed)
 }

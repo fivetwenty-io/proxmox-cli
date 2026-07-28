@@ -209,7 +209,7 @@ func labFetchHostname(deps *cli.Deps, ip string) (string, error) {
 // failures (ssh cannot connect yet) are retried; a connected-but-non-zero
 // probe returns success, since reachability is all this step needs.
 func labWaitForSSH(ctx context.Context, deps *cli.Deps, ip string) error {
-	for attempt := 0; attempt < labSSHWaitAttempts; attempt++ {
+	for range labSSHWaitAttempts {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("waiting for ssh on %s: %w", ip, err)
 		}

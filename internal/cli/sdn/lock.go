@@ -39,7 +39,7 @@ func newLockAcquireCmd() *cobra.Command {
 			params := &cluster.CreateSdnLockParams{}
 			fl := cmd.Flags()
 			if fl.Changed("allow-pending") {
-				params.AllowPending = boolPtr(allowPending)
+				params.AllowPending = new(allowPending)
 			}
 			resp, err := deps.API.Cluster.CreateSdnLock(cmd.Context(), params)
 			if err != nil {
@@ -82,10 +82,10 @@ func newLockReleaseCmd() *cobra.Command {
 			params := &cluster.DeleteSdnLockParams{}
 			fl := cmd.Flags()
 			if fl.Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.DeleteSdnLock(cmd.Context(), params); err != nil {
 				return fmt.Errorf("release SDN lock: %w", err)

@@ -370,9 +370,9 @@ func newSecurityCpuFlagsSetCmd() *cobra.Command {
 
 			params := &nodes.UpdateQemuConfigParams{}
 			if s := list.String(); s == "" {
-				params.Delete = strPtr("cpu")
+				params.Delete = new("cpu")
 			} else {
-				params.Cpu = strPtr(s)
+				params.Cpu = new(s)
 			}
 			applyDigest(params, fl, digest, autoDigest)
 

@@ -2,6 +2,7 @@ package remote
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -144,8 +145,8 @@ func splitEquals(tok string) (name, value string, hasValue bool) {
 	if !strings.HasPrefix(tok, "--") {
 		return tok, "", false
 	}
-	if idx := strings.IndexByte(tok, '='); idx >= 0 {
-		return tok[:idx], tok[idx+1:], true
+	if before, after, ok := strings.Cut(tok, "="); ok {
+		return before, after, true
 	}
 	return tok, "", false
 }
@@ -154,10 +155,8 @@ func splitEquals(tok string) (name, value string, hasValue bool) {
 // a recognised pmx-owned flag.
 func lookupFlagSpec(name string) *pmxFlagSpec {
 	for i := range pmxFlagTable {
-		for _, n := range pmxFlagTable[i].names {
-			if n == name {
-				return &pmxFlagTable[i]
-			}
+		if slices.Contains(pmxFlagTable[i].names, name) {
+			return &pmxFlagTable[i]
 		}
 	}
 	return nil

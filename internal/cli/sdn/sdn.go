@@ -9,6 +9,7 @@ package sdn
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -72,24 +73,10 @@ func Group(_ *cli.Deps) *cobra.Command {
 	return cmd
 }
 
-// strPtr returns a pointer to v.
-func strPtr(v string) *string { return &v }
-
-// boolPtr returns a pointer to v.
-func boolPtr(v bool) *bool { return &v }
-
-// int64Ptr returns a pointer to v.
-func int64Ptr(v int64) *int64 { return &v }
-
 // anyFlagChanged reports whether any of the named flags was set on the command
 // line. Used by `set` verbs to refuse a no-op update.
 func anyFlagChanged(fl *pflag.FlagSet, names ...string) bool {
-	for _, n := range names {
-		if fl.Changed(n) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(names, fl.Changed)
 }
 
 // anyCell renders an arbitrary JSON value as a single table cell.

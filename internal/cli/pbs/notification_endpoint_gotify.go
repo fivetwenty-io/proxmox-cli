@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -223,19 +224,19 @@ func newNotifEndpointGotifyAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(gf.comment)
+				params.Comment = new(gf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(gf.disable)
+				params.Disable = new(gf.disable)
 			}
 
 			if fl.Changed("filter") {
-				params.Filter = strPtr(gf.filter)
+				params.Filter = new(gf.filter)
 			}
 
 			if fl.Changed("origin") {
-				params.Origin = strPtr(gf.origin)
+				params.Origin = new(gf.origin)
 			}
 
 			err := deps.PBS.Config.CreateNotificationsEndpointsGotify(cmd.Context(), params)
@@ -280,29 +281,27 @@ func newNotifEndpointGotifyUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range gf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(gf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateNotificationsEndpointsGotifyParams{}
 
 			if fl.Changed("server") {
-				params.Server = strPtr(gf.server)
+				params.Server = new(gf.server)
 			}
 
 			if fl.Changed("token") {
-				params.Token = strPtr(gf.token)
+				params.Token = new(gf.token)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(gf.comment)
+				params.Comment = new(gf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(gf.disable)
+				params.Disable = new(gf.disable)
 			}
 
 			if fl.Changed("delete") {
@@ -310,7 +309,7 @@ func newNotifEndpointGotifyUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(gf.digest)
+				params.Digest = new(gf.digest)
 			}
 
 			err := deps.PBS.Config.UpdateNotificationsEndpointsGotify(cmd.Context(), name, params)

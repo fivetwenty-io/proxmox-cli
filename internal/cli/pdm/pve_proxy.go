@@ -567,8 +567,8 @@ type pveResourceEntry struct {
 // "<type>/<name-or-id>" convention every resource id follows, matching
 // resource.go's identical inference for PDM's own aggregated resource list.
 func resourceTypeFromID(id string) string {
-	if idx := strings.IndexByte(id, '/'); idx >= 0 {
-		return id[:idx]
+	if before, _, ok := strings.Cut(id, "/"); ok {
+		return before
 	}
 	return ""
 }

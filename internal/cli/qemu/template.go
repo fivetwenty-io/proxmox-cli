@@ -54,7 +54,7 @@ func newTemplateCmd() *cobra.Command {
 
 			params := &nodes.CreateQemuTemplateParams{}
 			if cmd.Flags().Changed("disk") {
-				params.Disk = strPtr(disk)
+				params.Disk = new(disk)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuTemplate(cmd.Context(), node, vmid, params)

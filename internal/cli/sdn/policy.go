@@ -54,13 +54,13 @@ func newPrefixListListCmd() *cobra.Command {
 			params := &cluster.ListSdnPrefixListsParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			if fl.Changed("verbose") {
-				params.Verbose = boolPtr(verbose)
+				params.Verbose = new(verbose)
 			}
 			resp, err := deps.API.Cluster.ListSdnPrefixLists(cmd.Context(), params)
 			if err != nil {
@@ -97,7 +97,7 @@ func newPrefixListCreateCmd() *cobra.Command {
 				params.Entries = entries
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.CreateSdnPrefixLists(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN prefix list %q: %w", id, err)
@@ -161,10 +161,10 @@ func newPrefixListSetCmd() *cobra.Command {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnPrefixLists(cmd.Context(), id, params); err != nil {
 				return fmt.Errorf("update SDN prefix list %q: %w", id, err)
@@ -202,7 +202,7 @@ func newPrefixListDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnPrefixListsParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			err := deps.API.Cluster.DeleteSdnPrefixLists(cmd.Context(), id, params)
 			if err != nil {
@@ -278,16 +278,16 @@ func newPrefixListEntryAddCmd() *cobra.Command {
 			fl := cmd.Flags()
 			params := &cluster.CreateSdnPrefixListsEntriesParams{Action: action, Prefix: prefix}
 			if fl.Changed("ge") {
-				params.Ge = int64Ptr(ge)
+				params.Ge = new(ge)
 			}
 			if fl.Changed("le") {
-				params.Le = int64Ptr(le)
+				params.Le = new(le)
 			}
 			if fl.Changed("seq") {
-				params.Seq = int64Ptr(seq)
+				params.Seq = new(seq)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.CreateSdnPrefixListsEntries(cmd.Context(), id, params); err != nil {
 				return fmt.Errorf("add entry to SDN prefix list %q: %w", id, err)
@@ -355,28 +355,28 @@ func newPrefixListEntrySetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnPrefixListsEntriesParams{}
 			if fl.Changed("action") {
-				params.Action = strPtr(action)
+				params.Action = new(action)
 			}
 			if fl.Changed("prefix") {
-				params.Prefix = strPtr(prefix)
+				params.Prefix = new(prefix)
 			}
 			if fl.Changed("ge") {
-				params.Ge = int64Ptr(ge)
+				params.Ge = new(ge)
 			}
 			if fl.Changed("le") {
-				params.Le = int64Ptr(le)
+				params.Le = new(le)
 			}
 			if fl.Changed("seq") {
-				params.Seq = int64Ptr(seq)
+				params.Seq = new(seq)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnPrefixListsEntries(cmd.Context(), id, urlSeq, params); err != nil {
 				return fmt.Errorf("update entry %q of SDN prefix list %q: %w", urlSeq, id, err)
@@ -419,7 +419,7 @@ func newPrefixListEntryDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnPrefixListsEntriesParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			err := deps.API.Cluster.DeleteSdnPrefixListsEntries(cmd.Context(), id, seq, params)
 			if err != nil {
@@ -469,7 +469,7 @@ func newRouteMapListCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnRouteMapsParams{}
 			if cmd.Flags().Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnRouteMaps(cmd.Context(), params)
 			if err != nil {
@@ -500,10 +500,10 @@ func newRouteMapGetCmd() *cobra.Command {
 			params := &cluster.GetSdnRouteMapsEntriesParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.GetSdnRouteMapsEntries(cmd.Context(), routeMap, params)
 			if err != nil {
@@ -556,10 +556,10 @@ func newRouteMapEntryListCmd() *cobra.Command {
 			params := &cluster.ListSdnRouteMapsEntriesParams{}
 			fl := cmd.Flags()
 			if fl.Changed("pending") {
-				params.Pending = boolPtr(pending)
+				params.Pending = new(pending)
 			}
 			if fl.Changed("running") {
-				params.Running = boolPtr(running)
+				params.Running = new(running)
 			}
 			resp, err := deps.API.Cluster.ListSdnRouteMapsEntries(cmd.Context(), params)
 			if err != nil {
@@ -606,13 +606,13 @@ func newRouteMapEntryAddCmd() *cobra.Command {
 				params.Set = set
 			}
 			if fl.Changed("call") {
-				params.Call = strPtr(call)
+				params.Call = new(call)
 			}
 			if fl.Changed("exit-action") {
-				params.ExitAction = strPtr(exitAction)
+				params.ExitAction = new(exitAction)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.CreateSdnRouteMapsEntries(cmd.Context(), params); err != nil {
 				return fmt.Errorf("add entry to SDN route map %q: %w", routeMap, err)
@@ -681,7 +681,7 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnRouteMapsEntriesEntryParams{}
 			if fl.Changed("action") {
-				params.Action = strPtr(action)
+				params.Action = new(action)
 			}
 			if fl.Changed("match") {
 				params.Match = match
@@ -690,19 +690,19 @@ func newRouteMapEntrySetCmd() *cobra.Command {
 				params.Set = set
 			}
 			if fl.Changed("call") {
-				params.Call = strPtr(call)
+				params.Call = new(call)
 			}
 			if fl.Changed("exit-action") {
-				params.ExitAction = strPtr(exitAction)
+				params.ExitAction = new(exitAction)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnRouteMapsEntriesEntry(cmd.Context(), routeMap, order, params); err != nil {
 				return fmt.Errorf("update entry %q of SDN route map %q: %w", order, routeMap, err)
@@ -745,7 +745,7 @@ func newRouteMapEntryDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnRouteMapsEntriesEntryParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			err := deps.API.Cluster.DeleteSdnRouteMapsEntriesEntry(cmd.Context(), routeMap, order, params)
 			if err != nil {

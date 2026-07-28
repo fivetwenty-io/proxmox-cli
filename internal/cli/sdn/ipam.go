@@ -56,7 +56,7 @@ func newIpamListCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnIpamsParams{}
 			if cmd.Flags().Changed("type") {
-				params.Type = strPtr(typ)
+				params.Type = new(typ)
 			}
 			resp, err := deps.API.Cluster.ListSdnIpams(cmd.Context(), params)
 			if err != nil {
@@ -100,19 +100,19 @@ func newIpamCreateCmd() *cobra.Command {
 			params := &cluster.CreateSdnIpamsParams{Ipam: ipam, Type: typ}
 			fl := cmd.Flags()
 			if fl.Changed("section") {
-				params.Section = int64Ptr(section)
+				params.Section = new(section)
 			}
 			if fl.Changed("token") {
-				params.Token = strPtr(token)
+				params.Token = new(token)
 			}
 			if fl.Changed("url") {
-				params.Url = strPtr(url)
+				params.Url = new(url)
 			}
 			if fl.Changed("fingerprint") {
-				params.Fingerprint = strPtr(fingerprint)
+				params.Fingerprint = new(fingerprint)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.CreateSdnIpams(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN IPAM %q: %w", ipam, err)
@@ -181,25 +181,25 @@ func newIpamSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnIpamsParams{}
 			if fl.Changed("section") {
-				params.Section = int64Ptr(section)
+				params.Section = new(section)
 			}
 			if fl.Changed("token") {
-				params.Token = strPtr(token)
+				params.Token = new(token)
 			}
 			if fl.Changed("url") {
-				params.Url = strPtr(url)
+				params.Url = new(url)
 			}
 			if fl.Changed("fingerprint") {
-				params.Fingerprint = strPtr(fingerprint)
+				params.Fingerprint = new(fingerprint)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnIpams(cmd.Context(), ipam, params); err != nil {
 				return fmt.Errorf("update SDN IPAM %q: %w", ipam, err)
@@ -240,7 +240,7 @@ func newIpamDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnIpamsParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.DeleteSdnIpams(cmd.Context(), ipam, params); err != nil {
 				return fmt.Errorf("delete SDN IPAM %q: %w", ipam, err)

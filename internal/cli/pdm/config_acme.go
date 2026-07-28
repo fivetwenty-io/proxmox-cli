@@ -3,6 +3,7 @@ package pdm
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -212,22 +213,22 @@ func newConfigAcmeAccountAddCmd() *cobra.Command {
 			name := args[0]
 
 			params := &pdmconfig.CreateAcmeAccountParams{
-				Name:    strPtr(name),
+				Name:    new(name),
 				Contact: contact,
 			}
 
 			fl := cmd.Flags()
 			if fl.Changed("directory") {
-				params.Directory = strPtr(directory)
+				params.Directory = new(directory)
 			}
 			if fl.Changed("eab-kid") {
-				params.EabKid = strPtr(eabKid)
+				params.EabKid = new(eabKid)
 			}
 			if fl.Changed("eab-hmac-key") {
-				params.EabHmacKey = strPtr(eabHmacKey)
+				params.EabHmacKey = new(eabHmacKey)
 			}
 			if fl.Changed("tos-url") {
-				params.TosUrl = strPtr(tosUrl)
+				params.TosUrl = new(tosUrl)
 			}
 
 			resp, err := deps.PDM.Config.CreateAcmeAccount(cmd.Context(), params)
@@ -275,7 +276,7 @@ func newConfigAcmeAccountUpdateCmd() *cobra.Command {
 
 			params := &pdmconfig.UpdateAcmeAccountParams{}
 			if cmd.Flags().Changed("contact") {
-				params.Contact = strPtr(contact)
+				params.Contact = new(contact)
 			}
 
 			resp, err := deps.PDM.Config.UpdateAcmeAccount(cmd.Context(), name, params)
@@ -324,7 +325,7 @@ func newConfigAcmeAccountDeleteCmd() *cobra.Command {
 
 			params := &pdmconfig.DeleteAcmeAccountParams{}
 			if cmd.Flags().Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 
 			resp, err := deps.PDM.Config.DeleteAcmeAccount(cmd.Context(), name, params)
@@ -522,10 +523,10 @@ func newConfigAcmePluginAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(a.disable)
+				params.Disable = new(a.disable)
 			}
 			if fl.Changed("validation-delay") {
-				params.ValidationDelay = int64Ptr(a.validationDelay)
+				params.ValidationDelay = new(a.validationDelay)
 			}
 
 			err := deps.PDM.Config.CreateAcmePlugins(cmd.Context(), params)
@@ -574,28 +575,26 @@ func newConfigAcmePluginUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, propName := range del {
-					if propName == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pdmconfig.UpdateAcmePluginsParams{}
 			if fl.Changed("api") {
-				params.Api = strPtr(a.api)
+				params.Api = new(a.api)
 			}
 			if fl.Changed("data") {
-				params.Data = strPtr(a.data)
+				params.Data = new(a.data)
 			}
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(a.disable)
+				params.Disable = new(a.disable)
 			}
 			if fl.Changed("validation-delay") {
-				params.ValidationDelay = int64Ptr(a.validationDelay)
+				params.ValidationDelay = new(a.validationDelay)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
@@ -824,7 +823,7 @@ func newConfigAcmeTosShowCmd() *cobra.Command {
 
 			params := &pdmconfig.ListAcmeTosParams{}
 			if cmd.Flags().Changed("directory") {
-				params.Directory = strPtr(directory)
+				params.Directory = new(directory)
 			}
 
 			resp, err := deps.PDM.Config.ListAcmeTos(cmd.Context(), params)

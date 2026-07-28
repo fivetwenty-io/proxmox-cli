@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -250,15 +251,15 @@ func newNotifEndpointSmtpAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("author") {
-				params.Author = strPtr(sf.author)
+				params.Author = new(sf.author)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(sf.comment)
+				params.Comment = new(sf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(sf.disable)
+				params.Disable = new(sf.disable)
 			}
 
 			if fl.Changed("mailto") {
@@ -270,23 +271,23 @@ func newNotifEndpointSmtpAddCmd() *cobra.Command {
 			}
 
 			if fl.Changed("mode") {
-				params.Mode = strPtr(sf.mode)
+				params.Mode = new(sf.mode)
 			}
 
 			if fl.Changed("origin") {
-				params.Origin = strPtr(sf.origin)
+				params.Origin = new(sf.origin)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(sf.password)
+				params.Password = new(sf.password)
 			}
 
 			if fl.Changed("port") {
-				params.Port = int64Ptr(sf.port)
+				params.Port = new(sf.port)
 			}
 
 			if fl.Changed("username") {
-				params.Username = strPtr(sf.username)
+				params.Username = new(sf.username)
 			}
 
 			err := deps.PBS.Config.CreateNotificationsEndpointsSmtp(cmd.Context(), params)
@@ -331,33 +332,31 @@ func newNotifEndpointSmtpUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range sf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(sf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateNotificationsEndpointsSmtpParams{}
 
 			if fl.Changed("server") {
-				params.Server = strPtr(sf.server)
+				params.Server = new(sf.server)
 			}
 
 			if fl.Changed("from-address") {
-				params.FromAddress = strPtr(sf.fromAddress)
+				params.FromAddress = new(sf.fromAddress)
 			}
 
 			if fl.Changed("author") {
-				params.Author = strPtr(sf.author)
+				params.Author = new(sf.author)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(sf.comment)
+				params.Comment = new(sf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(sf.disable)
+				params.Disable = new(sf.disable)
 			}
 
 			if fl.Changed("mailto") {
@@ -369,19 +368,19 @@ func newNotifEndpointSmtpUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("mode") {
-				params.Mode = strPtr(sf.mode)
+				params.Mode = new(sf.mode)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(sf.password)
+				params.Password = new(sf.password)
 			}
 
 			if fl.Changed("port") {
-				params.Port = int64Ptr(sf.port)
+				params.Port = new(sf.port)
 			}
 
 			if fl.Changed("username") {
-				params.Username = strPtr(sf.username)
+				params.Username = new(sf.username)
 			}
 
 			if fl.Changed("delete") {
@@ -389,7 +388,7 @@ func newNotifEndpointSmtpUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(sf.digest)
+				params.Digest = new(sf.digest)
 			}
 
 			err := deps.PBS.Config.UpdateNotificationsEndpointsSmtp(cmd.Context(), name, params)

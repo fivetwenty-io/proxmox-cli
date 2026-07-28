@@ -3,6 +3,7 @@ package pdm
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -467,47 +468,47 @@ func (pf *autoInstallPreparedFlags) toUpdateParams(cmd *cobra.Command) *pdmautoi
 	fl := cmd.Flags()
 
 	if fl.Changed("country") {
-		params.Country = strPtr(pf.country)
+		params.Country = new(pf.country)
 	}
 	if fl.Changed("disk-mode") {
-		params.DiskMode = strPtr(pf.diskMode)
+		params.DiskMode = new(pf.diskMode)
 	}
 	if fl.Changed("fqdn") {
-		params.Fqdn = strPtr(pf.fqdn)
+		params.Fqdn = new(pf.fqdn)
 	}
 	if fl.Changed("keyboard") {
-		params.Keyboard = strPtr(pf.keyboard)
+		params.Keyboard = new(pf.keyboard)
 	}
 	if fl.Changed("mailto") {
-		params.Mailto = strPtr(pf.mailto)
+		params.Mailto = new(pf.mailto)
 	}
 	if fl.Changed("timezone") {
-		params.Timezone = strPtr(pf.timezone)
+		params.Timezone = new(pf.timezone)
 	}
 	if fl.Changed("filesystem") {
 		params.Filesystem = json.RawMessage(pf.filesystem)
 	}
 	if fl.Changed("reboot-mode") {
-		params.RebootMode = strPtr(pf.rebootMode)
+		params.RebootMode = new(pf.rebootMode)
 	}
 	if fl.Changed("netif-name-pinning-enabled") {
-		params.NetifNamePinningEnabled = boolPtr(pf.netifNamePinningEnabled)
+		params.NetifNamePinningEnabled = new(pf.netifNamePinningEnabled)
 	}
 	if fl.Changed("reboot-on-error") {
-		params.RebootOnError = boolPtr(pf.rebootOnError)
+		params.RebootOnError = new(pf.rebootOnError)
 	}
 	if fl.Changed("use-dhcp-fqdn") {
-		params.UseDhcpFqdn = boolPtr(pf.useDhcpFqdn)
+		params.UseDhcpFqdn = new(pf.useDhcpFqdn)
 	}
 	if fl.Changed("use-dhcp-network") {
-		params.UseDhcpNetwork = boolPtr(pf.useDhcpNetwork)
+		params.UseDhcpNetwork = new(pf.useDhcpNetwork)
 	}
 	pf.applyOptionalUpdate(cmd, params)
 	if fl.Changed("delete") {
 		params.Delete = pf.del
 	}
 	if fl.Changed("digest") {
-		params.Digest = strPtr(pf.digest)
+		params.Digest = new(pf.digest)
 	}
 	return params
 }
@@ -522,46 +523,46 @@ func (pf *autoInstallPreparedFlags) applyOptionalCreate(cmd *cobra.Command, para
 		params.AuthorizedTokens = pf.authorizedTokens
 	}
 	if fl.Changed("cidr") {
-		params.Cidr = strPtr(pf.cidr)
+		params.Cidr = new(pf.cidr)
 	}
 	if fl.Changed("disk-filter") {
 		params.DiskFilter = json.RawMessage(pf.diskFilter)
 	}
 	if fl.Changed("disk-filter-match") {
-		params.DiskFilterMatch = strPtr(pf.diskFilterMatch)
+		params.DiskFilterMatch = new(pf.diskFilterMatch)
 	}
 	if fl.Changed("disk-list") {
 		params.DiskList = pf.diskList
 	}
 	if fl.Changed("dns") {
-		params.Dns = strPtr(pf.dns)
+		params.Dns = new(pf.dns)
 	}
 	if fl.Changed("gateway") {
-		params.Gateway = strPtr(pf.gateway)
+		params.Gateway = new(pf.gateway)
 	}
 	if fl.Changed("default") {
-		params.IsDefault = boolPtr(pf.isDefault)
+		params.IsDefault = new(pf.isDefault)
 	}
 	if fl.Changed("netdev-filter") {
 		params.NetdevFilter = json.RawMessage(pf.netdevFilter)
 	}
 	if fl.Changed("post-hook-base-url") {
-		params.PostHookBaseUrl = strPtr(pf.postHookBaseUrl)
+		params.PostHookBaseUrl = new(pf.postHookBaseUrl)
 	}
 	if fl.Changed("post-hook-cert-fp") {
-		params.PostHookCertFp = strPtr(pf.postHookCertFp)
+		params.PostHookCertFp = new(pf.postHookCertFp)
 	}
 	if fl.Changed("root-password") {
-		params.RootPassword = strPtr(pf.rootPassword)
+		params.RootPassword = new(pf.rootPassword)
 	}
 	if fl.Changed("root-password-hashed") {
-		params.RootPasswordHashed = strPtr(pf.rootPasswordHashed)
+		params.RootPasswordHashed = new(pf.rootPasswordHashed)
 	}
 	if fl.Changed("root-ssh-key") {
 		params.RootSshKeys = pf.rootSshKeys
 	}
 	if fl.Changed("subscription-key") {
-		params.SubscriptionKey = strPtr(pf.subscriptionKey)
+		params.SubscriptionKey = new(pf.subscriptionKey)
 	}
 	if fl.Changed("target-filter") {
 		params.TargetFilter = json.RawMessage(pf.targetFilter)
@@ -579,46 +580,46 @@ func (pf *autoInstallPreparedFlags) applyOptionalUpdate(cmd *cobra.Command, para
 		params.AuthorizedTokens = pf.authorizedTokens
 	}
 	if fl.Changed("cidr") {
-		params.Cidr = strPtr(pf.cidr)
+		params.Cidr = new(pf.cidr)
 	}
 	if fl.Changed("disk-filter") {
 		params.DiskFilter = json.RawMessage(pf.diskFilter)
 	}
 	if fl.Changed("disk-filter-match") {
-		params.DiskFilterMatch = strPtr(pf.diskFilterMatch)
+		params.DiskFilterMatch = new(pf.diskFilterMatch)
 	}
 	if fl.Changed("disk-list") {
 		params.DiskList = pf.diskList
 	}
 	if fl.Changed("dns") {
-		params.Dns = strPtr(pf.dns)
+		params.Dns = new(pf.dns)
 	}
 	if fl.Changed("gateway") {
-		params.Gateway = strPtr(pf.gateway)
+		params.Gateway = new(pf.gateway)
 	}
 	if fl.Changed("default") {
-		params.IsDefault = boolPtr(pf.isDefault)
+		params.IsDefault = new(pf.isDefault)
 	}
 	if fl.Changed("netdev-filter") {
 		params.NetdevFilter = json.RawMessage(pf.netdevFilter)
 	}
 	if fl.Changed("post-hook-base-url") {
-		params.PostHookBaseUrl = strPtr(pf.postHookBaseUrl)
+		params.PostHookBaseUrl = new(pf.postHookBaseUrl)
 	}
 	if fl.Changed("post-hook-cert-fp") {
-		params.PostHookCertFp = strPtr(pf.postHookCertFp)
+		params.PostHookCertFp = new(pf.postHookCertFp)
 	}
 	if fl.Changed("root-password") {
-		params.RootPassword = strPtr(pf.rootPassword)
+		params.RootPassword = new(pf.rootPassword)
 	}
 	if fl.Changed("root-password-hashed") {
-		params.RootPasswordHashed = strPtr(pf.rootPasswordHashed)
+		params.RootPasswordHashed = new(pf.rootPasswordHashed)
 	}
 	if fl.Changed("root-ssh-key") {
 		params.RootSshKeys = pf.rootSshKeys
 	}
 	if fl.Changed("subscription-key") {
-		params.SubscriptionKey = strPtr(pf.subscriptionKey)
+		params.SubscriptionKey = new(pf.subscriptionKey)
 	}
 	if fl.Changed("target-filter") {
 		params.TargetFilter = json.RawMessage(pf.targetFilter)
@@ -712,10 +713,8 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, key := range pf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(pf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -875,13 +874,13 @@ func newAutoInstallTokenAddCmd() *cobra.Command {
 
 			params := &pdmautoinstall.CreateTokensParams{Id: id}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if fl.Changed("enabled") {
-				params.Enabled = boolPtr(enabled)
+				params.Enabled = new(enabled)
 			}
 			if fl.Changed("expire-at") {
-				params.ExpireAt = int64Ptr(expireAt)
+				params.ExpireAt = new(expireAt)
 			}
 
 			resp, err := deps.PDM.AutoInstall.CreateTokens(cmd.Context(), params)
@@ -945,22 +944,22 @@ func newAutoInstallTokenUpdateCmd() *cobra.Command {
 
 			params := &pdmautoinstall.UpdateTokensParams{}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("enabled") {
-				params.Enabled = boolPtr(enabled)
+				params.Enabled = new(enabled)
 			}
 			if fl.Changed("expire-at") {
-				params.ExpireAt = int64Ptr(expireAt)
+				params.ExpireAt = new(expireAt)
 			}
 			if fl.Changed("regenerate") {
-				params.RegenerateSecret = boolPtr(regenerate)
+				params.RegenerateSecret = new(regenerate)
 			}
 
 			resp, err := deps.PDM.AutoInstall.UpdateTokens(cmd.Context(), id, params)

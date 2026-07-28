@@ -29,7 +29,6 @@ func TestFromError_ExitError_ChildCodeVerbatim(t *testing.T) {
 	t.Parallel()
 
 	for _, code := range []int{130, 255, 23} {
-		code := code
 		t.Run(fmt.Sprintf("code=%d", code), func(t *testing.T) {
 			t.Parallel()
 			ee := &exec.ExitError{Code: code, Err: fmt.Errorf("child exited")}

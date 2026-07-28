@@ -133,7 +133,7 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 				list := propstr.Parse(raw, "file")
 				list.Set("ms-cert", msCert)
 
-				params := &nodes.UpdateQemuConfigParams{Efidisk0: strPtr(list.String())}
+				params := &nodes.UpdateQemuConfigParams{Efidisk0: new(list.String())}
 				applyDigest(params, fl, digest, autoDigest)
 				if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
 					return fmt.Errorf("update efidisk0 for VM %s on node %q: %w", vmid, node, err)
@@ -199,9 +199,9 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 			}
 			newEfidisk := strings.Join(efidiskParts, ",")
 
-			params := &nodes.UpdateQemuConfigParams{Efidisk0: strPtr(newEfidisk)}
+			params := &nodes.UpdateQemuConfigParams{Efidisk0: new(newEfidisk)}
 			if bp.Bios != "ovmf" {
-				params.Bios = strPtr("ovmf")
+				params.Bios = new("ovmf")
 			}
 			applyDigest(params, fl, digest, autoDigest)
 

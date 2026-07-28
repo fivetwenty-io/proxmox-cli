@@ -383,7 +383,7 @@ func newSubscriptionNodeStatusCmd() *cobra.Command {
 
 			params := &pdmsubscriptions.ListNodeStatusParams{}
 			if cmd.Flags().Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 
 			resp, err := deps.PDM.Subscriptions.ListNodeStatus(cmd.Context(), params)

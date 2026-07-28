@@ -34,7 +34,7 @@ func newFeatureCmd() *cobra.Command {
 
 			params := &nodes.ListQemuFeatureParams{Feature: feature}
 			if cmd.Flags().Changed("snapname") {
-				params.Snapname = strPtr(snapname)
+				params.Snapname = new(snapname)
 			}
 
 			resp, err := deps.API.Nodes.ListQemuFeature(cmd.Context(), node, vmid, params)

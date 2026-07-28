@@ -89,43 +89,43 @@ func (f *vnetRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDe
 func (f *vnetRuleFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnVnetsFirewallRulesParams) {
 	c := fl.Flags()
 	if c.Changed("source") {
-		p.Source = strPtr(f.source)
+		p.Source = new(f.source)
 	}
 	if c.Changed("dest") {
-		p.Dest = strPtr(f.dest)
+		p.Dest = new(f.dest)
 	}
 	if c.Changed("proto") {
-		p.Proto = strPtr(f.proto)
+		p.Proto = new(f.proto)
 	}
 	if c.Changed("dport") {
-		p.Dport = strPtr(f.dport)
+		p.Dport = new(f.dport)
 	}
 	if c.Changed("sport") {
-		p.Sport = strPtr(f.sport)
+		p.Sport = new(f.sport)
 	}
 	if c.Changed("iface") {
-		p.Iface = strPtr(f.iface)
+		p.Iface = new(f.iface)
 	}
 	if c.Changed("macro") {
-		p.Macro = strPtr(f.macro)
+		p.Macro = new(f.macro)
 	}
 	if c.Changed("log") {
-		p.Log = strPtr(f.log)
+		p.Log = new(f.log)
 	}
 	if c.Changed("comment") {
-		p.Comment = strPtr(f.comment)
+		p.Comment = new(f.comment)
 	}
 	if c.Changed("icmp-type") {
-		p.IcmpType = strPtr(f.icmpType)
+		p.IcmpType = new(f.icmpType)
 	}
 	if c.Changed("enable") {
-		p.Enable = int64Ptr(f.enable)
+		p.Enable = new(f.enable)
 	}
 	if c.Changed("pos") {
-		p.Pos = int64Ptr(f.pos)
+		p.Pos = new(f.pos)
 	}
 	if c.Changed("digest") {
-		p.Digest = strPtr(f.digest)
+		p.Digest = new(f.digest)
 	}
 }
 
@@ -133,52 +133,52 @@ func (f *vnetRuleFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnVnets
 func (f *vnetRuleFlags) applyUpdate(fl *cobra.Command, p *cluster.UpdateSdnVnetsFirewallRulesParams) {
 	c := fl.Flags()
 	if c.Changed("type") {
-		p.Type = strPtr(f.ruleType)
+		p.Type = new(f.ruleType)
 	}
 	if c.Changed("action") {
-		p.Action = strPtr(f.action)
+		p.Action = new(f.action)
 	}
 	if c.Changed("source") {
-		p.Source = strPtr(f.source)
+		p.Source = new(f.source)
 	}
 	if c.Changed("dest") {
-		p.Dest = strPtr(f.dest)
+		p.Dest = new(f.dest)
 	}
 	if c.Changed("proto") {
-		p.Proto = strPtr(f.proto)
+		p.Proto = new(f.proto)
 	}
 	if c.Changed("dport") {
-		p.Dport = strPtr(f.dport)
+		p.Dport = new(f.dport)
 	}
 	if c.Changed("sport") {
-		p.Sport = strPtr(f.sport)
+		p.Sport = new(f.sport)
 	}
 	if c.Changed("iface") {
-		p.Iface = strPtr(f.iface)
+		p.Iface = new(f.iface)
 	}
 	if c.Changed("macro") {
-		p.Macro = strPtr(f.macro)
+		p.Macro = new(f.macro)
 	}
 	if c.Changed("log") {
-		p.Log = strPtr(f.log)
+		p.Log = new(f.log)
 	}
 	if c.Changed("comment") {
-		p.Comment = strPtr(f.comment)
+		p.Comment = new(f.comment)
 	}
 	if c.Changed("icmp-type") {
-		p.IcmpType = strPtr(f.icmpType)
+		p.IcmpType = new(f.icmpType)
 	}
 	if c.Changed("enable") {
-		p.Enable = int64Ptr(f.enable)
+		p.Enable = new(f.enable)
 	}
 	if c.Changed("moveto") {
-		p.Moveto = int64Ptr(f.moveto)
+		p.Moveto = new(f.moveto)
 	}
 	if c.Changed("delete") {
-		p.Delete = strPtr(f.del)
+		p.Delete = new(f.del)
 	}
 	if c.Changed("digest") {
-		p.Digest = strPtr(f.digest)
+		p.Digest = new(f.digest)
 	}
 }
 
@@ -464,19 +464,19 @@ func newVnetFirewallOptionsSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnVnetsFirewallOptionsParams{}
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 			if fl.Changed("log-level-forward") {
-				params.LogLevelForward = strPtr(logLevelForward)
+				params.LogLevelForward = new(logLevelForward)
 			}
 			if fl.Changed("policy-forward") {
-				params.PolicyForward = strPtr(policyForward)
+				params.PolicyForward = new(policyForward)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if err := deps.API.Cluster.UpdateSdnVnetsFirewallOptions(cmd.Context(), vnet, params); err != nil {
 				return fmt.Errorf("set firewall options for vnet %q: %w", vnet, err)

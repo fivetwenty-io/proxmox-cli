@@ -96,37 +96,37 @@ func (tf *remoteTaskListFlags) validate(cmd string) error {
 func (tf *remoteTaskListFlags) applyList(cmd *cobra.Command, p *pdmremotes.ListTasksListParams) {
 	fl := cmd.Flags()
 	if fl.Changed("errors") {
-		p.Errors = boolPtr(tf.errorsOnly)
+		p.Errors = new(tf.errorsOnly)
 	}
 	if fl.Changed("limit") {
-		p.Limit = int64Ptr(tf.limit)
+		p.Limit = new(tf.limit)
 	}
 	if fl.Changed("remote") {
-		p.Remote = strPtr(tf.remote)
+		p.Remote = new(tf.remote)
 	}
 	if fl.Changed("running") {
-		p.Running = boolPtr(tf.running)
+		p.Running = new(tf.running)
 	}
 	if fl.Changed("since") {
-		p.Since = int64Ptr(tf.since)
+		p.Since = new(tf.since)
 	}
 	if fl.Changed("start") {
-		p.Start = int64Ptr(tf.start)
+		p.Start = new(tf.start)
 	}
 	if fl.Changed("status") {
 		p.Statusfilter = tf.statusfilter
 	}
 	if fl.Changed("type") {
-		p.Typefilter = strPtr(tf.typefilter)
+		p.Typefilter = new(tf.typefilter)
 	}
 	if fl.Changed("until") {
-		p.Until = int64Ptr(tf.until)
+		p.Until = new(tf.until)
 	}
 	if fl.Changed("user") {
-		p.Userfilter = strPtr(tf.userfilter)
+		p.Userfilter = new(tf.userfilter)
 	}
 	if fl.Changed("view") {
-		p.View = strPtr(tf.view)
+		p.View = new(tf.view)
 	}
 }
 
@@ -135,37 +135,37 @@ func (tf *remoteTaskListFlags) applyList(cmd *cobra.Command, p *pdmremotes.ListT
 func (tf *remoteTaskListFlags) applyStatistics(cmd *cobra.Command, p *pdmremotes.ListTasksStatisticsParams) {
 	fl := cmd.Flags()
 	if fl.Changed("errors") {
-		p.Errors = boolPtr(tf.errorsOnly)
+		p.Errors = new(tf.errorsOnly)
 	}
 	if fl.Changed("limit") {
-		p.Limit = int64Ptr(tf.limit)
+		p.Limit = new(tf.limit)
 	}
 	if fl.Changed("remote") {
-		p.Remote = strPtr(tf.remote)
+		p.Remote = new(tf.remote)
 	}
 	if fl.Changed("running") {
-		p.Running = boolPtr(tf.running)
+		p.Running = new(tf.running)
 	}
 	if fl.Changed("since") {
-		p.Since = int64Ptr(tf.since)
+		p.Since = new(tf.since)
 	}
 	if fl.Changed("start") {
-		p.Start = int64Ptr(tf.start)
+		p.Start = new(tf.start)
 	}
 	if fl.Changed("status") {
 		p.Statusfilter = tf.statusfilter
 	}
 	if fl.Changed("type") {
-		p.Typefilter = strPtr(tf.typefilter)
+		p.Typefilter = new(tf.typefilter)
 	}
 	if fl.Changed("until") {
-		p.Until = int64Ptr(tf.until)
+		p.Until = new(tf.until)
 	}
 	if fl.Changed("user") {
-		p.Userfilter = strPtr(tf.userfilter)
+		p.Userfilter = new(tf.userfilter)
 	}
 	if fl.Changed("view") {
-		p.View = strPtr(tf.view)
+		p.View = new(tf.view)
 	}
 }
 
@@ -508,7 +508,7 @@ func newRemoteMetricCollectionTriggerCmd() *cobra.Command {
 
 			params := &pdmremotes.CreateMetricCollectionTriggerParams{}
 			if cmd.Flags().Changed("remote") {
-				params.Remote = strPtr(remote)
+				params.Remote = new(remote)
 			}
 
 			err := deps.PDM.Remotes.CreateMetricCollectionTrigger(cmd.Context(), params)

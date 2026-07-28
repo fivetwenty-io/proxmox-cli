@@ -96,7 +96,7 @@ func newHookscriptSetCmd() *cobra.Command {
 			_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
 				"WARNING: the hookscript executes on the HOST during VM lifecycle events")
 
-			params := &nodes.UpdateQemuConfigParams{Hookscript: strPtr(volume)}
+			params := &nodes.UpdateQemuConfigParams{Hookscript: new(volume)}
 			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("set hookscript on VM %s: %w", vmid, err)
 			}
@@ -122,7 +122,7 @@ func newHookscriptUnsetCmd() *cobra.Command {
 				return err
 			}
 
-			params := &nodes.UpdateQemuConfigParams{Delete: strPtr("hookscript")}
+			params := &nodes.UpdateQemuConfigParams{Delete: new("hookscript")}
 			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("remove hookscript from VM %s: %w", vmid, err)
 			}

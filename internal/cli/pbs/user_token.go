@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -149,19 +150,19 @@ func newUserTokenAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			resp, err := deps.PBS.Access.CreateUsersToken(cmd.Context(), userid, tokenName, params)
@@ -219,16 +220,14 @@ func newUserTokenUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsaccess.UpdateUsersTokenParams{}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("delete") {
@@ -236,19 +235,19 @@ func newUserTokenUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			if fl.Changed("regenerate") {
-				params.Regenerate = boolPtr(regenerate)
+				params.Regenerate = new(regenerate)
 			}
 
 			resp, err := deps.PBS.Access.UpdateUsersToken(cmd.Context(), userid, tokenName, params)
@@ -304,7 +303,7 @@ func newUserTokenDeleteCmd() *cobra.Command {
 
 			params := &pbsaccess.DeleteUsersTokenParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Access.DeleteUsersToken(cmd.Context(), userid, tokenName, params)

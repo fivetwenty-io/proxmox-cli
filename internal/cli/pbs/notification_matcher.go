@@ -3,6 +3,7 @@ package pbs
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -224,15 +225,15 @@ func newNotifMatcherAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(mf.comment)
+				params.Comment = new(mf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(mf.disable)
+				params.Disable = new(mf.disable)
 			}
 
 			if fl.Changed("invert-match") {
-				params.InvertMatch = boolPtr(mf.invertMatch)
+				params.InvertMatch = new(mf.invertMatch)
 			}
 
 			if fl.Changed("match-calendar") {
@@ -248,11 +249,11 @@ func newNotifMatcherAddCmd() *cobra.Command {
 			}
 
 			if fl.Changed("mode") {
-				params.Mode = strPtr(mf.mode)
+				params.Mode = new(mf.mode)
 			}
 
 			if fl.Changed("origin") {
-				params.Origin = strPtr(mf.origin)
+				params.Origin = new(mf.origin)
 			}
 
 			if fl.Changed("target") {
@@ -299,25 +300,23 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range mf.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(mf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pbsconfig.UpdateNotificationsMatchersParams{}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(mf.comment)
+				params.Comment = new(mf.comment)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(mf.disable)
+				params.Disable = new(mf.disable)
 			}
 
 			if fl.Changed("invert-match") {
-				params.InvertMatch = boolPtr(mf.invertMatch)
+				params.InvertMatch = new(mf.invertMatch)
 			}
 
 			if fl.Changed("match-calendar") {
@@ -333,7 +332,7 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("mode") {
-				params.Mode = strPtr(mf.mode)
+				params.Mode = new(mf.mode)
 			}
 
 			if fl.Changed("target") {
@@ -345,7 +344,7 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(mf.digest)
+				params.Digest = new(mf.digest)
 			}
 
 			err := deps.PBS.Config.UpdateNotificationsMatchers(cmd.Context(), name, params)

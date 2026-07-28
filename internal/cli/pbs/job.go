@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -245,15 +246,15 @@ func (jf *tapeJobFlags) validateNotificationMode(cmd *cobra.Command) error {
 func (jf *tapeJobFlags) applyAdd(cmd *cobra.Command, p *pbsconfig.CreateTapeBackupJobParams) {
 	fl := cmd.Flags()
 	if fl.Changed("comment") {
-		p.Comment = strPtr(jf.comment)
+		p.Comment = new(jf.comment)
 	}
 
 	if fl.Changed("eject-media") {
-		p.EjectMedia = boolPtr(jf.ejectMedia)
+		p.EjectMedia = new(jf.ejectMedia)
 	}
 
 	if fl.Changed("export-media-set") {
-		p.ExportMediaSet = boolPtr(jf.exportMediaSet)
+		p.ExportMediaSet = new(jf.exportMediaSet)
 	}
 
 	if fl.Changed("group-filter") {
@@ -261,31 +262,31 @@ func (jf *tapeJobFlags) applyAdd(cmd *cobra.Command, p *pbsconfig.CreateTapeBack
 	}
 
 	if fl.Changed("latest-only") {
-		p.LatestOnly = boolPtr(jf.latestOnly)
+		p.LatestOnly = new(jf.latestOnly)
 	}
 
 	if fl.Changed("max-depth") {
-		p.MaxDepth = int64Ptr(jf.maxDepth)
+		p.MaxDepth = new(jf.maxDepth)
 	}
 
 	if fl.Changed("notification-mode") {
-		p.NotificationMode = strPtr(jf.notificationMode)
+		p.NotificationMode = new(jf.notificationMode)
 	}
 
 	if fl.Changed("notify-user") {
-		p.NotifyUser = strPtr(jf.notifyUser)
+		p.NotifyUser = new(jf.notifyUser)
 	}
 
 	if fl.Changed("ns") {
-		p.Ns = strPtr(jf.ns)
+		p.Ns = new(jf.ns)
 	}
 
 	if fl.Changed("schedule") {
-		p.Schedule = strPtr(jf.schedule)
+		p.Schedule = new(jf.schedule)
 	}
 
 	if fl.Changed("worker-threads") {
-		p.WorkerThreads = int64Ptr(jf.workerThreads)
+		p.WorkerThreads = new(jf.workerThreads)
 	}
 }
 
@@ -293,19 +294,19 @@ func (jf *tapeJobFlags) applyAdd(cmd *cobra.Command, p *pbsconfig.CreateTapeBack
 func (jf *tapeJobFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateTapeBackupJobParams) {
 	fl := cmd.Flags()
 	if fl.Changed("comment") {
-		p.Comment = strPtr(jf.comment)
+		p.Comment = new(jf.comment)
 	}
 
 	if fl.Changed("drive") {
-		p.Drive = strPtr(jf.drive)
+		p.Drive = new(jf.drive)
 	}
 
 	if fl.Changed("eject-media") {
-		p.EjectMedia = boolPtr(jf.ejectMedia)
+		p.EjectMedia = new(jf.ejectMedia)
 	}
 
 	if fl.Changed("export-media-set") {
-		p.ExportMediaSet = boolPtr(jf.exportMediaSet)
+		p.ExportMediaSet = new(jf.exportMediaSet)
 	}
 
 	if fl.Changed("group-filter") {
@@ -313,39 +314,39 @@ func (jf *tapeJobFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateTapeB
 	}
 
 	if fl.Changed("latest-only") {
-		p.LatestOnly = boolPtr(jf.latestOnly)
+		p.LatestOnly = new(jf.latestOnly)
 	}
 
 	if fl.Changed("max-depth") {
-		p.MaxDepth = int64Ptr(jf.maxDepth)
+		p.MaxDepth = new(jf.maxDepth)
 	}
 
 	if fl.Changed("notification-mode") {
-		p.NotificationMode = strPtr(jf.notificationMode)
+		p.NotificationMode = new(jf.notificationMode)
 	}
 
 	if fl.Changed("notify-user") {
-		p.NotifyUser = strPtr(jf.notifyUser)
+		p.NotifyUser = new(jf.notifyUser)
 	}
 
 	if fl.Changed("ns") {
-		p.Ns = strPtr(jf.ns)
+		p.Ns = new(jf.ns)
 	}
 
 	if fl.Changed("pool") {
-		p.Pool = strPtr(jf.pool)
+		p.Pool = new(jf.pool)
 	}
 
 	if fl.Changed("schedule") {
-		p.Schedule = strPtr(jf.schedule)
+		p.Schedule = new(jf.schedule)
 	}
 
 	if fl.Changed("store") {
-		p.Store = strPtr(jf.store)
+		p.Store = new(jf.store)
 	}
 
 	if fl.Changed("worker-threads") {
-		p.WorkerThreads = int64Ptr(jf.workerThreads)
+		p.WorkerThreads = new(jf.workerThreads)
 	}
 
 	if fl.Changed("delete") {
@@ -353,7 +354,7 @@ func (jf *tapeJobFlags) applyUpdate(cmd *cobra.Command, p *pbsconfig.UpdateTapeB
 	}
 
 	if fl.Changed("digest") {
-		p.Digest = strPtr(jf.digest)
+		p.Digest = new(jf.digest)
 	}
 }
 
@@ -445,10 +446,8 @@ func newTapeJobUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, name := range jf.del {
-					if name == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(jf.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -497,7 +496,7 @@ func newTapeJobDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeleteTapeBackupJobParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeleteTapeBackupJob(cmd.Context(), id, params)

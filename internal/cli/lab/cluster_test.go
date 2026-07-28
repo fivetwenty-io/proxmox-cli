@@ -463,7 +463,7 @@ Flags:            Quorate
 		{Stdout: samplePctListEmpty},                         // guest-free check: pct list (empty)
 		{},                                                   // pvecm add
 	}
-	for i := 0; i < clusterJoinPollAttempts; i++ {
+	for range clusterJoinPollAttempts {
 		responses = append(responses, exec.FakeResponse{Stdout: stuck}, exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp})
 	}
 	fake := exec.Fake(responses...)

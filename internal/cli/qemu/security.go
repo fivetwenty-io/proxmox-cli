@@ -121,11 +121,11 @@ func applyDigest(
 	explicitDigest, autoDigest string,
 ) {
 	if fl.Changed("digest") {
-		params.Digest = strPtr(explicitDigest)
+		params.Digest = new(explicitDigest)
 		return
 	}
 	if autoDigest != "" {
-		params.Digest = strPtr(autoDigest)
+		params.Digest = new(autoDigest)
 	}
 }
 
@@ -886,7 +886,7 @@ func newSecurityProtectionSetCmd(enable bool) *cobra.Command {
 					"WARNING: clearing the protection flag re-enables destroy and disk-removal operations for VM %s\n", vmid)
 			}
 
-			params := &nodes.UpdateQemuConfigParams{Protection: boolPtr(enable)}
+			params := &nodes.UpdateQemuConfigParams{Protection: new(enable)}
 			applyDigest(params, fl, digest, autoDigest)
 
 			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {

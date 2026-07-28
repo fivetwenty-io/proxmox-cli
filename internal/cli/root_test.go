@@ -407,7 +407,7 @@ func TestHelp_WrapsFlagUsagesToColumns(t *testing.T) {
 	require.NoError(t, sub.Usage())
 
 	require.Contains(t, buf.String(), "--long-one")
-	for _, line := range strings.Split(buf.String(), "\n") {
+	for line := range strings.SplitSeq(buf.String(), "\n") {
 		require.LessOrEqual(t, len(line), 80, "help line exceeds $COLUMNS: %q", line)
 	}
 }

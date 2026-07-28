@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -95,31 +96,29 @@ func newConfigWebauthnUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pdmconfig.UpdateAccessTfaWebauthnParams{}
 			if fl.Changed("id") {
-				params.Id = strPtr(id)
+				params.Id = new(id)
 			}
 			if fl.Changed("rp") {
-				params.Rp = strPtr(rp)
+				params.Rp = new(rp)
 			}
 			if fl.Changed("origin") {
-				params.Origin = strPtr(origin)
+				params.Origin = new(origin)
 			}
 			if fl.Changed("allow-subdomains") {
-				params.AllowSubdomains = boolPtr(allowSubdomains)
+				params.AllowSubdomains = new(allowSubdomains)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.UpdateAccessTfaWebauthn(cmd.Context(), params)

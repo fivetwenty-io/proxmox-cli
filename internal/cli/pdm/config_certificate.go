@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -93,37 +94,35 @@ func newConfigCertificateUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("delete") {
-				for _, key := range del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
 			params := &pdmconfig.UpdateCertificateParams{}
 			if fl.Changed("acme") {
-				params.Acme = strPtr(acme)
+				params.Acme = new(acme)
 			}
 			if fl.Changed("acmedomain0") {
-				params.Acmedomain0 = strPtr(acmedomain0)
+				params.Acmedomain0 = new(acmedomain0)
 			}
 			if fl.Changed("acmedomain1") {
-				params.Acmedomain1 = strPtr(acmedomain1)
+				params.Acmedomain1 = new(acmedomain1)
 			}
 			if fl.Changed("acmedomain2") {
-				params.Acmedomain2 = strPtr(acmedomain2)
+				params.Acmedomain2 = new(acmedomain2)
 			}
 			if fl.Changed("acmedomain3") {
-				params.Acmedomain3 = strPtr(acmedomain3)
+				params.Acmedomain3 = new(acmedomain3)
 			}
 			if fl.Changed("acmedomain4") {
-				params.Acmedomain4 = strPtr(acmedomain4)
+				params.Acmedomain4 = new(acmedomain4)
 			}
 			if fl.Changed("delete") {
 				params.Delete = del
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.UpdateCertificate(cmd.Context(), params)

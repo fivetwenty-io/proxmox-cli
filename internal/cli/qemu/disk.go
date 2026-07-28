@@ -66,10 +66,10 @@ func newDiskResizeCmd() *cobra.Command {
 
 			params := &nodes.UpdateQemuResizeParams{Disk: disk, Size: size}
 			if cmd.Flags().Changed("skiplock") {
-				params.Skiplock = boolPtr(skiplock)
+				params.Skiplock = new(skiplock)
 			}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			resp, err := deps.API.Nodes.UpdateQemuResize(cmd.Context(), node, vmid, params)
@@ -138,28 +138,28 @@ func newDiskMoveCmd() *cobra.Command {
 			params := &nodes.CreateQemuMoveDiskParams{Disk: disk}
 			fl := cmd.Flags()
 			if fl.Changed("storage") {
-				params.Storage = strPtr(storage)
+				params.Storage = new(storage)
 			}
 			if fl.Changed("target-disk") {
-				params.TargetDisk = strPtr(targetDisk)
+				params.TargetDisk = new(targetDisk)
 			}
 			if fl.Changed("target-vmid") {
-				params.TargetVmid = int64Ptr(targetVMID)
+				params.TargetVmid = new(targetVMID)
 			}
 			if fl.Changed("format") {
-				params.Format = strPtr(format)
+				params.Format = new(format)
 			}
 			if fl.Changed("bwlimit") {
-				params.Bwlimit = int64Ptr(bwlimit)
+				params.Bwlimit = new(bwlimit)
 			}
 			if fl.Changed("delete") {
-				params.Delete = boolPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("target-digest") {
-				params.TargetDigest = strPtr(targetDigest)
+				params.TargetDigest = new(targetDigest)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuMoveDisk(cmd.Context(), node, vmid, params)
@@ -214,7 +214,7 @@ func newDiskUnlinkCmd() *cobra.Command {
 
 			params := &nodes.UpdateQemuUnlinkParams{Idlist: disk}
 			if cmd.Flags().Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 
 			if err := deps.API.Nodes.UpdateQemuUnlink(cmd.Context(), node, vmid, params); err != nil {

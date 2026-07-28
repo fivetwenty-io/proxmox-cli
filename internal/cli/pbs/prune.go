@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -91,27 +92,27 @@ func pruneKeepPtrs(cmd *cobra.Command, a pruneKeepArgs) (last, hourly, daily, we
 	fl := cmd.Flags()
 
 	if fl.Changed("keep-last") {
-		last = int64Ptr(a.last)
+		last = new(a.last)
 	}
 
 	if fl.Changed("keep-hourly") {
-		hourly = int64Ptr(a.hourly)
+		hourly = new(a.hourly)
 	}
 
 	if fl.Changed("keep-daily") {
-		daily = int64Ptr(a.daily)
+		daily = new(a.daily)
 	}
 
 	if fl.Changed("keep-weekly") {
-		weekly = int64Ptr(a.weekly)
+		weekly = new(a.weekly)
 	}
 
 	if fl.Changed("keep-monthly") {
-		monthly = int64Ptr(a.monthly)
+		monthly = new(a.monthly)
 	}
 
 	if fl.Changed("keep-yearly") {
-		yearly = int64Ptr(a.yearly)
+		yearly = new(a.yearly)
 	}
 
 	return last, hourly, daily, weekly, monthly, yearly
@@ -146,15 +147,15 @@ func newPruneRunCmd() *cobra.Command {
 			fl := cmd.Flags()
 			params := &pbsadmin.CreateDatastorePruneDatastoreParams{}
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 
 			if fl.Changed("dry-run") {
-				params.DryRun = boolPtr(dryRun)
+				params.DryRun = new(dryRun)
 			}
 
 			params.KeepLast, params.KeepHourly, params.KeepDaily,
@@ -226,12 +227,12 @@ func newPruneSimulateCmd() *cobra.Command {
 			params := &pbsadmin.CreateDatastorePruneParams{
 				BackupId:   backupID,
 				BackupType: backupType,
-				DryRun:     boolPtr(true),
+				DryRun:     new(true),
 			}
 
 			fl := cmd.Flags()
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			params.KeepLast, params.KeepHourly, params.KeepDaily,
@@ -531,19 +532,19 @@ func newPruneJobAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(disable)
+				params.Disable = new(disable)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			params.KeepLast, params.KeepHourly, params.KeepDaily,
@@ -605,38 +606,36 @@ func newPruneJobUpdateCmd() *cobra.Command {
 			params := &pbsconfig.UpdatePruneParams{}
 
 			if fl.Changed("store") {
-				params.Store = strPtr(store)
+				params.Store = new(store)
 			}
 
 			if fl.Changed("schedule") {
-				params.Schedule = strPtr(schedule)
+				params.Schedule = new(schedule)
 			}
 
 			if fl.Changed("ns") {
-				params.Ns = strPtr(ns)
+				params.Ns = new(ns)
 			}
 
 			if fl.Changed("max-depth") {
-				params.MaxDepth = int64Ptr(maxDepth)
+				params.MaxDepth = new(maxDepth)
 			}
 
 			if fl.Changed("disable") {
-				params.Disable = boolPtr(disable)
+				params.Disable = new(disable)
 			}
 
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("delete") {
-				for _, name := range del {
-					if name == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 
 				params.Delete = del
@@ -692,7 +691,7 @@ func newPruneJobDeleteCmd() *cobra.Command {
 
 			params := &pbsconfig.DeletePruneParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Config.DeletePrune(cmd.Context(), id, params)

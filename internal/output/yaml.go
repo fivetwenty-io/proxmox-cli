@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"maps"
 
 	yaml "github.com/goccy/go-yaml"
 )
@@ -19,9 +20,7 @@ func renderYAML(w io.Writer, res Result) error {
 		// isomorphic for single-map Results. goccy/go-yaml sorts map keys, giving
 		// deterministic output.
 		data := make(map[string]string, len(res.Single))
-		for k, val := range res.Single {
-			data[k] = val
-		}
+		maps.Copy(data, res.Single)
 		v = map[string]any{"data": data}
 	} else if len(res.Headers) > 0 || len(res.Rows) > 0 {
 		rows := res.Rows

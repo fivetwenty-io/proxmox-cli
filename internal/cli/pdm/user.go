@@ -74,7 +74,7 @@ func newUserLsCmd() *cobra.Command {
 
 			params := &pdmaccess.ListUsersParams{}
 			if cmd.Flags().Changed("include-tokens") {
-				params.IncludeTokens = boolPtr(includeTokens)
+				params.IncludeTokens = new(includeTokens)
 			}
 
 			resp, err := deps.PDM.Access.ListUsers(cmd.Context(), params)
@@ -167,31 +167,31 @@ func newUserAddCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("email") {
-				params.Email = strPtr(email)
+				params.Email = new(email)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			if fl.Changed("firstname") {
-				params.Firstname = strPtr(firstname)
+				params.Firstname = new(firstname)
 			}
 
 			if fl.Changed("lastname") {
-				params.Lastname = strPtr(lastname)
+				params.Lastname = new(lastname)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PDM.Access.CreateUsers(cmd.Context(), params)
@@ -242,7 +242,7 @@ func newUserUpdateCmd() *cobra.Command {
 
 			params := &pdmaccess.UpdateUsersParams{}
 			if fl.Changed("comment") {
-				params.Comment = strPtr(comment)
+				params.Comment = new(comment)
 			}
 
 			if fl.Changed("delete") {
@@ -250,31 +250,31 @@ func newUserUpdateCmd() *cobra.Command {
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			if fl.Changed("email") {
-				params.Email = strPtr(email)
+				params.Email = new(email)
 			}
 
 			if fl.Changed("enable") {
-				params.Enable = boolPtr(enable)
+				params.Enable = new(enable)
 			}
 
 			if fl.Changed("expire") {
-				params.Expire = int64Ptr(expire)
+				params.Expire = new(expire)
 			}
 
 			if fl.Changed("firstname") {
-				params.Firstname = strPtr(firstname)
+				params.Firstname = new(firstname)
 			}
 
 			if fl.Changed("lastname") {
-				params.Lastname = strPtr(lastname)
+				params.Lastname = new(lastname)
 			}
 
 			if fl.Changed("password") {
-				params.Password = strPtr(password)
+				params.Password = new(password)
 			}
 
 			err := deps.PDM.Access.UpdateUsers(cmd.Context(), userid, params)
@@ -323,7 +323,7 @@ func newUserDeleteCmd() *cobra.Command {
 
 			params := &pdmaccess.DeleteUsersParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Access.DeleteUsers(cmd.Context(), userid, params)

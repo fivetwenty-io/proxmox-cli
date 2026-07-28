@@ -56,7 +56,7 @@ func newDnsListCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnDnsParams{}
 			if cmd.Flags().Changed("type") {
-				params.Type = strPtr(typ)
+				params.Type = new(typ)
 			}
 			resp, err := deps.API.Cluster.ListSdnDns(cmd.Context(), params)
 			if err != nil {
@@ -102,19 +102,19 @@ func newDnsCreateCmd() *cobra.Command {
 			params := &cluster.CreateSdnDnsParams{Dns: dns, Type: typ, Url: url, Key: key}
 			fl := cmd.Flags()
 			if fl.Changed("fingerprint") {
-				params.Fingerprint = strPtr(fingerprint)
+				params.Fingerprint = new(fingerprint)
 			}
 			if fl.Changed("reversemaskv6") {
-				params.Reversemaskv6 = int64Ptr(reversemaskv6)
+				params.Reversemaskv6 = new(reversemaskv6)
 			}
 			if fl.Changed("reversev6mask") {
-				params.Reversev6mask = int64Ptr(reversev6mask)
+				params.Reversev6mask = new(reversev6mask)
 			}
 			if fl.Changed("ttl") {
-				params.Ttl = int64Ptr(ttl)
+				params.Ttl = new(ttl)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.CreateSdnDns(cmd.Context(), params); err != nil {
 				return fmt.Errorf("create SDN DNS provider %q: %w", dns, err)
@@ -188,28 +188,28 @@ func newDnsSetCmd() *cobra.Command {
 			}
 			params := &cluster.UpdateSdnDnsParams{}
 			if fl.Changed("url") {
-				params.Url = strPtr(url)
+				params.Url = new(url)
 			}
 			if fl.Changed("key") {
-				params.Key = strPtr(key)
+				params.Key = new(key)
 			}
 			if fl.Changed("fingerprint") {
-				params.Fingerprint = strPtr(fingerprint)
+				params.Fingerprint = new(fingerprint)
 			}
 			if fl.Changed("reversemaskv6") {
-				params.Reversemaskv6 = int64Ptr(reversemaskv6)
+				params.Reversemaskv6 = new(reversemaskv6)
 			}
 			if fl.Changed("ttl") {
-				params.Ttl = int64Ptr(ttl)
+				params.Ttl = new(ttl)
 			}
 			if fl.Changed("delete") {
-				params.Delete = strPtr(del)
+				params.Delete = new(del)
 			}
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 			if fl.Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.UpdateSdnDns(cmd.Context(), dns, params); err != nil {
 				return fmt.Errorf("update SDN DNS provider %q: %w", dns, err)
@@ -251,7 +251,7 @@ func newDnsDeleteCmd() *cobra.Command {
 			}
 			params := &cluster.DeleteSdnDnsParams{}
 			if cmd.Flags().Changed("lock-token") {
-				params.LockToken = strPtr(lockToken)
+				params.LockToken = new(lockToken)
 			}
 			if err := deps.API.Cluster.DeleteSdnDns(cmd.Context(), dns, params); err != nil {
 				return fmt.Errorf("delete SDN DNS provider %q: %w", dns, err)

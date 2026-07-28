@@ -47,11 +47,11 @@ func newPermissionLsCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("auth-id") {
-				params.AuthId = strPtr(authId)
+				params.AuthId = new(authId)
 			}
 
 			if fl.Changed("path") {
-				params.Path = strPtr(path)
+				params.Path = new(path)
 			}
 
 			resp, err := deps.PDM.Access.ListPermissions(cmd.Context(), params)

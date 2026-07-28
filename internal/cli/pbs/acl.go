@@ -55,11 +55,11 @@ func newACLLsCmd() *cobra.Command {
 
 			fl := cmd.Flags()
 			if fl.Changed("path") {
-				params.Path = strPtr(path)
+				params.Path = new(path)
 			}
 
 			if fl.Changed("exact") {
-				params.Exact = boolPtr(exact)
+				params.Exact = new(exact)
 			}
 
 			resp, err := deps.PBS.Access.ListAcl(cmd.Context(), params)
@@ -145,23 +145,23 @@ func newACLUpdateCmd() *cobra.Command {
 
 			params := &pbsaccess.UpdateAclParams{Path: path, Role: role}
 			if fl.Changed("auth-id") {
-				params.AuthId = strPtr(authId)
+				params.AuthId = new(authId)
 			}
 
 			if fl.Changed("group") {
-				params.Group = strPtr(group)
+				params.Group = new(group)
 			}
 
 			if fl.Changed("propagate") {
-				params.Propagate = boolPtr(propagate)
+				params.Propagate = new(propagate)
 			}
 
 			if fl.Changed("delete") {
-				params.Delete = boolPtr(del)
+				params.Delete = new(del)
 			}
 
 			if fl.Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PBS.Access.UpdateAcl(cmd.Context(), params)

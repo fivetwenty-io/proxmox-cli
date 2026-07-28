@@ -116,7 +116,7 @@ func newSecurityTpmAddCmd() *cobra.Command {
 			}
 
 			newTpm := fmt.Sprintf("%s:1,version=%s", storage, version)
-			params := &nodes.UpdateQemuConfigParams{Tpmstate0: strPtr(newTpm)}
+			params := &nodes.UpdateQemuConfigParams{Tpmstate0: new(newTpm)}
 			applyDigest(params, fl, digest, autoDigest)
 
 			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
@@ -183,7 +183,7 @@ func newSecurityTpmRemoveCmd() *cobra.Command {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 				"WARNING: destroying TPM state of VM %s — keys sealed in the TPM are unrecoverable\n", vmid)
 
-			params := &nodes.UpdateQemuConfigParams{Delete: strPtr("tpmstate0")}
+			params := &nodes.UpdateQemuConfigParams{Delete: new("tpmstate0")}
 			applyDigest(params, fl, digest, autoDigest)
 
 			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {

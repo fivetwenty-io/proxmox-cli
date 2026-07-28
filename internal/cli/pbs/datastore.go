@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -639,7 +640,7 @@ func newDatastoreRrdCmd() *cobra.Command {
 			}
 
 			path := fmt.Sprintf("/admin/datastore/%s/rrd", url.PathEscape(name))
-			params := map[string]interface{}{"cf": cf, "timeframe": timeframe}
+			params := map[string]any{"cf": cf, "timeframe": timeframe}
 
 			resp, err := deps.PBS.Raw.GetRawCtx(cmd.Context(), path, params)
 			if err != nil {
@@ -674,12 +675,7 @@ func anyFlagChanged(fl *pflag.FlagSet) bool {
 
 // stringInSlice reports whether v equals one of allowed.
 func stringInSlice(v string, allowed []string) bool {
-	for _, a := range allowed {
-		if v == a {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, v)
 }
 
 // rawItemsOf dereferences a *[]json.RawMessage-shaped response type, returning

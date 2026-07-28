@@ -55,7 +55,7 @@ func rawNormalizePath(path string) (string, error) {
 // what every generated binding does for a parameter-less call. Malformed
 // entries (no "=", empty key, or a key repeated in the same invocation) are
 // rejected by the shared cli.ParseKeyValues parser.
-func rawParamsFromData(data []string) (map[string]interface{}, error) {
+func rawParamsFromData(data []string) (map[string]any, error) {
 	kvs, err := cli.ParseKeyValues(data)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func rawParamsFromData(data []string) (map[string]interface{}, error) {
 		return nil, nil
 	}
 
-	params := make(map[string]interface{}, len(kvs))
+	params := make(map[string]any, len(kvs))
 	for _, kv := range kvs {
 		params[kv.Key] = kv.Value
 	}
@@ -230,7 +230,7 @@ func newRawDeleteCmd() *cobra.Command {
 
 // rawRender renders the decoded body of a raw API response and writes it
 // through deps.Out. See rawResult for the shape-dependent rendering rules.
-func rawRender(cmd *cobra.Command, deps *cli.Deps, method, path string, data interface{}) error {
+func rawRender(cmd *cobra.Command, deps *cli.Deps, method, path string, data any) error {
 	res := rawResult(method, path, data)
 	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 }
@@ -254,13 +254,13 @@ func rawRender(cmd *cobra.Command, deps *cli.Deps, method, path string, data int
 // Every branch also sets Raw to the original decoded value so --output
 // json/yaml reproduces the server response losslessly regardless of which
 // table shape was chosen for table/plain/ascii.
-func rawResult(method, path string, data interface{}) output.Result {
+func rawResult(method, path string, data any) output.Result {
 	switch v := data.(type) {
 	case nil:
 		return output.Result{Message: fmt.Sprintf("%s %s: OK (no data returned).", method, path)}
-	case map[string]interface{}:
+	case map[string]any:
 		return output.Result{Single: rawObjectToSingle(v), Raw: v}
-	case []interface{}:
+	case []any:
 		return rawArrayResult(v)
 	default:
 		return output.Result{Message: rawCell(v), Raw: v}
@@ -270,16 +270,16 @@ func rawResult(method, path string, data interface{}) output.Result {
 // rawArrayResult renders a []interface{} response body: as a dynamic table
 // when every element is a JSON object, or as a single VALUE column otherwise
 // (an array of scalars, or a mix of objects and scalars).
-func rawArrayResult(items []interface{}) output.Result {
+func rawArrayResult(items []any) output.Result {
 	if len(items) == 0 {
 		return output.Result{Message: "[] (empty array).", Raw: items}
 	}
 
-	maps := make([]map[string]interface{}, 0, len(items))
+	maps := make([]map[string]any, 0, len(items))
 	allObjects := true
 
 	for _, it := range items {
-		m, ok := it.(map[string]interface{})
+		m, ok := it.(map[string]any)
 		if !ok {
 			allObjects = false
 			break
@@ -305,7 +305,7 @@ func rawArrayResult(items []interface{}) output.Result {
 
 // rawObjectToSingle flattens a decoded JSON object into a string map for
 // table/plain/text rendering.
-func rawObjectToSingle(obj map[string]interface{}) map[string]string {
+func rawObjectToSingle(obj map[string]any) map[string]string {
 	single := make(map[string]string, len(obj))
 	for k, v := range obj {
 		single[k] = rawCell(v)
@@ -317,7 +317,7 @@ func rawObjectToSingle(obj map[string]interface{}) map[string]string {
 // rawDynamicTable derives a stable, sorted column set from the union of keys
 // across entries and renders each entry as a row, for API responses whose
 // element shape is not statically known to this CLI.
-func rawDynamicTable(entries []map[string]interface{}) ([]string, [][]string) {
+func rawDynamicTable(entries []map[string]any) ([]string, [][]string) {
 	keySet := make(map[string]struct{})
 	for _, e := range entries {
 		for k := range e {
@@ -361,7 +361,7 @@ func rawUpperHeader(k string) string {
 // to float64 regardless of whether the server sent an integer); any value
 // this CLI does not otherwise recognize (nested objects/arrays) falls back to
 // compact JSON so no information is silently dropped.
-func rawCell(v interface{}) string {
+func rawCell(v any) string {
 	switch t := v.(type) {
 	case nil:
 		return ""

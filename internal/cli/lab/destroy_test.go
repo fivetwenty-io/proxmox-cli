@@ -510,7 +510,6 @@ func TestDestroy_ThreeNodeCluster_DestroysInReverseOrder(t *testing.T) {
 	// its RWMutex's read lock for the whole duration of the handler it
 	// dispatches to, and registration takes that same mutex's write lock.
 	for _, vmid := range []string{"100", "101", "102"} {
-		vmid := vmid
 		deleteUPID := "UPID:pve1:00000000:00000000:65000000:qmdestroy:" + vmid + ":root@pam:"
 		f.HandleFunc("GET /api2/json/nodes/pve1/qemu/"+vmid+"/status/current", func(w http.ResponseWriter, _ *http.Request) {
 			testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": vmid})
@@ -551,7 +550,6 @@ func TestDestroy_TwoNodePlusQdevice_DestroysQdeviceFirst(t *testing.T) {
 	// up front, before destroyRun executes: see the identical note in
 	// TestDestroy_ThreeNodeCluster_DestroysInReverseOrder.
 	for _, vmid := range []string{"200", "201", "202"} {
-		vmid := vmid
 		deleteUPID := "UPID:pve1:00000000:00000000:65000000:qmdestroy:" + vmid + ":root@pam:"
 		f.HandleFunc("GET /api2/json/nodes/pve1/qemu/"+vmid+"/status/current", func(w http.ResponseWriter, _ *http.Request) {
 			testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": vmid})

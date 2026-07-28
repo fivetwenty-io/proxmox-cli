@@ -135,7 +135,7 @@ func TestFindLabVMs_ClassifiesThreeNodeCluster(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, classified, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		vm, found := nodeLabVM(classified, i)
 		require.True(t, found, "node %d", i)
 		assert.Equal(t, int64(100+i), vm.VMID)

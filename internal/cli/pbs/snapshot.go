@@ -118,7 +118,7 @@ func (d *storeFlags) register(cmd *cobra.Command) {
 // namespace rather than sent as an empty string.
 func (d *storeFlags) nsPtr(cmd *cobra.Command) *string {
 	if cmd.Flags().Changed("ns") {
-		return strPtr(d.ns)
+		return new(d.ns)
 	}
 
 	return nil
@@ -294,8 +294,8 @@ func newSnapshotLsCmd() *cobra.Command {
 					return err
 				}
 
-				params.BackupType = strPtr(btype)
-				params.BackupId = strPtr(bid)
+				params.BackupType = new(btype)
+				params.BackupId = new(bid)
 			}
 
 			resp, err := deps.PBS.Admin.ListDatastoreSnapshots(cmd.Context(), df.store, params)
@@ -354,8 +354,8 @@ func newSnapshotShowCmd() *cobra.Command {
 			}
 
 			params := &pbsadmin.ListDatastoreSnapshotsParams{
-				BackupType: strPtr(btype),
-				BackupId:   strPtr(bid),
+				BackupType: new(btype),
+				BackupId:   new(bid),
 				Ns:         df.nsPtr(cmd),
 			}
 
@@ -672,7 +672,7 @@ func newSnapshotNotesCmd() *cobra.Command {
 func fetchSnapshotNotes(
 	cmd *cobra.Command, deps *cli.Deps, store, btype, bid string, btime int64, ns *string,
 ) (string, error) {
-	params := map[string]interface{}{
+	params := map[string]any{
 		"backup-type": btype,
 		"backup-id":   bid,
 		"backup-time": btime,

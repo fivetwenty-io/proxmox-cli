@@ -35,7 +35,7 @@ func newMigrateCheckCmd() *cobra.Command {
 
 			params := &nodes.ListQemuMigrateParams{}
 			if cmd.Flags().Changed("target-node") {
-				params.Target = strPtr(targetNode)
+				params.Target = new(targetNode)
 			}
 
 			resp, err := deps.API.Nodes.ListQemuMigrate(cmd.Context(), node, vmid, params)
@@ -110,28 +110,28 @@ func newMigrateCmd() *cobra.Command {
 			params := &nodes.CreateQemuMigrateParams{Target: target}
 			fl := cmd.Flags()
 			if fl.Changed("online") {
-				params.Online = boolPtr(online)
+				params.Online = new(online)
 			}
 			if fl.Changed("with-local-disks") {
-				params.WithLocalDisks = boolPtr(withLocalDisks)
+				params.WithLocalDisks = new(withLocalDisks)
 			}
 			if fl.Changed("force") {
-				params.Force = boolPtr(force)
+				params.Force = new(force)
 			}
 			if fl.Changed("migration-network") {
-				params.MigrationNetwork = strPtr(migrationNetwork)
+				params.MigrationNetwork = new(migrationNetwork)
 			}
 			if fl.Changed("migration-type") {
-				params.MigrationType = strPtr(migrationType)
+				params.MigrationType = new(migrationType)
 			}
 			if fl.Changed("with-conntrack-state") {
-				params.WithConntrackState = boolPtr(withConntrackState)
+				params.WithConntrackState = new(withConntrackState)
 			}
 			if fl.Changed("bwlimit") {
-				params.Bwlimit = int64Ptr(bwlimit)
+				params.Bwlimit = new(bwlimit)
 			}
 			if fl.Changed("targetstorage") {
-				params.Targetstorage = strPtr(targetstorage)
+				params.Targetstorage = new(targetstorage)
 			}
 
 			resp, err := deps.API.Nodes.CreateQemuMigrate(cmd.Context(), node, vmid, params)

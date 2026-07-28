@@ -85,16 +85,16 @@ func newResourceLsCmd() *cobra.Command {
 
 			params := &pdmresources.ListListParams{}
 			if fl.Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 			if fl.Changed("resource-type") {
-				params.ResourceType = strPtr(resourceType)
+				params.ResourceType = new(resourceType)
 			}
 			if fl.Changed("search") {
-				params.Search = strPtr(search)
+				params.Search = new(search)
 			}
 			if fl.Changed("view") {
-				params.View = strPtr(view)
+				params.View = new(view)
 			}
 
 			resp, err := deps.PDM.Resources.ListList(cmd.Context(), params)
@@ -137,8 +137,8 @@ func newResourceLsCmd() *cobra.Command {
 
 					id, _ := m["id"].(string)
 					typ := ""
-					if idx := strings.IndexByte(id, '/'); idx >= 0 {
-						typ = id[:idx]
+					if before, _, ok := strings.Cut(id, "/"); ok {
+						typ = before
 					}
 					name, _ := m["name"].(string)
 					node, _ := m["node"].(string)
@@ -204,10 +204,10 @@ func newResourceLocationInfoCmd() *cobra.Command {
 
 			params := &pdmresources.ListLocationInfoParams{}
 			if fl.Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 			if fl.Changed("view") {
-				params.View = strPtr(view)
+				params.View = new(view)
 			}
 
 			err := deps.PDM.Resources.ListLocationInfo(cmd.Context(), params)
@@ -249,10 +249,10 @@ func newResourceStatusCmd() *cobra.Command {
 
 			params := &pdmresources.ListStatusParams{}
 			if fl.Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 			if fl.Changed("view") {
-				params.View = strPtr(view)
+				params.View = new(view)
 			}
 
 			resp, err := deps.PDM.Resources.ListStatus(cmd.Context(), params)
@@ -303,13 +303,13 @@ func newResourceSubscriptionCmd() *cobra.Command {
 
 			params := &pdmresources.ListSubscriptionParams{}
 			if fl.Changed("max-age") {
-				params.MaxAge = int64Ptr(maxAge)
+				params.MaxAge = new(maxAge)
 			}
 			if fl.Changed("verbose") {
-				params.Verbose = boolPtr(verbose)
+				params.Verbose = new(verbose)
 			}
 			if fl.Changed("view") {
-				params.View = strPtr(view)
+				params.View = new(view)
 			}
 
 			resp, err := deps.PDM.Resources.ListSubscription(cmd.Context(), params)
@@ -372,10 +372,10 @@ func newResourceTopEntitiesCmd() *cobra.Command {
 
 			params := &pdmresources.ListTopEntitiesParams{}
 			if fl.Changed("timeframe") {
-				params.Timeframe = strPtr(timeframe)
+				params.Timeframe = new(timeframe)
 			}
 			if fl.Changed("view") {
-				params.View = strPtr(view)
+				params.View = new(view)
 			}
 
 			resp, err := deps.PDM.Resources.ListTopEntities(cmd.Context(), params)

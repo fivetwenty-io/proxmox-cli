@@ -155,7 +155,7 @@ func newGroupDeleteCmd() *cobra.Command {
 				Ns:         df.nsPtr(cmd),
 			}
 			if cmd.Flags().Changed("error-on-protected") {
-				params.ErrorOnProtected = boolPtr(errorOnProtected)
+				params.ErrorOnProtected = new(errorOnProtected)
 			}
 
 			resp, err := deps.PBS.Admin.DeleteDatastoreGroups(cmd.Context(), df.store, params)
@@ -244,7 +244,7 @@ func newGroupNotesCmd() *cobra.Command {
 // body, so this calls the shared raw transport directly against the
 // identical path and params.
 func fetchGroupNotes(cmd *cobra.Command, deps *cli.Deps, store, btype, bid string, ns *string) (string, error) {
-	params := map[string]interface{}{
+	params := map[string]any{
 		"backup-type": btype,
 		"backup-id":   bid,
 	}

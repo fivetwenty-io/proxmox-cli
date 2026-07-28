@@ -120,7 +120,7 @@ func newSecurityAgentSetCmd() *cobra.Command {
 			var msg string
 
 			if reset {
-				params.Delete = strPtr("agent")
+				params.Delete = new("agent")
 				msg = fmt.Sprintf("VM %s agent configuration removed (agent disabled).", vmid)
 			} else {
 				raw, _ := rawStr(m, "agent")
@@ -139,12 +139,12 @@ func newSecurityAgentSetCmd() *cobra.Command {
 				}
 
 				if isAgentAtAPIDefault(list) {
-					params.Delete = strPtr("agent")
+					params.Delete = new("agent")
 					msg = fmt.Sprintf(
 						"VM %s agent configuration updated (all sub-options at their API default; agent= removed).", vmid)
 				} else {
 					s := list.String()
-					params.Agent = strPtr(s)
+					params.Agent = new(s)
 					msg = fmt.Sprintf("VM %s agent configuration updated.", vmid)
 				}
 			}

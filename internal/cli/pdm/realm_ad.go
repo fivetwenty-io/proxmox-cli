@@ -2,6 +2,7 @@ package pdm
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -368,10 +369,8 @@ func newRealmAdUpdateCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("delete") {
-				for _, key := range af.del {
-					if key == "" {
-						return fmt.Errorf("--delete: property name must not be empty")
-					}
+				if slices.Contains(af.del, "") {
+					return fmt.Errorf("--delete: property name must not be empty")
 				}
 			}
 
@@ -418,7 +417,7 @@ func newRealmAdDeleteCmd() *cobra.Command {
 
 			params := &pdmconfig.DeleteAccessAdParams{}
 			if cmd.Flags().Changed("digest") {
-				params.Digest = strPtr(digest)
+				params.Digest = new(digest)
 			}
 
 			err := deps.PDM.Config.DeleteAccessAd(cmd.Context(), realm, params)

@@ -1403,7 +1403,7 @@ func createHandleDisksZfs(f *testhelper.FakePVE, node, poolName string, sizeByte
 // peppi-actuals ("used") terms without the default 1024G NFS reserve
 // (config.DefaultNFSReservedGB) also contributing to the ratio.
 func createNoNFSReserve(labs map[string]*config.Lab) *config.Config {
-	return &config.Config{Labs: labs, Storage: config.ConfigStorage{NFSReservedGB: createPtr(0)}}
+	return &config.Config{Labs: labs, Storage: config.ConfigStorage{NFSReservedGB: new(0)}}
 }
 
 // TestCreateCapacityGate_BelowWarnThreshold_NoNote covers the quiet path:

@@ -30,7 +30,7 @@ func TestStatusCommandTree(t *testing.T) {
 	require.True(t, topNames["status"], "sdn must expose \"status\"")
 
 	// Find status command.
-	var status, zones, vnets, fabrics interface{ Commands() []interface{} }
+	var status, zones, vnets, fabrics interface{ Commands() []any }
 	_ = status
 	_ = zones
 	_ = vnets

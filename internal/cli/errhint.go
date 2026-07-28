@@ -133,13 +133,11 @@ func UnreachableHint(err error, ctx *config.Context, contextName, cmdPrefix stri
 // or wrong-protocol port), or a network timeout. HTTP-status errors are
 // deliberately excluded — they prove the connection worked.
 func isConnectionError(err error) bool {
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
+	if _, ok := errors.AsType[*net.OpError](err); ok {
 		return true
 	}
 
-	var recErr tls.RecordHeaderError
-	if errors.As(err, &recErr) {
+	if _, ok := errors.AsType[tls.RecordHeaderError](err); ok {
 		return true
 	}
 

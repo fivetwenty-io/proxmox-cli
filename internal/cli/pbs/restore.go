@@ -55,13 +55,13 @@ func newTapeRestoreCmd() *cobra.Command {
 				params.Namespaces = namespaces
 			}
 			if fl.Changed("notification-mode") {
-				params.NotificationMode = strPtr(notificationMode)
+				params.NotificationMode = new(notificationMode)
 			}
 			if fl.Changed("notify-user") {
-				params.NotifyUser = strPtr(notifyUser)
+				params.NotifyUser = new(notifyUser)
 			}
 			if fl.Changed("owner") {
-				params.Owner = strPtr(owner)
+				params.Owner = new(owner)
 			}
 			if fl.Changed("snapshots") {
 				params.Snapshots = snapshots

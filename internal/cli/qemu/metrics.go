@@ -36,7 +36,7 @@ func newMetricsCmd() *cobra.Command {
 
 			params := &nodes.ListQemuRrddataParams{Timeframe: timeframe}
 			if cmd.Flags().Changed("cf") {
-				params.Cf = strPtr(cf)
+				params.Cf = new(cf)
 			}
 
 			resp, err := deps.API.Nodes.ListQemuRrddata(cmd.Context(), node, vmid, params)
