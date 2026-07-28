@@ -25,12 +25,14 @@ func newApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Commit pending SDN configuration",
-		Long: "Reload the network configuration on every cluster node so pending SDN changes " +
-			"(zones, vnets, subnets, controllers, IPAM/DNS providers, fabrics) take effect. " +
-			"Submits a PVE task and blocks until it completes; pass --async to print the task " +
-			"UPID immediately instead of waiting. Some PVE versions return no task and the " +
-			"reload is reported as immediately applied. The reload touches every cluster " +
-			"node; preview the pending changes first with `pmx pve sdn dry-run`.",
+		Long: "Reload the network configuration on every cluster node, so that pending SDN " +
+			"changes take effect: zones, vnets, subnets, controllers, IPAM and DNS " +
+			"providers, and fabrics.\n\n" +
+			"The reload touches every node in the cluster, so preview what is pending first " +
+			"with `pmx pve sdn dry-run`.\n\n" +
+			"The command submits a PVE task and blocks until it completes; --async prints " +
+			"the task UPID and returns immediately. Some PVE versions return no task at all " +
+			"and report the reload as applied on the spot.",
 		Example: `  pmx pve sdn dry-run
   pmx pve sdn apply
   pmx pve sdn apply --async`,

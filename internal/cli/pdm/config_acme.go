@@ -198,12 +198,13 @@ func newConfigAcmeAccountAddCmd() *cobra.Command {
 		Use:   "add <name>",
 		Short: "Register an ACME account",
 		Long: "Register a new ACME account with a certificate authority (POST " +
-			"/config/acme/account). --contact is required (comma-separated list of " +
-			"email addresses); every other flag is optional and only forwarded when " +
-			"explicitly set. Pass --tos-url to indicate agreement with the CA's " +
-			"Terms of Service (see 'pmx pdm config acme tos show'). Runs as an " +
-			"asynchronous task; the command blocks until it finishes unless --async " +
-			"(persistent flag) is set.",
+			"/config/acme/account).\n\n" +
+			"--contact is required and takes a comma-separated list of email addresses. " +
+			"Every other flag is optional, and only forwarded when you set it explicitly.\n\n" +
+			"Pass --tos-url to signal agreement with the CA's Terms of Service; read them " +
+			"first with `pmx pdm config acme tos show`.\n\n" +
+			"Registration runs as an asynchronous task, and the command blocks until it " +
+			"finishes unless the persistent --async flag is set.",
 		Example: `  pmx pdm config acme account add default --contact admin@example.com`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -305,11 +306,12 @@ func newConfigAcmeAccountDeleteCmd() *cobra.Command {
 		Use:   "delete <name>",
 		Short: "Deactivate an ACME account",
 		Long: "Deactivate an ACME account with its provider and remove its local " +
-			"configuration (DELETE /config/acme/account/{name}). --force removes the " +
-			"local configuration even if the provider refuses the deactivation " +
-			"request. Runs as an asynchronous task; the command blocks until it " +
-			"finishes unless --async (persistent flag) is set. This is destructive: " +
-			"pass --yes/-y to confirm.",
+			"configuration (DELETE /config/acme/account/{name}). Pass --yes/-y to " +
+			"confirm.\n\n" +
+			"--force drops the local configuration even when the provider refuses the " +
+			"deactivation request.\n\n" +
+			"Deactivation runs as an asynchronous task, and the command blocks until it " +
+			"finishes unless the persistent --async flag is set.",
 		Example: `  pmx pdm config acme account delete default --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

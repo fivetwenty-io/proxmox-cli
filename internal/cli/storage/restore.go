@@ -49,11 +49,12 @@ func newFileRestoreListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <storage>",
 		Short: "List directory entries inside a backup snapshot",
-		Long: "List the directory entries inside a backup snapshot at a given path. Requires a " +
-			"node via --node, PMX_NODE, or the active context's default, and the backup to " +
-			"browse via --volume. --filepath selects the directory within the backup and " +
-			"defaults to the archive root. Currently only Proxmox Backup Server snapshots " +
-			"are supported.",
+		Long: "List the directory entries inside a backup snapshot at a given path.\n\n" +
+			"Two things are required: a node, via --node or PMX_NODE or the active context's " +
+			"default, and the backup to browse, via --volume.\n\n" +
+			"--filepath picks the directory within the backup, and defaults to the archive " +
+			"root.\n\n" +
+			"Only Proxmox Backup Server snapshots are supported so far.",
 		Example: `  pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z
   pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc`,
 		Args: cobra.ExactArgs(1),

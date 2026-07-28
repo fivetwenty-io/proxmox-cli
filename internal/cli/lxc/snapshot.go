@@ -144,11 +144,12 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a container back to a snapshot",
-		Long: "Restore the container's disks to the state captured in the named snapshot, " +
-			"DISCARDING any changes made since — pass --yes to confirm. Pass --start to " +
-			"start the container immediately after a successful rollback. Submits a PVE task " +
-			"and blocks until it completes; pass --async or the global --async flag to print " +
-			"the task UPID immediately instead of waiting.",
+		Long: "Restore the container's disks to what the named snapshot holds.\n\n" +
+			"Everything written since that snapshot is discarded, so --yes is required to " +
+			"confirm. Pass --start to bring the container up as soon as the rollback " +
+			"succeeds.\n\n" +
+			"The command submits a PVE task and blocks until it completes; --async, or the " +
+			"global --async flag, prints the task UPID and returns immediately.",
 		Example: `  pmx pve lxc snapshot rollback 200 pre-upgrade --yes
   pmx pve lxc snapshot rollback web1 pre-upgrade --yes --start`,
 		Args: cobra.ExactArgs(2),

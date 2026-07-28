@@ -685,10 +685,11 @@ func newSMTPSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update an SMTP endpoint",
-		Long: "Update an existing SMTP notification endpoint. Pass at least one of --server, " +
-			"--from-address, --mailto, --mailto-user, --username, --password, --mode, --port, " +
-			"--author, --comment, or --disable to change those fields; use --delete to reset a " +
-			"setting to its default and --digest to reject the change if the config has changed.",
+		Long: "Update an existing SMTP notification endpoint.\n\n" +
+			"Pass at least one of --server, --from-address, --mailto, --mailto-user, " +
+			"--username, --password, --mode, --port, --author, --comment, or --disable.\n\n" +
+			"--delete resets a setting to its default, and --digest rejects the change if the " +
+			"config moved since you read it.",
 		Example: "  pmx pve cluster notifications smtp set my-smtp --mode starttls --port 587",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -820,11 +821,13 @@ func newWebhookCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a Webhook endpoint",
-		Long: "Create a Webhook notification endpoint that issues an HTTP request on each " +
-			"notification. --url and --method (post, put, or get) are required. Repeatable " +
-			"--header and --secret take property strings of the form name=<name>,value=<base64 " +
-			"of value>; --body is the base64-encoded request body. Pass --comment to annotate it " +
-			"or --disable to create it disabled.",
+		Long: "Create a Webhook notification endpoint, which issues an HTTP request on each " +
+			"notification. --url and --method are required; the method is post, put, or " +
+			"get.\n\n" +
+			"--header and --secret are repeatable and take property strings shaped as " +
+			"`name=<name>,value=<base64 of value>`. --body carries the request body, " +
+			"base64-encoded.\n\n" +
+			"Pass --comment to annotate the endpoint, or --disable to create it inactive.",
 		Example: "  pmx pve cluster notifications webhook create my-webhook " +
 			"--url https://hooks.example.com/notify --method post",
 		Args: cobra.ExactArgs(1),
@@ -879,11 +882,12 @@ func newWebhookSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update a Webhook endpoint",
-		Long: "Update an existing Webhook notification endpoint. Pass at least one of --url, " +
-			"--method, --header, --secret, --body, --comment, or --disable to change those " +
-			"fields; --header and --secret take property strings of the form " +
-			"name=<name>,value=<base64 of value>. Use --delete to reset a setting to its default " +
-			"and --digest to reject the change if the config has been modified since it was read.",
+		Long: "Update an existing Webhook notification endpoint.\n\n" +
+			"Pass at least one of --url, --method, --header, --secret, --body, --comment, or " +
+			"--disable. --header and --secret take property strings shaped as " +
+			"`name=<name>,value=<base64 of value>`.\n\n" +
+			"--delete resets a setting to its default, and --digest rejects the change if the " +
+			"config moved since you read it.",
 		Example: "  pmx pve cluster notifications webhook set my-webhook --method put",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -997,12 +1001,15 @@ func newMatcherCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a matcher",
-		Long: "Create a notification matcher that routes matching notifications to target " +
-			"endpoints. Repeatable --match-field takes (regex|exact):<field>=<value>, " +
-			"--match-severity and --match-calendar add severity and systemd-calendar rules, and " +
-			"--notify-target names the targets to notify. Use --mode (all or any) to combine " +
-			"rules, --invert-match to negate the whole matcher, and --comment or --disable as " +
-			"needed.",
+		Long: "Create a notification matcher, which routes the notifications it matches to " +
+			"target endpoints.\n\n" +
+			"  --match-field      repeatable, `(regex|exact):<field>=<value>`\n" +
+			"  --match-severity   match on notification severity\n" +
+			"  --match-calendar   match on a systemd calendar expression\n" +
+			"  --notify-target    the endpoints a match notifies\n\n" +
+			"--mode decides how the rules combine, all or any, and --invert-match negates " +
+			"the matcher as a whole.\n\n" +
+			"Pass --comment to annotate the matcher, or --disable to create it inactive.",
 		Example: "  pmx pve cluster notifications matcher create my-matcher " +
 			"--match-severity error --notify-target my-gotify",
 		Args: cobra.ExactArgs(1),
@@ -1035,11 +1042,11 @@ func newMatcherSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Update a matcher",
-		Long: "Update an existing notification matcher. Pass at least one of --match-field, " +
-			"--match-severity, --match-calendar, --notify-target, --mode, --comment, " +
-			"--invert-match, or --disable to change those fields; use --delete to reset a setting " +
-			"to its default and --digest to reject the change if the config has been modified " +
-			"since it was read.",
+		Long: "Update an existing notification matcher.\n\n" +
+			"Pass at least one of --match-field, --match-severity, --match-calendar, " +
+			"--notify-target, --mode, --comment, --invert-match, or --disable.\n\n" +
+			"--delete resets a setting to its default, and --digest rejects the change if the " +
+			"config moved since you read it.",
 		Example: "  pmx pve cluster notifications matcher set my-matcher --notify-target my-smtp",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

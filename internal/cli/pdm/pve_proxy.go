@@ -50,11 +50,15 @@ func newPveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pve",
 		Short: "Proxy operations against managed PVE remotes",
-		Long: "Discover, inspect, and manage the PVE (Proxmox VE) remotes this Proxmox " +
-			"Datacenter Manager instance manages: connection discovery, the PVE remote " +
-			"directory, cluster options/updates/status/next-VMID/resources, cluster and " +
-			"node firewalls, remote nodes (config, network, RRD metrics, APT, subscription, " +
-			"SDN VRF lookups), storage, remote tasks, and guest (qemu/lxc) operations.",
+		Long: "Discover, inspect, and manage the Proxmox VE remotes this Datacenter " +
+			"Manager instance looks after.\n\n" +
+			"  remote, scan, probe-tls   the remote directory and discovery\n" +
+			"  cluster, options          cluster status, resources, next VMID\n" +
+			"  node                      config, network, RRD, APT, SDN VRFs\n" +
+			"  storage                   storage as each remote sees it\n" +
+			"  qemu, lxc                 guest operations through the proxy\n" +
+			"  task                      tasks running on the remotes\n" +
+			"  firewall                  cluster-level and node-level rules",
 	}
 	cmd.AddCommand(
 		newPveRemoteCmd(),

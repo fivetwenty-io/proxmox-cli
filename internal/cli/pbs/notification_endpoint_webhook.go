@@ -106,10 +106,10 @@ func newNotifEndpointWebhookShowCmd() *cobra.Command {
 		Use:   "show <name>",
 		Short: "Show a single webhook endpoint's configuration",
 		Long: "Show every populated field of a single webhook endpoint (GET " +
-			"/config/notifications/endpoints/webhook/{name}). Secret values are " +
-			"write-only; only secret names are ever returned by the API. The API " +
-			"also omits options left at their built-in defaults; pass --defaults to " +
-			"also list those, with the value they effectively have.",
+			"/config/notifications/endpoints/webhook/{name}).\n\n" +
+			"Secret values are write-only. The API returns secret names and nothing more.\n\n" +
+			"Options left at their built-in defaults are omitted too; pass --defaults to " +
+			"list them as well, each with the value it effectively has.",
 		Example: "  pmx pbs notification endpoint webhook show webhook-main",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

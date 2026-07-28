@@ -448,11 +448,11 @@ func newDatastoreDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a datastore configuration",
-		Long: "Remove a datastore configuration. Pass --destroy-data to also delete the " +
-			"datastore's underlying contents; without it, only the configuration entry is removed " +
-			"and the on-disk data is left in place. This is an asynchronous task: by default the " +
-			"command blocks until it completes; pass --async (persistent flag) to return the UPID " +
-			"immediately instead. This is destructive: pass --yes/-y to confirm.",
+		Long: "Remove a datastore configuration. Pass --yes/-y to confirm.\n\n" +
+			"By default only the configuration entry goes away and the on-disk data stays " +
+			"put. Pass --destroy-data to delete the datastore's contents as well.\n\n" +
+			"The removal runs as an asynchronous task, and the command blocks until it " +
+			"completes; the persistent --async flag returns the UPID immediately instead.",
 		Example: `  pmx pbs datastore delete tank --yes
   pmx pbs datastore delete tank --destroy-data --yes`,
 		Args: cobra.ExactArgs(1),

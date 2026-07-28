@@ -49,11 +49,12 @@ func newSSHCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ssh <node> [ssh-option...] [command...]",
 		Short: "Open an SSH session to a node (optionally run a remote command)",
-		Long: "Resolve <node> to an SSH address and open an SSH session to it, passing " +
-			"through any trailing ssh-option/command tokens. With no remote command, opens " +
-			"an interactive session; with one, runs it and exits. A leading-dash token " +
-			"after <node> is treated as an ssh option or remote-command token, not a pmx " +
-			"flag; use \"--\" to disambiguate when needed.",
+		Long: "Resolve the named node to an SSH address and open a session to it, passing " +
+			"any trailing ssh-option and command tokens straight through.\n\n" +
+			"With no remote command, the session is interactive. With one, it runs and " +
+			"exits.\n\n" +
+			"Every leading-dash token after the node name belongs to ssh or to the remote " +
+			"command, never to pmx. Use \"--\" when that needs to be unambiguous.",
 		Example: `  pmx pve node ssh pve1
   pmx pve node ssh pve1 -- uptime`,
 		Args:        cobra.MinimumNArgs(1),

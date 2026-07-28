@@ -126,11 +126,11 @@ func newRealmOpenidShowCmd() *cobra.Command {
 		Use:   "show <realm>",
 		Short: "Show a single OpenID realm's configuration",
 		Long: "Show every populated field of a single OpenID realm configuration " +
-			"(GET /config/access/openid/{realm}). The client key is write-only " +
-			"credential material and is stripped from the output even if the API " +
-			"returns it. The API also omits options left at their built-in " +
-			"defaults; pass --defaults to also list those, with the value they " +
-			"effectively have.",
+			"(GET /config/access/openid/{realm}).\n\n" +
+			"The client key is credential material and write-only here. It is stripped from " +
+			"the output even when the API hands it back.\n\n" +
+			"Options left at their built-in defaults are omitted too; pass --defaults to " +
+			"list them as well, each with the value it effectively has.",
 		Example: "  pmx pdm realm openid show company",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -297,11 +297,12 @@ func newSnapshotRollbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rollback <vmid|name> <snapname>",
 		Short: "Roll a VM back to a snapshot",
-		Long: "Restore the VM's disks (and RAM state, if the snapshot has one) to the state " +
-			"captured in the named snapshot, DISCARDING any changes made since — pass --yes " +
-			"to confirm. Pass --start to start the VM immediately after a successful " +
-			"rollback. Submits a PVE task and blocks until it completes; pass --async to " +
-			"print the task UPID immediately instead of waiting.",
+		Long: "Restore the VM's disks, and its RAM state if the snapshot captured one, to " +
+			"what the named snapshot holds.\n\n" +
+			"Everything written since that snapshot is discarded, so --yes is required to " +
+			"confirm. Pass --start to bring the VM up as soon as the rollback succeeds.\n\n" +
+			"The command submits a PVE task and blocks until it completes; --async prints " +
+			"the task UPID and returns immediately.",
 		Example: `  pmx pve qemu snapshot rollback 100 pre-upgrade --yes
   pmx pve qemu snapshot rollback web1 pre-upgrade --yes --start`,
 		Args: cobra.ExactArgs(2),

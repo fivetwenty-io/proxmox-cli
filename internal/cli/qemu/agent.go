@@ -98,13 +98,40 @@ type agentNodes interface {
 // Parameterised endpoints (exec, exec-status, file-read, file-write,
 // set-user-password) are wired as dedicated sub-commands so their structured
 // arguments and, in the password case, the secret value are handled cleanly.
+// indentList renders names as comma-separated lines indented by two spaces and
+// wrapped at 68 columns, so cobra's terminal help and the roff man page both
+// stay inside 80 columns without relying on the reader's terminal width.
+func indentList(names []string) string {
+	const width = 68
+	var b strings.Builder
+	line := "  "
+	for i, n := range names {
+		item := n
+		if i < len(names)-1 {
+			item += ","
+		}
+		if len(line) > 2 && len(line)+1+len(item) > width {
+			b.WriteString(line + "\n")
+			line = "  "
+		}
+		if len(line) > 2 {
+			line += " "
+		}
+		line += item
+	}
+	b.WriteString(line)
+	return b.String()
+}
+
 func newAgentCmd() *cobra.Command {
-	long := "Run a QEMU guest-agent command against a VM. The guest agent must be\n" +
+	long := "Run a QEMU guest-agent command against a VM. The guest agent has to be " +
 		"installed and running inside the VM.\n\n" +
-		"Read-only queries:\n  " + strings.Join(agentQueryCommands, ", ") + "\n\n" +
-		"Operations that change guest state:\n  " + strings.Join(agentMutateCommands, ", ") + "\n\n" +
-		"Parameterised sub-commands (require additional flags):\n" +
-		"  exec, exec-status, file-read, file-write, set-user-password"
+		"Read-only queries\n" + indentList(agentQueryCommands) + "\n\n" +
+		"Operations that change guest state\n" + indentList(agentMutateCommands) + "\n\n" +
+		"Parameterised sub-commands, which take additional flags\n" +
+		indentList([]string{
+			"exec", "exec-status", "file-read", "file-write", "set-user-password",
+		})
 
 	cmd := &cobra.Command{
 		Use:   "agent <vmid|name> <command>",

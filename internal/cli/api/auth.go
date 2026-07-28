@@ -30,12 +30,18 @@ func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authenticate against a context",
-		Long: "Manage local credentials and session state for a context. status, set-token, " +
-			"set-password, login, refresh, logout, and whoami all work with any context, Proxmox VE " +
-			"(PVE), Proxmox Backup Server (PBS), or Proxmox Datacenter Manager (PDM). login and " +
-			"refresh negotiate a session ticket with the server; --otp (one-time password for " +
-			"TOTP-based two-factor authentication) is PVE-only — PBS and PDM contexts use " +
-			"--tfa-challenge instead. whoami queries the server to verify the stored credentials.",
+		Long: "Manage local credentials and session state for a context.\n\n" +
+			"  status         what is configured, read from the config file\n" +
+			"  set-token      store an API token id and secret\n" +
+			"  set-password   store a username and password reference\n" +
+			"  login          negotiate a session ticket with the server\n" +
+			"  refresh        replace an existing session ticket\n" +
+			"  logout         invalidate the ticket and drop it locally\n" +
+			"  whoami         ask the server who the credentials are\n\n" +
+			"Every verb works against any context, whether it targets Proxmox VE, Proxmox " +
+			"Backup Server, or Proxmox Datacenter Manager.\n\n" +
+			"Two-factor authentication differs by product. --otp, a one-time password for " +
+			"TOTP, is PVE-only; PBS and PDM contexts use --tfa-challenge instead.",
 		Example: `  pmx auth login --context lab
   pmx auth login --context lab --oidc --realm sso
   pmx auth whoami --context lab
@@ -325,11 +331,13 @@ func newAuthRefreshCmd() *cobra.Command {
 		Use:   "refresh",
 		Short: "Refresh the session ticket for a password context",
 		Long: "Re-authenticate against a password context's realm and replace the stored " +
-			"session ticket, without changing the configured credentials. Applies only to " +
-			"contexts using password authentication (auth.type == \"password\"); the command " +
-			"errors on any other auth type, such as token contexts. --tfa-challenge supplies " +
-			"a second-factor challenge response if the realm requires one. The refreshed " +
-			"ticket and its expiry are persisted to the config file.",
+			"session ticket. The configured credentials are left as they are.\n\n" +
+			"This applies only to contexts using password authentication, meaning " +
+			"auth.type is \"password\". On any other type, token contexts included, the " +
+			"command errors out.\n\n" +
+			"Pass --tfa-challenge to answer a second-factor challenge when the realm asks " +
+			"for one.\n\n" +
+			"The refreshed ticket and its expiry are written to the config file.",
 		Example: `  pmx auth refresh --context lab
   pmx auth refresh --context lab --tfa-challenge <response>`,
 		Args: cobra.NoArgs,
@@ -388,12 +396,14 @@ func newAuthLogoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Invalidate the session ticket and remove it from the config",
-		Long: "Invalidate a context's session ticket and remove it from the config file. If a " +
-			"live session ticket is present, the server is asked to invalidate it first; on " +
-			"failure the command errors and the local session is left untouched. Once server-side " +
-			"invalidation succeeds (or there was no live ticket to invalidate), the local session " +
-			"is cleared and the config saved. Configured API-token or password credentials on the " +
-			"context are left intact — only the session ticket is removed.",
+		Long: "Invalidate a context's session ticket and remove it from the config file.\n\n" +
+			"When a live ticket is present, the server is asked to invalidate it first. If " +
+			"that fails, the command errors and leaves the local session untouched, so the " +
+			"two never drift apart.\n\n" +
+			"Once the server has invalidated the ticket, or there was none to invalidate, " +
+			"the local session is cleared and the config saved.\n\n" +
+			"Only the session ticket goes. Configured API-token and password credentials on " +
+			"the context stay intact.",
 		Example: `  pmx auth logout --context lab`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -438,13 +448,17 @@ func newAuthStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show authentication status for a context",
-		Long: "Display the authentication configuration and session state for a context: host, " +
-			"product, configured auth type, username or token id, where the secret is sourced " +
-			"from, whether that secret currently resolves, and the session ticket's validity. " +
-			"Reads only the local config file and never contacts the Proxmox API — use " +
-			"'auth whoami' to verify the credentials against the server. Secret values are never " +
-			"displayed, only their source (inline literal, environment variable, or keychain " +
-			"reference).",
+		Long: "Display the authentication configuration and session state for a " +
+			"context.\n\n" +
+			"  * host and product\n" +
+			"  * configured auth type\n" +
+			"  * username or token id\n" +
+			"  * where the secret comes from, and whether it resolves\n" +
+			"  * how much validity the session ticket has left\n\n" +
+			"This reads the local config file and never contacts the Proxmox API. To verify " +
+			"the credentials against the server, use `auth whoami`.\n\n" +
+			"Secret values are never displayed, only their source: an inline literal, an " +
+			"environment variable, or a keychain reference.",
 		Example: `  pmx auth status --context lab`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -509,12 +523,15 @@ func newAuthWhoamiCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "whoami",
 		Short: "Show the identity the current credentials authenticate as",
-		Long: "Query the server to confirm the stored credentials authenticate, calling " +
-			"GET /access/permissions against whichever product — Proxmox VE, Proxmox Backup " +
-			"Server, or Proxmox Datacenter Manager — the resolved context targets. Prints the " +
-			"effective identity (username, or user!token-id for token authentication) plus the " +
-			"full accessible-ACL-path payload the server returns. This makes a live API call " +
-			"and requires a valid session ticket or resolvable credential.",
+		Long: "Query the server to confirm the stored credentials actually authenticate. " +
+			"The call is GET /access/permissions, made against whichever product the " +
+			"resolved context targets: Proxmox VE, Proxmox Backup Server, or Proxmox " +
+			"Datacenter Manager.\n\n" +
+			"The output is the effective identity, a username or a user!token-id under token " +
+			"authentication, together with the full accessible-ACL-path payload the server " +
+			"returns.\n\n" +
+			"This makes a live API call, so it needs a valid session ticket or a resolvable " +
+			"credential.",
 		Example:     `  pmx auth whoami --context lab`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{cli.ProductAnnotation: cli.ProductFromContext},
@@ -584,13 +601,14 @@ func newAuthSetTokenCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-token",
 		Short: "Configure token authentication for a context",
-		Long: "Configure API-token authentication for a context: store the token id (in " +
-			"Proxmox's user@realm!token-id form) and its secret, switch the context's auth type " +
-			"to \"token\", and clear any stored session ticket. --token-id and --secret are both " +
-			"required; --username overrides the context's configured username when set. --secret " +
-			"accepts an inline literal, a ${VAR} or $VAR environment-variable reference, or a " +
-			"keychain:PATH reference — prefer a reference over a literal to avoid writing the " +
-			"secret to the config file in cleartext.",
+		Long: "Configure API-token authentication for a context. The command stores the " +
+			"token id, in Proxmox's user@realm!token-id form, and its secret; switches the " +
+			"context's auth type to \"token\"; and clears any stored session ticket.\n\n" +
+			"--token-id and --secret are both required. --username overrides the context's " +
+			"configured username when you set it.\n\n" +
+			"--secret takes an inline literal, a ${VAR} or $VAR environment-variable " +
+			"reference, or a keychain:PATH reference. Prefer a reference: a literal ends up " +
+			"in the config file in cleartext.",
 		Example: `  pmx auth set-token --context lab --token-id root@pam!ci --secret '${PMX_TOKEN_SECRET}'`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -649,12 +667,14 @@ func newAuthSetPasswordCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-password",
 		Short: "Configure password authentication for a context",
-		Long: "Configure password authentication for a context: store the username and password " +
-			"reference, switch the context's auth type to \"password\", clear any configured API " +
-			"token id, and clear any stored session ticket. --username and --secret are both " +
-			"required. --secret accepts an inline literal, a ${VAR} or $VAR environment-variable " +
-			"reference, or a keychain:PATH reference — prefer a reference over a literal to avoid " +
-			"writing the password to the config file in cleartext.",
+		Long: "Configure password authentication for a context. The command stores the " +
+			"username and password reference; switches the context's auth type to " +
+			"\"password\"; and clears any configured API token id along with any stored " +
+			"session ticket.\n\n" +
+			"--username and --secret are both required.\n\n" +
+			"--secret takes an inline literal, a ${VAR} or $VAR environment-variable " +
+			"reference, or a keychain:PATH reference. Prefer a reference: a literal ends up " +
+			"in the config file in cleartext.",
 		Example: `  pmx auth set-password --context lab --username root@pam --secret '${PMX_PASSWORD}'`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

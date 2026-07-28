@@ -27,10 +27,16 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Manage ACL entries and inspect effective permissions on a storage",
-		Long: "List, grant, and revoke ACL entries on a storage's ACL path (/storage/{storage}), " +
-			"and inspect the resulting effective permissions. The path is derived from the " +
-			"storage identifier; no existence check is performed against the storage's actual " +
-			"configuration, since ACL paths are free-form and granting ahead of provisioning is legal.",
+		Long: "Manage the ACL entries that decide who may act on a storage, and inspect the " +
+			"privileges those entries resolve to.\n\n" +
+			"  list        ACL entries written on this storage's path\n" +
+			"  effective   privileges a user actually holds there\n" +
+			"  grant       add roles for users, groups, or tokens\n" +
+			"  revoke      take those roles away again\n\n" +
+			"The path is /storage/{storage}, derived from the identifier you pass. PVE never " +
+			"checks that identifier against a real storage: ACL paths are free-form strings, so " +
+			"granting access before a storage is provisioned, or after it is deleted, is legal " +
+			"and sometimes deliberate.",
 	}
 	cmd.AddCommand(
 		newPermissionsListCmd(),
@@ -47,9 +53,9 @@ func newPermissionsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <storage>",
 		Short: "List ACL entries on a storage's ACL path",
-		Long: "List the ACL entries whose path exactly matches /storage/{storage}. With " +
-			"--inherited, also include entries from every ancestor path (/, /storage), each " +
-			"row showing which path it came from.",
+		Long: "List the ACL entries whose path exactly matches /storage/{storage}.\n\n" +
+			"With --inherited, the listing also covers every ancestor path (/ and /storage), " +
+			"and each row names the path its entry was granted on.",
 		Example: `  pmx pve storage permissions list local-lvm
   pmx pve storage permissions list local-lvm --inherited`,
 		Args: cobra.ExactArgs(1),
@@ -90,9 +96,9 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "effective <storage>",
 		Short: "Show effective permissions on a storage's ACL path",
-		Long: "Show the effective (post-inheritance) privileges on /storage/{storage} for the " +
-			"caller, or for --userid when passed. Querying another user's or token's permissions " +
-			"requires Sys.Audit on /access.",
+		Long: "Show the privileges that /storage/{storage} resolves to for the calling user, " +
+			"or for --userid when passed, once inheritance has been applied.\n\n" +
+			"Querying another user's or token's permissions requires Sys.Audit on /access.",
 		Example: `  pmx pve storage permissions effective local-lvm
   pmx pve storage permissions effective local-lvm --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
@@ -133,9 +139,22 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 
 	verb, verbPast, prep := "grant", "Granted", "to"
 	short := "Grant roles to users, groups, or tokens on a storage's ACL path"
+	long := "Grant roles on a storage's ACL path, /storage/{storage}, to any mix of users, " +
+		"groups, and API tokens. Name at least one of --users, --groups, or --tokens.\n\n" +
+		"Writing ACL entries requires Permissions.Modify on the path.\n\n" +
+		"A granted role propagates to every path below this one by default; pass " +
+		"--no-propagate to confine it to this path alone."
 	if revoke {
 		verb, verbPast, prep = "revoke", "Revoked", "from"
 		short = "Revoke roles from users, groups, or tokens on a storage's ACL path"
+		long = "Revoke roles on a storage's ACL path, /storage/{storage}, from any mix of " +
+			"users, groups, and API tokens. Name at least one of --users, --groups, or " +
+			"--tokens.\n\n" +
+			"Removing ACL entries requires Permissions.Modify on the path. Revoking an entry " +
+			"that was never there succeeds silently, matching the PVE server.\n\n" +
+			"Nothing here guards against self-lockout: revoking your own access to the path " +
+			"you are managing is allowed and takes effect at once. Run `permissions " +
+			"effective` first if you are unsure what you are about to lose."
 	}
 
 	example := `  pmx pve storage permissions grant local-lvm --roles PVEVMAdmin --users alice@pve`
@@ -144,12 +163,9 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   verb + " <storage>",
-		Short: short,
-		Long: short + " (/storage/{storage}). Mutating ACL entries requires Permissions.Modify " +
-			"on the path. Revoking an entry that does not exist succeeds silently, matching PVE " +
-			"server behavior. This command does not block self-lockout (e.g. revoking your own " +
-			"access to the path you are managing); check `permissions effective` first if unsure.",
+		Use:     verb + " <storage>",
+		Short:   short,
+		Long:    long,
 		Example: example,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

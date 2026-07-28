@@ -14,16 +14,33 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lxc",
 		Short: "Manage LXC containers",
-		Long: `Manage LXC containers on Proxmox VE: lifecycle (create, start, stop,
-migrate, clone, delete), configuration, disks, snapshots, network interfaces,
-firewall rules, and console access. Requires a configured Proxmox VE API
-connection.
-
-Commands take a container by numeric vmid or name; when the container's node
-cannot be resolved automatically from the cluster, pass --node. Actions that
-submit a PVE task (create, clone, migrate, delete, start, stop, and similar)
-block until the task completes; pass --async to print the task UPID
-immediately instead of waiting.`,
+		Long: "Manage LXC containers on a Proxmox VE cluster. Requires a configured Proxmox " +
+			"VE API connection.\n\n" +
+			"Lifecycle\n" +
+			"  create, clone, template   bring a container into being\n" +
+			"  start, stop, reboot       run it, with shutdown/suspend/resume\n" +
+			"  migrate, remote-migrate   move it to another node or cluster\n" +
+			"  delete                    remove it\n\n" +
+			"Inspecting\n" +
+			"  list, status   what exists and what state it is in\n" +
+			"  config         read and change configuration options\n" +
+			"  metrics, rrd   current and historical resource use\n" +
+			"  feature        ask what the container's storage supports\n\n" +
+			"Composition\n" +
+			"  disk         attach, resize, move, and detach volumes\n" +
+			"  snapshot     take, list, roll back to, and delete snapshots\n" +
+			"  interfaces   the container's network interfaces\n\n" +
+			"Access and hardening\n" +
+			"  console       reach the container\n" +
+			"  firewall      rules, aliases, ipsets, and options\n" +
+			"  security      privilege level, features, capabilities\n" +
+			"  permissions   ACL entries on the container's path\n" +
+			"  hookscript    the host-side lifecycle hook\n\n" +
+			"Commands take a container by numeric vmid or by name. Pass --node when the " +
+			"container's node cannot be resolved from the cluster on its own.\n\n" +
+			"Anything that submits a PVE task, create and clone and migrate and delete and " +
+			"start and stop among them, blocks until that task completes. Pass --async to " +
+			"print the task UPID and return immediately.",
 		Example: `  pmx pve lxc list
   pmx pve lxc start 200
   pmx pve lxc migrate 200 --target-node pve2 --restart

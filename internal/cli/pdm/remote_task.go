@@ -236,11 +236,11 @@ func newRemoteTaskRefreshCmd() *cobra.Command {
 		Use:   "refresh",
 		Short: "Refresh the cached remote task list",
 		Long: "Refresh the task cache PDM keeps for its managed remotes (POST " +
-			"/remotes/tasks/refresh). Without --remote, every remote the caller has " +
-			"permission for is refreshed; with one or more --remote flags, only those " +
-			"remotes are refreshed. This is an asynchronous task: by default the " +
-			"command blocks until it completes; pass --async (persistent flag) to " +
-			"return the UPID immediately instead.",
+			"/remotes/tasks/refresh).\n\n" +
+			"Without --remote, every remote the caller has permission for is refreshed. " +
+			"Pass one or more --remote flags to narrow that to specific remotes.\n\n" +
+			"The refresh runs as an asynchronous task, and the command blocks until it " +
+			"completes; the persistent --async flag returns the UPID immediately instead.",
 		Example: "  pmx pdm remote task refresh --remote pve-main",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

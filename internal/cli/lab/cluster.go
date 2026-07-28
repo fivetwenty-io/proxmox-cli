@@ -213,13 +213,13 @@ func newClusterJoinCmd() *cobra.Command {
 			"list` on the joining node. Plan §6.2: only node 0 may ever hold guests before " +
 			"clustering, so a guest-hosting node may create a cluster but must never join " +
 			"one.\n\n" +
-			"Before `pvecm add` runs, non-interactive root ssh trust from the joining node to " +
-			"node 0 is seeded and verified end to end: root keypair, pushed public key, " +
-			"accepted host key. `pvecm add`'s own ssh-fallback join path relies on that trust " +
-			"already existing, and fails silently — reporting success — on a fresh node pair " +
-			"without it. Once `pvecm add` returns, the joining node is re-probed to confirm it " +
-			"actually joined before waiting for quorum, since `pvecm add`'s exit code alone " +
-			"cannot be trusted.\n\n" +
+			"Before `pvecm add` runs, non-interactive root ssh trust from the joining node " +
+			"to node 0 is seeded and verified end to end: root keypair, pushed public key, " +
+			"accepted host key. That trust has to exist already, because `pvecm add`'s own " +
+			"ssh-fallback join path assumes it and fails silently on a fresh node pair " +
+			"without it, reporting success all the while.\n\n" +
+			"For the same reason, the joining node is re-probed once `pvecm add` returns, to " +
+			"confirm it actually joined before the wait for quorum begins.\n\n" +
 			"Join nodes one at a time, in index order: 1, then 2, then 3, and so on. Never run " +
 			"two joins for the same lab concurrently, and never join node i before node i-1 " +
 			"has finished joining and reached quorum.",

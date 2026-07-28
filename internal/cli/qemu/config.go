@@ -266,12 +266,14 @@ func newConfigSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
 		Short: "Update the configuration of a VM",
-		Long: "Update one or more VM configuration options. Each supported option has a " +
-			"dedicated flag; indexed device families (net, scsi, ide, virtio, sata, " +
-			"ipconfig, hostpci, serial, usb, parallel, numa-node, virtiofs) take repeatable " +
-			"INDEX=VALUE slots. Pass --set KEY=VALUE for options without a dedicated flag; " +
-			"--delete removes keys and --revert discards pending changes. At least one change " +
-			"must be given. The update is applied synchronously (no task UPID).",
+		Long: "Update one or more VM configuration options. At least one change is " +
+			"required.\n\n" +
+			"Every supported option has a dedicated flag. The indexed device families (net, " +
+			"scsi, ide, virtio, sata, ipconfig, hostpci, serial, usb, parallel, numa-node, " +
+			"virtiofs) take repeatable INDEX=VALUE slots.\n\n" +
+			"For anything without a dedicated flag, use --set KEY=VALUE. --delete removes " +
+			"keys outright, and --revert discards changes that are still pending.\n\n" +
+			"The update applies synchronously; there is no task UPID to follow.",
 		Example: `  pmx pve qemu config set 100 --cores 4 --memory 8192
   pmx pve qemu config set web1 --net 0=virtio,bridge=vmbr0
   pmx pve qemu config set 100 --set hugepages=1024`,

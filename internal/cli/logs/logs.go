@@ -41,16 +41,15 @@ func newPruneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "prune",
 		Short: "Delete old or empty log files",
-		Long: `Delete JSONL log files under ~/.pmx/logs.
-
-Files older than the cutoff are removed. The cutoff comes from --older-than
-(days), falling back to the log.retention config key. With --empty, 0-byte
-log files older than one hour are removed regardless of age cutoff (empty
-files were produced by pmx releases that logged only API activity).
-Directories left empty by the removals are removed too.
-
-With a positive log.retention configured, an equivalent prune also runs
-automatically at most once per 24 hours after any command completes.`,
+		Long: "Delete JSONL log files under ~/.pmx/logs.\n\n" +
+			"Files older than the cutoff are removed. The cutoff comes from --older-than, in " +
+			"days, and falls back to the log.retention config key.\n\n" +
+			"With --empty, 0-byte log files older than one hour go too, whatever the age " +
+			"cutoff says. Those files came from pmx releases that logged only API " +
+			"activity.\n\n" +
+			"Directories left empty by the removals are removed as well.\n\n" +
+			"With a positive log.retention configured, an equivalent prune runs on its own " +
+			"after any command completes, at most once per 24 hours.",
 		Example: `  pmx logs prune --older-than 30
   pmx logs prune --empty
   pmx logs prune --older-than 90 --empty --dry-run

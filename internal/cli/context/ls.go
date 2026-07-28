@@ -28,12 +28,14 @@ func newLsCmd() *cobra.Command {
 		Use:     "ls",
 		Aliases: []string{"list"},
 		Short:   "List all named contexts",
-		Long: "List every named context recorded in the config file, sorted by name, with the " +
-			"active context marked by a leading asterisk. --product restricts the list to " +
-			"contexts targeting a single product (pve, pbs, or pdm). Under a persona binary " +
-			"(pve, pbs, pdm), rows whose product differs from the persona's are flagged " +
-			"\"(mismatch)\" in the table output; json/yaml output always reports the plain " +
-			"product value. Reads only the local config file; no API calls are made.",
+		Long: "List every named context recorded in the config file, sorted by name, with " +
+			"the active one marked by a leading asterisk.\n\n" +
+			"--product narrows the list to contexts targeting a single product: pve, pbs, " +
+			"or pdm.\n\n" +
+			"Under a persona binary, table output flags rows whose product differs from the " +
+			"persona's with \"(mismatch)\". JSON and YAML output always report the plain " +
+			"product value instead.\n\n" +
+			"This reads the local config file only; no API calls are made.",
 		Example: `  pmx context ls
   pmx context ls --product pbs`,
 		Args:        cobra.NoArgs,

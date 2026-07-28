@@ -152,10 +152,12 @@ func newSecurityCapsShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show configured lxc.cap.keep / lxc.cap.drop entries",
-		Long: "Show a container's configured capability mode and lists. Without --effective this is " +
-			"an API-only read of the raw lxc.* entries. With --effective it additionally probes the " +
-			"running container's /proc/1/status over root ssh and decodes its bounding (CapBnd) and " +
-			"effective (CapEff) capability masks, so you can confirm what the container actually has.",
+		Long: "Show a container's configured capability mode and lists.\n\n" +
+			"By default this is an API-only read of the raw lxc.* entries, so it reports what " +
+			"the config asks for.\n\n" +
+			"With --effective, the command also reads the running container's /proc/1/status " +
+			"over root ssh and decodes its bounding (CapBnd) and effective (CapEff) masks, " +
+			"which is what the container actually holds.",
 		Example: `  pmx pve lxc security caps show 200
   pmx pve lxc security caps show 200 --effective`,
 		Args: cobra.ExactArgs(1),
@@ -421,10 +423,13 @@ func newSecurityCapsAddCmd() *cobra.Command {
 		// add grants an existing capability rather than creating anything;
 		// a "create" alias would misdescribe the command.
 		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
-		Long: "Grant one or more capabilities to the container. In keep mode the caps are appended " +
-			"to lxc.cap.keep; in drop mode they are removed from lxc.cap.drop. Both mean the " +
-			"container gains the capability. With no capability configuration yet, add errors and " +
-			"points you at 'caps set --keep', since PVE's defaults already grant most capabilities. " +
+		Long: "Grant one or more capabilities to the container.\n\n" +
+			"How that is written depends on the container's mode. In keep mode the caps are " +
+			"appended to lxc.cap.keep; in drop mode they are removed from lxc.cap.drop. " +
+			"Either way the container ends up with the capability.\n\n" +
+			"On a container with no capability configuration at all, add errors out and " +
+			"points you at `caps set --keep`, because PVE's defaults already grant most " +
+			"capabilities.\n\n" +
 			"Granting a dangerous capability requires --force.",
 		Example: `  pmx pve lxc security caps add 200 net_bind_service
   pmx pve lxc security caps add 200 sys_admin --force`,

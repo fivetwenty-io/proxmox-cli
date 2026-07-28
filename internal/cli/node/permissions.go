@@ -23,12 +23,16 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Manage ACL entries and inspect effective permissions on a node",
-		Long: "List, grant, and revoke ACL entries on a node's ACL path (/nodes/{node}), and " +
-			"inspect the resulting effective permissions. Some node-scoped privileges " +
-			"(Sys.Incoming, PCI mdev operations) are checked at the root path \"/\" rather than " +
-			"at /nodes/{node}; this command only shows /nodes/{node}. Use " +
-			"`pmx pve access permissions --path /` (or `pmx pve access acl list --path /`) to inspect or " +
-			"grant those root-scoped privileges.",
+		Long: "Manage the ACL entries on a node's own path, /nodes/{node}, and inspect the " +
+			"privileges those entries resolve to.\n\n" +
+			"  list        ACL entries written on this node's path\n" +
+			"  effective   privileges a user actually holds there\n" +
+			"  grant       add roles for users, groups, or tokens\n" +
+			"  revoke      take those roles away again\n\n" +
+			"Not every node-scoped privilege lives at that path. Sys.Incoming and the PCI mdev " +
+			"operations are checked at the root path \"/\" instead, and nothing here shows or " +
+			"changes them. Reach for `pmx pve access permissions --path /`, or " +
+			"`pmx pve access acl list --path /`, when you need those.",
 	}
 	cmd.AddCommand(
 		newPermissionsListCmd(),
@@ -45,11 +49,12 @@ func newPermissionsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <node>",
 		Short: "List ACL entries on a node's ACL path",
-		Long: "List the ACL entries whose path exactly matches /nodes/{node}. With --inherited, " +
-			"also include entries from every ancestor path (/, /nodes), each row showing which " +
-			"path it came from. Some node privileges (Sys.Incoming, PCI mdev) are checked at " +
-			"root \"/\" and are not shown here even with --inherited beyond the normal chain; use " +
-			"`pmx pve access acl list --path /` to inspect root grants directly.",
+		Long: "List the ACL entries whose path exactly matches /nodes/{node}.\n\n" +
+			"With --inherited, the listing also covers every ancestor path (/ and /nodes), and " +
+			"each row names the path its entry was granted on.\n\n" +
+			"Sys.Incoming and the PCI mdev privileges are checked at root \"/\" rather than on " +
+			"the node, so they do not appear here. Use `pmx pve access acl list --path /` to " +
+			"inspect root grants directly.",
 		Example: `  pmx pve node permissions list pve1
   pmx pve node permissions list pve1 --inherited`,
 		Args: cobra.ExactArgs(1),
@@ -90,10 +95,11 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "effective <node>",
 		Short: "Show effective permissions on a node's ACL path",
-		Long: "Show the effective (post-inheritance) privileges on /nodes/{node} for the " +
-			"caller, or for --userid when passed. Querying another user's or token's permissions " +
-			"requires Sys.Audit on /access. Some node privileges (Sys.Incoming, PCI mdev) are " +
-			"checked at root \"/\" instead and will not appear here; use " +
+		Long: "Show the privileges that /nodes/{node} resolves to for the calling user, or for " +
+			"--userid when passed, once inheritance has been applied.\n\n" +
+			"Querying another user's or token's permissions requires Sys.Audit on /access.\n\n" +
+			"Sys.Incoming and the PCI mdev privileges are checked at root \"/\" rather than on " +
+			"the node, so they do not appear here. Use " +
 			"`pmx pve access permissions --path /` to inspect those.",
 		Example: `  pmx pve node permissions effective pve1`,
 		Args:    cobra.ExactArgs(1),
@@ -134,20 +140,33 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 
 	verb, verbPast, prep := "grant", "Granted", "to"
 	short := "Grant roles to users, groups, or tokens on a node's ACL path"
+	long := "Grant roles on a node's ACL path, /nodes/{node}, to any mix of users, groups, " +
+		"and API tokens. Name at least one of --users, --groups, or --tokens.\n\n" +
+		"Writing ACL entries requires Permissions.Modify on the path.\n\n" +
+		"A granted role propagates to every path below this one by default; pass " +
+		"--no-propagate to confine it to this path alone.\n\n" +
+		"Sys.Incoming and the PCI mdev privileges are checked at root \"/\" rather than on " +
+		"the node, so this command cannot confer them. Use " +
+		"`pmx pve access acl set --path /` for those."
 	if revoke {
 		verb, verbPast, prep = "revoke", "Revoked", "from"
 		short = "Revoke roles from users, groups, or tokens on a node's ACL path"
+		long = "Revoke roles on a node's ACL path, /nodes/{node}, from any mix of users, " +
+			"groups, and API tokens. Name at least one of --users, --groups, or --tokens.\n\n" +
+			"Removing ACL entries requires Permissions.Modify on the path. Revoking an entry " +
+			"that was never there succeeds silently, matching the PVE server.\n\n" +
+			"Nothing here guards against self-lockout: revoking your own access to the path " +
+			"you are managing is allowed and takes effect at once. Run `permissions " +
+			"effective` first if you are unsure what you are about to lose.\n\n" +
+			"Sys.Incoming and the PCI mdev privileges are checked at root \"/\" rather than " +
+			"on the node, so this command cannot withdraw them. Use " +
+			"`pmx pve access acl set --path /` for those."
 	}
 
 	cmd := &cobra.Command{
-		Use:   verb + " <node>",
-		Short: short,
-		Long: short + " (/nodes/{node}). Some node privileges (Sys.Incoming, PCI mdev) are " +
-			"checked at root \"/\" instead and are unaffected by this command; use " +
-			"`pmx pve access acl set --path /` for those. Mutating ACL entries requires " +
-			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
-			"silently, matching PVE server behavior. This command does not block self-lockout; " +
-			"check `permissions effective` first if unsure.",
+		Use:     verb + " <node>",
+		Short:   short,
+		Long:    long,
 		Example: `  pmx pve node permissions ` + verb + ` pve1 --roles PVEAdmin --users alice@pve`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

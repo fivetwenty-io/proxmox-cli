@@ -25,18 +25,29 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sdn",
 		Short: "Manage software-defined networking (zones, vnets, subnets)",
-		Long: `Manage Proxmox VE Software-Defined Networking: zones, vnets, subnets,
-controllers, IPAM providers, DNS providers, fabrics, and vnet firewall rules,
-plus SDN-wide status, prefix-lists, route-maps, and configuration locking.
-Requires a configured Proxmox VE API connection.
-
-Creating, updating, or deleting a zone, vnet, subnet, controller, IPAM, DNS
-provider, or fabric only edits the pending configuration; changes take effect
-on the nodes only after 'pmx pve sdn apply' reloads the network config
-('pmx pve sdn dry-run' previews the reload, 'pmx pve sdn rollback' discards
-pending changes). Sub-commands take the resource's own identifier (zone
-name, vnet name, controller ID, and so on); destructive verbs require
---yes/-y and otherwise refuse to run.`,
+		Long: "Manage Proxmox VE Software-Defined Networking. Requires a configured Proxmox " +
+			"VE API connection.\n\n" +
+			"Network objects\n" +
+			"  zone         the SDN zone and its type\n" +
+			"  vnet         virtual networks inside a zone\n" +
+			"  subnet       address ranges and gateways on a vnet\n" +
+			"  controller   BGP, EVPN, and friends\n" +
+			"  fabric       underlay fabrics and their nodes\n\n" +
+			"Supporting configuration\n" +
+			"  ipam, dns                 address and name providers\n" +
+			"  prefix-list, route-map    routing policy building blocks\n" +
+			"  lock                      hold the SDN config against edits\n\n" +
+			"Committing and inspecting\n" +
+			"  dry-run    preview what a reload would change\n" +
+			"  apply      reload the network config on every node\n" +
+			"  rollback   discard everything still pending\n" +
+			"  status     where the SDN config stands per node\n\n" +
+			"Creating, updating, or deleting any of these objects edits the pending " +
+			"configuration only. Nothing reaches the nodes until `pmx pve sdn apply` reloads " +
+			"the network config.\n\n" +
+			"Sub-commands take the resource's own identifier: a zone name, a vnet name, a " +
+			"controller ID, and so on. Destructive verbs require --yes/-y and otherwise " +
+			"refuse to run.",
 		Example: `  pmx pve sdn zone create myzone --type simple
   pmx pve sdn vnet create vnet1 --zone myzone
   pmx pve sdn subnet create vnet1 10.0.0.0/24 --gateway 10.0.0.1

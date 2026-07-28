@@ -38,18 +38,19 @@ func SSH(deps *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ssh [node] [ssh-option...] [command...]",
 		Short: "Open an SSH session to a PVE node, PBS host, or PDM host (optionally run a remote command)",
-		Long: `pmx ssh connects to the active context's target and execs the system
-ssh(1) binary against it. Against a PVE context, <node> resolves to its
-cluster management address and is required. Against a PBS or PDM context,
-ssh connects directly to the context's host; no node argument is needed or
-accepted — the first token is treated as an ssh option/remote command.
-
-The connection flags below (-l, -i, -p, -A, --no-strict) must precede
-<node>. Everything after <node> is passed through to ssh verbatim: options
-(e.g. -L 8080:localhost:80, -N) are reordered ahead of the destination
-since ssh's own option parser does not permute arguments on every platform,
-and the first token that is not an option starts the remote command. Use
-"--" to force the remote-command boundary explicitly.`,
+		Long: "Connect to the active context's target and exec the system ssh(1) binary " +
+			"against it.\n\n" +
+			"What the node argument means depends on the product. Against a PVE context it " +
+			"is required, and resolves to that node's cluster management address. Against a " +
+			"PBS or PDM context there is only one host, so no node argument is accepted at " +
+			"all and the first token is read as an ssh option or remote command.\n\n" +
+			"The connection flags below (-l, -i, -p, -A, --no-strict) must come before the " +
+			"node.\n\n" +
+			"Everything after the node goes to ssh verbatim. Options such as " +
+			"-L 8080:localhost:80 or -N are reordered ahead of the destination, because " +
+			"ssh's own parser does not permute arguments on every platform. The first token " +
+			"that is not an option begins the remote command; pass \"--\" to place that " +
+			"boundary yourself.",
 		Example: `  pmx ssh pve1
   pmx ssh pve1 -l root -- uptime
   pmx ssh --context backup

@@ -523,11 +523,17 @@ func newSecurityShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show VM security posture (protection, boot chain, encryption, agent, firewall coverage)",
-		Long: "Show the full security posture of a VM from one config read plus one firewall-options " +
-			"read: the protection flag, BIOS/Secure Boot configuration, TPM state device, " +
-			"confidential-computing settings, security-relevant CPU flags, guest-agent config, " +
-			"per-NIC firewall coverage, and the VM firewall option summary. Risky settings " +
-			"(raw QEMU args, hookscript, PCI passthrough) are called out.",
+		Long: "Show the full security posture of a VM, gathered from one config read plus " +
+			"one firewall-options read.\n\n" +
+			"  * the protection flag\n" +
+			"  * BIOS and Secure Boot configuration\n" +
+			"  * the TPM state device\n" +
+			"  * confidential-computing settings\n" +
+			"  * security-relevant CPU flags\n" +
+			"  * guest-agent configuration\n" +
+			"  * per-NIC firewall coverage and the VM firewall options\n\n" +
+			"Risky settings are called out explicitly: raw QEMU args, a hookscript, and PCI " +
+			"passthrough.",
 		Example: `  pmx pve qemu security show 100`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -676,11 +682,12 @@ func newSecurityListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "Security posture summary for all VMs",
-		Long: "Audit the security posture of every VM in the cluster (or on --node): protection, " +
-			"Secure Boot / TPM presence, confidential computing, guest agent, per-NIC firewall " +
-			"coverage, and risky settings (raw args, hookscript, PCI passthrough). VMs with a " +
-			"risky setting are flagged with '!' and sorted first. This is a cluster resources " +
-			"scan plus one config read per VM.",
+		Long: "Audit the security posture of every VM in the cluster, or on one node with " +
+			"--node: protection, Secure Boot and TPM presence, confidential computing, guest " +
+			"agent, per-NIC firewall coverage, and risky settings such as raw args, a " +
+			"hookscript, or PCI passthrough.\n\n" +
+			"VMs carrying a risky setting are marked with '!' and sorted to the top.\n\n" +
+			"The cost is one cluster resources scan plus one config read per VM.",
 		Example: `  pmx pve qemu security list
   pmx pve qemu security list --node pve1`,
 		Args: cobra.NoArgs,

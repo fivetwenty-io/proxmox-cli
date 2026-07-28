@@ -25,13 +25,16 @@ func newSelectCmd() *cobra.Command {
 		Use:     "select [<name>]",
 		Aliases: []string{"use", "switch"},
 		Short:   "Select the active named context",
-		Long: "Set the active named context, updating current-context in the config file and " +
-			"recording the prior value as previous-context so it can be restored with " +
-			"'pmx context previous'. Passing \"-\" switches back to the previous context (same " +
-			"as 'pmx context previous'). With no argument, prints a numbered list of configured " +
-			"contexts and prompts for a selection (number or name) on stdin. Prints a " +
-			"non-blocking warning to stderr if the selected context targets a different product " +
-			"than the current persona binary, or has no credentials configured.",
+		Long: "Set the active named context. This updates current-context in the config " +
+			"file and records the prior value as previous-context, so " +
+			"`pmx context previous` can bring it back.\n\n" +
+			"Passing \"-\" switches straight back to the previous context, exactly as " +
+			"`pmx context previous` does.\n\n" +
+			"With no argument at all, the command prints a numbered list of configured " +
+			"contexts and reads a selection, by number or by name, from stdin.\n\n" +
+			"Two situations produce a warning on stderr without blocking the switch: the " +
+			"selected context targets a different product than the persona binary you are " +
+			"running, or it has no credentials configured.",
 		Example: `  pmx context select lab
   pmx context select -
   pmx context select`,

@@ -42,18 +42,21 @@ func newUploadCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "upload <storage>",
 		Short: "Upload a local file to a storage",
-		Long: "Stream a local file to the resolved node's storage as an ISO image, container " +
-			"template, or snippet. The destination name defaults to the source file's base name; " +
-			"override it with --filename. Optionally verify the upload with --checksum and " +
-			"--checksum-algorithm. The upload runs as an asynchronous task and the command blocks " +
-			"until it finishes unless --async is set.\n\n" +
-			"--content snippets is a workaround, not an API upload: the PVE upload endpoint " +
-			"only accepts iso, vztmpl, and import (snippets upload is a long-standing gap, " +
-			"Proxmox Bugzilla #2208 — https://bugzilla.proxmox.com/show_bug.cgi?id=2208), so the " +
-			"file is streamed over SSH into the storage's snippets/ directory instead. This " +
-			"requires a path-backed storage (dir, nfs, cifs, ...) with the snippets content type " +
-			"enabled, and SSH access to the node (root by default; -l/-i/-p and the context ssh " +
-			"block apply). --checksum is not supported in this mode, and no task is created.",
+		Long: "Stream a local file to the resolved node's storage as an ISO image, a " +
+			"container template, or a snippet.\n\n" +
+			"The destination name defaults to the source file's base name; --filename " +
+			"overrides it. Pass --checksum and --checksum-algorithm to have the upload " +
+			"verified.\n\n" +
+			"The upload runs as an asynchronous task, and the command blocks until it " +
+			"finishes unless --async is set.\n\n" +
+			"--content snippets works differently. PVE's upload endpoint accepts only iso, " +
+			"vztmpl, and import; snippets have been a gap for years (Proxmox Bugzilla #2208, " +
+			"https://bugzilla.proxmox.com/show_bug.cgi?id=2208). So the file goes over SSH " +
+			"into the storage's snippets/ directory instead of through the API.\n\n" +
+			"That path needs a path-backed storage (dir, nfs, cifs, and the like) with the " +
+			"snippets content type enabled, plus SSH access to the node. The SSH user is root " +
+			"by default; -l/-i/-p and the context's ssh block apply. No task is created, and " +
+			"--checksum has no effect.",
 		Example: `  pmx pve storage upload local --file ./debian-12.iso --content iso
   pmx pve storage upload local --file ./snippet.yaml --content snippets`,
 		Args: cobra.ExactArgs(1),

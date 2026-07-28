@@ -28,12 +28,16 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Inspect and manage ACL entries scoped to a container",
-		Long: "Scope the global 'pmx pve access acl' and 'pmx pve access permissions' commands to a " +
-			"single container's ACL path, /vms/{vmid} (the same path grammar shared by QEMU VMs " +
-			"under 'pmx pve qemu permissions'), so operators never have to hand-type it. 'list' and " +
-			"'effective' are read-only views; 'grant' and 'revoke' are thin wrappers over the " +
-			"underlying access.acl update call. For any ACL path other than a single " +
-			"container's, use 'pmx pve access acl'/'pmx pve access permissions' directly.",
+		Long: "Manage the ACL entries on a container's own path, /vms/{vmid}, and inspect the " +
+			"privileges those entries resolve to. The path is derived from the container you " +
+			"name, so you never have to type it.\n\n" +
+			"  list        ACL entries written on this container's path\n" +
+			"  effective   privileges a user actually holds there\n" +
+			"  grant       add roles for users, groups, or tokens\n" +
+			"  revoke      take those roles away again\n\n" +
+			"QEMU VMs share the same /vms/{vmid} path grammar; see " +
+			"`pmx pve qemu permissions`. For any other ACL path, use `pmx pve access acl` and " +
+			"`pmx pve access permissions` directly.",
 	}
 	cmd.AddCommand(
 		newPermissionsListCmd(),
@@ -50,10 +54,12 @@ func newPermissionsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <vmid|name>",
 		Short: "List ACL entries on a container's ACL path",
-		Long: "List the ACL entries whose path is exactly the container's /vms/{vmid} path. With " +
-			"--inherited, also include entries on every ancestor of that path (/, /vms), unioned " +
-			"client-side from a single ACL read (no extra API calls); each row then shows the " +
-			"path it was actually granted on so inherited and direct entries are never confused.",
+		Long: "List the ACL entries whose path is exactly the container's /vms/{vmid} " +
+			"path.\n\n" +
+			"With --inherited, the listing also covers every ancestor of that path (/ and " +
+			"/vms), unioned client-side from a single ACL read rather than extra API calls. " +
+			"Each row then names the path its entry was granted on, so direct and inherited " +
+			"entries never blur together.",
 		Example: `  pmx pve lxc permissions list 200
   pmx pve lxc permissions list 200 --inherited`,
 		Args: cobra.ExactArgs(1),
@@ -98,10 +104,10 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "effective <vmid|name>",
 		Short: "Show effective permissions on a container's ACL path",
-		Long: "Show the effective (post-inheritance, post-propagation) privileges on a " +
-			"container's /vms/{vmid} path for the calling user, or for --userid when passed. " +
-			"Querying another user's or token's effective permissions requires Sys.Audit on " +
-			"/access.",
+		Long: "Show the privileges that a container's /vms/{vmid} path resolves to for the " +
+			"calling user, or for --userid when passed, once inheritance and propagation have " +
+			"been applied.\n\n" +
+			"Querying another user's or token's permissions requires Sys.Audit on /access.",
 		Example: `  pmx pve lxc permissions effective 200
   pmx pve lxc permissions effective 200 --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
@@ -156,21 +162,24 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 
 	verb, pastTense, prep := "grant", "Granted", "to"
 	shortDesc := "Grant roles to users, groups, or tokens on a container's ACL path"
-	longDesc := "Grant one or more roles on a container's /vms/{vmid} ACL path to the given " +
-		"users, groups, and/or tokens (comma-separated; at least one of --users, --groups, or " +
-		"--tokens is required). Requires Permissions.Modify on the path. By default the " +
-		"granted roles propagate to any path below /vms/{vmid}; pass --no-propagate to " +
-		"restrict them to this path only."
+	longDesc := "Grant roles on a container's ACL path, /vms/{vmid}, to any mix of users, " +
+		"groups, and API tokens. Each flag takes a comma-separated list, and at least one of " +
+		"--users, --groups, or --tokens is required.\n\n" +
+		"Writing ACL entries requires Permissions.Modify on the path.\n\n" +
+		"A granted role propagates to every path below /vms/{vmid} by default; pass " +
+		"--no-propagate to confine it to this path alone."
 	if revoke {
 		verb, pastTense, prep = "revoke", "Revoked", "from"
 		shortDesc = "Revoke roles from users, groups, or tokens on a container's ACL path"
-		longDesc = "Revoke one or more roles on a container's /vms/{vmid} ACL path from the " +
-			"given users, groups, and/or tokens (comma-separated; at least one of --users, " +
-			"--groups, or --tokens is required). Requires Permissions.Modify on the path. " +
-			"Revoking an entry that does not exist succeeds silently (PVE behavior: there is " +
-			"nothing to confirm it ever matched). Revoking roles you rely on, including your " +
-			"own access to this container, is not blocked by this command (self-lockout); run 'permissions " +
-			"effective' first to confirm what you are about to lose."
+		longDesc = "Revoke roles on a container's ACL path, /vms/{vmid}, from any mix of " +
+			"users, groups, and API tokens. Each flag takes a comma-separated list, and at " +
+			"least one of --users, --groups, or --tokens is required.\n\n" +
+			"Removing ACL entries requires Permissions.Modify on the path. Revoking an entry " +
+			"that was never there succeeds silently: PVE reports nothing that would confirm " +
+			"it ever matched.\n\n" +
+			"Nothing here guards against self-lockout. Revoking roles you rely on, your own " +
+			"access to this container included, is allowed and takes effect at once. Run " +
+			"`permissions effective` first to confirm what you are about to lose."
 	}
 
 	example := `  pmx pve lxc permissions grant 200 --roles PVEVMAdmin --users alice@pve`

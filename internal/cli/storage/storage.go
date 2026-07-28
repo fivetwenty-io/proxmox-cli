@@ -23,17 +23,28 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "storage",
 		Short: "Manage cluster storage configuration",
-		Long: `Manage Proxmox VE cluster-wide storage definitions: list, inspect, create,
-update, and delete storage entries, prune backup retention, and pull OCI
-images. Requires a configured Proxmox VE API connection.
-
-The cluster-scoped commands (list, get, create, set, delete) take a storage
-ID and need no node. Node-scoped commands that inspect or write through a
-specific node's view of the storage (content, status, identity, node-list,
-upload, download-url, prune) additionally require --node, PMX_NODE, or the
-active context's default node. Storage type (dir, nfs, cifs, lvm, lvmthin,
-zfspool, rbd, pbs, and others) determines which create/set flags apply, for
-example --vgname for lvm or --server/--export for nfs.`,
+		Long: "Manage Proxmox VE cluster-wide storage definitions. Requires a configured " +
+			"Proxmox VE API connection.\n\n" +
+			"The definition itself\n" +
+			"  list, get, describe     what exists and what it accepts\n" +
+			"  create, set, delete     add, change, and remove definitions\n" +
+			"  permissions             ACL entries on the storage's path\n\n" +
+			"What lives on it\n" +
+			"  content, volume        the volumes stored there\n" +
+			"  upload, download-url   put files onto it\n" +
+			"  prune                  drop backups outside the retention window\n" +
+			"  file-restore           browse and extract from a backup\n" +
+			"  aplinfo, oci-pull      fetch appliance templates and OCI images\n\n" +
+			"Through one node's eyes\n" +
+			"  status, identity, node-list   live state and backend plugin\n" +
+			"  rrd, rrddata                  historical usage graphs\n\n" +
+			"The cluster-scoped verbs (list, get, create, set, delete) take a storage ID and " +
+			"need no node. The ones that work through a specific node's view of the storage " +
+			"(content, status, identity, node-list, upload, download-url, prune) also need " +
+			"--node, PMX_NODE, or the active context's default node.\n\n" +
+			"Storage type decides which create and set flags apply: --vgname for lvm, " +
+			"--server and --export for nfs, and so on across dir, cifs, lvmthin, zfspool, " +
+			"rbd, pbs, and the rest.",
 		Example: `  pmx pve storage list
   pmx pve storage get local-lvm
   pmx pve storage create --storage backup01 --type nfs --server 10.0.0.5 --export /export/backup
@@ -528,11 +539,13 @@ func newCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new storage definition",
-		Long: "Create a cluster-wide storage definition. --storage and --type are required; " +
-			"the type (dir, nfs, cifs, rbd, lvm, lvmthin, zfspool, btrfs, pbs, and others) " +
-			"determines which of the remaining flags apply, for example --path for dir, " +
-			"--server/--export for nfs, or --vgname for lvm. Credential flags such as " +
-			"--password and --keyring are forwarded to the API but never echoed back.",
+		Long: "Create a cluster-wide storage definition. --storage and --type are " +
+			"required.\n\n" +
+			"The type (dir, nfs, cifs, rbd, lvm, lvmthin, zfspool, btrfs, pbs, and others) " +
+			"decides which of the remaining flags mean anything: --path for dir, --server " +
+			"and --export for nfs, --vgname for lvm, and so on.\n\n" +
+			"Credential flags such as --password and --keyring are forwarded to the API and " +
+			"never echoed back.",
 		Example: `  pmx pve storage create --storage backup01 --type nfs --server 10.0.0.5 --export /export/backup
   pmx pve storage create --storage images01 --type dir --path /var/lib/images --content images,iso`,
 		Args: cobra.NoArgs,
@@ -566,11 +579,12 @@ func newSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <storage>",
 		Short: "Update an existing storage definition",
-		Long: "Update an existing storage definition. Only the flags you pass are changed; " +
-			"identity fields fixed at create time (path, export, vgname, and similar) cannot " +
-			"be updated. Pass --delete with a comma-separated list of option names to reset " +
-			"them to their defaults, and --digest to abort if the configuration changed since " +
-			"you read it.",
+		Long: "Update an existing storage definition. Only the flags you pass are changed.\n\n" +
+			"Identity fields fixed at create time cannot be updated: path, export, vgname, " +
+			"and their like.\n\n" +
+			"Pass --delete with a comma-separated list of option names to reset them to " +
+			"their defaults, and --digest to abort if the configuration changed since you " +
+			"read it.",
 		Example: `  pmx pve storage set backup01 --content backup,iso
   pmx pve storage set backup01 --enabled=false
   pmx pve storage set backup01 --delete bwlimit,options`,

@@ -18,10 +18,11 @@ func newHookscriptCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hookscript",
 		Short: "Manage the hookscript attached to a container",
-		Long: "Show, set, or remove the hookscript volume attached to a container. A " +
-			"hookscript is an executable stored on snippets-capable storage (e.g. " +
-			"local:snippets/hook.pl) that PVE runs on the HOST at each guest lifecycle " +
-			"phase (pre-start, post-start, pre-stop, post-stop). Upload one with " +
+		Long: "Show, set, or remove the hookscript volume attached to a container.\n\n" +
+			"A hookscript is an executable on snippets-capable storage, such as " +
+			"local:snippets/hook.pl, that PVE runs on the host at each guest lifecycle phase: " +
+			"pre-start, post-start, pre-stop, and post-stop.\n\n" +
+			"Upload one with " +
 			"`pmx pve storage upload <storage> --file <script> --content snippets`.",
 		Example: `  pmx pve lxc hookscript get 200
   pmx pve lxc hookscript set 200 local:snippets/hook.pl

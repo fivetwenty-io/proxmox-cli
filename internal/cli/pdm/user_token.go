@@ -196,10 +196,11 @@ func newTokenUpdateCmd() *cobra.Command {
 		Use:   "update <userid> <name>",
 		Short: "Update an API token",
 		Long: "Update an existing API token's metadata (PUT " +
-			"/access/users/{userid}/token/{token-name}). Only flags explicitly set are " +
-			"sent; use --delete to reset properties to their default, or --regenerate " +
-			"to issue a new secret while keeping the token's permissions — the new " +
-			"secret is printed once in the response and is never retrievable again.",
+			"/access/users/{userid}/token/{token-name}).\n\n" +
+			"Only the flags you set explicitly are sent. Use --delete to reset properties to " +
+			"their defaults.\n\n" +
+			"--regenerate issues a new secret while keeping the token's permissions. That " +
+			"secret is printed once, in the response, and can never be retrieved again.",
 		Example: `  pmx pdm token update alice@pdm ci --comment 'CI automation (rotated)'
   pmx pdm token update alice@pdm ci --regenerate`,
 		Args: cobra.ExactArgs(2),

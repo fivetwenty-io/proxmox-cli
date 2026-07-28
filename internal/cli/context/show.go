@@ -17,12 +17,14 @@ func newShowCmd() *cobra.Command {
 		Use:     "show [<name>]",
 		Aliases: []string{"info"},
 		Short:   "Show a named context (defaults to the current context)",
-		Long: "Display the full configuration of a named context: host, port, protocol, realm, " +
-			"product, auth type, username, token id, TLS settings, and default node/output. " +
-			"Defaults to the current context when <name> is omitted, erroring if none is set. " +
-			"The secret value is always redacted to \"***\" for inline literals; " +
-			"environment-variable and keychain references are shown as-is since the reference " +
-			"itself is not sensitive.",
+		Long: "Display the full configuration of a named context: host, port, protocol, " +
+			"realm, product, auth type, username, token id, TLS settings, and the default " +
+			"node and output format.\n\n" +
+			"With no name, the command shows the current context, and errors if none is " +
+			"set.\n\n" +
+			"Inline secret literals are always redacted to \"***\". Environment-variable and " +
+			"keychain references are shown as they are, since a reference reveals nothing on " +
+			"its own.",
 		Example: `  pmx context show
   pmx context show lab`,
 		Args:        cobra.MaximumNArgs(1),

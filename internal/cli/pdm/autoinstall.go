@@ -691,10 +691,11 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 		Use:   "update <id>",
 		Short: "Update a prepared auto-installer answer configuration",
 		Long: "Update an existing prepared auto-installer answer configuration (PUT " +
-			"/auto-install/prepared/{id}). Only flags explicitly set are sent; use " +
-			"--delete to reset properties to their default instead. --filesystem, " +
-			"--disk-filter, --netdev-filter, --target-filter, and --template-counters " +
-			"each take literal JSON text for their respective nested object.",
+			"/auto-install/prepared/{id}).\n\n" +
+			"Only the flags you set explicitly are sent. Use --delete to reset properties to " +
+			"their defaults instead.\n\n" +
+			"Five flags carry nested objects and take literal JSON text: --filesystem, " +
+			"--disk-filter, --netdev-filter, --target-filter, and --template-counters.",
 		Example: `  pmx pdm auto-install prepared update default --timezone America/New_York
   pmx pdm auto-install prepared update default --delete mailto`,
 		Args: cobra.ExactArgs(1),

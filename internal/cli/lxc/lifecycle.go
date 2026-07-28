@@ -259,12 +259,16 @@ func newDeleteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <vmid|name>",
 		Short: "Destroy a container",
-		Long: "Permanently destroy a container and its disks. Refuses to run without --yes; " +
-			"pass --force to destroy it even while running, --purge to also remove it from " +
-			"backup/replication/HA jobs and ACLs, and --destroy-unreferenced-disks to also " +
-			"remove disks with this VMID that are no longer referenced by the config. " +
-			"Submits a PVE task and blocks until it completes; pass the global --async flag " +
-			"to print the task UPID immediately instead of waiting.",
+		Long: "Permanently destroy a container and its disks. The command refuses to run " +
+			"without --yes.\n\n" +
+			"  --force                        destroy it even while running\n" +
+			"  --purge                        also drop it from backup,\n" +
+			"                                 replication, and HA jobs, and ACLs\n" +
+			"  --destroy-unreferenced-disks   also remove disks carrying this\n" +
+			"                                 VMID that the config no longer\n" +
+			"                                 references\n\n" +
+			"The command submits a PVE task and blocks until it completes; the global " +
+			"--async flag prints the task UPID and returns immediately.",
 		Example: `  pmx pve lxc delete 200 --yes
   pmx pve lxc delete web1 --yes --purge`,
 		Args: cobra.ExactArgs(1),

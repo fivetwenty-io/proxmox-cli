@@ -32,11 +32,11 @@ func newContentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "content <storage>",
 		Short: "List the volumes stored on a storage",
-		Long: "List the volumes stored on a storage as seen from the resolved node, showing " +
-			"each volume's ID, content type, format, size, and owning guest. Requires a node " +
-			"via --node, PMX_NODE, or the active context's default. Use --content to show " +
-			"only one content type (for example iso, backup, or images) and --vmid to show " +
-			"only volumes owned by a given guest.",
+		Long: "List the volumes on a storage as the resolved node sees them, with each " +
+			"volume's ID, content type, format, size, and owning guest.\n\n" +
+			"A node is required, via --node, PMX_NODE, or the active context's default.\n\n" +
+			"Narrow the listing with --content for a single content type, such as iso or " +
+			"backup or images, and with --vmid for the volumes one guest owns.",
 		Example: `  pmx pve storage content local --node pve1
   pmx pve storage content local --node pve1 --content backup --vmid 100
   pmx pve storage content local --node pve1 --content snippets`,

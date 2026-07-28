@@ -17,11 +17,13 @@ func newDescribeCmd() *cobra.Command {
 	return optionschema.NewDescribeCmd(optionschema.DescribeConfig{
 		Schemas: storageOptionSchemas,
 		Short:   "Describe all storage options and the types that accept them",
-		Long: "List every storage option from the PVE API schema: type, built-in default, " +
-			"allowed values, and the storage types that accept it. The option set is " +
-			"type-polymorphic; pass --type to see exactly what one storage type accepts, " +
-			"including its required and create-only options. Runs offline. Pass an option " +
-			"name to show only that option with full descriptions and sub-keys.",
+		Long: "List every storage option from the PVE API schema, with its type, built-in " +
+			"default, allowed values, and the storage types that accept it.\n\n" +
+			"The option set is type-polymorphic, so pass --type to see exactly what one " +
+			"storage type takes, its required and create-only options included.\n\n" +
+			"Pass an option name to narrow the output to that option alone, with full " +
+			"descriptions and sub-keys.\n\n" +
+			"Runs entirely offline.",
 		CommandHint:         "pmx pve storage describe",
 		SubKeyRowsInCatalog: false,
 		TypeSets:            storageTypeOptions,

@@ -35,24 +35,25 @@ func newValidateCmd() *cobra.Command {
 		Short:       "Validate one or all contexts",
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
-		Long: `Validate one or all named contexts against structural rules:
-  - host is present
-  - auth type is "token" or "password"
-  - token auth: token-id and secret are set
-  - password auth: username and secret are set
-  - port is in range [1, 65535] (0 means "use the product's default port:
-    8006 pve, 8007 pbs, 8443 pdm"; accepted)
-  - protocol is "https" or "http" (empty means "use default https"; accepted)
-  - default-output, if set, is one of: table, ascii, plain, json, yaml
-  - fingerprint, if set, matches the XX:XX:...:XX hex pattern (32 pairs)
-
-With --connect, each structurally valid context is probed live: the version
-endpoint is fetched over TLS (honoring tls.insecure), the server's
-identification header is compared against the context's product, and the
-stored secret is checked for resolvability. Unreachable contexts fail the
-command; a product mismatch is reported as a warning only.
-
-Exit status: 0 if all validated contexts are valid; 1 if any are invalid.`,
+		Long: "Validate one or all named contexts against structural rules.\n\n" +
+			"  * host is present\n" +
+			"  * auth type is \"token\" or \"password\"\n" +
+			"  * token auth has token-id and secret set\n" +
+			"  * password auth has username and secret set\n" +
+			"  * port is within [1, 65535]\n" +
+			"  * protocol is \"https\" or \"http\"\n" +
+			"  * default-output, if set, is table, ascii, plain, json, or yaml\n" +
+			"  * fingerprint, if set, is 32 colon-separated hex pairs\n\n" +
+			"Two of those accept an empty value as \"use the default\": port 0 means the " +
+			"product's own port (8006 pve, 8007 pbs, 8443 pdm), and an empty protocol means " +
+			"https.\n\n" +
+			"With --connect, every structurally valid context is also probed live. The " +
+			"version endpoint is fetched over TLS, honoring tls.insecure; the server's " +
+			"identification header is compared against the context's product; and the stored " +
+			"secret is checked for resolvability.\n\n" +
+			"An unreachable context fails the command. A product mismatch is only a " +
+			"warning.\n\n" +
+			"Exit status is 0 when every validated context is valid, and 1 when any is not.",
 		Example: `  pmx context validate
   pmx context validate lab
   pmx context validate --all --connect`,

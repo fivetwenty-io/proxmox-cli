@@ -86,13 +86,18 @@ func newSecurityShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <vmid|name>",
 		Short: "Show container security posture (privilege level, features, capabilities, raw lxc.* keys)",
-		Long: "Show the full security posture of a container from a single config read: whether it " +
-			"is unprivileged, its protection flag, the parsed features= flags, the capability " +
-			"whitelist (lxc.cap.keep / lxc.cap.drop), and any remaining raw lxc.* directives.\n\n" +
-			"Privilege level cannot be safely flipped in place: the API accepts unprivileged on " +
-			"update but does not remap the rootfs UIDs, and PVE documents it as \"should not be " +
-			"modified manually.\" The supported path is to back up and restore with an explicit " +
-			"privilege choice (see 'pmx pve lxc create --restore --force --unprivileged ...').",
+		Long: "Show the full security posture of a container, gathered from a single config " +
+			"read.\n\n" +
+			"  * whether it runs unprivileged\n" +
+			"  * the protection flag\n" +
+			"  * the parsed features= flags\n" +
+			"  * the capability whitelist (lxc.cap.keep / lxc.cap.drop)\n" +
+			"  * any remaining raw lxc.* directives\n\n" +
+			"Privilege level cannot be flipped in place. The API accepts unprivileged on " +
+			"update but does not remap the rootfs UIDs, and PVE documents the key as one that " +
+			"should not be modified manually. The supported path is a backup and restore with " +
+			"the privilege choice made explicitly; see " +
+			"`pmx pve lxc create --restore --force --unprivileged`.",
 		Example: `  pmx pve lxc security show 200`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

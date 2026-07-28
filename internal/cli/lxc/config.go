@@ -146,11 +146,13 @@ func newConfigSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
 		Short: "Update the configuration of a container",
-		Long: "Update one or more settings on a container's configuration. Only the flags you " +
-			"pass are changed; unspecified options keep their current value. Use --delete to " +
-			"reset options to their defaults, --revert to discard specific pending changes, " +
-			"and --set KEY=VALUE as an escape hatch for options with no dedicated flag. At " +
-			"least one field must be given.",
+		Long: "Update one or more settings on a container's configuration. At least one " +
+			"field is required.\n\n" +
+			"Only the flags you pass are touched; every other option keeps its current " +
+			"value.\n\n" +
+			"  --delete          reset options to their defaults\n" +
+			"  --revert          discard specific pending changes\n" +
+			"  --set KEY=VALUE   escape hatch for options with no flag",
 		Example: `  pmx pve lxc config set 200 --memory 2048 --cores 4
   pmx pve lxc config set web1 --hostname web1 --onboot --tags prod`,
 		Args: cobra.ExactArgs(1),

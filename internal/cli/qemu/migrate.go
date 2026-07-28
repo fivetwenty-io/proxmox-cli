@@ -86,13 +86,11 @@ func newMigrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate <vmid|name>",
 		Short: "Migrate a QEMU virtual machine to another node",
-		Long: "Migrate a QEMU VM to a different cluster node. " +
-			"--target-node is required. The source node is detected automatically " +
-			"from the cluster (an explicit --node pins it instead). " +
-			"For running VMs pass --online to perform a " +
-			"live migration; without it PVE will refuse to migrate a running VM " +
-			"unless --force is also set. " +
-			"The command blocks until the migration task completes unless --async is set.",
+		Long: "Migrate a QEMU VM to a different cluster node. --target-node is required; the " +
+			"source node is detected from the cluster, and --node pins it explicitly.\n\n" +
+			"A running VM needs --online for a live migration. Without it, PVE refuses to " +
+			"move a running VM unless --force is also set.\n\n" +
+			"The command blocks until the migration task finishes, unless --async is set.",
 		Example: `  pmx pve qemu migrate 100 --target-node pve2
   pmx pve qemu migrate 100 --target-node pve2 --online`,
 		Args: cobra.ExactArgs(1),

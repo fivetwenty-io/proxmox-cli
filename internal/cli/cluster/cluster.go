@@ -13,18 +13,29 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Inspect Proxmox VE cluster state",
-		Long: `Inspect and manage Proxmox VE cluster-wide state: quorum status, cluster
-resources, the cluster log, recent tasks, and the next free guest ID.
-Configure cluster-wide backup jobs, HA groups/rules/resources, firewall
-rules, resource mappings, replication jobs, metric servers, notification
-targets, ACME accounts, CPU models, and bulk guest actions across every node.
-Requires a configured Proxmox VE API connection.
-
-Sub-commands take whatever identifier the resource uses (an HA sid, mapping
-ID, job ID, or node name); no --node flag is needed since these operate
-cluster-wide. Actions that submit a PVE task (backup jobs, bulk start/
-shutdown/migrate) block until the task completes; pass the global --async
-flag to print the task UPID immediately instead of waiting.`,
+		Long: "Inspect and manage Proxmox VE cluster-wide state. Requires a configured " +
+			"Proxmox VE API connection.\n\n" +
+			"Inspecting\n" +
+			"  status, resources   quorum, nodes, and everything running\n" +
+			"  log, tasks          the cluster log and recent tasks\n" +
+			"  next-id             the next free guest ID\n\n" +
+			"Scheduled and automated work\n" +
+			"  backup        cluster-wide backup jobs\n" +
+			"  replication   replication jobs between nodes\n" +
+			"  ha            HA groups, rules, and resources\n" +
+			"  bulk          start, shutdown, migrate across nodes\n\n" +
+			"Cluster-wide configuration\n" +
+			"  firewall             rules, aliases, ipsets, options\n" +
+			"  notifications        targets, matchers, endpoints\n" +
+			"  metrics              external metric servers\n" +
+			"  mapping              PCI and USB resource mappings\n" +
+			"  acme, cpu-models     certificates and CPU definitions\n\n" +
+			"Sub-commands take whatever identifier the resource itself uses: an HA sid, a " +
+			"mapping ID, a job ID, a node name. No --node flag is needed, since all of this " +
+			"is cluster-wide.\n\n" +
+			"Anything that submits a PVE task, backup jobs and the bulk verbs among them, " +
+			"blocks until that task completes. Pass the global --async flag to print the " +
+			"task UPID and return immediately.",
 		Example: `  pmx pve cluster status
   pmx pve cluster resources --type vm
   pmx pve cluster next-id

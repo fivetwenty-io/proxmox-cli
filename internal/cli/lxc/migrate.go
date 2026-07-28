@@ -31,13 +31,14 @@ func newMigrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate <vmid|name>",
 		Short: "Migrate an LXC container to another node",
-		Long: "Migrate an LXC container to a different cluster node. " +
-			"--target-node is required. The source node is detected automatically " +
-			"from the cluster (an explicit --node pins it instead). " +
-			"A running container cannot be live-migrated; " +
-			"pass --restart to migrate it by briefly restarting it on the target node. " +
-			"The command blocks until the migration task completes unless --async is set. " +
-			"Use `pmx pve lxc migrate check <vmid|name>` for a pre-flight feasibility check.",
+		Long: "Migrate an LXC container to a different cluster node. --target-node is " +
+			"required; the source node is detected from the cluster, and --node pins it " +
+			"explicitly.\n\n" +
+			"Containers cannot be live-migrated while running. Pass --restart to move one " +
+			"anyway, at the cost of a brief restart on the target node.\n\n" +
+			"The command blocks until the migration task finishes, unless --async is set.\n\n" +
+			"For a feasibility check beforehand, run " +
+			"`pmx pve lxc migrate check <vmid|name>`.",
 		Example: `  pmx pve lxc migrate 200 --target-node pve2
   pmx pve lxc migrate 200 --target-node pve2 --restart --async`,
 		Args: cobra.ExactArgs(1),

@@ -33,12 +33,14 @@ func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api",
 		Short: "Make raw Proxmox API requests against the active context",
-		Long: "Issue raw GET/POST/PUT/DELETE requests against the active context's Proxmox VE, " +
-			"Proxmox Backup Server, or Proxmox Datacenter Manager API, for endpoints this CLI does " +
-			"not (yet) expose as a typed command. The response is rendered generically: as a " +
-			"key/value table for a single JSON object, a table for an array of objects, and a " +
-			"plain value otherwise; every format always preserves the full response losslessly via " +
-			"--output json or --output yaml.",
+		Long: "Issue raw GET, POST, PUT, and DELETE requests against the active context's " +
+			"API, whether it targets Proxmox VE, Proxmox Backup Server, or Proxmox " +
+			"Datacenter Manager. This is the escape hatch for endpoints the CLI does not " +
+			"expose as a typed command yet.\n\n" +
+			"Responses render generically: a key/value table for a single JSON object, a " +
+			"table for an array of objects, and a plain value for anything else.\n\n" +
+			"For the response exactly as the server sent it, use --output json or " +
+			"--output yaml.",
 		Example: `  pmx api get /nodes
   pmx api get /cluster/resources -d type=vm
   pmx api post /nodes/pve1/qemu/100/status/start

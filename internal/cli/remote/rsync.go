@@ -40,24 +40,22 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rsync [flags] <rsync-arg>...",
 		Short: "Synchronise files to or from a PVE node, PBS host, or PDM host over SSH (node:path operands)",
-		Long: `pmx rsync execs the system rsync(1) binary, rewriting any "node:path"
-operand (optionally "user@node:path") to the active context's target, and
-injects "-e ssh ..." so the transfer authenticates the same way "pmx ssh"
-does. At least one operand must reference a remote target; every remote
-operand must reference the SAME target.
-
-Against a PVE context, the host portion names a cluster node and resolves to
-its cluster management address; every remote operand must name the same
-node. Against a PBS or PDM context, every remote operand is rewritten to the
-context's single endpoint host directly — the host portion you type is not
-looked up, so any label (e.g. "pbs:/path") works.
-
-Because rsync owns most short flags, pmx's own connection flags are
-long-only and must precede the rsync arguments: --ssh-user, --ssh-port,
---ssh-identity, --ssh-agent, --no-strict. -c/--context, --config,
---insecure, and --debug are also recognised in that same leading position.
-
-Supplying your own -e/--rsh is rejected: pmx always injects its own.`,
+		Long: "Exec the system rsync(1) binary, with two rewrites applied first: any " +
+			"`node:path` operand, or `user@node:path`, is pointed at the active context's " +
+			"target, and `-e ssh ...` is injected so the transfer authenticates exactly the " +
+			"way `pmx ssh` does.\n\n" +
+			"At least one operand must name a remote target, and every remote operand must " +
+			"name the same one.\n\n" +
+			"Against a PVE context, the host portion names a cluster node and resolves to " +
+			"its management address, so all remote operands have to name that same node. " +
+			"Against a PBS or PDM context there is a single endpoint host and every remote " +
+			"operand is rewritten to it; the host portion you type is never looked up, so " +
+			"any label works, `pbs:/path` included.\n\n" +
+			"rsync owns most short flags, so pmx's own connection flags are long-only and " +
+			"must precede the rsync arguments: --ssh-user, --ssh-port, --ssh-identity, " +
+			"--ssh-agent, and --no-strict. -c/--context, --config, --insecure, and --debug " +
+			"are recognised in that same leading position.\n\n" +
+			"Supplying your own -e/--rsh is rejected, since pmx always injects its own.",
 		Example: `  pmx rsync ./backup.tar pve1:/var/tmp/
   pmx rsync -av pve1:/etc/pve/ ./pve-etc/
   pmx rsync --ssh-user admin --context backup local.img backup:/tmp/`,

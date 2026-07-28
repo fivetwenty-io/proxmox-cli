@@ -21,16 +21,34 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "qemu",
 		Short: "Manage QEMU virtual machines",
-		Long: `Manage QEMU/KVM virtual machines on Proxmox VE: lifecycle (create, start,
-stop, migrate, clone, delete), configuration, disks, snapshots, the guest
-agent, cloud-init, firewall rules, and console access. Requires a configured
-Proxmox VE API connection.
-
-Commands take a VM by numeric vmid or name; when the VM's node cannot be
-resolved automatically from the cluster, pass --node. Actions that submit a
-PVE task (create, clone, migrate, delete, start, stop, and similar) block
-until the task completes; pass --async to print the task UPID immediately
-instead of waiting.`,
+		Long: "Manage QEMU/KVM virtual machines on a Proxmox VE cluster. Requires a " +
+			"configured Proxmox VE API connection.\n\n" +
+			"Lifecycle\n" +
+			"  create, clone, template   bring a VM into being\n" +
+			"  start, stop, reboot       run it, with shutdown/reset/suspend/resume\n" +
+			"  migrate, remote-migrate   move it to another node or cluster\n" +
+			"  delete                    remove it\n\n" +
+			"Inspecting\n" +
+			"  list, status      what exists and what state it is in\n" +
+			"  config            read and change configuration options\n" +
+			"  metrics, rrd      current and historical resource use\n" +
+			"  feature           ask what the VM's storage supports\n\n" +
+			"Composition\n" +
+			"  disk        attach, resize, move, and detach disks\n" +
+			"  snapshot    take, list, roll back to, and delete snapshots\n" +
+			"  cloudinit   the cloud-init drive and its settings\n" +
+			"  cpu, machine, cpu-flags   processor and machine models\n\n" +
+			"Access and hardening\n" +
+			"  console, ssh, monitor, sendkey   reach the guest\n" +
+			"  agent                            run guest-agent commands\n" +
+			"  firewall, security               rules and security posture\n" +
+			"  permissions                      ACL entries on the VM's path\n" +
+			"  hookscript                       the host-side lifecycle hook\n\n" +
+			"Commands take a VM by numeric vmid or by name. Pass --node when the VM's node " +
+			"cannot be resolved from the cluster on its own.\n\n" +
+			"Anything that submits a PVE task, create and clone and migrate and delete and " +
+			"start and stop among them, blocks until that task completes. Pass --async to " +
+			"print the task UPID and return immediately.",
 		Example: `  pmx pve qemu list
   pmx pve qemu start 100
   pmx pve qemu migrate 100 --target-node pve2 --online

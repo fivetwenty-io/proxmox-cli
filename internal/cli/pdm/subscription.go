@@ -669,11 +669,13 @@ func newSubscriptionBulkAssignCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bulk-assign",
 		Short: "Apply a proposal previously returned by auto-assign",
-		Long: "Apply a key-to-node assignment proposal previously returned by " +
-			"'subscription auto-assign' (POST /subscriptions/bulk-assign). Pass the full " +
-			"proposal JSON via --proposal, or '-' to read it from stdin. The server rejects " +
-			"the call if the pool or node-status digests embedded in the proposal no " +
-			"longer match the live state. This applies the assignments: pass --yes/-y to confirm.",
+		Long: "Apply a key-to-node assignment proposal that `subscription auto-assign` " +
+			"returned earlier (POST /subscriptions/bulk-assign). Pass --yes/-y to " +
+			"confirm.\n\n" +
+			"Give the full proposal JSON to --proposal, or pass '-' to read it from " +
+			"stdin.\n\n" +
+			"The server rejects the call outright if the pool or node-status digests " +
+			"embedded in the proposal no longer match the live state.",
 		Example: `  pmx pdm subscription bulk-assign --proposal '{"assignments":[]}' --yes
   pmx pdm subscription bulk-assign --proposal - --yes`,
 		Args: cobra.NoArgs,
@@ -763,10 +765,12 @@ func newSubscriptionApplyPendingCmd() *cobra.Command {
 		Use:   "apply-pending",
 		Short: "Apply every pending pool change to its remote node",
 		Long: "Apply every pending subscription pool change to its remote node (POST " +
-			"/subscriptions/apply-pending). This starts an asynchronous worker task when " +
-			"there is something to apply: by default the command blocks until it " +
-			"completes; pass --async (persistent flag) to return the UPID immediately " +
-			"instead. This pushes changes to remotes: pass --yes/-y to confirm.",
+			"/subscriptions/apply-pending).\n\n" +
+			"This pushes changes out to the remotes themselves, so --yes/-y is required to " +
+			"confirm.\n\n" +
+			"When there is something to apply, an asynchronous worker task starts and the " +
+			"command blocks until it completes; the persistent --async flag returns the UPID " +
+			"immediately instead.",
 		Example: "  pmx pdm subscription apply-pending --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

@@ -36,11 +36,12 @@ func newRemoteMigrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote-migrate <vmid|name>",
 		Short: "Migrate a container to a remote PVE cluster",
-		Long: "Migrate an LXC container to a different PVE cluster. " +
-			"--target-endpoint, --target-storage, and --target-bridge are required. " +
-			"This operation moves the container across cluster boundaries and is irreversible " +
-			"unless --delete is omitted (the default keeps a stopped copy on the source). " +
-			"Pass --yes to confirm. The command blocks until the task completes unless --async is set.",
+		Long: "Migrate an LXC container to a different PVE cluster. --target-endpoint, " +
+			"--target-storage, and --target-bridge are all required.\n\n" +
+			"This crosses a cluster boundary, so --yes is required to confirm. Without " +
+			"--delete, which is the default, a stopped copy stays behind on the source " +
+			"cluster; with it, the source copy goes away and the move cannot be undone.\n\n" +
+			"The command blocks until the task completes, unless --async is set.",
 		Example: `  pmx pve lxc remote-migrate 200 --target-endpoint https://remote:8006 \
   --target-storage local-lvm --target-bridge vmbr0 --yes`,
 		Args: cobra.ExactArgs(1),

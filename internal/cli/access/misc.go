@@ -23,11 +23,11 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Show effective permissions for a user or token",
-		Long: "Show the effective privilege set after role and ACL propagation is resolved " +
-			"server-side, as a path-to-privilege-list table. Without --userid, shows the " +
-			"calling user's own effective permissions; pass --userid to query a different " +
-			"user or token (requires Sys.Audit on /access). Pass --path to restrict the " +
-			"result to a single path.",
+		Long: "Show the effective privilege set as a path-to-privilege-list table, with " +
+			"role and ACL propagation already resolved server-side.\n\n" +
+			"Without --userid you see your own permissions. Pass --userid to query a " +
+			"different user or token, which requires Sys.Audit on /access.\n\n" +
+			"Pass --path to narrow the result to a single path.",
 		Example: `  pmx pve access permissions
   pmx pve access permissions --path /vms/100
   pmx pve access permissions --userid alice@pve`,

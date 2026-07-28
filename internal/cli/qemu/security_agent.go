@@ -18,11 +18,13 @@ func newSecurityAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Inspect and set the QEMU guest-agent configuration (the agent= config option)",
-		Long: "Inspect and set the agent= config option with structured per-field flags, merging " +
-			"with the current value. This configures the virtio/isa agent DEVICE and PVE's use " +
-			"of it; it is NOT 'pmx pve qemu agent', which runs operational guest-agent commands " +
-			"(exec, file-read, ...). The raw --agent string on 'pmx pve qemu create' and " +
-			"'pmx pve qemu config set' stays available as an escape hatch.",
+		Long: "Inspect and set the VM's agent= config option through per-field flags that " +
+			"merge into the current value. What this configures is the virtio/isa agent " +
+			"device and how PVE uses it.\n\n" +
+			"Do not confuse this with `pmx pve qemu agent`, which runs operational " +
+			"guest-agent commands such as exec and file-read.\n\n" +
+			"The raw --agent string on `pmx pve qemu create` and `pmx pve qemu config set` " +
+			"remains available as an escape hatch.",
 	}
 	cmd.AddCommand(newSecurityAgentShowCmd(), newSecurityAgentSetCmd())
 	return cmd

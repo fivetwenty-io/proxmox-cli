@@ -202,10 +202,11 @@ func newUserTokenUpdateCmd() *cobra.Command {
 		Use:   "update <userid> <token-name>",
 		Short: "Update an API token",
 		Long: "Update an existing API token's metadata (PUT " +
-			"/access/users/{userid}/token/{token-name}). Only flags explicitly set are " +
-			"sent; use --delete to reset properties to their default, or --regenerate " +
-			"to issue a new secret while keeping the token's permissions — the new " +
-			"secret is printed once in the response and is never retrievable again.",
+			"/access/users/{userid}/token/{token-name}).\n\n" +
+			"Only the flags you set explicitly are sent. Use --delete to reset properties to " +
+			"their defaults.\n\n" +
+			"--regenerate issues a new secret while keeping the token's permissions. That " +
+			"secret is printed once, in the response, and can never be retrieved again.",
 		Example: "  pmx pbs user token update alice@pbs backup-token --comment rotated",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {

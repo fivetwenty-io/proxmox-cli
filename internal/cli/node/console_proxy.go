@@ -208,16 +208,16 @@ func newSpiceshellCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "spiceshell",
 		Short: "Request a SPICE shell proxy ticket for the node",
-		Long: "POST /nodes/{node}/spiceshell to acquire a short-lived SPICE ticket for\n" +
-			"a shell session on the node. A SPICE .vv connection file is written to\n" +
-			"the system temp directory; its path is printed so you can open it with\n" +
-			"virt-viewer (remote-viewer file.vv) or any compatible SPICE client.\n" +
-			"The full connection details (host, tls-port, password, etc.) are also\n" +
-			"printed.\n\n" +
-			"SPICE is a GUI protocol — this command emits connection info and a .vv\n" +
-			"file only and does not open an interactive terminal.\n\n" +
-			"Use --cmd to run a specific command instead of the default login shell\n" +
-			"(requires root@pam credentials).",
+		Long: "Acquire a short-lived SPICE ticket for a shell session on the node, via " +
+			"POST /nodes/{node}/spiceshell.\n\n" +
+			"A SPICE .vv connection file is written to the system temp directory and its " +
+			"path printed, so you can open it with virt-viewer (remote-viewer file.vv) or " +
+			"any compatible client. The full connection details are printed too: host, " +
+			"tls-port, password, and the rest.\n\n" +
+			"SPICE is a GUI protocol, so this command produces connection information and a " +
+			"file. It does not open an interactive terminal.\n\n" +
+			"Use --cmd to run a specific command in place of the default login shell. That " +
+			"requires root@pam credentials.",
 		Example: `  pmx pve node spiceshell`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

@@ -398,12 +398,12 @@ func newTapeMediaDestroyCmd() *cobra.Command {
 		Use:   "destroy",
 		Short: "Destroy a tape medium's database record",
 		Long: "Completely remove a tape medium's record from the media database " +
-			"(GET /tape/media/destroy). Identify the medium with --uuid or " +
-			"--label-text; at least one is required. Pass --force to remove it " +
-			"even if it belongs to a media set. This is a synchronous operation: " +
-			"the PBS API returns no task ID for it. This is destructive: the " +
-			"medium's cataloged backup content becomes unrecoverable through PBS. " +
-			"Pass --yes/-y to confirm.",
+			"(GET /tape/media/destroy).\n\n" +
+			"Identify the medium with --uuid or --label-text; at least one is required. Pass " +
+			"--force to remove it even while it belongs to a media set.\n\n" +
+			"This destroys information: once the record is gone, the medium's cataloged " +
+			"backup content is unrecoverable through PBS. Pass --yes/-y to confirm.\n\n" +
+			"The operation is synchronous; the PBS API returns no task ID for it.",
 		Example: "  pmx pbs tape media destroy --label-text vol001 --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -459,12 +459,12 @@ func newTapeMediaSetStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-status <uuid>",
 		Short: "Set a tape medium's status",
-		Long: "Update a tape medium's status to 'full', 'damaged', or 'retired' " +
-			"(POST /tape/media/list/{uuid}/status). Pass --status; omitting it " +
-			"clears the medium's status back to its internally managed state " +
-			"('writable' and 'unknown' are managed automatically and cannot be " +
-			"set directly). This is a synchronous operation: the PBS API returns " +
-			"no task ID for it.",
+		Long: "Update a tape medium's status to full, damaged, or retired " +
+			"(POST /tape/media/list/{uuid}/status).\n\n" +
+			"Omitting --status clears the status instead, handing the medium back to PBS's " +
+			"internal management. The writable and unknown states are managed that way " +
+			"automatically and cannot be set by hand.\n\n" +
+			"The operation is synchronous; the PBS API returns no task ID for it.",
 		Example: "  pmx pbs tape media set-status 3f2a9c10-8b7d-4e21-9a3f-1c2d3e4f5a6b --status damaged",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

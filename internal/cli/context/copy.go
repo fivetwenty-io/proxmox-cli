@@ -24,11 +24,14 @@ func newCopyCmd() *cobra.Command {
 		Use:     "copy <src> <dst>",
 		Aliases: []string{"cp"},
 		Short:   "Copy a named context to a new name",
-		Long: "Copy a named context's full configuration (host, auth, TLS, defaults) to a new " +
-			"name, deep-copying the source so subsequent edits to either context do not affect " +
-			"the other. Errors if <dst> already exists unless --force is passed. --select makes " +
-			"the newly copied context the active one, recording the previous current-context as " +
-			"previous-context.",
+		Long: "Copy a named context's full configuration to a new name: host, auth, TLS, " +
+			"and defaults.\n\n" +
+			"The source is deep-copied, so later edits to either context leave the other " +
+			"alone.\n\n" +
+			"The command errors if the destination already exists, unless --force is " +
+			"passed.\n\n" +
+			"--select makes the new copy the active context, recording the outgoing " +
+			"current-context as previous-context.",
 		Example: `  pmx context copy lab lab-staging
   pmx context copy lab lab-staging --select
   pmx context copy lab lab-old --force`,

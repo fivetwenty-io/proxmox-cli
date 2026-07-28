@@ -29,11 +29,16 @@ func newNodeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Administer this Proxmox Datacenter Manager's own node(s)",
-		Long: "Inspect and manage the Proxmox Datacenter Manager's own node(s) " +
-			"natively: status, power control, configuration, DNS, time, logs, " +
-			"network interfaces, APT packages and repositories, TLS certificates, " +
-			"background tasks, SDN VRF lookups, and subscription. Distinct from the " +
-			"remote-scoped PVE/PBS command groups, which proxy to managed remotes.",
+		Long: "Inspect and manage the Proxmox Datacenter Manager's own node or nodes, " +
+			"natively rather than through a proxy.\n\n" +
+			"  ls, status         what exists and how it is doing\n" +
+			"  reboot, shutdown   power control\n" +
+			"  config, dns, time, network   host configuration\n" +
+			"  apt, certificate, subscription   packages, TLS, licensing\n" +
+			"  syslog, task       logs and background work\n" +
+			"  sdn                VRF lookups on this node\n\n" +
+			"The PVE and PBS command groups are the counterpart to this one: they proxy out " +
+			"to the remotes this instance manages.",
 	}
 	cmd.AddCommand(
 		newNodeLsCmd(),

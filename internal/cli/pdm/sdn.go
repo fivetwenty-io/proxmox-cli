@@ -258,11 +258,11 @@ func newSdnVnetAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <vnet>",
 		Short: "Create a VNet across multiple remotes",
-		Long: "Create a VNet with the given name on multiple remotes (POST /sdn/vnets). Each " +
-			"--remote entry is \"<remote>=<zone>\", pairing the remote with the zone the VNet " +
-			"should be created in on that remote. This is an asynchronous task: by default the " +
-			"command blocks until it completes; pass --async (persistent flag) to return the " +
-			"UPID immediately instead.",
+		Long: "Create a VNet with the given name on multiple remotes (POST /sdn/vnets).\n\n" +
+			"Each --remote entry is `<remote>=<zone>`, pairing a remote with the zone the " +
+			"VNet should be created in on that remote.\n\n" +
+			"Creation runs as an asynchronous task, and the command blocks until it " +
+			"completes; the persistent --async flag returns the UPID immediately instead.",
 		Example: "  pmx pdm sdn vnet add vnet1 --remote pve-main=zone1 --remote pve-secondary=zone1",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -438,11 +438,12 @@ func newSdnZoneAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <zone>",
 		Short: "Create a zone across multiple remotes",
-		Long: "Create a zone with the given name on multiple remotes (POST /sdn/zones). Each " +
-			"--remote entry is \"<remote>\" or \"<remote>=<controller>\"; the controller is only " +
-			"needed for zone types that use one (evpn); simple/vlan/vxlan/qinq zones omit it. " +
-			"This is an asynchronous task: by default the command blocks until it completes; pass " +
-			"--async (persistent flag) to return the UPID immediately instead.",
+		Long: "Create a zone with the given name on multiple remotes (POST /sdn/zones).\n\n" +
+			"Each --remote entry is either `<remote>` or `<remote>=<controller>`. Only zone " +
+			"types that use a controller need the second form, which in practice means evpn; " +
+			"simple, vlan, vxlan, and qinq zones leave it off.\n\n" +
+			"Creation runs as an asynchronous task, and the command blocks until it " +
+			"completes; the persistent --async flag returns the UPID immediately instead.",
 		Example: "  pmx pdm sdn zone add zone1 --remote pve-main --remote pve-secondary",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

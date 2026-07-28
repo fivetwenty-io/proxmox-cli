@@ -26,11 +26,15 @@ func newPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Manage ACL entries and inspect effective permissions on a pool",
-		Long: "List, grant, and revoke ACL entries on a pool's ACL path (/pool/{poolid}), and " +
-			"inspect the resulting effective permissions. This manages who may administer the " +
-			"pool object itself (ACL entries granting roles such as PVEPoolAdmin), which is " +
-			"distinct from pool membership: use `pmx pve pool set --vms/--storage` to add or remove " +
-			"the guests and storage that belong to the pool.",
+		Long: "Manage the ACL entries on a pool's own path, /pool/{poolid}, and inspect the " +
+			"privileges those entries resolve to.\n\n" +
+			"  list        ACL entries written on this pool's path\n" +
+			"  effective   privileges a user actually holds there\n" +
+			"  grant       add roles for users, groups, or tokens\n" +
+			"  revoke      take those roles away again\n\n" +
+			"What this controls is who may administer the pool object itself, through roles " +
+			"such as PVEPoolAdmin. Pool membership is a separate thing: to change which guests " +
+			"and storage belong to the pool, use `pmx pve pool set --vms/--storage`.",
 	}
 	cmd.AddCommand(
 		newPermissionsListCmd(),
@@ -47,9 +51,10 @@ func newPermissionsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <poolid>",
 		Short: "List ACL entries on a pool's ACL path",
-		Long: "List the ACL entries whose path exactly matches /pool/{poolid} (note the singular " +
-			"\"pool\", not \"pools\"). With --inherited, also include entries from every ancestor " +
-			"path (/, /pool), each row showing which path it came from.",
+		Long: "List the ACL entries whose path exactly matches /pool/{poolid}. Note the " +
+			"singular \"pool\" in that path, not \"pools\".\n\n" +
+			"With --inherited, the listing also covers every ancestor path (/ and /pool), and " +
+			"each row names the path its entry was granted on.",
 		Example: `  pmx pve pool permissions list prod
   pmx pve pool permissions list prod --inherited`,
 		Args: cobra.ExactArgs(1),
@@ -90,9 +95,9 @@ func newPermissionsEffectiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "effective <poolid>",
 		Short: "Show effective permissions on a pool's ACL path",
-		Long: "Show the effective (post-inheritance) privileges on /pool/{poolid} for the " +
-			"caller, or for --userid when passed. Querying another user's or token's permissions " +
-			"requires Sys.Audit on /access.",
+		Long: "Show the privileges that /pool/{poolid} resolves to for the calling user, or " +
+			"for --userid when passed, once inheritance has been applied.\n\n" +
+			"Querying another user's or token's permissions requires Sys.Audit on /access.",
 		Example: `  pmx pve pool permissions effective prod
   pmx pve pool permissions effective prod --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
@@ -133,9 +138,27 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 
 	verb, verbPast, prep := "grant", "Granted", "to"
 	short := "Grant roles to users, groups, or tokens on a pool's ACL path"
+	long := "Grant roles on a pool's ACL path, /pool/{poolid}, to any mix of users, groups, " +
+		"and API tokens. Name at least one of --users, --groups, or --tokens.\n\n" +
+		"This confers administrative access to the pool object, not membership in it. To " +
+		"change which guests and storage belong to the pool, use " +
+		"`pmx pve pool set --vms/--storage`.\n\n" +
+		"Writing ACL entries requires Permissions.Modify on the path.\n\n" +
+		"A granted role propagates to every path below this one by default; pass " +
+		"--no-propagate to confine it to this path alone."
 	if revoke {
 		verb, verbPast, prep = "revoke", "Revoked", "from"
 		short = "Revoke roles from users, groups, or tokens on a pool's ACL path"
+		long = "Revoke roles on a pool's ACL path, /pool/{poolid}, from any mix of users, " +
+			"groups, and API tokens. Name at least one of --users, --groups, or --tokens.\n\n" +
+			"This withdraws administrative access to the pool object, not membership in it. " +
+			"To change which guests and storage belong to the pool, use " +
+			"`pmx pve pool set --vms/--storage`.\n\n" +
+			"Removing ACL entries requires Permissions.Modify on the path. Revoking an entry " +
+			"that was never there succeeds silently, matching the PVE server.\n\n" +
+			"Nothing here guards against self-lockout: revoking your own access to the path " +
+			"you are managing is allowed and takes effect at once. Run `permissions " +
+			"effective` first if you are unsure what you are about to lose."
 	}
 
 	example := `  pmx pve pool permissions grant prod --roles PVEVMAdmin --users alice@pve`
@@ -144,14 +167,9 @@ func newPermissionsGrantRevokeCmd(revoke bool) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   verb + " <poolid>",
-		Short: short,
-		Long: short + " (/pool/{poolid}). This grants administrative access to the pool object " +
-			"itself, not pool membership; use `pmx pve pool set --vms/--storage` to change which " +
-			"guests and storage belong to the pool. Mutating ACL entries requires " +
-			"Permissions.Modify on the path. Revoking an entry that does not exist succeeds " +
-			"silently, matching PVE server behavior. This command does not block self-lockout; " +
-			"check `permissions effective` first if unsure.",
+		Use:     verb + " <poolid>",
+		Short:   short,
+		Long:    long,
 		Example: example,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

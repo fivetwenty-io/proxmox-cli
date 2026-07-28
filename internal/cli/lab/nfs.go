@@ -152,10 +152,10 @@ func newNfsAttachCmd() *cobra.Command {
 			"  * this lab's mgmt /24 in the shared tank/nfs/shared/iso\n" +
 			"    export's `ro=` list, inserted without replacing any other\n" +
 			"    lab's entry\n\n" +
-			"This phase refuses loudly, naming lab repo scripts/60-nfs-service as the " +
-			"remediation, if the shared/iso export itself has no usable sharenfs value yet: it " +
-			"can only ensure lab-subnet MEMBERSHIP in an already-built list, never construct " +
-			"one from scratch.\n\n" +
+			"This phase can only ensure lab-subnet MEMBERSHIP in an already-built list, never " +
+			"construct one from scratch. If the shared/iso export has no usable sharenfs " +
+			"value yet, it refuses loudly and names lab repo scripts/60-nfs-service as the " +
+			"remediation.\n\n" +
 			"Host firewall. Ensures the outer node carries an enabled ACCEPT rule for 2049/tcp " +
 			"(NFS) and 111/tcp (rpcbind, PVE's storage online-probe) scoped to this lab's mgmt " +
 			"/24, matched by the same comment key scripts/60-nfs-service's firewall group uses, " +
@@ -178,12 +178,14 @@ func newNfsAttachCmd() *cobra.Command {
 			"built and healthy — lab repo scripts/60-nfs-service's nfsd and health groups. " +
 			"Attach provisions this lab's own export objects and firewall rules, never the " +
 			"shared NFS host service itself.\n\n" +
-			"Shared exports: when this lab's storage.nfs_export names ANOTHER lab, the " +
-			"server-side phase operates on that named lab's dataset and quota instead of this " +
-			"lab's own, and the rw sharenfs ACL becomes the union of every lab (across the " +
-			"loaded config) whose own nfs_export resolves to the same owner — so attaching any " +
-			"one member converges the whole group's ACL. The named owner lab must exist, and " +
-			"must not itself set nfs_export to a third lab.",
+			"Shared exports work differently. When this lab's storage.nfs_export names " +
+			"ANOTHER lab, the server-side phase operates on that lab's dataset and quota " +
+			"rather than this one's.\n\n" +
+			"The rw sharenfs ACL then becomes the union of every lab in the loaded config " +
+			"whose own nfs_export resolves to the same owner, so attaching any one member " +
+			"converges the whole group's ACL.\n\n" +
+			"The named owner lab must exist, and must not itself point nfs_export at a third " +
+			"lab.",
 		Example: `  pmx lab nfs attach wayne
   pmx lab nfs attach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -492,13 +494,14 @@ func newNfsDetachCmd() *cobra.Command {
 			"error. Removal is safe only once no VM disk still references the storage — PVE " +
 			"itself refuses to remove a storage entry with in-use content. Detaching requires " +
 			"--yes/-y or an interactive 'y' confirmation.\n\n" +
-			"IMPORTANT ASYMMETRY: detach ONLY removes the CLIENT-side pvesm storage entries. It " +
-			"never touches the SERVER-side ZFS datasets and exports `attach` ensures — " +
-			"`tank/nfs/labs/<name>/{images,backup}`, their quota and sharenfs properties, or this " +
-			"lab's entry in the shared/iso export's ro= list. Those carry this lab's actual " +
-			"data and shared-export state, and this command never deletes data implicitly. " +
-			"Remove them by hand over ssh (`zfs destroy -r tank/nfs/labs/<name>`, for example) " +
-			"only once you have confirmed the lab's data is no longer needed.\n\n" +
+			"IMPORTANT ASYMMETRY: detach removes the CLIENT-side pvesm storage entries and " +
+			"nothing else. The SERVER-side state that `attach` puts in place is left " +
+			"untouched.\n\n" +
+			"That state is `tank/nfs/labs/<name>/{images,backup}`, their quota and sharenfs " +
+			"properties, and this lab's entry in the shared/iso export's ro= list. It holds " +
+			"the lab's actual data, and this command never deletes data implicitly.\n\n" +
+			"Remove it by hand over ssh, `zfs destroy -r tank/nfs/labs/<name>` for instance, " +
+			"once you have confirmed the lab's data is no longer needed.\n\n" +
 			"ONE EXCEPTION, when this lab shares a storage.nfs_export-aliased export with other " +
 			"labs: detaching a non-owner member also narrows the export owner's rw sharenfs ACL " +
 			"to exclude this lab's own mgmt /24. The owner's dataset and quota are still never " +

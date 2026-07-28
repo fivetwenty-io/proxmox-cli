@@ -21,12 +21,12 @@ func newPreviousCmd() *cobra.Command {
 		Use:     "previous",
 		Aliases: []string{"prev"},
 		Short:   "Switch back to the previously active context",
-		Long: "Switch the active context back to the one that was active before the last " +
-			"context switch, swapping current-context and previous-context in the config " +
-			"file. Errors if no previous context is recorded, or if either the current or " +
-			"previous context name no longer exists in the config — a stale reference is " +
-			"cleared automatically so the next run does not repeat the same failure. " +
-			"Equivalent to 'pmx context select -'.",
+		Long: "Switch the active context back to whichever one was active before the last " +
+			"switch, swapping current-context and previous-context in the config file.\n\n" +
+			"The command errors when no previous context is recorded, or when either name no " +
+			"longer exists in the config. A stale reference is cleared on the way out, so the " +
+			"next run does not fail the same way twice.\n\n" +
+			"Equivalent to `pmx context select -`.",
 		Example:     `  pmx context previous`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"noClient": "true"},

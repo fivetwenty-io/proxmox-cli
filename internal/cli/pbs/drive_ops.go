@@ -300,12 +300,14 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "format <drive>",
 		Short: "Format (erase) a drive's current media",
-		Long: "Format (erase) the media currently loaded in a drive (POST " +
-			"/tape/drive/{drive}/format-media). Every option is optional and only " +
-			"forwarded when explicitly set. Runs as an asynchronous task; the " +
-			"command blocks until it finishes unless --async is set. This is " +
-			"destructive: all data on the media is erased and unrecoverable. Pass " +
-			"--yes/-y to confirm.",
+		Long: "Format the media currently loaded in a drive, erasing it (POST " +
+			"/tape/drive/{drive}/format-media).\n\n" +
+			"Everything on the media is erased and cannot be recovered afterwards, so " +
+			"--yes/-y is required to confirm.\n\n" +
+			"Every option is optional, and only the ones you set explicitly are " +
+			"forwarded.\n\n" +
+			"The format runs as an asynchronous task, and the command blocks until it " +
+			"finishes unless --async is set.",
 		Example: `  pmx pbs tape drive format tape0 --yes
   pmx pbs tape drive format tape0 --label-text vol001 --yes`,
 		Args: cobra.ExactArgs(1),

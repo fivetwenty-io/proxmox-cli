@@ -61,21 +61,23 @@ func newScaleCmd() *cobra.Command {
 			"node returns a non-zero exit after rendering the full report. A deferred, " +
 			"still-in-progress transition does not.\n\n" +
 			"Every step besides the final validation is individually idempotent, so a scale " +
-			"that stopped partway can simply be re-run to continue. The current node count and " +
-			"QDevice registration are always re-derived from node 0's live corosync membership, " +
-			"never from VM-shell existence alone, so a re-run correctly resumes joining and " +
-			"wiring already-created shells rather than treating their mere existence as " +
-			"\"done.\"\n\n" +
+			"that stopped partway can simply be re-run to continue.\n\n" +
+			"The current node count and QDevice registration are re-derived each run from " +
+			"node 0's live corosync membership, never from VM-shell existence alone. A re-run " +
+			"therefore resumes joining and wiring shells that already exist, rather than " +
+			"reading their existence as \"done.\"\n\n" +
 			"VM-shell provisioning for new node and QDevice VMs reuses `pmx lab create`'s own " +
 			"idempotent plan machinery and capacity gate. This command creates VM shells only — " +
 			"it never installs an OS, matching `pmx lab create`'s own scope.\n\n" +
-			"Outside this command's scope: SNAT rules, PBS jobs, and DNS registration for new " +
-			"or removed nodes stay lab-repository host-side script responsibilities. A completed " +
-			"node-count change also prints a reminder that the lab's PDM remote (single-host vs. " +
-			"cluster endpoint) needs a manual swap via the lab repository's own PDM tooling — " +
-			"`pmx lab scale` has no PDM write API to call. The live-migration acceptance test (a " +
-			"test VM on nfs-images migrated across every node) is milestone QA, not part of this " +
-			"command's own automated validation.",
+			"Three things stay outside this command's scope.\n\n" +
+			"SNAT rules, PBS jobs, and DNS registration for new or removed nodes remain " +
+			"lab-repository host-side script responsibilities.\n\n" +
+			"The lab's PDM remote needs a manual swap between its single-host and cluster " +
+			"endpoint, through the lab repository's own PDM tooling; `pmx lab scale` has no " +
+			"PDM write API to call, so a completed node-count change only prints a " +
+			"reminder.\n\n" +
+			"The live-migration acceptance test, a test VM on nfs-images migrated across " +
+			"every node, is milestone QA rather than part of this command's validation.",
 		Example: `  pmx lab scale wayne --nodes 3
   pmx lab scale wayne --nodes 2 --qdevice auto
   pmx lab scale wayne --nodes 5 --dry-run

@@ -22,11 +22,14 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Manage this Proxmox Datacenter Manager's own host configuration",
 		Long: "Manage this Proxmox Datacenter Manager instance's own host " +
-			"configuration: ACME accounts and challenge plugins, the " +
-			"certificate/ACME-domain binding, the dashboard welcome notes, saved " +
-			"resource views, and the WebAuthn (TFA) relying-party configuration. " +
-			"This is distinct from 'pdm remote', which manages the PVE/PBS " +
-			"remotes this instance is itself managing.",
+			"configuration.\n\n" +
+			"  acme          accounts and challenge plugins\n" +
+			"  certificate   the certificate and its ACME-domain binding\n" +
+			"  notes         the dashboard welcome notes\n" +
+			"  view          saved resource views\n" +
+			"  webauthn      the WebAuthn (TFA) relying-party settings\n\n" +
+			"This is the instance's own configuration, not the remotes it manages. For " +
+			"those, see `pdm remote`.",
 	}
 	cmd.AddCommand(
 		newConfigAcmeCmd(),

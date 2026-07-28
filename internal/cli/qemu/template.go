@@ -26,11 +26,13 @@ func newTemplateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "template <vmid|name>",
 		Short: "Convert a VM into a template (irreversible)",
-		Long: "Convert a VM into a template. This is irreversible: a template cannot be " +
-			"started or converted back into a regular VM, so the command refuses to run " +
-			"without --yes/-y. With --disk only the named disk is converted to a base image. " +
-			"Conversion may run as a background task (blocks until done unless --async is " +
-			"passed) or complete synchronously, depending on the PVE version.",
+		Long: "Convert a VM into a template.\n\n" +
+			"This cannot be undone. A template can neither be started nor converted back into " +
+			"a regular VM, so the command refuses to run without --yes/-y.\n\n" +
+			"With --disk, only the named disk becomes a base image.\n\n" +
+			"Depending on the PVE version, conversion either completes synchronously or runs " +
+			"as a background task. In the latter case the command blocks until it finishes, " +
+			"unless --async is passed.",
 		Example: `  pmx pve qemu template 100 --yes
   pmx pve qemu template golden-image --yes --disk scsi0`,
 		Args: cobra.ExactArgs(1),

@@ -294,11 +294,12 @@ func newSuspendCmd() *cobra.Command {
 		statestorage string
 	)
 	cmd := newLifecycleCmd("suspend", "Suspend a VM",
-		"Pause the VM's execution and, by default, keep its state in memory. Pass --todisk "+
-			"to suspend to disk instead, freeing host memory (requires --statestorage on "+
-			"some PVE configurations); resume with 'qemu resume'. Submits a PVE task and "+
-			"blocks until it completes; pass --async to print the task UPID immediately "+
-			"instead of waiting.",
+		"Pause the VM's execution, keeping its state in memory by default.\n\n"+
+			"Pass --todisk to suspend to disk instead, which frees the host memory. Some PVE "+
+			"configurations require --statestorage alongside it. Either way, bring the VM "+
+			"back with `qemu resume`.\n\n"+
+			"The command submits a PVE task and blocks until it completes; --async prints "+
+			"the task UPID and returns immediately.",
 		`  pmx pve qemu suspend 100
   pmx pve qemu suspend web1 --todisk --statestorage local-lvm`,
 		"VM %s suspended.",

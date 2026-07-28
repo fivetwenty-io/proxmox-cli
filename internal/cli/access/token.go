@@ -116,11 +116,12 @@ func newTokenCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <userid> <tokenid>",
 		Short: "Create an API token",
-		Long: "Create a new API token for a user. The token secret is generated server-side " +
-			"and returned exactly once in this command's output — save it now, since it " +
-			"cannot be retrieved again afterward (only `--regenerate` on `token set` can " +
-			"issue a new one). --privsep is on by default, meaning the token needs its own " +
-			"ACL entries independent of the user's own permissions.",
+		Long: "Create a new API token for a user.\n\n" +
+			"The secret is generated server-side and returned exactly once, in this " +
+			"command's output. Save it now: it cannot be retrieved again, and the only way " +
+			"to get another is `--regenerate` on `token set`.\n\n" +
+			"--privsep is on by default, which means the token carries its own ACL entries " +
+			"rather than inheriting the user's permissions.",
 		Example: `  pmx pve access user token create alice@pve ci-token --comment "CI pipeline"
   pmx pve access user token create alice@pve ci-token --expire 1735689600 --privsep=false`,
 		Args: cobra.ExactArgs(2),

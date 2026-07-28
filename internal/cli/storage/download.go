@@ -30,10 +30,13 @@ func newDownloadURLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "download-url <storage>",
 		Short: "Download a file from a URL onto a storage",
-		Long: "Have the resolved node fetch the file at --url and store it on the given storage " +
-			"under --filename. Optionally verify the download against a --checksum, decompress it " +
-			"with --compression, or skip TLS verification with --no-verify-certificates. The download " +
-			"runs as an asynchronous task and the command blocks until it finishes unless --async is set.",
+		Long: "Have the resolved node fetch the file at --url and store it on the given " +
+			"storage under --filename.\n\n" +
+			"  --checksum                 verify the download against a digest\n" +
+			"  --compression              decompress it on arrival\n" +
+			"  --no-verify-certificates   skip TLS verification of the source\n\n" +
+			"The download runs as an asynchronous task, and the command blocks until it " +
+			"finishes unless --async is set.",
 		Example: `  pmx pve storage download-url local-lvm --url https://example.com/image.iso --filename image.iso
   pmx pve storage download-url local-lvm --url https://example.com/image.iso --filename image.iso --async`,
 		Args: cobra.ExactArgs(1),

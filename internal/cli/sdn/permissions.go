@@ -29,10 +29,15 @@ func newZonePermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Manage ACL entries and view effective permissions on an SDN zone",
-		Long: "List, grant, and revoke ACL entries on an SDN zone's own access-control path " +
-			"(/sdn/zones/{zone}), and view the effective permission set a user or token holds " +
-			"there. This is a thin, path-deriving wrapper over `pmx pve access acl` and " +
-			"`pmx pve access permissions`; use those directly for any path outside a single zone.",
+		Long: "Manage the ACL entries on an SDN zone's own path, /sdn/zones/{zone}, and " +
+			"inspect the privileges those entries resolve to.\n\n" +
+			"  list        ACL entries written on this zone's path\n" +
+			"  effective   privileges a user actually holds there\n" +
+			"  grant       add roles for users, groups, or tokens\n" +
+			"  revoke      take those roles away again\n\n" +
+			"These verbs only derive the path for you; the work is done by " +
+			"`pmx pve access acl` and `pmx pve access permissions`, which you can call " +
+			"directly for any path outside a single zone.",
 	}
 	cmd.AddCommand(
 		newZonePermListCmd(),
@@ -49,10 +54,11 @@ func newZonePermListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <zone>",
 		Short: "List ACL entries on an SDN zone",
-		Long: "List ACL entries whose path exactly matches the zone's own ACL path " +
-			"(/sdn/zones/{zone}). Pass --inherited to also include entries inherited from the " +
-			"zone's ancestor paths (/, /sdn, /sdn/zones); this walks the path client-side and " +
-			"issues no extra API calls. Needs the same privilege as `pmx pve access acl list`.",
+		Long: "List the ACL entries whose path exactly matches the zone's own path, " +
+			"/sdn/zones/{zone}.\n\n" +
+			"With --inherited, the listing also covers the zone's ancestor paths (/, /sdn, " +
+			"and /sdn/zones). That walk happens client-side and costs no extra API calls.\n\n" +
+			"Needs the same privilege as `pmx pve access acl list`.",
 		Example: `  pmx pve sdn zone permissions list myzone
   pmx pve sdn zone permissions list myzone --inherited`,
 		Args: cobra.ExactArgs(1),
@@ -72,10 +78,11 @@ func newZonePermEffectiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "effective <zone>",
 		Short: "Show effective permissions on an SDN zone",
-		Long: "Show the effective privileges the calling user (or --userid, if passed) holds on " +
-			"the zone's ACL path (/sdn/zones/{zone}), after role and ACL propagation is resolved " +
-			"server-side. Querying another user's or token's effective permissions with --userid " +
-			"needs Sys.Audit on /access.",
+		Long: "Show the privileges that the zone's path, /sdn/zones/{zone}, resolves to for " +
+			"the calling user, or for --userid when passed. Role and ACL propagation is " +
+			"resolved server-side.\n\n" +
+			"Querying another user's or token's permissions with --userid needs Sys.Audit on " +
+			"/access.",
 		Example: `  pmx pve sdn zone permissions effective myzone
   pmx pve sdn zone permissions effective myzone --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
@@ -102,21 +109,23 @@ func newZonePermGrantRevokeCmd(revoke bool) *cobra.Command {
 
 	use, short, long := "grant <zone>",
 		"Grant roles to users, groups, or tokens on an SDN zone",
-		"Grant one or more roles on the zone's ACL path (/sdn/zones/{zone}) to the given users, "+
-			"groups, and/or tokens (at least one of --users/--groups/--tokens is required). "+
-			"Needs Permissions.Modify on the path. By default the granted roles propagate to any "+
-			"path nested under the zone (including its vnets); pass --no-propagate to grant "+
-			"non-propagating access instead."
+		"Grant roles on the zone's ACL path, /sdn/zones/{zone}, to any mix of users, groups, "+
+			"and API tokens. Name at least one of --users, --groups, or --tokens.\n\n"+
+			"Writing ACL entries needs Permissions.Modify on the path.\n\n"+
+			"A granted role propagates to every path nested under the zone, its vnets "+
+			"included, by default; pass --no-propagate to confine it to the zone itself."
 	example := `  pmx pve sdn zone permissions grant myzone --roles PVEVMAdmin --users alice@pve`
 	if revoke {
 		use, short, long = "revoke <zone>",
 			"Revoke roles from users, groups, or tokens on an SDN zone",
-			"Revoke one or more roles on the zone's ACL path (/sdn/zones/{zone}) from the given "+
-				"users, groups, and/or tokens (at least one of --users/--groups/--tokens is "+
-				"required). Needs Permissions.Modify on the path. Revoking a role that was never "+
-				"granted at this exact path silently succeeds. Nothing here stops an operator from "+
-				"revoking their own access to this path (self-lockout): double-check --users before "+
-				"running this against your own account."
+			"Revoke roles on the zone's ACL path, /sdn/zones/{zone}, from any mix of users, "+
+				"groups, and API tokens. Name at least one of --users, --groups, or "+
+				"--tokens.\n\n"+
+				"Removing ACL entries needs Permissions.Modify on the path. Revoking a role "+
+				"that was never granted at this exact path succeeds silently.\n\n"+
+				"Nothing here guards against self-lockout: revoking your own access to this "+
+				"path is allowed and takes effect at once. Check --users before running this "+
+				"against your own account."
 		example = `  pmx pve sdn zone permissions revoke myzone --roles PVEVMAdmin --users alice@pve`
 	}
 
@@ -188,12 +197,18 @@ func newVnetPermissionsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Manage ACL entries and view effective permissions on an SDN vnet",
-		Long: "List, grant, and revoke ACL entries on an SDN vnet's derived access-control path " +
-			"(/sdn/zones/{zone}/{vnet}), and view the effective permission set a user or token " +
-			"holds there. Vnets have no independent ACL identity: their path nests under their " +
-			"zone. Pass --zone to skip the extra GET /cluster/sdn/vnets/{vnet} lookup this command " +
-			"otherwise performs to resolve the vnet's zone automatically. This is a thin, " +
-			"path-deriving wrapper over `pmx pve access acl` and `pmx pve access permissions`; use those " +
+		Long: "Manage the ACL entries on an SDN vnet's derived path, " +
+			"/sdn/zones/{zone}/{vnet}, and inspect the privileges those entries resolve " +
+			"to.\n\n" +
+			"  list        ACL entries written on this vnet's path\n" +
+			"  effective   privileges a user actually holds there\n" +
+			"  grant       add roles for users, groups, or tokens\n" +
+			"  revoke      take those roles away again\n\n" +
+			"Vnets have no ACL identity of their own: their path nests under their zone. " +
+			"Resolving that zone costs one GET /cluster/sdn/vnets/{vnet} lookup, which you can " +
+			"skip by passing --zone.\n\n" +
+			"These verbs only derive the path for you; the work is done by " +
+			"`pmx pve access acl` and `pmx pve access permissions`, which you can call " +
 			"directly for any path outside a single vnet.",
 	}
 	cmd.AddCommand(
@@ -214,12 +229,14 @@ func newVnetPermListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <vnet>",
 		Short: "List ACL entries on an SDN vnet",
-		Long: "List ACL entries whose path exactly matches the vnet's derived ACL path " +
-			"(/sdn/zones/{zone}/{vnet}). Pass --inherited to also include entries inherited from " +
-			"the vnet's ancestor paths (/, /sdn, /sdn/zones, /sdn/zones/{zone}); this walks the " +
-			"path client-side and issues no extra API calls beyond the zone lookup below. Pass " +
-			"--zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves " +
-			"the vnet's zone. Needs the same privilege as `pmx pve access acl list`.",
+		Long: "List the ACL entries whose path exactly matches the vnet's derived path, " +
+			"/sdn/zones/{zone}/{vnet}.\n\n" +
+			"With --inherited, the listing also covers the vnet's ancestor paths (/, /sdn, " +
+			"/sdn/zones, and /sdn/zones/{zone}). That walk happens client-side and costs no " +
+			"API calls beyond the zone lookup.\n\n" +
+			"Pass --zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise " +
+			"resolves the vnet's zone.\n\n" +
+			"Needs the same privilege as `pmx pve access acl list`.",
 		Example: `  pmx pve sdn vnet permissions list vnet1
   pmx pve sdn vnet permissions list vnet1 --inherited`,
 		Args: cobra.ExactArgs(1),
@@ -249,12 +266,13 @@ func newVnetPermEffectiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "effective <vnet>",
 		Short: "Show effective permissions on an SDN vnet",
-		Long: "Show the effective privileges the calling user (or --userid, if passed) holds on " +
-			"the vnet's derived ACL path (/sdn/zones/{zone}/{vnet}), after role and ACL " +
-			"propagation is resolved server-side. Pass --zone to skip the " +
-			"GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves the vnet's zone. " +
-			"Querying another user's or token's effective permissions with --userid needs " +
-			"Sys.Audit on /access.",
+		Long: "Show the privileges that the vnet's derived path, /sdn/zones/{zone}/{vnet}, " +
+			"resolves to for the calling user, or for --userid when passed. Role and ACL " +
+			"propagation is resolved server-side.\n\n" +
+			"Pass --zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise " +
+			"resolves the vnet's zone.\n\n" +
+			"Querying another user's or token's permissions with --userid needs Sys.Audit on " +
+			"/access.",
 		Example: `  pmx pve sdn vnet permissions effective vnet1
   pmx pve sdn vnet permissions effective vnet1 --userid alice@pve`,
 		Args: cobra.ExactArgs(1),
@@ -289,24 +307,28 @@ func newVnetPermGrantRevokeCmd(revoke bool) *cobra.Command {
 
 	use, short, long := "grant <vnet>",
 		"Grant roles to users, groups, or tokens on an SDN vnet",
-		"Grant one or more roles on the vnet's derived ACL path (/sdn/zones/{zone}/{vnet}) to "+
-			"the given users, groups, and/or tokens (at least one of --users/--groups/--tokens is "+
-			"required). Pass --zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that "+
-			"otherwise auto-resolves the vnet's zone. Needs Permissions.Modify on the path. By "+
-			"default the granted roles propagate to any path nested under the vnet; pass "+
-			"--no-propagate to grant non-propagating access instead."
+		"Grant roles on the vnet's derived ACL path, /sdn/zones/{zone}/{vnet}, to any mix of "+
+			"users, groups, and API tokens. Name at least one of --users, --groups, or "+
+			"--tokens.\n\n"+
+			"Writing ACL entries needs Permissions.Modify on the path.\n\n"+
+			"A granted role propagates to every path nested under the vnet by default; pass "+
+			"--no-propagate to confine it to the vnet itself.\n\n"+
+			"Pass --zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise "+
+			"resolves the vnet's zone."
 	example := `  pmx pve sdn vnet permissions grant vnet1 --roles PVEVMAdmin --users alice@pve`
 	if revoke {
 		use, short, long = "revoke <vnet>",
 			"Revoke roles from users, groups, or tokens on an SDN vnet",
-			"Revoke one or more roles on the vnet's derived ACL path (/sdn/zones/{zone}/{vnet}) "+
-				"from the given users, groups, and/or tokens (at least one of "+
-				"--users/--groups/--tokens is required). Pass --zone to skip the "+
-				"GET /cluster/sdn/vnets/{vnet} lookup that otherwise auto-resolves the vnet's "+
-				"zone. Needs Permissions.Modify on the path. Revoking a role that was never "+
-				"granted at this exact path silently succeeds. Nothing here stops an operator "+
-				"from revoking their own access to this path (self-lockout): double-check "+
-				"--users before running this against your own account."
+			"Revoke roles on the vnet's derived ACL path, /sdn/zones/{zone}/{vnet}, from any "+
+				"mix of users, groups, and API tokens. Name at least one of --users, "+
+				"--groups, or --tokens.\n\n"+
+				"Removing ACL entries needs Permissions.Modify on the path. Revoking a role "+
+				"that was never granted at this exact path succeeds silently.\n\n"+
+				"Nothing here guards against self-lockout: revoking your own access to this "+
+				"path is allowed and takes effect at once. Check --users before running this "+
+				"against your own account.\n\n"+
+				"Pass --zone to skip the GET /cluster/sdn/vnets/{vnet} lookup that otherwise "+
+				"resolves the vnet's zone."
 		example = `  pmx pve sdn vnet permissions revoke vnet1 --roles PVEVMAdmin --users alice@pve`
 	}
 

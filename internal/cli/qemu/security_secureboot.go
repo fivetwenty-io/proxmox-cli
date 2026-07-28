@@ -21,12 +21,14 @@ func newSecuritySecurebootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "secureboot",
 		Short: "Inspect and enable UEFI Secure Boot (OVMF + EFI vars disk)",
-		Long: "Secure Boot on PVE means bios=ovmf plus an EFI vars disk (efidisk0) created with " +
-			"efitype=4m and pre-enrolled-keys=1 (distribution + Microsoft keys). The " +
-			"pre-enrolled template enables Secure Boot by default; the guest can still toggle " +
-			"it from the OVMF firmware menu. There is no 'disable' command: the Secure Boot " +
-			"on/off switch lives in the EFI variables themselves — flip it in the firmware " +
-			"setup menu, or recreate the vars disk without pre-enrolled keys.",
+		Long: "Secure Boot on PVE takes two things: bios=ovmf, and an EFI vars disk " +
+			"(efidisk0) created with efitype=4m and pre-enrolled-keys=1, which loads the " +
+			"distribution and Microsoft keys.\n\n" +
+			"A pre-enrolled vars disk turns Secure Boot on by default. The guest can still " +
+			"toggle it from the OVMF firmware menu.\n\n" +
+			"There is no disable verb here, because the on/off switch lives in the EFI " +
+			"variables rather than in the VM config. Flip it in the firmware setup menu, or " +
+			"recreate the vars disk without pre-enrolled keys.",
 	}
 	cmd.AddCommand(newSecuritySecurebootShowCmd(), newSecuritySecurebootEnableCmd())
 	return cmd

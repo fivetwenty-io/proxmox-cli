@@ -88,12 +88,13 @@ func newSecurityConfidentialSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
 		Short: "Configure AMD SEV or Intel TDX for the VM",
-		Long: "Configure one confidential-computing platform. --sev / --tdx select the platform " +
-			"and its type; the per-platform sub-flags merge with the current value. Type values " +
-			"are passed to PVE unvalidated (upstream SEV types include std, es, and snp; the " +
-			"accepted set depends on the PVE version and host hardware). If the VM currently " +
-			"has the other platform configured, clear it first with 'confidential clear'.\n\n" +
-			"Example: pmx pve qemu security confidential set 100 --sev snp --sev-no-debug",
+		Long: "Configure one confidential-computing platform on the VM. --sev and --tdx pick " +
+			"the platform and its type; the per-platform sub-flags merge into the current " +
+			"value.\n\n" +
+			"Type values go to PVE unvalidated. Upstream SEV types include std, es, and snp, " +
+			"but which ones are accepted depends on the PVE version and the host hardware.\n\n" +
+			"A VM carries one platform at a time. If the other one is already configured, " +
+			"clear it first with `confidential clear`.",
 		Example: `  pmx pve qemu security confidential set 100 --sev snp --sev-no-debug`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

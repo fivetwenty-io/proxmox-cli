@@ -174,12 +174,15 @@ func newSecurityCpuFlagsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cpu-flags",
 		Short: "Manage the VM's security-relevant CPU flags (Spectre/Meltdown mitigations and friends)",
-		Long: "Manage the flags= list inside the cpu= config option with validated, structured " +
-			"flags. PVE restricts per-VM flags to a fixed security-relevant set (aes, " +
-			"amd-no-ssb, amd-ssbd, hv-evmcs, hv-tlbflush, ibpb, md-clear, nested-virt, pcid, " +
-			"pdpe1gb, spec-ctrl, ssbd, virt-ssbd). The cputype and other cpu= sub-options are " +
-			"preserved. This is NOT 'pmx pve qemu cpu-flags', which lists the flags a NODE's " +
-			"hardware supports.",
+		Long: "Manage the flags= list inside the VM's cpu= option, with validation rather " +
+			"than free-form string editing. The cputype and every other cpu= sub-option is " +
+			"preserved across changes.\n\n" +
+			"PVE accepts a fixed security-relevant set per VM:\n" +
+			"  aes, amd-no-ssb, amd-ssbd, hv-evmcs, hv-tlbflush, ibpb,\n" +
+			"  md-clear, nested-virt, pcid, pdpe1gb, spec-ctrl, ssbd,\n" +
+			"  virt-ssbd\n\n" +
+			"Do not confuse this with `pmx pve qemu cpu-flags`, which reports the flags a " +
+			"node's hardware supports.",
 	}
 	cmd.AddCommand(newSecurityCpuFlagsShowCmd(), newSecurityCpuFlagsSetCmd(), newSecurityCpuFlagsDescribeCmd())
 	return cmd
@@ -262,13 +265,15 @@ func newSecurityCpuFlagsSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <vmid|name>",
 		Short: "Enable or disable security-relevant CPU flags",
-		Long: "Merge flag changes into the cpu= option: --enable adds +FLAG entries, --disable " +
-			"adds -FLAG entries, and flags named in neither are left untouched. --clear removes " +
-			"the whole flags= list. Names are validated against PVE's security-relevant set. " +
-			"Explicitly disabling a mitigation flag (spec-ctrl, ssbd, virt-ssbd, amd-ssbd, " +
-			"amd-no-ssb, ibpb, md-clear) exposes the guest to speculative-execution attacks and " +
-			"requires --force.\n\n" +
-			"Example: pmx pve qemu security cpu-flags set web1 --enable spec-ctrl,ssbd,md-clear",
+		Long: "Merge flag changes into the VM's cpu= option.\n\n" +
+			"  --enable    add +FLAG entries\n" +
+			"  --disable   add -FLAG entries\n" +
+			"  --clear     drop the flags= list entirely\n\n" +
+			"Flags you name in neither --enable nor --disable are left as they are. Names are " +
+			"validated against PVE's security-relevant set.\n\n" +
+			"Turning a mitigation off exposes the guest to speculative-execution attacks, so " +
+			"--disable requires --force for spec-ctrl, ssbd, virt-ssbd, amd-ssbd, amd-no-ssb, " +
+			"ibpb, and md-clear.",
 		Example: `  pmx pve qemu security cpu-flags set web1 --enable spec-ctrl,ssbd,md-clear`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

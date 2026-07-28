@@ -29,11 +29,12 @@ func newRmCmd() *cobra.Command {
 		Use:     "rm <name>",
 		Aliases: []string{"remove", "delete"},
 		Short:   "Remove a named context from the config file",
-		Long: "Remove a named context from the config file. Requires --yes to confirm the " +
-			"destructive action. Removing the active (current-context) context requires " +
-			"--force, which also clears current-context; without --force the command refuses " +
-			"and points at 'context select' first. If the removed context was previous-context, " +
-			"that pointer is cleared as well.",
+		Long: "Remove a named context from the config file. --yes is required to " +
+			"confirm.\n\n" +
+			"Removing the active context takes --force as well, which clears current-context " +
+			"along with it. Without --force the command refuses and points you at " +
+			"`context select` first.\n\n" +
+			"If the removed context was previous-context, that pointer is cleared too.",
 		Example: `  pmx context rm lab --yes
   pmx context rm lab --force --yes`,
 		Args:        cobra.ExactArgs(1),

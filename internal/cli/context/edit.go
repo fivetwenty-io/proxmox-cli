@@ -29,20 +29,19 @@ func newEditCmd() *cobra.Command {
 		Short:       "Edit a named context in $EDITOR",
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
-		Long: `Edit a named context using $EDITOR (or $VISUAL).
-
-The context is marshalled to a temporary YAML file and opened in the editor.
-On save and exit the file is parsed and validated.  If validation succeeds the
-config is updated.  If the editor exits with a non-zero status, no changes are
-saved.  If the edited file contains invalid YAML or fails validation, an error
-is returned and the temp file path is printed so you can recover your edits.
-
-Note: the context name cannot be changed via edit; use 'context rename'.
-Note: config.Save rewrites the config file and does not preserve comments.
-
-Passing --product <pve|pbs|pdm> edits that single field directly without
-opening $EDITOR; a port equal to the old product's default port is switched
-to the new product's default (8006 pve, 8007 pbs, 8443 pdm).`,
+		Long: "Edit a named context in $EDITOR, or $VISUAL if that is what is set.\n\n" +
+			"The context is marshalled to a temporary YAML file and opened in the editor. On " +
+			"save and exit, the file is parsed and validated, and the config updated if it " +
+			"passes.\n\n" +
+			"Nothing is saved when the editor exits non-zero. When the edited file has " +
+			"invalid YAML or fails validation, the command errors and prints the temp file " +
+			"path so your edits are recoverable.\n\n" +
+			"Two things worth knowing: the context name cannot be changed here, so use " +
+			"`context rename` for that; and saving rewrites the config file, which does not " +
+			"preserve comments.\n\n" +
+			"Passing --product <pve|pbs|pdm> edits that one field directly, without opening " +
+			"an editor. A port still sitting at the old product's default moves to the new " +
+			"product's default: 8006 pve, 8007 pbs, 8443 pdm.",
 		Example: `  pmx context edit lab
   pmx context edit lab --product pbs`,
 		RunE: func(cmd *cobra.Command, args []string) error {

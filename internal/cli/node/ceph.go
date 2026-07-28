@@ -466,11 +466,11 @@ func newCephCtlCmd(use, short, long, example, action string,
 
 func newCephStartCmd() *cobra.Command {
 	return newCephCtlCmd("start", "Start Ceph services on the node (destructive)",
-		"Start Ceph services on the resolved node, optionally restricted to a single "+
-			"--service (for example osd.0 or mon.pve); with no --service, all Ceph services "+
-			"on the node are started. Refuses to run without --yes/-y. Submits a worker task "+
-			"and blocks until it completes; pass the global --async flag to print the task "+
-			"UPID immediately instead of waiting.",
+		"Start Ceph services on the resolved node. Refuses to run without --yes/-y.\n\n"+
+			"Restrict the action to one service with --service, naming it as osd.0 or "+
+			"mon.pve. Without that flag, every Ceph service on the node is started.\n\n"+
+			"The command submits a worker task and blocks until it completes; the global "+
+			"--async flag prints the task UPID and returns immediately.",
 		`  pmx pve node ceph start --yes
   pmx pve node ceph start --service osd.0 --yes`,
 		"start Ceph services",
@@ -481,11 +481,11 @@ func newCephStartCmd() *cobra.Command {
 
 func newCephStopCmd() *cobra.Command {
 	return newCephCtlCmd("stop", "Stop Ceph services on the node (destructive)",
-		"Stop Ceph services on the resolved node, optionally restricted to a single "+
-			"--service (for example osd.0 or mon.pve); with no --service, all Ceph services "+
-			"on the node are stopped. Refuses to run without --yes/-y. Submits a worker task "+
-			"and blocks until it completes; pass the global --async flag to print the task "+
-			"UPID immediately instead of waiting.",
+		"Stop Ceph services on the resolved node. Refuses to run without --yes/-y.\n\n"+
+			"Restrict the action to one service with --service, naming it as osd.0 or "+
+			"mon.pve. Without that flag, every Ceph service on the node is stopped.\n\n"+
+			"The command submits a worker task and blocks until it completes; the global "+
+			"--async flag prints the task UPID and returns immediately.",
 		`  pmx pve node ceph stop --yes
   pmx pve node ceph stop --service osd.0 --yes`,
 		"stop Ceph services",
@@ -496,11 +496,11 @@ func newCephStopCmd() *cobra.Command {
 
 func newCephRestartCmd() *cobra.Command {
 	return newCephCtlCmd("restart", "Restart Ceph services on the node (destructive)",
-		"Restart Ceph services on the resolved node, optionally restricted to a single "+
-			"--service (for example osd.0 or mon.pve); with no --service, all Ceph services "+
-			"on the node are restarted. Refuses to run without --yes/-y. Submits a worker "+
-			"task and blocks until it completes; pass the global --async flag to print the "+
-			"task UPID immediately instead of waiting.",
+		"Restart Ceph services on the resolved node. Refuses to run without --yes/-y.\n\n"+
+			"Restrict the action to one service with --service, naming it as osd.0 or "+
+			"mon.pve. Without that flag, every Ceph service on the node is restarted.\n\n"+
+			"The command submits a worker task and blocks until it completes; the global "+
+			"--async flag prints the task UPID and returns immediately.",
 		`  pmx pve node ceph restart --yes
   pmx pve node ceph restart --service osd.0 --yes`,
 		"restart Ceph services",
