@@ -190,7 +190,7 @@ func TestNodeDisksZfsLs_RendersTable(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "GET "+nodeAPIBase+"/disks/zfs", &rec, []map[string]any{
-		{"name": "tank", "health": "ONLINE", "size": 1000},
+		{"name": "tank", "health": "ONLINE", "size": 1000, "dedup": 1.47, "frag": 3},
 	})
 
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -201,6 +201,25 @@ func TestNodeDisksZfsLs_RendersTable(t *testing.T) {
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Contains(t, buf.String(), "tank")
 	require.Contains(t, buf.String(), "ONLINE")
+	require.Contains(t, buf.String(), "1.47")
+}
+
+// PBS reports the deduplication ratio as a float, so a whole-numbered ratio
+// arrives as 1.0 and must not render with a trailing ".0".
+func TestNodeDisksZfsLs_RendersWholeDedupRatioWithoutFraction(t *testing.T) {
+	f, pc := newFakeClient(t)
+	var rec recordedRequest
+	recordJSON(f, "GET "+nodeAPIBase+"/disks/zfs", &rec, []map[string]any{
+		{"name": "tank", "health": "ONLINE", "dedup": 1.0},
+	})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "disks", "zfs", "ls")
+	require.NoError(t, err)
+
+	require.Contains(t, buf.String(), "1")
+	require.NotContains(t, buf.String(), "1.0")
 }
 
 func TestNodeDisksZfsShow_RendersRaw(t *testing.T) {

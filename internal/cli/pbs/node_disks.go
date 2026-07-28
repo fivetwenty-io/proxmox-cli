@@ -48,14 +48,15 @@ type nodeDirEntry struct {
 // nodeZfsEntry mirrors one element of the JSON array PBS returns from
 // GET /nodes/{node}/disks/zfs, per the PBS API's documented ZFSPoolInfo
 // schema.
+// The deduplication ratio is a ZFS float (`"dedup": 1.47`), not a string.
 type nodeZfsEntry struct {
-	Name    string  `json:"name"`
-	Health  *string `json:"health,omitempty"`
-	Size    *int64  `json:"size,omitempty"`
-	Alloc   *int64  `json:"alloc,omitempty"`
-	Free    *int64  `json:"free,omitempty"`
-	Dedup   *string `json:"dedup,omitempty"`
-	Fragmen *int64  `json:"frag,omitempty"`
+	Name    string   `json:"name"`
+	Health  *string  `json:"health,omitempty"`
+	Size    *int64   `json:"size,omitempty"`
+	Alloc   *int64   `json:"alloc,omitempty"`
+	Free    *int64   `json:"free,omitempty"`
+	Dedup   *float64 `json:"dedup,omitempty"`
+	Fragmen *int64   `json:"frag,omitempty"`
 }
 
 // newNodeDisksCmd builds `pmx pbs node disks` and its
@@ -470,7 +471,7 @@ func newNodeDisksZfsLsCmd(nf *nodeFlags) *cobra.Command {
 				rows = append(rows, []string{
 					e.Name, pbsFormatOptionalString(e.Health), pbsFormatOptionalInt64(e.Size),
 					pbsFormatOptionalInt64(e.Alloc), pbsFormatOptionalInt64(e.Free),
-					pbsFormatOptionalString(e.Dedup), pbsFormatOptionalInt64(e.Fragmen),
+					pbsFormatOptionalFloat64(e.Dedup), pbsFormatOptionalInt64(e.Fragmen),
 				})
 			}
 

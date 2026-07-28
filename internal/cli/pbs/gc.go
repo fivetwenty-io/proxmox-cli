@@ -309,6 +309,21 @@ func pbsFormatOptionalInt64(v *int64) string {
 	return strconv.FormatInt(*v, 10)
 }
 
+// pbsFormatOptionalFloat64 dereferences a *float64 for table rendering,
+// returning "" for nil. Values with no fractional part render without a
+// trailing ".0", matching how the other float-typed PBS fields are shown.
+func pbsFormatOptionalFloat64(v *float64) string {
+	if v == nil {
+		return ""
+	}
+
+	if *v == float64(int64(*v)) {
+		return strconv.FormatInt(int64(*v), 10)
+	}
+
+	return strconv.FormatFloat(*v, 'f', -1, 64)
+}
+
 // pbsFormatOptionalBool dereferences a *bool for table rendering, returning
 // "false" for nil (an unset optional PBS boolean defaults to false). Shared
 // by the prune, gc, and verify command files.
