@@ -10,10 +10,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
@@ -333,6 +335,8 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 	root.PersistentFlags().BoolVar(&pf.async, "async", false, "return task UPID immediately without waiting")
 	root.PersistentFlags().BoolVar(&pf.insecure, "insecure", false, "disable TLS certificate verification")
 
+	wrapFlagUsages(root)
+
 	// PersistentPreRunE is invoked for every sub-command unless that command
 	// overrides it explicitly.
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
@@ -344,6 +348,41 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 	}
 
 	return root, cleanup
+}
+
+// wrapFlagUsages makes `--help` wrap flag descriptions to the terminal width
+// instead of emitting one unbroken line per flag. cobra's stock template calls
+// pflag's FlagUsages, which never wraps, so the longest descriptions in this
+// tree run past 250 columns and the terminal reflows them under the flag name
+// with no indentation, hiding where one flag ends and the next begins.
+//
+// The template is patched rather than replaced so cobra's own layout (usage
+// line, command groups, help footer) stays whatever the vendored version
+// emits. Sub-commands inherit the root's template, so setting it here covers
+// the whole tree.
+func wrapFlagUsages(root *cobra.Command) {
+	cobra.AddTemplateFunc("wrapFlags", func(fs *pflag.FlagSet) string {
+		return fs.FlagUsagesWrapped(helpWidth())
+	})
+	root.SetUsageTemplate(strings.NewReplacer(
+		".LocalFlags.FlagUsages", "wrapFlags .LocalFlags",
+		".InheritedFlags.FlagUsages", "wrapFlags .InheritedFlags",
+	).Replace(root.UsageTemplate()))
+}
+
+// helpWidth returns the column count to wrap flag help at, or 0 for pflag's
+// unwrapped output. $COLUMNS wins so the width can be pinned in a script or a
+// test; otherwise the width comes from the terminal on stdout. Output that is
+// not going to a terminal stays unwrapped, keeping piped and captured help
+// byte-identical to what earlier versions produced.
+func helpWidth() int {
+	if n, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && n > 0 {
+		return n
+	}
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+		return w
+	}
+	return 0
 }
 
 // resolveOutputDefault returns the --output/-o default: PMX_OUTPUT env if set,

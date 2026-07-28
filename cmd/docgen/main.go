@@ -25,6 +25,7 @@ import (
 	"github.com/cpuguy83/go-md2man/v2/md2man"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
+	"github.com/spf13/pflag"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/persona"
@@ -97,6 +98,7 @@ func run(opts runOpts) error {
 		root, cleanup := buildRoot(name)
 		disableAutoGen(root)
 		sanitizeFlags(root)
+		escapeAngles(root, map[*pflag.Flag]bool{})
 		if err := doc.GenManTree(root, hdr, man1); err != nil {
 			cleanup()
 			return fmt.Errorf("persona %s: %w", name, err)
@@ -142,7 +144,7 @@ func renderConfigPage(man5 string, hdr *doc.GenManHeader) error {
 		// runtime condition callers can recover from.
 		panic(fmt.Sprintf("docgen: embedded pages/pmx-config.5.md missing: %v", err))
 	}
-	body := md2man.Render(src)
+	body := md2man.Render([]byte(escapeAnglesText(string(src))))
 	if i := bytes.Index(body, []byte(".SH ")); i >= 0 {
 		body = body[i:]
 	}
@@ -207,6 +209,84 @@ func sanitizeFlags(root *cobra.Command) {
 	}
 }
 
+// escapeAngles backslash-escapes the argument placeholders in a command tree's
+// Use, Short, Long, and flag-usage strings so they survive man-page rendering.
+//
+// cobra/doc emits those strings as markdown and md2man parses them with
+// blackfriday, which treats a bare "<vmid>" as inline HTML and drops it: the
+// synopsis "pmx pve qemu agent <vmid|name> <command> [flags]" would otherwise
+// render as "pmx pve qemu agent   [flags]". Escaping restores the literal text.
+//
+// Example is deliberately untouched: cobra wraps it in a fenced code block,
+// where placeholders already pass through verbatim and a backslash would show
+// up in the rendered page.
+//
+// The tree here is docgen's own throwaway copy, so this never affects the
+// terminal help, which cobra prints verbatim and where "<vmid>" is already fine.
+// seen carries the flags rewritten so far, since a persistent flag is reached
+// again through every descendant's inherited set and must be escaped once.
+func escapeAngles(cmd *cobra.Command, seen map[*pflag.Flag]bool) {
+	cmd.Use = escapeAnglesText(cmd.Use)
+	cmd.Short = escapeAnglesText(cmd.Short)
+	cmd.Long = escapeAnglesText(cmd.Long)
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if seen[f] {
+			return
+		}
+		seen[f] = true
+		f.Usage = escapeAnglesText(f.Usage)
+	})
+	for _, c := range cmd.Commands() {
+		escapeAngles(c, seen)
+	}
+}
+
+// escapeAnglesText backslash-escapes < and > everywhere blackfriday would
+// otherwise read them as inline HTML, and leaves them alone everywhere a
+// backslash would survive into the rendered page: backtick code spans, fenced
+// blocks, and indented (4-space or tab) blocks, none of which process escapes.
+// The completion commands' Long text carries indented shell snippets such as
+// "source <(pmx completion bash)", which must stay verbatim.
+//
+// Any indented line counts as a code block here, even one markdown would treat
+// as a lazy paragraph continuation. Guessing wrong that way costs one dropped
+// placeholder; guessing wrong the other way prints a stray backslash into the
+// page. Code-span state resets each line so one unbalanced backtick cannot
+// corrupt the rest of the text.
+func escapeAnglesText(s string) string {
+	if !strings.ContainsAny(s, "<>") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 16)
+	fenced := false
+	for i, line := range strings.Split(s, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		trimmed := strings.TrimLeft(line, " ")
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			fenced = !fenced
+		}
+		if fenced || strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
+			b.WriteString(line)
+			continue
+		}
+		inCode := false
+		for j := 0; j < len(line); j++ {
+			c := line[j]
+			switch {
+			case c == '`':
+				inCode = !inCode
+			case (c == '<' || c == '>') && !inCode:
+				b.WriteByte('\\')
+			}
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
 // seeAlsoMarker is the exact roff macro cobra/doc emits for its auto-generated
 // SEE ALSO section (verified against actual GenManTree output). Splicing
 // before it keeps SEE ALSO auto-generated so persona group lists never go
@@ -229,7 +309,7 @@ func injectRootSections(page []byte) []byte {
 		// runtime condition callers can recover from.
 		panic(fmt.Sprintf("docgen: embedded pages/root-sections.md missing: %v", err))
 	}
-	extra := md2man.Render(src)
+	extra := md2man.Render([]byte(escapeAnglesText(string(src))))
 	if i := bytes.Index(extra, []byte(".SH ")); i >= 0 {
 		extra = extra[i:]
 	}

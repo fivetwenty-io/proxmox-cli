@@ -110,6 +110,44 @@ func TestConfigPage_Generated(t *testing.T) {
 	}
 }
 
+func TestEscapeAnglesText(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want string }{
+		"plain":          {"agent <vmid> <command>", `agent \<vmid\> \<command\>`},
+		"no angles":      {"start a virtual machine", "start a virtual machine"},
+		"code span kept": {"pass `<vmid>` or <name>", `pass ` + "`<vmid>`" + ` or \<name\>`},
+		"indented block": {"run it:\n\n    source <(pmx completion bash)\n", "run it:\n\n    source <(pmx completion bash)\n"},
+		"tab block":      {"run:\n\n\tcat <file>\n", "run:\n\n\tcat <file>\n"},
+		"fenced block":   {"```\ncat <file>\n```\nthen <vmid>", "```\ncat <file>\n```\nthen \\<vmid\\>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.want, escapeAnglesText(tc.in))
+		})
+	}
+}
+
+// TestPlaceholdersSurviveManRendering guards the md2man escaping: without it
+// blackfriday reads "<vmid>" as inline HTML and drops it, collapsing the
+// synopsis to "pmx pve qemu agent   [flags]".
+func TestPlaceholdersSurviveManRendering(t *testing.T) {
+	got := generateInto(t, t.TempDir())
+
+	page := string(got["pmx-pve-qemu-agent.1"])
+	require.Contains(t, page, "pmx pve qemu agent <vmid|name> <command> [flags]")
+
+	// A backslash that reached the roff output means the escape leaked out of
+	// a context blackfriday does not unescape, such as a fenced code block.
+	for name, b := range got {
+		require.NotContains(t, string(b), `\\<`, "%s renders a literal backslash before <", name)
+		require.NotContains(t, string(b), `\\>`, "%s renders a literal backslash before >", name)
+	}
+
+	// The completion pages carry indented shell snippets that must stay verbatim.
+	require.Contains(t, string(got["pmx-completion-bash.1"]), "source <(pmx completion bash)")
+
+	// The hand-authored man5 page goes through the same escaping.
+	require.Contains(t, string(got["pmx-config.5"]), "<pool>-lab-<name>")
+}
+
 func TestExitStatus_MatchesExitcodeConsts(t *testing.T) {
 	page := string(generateInto(t, t.TempDir())["pmx.1"])
 	for _, code := range []int{

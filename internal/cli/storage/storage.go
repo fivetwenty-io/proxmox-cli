@@ -565,8 +565,10 @@ func newCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&storageID, "storage", "", "storage identifier (required)")
+	// Comma-separated so the list wraps: pipe-joined it is a single token no
+	// help renderer can break across lines.
 	cmd.Flags().StringVar(&stType, "type", "",
-		"storage type: dir|nfs|cifs|rbd|lvm|lvmthin|zfspool|btrfs|pbs (required)")
+		"storage type, one of dir, nfs, cifs, rbd, lvm, lvmthin, zfspool, btrfs, pbs (required)")
 	sf.registerCreate(cmd)
 	cli.MustMarkRequired(cmd, "storage")
 	cli.MustMarkRequired(cmd, "type")

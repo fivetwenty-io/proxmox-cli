@@ -388,6 +388,51 @@ func TestAddGroups_GroupAppearsInHelp(t *testing.T) {
 	require.True(t, names["testgroup"], "testgroup must appear in root commands after AddGroups")
 }
 
+// TestHelp_WrapsFlagUsagesToColumns verifies that flag descriptions wrap to
+// $COLUMNS instead of running off the side. cobra's stock template never
+// wraps, and the longest descriptions in this tree are well over 200 columns.
+func TestHelp_WrapsFlagUsagesToColumns(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	sub := &cobra.Command{Use: "wrapme", Run: func(*cobra.Command, []string) {}}
+	sub.Flags().String("long-one", "",
+		"a deliberately long flag description that has to be wrapped by the help "+
+			"renderer because it comfortably exceeds eighty columns on its own")
+	root.AddCommand(sub)
+
+	var buf bytes.Buffer
+	sub.SetOut(&buf)
+	require.NoError(t, sub.Usage())
+
+	require.Contains(t, buf.String(), "--long-one")
+	for _, line := range strings.Split(buf.String(), "\n") {
+		require.LessOrEqual(t, len(line), 80, "help line exceeds $COLUMNS: %q", line)
+	}
+}
+
+// TestHelp_UnwrappedWithoutTerminalWidth verifies the fallback: with no
+// $COLUMNS and no terminal on stdout, help stays byte-identical to cobra's
+// unwrapped output, so piped and captured help does not change shape.
+func TestHelp_UnwrappedWithoutTerminalWidth(t *testing.T) {
+	t.Setenv("COLUMNS", "")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	usage := "a deliberately long flag description that has to be left alone by the " +
+		"help renderer because there is no width to wrap it to at all"
+	sub := &cobra.Command{Use: "wrapme", Run: func(*cobra.Command, []string) {}}
+	sub.Flags().String("long-one", "", usage)
+	root.AddCommand(sub)
+
+	var buf bytes.Buffer
+	sub.SetOut(&buf)
+	require.NoError(t, sub.Usage())
+
+	require.Contains(t, buf.String(), usage)
+}
+
 // TestMain_HelpExitsZero verifies that Main() exits 0 when invoked with no
 // subcommand (cobra prints help and exits 0).
 func TestMain_HelpExitsZero(t *testing.T) {

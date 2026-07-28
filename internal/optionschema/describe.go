@@ -115,8 +115,12 @@ func NewDescribeCmd(cfg DescribeConfig) *cobra.Command {
 		},
 	}
 	if cfg.TypeSets != nil {
+		// Comma-separated rather than pipe-separated so the list stays one
+		// wrappable run of words: storage has 13 types, and joined by pipes
+		// they form a single 84-character token that neither cobra's help nor
+		// the man page can break across lines.
 		cmd.Flags().StringVar(&typeFilter, "type", "",
-			"limit the catalog to the options one type accepts: "+strings.Join(typeNames(cfg.TypeSets), "|"))
+			"limit the catalog to the options one type accepts: "+strings.Join(typeNames(cfg.TypeSets), ", "))
 	}
 	return cmd
 }
