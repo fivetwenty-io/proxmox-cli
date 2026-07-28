@@ -65,9 +65,15 @@ CL_FW_GROUP = "pmxcli-grp"      # isolated cluster security group
 CL_FW_IPSET = "pmxcli-clips"    # cluster-level IP set (distinct from per-guest FW_IPSET)
 CL_FW_ALIAS = "pmxcli-clalias"  # cluster-level address alias
 CL_FW_COMMENT = "pmx-cli-e2e"   # marks the throwaway top-level cluster rule
-ROOTDIR_STORAGE = "local-lvm"   # lvmthin: supports rootdir/images + snapshots
-TMPL_STORAGE = "local"          # holds vztmpl content
-BACKUP_STORAGE = "local"        # dir storage that holds backup content
+# Storage picks. These defaults describe a stock PVE install; `resolve_storages`
+# rebinds them at run start to whatever the target cluster actually offers, so
+# the suite runs unchanged on a lab whose layout differs — zfspool instead of
+# lvmthin, an NFS export for backups, and so on. Setting any of
+# $PMX_E2E_ROOTDIR_STORAGE, $PMX_E2E_TMPL_STORAGE, or $PMX_E2E_BACKUP_STORAGE
+# pins that one by hand.
+ROOTDIR_STORAGE = "local-lvm"   # supports rootdir/images (+ snapshots)
+TMPL_STORAGE = "local"          # holds vztmpl and iso content
+BACKUP_STORAGE = "local"        # holds backup content
 BACKUP_JOB = "pmxcli-backup"    # isolated, disabled vzdump schedule id
 METRICS_SERVER = "pmx-cli-graphite"  # isolated, disabled external metric server
 GOTIFY_ENDPOINT = "pmx-cli-gotify"   # isolated, disabled gotify notification endpoint
@@ -321,6 +327,76 @@ def _node_count(r: Runner) -> int:
     except (ValueError, KeyError):
         pass
     return 1
+
+
+# Preference order when several storages can host guest volumes. The snapshot
+# capable types come first: the qemu/lxc snapshot verbs need one.
+_VOLUME_TYPE_RANK = ("zfspool", "lvmthin", "rbd", "btrfs", "dir", "nfs", "cifs")
+
+# Preference order for the file-content storages (templates, ISOs, backups).
+# A local directory is both the likeliest to exist and the cheapest to write.
+_FILE_TYPE_RANK = ("dir", "btrfs", "nfs", "cifs", "cephfs", "glusterfs")
+
+
+def _storage_rows(r: Runner) -> list[dict]:
+    """Cluster storages usable on the run's node, as decoded config rows."""
+    res = r.pmx("pve", "storage", "list", json_out=True, node=False)
+    if res.rc != 0:
+        return []
+    try:
+        rows = res.json()
+    except ValueError:
+        return []
+    if not isinstance(rows, list):
+        return []
+
+    usable = []
+    for s in rows:
+        if not isinstance(s, dict) or not s.get("storage"):
+            continue
+        if str(s.get("disable", "0")) not in ("0", "", "False"):
+            continue
+        # `nodes` is absent unless the storage is restricted to a subset.
+        nodes = str(s.get("nodes", ""))
+        if nodes and r.node not in [n.strip() for n in nodes.split(",")]:
+            continue
+        usable.append(s)
+    return usable
+
+
+def _pick_storage(rows: list[dict], needs: tuple[str, ...], rank: tuple[str, ...]) -> str:
+    """Id of the best-ranked storage carrying every content type in `needs`."""
+    def key(s: dict) -> tuple[int, str]:
+        kind = str(s.get("type", ""))
+        return (rank.index(kind) if kind in rank else len(rank), str(s.get("storage", "")))
+
+    for s in sorted(rows, key=key):
+        content = [c.strip() for c in str(s.get("content", "")).split(",")]
+        if all(need in content for need in needs):
+            return str(s["storage"])
+    return ""
+
+
+def resolve_storages(r: Runner) -> None:
+    """Rebind the storage constants to what the target cluster actually offers.
+
+    Called once before any resource is created, so every later reference —
+    all of them inside functions — sees the resolved value. A cluster that
+    offers nothing matching keeps the default and lets the failure surface at
+    the verb that needs it, which reports the storage id in its error.
+    """
+    global ROOTDIR_STORAGE, TMPL_STORAGE, BACKUP_STORAGE
+
+    rows = _storage_rows(r)
+    ROOTDIR_STORAGE = (os.environ.get("PMX_E2E_ROOTDIR_STORAGE")
+                       or _pick_storage(rows, ("rootdir", "images"), _VOLUME_TYPE_RANK)
+                       or ROOTDIR_STORAGE)
+    TMPL_STORAGE = (os.environ.get("PMX_E2E_TMPL_STORAGE")
+                    or _pick_storage(rows, ("vztmpl", "iso"), _FILE_TYPE_RANK)
+                    or TMPL_STORAGE)
+    BACKUP_STORAGE = (os.environ.get("PMX_E2E_BACKUP_STORAGE")
+                      or _pick_storage(rows, ("backup",), _FILE_TYPE_RANK)
+                      or BACKUP_STORAGE)
 
 
 def _alt_image_storage(r: Runner, exclude: str) -> str:
@@ -4125,9 +4201,12 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
         return 3
 
     r = Runner(bin_path, context, node)
+    resolve_storages(r)
     print(BOLD(f"lifecycle: context={context} node={node}"))
     print(DIM(f"  isolation: zone={Isolation.SDN_ZONE} vnet={Isolation.SDN_VNET} "
               f"subnet={Isolation.SDN_SUBNET} pool={Isolation.POOL} tag={Isolation.TAG}"))
+    print(DIM(f"  storage: rootdir={ROOTDIR_STORAGE} template={TMPL_STORAGE} "
+              f"backup={BACKUP_STORAGE}"))
     print()
 
     failed = False

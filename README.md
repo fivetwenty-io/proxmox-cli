@@ -1178,14 +1178,19 @@ mutating sub-command — the full power-state matrix
 tears everything down. Every created resource is tagged `pmx-cli`, placed in the
 `pmx-cli` pool, and attached to the isolated SDN, so other efforts on a shared
 lab are never disturbed. Teardown always runs, and a crashed prior run is swept
-clean before the next provisions. Two verbs are environment-bound and recorded
+clean before the next provisions. The storages it writes to are discovered from
+the target cluster rather than pinned — the snapshot-capable volume storage for
+guest disks, and file storages for templates, ISOs, and backups — and the run
+header prints the three it chose. Set `PMX_E2E_ROOTDIR_STORAGE`,
+`PMX_E2E_TMPL_STORAGE`, or `PMX_E2E_BACKUP_STORAGE` to pin any of them. Two
+verbs are environment-bound and recorded
 as SKIP with their reason rather than run as failures: qemu `reboot` (a diskless
 VM has no guest OS to ACPI-reboot — the verb is proven on the Alpine container)
 and lxc `suspend`/`resume` (need working CRIU support on the host).
 
 ```bash
 make test-e2e-mutate                       # read-only sweep + the destructive verb matrix
-make test-lifecycle                        # the destructive verb matrix only, against `lab`
+make test-lifecycle                        # the destructive verb matrix only, against `lab-pmx`
 make test-lifecycle CONTEXT=prod
 scripts/e2e --mutate --vm-only             # sweep + VM verb matrix (skip the container)
 scripts/lifecycle --vm-only                # VM verb matrix only

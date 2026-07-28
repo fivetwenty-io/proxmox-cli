@@ -360,13 +360,13 @@ def _node_sdn(ctx: Ctx, node: str) -> None:
         if vnet and vnet_remote:
             ctx.check("node sdn vnet mac-vrf", "pdm", "node", "sdn", "vnet",
                       "mac-vrf", node, vnet, "--remote", vnet_remote,
-                      skip_on=REMOTE_DOWN)
+                      skip_on={**TICKET_ONLY, **REMOTE_DOWN})
         else:
             ctx.skip("node sdn vnet mac-vrf", "no SDN vnet on any managed remote")
         if zone and zone_remote:
             ctx.check("node sdn zone ip-vrf", "pdm", "node", "sdn", "zone",
                       "ip-vrf", node, zone, "--remote", zone_remote,
-                      skip_on=REMOTE_DOWN)
+                      skip_on={**TICKET_ONLY, **REMOTE_DOWN})
         else:
             ctx.skip("node sdn zone ip-vrf", "no SDN zone on any managed remote")
 
@@ -552,12 +552,14 @@ def _proxy_pve_node(ctx: Ctx, remote: str) -> None:
                      "zone", "name")
         if vnet:
             ctx.check("pve node sdn vnet mac-vrf", "pdm", "pve", "node", "sdn",
-                      "vnet", "mac-vrf", remote, node, vnet)
+                      "vnet", "mac-vrf", remote, node, vnet,
+                      skip_on=TICKET_ONLY)
         else:
             ctx.skip("pve node sdn vnet mac-vrf", "no SDN vnet on this remote")
         if zone:
             ctx.check("pve node sdn zone ip-vrf", "pdm", "pve", "node", "sdn",
-                      "zone", "ip-vrf", remote, node, zone)
+                      "zone", "ip-vrf", remote, node, zone,
+                      skip_on=TICKET_ONLY)
         else:
             ctx.skip("pve node sdn zone ip-vrf", "no SDN zone on this remote")
 

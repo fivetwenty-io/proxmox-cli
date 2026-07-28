@@ -48,8 +48,9 @@ def main() -> None:
         nargs="*",
         help="command trees to run (default: all)",
     )
-    parser.add_argument("--context", "-c", default=os.environ.get("PMX_E2E_CONTEXT", "lab"),
-                        help="configured context name (default: lab, or $PMX_E2E_CONTEXT)")
+    parser.add_argument("--context", "-c", default=os.environ.get("PMX_E2E_CONTEXT", "lab-pmx"),
+                        help="configured context name (default: lab-pmx, the lab dedicated to\n"
+                             "testing this project, or $PMX_E2E_CONTEXT)")
     parser.add_argument("--pbs-context", default=os.environ.get("PMX_E2E_PBS_CONTEXT", ""),
                         help="configured `product: pbs` context for the opt-in pbs tree "
                              "(default: $PMX_E2E_PBS_CONTEXT; empty = pbs tree skips)")

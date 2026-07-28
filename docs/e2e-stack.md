@@ -22,7 +22,9 @@ For each product enabled in `config/stack.toml`:
   `pmx context validate --connect`
 
 PBS guests additionally get a datastore named `e2e` at `/srv/pbs-e2e`, so
-datastore-scoped commands have a target.
+datastore-scoped commands have a target. PDM guests get the lab PVE cluster
+and the stack's PBS guest registered as remotes, so the proxied inventory
+reads have something to proxy to.
 
 The nested PVE product is optional and disabled by default — the lab cluster
 itself is already the PVE target for the sweep. Enable it only when a fully
@@ -94,6 +96,11 @@ qm template 9002
   any API token regardless of its ACLs. The e2e trees record those checks as
   skips (`skip_on`) under the stack's token contexts rather than failures.
 
-- After `up`, the PDM instance has no remotes configured. Add the lab cluster
-  as a remote (`pmx pdm remote ...` against the `pdm-e2e` context) if remote
-  -dependent checks should exercise more than the empty-inventory paths.
+- `up` finishes by pointing the PDM guest at the lab PVE cluster and at the
+  stack's own PBS guest, so the pdm tree's proxied inventory reads have
+  something to proxy to instead of returning empty lists. Each remote is
+  pinned to the node's SHA-256 certificate fingerprint, probed from inside
+  the PDM guest so it is exactly what PDM sees when it connects. The token
+  PDM uses on the lab PVE (`root@pam!pdm-e2e` by default) is minted by `up`
+  and revoked by `down`. Set `[products.pdm].remotes = false` to skip the
+  whole phase.

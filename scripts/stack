@@ -122,6 +122,10 @@ context = "pdm-e2e"
 component = "pdm-test"     # PDM still ships via the test component
 token_name = "e2e"
 role = "Administrator"
+remotes = true             # register the lab PVE (and this stack's PBS) as
+                           # PDM remotes, so the proxied inventory reads have
+                           # something to proxy to
+remote_token_name = "pdm-e2e"   # token minted on the lab PVE for PDM to use
 
 # A nested full PVE guest is optional: the lab cluster itself already is the
 # PVE target for the sweep. Enable this only for a fully isolated stack.
@@ -512,6 +516,102 @@ def ensure_context(r: Runner, product: str, p: dict, secret: str) -> None:
               f"{proc.stderr.strip() or proc.stdout.strip()}")
 
 
+# --- pdm remotes ------------------------------------------------------------------
+
+
+def lab_pve_host(r: Runner) -> str:
+    """Address of the PVE cluster hosting the stack, from its pmx context."""
+    data = r.pmx_json("context", "show", r.lab["context"])
+    host = data.get("host") if isinstance(data, dict) else ""
+    if not host:
+        die(f"context {r.lab['context']!r} has no host")
+    return str(host)
+
+
+def probe_fingerprint(r: Runner, prober: str, host: str, port: int) -> str:
+    """SHA-256 certificate fingerprint of host:port, probed from `prober`.
+
+    PDM pins the fingerprint it is given and refuses the connection when the
+    certificate does not match, so the value has to be what PDM itself sees.
+    Probing from the PDM guest rather than this machine removes any doubt.
+    """
+    proc = r.ssh(prober, "\n".join([
+        "set -euo pipefail",
+        f"openssl s_client -connect {shlex.quote(f'{host}:{port}')} </dev/null 2>/dev/null"
+        " | openssl x509 -noout -fingerprint -sha256",
+    ]))
+    fp = proc.stdout.strip().split("=", 1)[-1].strip()
+    if not fp:
+        die(f"could not read the TLS fingerprint of {host}:{port} from {prober}")
+    return fp
+
+
+def pve_remote_token(r: Runner, host: str, token: str) -> str:
+    """Mint a privilege-separated-off root token on the lab PVE for PDM.
+
+    Same convergence rule as the product tokens: the secret is only shown at
+    creation, so an existing token is removed and re-minted.
+    """
+    proc = r.ssh(host, "\n".join([
+        "set -euo pipefail",
+        f"pveum user token remove root@pam {token} >/dev/null 2>&1 || true",
+        f"OUT=$(pveum user token add root@pam {token} --privsep 0 --output-format json)",
+        "echo TOKEN_SECRET=$(echo \"$OUT\" | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"value\"])')",
+    ]))
+    for line in proc.stdout.splitlines():
+        if line.startswith("TOKEN_SECRET="):
+            return line.split("=", 1)[1].strip()
+    die(f"minting root@pam!{token} on {host} returned no secret:\n{proc.stdout}\n{proc.stderr}")
+
+
+def remote_exists(r: Runner, pdm_context: str, remote_id: str) -> bool:
+    proc = r.pmx("pdm", "remote", "ls", context=pdm_context, check=False, json_out=True)
+    if proc.returncode != 0:
+        return False
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(data, list) and any(
+        isinstance(e, dict) and (e.get("id") or e.get("name")) == remote_id for e in data)
+
+
+def ensure_remote(r: Runner, pdm_context: str, remote_id: str, kind: str,
+                  authid: str, secret: str, host: str, port: int, prober: str) -> None:
+    fp = probe_fingerprint(r, prober, host, port)
+    if remote_exists(r, pdm_context, remote_id):
+        r.pmx("pdm", "remote", "delete", remote_id, "--yes", context=pdm_context)
+    r.pmx("pdm", "remote", "add", remote_id, "--type", kind, "--authid", authid,
+          "--token", secret, "--node", f"hostname={host},fingerprint={fp}",
+          context=pdm_context)
+    step(f"pdm: remote {remote_id!r} ({kind}) -> {host}:{port}")
+
+
+def ensure_pdm_remotes(r: Runner, cfg: dict, secrets: dict[str, str]) -> None:
+    """Point the PDM guest at the lab PVE and at this stack's PBS guest.
+
+    A PDM with no remotes answers every proxied inventory read with an empty
+    list, so the e2e pdm tree's remote-dependent checks skip rather than run.
+    """
+    pdm = cfg["products"]["pdm"]
+    if not pdm.get("remotes", True):
+        return
+    pdm_context, prober = pdm["context"], guest_ip(pdm)
+
+    phase("pdm remotes")
+    pve_host = lab_pve_host(r)
+    tok = _ident(pdm.get("remote_token_name", "pdm-e2e"), "[products.pdm].remote_token_name")
+    ensure_remote(r, pdm_context, r.lab["context"], "pve",
+                  f"root@pam!{tok}", pve_remote_token(r, pve_host, tok),
+                  pve_host, INSTALL["pve"]["port"], prober)
+
+    pbs = cfg.get("products", {}).get("pbs", {})
+    if pbs.get("enabled") and secrets.get("pbs"):
+        ensure_remote(r, pdm_context, pbs["name"], "pbs",
+                      f"root@pam!{pbs.get('token_name', 'e2e')}", secrets["pbs"],
+                      guest_ip(pbs), INSTALL["pbs"]["port"], prober)
+
+
 # --- subcommands -----------------------------------------------------------------
 
 
@@ -535,13 +635,17 @@ def cmd_up(_: argparse.Namespace) -> int:
         die("no products enabled in config/stack.toml")
 
     phase(f"stack up: {', '.join(products)} on context {cfg['lab']['context']!r}")
+    secrets: dict[str, str] = {}
     for product in products:
         p = cfg["products"][product]
         phase(f"{product} ({p['name']}, VM {p['vmid']}, {p['ip']})")
         ensure_guest(r, product, p)
         wait_for_ssh(r, product, guest_ip(p))
-        secret = provision_product(r, product, p)
-        ensure_context(r, product, p, secret)
+        secrets[product] = provision_product(r, product, p)
+        ensure_context(r, product, p, secrets[product])
+
+    if "pdm" in products:
+        ensure_pdm_remotes(r, cfg, secrets)
 
     phase("stack ready")
     print_env(cfg)
@@ -566,6 +670,14 @@ def cmd_down(args: argparse.Namespace) -> int:
             step(f"{product}: VM {vmid} destroyed")
         else:
             note(f"{product}: VM {vmid} absent")
+
+    # The PDM remotes die with the PDM guest, but the token `up` minted for
+    # them lives on the lab PVE and has to be revoked here.
+    pdm = cfg.get("products", {}).get("pdm", {})
+    if pdm.get("enabled") and pdm.get("remotes", True):
+        tok = _ident(pdm.get("remote_token_name", "pdm-e2e"), "[products.pdm].remote_token_name")
+        r.ssh(lab_pve_host(r), f"pveum user token remove root@pam {tok} >/dev/null 2>&1 || true")
+        step(f"pdm: lab PVE token root@pam!{tok} revoked")
     return 0
 
 
@@ -580,8 +692,16 @@ def cmd_status(_: argparse.Namespace) -> int:
         ctx = context_exists(r, p["context"])
         vm_state = "running" if running else ("stopped" if exists else "absent")
         glyph = GREEN("✓") if running and ctx else YELLOW("○")
-        print(f"  {glyph} {product}: VM {vmid} {vm_state}, "
-              f"context {p['context']!r} {'present' if ctx else 'absent'}")
+        line = (f"  {glyph} {product}: VM {vmid} {vm_state}, "
+                f"context {p['context']!r} {'present' if ctx else 'absent'}")
+        if product == "pdm" and ctx:
+            proc = r.pmx("pdm", "remote", "ls", context=p["context"], check=False, json_out=True)
+            try:
+                remotes = json.loads(proc.stdout) if proc.returncode == 0 else []
+            except json.JSONDecodeError:
+                remotes = []
+            line += f", {len(remotes)} remote(s)"
+        print(line)
     return 0
 
 
