@@ -54,11 +54,12 @@ func newClusterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Create and join a lab's nested PVE cluster",
-		Long: "Form the nested Proxmox VE cluster inside a multi-node lab: `init` creates the " +
-			"cluster on node 0, `join` adds one more node at a time (serialized — never run two " +
-			"joins concurrently against the same lab), and `status` reports quorum and corosync " +
-			"link health. Every mutating verb runs entirely over ssh into the lab guest's own " +
-			"mgmt IP, never against the outer Proxmox VE API.",
+		Long: "Form and inspect the nested Proxmox VE cluster inside a multi-node lab:\n\n" +
+			"  * init     create the cluster on node 0\n" +
+			"  * join     add one node at a time, never two at once per lab\n" +
+			"  * status   report quorum and corosync link health\n\n" +
+			"Every mutating verb runs entirely over ssh into the lab guest's own mgmt IP, " +
+			"never against the outer Proxmox VE API.",
 	}
 	cmd.AddCommand(newClusterInitCmd(), newClusterJoinCmd(), newClusterStatusCmd())
 	return cmd
@@ -71,11 +72,11 @@ func newClusterInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init <name>",
 		Short: "Create a lab's nested PVE cluster on node 0",
-		Long: "Run `pvecm create <lab-name> --link0 <node-0-mgmt-ip>` over ssh on the lab's node " +
-			"0, then verify it reports a quorate 1-of-1-vote cluster. Idempotent: if node 0 " +
-			"already reports a cluster with this lab's name, the command reports it as already " +
-			"initialized and does nothing further. Requires topology.nodes >= 2 — a single-node " +
-			"lab has no cluster to create.",
+		Long: "Run `pvecm create <lab-name> --link0 <node-0-mgmt-ip>` over ssh on the lab's " +
+			"node 0, then verify it reports a quorate 1-of-1-vote cluster.\n\n" +
+			"Idempotent: if node 0 already reports a cluster with this lab's name, the command " +
+			"reports it as already initialized and does nothing further.\n\n" +
+			"Requires topology.nodes >= 2 — a single-node lab has no cluster to create.",
 		Example: `  pmx lab cluster init wayne
   pmx lab cluster init wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -204,21 +205,24 @@ func newClusterJoinCmd() *cobra.Command {
 		Short: "Join one more node to a lab's nested PVE cluster",
 		Long: "Run `pvecm add <node-0-mgmt-ip> --link0 <node-i-mgmt-ip> --use_ssh` over ssh on " +
 			"the joining node (--node, required, 1-4 — node 0 is created, never joined), then " +
-			"block until node 0 reports the expected vote count reached and every corosync link " +
-			"connected (multi-node lab plan §6.2). Idempotent: if the target node already reports " +
-			"membership in this lab's cluster, the command reports it as already joined and does " +
-			"nothing further. Refuses to join a node that hosts any VM or container (`qm list`/" +
-			"`pct list` on the joining node) — plan §6.2: only node 0 may ever hold guests before " +
-			"clustering; a guest-hosting node may create a cluster but must never join one. Before " +
-			"`pvecm add` runs, non-interactive root ssh trust from the joining node to node 0 is " +
-			"seeded and verified end to end (root keypair, pushed public key, accepted host key) — " +
-			"`pvecm add`'s own ssh-fallback join path relies on that trust already existing and " +
-			"fails silently (reporting success) on a fresh node pair without it. After `pvecm add` " +
-			"returns, the joining node is re-probed to confirm it actually joined before waiting for " +
-			"quorum, since `pvecm add`'s exit code alone cannot be trusted. Nodes must be joined one " +
-			"at a time, in index order (1, then 2, then 3, ...) — never run two joins for the same " +
-			"lab concurrently, and never join node i before node i-1 has finished joining and " +
-			"reached quorum.",
+			"block until node 0 reports the expected vote count reached and every corosync " +
+			"link connected (multi-node lab plan §6.2).\n\n" +
+			"Idempotent: if the target node already reports membership in this lab's cluster, " +
+			"the command reports it as already joined and does nothing further.\n\n" +
+			"A node that hosts any VM or container is refused, checked with `qm list`/`pct " +
+			"list` on the joining node. Plan §6.2: only node 0 may ever hold guests before " +
+			"clustering, so a guest-hosting node may create a cluster but must never join " +
+			"one.\n\n" +
+			"Before `pvecm add` runs, non-interactive root ssh trust from the joining node to " +
+			"node 0 is seeded and verified end to end: root keypair, pushed public key, " +
+			"accepted host key. `pvecm add`'s own ssh-fallback join path relies on that trust " +
+			"already existing, and fails silently — reporting success — on a fresh node pair " +
+			"without it. Once `pvecm add` returns, the joining node is re-probed to confirm it " +
+			"actually joined before waiting for quorum, since `pvecm add`'s exit code alone " +
+			"cannot be trusted.\n\n" +
+			"Join nodes one at a time, in index order: 1, then 2, then 3, and so on. Never run " +
+			"two joins for the same lab concurrently, and never join node i before node i-1 " +
+			"has finished joining and reached quorum.",
 		Example: `  pmx lab cluster join wayne --node 1
   pmx lab cluster join wayne --node 1 --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -570,10 +574,11 @@ func newClusterStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <name>",
 		Short: "Show a lab's nested cluster quorum and corosync link state",
-		Long: "Run `pvecm status` and `corosync-cfgtool -s` over ssh against one node (node 0 " +
-			"by default; pass --node to target a different index) and report cluster " +
-			"membership, quorum, vote counts, QDevice presence, and whether every corosync link " +
-			"is connected. Read-only: never mutates anything.",
+		Long: "Run `pvecm status` and `corosync-cfgtool -s` over ssh against one node — node 0 " +
+			"by default, or pass --node to target a different index.\n\n" +
+			"Reports cluster membership, quorum, vote counts, QDevice presence, and whether " +
+			"every corosync link is connected.\n\n" +
+			"Read-only: never mutates anything.",
 		Example: `  pmx lab cluster status wayne
   pmx lab cluster status wayne --node 1`,
 		Args: cobra.ExactArgs(1),

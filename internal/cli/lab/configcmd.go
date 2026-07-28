@@ -47,11 +47,12 @@ func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Scaffold, write, and inspect local lab definition files",
-		Long: "Manage the lab definitions pmx lab resolves against: scaffold a labs_dir " +
-			"with a commented example (init), write a new lab definition from flags " +
-			"(add), or inspect a resolved lab and where it came from (show).\n\n" +
-			"Every sub-command here operates on the local filesystem and config.yml " +
-			"only; none of them build or call a Proxmox API client.",
+		Long: "Manage the lab definitions `pmx lab` resolves against:\n\n" +
+			"  * init   scaffold a labs_dir with a commented example\n" +
+			"  * add    write a new lab definition from flags\n" +
+			"  * show   inspect a resolved lab and where it came from\n\n" +
+			"Every sub-command here operates on the local filesystem and config.yml only. " +
+			"None of them build or call a Proxmox API client.",
 	}
 	cmd.AddCommand(newConfigInitCmd(), newConfigAddCmd(), newConfigShowCmd())
 	return cmd
@@ -252,11 +253,11 @@ func newConfigInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Scaffold labs_dir with a commented example lab",
 		Long: "Ensure the lab include directory exists (0700) and write a fully-commented " +
-			"example.yaml documenting every lab schema field to it, ready to copy by hand " +
-			"or as a starting point for 'pmx lab config add'.\n\n" +
-			"Never rewrites config.yml: if labs_dir is not already set there, the one line " +
-			"to add is printed instead of being written for you, so config.yml's comments " +
-			"are never lost to a struct-marshal rewrite.",
+			"example.yaml to it, documenting every lab schema field — ready to copy by hand, " +
+			"or to use as a starting point for `pmx lab config add`.\n\n" +
+			"Never rewrites config.yml. If labs_dir is not already set there, the one line to " +
+			"add is printed rather than written for you, so config.yml's comments are never " +
+			"lost to a struct-marshal rewrite.",
 		Example: `  pmx lab config init
   pmx lab config init --labs-dir ~/labs.d
   pmx lab config init --force`,
@@ -314,12 +315,13 @@ func newConfigAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <name>",
 		Short: "Write a new lab definition to labs_dir",
-		Long: "Build a lab definition from schema defaults plus any flag overrides and write " +
+		Long: "Build a lab definition from schema defaults plus any flag overrides, and write " +
 			"it to a file named after the lab inside labs_dir.\n\n" +
-			"Refuses to overwrite an existing file at that path, and refuses when the name " +
-			"already resolves via the current config (inline or another included file), " +
-			"unless --force. The written file never carries default_user_password: Lab has " +
-			"no such field, so a per-lab file cannot leak the fleet's bootstrap secret.",
+			"It refuses to overwrite an existing file at that path, and refuses when the name " +
+			"already resolves via the current config — inline, or another included file — " +
+			"unless --force.\n\n" +
+			"The written file never carries default_user_password: Lab has no such field, so a " +
+			"per-lab file cannot leak the fleet's bootstrap secret.",
 		Example: `  pmx lab config add wayne --vnet-id wayne --vxlan-tag 5001 --cidr 10.108.0.0/16
   pmx lab config add pipeline --vxlan-tag 5008 --cidr 10.115.0.0/16 --vcpu 24 --role PVEVMUser`,
 		Args: cobra.ExactArgs(1),
@@ -515,9 +517,10 @@ func newConfigShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a resolved lab and where it came from",
-		Long: "Resolve the named lab the same way every other lab verb does (inline config.yml plus " +
-			"labs_dir/include files) and render its merged definition alongside its " +
-			"provenance: \"config.yml (inline)\", or the path of the file it was loaded from.\n\n" +
+		Long: "Resolve the named lab the same way every other lab verb does — inline " +
+			"config.yml plus labs_dir/include files — and render its merged definition " +
+			"alongside its provenance: \"config.yml (inline)\", or the path of the file it was " +
+			"loaded from.\n\n" +
 			"-o/--output (inherited from the root command) selects table, plain, json, or yaml.",
 		Example: `  pmx lab config show wayne
   pmx lab config show wayne -o json`,

@@ -14,35 +14,36 @@ func Group(_ *cli.Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lab",
 		Short: "Manage per-member nested lab environments",
-		Long: `Manage per-member nested lab environments running inside a Proxmox VE
-cluster: each lab's SDN network, VM, storage, DNS zone, access grants, and
-ZFS quota. Labs are config-driven, resolved from the labs/labs_dir/include
-keys in ~/.config/pmx/config.yml (see 'pmx lab config'); most mutating verbs
-accept flags that override individual config fields for a single invocation.
-
-'pmx lab create' idempotently provisions a lab's shared SDN zone, its own
-vnet and subnet, storage, resource pool, and VM, in that order, skipping
-anything already in place; it does not commit the SDN changes it stages.
-'pmx lab net apply' reconciles a lab's SDN zone/vnet/subnet against its
-config, always previews the pending changeset, and applies it. 'pmx lab
-access grant' grants a pve-realm user pool-scoped access to a lab. 'pmx lab
-quota set' sets the lab's ZFS dataset refquota over ssh, since Proxmox VE
-has no API for ZFS dataset properties. 'pmx lab destroy' stops and deletes a
-lab's VM, optionally purging its resource pool and storage definition too.
-'pmx lab list'/'status'/'start'/'stop' inspect and control a lab's VM
-lifecycle, joining each configured lab against its live state by resource
-pool membership. For a multi-node lab (topology.nodes > 1): 'pmx lab
-cluster init'/'join'/'status' form and inspect the nested PVE cluster;
-'pmx lab qdevice add'/'remove' wire up or tear down the corosync QDevice
-tie-breaker a 2-node (mandatory) or 4-node (recommended) topology needs;
-'pmx lab sdn apply' reconciles the inner VXLAN zone spanning the nested
-cluster's own nodes; 'pmx lab nfs attach'/'status'/'detach' register the
-shared NFS service's exports as storage inside the nested cluster; 'pmx lab
-scale --nodes N' orchestrates a full topology migration (grow or shrink,
-with correct QDevice-parity sequencing) by driving all of the above in the
-right order. Every one of these seven verb groups is transported entirely
-over ssh into the lab guest's own mgmt IP, never against the outer Proxmox
-VE API.`,
+		Long: "Manage per-member nested lab environments running inside a Proxmox VE cluster: " +
+			"each lab's SDN network, VMs, storage, DNS zone, access grants, and ZFS quota.\n\n" +
+			"Labs are config-driven, resolved from the labs/labs_dir/include keys in " +
+			"~/.config/pmx/config.yml (see `pmx lab config`). Most mutating verbs accept flags " +
+			"that override individual config fields for a single invocation.\n\n" +
+			"Lifecycle\n" +
+			"  create    provision a lab's network, storage, pool, and VMs\n" +
+			"  list      show every lab beside its live node-0 VM state\n" +
+			"  status    break one lab down per node (and its QDevice VM)\n" +
+			"  start     start a lab's VMs, node 0 first\n" +
+			"  stop      power a lab's VMs off, in reverse order\n" +
+			"  destroy   delete a lab's VMs, optionally its pool and storage\n\n" +
+			"On the outer cluster\n" +
+			"  net apply      reconcile the lab's outer SDN zone, vnet, subnet\n" +
+			"  access grant   give a pve user pool-scoped access to a lab\n" +
+			"  quota set      set the lab's ZFS refquota (no PVE API for it)\n" +
+			"  config         scaffold and inspect lab definitions on disk\n" +
+			"  context sync   register the `lab-<name>` context and its token\n\n" +
+			"Inside a multi-node lab (topology.nodes > 1)\n" +
+			"  cluster init/join/status   form and inspect the nested cluster\n" +
+			"  qdevice add/remove         wire up the corosync tie-breaker\n" +
+			"  hostnet apply              reconcile nested bonds and bridges\n" +
+			"  sdn apply                  reconcile the inner VXLAN zone\n" +
+			"  nfs attach/status/detach   register the shared NFS exports\n" +
+			"  scale --nodes N            migrate the lab to a new node count\n\n" +
+			"The cluster, qdevice, sdn, and nfs verbs run entirely over ssh into the lab " +
+			"guests' own mgmt IPs, never against the outer Proxmox VE API. `hostnet apply` " +
+			"talks to the nested cluster's own API instead, and `scale` drives all of them, " +
+			"plus outer-API VM creation, in the right order.\n\n" +
+			"Run `pmx lab <verb> --help` for the details of any one verb.",
 		Example: `  pmx lab create wayne --node sm-0
   pmx lab status wayne
   pmx lab list

@@ -32,37 +32,50 @@ func newScaleCmd() *cobra.Command {
 		Use:   "scale <name>",
 		Short: "Migrate a lab's node count (and QDevice) to a new topology",
 		Long: "Orchestrate a lab's transition to a new topology.nodes / topology.qdevice " +
-			"target, per multi-node lab plan §9. Preflight (before any mutation): rename a " +
-			"surviving legacy `lab-<member>` VM (no index suffix) to `lab-<member>-0` (decision " +
-			"D3's safety net), verify the CURRENT cluster (if any) is quorate, run the capacity " +
-			"gate if this run will create any VM shell — all before the QDevice-removal step, so " +
-			"a capacity refusal never strands the cluster witness-less. Then: remove the QDevice " +
-			"first if the target no longer needs one (never leave an odd+witness Last-Man-" +
-			"Standing shape mid-transition) and destroy its now-orphaned VM; grow by creating VM " +
-			"shells and joining every newly-reachable node in serial index order (deferring, not " +
-			"failing, at the first node whose OS/ssh is not yet provisioned — re-run once it is); " +
-			"shrink by evacuating guests to node 0, delnode, and destroying each departing node's " +
-			"VM in reverse index order (node 0 is never removed); add the QDevice after every " +
-			"join/delnode for this transition has completed; reconcile the inner SDN zone and NFS " +
-			"storage attachment; and finally validate quorum, corosync links, and storage-active " +
-			"state on EVERY node in the target topology. A transition that completed (was not " +
-			"deferred waiting on manual OS provisioning) but ends non-quorate, link-degraded, or " +
-			"storage-inactive on any node returns a non-zero exit after rendering the full report " +
-			"— a deferred, still-in-progress transition does not. Every step besides the final " +
-			"validation is individually idempotent, so a scale command that stopped partway can " +
-			"simply be re-run to continue: the current node count and QDevice registration are " +
-			"always re-derived from node 0's live corosync membership, never from VM-shell " +
-			"existence alone, so a re-run correctly resumes joining/wiring already-created shells " +
-			"rather than treating their mere existence as \"done.\" VM-shell provisioning (new " +
-			"node/QDevice VMs) reuses `pmx lab create`'s own idempotent plan machinery and " +
-			"capacity gate; this command creates VM shells only — it never installs an OS, " +
-			"matching `pmx lab create`'s own scope. SNAT-rule, PBS-job, and DNS registration for " +
-			"new/removed nodes remain lab-repository host-side script responsibilities, outside " +
-			"this CLI's scope; a completed node-count change also prints a reminder that the " +
-			"lab's PDM remote (single-host vs. cluster endpoint) needs a manual swap via the lab " +
-			"repository's own PDM tooling — `pmx lab scale` has no PDM write API to call. The " +
-			"live-migration acceptance test (a test VM on nfs-images migrated across every node) " +
-			"is milestone QA, not part of this command's own automated validation.",
+			"target, per multi-node lab plan §9.\n\n" +
+			"Preflight, before any mutation:\n\n" +
+			"  1. rename a surviving legacy `lab-<member>` VM (no index suffix)\n" +
+			"     to `lab-<member>-0` — decision D3's safety net\n" +
+			"  2. verify the CURRENT cluster, if there is one, is quorate\n" +
+			"  3. run the capacity gate if this run will create any VM shell\n\n" +
+			"All of that happens before the QDevice-removal step, so a capacity refusal never " +
+			"strands the cluster witness-less.\n\n" +
+			"Then the transition itself:\n\n" +
+			"  1. remove the QDevice first if the target no longer needs one,\n" +
+			"     and destroy its now-orphaned VM — never leave an odd+witness\n" +
+			"     (Last-Man-Standing) shape mid-transition\n" +
+			"  2. grow by creating VM shells and joining every newly-reachable\n" +
+			"     node in serial index order, deferring rather than failing at\n" +
+			"     the first node whose OS/ssh is not yet provisioned (re-run\n" +
+			"     once it is)\n" +
+			"  3. shrink by evacuating guests to node 0, delnode, and destroying\n" +
+			"     each departing node's VM in reverse index order — node 0 is\n" +
+			"     never removed\n" +
+			"  4. add the QDevice once every join and delnode for this\n" +
+			"     transition has completed\n" +
+			"  5. reconcile the inner SDN zone and the NFS storage attachment\n" +
+			"  6. validate quorum, corosync links, and storage-active state on\n" +
+			"     EVERY node in the target topology\n\n" +
+			"A transition that completed — that is, was not deferred waiting on manual OS " +
+			"provisioning — but ends non-quorate, link-degraded, or storage-inactive on any " +
+			"node returns a non-zero exit after rendering the full report. A deferred, " +
+			"still-in-progress transition does not.\n\n" +
+			"Every step besides the final validation is individually idempotent, so a scale " +
+			"that stopped partway can simply be re-run to continue. The current node count and " +
+			"QDevice registration are always re-derived from node 0's live corosync membership, " +
+			"never from VM-shell existence alone, so a re-run correctly resumes joining and " +
+			"wiring already-created shells rather than treating their mere existence as " +
+			"\"done.\"\n\n" +
+			"VM-shell provisioning for new node and QDevice VMs reuses `pmx lab create`'s own " +
+			"idempotent plan machinery and capacity gate. This command creates VM shells only — " +
+			"it never installs an OS, matching `pmx lab create`'s own scope.\n\n" +
+			"Outside this command's scope: SNAT rules, PBS jobs, and DNS registration for new " +
+			"or removed nodes stay lab-repository host-side script responsibilities. A completed " +
+			"node-count change also prints a reminder that the lab's PDM remote (single-host vs. " +
+			"cluster endpoint) needs a manual swap via the lab repository's own PDM tooling — " +
+			"`pmx lab scale` has no PDM write API to call. The live-migration acceptance test (a " +
+			"test VM on nfs-images migrated across every node) is milestone QA, not part of this " +
+			"command's own automated validation.",
 		Example: `  pmx lab scale wayne --nodes 3
   pmx lab scale wayne --nodes 2 --qdevice auto
   pmx lab scale wayne --nodes 5 --dry-run

@@ -400,11 +400,11 @@ func newContextCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "context",
 		Short: "Manage the pmx context auto-registered for a lab",
-		Long: "Register or refresh the pmx context (named lab-<name>) that points at a lab's " +
+		Long: "Register or refresh the pmx context (named `lab-<name>`) that points at a lab's " +
 			"nested Proxmox VE API, minting a dedicated admin token over ssh and storing its " +
-			"secret in the macOS keychain. `pmx lab create --start` runs this automatically; " +
-			"use `sync` to (re-)register a lab, rotate a lost secret, or refresh the pinned " +
-			"TLS fingerprint.",
+			"secret in the macOS keychain.\n\n" +
+			"`pmx lab create --start` runs this automatically. Use `sync` to register or " +
+			"re-register a lab, rotate a lost secret, or refresh the pinned TLS fingerprint.",
 	}
 	cmd.AddCommand(newContextSyncCmd())
 	cmd.AddCommand(newContextRmCmd())
@@ -423,12 +423,13 @@ func newContextRmCmd() *cobra.Command {
 		Use:     "rm <name>",
 		Aliases: []string{"remove", "delete"},
 		Short:   "Remove a lab's pmx context and keychain secret",
-		Long: "Remove the lab-<name> pmx context from config and delete its token " +
-			"secret from the macOS keychain. Unlike `pmx lab destroy` this touches no " +
-			"VMs and does not need the lab to still be defined, so it cleans up a " +
-			"context left orphaned by removing its lab. If lab-<name> is the active " +
-			"context it is unset. Re-register at any time with `pmx lab context sync " +
-			"<name>` while the lab's node 0 is running.",
+		Long: "Remove the `lab-<name>` pmx context from config and delete its token secret from " +
+			"the macOS keychain.\n\n" +
+			"Unlike `pmx lab destroy` this touches no VMs and does not need the lab to still " +
+			"be defined, so it cleans up a context left orphaned by removing its lab. If " +
+			"`lab-<name>` is the active context, it is unset.\n\n" +
+			"Re-register at any time with `pmx lab context sync <name>`, while the lab's node " +
+			"0 is running.",
 		Example: `  pmx lab context rm demo`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -468,12 +469,15 @@ func newContextSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync <name>",
 		Short: "Register or refresh a lab's pmx context",
-		Long: "Ensure the lab-<name> pmx context exists and works: ensure the pmx@pve admin " +
-			"token user and ACL on the nested cluster, reuse the stored token secret if it " +
-			"still authenticates (otherwise rotate to a fresh one), refresh the pinned TLS " +
-			"fingerprint, and verify the context end to end with GET /version. Requires an " +
-			"active pmx context (--context/-c) as the source of ssh connection defaults, and " +
-			"the lab's node 0 to be running.",
+		Long: "Ensure the `lab-<name>` pmx context exists and works:\n\n" +
+			"  1. ensure the pmx@pve admin token user and ACL on the nested\n" +
+			"     cluster\n" +
+			"  2. reuse the stored token secret if it still authenticates,\n" +
+			"     otherwise rotate to a fresh one\n" +
+			"  3. refresh the pinned TLS fingerprint\n" +
+			"  4. verify the context end to end with GET /version\n\n" +
+			"Requires an active pmx context (--context/-c) as the source of ssh connection " +
+			"defaults, and the lab's node 0 to be running.",
 		Example: `  pmx -c fleet lab context sync demo`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

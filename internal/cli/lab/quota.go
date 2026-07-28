@@ -38,16 +38,17 @@ func newQuotaSetCmd() *cobra.Command {
 		Short: "Set a lab's ZFS dataset refquota over ssh",
 		Long: `Set a lab's ZFS dataset refquota over ssh.
 
-There is no Proxmox VE API for ZFS dataset properties, so this verb runs
-"zfs set refquota" with the requested size (for example refquota=480G) on the lab host directly over ssh, targeting the
-active context's host and the SSH connection settings configured on it
-(ssh.user/ssh.port/ssh.identity). The effective refquota is --refquota-gb
-when given, else the lab's storage.refquota_gb; at least one of the two
-must yield a positive value.
+Proxmox VE has no API for ZFS dataset properties, so this verb runs "zfs
+set refquota" with the requested size (refquota=480G, for example) on the
+lab host directly over ssh. It targets the active context's host and the
+ssh connection settings configured on it: ssh.user, ssh.port, ssh.identity.
 
-This runs a real command against the lab host by default; pass --dry-run
-to print the ssh command that would run without executing it, or --yes to
-skip the confirmation prompt.`,
+The effective refquota is --refquota-gb when given, else the lab's
+storage.refquota_gb. At least one of the two must yield a positive value.
+
+This runs a real command against the lab host by default. Pass --dry-run to
+print the ssh command that would run without executing it, or --yes to skip
+the confirmation prompt.`,
 		Example: `  pmx lab quota set wayne
   pmx lab quota set wayne --refquota-gb 600 --yes
   pmx lab quota set wayne --dry-run`,

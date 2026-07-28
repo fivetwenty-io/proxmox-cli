@@ -49,16 +49,17 @@ func newDestroyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "destroy <name>",
 		Short: "Destroy a lab's node VMs (and QDevice, if any)",
-		Long: "Destroy every node VM belonging to the named lab (and its QDevice VM, if the " +
-			"lab's topology has one), in reverse start order — the QDevice first (if present), " +
-			"then node N-1 down to node 0: stop each if running, then delete it. Every live VM " +
-			"in the lab's pool is classified by name against the node/QDevice naming " +
-			"convention (the same classification start/stop/status use); a pool member whose " +
-			"name matches none of it refuses the whole command rather than guessing which VM " +
-			"it is. Refuses to run without --yes/-y or an interactive 'y' confirmation. Pass " +
-			"--purge to also remove the lab's resource pool and storage definition. Pass " +
-			"--dry-run to preview what would be destroyed without mutating anything or " +
-			"prompting.",
+		Long: "Destroy every node VM belonging to the named lab, and its QDevice VM if the " +
+			"lab's topology has one.\n\n" +
+			"VMs go in reverse start order — the QDevice first, if present, then node N-1 down " +
+			"to node 0 — stopping each one that is running before deleting it.\n\n" +
+			"Every live VM in the lab's pool is classified by name against the node/QDevice " +
+			"naming convention, the same classification start, stop, and status use. A pool " +
+			"member whose name matches none of it refuses the whole command rather than " +
+			"guessing which VM it is.\n\n" +
+			"Destroying requires --yes/-y or an interactive 'y' confirmation. Pass --purge to " +
+			"remove the lab's resource pool and storage definition as well, or --dry-run to " +
+			"preview what would be destroyed without mutating anything or prompting.",
 		Example: `  pmx lab destroy wayne --yes
   pmx lab destroy wayne --dry-run
   pmx lab destroy wayne --yes --purge`,

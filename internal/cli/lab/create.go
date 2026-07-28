@@ -166,26 +166,31 @@ func newCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Create a lab's SDN network, storage, and node (and QDevice) VMs",
-		Long: "Create a lab: idempotently ensures the lab's config-resolved SDN zone " +
-			"(defaulting to zone \"labs\", type \"simple\" — decision D4), the lab's own vnet " +
-			"and subnet, its derived lab storage (tank-lab-wayne for lab wayne), and its " +
-			"resource pool all exist, then creates one VM per configured topology.nodes index " +
-			"(or clones each from an existing VM given --clone-from) plus, when the lab's " +
-			"topology calls for a QDevice tie-breaker, a QDevice VM (or clones it given " +
-			"--qdevice-clone-from), applying each target's resolved compute spec. Every step " +
-			"queries live state first and skips anything already satisfied, so re-running " +
-			"create against a partially-built lab is safe. Before adding any node/QDevice VM " +
-			"step, a capacity gate sums every configured lab's ZFS refquota reservation " +
-			"against the shared pool's live size: it warns above 75% full and refuses above " +
-			"85% full unless --force is passed.\n\n" +
-			"This does not run `pmx lab net apply`: the vnet/subnet definitions are staged, not yet " +
-			"live, until that command (or `pmx pve sdn apply`) commits them. --clone-from assumes " +
-			"the source VM lives on the same node as the new lab VMs; the platform is single-node " +
-			"today, so this always holds.\n\n" +
-			"Every other lab verb (destroy, start, stop, list, status) locates the lab's VMs by " +
-			"membership in the effective resource pool, not by name: a --pool override here must " +
-			"match the lab's configured access.pool, or the config must be updated to match, or " +
-			"those verbs will report no VM found even though create succeeded.",
+		Long: "Create a lab, ensuring each piece of it in order and skipping anything " +
+			"already in place:\n\n" +
+			"  1. the lab's config-resolved SDN zone (zone \"labs\", type\n" +
+			"     \"simple\" by default — decision D4)\n" +
+			"  2. the lab's own vnet and subnet\n" +
+			"  3. its derived lab storage (tank-lab-wayne, for lab wayne)\n" +
+			"  4. its resource pool\n" +
+			"  5. one VM per configured topology.nodes index, plus a QDevice VM\n" +
+			"     when the lab's topology calls for a tie-breaker, each at its\n" +
+			"     resolved compute spec\n\n" +
+			"Every step queries live state first, so re-running create against a " +
+			"partially-built lab is safe.\n\n" +
+			"Pass --clone-from to clone each node VM from an existing VM instead of creating " +
+			"blank disks, and --qdevice-clone-from to clone the QDevice VM. --clone-from " +
+			"assumes the source VM lives on the same node as the new lab VMs; the platform is " +
+			"single-node today, so this always holds.\n\n" +
+			"Before any node or QDevice VM is added, a capacity gate sums every configured " +
+			"lab's ZFS refquota reservation against the shared pool's live size. It warns " +
+			"above 75% full and refuses above 85% full unless --force is passed.\n\n" +
+			"This does not run `pmx lab net apply`: the vnet and subnet definitions stay " +
+			"staged, not yet live, until that command (or `pmx pve sdn apply`) commits them.\n\n" +
+			"Every other lab verb (destroy, start, stop, list, status) finds the lab's VMs by " +
+			"membership in the effective resource pool, not by name. A --pool override here " +
+			"must match the lab's configured access.pool, or the config must be updated to " +
+			"match, or those verbs will report no VM found even though create succeeded.",
 		Example: `  pmx lab create wayne --node sm-0
   pmx lab create wayne --node sm-0 --start
   pmx lab create wayne --node sm-0 --dry-run

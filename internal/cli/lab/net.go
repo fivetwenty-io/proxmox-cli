@@ -43,9 +43,9 @@ func newNetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "net",
 		Short: "Manage a lab's SDN network",
-		Long: "Reconcile a lab's SDN zone, every configured vnet (the primary " +
-			"vnet plus any network.vnets entries) and their subnets against " +
-			"its config, preview the resulting pending changeset, and apply it.",
+		Long: "Reconcile a lab's SDN zone, every configured vnet — the primary vnet plus any " +
+			"network.vnets entries — and their subnets against its config.\n\n" +
+			"The resulting pending changeset is previewed, then applied.",
 	}
 	cmd.AddCommand(newNetApplyCmd())
 	return cmd
@@ -77,12 +77,13 @@ func newNetApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply <name>",
 		Short: "Reconcile and apply a lab's SDN configuration",
-		Long: "Idempotently ensure the named lab's SDN zone, vnet, and subnet match " +
-			"its config, then always preview the pending SDN changeset with " +
-			"`ListSdnDryRun` before committing. --dry-run stops after that preview " +
-			"without ensuring any resource or calling apply. Without --dry-run, an " +
-			"empty pending changeset is reported and skipped; a non-empty one is " +
-			"applied and awaited.",
+		Long: "Idempotently ensure the named lab's SDN zone, vnet, and subnet match its " +
+			"config, then always preview the pending SDN changeset with `ListSdnDryRun` before " +
+			"committing.\n\n" +
+			"--dry-run stops after that preview, without ensuring any resource or calling " +
+			"apply.\n\n" +
+			"Without --dry-run, an empty pending changeset is reported and skipped; a " +
+			"non-empty one is applied and awaited.",
 		Example: `  pmx lab net apply wayne
   pmx lab net apply wayne --dry-run`,
 		Args: cobra.ExactArgs(1),

@@ -114,15 +114,18 @@ func newNfsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "nfs",
 		Short: "Attach, inspect, or detach a lab's shared NFS storage",
-		Long: "Register (or remove) the shared NFS service's per-lab images/backup exports and " +
-			"the cluster-wide read-only ISO/template export as PVE storage on a lab's nested " +
-			"cluster (or single-node lab — NFS attach applies regardless of node count), over " +
-			"ssh/pvesm against node 0.\n\n" +
-			"`attach` also ensures the SERVER-side ZFS dataset/export objects these storage " +
-			"entries point at (tank/nfs/labs/<lab>/{images,backup}, plus this lab's mgmt /24 " +
-			"membership in the shared tank/nfs/shared/iso export's ro= list) exist on the outer " +
-			"PVE node hosting tank/nfs, over ssh via --node/$PMX_NODE/the context default node. " +
-			"`detach` never touches any of that server-side state — see its own Long text.",
+		Long: "Register, inspect, or remove the shared NFS service's storage on a lab: its own " +
+			"per-lab images and backup exports, plus the cluster-wide read-only ISO/template " +
+			"export.\n\n" +
+			"They are registered as PVE storage on the lab's nested cluster — or single-node " +
+			"lab, since NFS attach applies regardless of node count — over ssh/pvesm against " +
+			"node 0.\n\n" +
+			"`attach` also ensures the SERVER-side ZFS dataset and export objects those " +
+			"storage entries point at (`tank/nfs/labs/<lab>/{images,backup}`, plus this lab's " +
+			"mgmt /24 membership in the shared tank/nfs/shared/iso export's ro= list) exist on " +
+			"the outer PVE node hosting tank/nfs, over ssh via --node, $PMX_NODE, or the " +
+			"context default node.\n\n" +
+			"`detach` never touches any of that server-side state; see its own help.",
 	}
 	cmd.AddCommand(newNfsAttachCmd(), newNfsStatusCmd(), newNfsDetachCmd())
 	return cmd
@@ -135,40 +138,52 @@ func newNfsAttachCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "attach <name>",
 		Short: "Register the shared NFS exports as PVE storage on a lab",
-		Long: "First ensures this lab's SERVER-side NFS export objects exist on the outer PVE " +
-			"node hosting tank/nfs (resolved via --node/$PMX_NODE/the context default node, the " +
-			"same resolution `pmx pve node ssh` uses): the tank/nfs/labs/<name>/{images,backup} " +
-			"datasets (created if missing, with their recordsize), a ZFS `quota` on their " +
-			"tank/nfs/labs/<name> parent (storage.nfs_quota_gb, default 200G), a `rw` sharenfs " +
-			"ACL on images/backup scoped to this lab's own mgmt /24, and this lab's mgmt /24 " +
-			"membership in the shared tank/nfs/shared/iso export's `ro=` subnet list (inserted, " +
-			"never replacing any other lab's entry). This step refuses loudly, naming lab repo " +
-			"scripts/60-nfs-service as the remediation, if the shared/iso export itself has no " +
-			"usable sharenfs value yet — it can only ensure lab-subnet MEMBERSHIP in an " +
-			"already-built list, never construct one from scratch.\n\n" +
-			"Also ensures the outer node's host firewall carries an enabled ACCEPT rule for " +
-			"2049/tcp (NFS) and 111/tcp (rpcbind — PVE's storage online-probe) scoped to this " +
-			"lab's mgmt /24, matched by the same comment key scripts/60-nfs-service's firewall " +
-			"group uses, so neither path duplicates the other's rules. A rule that exists but is " +
-			"disabled is a loud failure, never silently skipped or force-enabled.\n\n" +
-			"Then runs `pvesm add nfs ...` over ssh on node 0 for each of the lab's three fixed " +
-			"exports: nfs-images (content images,import,snippets,iso — full BOSH-CPI-target " +
-			"parity from day one) and nfs-backup (both rw, hard-mounted, scoped to this lab " +
-			"under tank/nfs/labs/<name>), and shared-iso (ro, soft-mounted, the one ISO/template " +
-			"export every lab shares). An already-attached entry whose content-type list lacks " +
-			"any of these types is widened in place (`pvesm set`), only ever adding types. Every " +
-			"step is idempotent: an already-satisfied dataset/property/rule/storage entry is " +
-			"skipped, not re-created or re-added, so re-running attach against a partially-built " +
-			"lab is safe. Requires the shared NFS service's own host software " +
-			"(nfs-kernel-server) to already be built and healthy (lab repo " +
-			"scripts/60-nfs-service's nfsd/health groups) — attach provisions this lab's own " +
-			"export objects and firewall rules, never the shared NFS host service itself.\n\n" +
-			"When this lab's storage.nfs_export names ANOTHER lab, the server-side ensure phase " +
-			"operates on that named lab's dataset/quota instead of this lab's own, and the rw " +
-			"sharenfs ACL becomes the union of every lab (across the loaded config) whose own " +
-			"nfs_export resolves to the same owner — attaching any one member converges the " +
-			"whole group's ACL. The named owner lab must exist and must not itself set " +
-			"nfs_export to a third lab.",
+		Long: "Attach works in three phases: the server-side export objects, the outer host's " +
+			"firewall, then the client-side storage entries on the lab itself.\n\n" +
+			"Server side. Ensures this lab's NFS export objects exist on the outer PVE node " +
+			"hosting tank/nfs, resolved via --node, $PMX_NODE, or the context default node — " +
+			"the same resolution `pmx pve node ssh` uses:\n\n" +
+			"  * the `tank/nfs/labs/<name>/{images,backup}` datasets, created\n" +
+			"    if missing, with their recordsize\n" +
+			"  * a ZFS `quota` on their `tank/nfs/labs/<name>` parent\n" +
+			"    (storage.nfs_quota_gb, default 200G)\n" +
+			"  * a `rw` sharenfs ACL on images and backup, scoped to this\n" +
+			"    lab's own mgmt /24\n" +
+			"  * this lab's mgmt /24 in the shared tank/nfs/shared/iso\n" +
+			"    export's `ro=` list, inserted without replacing any other\n" +
+			"    lab's entry\n\n" +
+			"This phase refuses loudly, naming lab repo scripts/60-nfs-service as the " +
+			"remediation, if the shared/iso export itself has no usable sharenfs value yet: it " +
+			"can only ensure lab-subnet MEMBERSHIP in an already-built list, never construct " +
+			"one from scratch.\n\n" +
+			"Host firewall. Ensures the outer node carries an enabled ACCEPT rule for 2049/tcp " +
+			"(NFS) and 111/tcp (rpcbind, PVE's storage online-probe) scoped to this lab's mgmt " +
+			"/24, matched by the same comment key scripts/60-nfs-service's firewall group uses, " +
+			"so neither path duplicates the other's rules. A rule that exists but is disabled " +
+			"is a loud failure, never silently skipped or force-enabled.\n\n" +
+			"Client side. Runs `pvesm add nfs ...` over ssh on node 0 for each of the lab's " +
+			"three fixed exports:\n\n" +
+			"  * nfs-images — rw, hard-mounted, scoped to this lab under\n" +
+			"    `tank/nfs/labs/<name>`, content images,import,snippets,iso\n" +
+			"    (full BOSH-CPI-target parity from day one)\n" +
+			"  * nfs-backup — rw, hard-mounted, scoped the same way\n" +
+			"  * shared-iso — ro, soft-mounted, the one ISO/template export\n" +
+			"    every lab shares\n\n" +
+			"An already-attached entry whose content-type list lacks any of these types is " +
+			"widened in place (`pvesm set`), only ever adding types.\n\n" +
+			"Every step is idempotent: an already-satisfied dataset, property, rule, or storage " +
+			"entry is skipped rather than re-created or re-added, so re-running attach against " +
+			"a partially-built lab is safe.\n\n" +
+			"The shared NFS service's own host software (nfs-kernel-server) must already be " +
+			"built and healthy — lab repo scripts/60-nfs-service's nfsd and health groups. " +
+			"Attach provisions this lab's own export objects and firewall rules, never the " +
+			"shared NFS host service itself.\n\n" +
+			"Shared exports: when this lab's storage.nfs_export names ANOTHER lab, the " +
+			"server-side phase operates on that named lab's dataset and quota instead of this " +
+			"lab's own, and the rw sharenfs ACL becomes the union of every lab (across the " +
+			"loaded config) whose own nfs_export resolves to the same owner — so attaching any " +
+			"one member converges the whole group's ACL. The named owner lab must exist, and " +
+			"must not itself set nfs_export to a third lab.",
 		Example: `  pmx lab nfs attach wayne
   pmx lab nfs attach wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -400,11 +415,13 @@ func newNfsStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <name>",
 		Short: "Show a lab's NFS storage attachment state",
-		Long: "Run `pvesm status` over ssh on node 0 and report whether each of the lab's three " +
-			"fixed NFS storage entries (nfs-images, nfs-backup, shared-iso) is configured and, " +
-			"if so, its live status (active/inactive/...), plus the resolved NFS export owner " +
-			"(this lab's own name unless storage.nfs_export aliases another lab) and every other " +
-			"lab currently sharing that same export. Read-only: never mutates anything.",
+		Long: "Run `pvesm status` over ssh on node 0 and report whether each of the lab's " +
+			"three fixed NFS storage entries — nfs-images, nfs-backup, shared-iso — is " +
+			"configured and, if so, its live status (active, inactive, and so on).\n\n" +
+			"Also reports the resolved NFS export owner (this lab's own name, unless " +
+			"storage.nfs_export aliases another lab) and every other lab currently sharing that " +
+			"same export.\n\n" +
+			"Read-only: never mutates anything.",
 		Example: `  pmx lab nfs status wayne`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -470,23 +487,25 @@ func newNfsDetachCmd() *cobra.Command {
 		Use:   "detach <name>",
 		Short: "Remove a lab's NFS storage entries",
 		Long: "Run `pvesm remove <id>` over ssh on node 0 for each of the lab's three NFS " +
-			"storage entries. Idempotent: an entry that is not configured is skipped, not " +
-			"treated as an error. Removal is safe only once no VM disk still references the " +
-			"storage — PVE itself refuses to remove a storage entry with in-use content. " +
-			"Refuses to run without --yes/-y or an interactive 'y' confirmation.\n\n" +
-			"IMPORTANT ASYMMETRY: detach ONLY removes the CLIENT-side pvesm storage entries. " +
-			"It never touches the SERVER-side ZFS datasets/exports `attach` ensures " +
-			"(tank/nfs/labs/<name>/{images,backup}, their quota/sharenfs properties, or this " +
-			"lab's entry in the shared/iso export's ro= list) — those carry this lab's actual " +
+			"storage entries.\n\n" +
+			"Idempotent: an entry that is not configured is skipped rather than treated as an " +
+			"error. Removal is safe only once no VM disk still references the storage — PVE " +
+			"itself refuses to remove a storage entry with in-use content. Detaching requires " +
+			"--yes/-y or an interactive 'y' confirmation.\n\n" +
+			"IMPORTANT ASYMMETRY: detach ONLY removes the CLIENT-side pvesm storage entries. It " +
+			"never touches the SERVER-side ZFS datasets and exports `attach` ensures — " +
+			"`tank/nfs/labs/<name>/{images,backup}`, their quota and sharenfs properties, or this " +
+			"lab's entry in the shared/iso export's ro= list. Those carry this lab's actual " +
 			"data and shared-export state, and this command never deletes data implicitly. " +
-			"Remove them by hand over ssh (e.g. `zfs destroy -r tank/nfs/labs/<name>`) only once " +
-			"you have confirmed the lab's data is no longer needed.\n\n" +
-			"ONE EXCEPTION when this lab shares a storage.nfs_export-aliased export with other " +
+			"Remove them by hand over ssh (`zfs destroy -r tank/nfs/labs/<name>`, for example) " +
+			"only once you have confirmed the lab's data is no longer needed.\n\n" +
+			"ONE EXCEPTION, when this lab shares a storage.nfs_export-aliased export with other " +
 			"labs: detaching a non-owner member also narrows the export owner's rw sharenfs ACL " +
-			"to exclude this lab's own mgmt /24 (the owner's dataset and quota are still never " +
-			"touched). Detaching the export OWNER while other members still depend on it is " +
-			"refused outright — repoint or detach every member first. A lab that owns and is the " +
-			"sole member of its own export (today's non-aliased shape) is unaffected: detach never " +
+			"to exclude this lab's own mgmt /24. The owner's dataset and quota are still never " +
+			"touched.\n\n" +
+			"Detaching the export OWNER while other members still depend on it is refused " +
+			"outright — repoint or detach every member first. A lab that owns and is the sole " +
+			"member of its own export (today's non-aliased shape) is unaffected: detach never " +
 			"touches server-side state for it, exactly as before this feature existed.",
 		Example: `  pmx lab nfs detach wayne --yes
   pmx lab nfs detach wayne --dry-run`,

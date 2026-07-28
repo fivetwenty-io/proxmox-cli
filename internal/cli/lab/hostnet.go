@@ -25,11 +25,12 @@ func newHostnetCmd() *cobra.Command {
 		Use:   "hostnet",
 		Short: "Manage a lab's nested-node host network bonds and bridges",
 		Long: "Reconcile the guest-OS bonds and bridges (network.nested_network.bonds) inside " +
-			"each of a lab's nested PVE nodes against its config. Distinct from `pmx lab net` " +
-			"(the outer host's own SDN vnet) and `pmx lab sdn`/`pmx lab sdn vlan` (the nested " +
-			"cluster's own SDN zones): this manages the nested node's plain Linux bond/bridge " +
-			"interfaces those SDN zones are layered on top of, via the nested cluster's own " +
-			"`/nodes/{node}/network` API (internal/cli/node/network.go's bindings), never over ssh.",
+			"each of a lab's nested PVE nodes against its config.\n\n" +
+			"Distinct from `pmx lab net` (the outer host's own SDN vnet) and `pmx lab " +
+			"sdn`/`pmx lab sdn vlan` (the nested cluster's own SDN zones): this manages the " +
+			"plain Linux bond and bridge interfaces those SDN zones are layered on top of.\n\n" +
+			"Reconciliation goes through the nested cluster's own `/nodes/{node}/network` API " +
+			"(internal/cli/node/network.go's bindings), never over ssh.",
 	}
 	cmd.AddCommand(newHostnetApplyCmd())
 	return cmd
@@ -42,19 +43,23 @@ func newHostnetApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply <name>",
 		Short: "Reconcile a lab's nested-node bonds and bridges against its config",
-		Long: "For each of the lab's nested node indices (0..topology.nodes-1), list the node's " +
-			"live/staged host network interfaces, diff every configured " +
-			"network.nested_network.bonds[] entry's bond and bridge against them, and issue " +
-			"CreateNetwork/UpdateNetwork2 calls for anything missing or drifted, then " +
-			"UpdateNetwork (the staged-changes reload) once per node when anything changed for " +
-			"that node. Idempotent and safe to rerun — this is the only path for a node whose " +
-			"bonds were never rendered at OS-install time (e.g. an already-installed node picking " +
-			"up a newly-added network.nested_network config without a reinstall). Requires the " +
-			"lab's own lab-<name> context (registered by `pmx lab context sync`) to be the " +
-			"currently active context (--context/-c): this command talks to the nested cluster's " +
-			"own API, never the outer host's, and refuses to run against any other context so it " +
-			"can never mistakenly stage a bond/bridge on the wrong cluster. A lab with no " +
-			"network.nested_network.bonds configured is a no-op with a notice.",
+		Long: "For each of the lab's nested node indices (0..topology.nodes-1):\n\n" +
+			"  1. list the node's live and staged host network interfaces\n" +
+			"  2. diff every configured network.nested_network.bonds[] entry's\n" +
+			"     bond and bridge against them\n" +
+			"  3. issue CreateNetwork/UpdateNetwork2 calls for anything missing\n" +
+			"     or drifted\n" +
+			"  4. call UpdateNetwork once — the staged-changes reload — when\n" +
+			"     anything changed for that node\n\n" +
+			"Idempotent and safe to rerun. This is the only path for a node whose bonds were " +
+			"never rendered at OS-install time, such as an already-installed node picking up a " +
+			"newly-added network.nested_network config without a reinstall.\n\n" +
+			"Requires the lab's own `lab-<name>` context (registered by `pmx lab context sync`) " +
+			"to be the currently active context (--context/-c). This command talks to the " +
+			"nested cluster's own API, never the outer host's, and refuses to run against any " +
+			"other context so it can never stage a bond or bridge on the wrong cluster by " +
+			"mistake.\n\n" +
+			"A lab with no network.nested_network.bonds configured is a no-op with a notice.",
 		Example: `  pmx -c lab-pve-cpi lab hostnet apply pve-cpi
   pmx -c lab-pve-cpi lab hostnet apply pve-cpi --dry-run`,
 		Args: cobra.ExactArgs(1),

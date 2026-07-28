@@ -40,9 +40,9 @@ func newAccessCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "access",
 		Short: "Manage a lab's pve access grants",
-		Long: "Grant a pve-realm user pool-scoped access to a lab, creating the lab's " +
-			"resource pool, the granted user's account, and the granted role along the way " +
-			"when any of them is missing.",
+		Long: "Grant a pve-realm user pool-scoped access to a lab.\n\n" +
+			"The lab's resource pool, the granted user's account, and the granted role are " +
+			"created along the way when any of them is missing.",
 	}
 	cmd.AddCommand(newAccessGrantCmd())
 	return cmd
@@ -56,15 +56,17 @@ func newAccessGrantCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "grant <name> <user>",
 		Short: "Grant a pve user pool-scoped access to a lab",
-		Long: "Grant a user (a pve-realm userid, e.g. wayne@pve) a role scoped to the named " +
-			"lab's resource pool. Ensures, in order, that the lab's pool exists (creating it " +
-			"if absent), that the user's account exists (creating it from the config's " +
-			"default_user_password if absent — refusing with guidance when that password " +
-			"is not configured), and that the effective role exists (PMXAdmin is created " +
-			"automatically when absent; any other " +
-			"role must already exist), then grants the role to the user on the pool via an " +
-			"ACL entry. The effective role is --role when given, else the lab's own " +
-			"access.role, else PMXAdmin.\n\n" +
+		Long: "Grant a user — a pve-realm userid such as wayne@pve — a role scoped to the " +
+			"named lab's resource pool.\n\n" +
+			"Three things are ensured first, in order:\n\n" +
+			"  1. the lab's pool, created if absent\n" +
+			"  2. the user's account, created from the config's\n" +
+			"     default_user_password if absent; when that password is not\n" +
+			"     configured the command refuses, with guidance\n" +
+			"  3. the effective role: PMXAdmin is created automatically when\n" +
+			"     absent, any other role must already exist\n\n" +
+			"The role is then granted to the user on the pool via an ACL entry. The effective " +
+			"role is --role when given, else the lab's own access.role, else PMXAdmin.\n\n" +
 			"This grants the single named user only; it never loops over every staff " +
 			"member. The pipelines automation account (pipelines@pve) is the standing " +
 			"counter-example: it is granted PVEVMUser scoped to its own lab's pool, never " +

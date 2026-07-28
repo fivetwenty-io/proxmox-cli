@@ -256,12 +256,13 @@ func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List every configured lab and its live VM state",
-		Long: "List every lab defined in config (inline `labs:` plus `labs_dir`/`include` " +
-			"includes), joined with the live state of its node-0 VM in the configured PVE " +
-			"cluster: present or absent, running or stopped, VMID, and node. A lab whose " +
-			"node-0 VM has not been created yet, or was destroyed, shows an absent state " +
-			"rather than an error. Use `pmx lab status <name>` for a full per-node/QDevice " +
-			"breakdown of a multi-node lab.",
+		Long: "List every lab defined in config — inline `labs:` entries plus whatever " +
+			"`labs_dir`/`include` pulls in — beside the live state of its node-0 VM in the " +
+			"configured PVE cluster: present or absent, running or stopped, VMID, and node.\n\n" +
+			"A lab whose node-0 VM has not been created yet, or was destroyed, shows an absent " +
+			"state rather than an error.\n\n" +
+			"For a full per-node and QDevice breakdown of a multi-node lab, use " +
+			"`pmx lab status <name>`.",
 		Example: `  pmx lab list
   pmx lab list -o json`,
 		Args: cobra.NoArgs,
@@ -426,14 +427,17 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <name>",
 		Short: "Show a lab's per-node power state, IP, and sizing",
-		Long: "Show one row per configured node (and, when the lab's topology calls for one, " +
-			"the QDevice tie-breaker VM): live power state, PVE host node, IP address " +
-			"(guest-agent-reported when running and the agent responds, else the target's " +
-			"configured management IP), guest-agent responsiveness, and configured vCPU/" +
-			"memory sizing. A target whose VM has not been created yet is reported as absent, " +
-			"with its configured sizing shown in place of live values, and does not cause the " +
-			"command to fail. Pass --node to show only one node index (0-4) or \"q\" for the " +
-			"QDevice.",
+		Long: "Show one row per configured node, plus the QDevice tie-breaker VM when the " +
+			"lab's topology calls for one:\n\n" +
+			"  * live power state\n" +
+			"  * PVE host node\n" +
+			"  * IP address — reported by the guest agent while the VM runs\n" +
+			"    and the agent answers, else the target's configured mgmt IP\n" +
+			"  * guest-agent responsiveness\n" +
+			"  * configured vCPU and memory sizing\n\n" +
+			"A target whose VM has not been created yet is reported as absent, with its " +
+			"configured sizing shown in place of live values. It does not fail the command.\n\n" +
+			"Pass --node to show a single node index (0-4), or \"q\" for the QDevice.",
 		Example: `  pmx lab status wayne
   pmx lab status wayne --node 0
   pmx lab status wayne --node q`,
@@ -632,15 +636,16 @@ func newStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start <name>",
 		Short: "Start a lab's node VMs (and QDevice, if any)",
-		Long: "Start every configured node VM in order (node 0 first, so a fresh cluster " +
-			"regains quorum predictably), then the QDevice VM if the lab's topology calls " +
-			"for one. Idempotent per target: a VM that is already running is reported as a " +
-			"no-op rather than re-issuing the start call. A target with no VM created yet is " +
-			"skipped silently unless --node names it explicitly. Refuses to act when the " +
-			"lab's identifiers, or any target's live VM ID, overlap a peppi-protected " +
-			"production resource. Blocks until each PVE task completes before starting the " +
-			"next target. Pass --node to scope the action to one node index (0-4) or \"q\" for " +
-			"the QDevice.",
+		Long: "Start every configured node VM in order — node 0 first, so a fresh cluster " +
+			"regains quorum predictably — then the QDevice VM if the lab's topology calls for " +
+			"one.\n\n" +
+			"Idempotent per target: a VM that is already running is reported as a no-op " +
+			"rather than re-issuing the start call. A target with no VM created yet is skipped " +
+			"silently unless --node names it explicitly.\n\n" +
+			"Start refuses to act when the lab's identifiers, or any target's live VM ID, " +
+			"overlap a peppi-protected production resource. It blocks until each PVE task " +
+			"completes before starting the next target.\n\n" +
+			"Pass --node to scope the action to one node index (0-4), or \"q\" for the QDevice.",
 		Example: `  pmx lab start wayne
   pmx lab start wayne --node 1
   pmx lab start wayne --dry-run`,
@@ -679,14 +684,16 @@ func newStopCmd() *cobra.Command {
 		Use:   "stop <name>",
 		Short: "Stop a lab's node VMs (and QDevice, if any) (hard power off)",
 		Long: "Immediately power off every configured node VM without asking the guest OS to " +
-			"shut down cleanly, similar to pulling the power — in reverse start order (the " +
-			"QDevice VM, if the lab's topology calls for one, then node N-1 down to node 0). " +
+			"shut down cleanly, much like pulling the power.\n\n" +
+			"VMs go in reverse start order: the QDevice VM first if the lab's topology calls " +
+			"for one, then node N-1 down to node 0.\n\n" +
 			"Idempotent per target: a VM that is already stopped is reported as a no-op " +
 			"rather than re-issuing the stop call. A target with no VM created yet is skipped " +
-			"silently unless --node names it explicitly. Refuses to act when the lab's " +
-			"identifiers, or any target's live VM ID, overlap a peppi-protected production " +
-			"resource. Blocks until each PVE task completes before stopping the next target. " +
-			"Pass --node to scope the action to one node index (0-4) or \"q\" for the QDevice.",
+			"silently unless --node names it explicitly.\n\n" +
+			"Stop refuses to act when the lab's identifiers, or any target's live VM ID, " +
+			"overlap a peppi-protected production resource. It blocks until each PVE task " +
+			"completes before stopping the next target.\n\n" +
+			"Pass --node to scope the action to one node index (0-4), or \"q\" for the QDevice.",
 		Example: `  pmx lab stop wayne
   pmx lab stop wayne --node q
   pmx lab stop wayne --dry-run`,

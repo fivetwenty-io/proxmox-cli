@@ -81,10 +81,11 @@ func newSdnCmd() *cobra.Command {
 		Use:   "sdn",
 		Short: "Manage a lab's inner (nested-cluster) VXLAN networking",
 		Long: "Reconcile the VXLAN zone spanning every node of a multi-node lab's OWN nested " +
-			"cluster (distinct from `pmx lab net`, which manages the outer per-lab Simple-zone " +
-			"vnet on the physical host) — a plain flood-and-learn VXLAN zone so BOSH/Cloud " +
-			"Foundry L2 guests can run and live-migrate to any node in the cluster. Applied over " +
-			"ssh/pvesh against node 0; a single-node lab has nothing to reconcile.",
+			"cluster: a plain flood-and-learn VXLAN zone, so BOSH and Cloud Foundry L2 guests " +
+			"can run on — and live-migrate to — any node in the cluster.\n\n" +
+			"Distinct from `pmx lab net`, which manages the outer per-lab Simple-zone vnet on " +
+			"the physical host.\n\n" +
+			"Applied over ssh/pvesh against node 0; a single-node lab has nothing to reconcile.",
 	}
 	cmd.AddCommand(newSdnApplyCmd())
 	cmd.AddCommand(newSdnVlanCmd())
@@ -99,16 +100,18 @@ func newSdnApplyCmd() *cobra.Command {
 		Use:   "apply <name>",
 		Short: "Reconcile a lab's inner VXLAN zone against its current node set",
 		Long: "Ensure the nested cluster's \"labvx\" VXLAN zone exists (type vxlan, MTU 1450) " +
-			"with a peer list equal to every currently-configured node's mgmt IP, comma-" +
-			"separated (Proxmox VE's own SDN zone peers format), then commit the change via " +
-			"`pvesh set /cluster/sdn`. Run over ssh " +
-			"against node 0; must run after the nested cluster is formed (`pmx lab cluster " +
-			"init`/`join`), since SDN changes propagate through pmxcfs, which requires healthy " +
-			"inter-node communication. A single-node lab (topology.nodes=1) is a no-op with a " +
-			"notice — it has no nested cluster for an inner zone to span. Re-running this after " +
-			"a scale up/down reconciles the peer list to the lab's current node set (multi-node " +
-			"lab plan §7/§9); it does not create or manage individual vnets/subnets inside the " +
-			"zone — those are the operator's/BOSH's own responsibility once the zone exists.",
+			"with a peer list equal to every currently-configured node's mgmt IP, " +
+			"comma-separated — Proxmox VE's own SDN zone peers format — then commit the change " +
+			"via `pvesh set /cluster/sdn`.\n\n" +
+			"Runs over ssh against node 0, and must run after the nested cluster is formed " +
+			"(`pmx lab cluster init`/`join`): SDN changes propagate through pmxcfs, which needs " +
+			"healthy inter-node communication.\n\n" +
+			"A single-node lab (topology.nodes=1) is a no-op with a notice — it has no nested " +
+			"cluster for an inner zone to span.\n\n" +
+			"Re-running this after a scale up or down reconciles the peer list to the lab's " +
+			"current node set (multi-node lab plan §7/§9). It does not create or manage " +
+			"individual vnets and subnets inside the zone; those are the operator's or BOSH's " +
+			"own responsibility once the zone exists.",
 		Example: `  pmx lab sdn apply wayne
   pmx lab sdn apply wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -255,9 +258,10 @@ func newSdnVlanCmd() *cobra.Command {
 		Use:   "vlan",
 		Short: "Manage a lab's nested-node client-VLAN SDN zone",
 		Long: "Reconcile the inner Proxmox VE SDN \"vlan\"-type zone layered on one of a lab's " +
-			"nested PVE node's own VLAN-aware bridges (network.nested_network.vlan_zone) — " +
-			"distinct from `pmx lab sdn apply`'s always-present cross-node BOSH/CF VXLAN zone " +
-			"above it. Applied over ssh/pvesh against node 0.",
+			"nested PVE node's own VLAN-aware bridges (network.nested_network.vlan_zone).\n\n" +
+			"Distinct from `pmx lab sdn apply`'s always-present cross-node BOSH/CF VXLAN zone " +
+			"above it.\n\n" +
+			"Applied over ssh/pvesh against node 0.",
 	}
 	cmd.AddCommand(newSdnVlanApplyCmd())
 	return cmd
@@ -270,14 +274,16 @@ func newSdnVlanApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply <name>",
 		Short: "Reconcile a lab's nested-node client-VLAN SDN zone against its config",
-		Long: "Ensure the lab's inner \"vlan\"-type SDN zone (network.nested_network.vlan_zone) " +
-			"exists on the bridge it names, then ensure every one of its configured vnets and " +
-			"subnets exist and match, each independently idempotent (probe-before-create/update, " +
-			"mirroring `pmx lab sdn apply`'s zone-reconciliation pattern), then commit via " +
-			"`pvesh set /cluster/sdn` iff anything changed. Run over ssh against node 0; must run " +
-			"after the nested cluster's bonds/bridges exist (`pmx lab hostnet apply`), since the " +
-			"zone's bridge must already exist for PVE to accept it. A lab with no " +
-			"network.nested_network.vlan_zone configured is a no-op with a notice.",
+		Long: "Ensure the lab's inner \"vlan\"-type SDN zone " +
+			"(network.nested_network.vlan_zone) exists on the bridge it names, then ensure " +
+			"every one of its configured vnets and subnets exists and matches, then commit via " +
+			"`pvesh set /cluster/sdn` iff anything changed.\n\n" +
+			"Each piece is independently idempotent — probe before create or update, mirroring " +
+			"`pmx lab sdn apply`'s zone-reconciliation pattern.\n\n" +
+			"Runs over ssh against node 0, and must run after the nested cluster's bonds and " +
+			"bridges exist (`pmx lab hostnet apply`): the zone's bridge must already exist for " +
+			"PVE to accept it.\n\n" +
+			"A lab with no network.nested_network.vlan_zone configured is a no-op with a notice.",
 		Example: `  pmx lab sdn vlan apply pve-cpi
   pmx lab sdn vlan apply pve-cpi --dry-run`,
 		Args: cobra.ExactArgs(1),

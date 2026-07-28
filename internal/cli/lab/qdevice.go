@@ -31,12 +31,13 @@ func newQdeviceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "qdevice",
 		Short: "Add or remove a lab's corosync QDevice tie-breaker",
-		Long: "Wire up (or tear down) the corosync-level QDevice tie-breaker for a lab whose " +
-			"topology calls for one (mandatory at exactly 2 nodes, `qdevice: auto`-recommended " +
-			"at 4). `pmx lab create` already provisions the QDevice VM itself when the topology " +
-			"calls for one; this command group handles the corosync-qnetd/corosync-qdevice " +
-			"package installation and `pvecm qdevice setup`/`remove` steps on top of that VM, all " +
-			"over ssh into the lab guests.",
+		Long: "Wire up or tear down the corosync-level QDevice tie-breaker for a lab whose " +
+			"topology calls for one: mandatory at exactly 2 nodes, `qdevice: auto`-recommended " +
+			"at 4.\n\n" +
+			"`pmx lab create` already provisions the QDevice VM itself when the topology calls " +
+			"for one. This group handles what goes on top of that VM — the " +
+			"corosync-qnetd/corosync-qdevice package installation and the `pvecm qdevice " +
+			"setup`/`remove` steps — all over ssh into the lab guests.",
 	}
 	cmd.AddCommand(newQdeviceAddCmd(), newQdeviceRemoveCmd())
 	return cmd
@@ -49,13 +50,15 @@ func newQdeviceAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <name>",
 		Short: "Wire up a lab's QDevice tie-breaker",
-		Long: "Install corosync-qnetd on the lab's QDevice VM (which must already exist and be " +
-			"running — `pmx lab create` provisions it when the lab's topology calls for one), " +
-			"confirm/install corosync-qdevice on every cluster node, then run `pvecm qdevice " +
-			"setup <qdevice-mgmt-ip>` on node 0. Requires the nested cluster to already be " +
-			"formed (`pmx lab cluster init`/`join`) and the lab's topology to actually call for " +
-			"a QDevice. Every step is idempotent: an already-installed package or an already-" +
-			"configured QDevice is skipped, not re-applied.",
+		Long: "Install corosync-qnetd on the lab's QDevice VM, confirm or install " +
+			"corosync-qdevice on every cluster node, then run `pvecm qdevice setup " +
+			"<qdevice-mgmt-ip>` on node 0.\n\n" +
+			"The QDevice VM must already exist and be running; `pmx lab create` provisions it " +
+			"when the lab's topology calls for one. The nested cluster must already be formed " +
+			"(`pmx lab cluster init`/`join`), and the lab's topology must actually call for a " +
+			"QDevice.\n\n" +
+			"Every step is idempotent: an already-installed package, or an already-configured " +
+			"QDevice, is skipped rather than re-applied.",
 		Example: `  pmx lab qdevice add wayne
   pmx lab qdevice add wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -244,13 +247,14 @@ func newQdeviceRemoveCmd() *cobra.Command {
 		Use:   "remove <name>",
 		Short: "Remove a lab's corosync QDevice tie-breaker",
 		Long: "Run `pvecm qdevice remove` over ssh on node 0, unregistering the QDevice from " +
-			"the nested cluster's corosync quorum config. Idempotent: if node 0 does not report " +
-			"a registered QDevice, the command reports it as already absent and does nothing " +
-			"further. This does NOT destroy the QDevice VM itself — use `pmx lab destroy " +
-			"--node q` (or a full `pmx lab destroy`) for that once no cluster references it. " +
-			"Per multi-node lab plan §9, this must run BEFORE any node join that would otherwise " +
-			"leave the vote count in an odd+witness (Last-Man-Standing) shape — never " +
-			"simultaneously with a join.",
+			"the nested cluster's corosync quorum config.\n\n" +
+			"Idempotent: if node 0 does not report a registered QDevice, the command reports " +
+			"it as already absent and does nothing further.\n\n" +
+			"This does NOT destroy the QDevice VM itself. Use `pmx lab destroy --node q`, or a " +
+			"full `pmx lab destroy`, for that once no cluster references it.\n\n" +
+			"Per multi-node lab plan §9, this must run BEFORE any node join that would " +
+			"otherwise leave the vote count in an odd+witness (Last-Man-Standing) shape — " +
+			"never simultaneously with a join.",
 		Example: `  pmx lab qdevice remove wayne
   pmx lab qdevice remove wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
