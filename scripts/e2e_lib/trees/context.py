@@ -5,7 +5,7 @@ a temp dir. No live Proxmox API is contacted. `with_context=False` is used
 throughout so the real config and configured context are never touched.
 
 Verbs covered: add, ls, show, select (by name), select '-' (previous alias),
-previous, copy, update, validate, rm (non-active), rm-active guard.
+previous, copy, rename, update, validate, rm (non-active), rm-active guard.
 
 Deferred: edit (requires $EDITOR / TTY interaction).
 """
@@ -100,6 +100,16 @@ def _scratch_context_checks(ctx: Ctx) -> None:
             return None
         return f"copied context {copy_name!r} not listed after copy"
 
+    def renamed_present(res: CmdResult) -> str | None:
+        data = res.json()
+        old, new = probe + "-copy", probe + "-renamed"
+        names = {t.get("name") for t in data if isinstance(t, dict)} if isinstance(data, list) else set()
+        if old in names:
+            return f"context {old!r} still listed after rename"
+        if new not in names:
+            return f"renamed context {new!r} not listed after rename"
+        return None
+
     def probe_absent(res: CmdResult) -> str | None:
         data = res.json()
         if isinstance(data, list) and not any(
@@ -187,6 +197,17 @@ def _scratch_context_checks(ctx: Ctx) -> None:
         ctx.check(
             "context ls (copy present)", "--config", cfg, "context", "ls",
             with_context=False, validate=copy_present,
+        )
+
+        # -- rename (the copy, so probe/probe2 keep their roles below) ---------
+        ctx.check(
+            "context rename", "--config", cfg, "context", "rename",
+            probe + "-copy", probe + "-renamed",
+            with_context=False, fmt="",
+        )
+        ctx.check(
+            "context ls (renamed present, old gone)", "--config", cfg, "context", "ls",
+            with_context=False, validate=renamed_present,
         )
 
         # -- update (single-field, everything else preserved) -------------------

@@ -73,19 +73,19 @@ swept clean before the next provisions.
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
 | `api` | 4 | 0 | 1 | 0 | 0 | 0 | 3 | 0 |
 | `auth` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
-| `context` | 11 | 9 | 0 | 0 | 0 | 0 | 1 | 1 |
+| `context` | 11 | 10 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lab` | 26 | 4 | 1 | 0 | 0 | 20 | 1 | 0 |
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 270 | 0 | 122 | 0 | 0 | 132 | 16 | 0 |
-| `pdm` | 260 | 0 | 15 | 0 | 0 | 97 | 3 | 145 |
-| `pve` | 676 | 80 | 180 | 354 | 4 | 97 | 7 | 5 |
+| `pdm` | 260 | 0 | 145 | 0 | 0 | 112 | 3 | 0 |
+| `pve` | 676 | 80 | 181 | 354 | 4 | 101 | 7 | 0 |
 | `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1261** | **100** | **321** | **357** | **4** | **348** | **31** | **151** |
+| **Total** | **1261** | **101** | **452** | **357** | **4** | **367** | **31** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **731** are exercised by at least one live suite, **348** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **31** are n/a by design, and **151** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **863** are exercised by at least one live suite, **367** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **31** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -117,7 +117,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `context edit` | — | — | n/a — requires $EDITOR / interactive TTY — not safe to drive in headless e2e; covered in unit tests via EDITOR=true trick (test-strategy §4.2) |
 | `context ls` | ✓ | — |  |
 | `context previous` | ✓ | — |  |
-| `context rename` | — | — | **uncovered** |
+| `context rename` | ✓ | — |  |
 | `context rm` | ✓ | — |  |
 | `context select` | ✓ | — |  |
 | `context show` | ✓ | — |  |
@@ -446,236 +446,236 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `pdm acl ls` | — | — | **uncovered** |
+| `pdm acl ls` | ◑ | — |  |
 | `pdm acl update` | — | — | deferred — modifies the access control list; covered by unit tests |
 | `pdm auto-install installation delete` | — | — | deferred — removes an automated installation record; covered by unit tests |
-| `pdm auto-install installation ls` | — | — | **uncovered** |
+| `pdm auto-install installation ls` | ◑ | — |  |
 | `pdm auto-install prepared add` | — | — | deferred — creates a prepared auto-installer answer configuration; covered by unit tests |
 | `pdm auto-install prepared delete` | — | — | deferred — removes a prepared auto-installer answer configuration; covered by unit tests |
 | `pdm auto-install prepared ls` | ◑ | — |  |
-| `pdm auto-install prepared show` | — | — | **uncovered** |
+| `pdm auto-install prepared show` | ◑ | — |  |
 | `pdm auto-install prepared update` | — | — | deferred — modifies a prepared auto-installer answer configuration; covered by unit tests |
 | `pdm auto-install token add` | — | — | deferred — creates an automated-installation authentication token; covered by unit tests |
 | `pdm auto-install token delete` | — | — | deferred — removes an automated-installation authentication token; covered by unit tests |
-| `pdm auto-install token ls` | — | — | **uncovered** |
-| `pdm auto-install token update` | — | — | **uncovered** |
-| `pdm ceph flags` | — | — | **uncovered** |
-| `pdm ceph fs` | — | — | **uncovered** |
+| `pdm auto-install token ls` | ◑ | — |  |
+| `pdm auto-install token update` | — | — | deferred — modifies an automated-installation authentication token, and --regenerate mints a new secret; covered by unit tests |
+| `pdm ceph flags` | ◑ | — |  |
+| `pdm ceph fs` | ◑ | — |  |
 | `pdm ceph ls` | ◑ | — |  |
-| `pdm ceph mds` | — | — | **uncovered** |
-| `pdm ceph mgr` | — | — | **uncovered** |
-| `pdm ceph mon` | — | — | **uncovered** |
-| `pdm ceph osd-tree` | — | — | **uncovered** |
-| `pdm ceph pools` | — | — | **uncovered** |
-| `pdm ceph status` | — | — | **uncovered** |
-| `pdm ceph summary` | — | — | **uncovered** |
+| `pdm ceph mds` | ◑ | — |  |
+| `pdm ceph mgr` | ◑ | — |  |
+| `pdm ceph mon` | ◑ | — |  |
+| `pdm ceph osd-tree` | ◑ | — |  |
+| `pdm ceph pools` | ◑ | — |  |
+| `pdm ceph status` | ◑ | — |  |
+| `pdm ceph summary` | ◑ | — |  |
 | `pdm config acme account add` | — | — | deferred — registers an account with a live certificate authority; covered by unit tests |
 | `pdm config acme account delete` | — | — | deferred — deactivates the account at the certificate authority; covered by unit tests |
-| `pdm config acme account ls` | — | — | **uncovered** |
-| `pdm config acme account show` | — | — | **uncovered** |
+| `pdm config acme account ls` | ◑ | — |  |
+| `pdm config acme account show` | ◑ | — |  |
 | `pdm config acme account update` | — | — | deferred — updates the registration at the certificate authority; covered by unit tests |
-| `pdm config acme challenge-schema ls` | — | — | **uncovered** |
-| `pdm config acme directories ls` | — | — | **uncovered** |
+| `pdm config acme challenge-schema ls` | ◑ | — |  |
+| `pdm config acme directories ls` | ◑ | — |  |
 | `pdm config acme plugin add` | — | — | deferred — creates an ACME challenge plugin (stores API credentials); covered by unit tests |
 | `pdm config acme plugin delete` | — | — | deferred — removes an ACME challenge plugin; covered by unit tests |
-| `pdm config acme plugin ls` | — | — | **uncovered** |
-| `pdm config acme plugin show` | — | — | **uncovered** |
+| `pdm config acme plugin ls` | ◑ | — |  |
+| `pdm config acme plugin show` | ◑ | — |  |
 | `pdm config acme plugin update` | — | — | deferred — modifies an ACME challenge plugin; covered by unit tests |
-| `pdm config acme tos show` | — | — | **uncovered** |
-| `pdm config certificate show` | — | — | **uncovered** |
+| `pdm config acme tos show` | ◑ | — |  |
+| `pdm config certificate show` | ◑ | — |  |
 | `pdm config certificate update` | — | — | deferred — modifies the certificate/ACME-domain configuration; covered by unit tests |
-| `pdm config notes show` | — | — | **uncovered** |
+| `pdm config notes show` | ◑ | — |  |
 | `pdm config notes update` | — | — | deferred — modifies the dashboard welcome notes; covered by unit tests |
 | `pdm config view add` | — | — | deferred — creates a saved resource view; covered by unit tests |
 | `pdm config view delete` | — | — | deferred — removes a saved resource view; covered by unit tests |
 | `pdm config view ls` | ◑ | — |  |
-| `pdm config view show` | — | — | **uncovered** |
+| `pdm config view show` | ◑ | — |  |
 | `pdm config view update` | — | — | deferred — modifies a saved resource view; covered by unit tests |
-| `pdm config webauthn show` | — | — | **uncovered** |
+| `pdm config webauthn show` | ◑ | — |  |
 | `pdm config webauthn update` | — | — | deferred — modifies the WebAuthn relying-party configuration; covered by unit tests |
-| `pdm node apt changelog` | — | — | **uncovered** |
-| `pdm node apt repositories` | — | — | **uncovered** |
+| `pdm node apt changelog` | ◑ | — |  |
+| `pdm node apt repositories` | ◑ | — |  |
 | `pdm node apt repository add` | — | — | deferred — adds a package repository to the host; covered by unit tests |
-| `pdm node apt repository change` | — | — | **uncovered** |
+| `pdm node apt repository change` | — | — | deferred — enables or disables a package repository on the host; covered by unit tests |
 | `pdm node apt update-database` | — | — | deferred — refreshes the package index on the host; covered by unit tests |
-| `pdm node apt updates` | — | — | **uncovered** |
-| `pdm node apt versions` | — | — | **uncovered** |
+| `pdm node apt updates` | ◑ | — |  |
+| `pdm node apt versions` | ◑ | — |  |
 | `pdm node certificate acme order` | — | — | deferred — orders a real certificate from the CA and replaces the server cert; covered by unit tests |
 | `pdm node certificate acme renew` | — | — | deferred — renews the certificate at the CA and replaces the server cert; covered by unit tests |
 | `pdm node certificate delete-custom` | — | — | deferred — removes the custom TLS certificate; covered by unit tests |
-| `pdm node certificate info` | — | — | **uncovered** |
+| `pdm node certificate info` | ◑ | — |  |
 | `pdm node certificate upload` | — | — | deferred — replaces the server's TLS certificate; covered by unit tests |
-| `pdm node config show` | — | — | **uncovered** |
+| `pdm node config show` | ◑ | — |  |
 | `pdm node config update` | — | — | deferred — modifies host configuration; covered by unit tests |
-| `pdm node dns show` | — | — | **uncovered** |
+| `pdm node dns show` | ◑ | — |  |
 | `pdm node dns update` | — | — | deferred — modifies host DNS configuration; covered by unit tests |
-| `pdm node journal` | — | — | **uncovered** |
+| `pdm node journal` | ◑ | — |  |
 | `pdm node ls` | ◑ | — |  |
 | `pdm node network apply` | — | — | deferred — applies staged host network changes; covered by unit tests |
 | `pdm node network create` | — | — | deferred — changes host network configuration; covered by unit tests |
 | `pdm node network delete` | — | — | deferred — changes host network configuration; covered by unit tests |
-| `pdm node network ls` | — | — | **uncovered** |
+| `pdm node network ls` | ◑ | — |  |
 | `pdm node network revert` | — | — | deferred — reverts staged host network changes; covered by unit tests |
-| `pdm node network show` | — | — | **uncovered** |
+| `pdm node network show` | ◑ | — |  |
 | `pdm node network update` | — | — | deferred — changes host network configuration; covered by unit tests |
 | `pdm node reboot` | — | — | n/a — reboots the real host; covered by unit tests |
-| `pdm node report` | — | — | **uncovered** |
-| `pdm node rrddata` | — | — | **uncovered** |
-| `pdm node sdn vnet mac-vrf` | — | — | **uncovered** |
-| `pdm node sdn zone ip-vrf` | — | — | **uncovered** |
+| `pdm node report` | ◑ | — |  |
+| `pdm node rrddata` | ◑ | — |  |
+| `pdm node sdn vnet mac-vrf` | ◑ | — |  |
+| `pdm node sdn zone ip-vrf` | ◑ | — |  |
 | `pdm node shutdown` | — | — | n/a — shuts down the real host; covered by unit tests |
-| `pdm node status` | — | — | **uncovered** |
-| `pdm node subscription show` | — | — | **uncovered** |
+| `pdm node status` | ◑ | — |  |
+| `pdm node subscription show` | ◑ | — |  |
 | `pdm node subscription update` | — | — | deferred — re-checks the subscription with the vendor; covered by unit tests |
-| `pdm node syslog` | — | — | **uncovered** |
-| `pdm node task log` | — | — | **uncovered** |
-| `pdm node task ls` | — | — | **uncovered** |
-| `pdm node task status` | — | — | **uncovered** |
+| `pdm node syslog` | ◑ | — |  |
+| `pdm node task log` | ◑ | — |  |
+| `pdm node task ls` | ◑ | — |  |
+| `pdm node task status` | ◑ | — |  |
 | `pdm node task stop` | — | — | deferred — cancels a running background task; covered by unit tests |
-| `pdm node time show` | — | — | **uncovered** |
+| `pdm node time show` | ◑ | — |  |
 | `pdm node time update` | — | — | deferred — modifies the host timezone; covered by unit tests |
-| `pdm pbs datastore ls` | — | — | **uncovered** |
-| `pdm pbs datastore namespaces` | — | — | **uncovered** |
-| `pdm pbs datastore rrddata` | — | — | **uncovered** |
-| `pdm pbs datastore snapshots` | — | — | **uncovered** |
-| `pdm pbs node apt changelog` | — | — | **uncovered** |
-| `pdm pbs node apt repositories` | — | — | **uncovered** |
-| `pdm pbs node apt update-database` | — | — | **uncovered** |
-| `pdm pbs node apt updates` | — | — | **uncovered** |
-| `pdm pbs node subscription` | — | — | **uncovered** |
-| `pdm pbs probe-tls` | — | — | **uncovered** |
-| `pdm pbs realms` | — | — | **uncovered** |
+| `pdm pbs datastore ls` | ◑ | — |  |
+| `pdm pbs datastore namespaces` | ◑ | — |  |
+| `pdm pbs datastore rrddata` | ◑ | — |  |
+| `pdm pbs datastore snapshots` | ◑ | — |  |
+| `pdm pbs node apt changelog` | ◑ | — |  |
+| `pdm pbs node apt repositories` | ◑ | — |  |
+| `pdm pbs node apt update-database` | — | — | deferred — refreshes the package index on a managed PBS remote's node; covered by unit tests |
+| `pdm pbs node apt updates` | ◑ | — |  |
+| `pdm pbs node subscription` | ◑ | — |  |
+| `pdm pbs probe-tls` | — | — | deferred — re-probes and stores a PBS host's TLS fingerprint; covered by unit tests |
+| `pdm pbs realms` | — | — | deferred — reads the realms of a PBS host the PDM dials by hostname before it is registered as a remote; covered by unit tests |
 | `pdm pbs remote ls` | ◑ | — |  |
-| `pdm pbs rrddata` | — | — | **uncovered** |
-| `pdm pbs scan` | — | — | **uncovered** |
-| `pdm pbs status` | — | — | **uncovered** |
-| `pdm pbs task log` | — | — | **uncovered** |
-| `pdm pbs task ls` | — | — | **uncovered** |
-| `pdm pbs task status` | — | — | **uncovered** |
-| `pdm pbs task stop` | — | — | **uncovered** |
+| `pdm pbs rrddata` | ◑ | — |  |
+| `pdm pbs scan` | — | — | deferred — scans a PBS host's connection info before adding it as a remote; covered by unit tests |
+| `pdm pbs status` | ◑ | — |  |
+| `pdm pbs task log` | ◑ | — |  |
+| `pdm pbs task ls` | ◑ | — |  |
+| `pdm pbs task status` | ◑ | — |  |
+| `pdm pbs task stop` | — | — | deferred — cancels a running background task on a managed PBS remote; covered by unit tests |
 | `pdm permission ls` | ◑ | — |  |
-| `pdm pve cluster next-id` | — | — | **uncovered** |
-| `pdm pve cluster resources` | — | — | **uncovered** |
-| `pdm pve cluster status` | — | — | **uncovered** |
-| `pdm pve firewall options show` | — | — | **uncovered** |
+| `pdm pve cluster next-id` | ◑ | — |  |
+| `pdm pve cluster resources` | ◑ | — |  |
+| `pdm pve cluster status` | ◑ | — |  |
+| `pdm pve firewall options show` | ◑ | — |  |
 | `pdm pve firewall options update` | — | — | deferred — modifies a PVE remote's cluster firewall options; covered by unit tests |
-| `pdm pve firewall rules` | — | — | **uncovered** |
-| `pdm pve firewall show` | — | — | **uncovered** |
+| `pdm pve firewall rules` | ◑ | — |  |
+| `pdm pve firewall show` | ◑ | — |  |
 | `pdm pve firewall status` | ◑ | — |  |
-| `pdm pve lxc config` | — | — | **uncovered** |
-| `pdm pve lxc firewall options show` | — | — | **uncovered** |
-| `pdm pve lxc firewall options update` | — | — | **uncovered** |
-| `pdm pve lxc firewall rules` | — | — | **uncovered** |
-| `pdm pve lxc ls` | — | — | **uncovered** |
+| `pdm pve lxc config` | ◑ | — |  |
+| `pdm pve lxc firewall options show` | ◑ | — |  |
+| `pdm pve lxc firewall options update` | — | — | deferred — modifies a container's firewall options on a managed PVE remote; covered by unit tests |
+| `pdm pve lxc firewall rules` | ◑ | — |  |
+| `pdm pve lxc ls` | ◑ | — |  |
 | `pdm pve lxc migrate` | — | — | deferred — migrates an LXC container between nodes on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc pending` | — | — | **uncovered** |
+| `pdm pve lxc pending` | ◑ | — |  |
 | `pdm pve lxc remote-migrate` | — | — | deferred — migrates an LXC container to a different remote cluster; covered by unit tests |
-| `pdm pve lxc rrddata` | — | — | **uncovered** |
+| `pdm pve lxc rrddata` | ◑ | — |  |
 | `pdm pve lxc shutdown` | — | — | deferred — shuts down an LXC container on a managed PVE remote; covered by unit tests |
 | `pdm pve lxc snapshot add` | — | — | deferred — creates an LXC container snapshot on a managed PVE remote; covered by unit tests |
 | `pdm pve lxc snapshot delete` | — | — | deferred — deletes an LXC container snapshot on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc snapshot ls` | — | — | **uncovered** |
+| `pdm pve lxc snapshot ls` | ◑ | — |  |
 | `pdm pve lxc snapshot rollback` | — | — | deferred — rolls back an LXC container snapshot on a managed PVE remote; covered by unit tests |
 | `pdm pve lxc snapshot update` | — | — | deferred — updates an LXC container snapshot's description on a managed PVE remote; covered by unit tests |
 | `pdm pve lxc start` | — | — | deferred — starts an LXC container on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc status` | — | — | **uncovered** |
+| `pdm pve lxc status` | ◑ | — |  |
 | `pdm pve lxc stop` | — | — | deferred — stops an LXC container on a managed PVE remote; covered by unit tests |
-| `pdm pve node apt changelog` | — | — | **uncovered** |
-| `pdm pve node apt repositories` | — | — | **uncovered** |
-| `pdm pve node apt update-database` | — | — | **uncovered** |
-| `pdm pve node apt updates` | — | — | **uncovered** |
-| `pdm pve node config` | — | — | **uncovered** |
-| `pdm pve node firewall options show` | — | — | **uncovered** |
-| `pdm pve node firewall options update` | — | — | **uncovered** |
-| `pdm pve node firewall rules` | — | — | **uncovered** |
-| `pdm pve node firewall status` | — | — | **uncovered** |
-| `pdm pve node ls` | — | — | **uncovered** |
-| `pdm pve node network` | — | — | **uncovered** |
-| `pdm pve node rrddata` | — | — | **uncovered** |
-| `pdm pve node sdn vnet mac-vrf` | — | — | **uncovered** |
-| `pdm pve node sdn zone ip-vrf` | — | — | **uncovered** |
-| `pdm pve node status` | — | — | **uncovered** |
-| `pdm pve node subscription` | — | — | **uncovered** |
-| `pdm pve options` | — | — | **uncovered** |
+| `pdm pve node apt changelog` | ◑ | — |  |
+| `pdm pve node apt repositories` | ◑ | — |  |
+| `pdm pve node apt update-database` | — | — | deferred — refreshes the package index on a managed PVE remote's node; covered by unit tests |
+| `pdm pve node apt updates` | ◑ | — |  |
+| `pdm pve node config` | ◑ | — |  |
+| `pdm pve node firewall options show` | ◑ | — |  |
+| `pdm pve node firewall options update` | — | — | deferred — modifies a PVE remote node's firewall options; covered by unit tests |
+| `pdm pve node firewall rules` | ◑ | — |  |
+| `pdm pve node firewall status` | ◑ | — |  |
+| `pdm pve node ls` | ◑ | — |  |
+| `pdm pve node network` | ◑ | — |  |
+| `pdm pve node rrddata` | ◑ | — |  |
+| `pdm pve node sdn vnet mac-vrf` | ◑ | — |  |
+| `pdm pve node sdn zone ip-vrf` | ◑ | — |  |
+| `pdm pve node status` | ◑ | — |  |
+| `pdm pve node subscription` | ◑ | — |  |
+| `pdm pve options` | ◑ | — |  |
 | `pdm pve probe-tls` | — | — | deferred — re-probes and stores a PVE host's TLS fingerprint; covered by unit tests |
-| `pdm pve qemu config` | — | — | **uncovered** |
-| `pdm pve qemu firewall options show` | — | — | **uncovered** |
-| `pdm pve qemu firewall options update` | — | — | **uncovered** |
-| `pdm pve qemu firewall rules` | — | — | **uncovered** |
-| `pdm pve qemu ls` | — | — | **uncovered** |
+| `pdm pve qemu config` | ◑ | — |  |
+| `pdm pve qemu firewall options show` | ◑ | — |  |
+| `pdm pve qemu firewall options update` | — | — | deferred — modifies a VM's firewall options on a managed PVE remote; covered by unit tests |
+| `pdm pve qemu firewall rules` | ◑ | — |  |
+| `pdm pve qemu ls` | ◑ | — |  |
 | `pdm pve qemu migrate` | — | — | deferred — migrates a QEMU VM between nodes on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu migrate-preconditions` | — | — | **uncovered** |
-| `pdm pve qemu pending` | — | — | **uncovered** |
+| `pdm pve qemu migrate-preconditions` | ◑ | — |  |
+| `pdm pve qemu pending` | ◑ | — |  |
 | `pdm pve qemu remote-migrate` | — | — | deferred — migrates a QEMU VM to a different remote cluster; covered by unit tests |
 | `pdm pve qemu resume` | — | — | deferred — resumes a QEMU VM on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu rrddata` | — | — | **uncovered** |
+| `pdm pve qemu rrddata` | ◑ | — |  |
 | `pdm pve qemu shutdown` | — | — | deferred — shuts down a QEMU VM on a managed PVE remote; covered by unit tests |
 | `pdm pve qemu snapshot add` | — | — | deferred — creates a QEMU VM snapshot on a managed PVE remote; covered by unit tests |
 | `pdm pve qemu snapshot delete` | — | — | deferred — deletes a QEMU VM snapshot on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu snapshot ls` | — | — | **uncovered** |
+| `pdm pve qemu snapshot ls` | ◑ | — |  |
 | `pdm pve qemu snapshot rollback` | — | — | deferred — rolls back a QEMU VM snapshot on a managed PVE remote; covered by unit tests |
 | `pdm pve qemu snapshot update` | — | — | deferred — updates a QEMU VM snapshot's description on a managed PVE remote; covered by unit tests |
 | `pdm pve qemu start` | — | — | deferred — starts a QEMU VM on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu status` | — | — | **uncovered** |
+| `pdm pve qemu status` | ◑ | — |  |
 | `pdm pve qemu stop` | — | — | deferred — stops a QEMU VM on a managed PVE remote; covered by unit tests |
-| `pdm pve realms` | — | — | **uncovered** |
+| `pdm pve realms` | — | — | deferred — reads the realms of a PVE host the PDM dials by hostname before it is registered as a remote; covered by unit tests |
 | `pdm pve remote ls` | ◑ | — |  |
 | `pdm pve scan` | — | — | deferred — scans a PVE host's connection info before adding it as a remote; covered by unit tests |
-| `pdm pve storage ls` | — | — | **uncovered** |
-| `pdm pve storage rrddata` | — | — | **uncovered** |
-| `pdm pve storage status` | — | — | **uncovered** |
-| `pdm pve task log` | — | — | **uncovered** |
-| `pdm pve task ls` | — | — | **uncovered** |
-| `pdm pve task status` | — | — | **uncovered** |
+| `pdm pve storage ls` | ◑ | — |  |
+| `pdm pve storage rrddata` | ◑ | — |  |
+| `pdm pve storage status` | ◑ | — |  |
+| `pdm pve task log` | ◑ | — |  |
+| `pdm pve task ls` | ◑ | — |  |
+| `pdm pve task status` | ◑ | — |  |
 | `pdm pve task stop` | — | — | deferred — cancels a running background task on a managed PVE remote; covered by unit tests |
-| `pdm pve updates` | — | — | **uncovered** |
+| `pdm pve updates` | ◑ | — |  |
 | `pdm realm ad add` | — | — | deferred — adds an AD authentication realm; covered by unit tests |
 | `pdm realm ad delete` | — | — | deferred — removes an AD realm; covered by unit tests |
-| `pdm realm ad ls` | — | — | **uncovered** |
-| `pdm realm ad show` | — | — | **uncovered** |
+| `pdm realm ad ls` | ◑ | — |  |
+| `pdm realm ad show` | ◑ | — |  |
 | `pdm realm ad update` | — | — | deferred — modifies an AD realm; covered by unit tests |
 | `pdm realm ldap add` | — | — | deferred — adds an LDAP authentication realm; covered by unit tests |
 | `pdm realm ldap delete` | — | — | deferred — removes an LDAP realm; covered by unit tests |
-| `pdm realm ldap ls` | — | — | **uncovered** |
-| `pdm realm ldap show` | — | — | **uncovered** |
+| `pdm realm ldap ls` | ◑ | — |  |
+| `pdm realm ldap show` | ◑ | — |  |
 | `pdm realm ldap update` | — | — | deferred — modifies an LDAP realm; covered by unit tests |
 | `pdm realm ls` | ◑ | — |  |
 | `pdm realm openid add` | — | — | deferred — adds an OpenID authentication realm; covered by unit tests |
 | `pdm realm openid delete` | — | — | deferred — removes an OpenID realm; covered by unit tests |
-| `pdm realm openid ls` | — | — | **uncovered** |
-| `pdm realm openid show` | — | — | **uncovered** |
+| `pdm realm openid ls` | ◑ | — |  |
+| `pdm realm openid show` | ◑ | — |  |
 | `pdm realm openid update` | — | — | deferred — modifies an OpenID realm; covered by unit tests |
-| `pdm realm pam show` | — | — | **uncovered** |
+| `pdm realm pam show` | ◑ | — |  |
 | `pdm realm pam update` | — | — | deferred — modifies the built-in PAM realm; covered by unit tests |
-| `pdm realm pdm show` | — | — | **uncovered** |
+| `pdm realm pdm show` | ◑ | — |  |
 | `pdm realm pdm update` | — | — | deferred — modifies the built-in PDM realm; covered by unit tests |
 | `pdm realm sync` | — | — | deferred — runs a realm sync task that can create or update users; covered by unit tests |
 | `pdm remote add` | — | — | deferred — registers a managed remote (stores credentials); covered by unit tests |
 | `pdm remote delete` | — | — | deferred — removes a managed remote; covered by unit tests |
 | `pdm remote ls` | ◑ | — |  |
-| `pdm remote metric-collection status` | — | — | **uncovered** |
+| `pdm remote metric-collection status` | ◑ | — |  |
 | `pdm remote metric-collection trigger` | — | — | deferred — triggers a metric-collection run against a remote; covered by unit tests |
 | `pdm remote probe-certificate` | — | — | deferred — re-probes and stores a remote's TLS fingerprint; covered by unit tests |
-| `pdm remote rrddata` | — | — | **uncovered** |
-| `pdm remote show` | — | — | **uncovered** |
-| `pdm remote task ls` | — | — | **uncovered** |
-| `pdm remote task refresh` | — | — | **uncovered** |
-| `pdm remote task statistics` | — | — | **uncovered** |
+| `pdm remote rrddata` | ◑ | — |  |
+| `pdm remote show` | ◑ | — |  |
+| `pdm remote task ls` | ◑ | — |  |
+| `pdm remote task refresh` | — | — | deferred — forces a task-cache refresh against every managed remote; covered by unit tests |
+| `pdm remote task statistics` | ◑ | — |  |
 | `pdm remote update` | — | — | deferred — modifies a managed remote; covered by unit tests |
 | `pdm remote updates refresh` | — | — | deferred — refreshes the available-package summary for every managed remote; covered by unit tests |
-| `pdm remote updates summary` | — | — | **uncovered** |
-| `pdm remote version` | — | — | **uncovered** |
+| `pdm remote updates summary` | ◑ | — |  |
+| `pdm remote version` | ◑ | — |  |
 | `pdm resource location-info` | — | — | deferred — refreshes the location-info cache for a view; covered by unit tests |
 | `pdm resource ls` | ◑ | — |  |
 | `pdm resource status` | ◑ | — |  |
-| `pdm resource subscription` | — | — | **uncovered** |
-| `pdm resource top-entities` | — | — | **uncovered** |
+| `pdm resource subscription` | ◑ | — |  |
+| `pdm resource top-entities` | ◑ | — |  |
 | `pdm role ls` | ◑ | — |  |
-| `pdm sdn controller ls` | — | — | **uncovered** |
-| `pdm sdn vnet add` | — | — | **uncovered** |
-| `pdm sdn vnet ls` | — | — | **uncovered** |
-| `pdm sdn zone add` | — | — | **uncovered** |
-| `pdm sdn zone ls` | — | — | **uncovered** |
+| `pdm sdn controller ls` | ◑ | — |  |
+| `pdm sdn vnet add` | — | — | deferred — creates a VNet on several managed remotes at once; covered by unit tests |
+| `pdm sdn vnet ls` | ◑ | — |  |
+| `pdm sdn zone add` | — | — | deferred — creates an SDN zone on several managed remotes at once; covered by unit tests |
+| `pdm sdn zone ls` | ◑ | — |  |
 | `pdm subscription adopt-all` | — | — | deferred — adopts every foreign live subscription into the pool; covered by unit tests |
 | `pdm subscription adopt-key` | — | — | deferred — adopts a live subscription on a remote node into the pool; covered by unit tests |
 | `pdm subscription apply-pending` | — | — | deferred — applies every pending pool change to its remote node; covered by unit tests |
@@ -687,24 +687,24 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pdm subscription key assign` | — | — | deferred — binds a pool key to a remote node; covered by unit tests |
 | `pdm subscription key delete` | — | — | deferred — removes a subscription key from the pool; covered by unit tests |
 | `pdm subscription key ls` | ◑ | — |  |
-| `pdm subscription key show` | — | — | **uncovered** |
+| `pdm subscription key show` | ◑ | — |  |
 | `pdm subscription key unassign` | — | — | deferred — drops the remote-node binding for a pool key; covered by unit tests |
-| `pdm subscription node-status` | — | — | **uncovered** |
+| `pdm subscription node-status` | ◑ | — |  |
 | `pdm subscription queue-clear` | — | — | deferred — queues a subscription clear on a remote node; covered by unit tests |
 | `pdm subscription revert-pending-clear` | — | — | deferred — drops a queued clear on a remote node; covered by unit tests |
 | `pdm tfa delete` | — | — | deferred — removes a user's TFA entry; covered by unit tests |
-| `pdm tfa ls` | — | — | **uncovered** |
-| `pdm tfa show` | — | — | **uncovered** |
+| `pdm tfa ls` | ◑ | — |  |
+| `pdm tfa show` | ◑ | — |  |
 | `pdm tfa update` | — | — | deferred — modifies a user's TFA entry description; covered by unit tests |
 | `pdm token add` | — | — | n/a — creates an API token and prints a once-only secret — out of scope for the automated sweep; covered by unit tests |
 | `pdm token delete` | — | — | deferred — removes an API token; covered by unit tests |
-| `pdm token ls` | — | — | **uncovered** |
-| `pdm token show` | — | — | **uncovered** |
+| `pdm token ls` | ◑ | — |  |
+| `pdm token show` | ◑ | — |  |
 | `pdm token update` | — | — | deferred — modifies an API token; covered by unit tests |
 | `pdm user add` | — | — | deferred — creates a user; covered by unit tests |
 | `pdm user delete` | — | — | deferred — removes a user; covered by unit tests |
 | `pdm user ls` | ◑ | — |  |
-| `pdm user show` | — | — | **uncovered** |
+| `pdm user show` | ◑ | — |  |
 | `pdm user update` | — | — | deferred — modifies a user; covered by unit tests |
 
 ## `pve`
@@ -909,7 +909,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster qemu cpu-flags` | ✓ | — |  |
 | `pve cluster replication create` | — | · |  |
 | `pve cluster replication delete` | — | · |  |
-| `pve cluster replication get` | — | — | **uncovered** |
+| `pve cluster replication get` | ◑ | — |  |
 | `pve cluster replication list` | ✓ | ✓ |  |
 | `pve cluster replication set` | — | · |  |
 | `pve cluster resources` | ✓ | — |  |
@@ -949,8 +949,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve lxc firewall rules list` | ◑ | ✓ |  |
 | `pve lxc firewall rules update` | — | ✓ |  |
 | `pve lxc hookscript get` | ◑ | — |  |
-| `pve lxc hookscript set` | — | — | **uncovered** |
-| `pve lxc hookscript unset` | — | — | **uncovered** |
+| `pve lxc hookscript set` | — | — | deferred — PVE restricts the hookscript config key to the root user and the suites run on an API token; the volume must also already exist on a snippets storage; covered by unit tests |
+| `pve lxc hookscript unset` | — | — | deferred — PVE restricts the hookscript config key to the root user, including its deletion, and the suites run on an API token; covered by unit tests |
 | `pve lxc interfaces` | ◑ | ✓ |  |
 | `pve lxc list` | ✓ | — |  |
 | `pve lxc metrics` | ◑ | — |  |
@@ -1209,8 +1209,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve qemu firewall rules list` | ◑ | ✓ |  |
 | `pve qemu firewall rules update` | — | ✓ |  |
 | `pve qemu hookscript get` | ◑ | — |  |
-| `pve qemu hookscript set` | — | — | **uncovered** |
-| `pve qemu hookscript unset` | — | — | **uncovered** |
+| `pve qemu hookscript set` | — | — | deferred — PVE restricts the hookscript config key to the root user and the suites run on an API token; the volume must also already exist on a snippets storage; covered by unit tests |
+| `pve qemu hookscript unset` | — | — | deferred — PVE restricts the hookscript config key to the root user, including its deletion, and the suites run on an API token; covered by unit tests |
 | `pve qemu list` | ✓ | — |  |
 | `pve qemu machine list` | ✓ | — |  |
 | `pve qemu metrics` | ◑ | — |  |
@@ -1412,11 +1412,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 
 Leaves exercised by neither suite. These are genuine coverage gaps — candidates for read-only sweep checks (the `get`/`list`/`show` verbs) or isolated mutate-phase coverage (the `create`/`set`/`delete` verbs). Each is listed inline per tree for a compact gap view.
 
-**`context`** (1) — `context rename`
-
-**`pdm`** (145) — `pdm acl ls`, `pdm auto-install installation ls`, `pdm auto-install prepared show`, `pdm auto-install token ls`, `pdm auto-install token update`, `pdm ceph flags`, `pdm ceph fs`, `pdm ceph mds`, `pdm ceph mgr`, `pdm ceph mon`, `pdm ceph osd-tree`, `pdm ceph pools`, `pdm ceph status`, `pdm ceph summary`, `pdm config acme account ls`, `pdm config acme account show`, `pdm config acme challenge-schema ls`, `pdm config acme directories ls`, `pdm config acme plugin ls`, `pdm config acme plugin show`, `pdm config acme tos show`, `pdm config certificate show`, `pdm config notes show`, `pdm config view show`, `pdm config webauthn show`, `pdm node apt changelog`, `pdm node apt repositories`, `pdm node apt repository change`, `pdm node apt updates`, `pdm node apt versions`, `pdm node certificate info`, `pdm node config show`, `pdm node dns show`, `pdm node journal`, `pdm node network ls`, `pdm node network show`, `pdm node report`, `pdm node rrddata`, `pdm node sdn vnet mac-vrf`, `pdm node sdn zone ip-vrf`, `pdm node status`, `pdm node subscription show`, `pdm node syslog`, `pdm node task log`, `pdm node task ls`, `pdm node task status`, `pdm node time show`, `pdm pbs datastore ls`, `pdm pbs datastore namespaces`, `pdm pbs datastore rrddata`, `pdm pbs datastore snapshots`, `pdm pbs node apt changelog`, `pdm pbs node apt repositories`, `pdm pbs node apt update-database`, `pdm pbs node apt updates`, `pdm pbs node subscription`, `pdm pbs probe-tls`, `pdm pbs realms`, `pdm pbs rrddata`, `pdm pbs scan`, `pdm pbs status`, `pdm pbs task log`, `pdm pbs task ls`, `pdm pbs task status`, `pdm pbs task stop`, `pdm pve cluster next-id`, `pdm pve cluster resources`, `pdm pve cluster status`, `pdm pve firewall options show`, `pdm pve firewall rules`, `pdm pve firewall show`, `pdm pve lxc config`, `pdm pve lxc firewall options show`, `pdm pve lxc firewall options update`, `pdm pve lxc firewall rules`, `pdm pve lxc ls`, `pdm pve lxc pending`, `pdm pve lxc rrddata`, `pdm pve lxc snapshot ls`, `pdm pve lxc status`, `pdm pve node apt changelog`, `pdm pve node apt repositories`, `pdm pve node apt update-database`, `pdm pve node apt updates`, `pdm pve node config`, `pdm pve node firewall options show`, `pdm pve node firewall options update`, `pdm pve node firewall rules`, `pdm pve node firewall status`, `pdm pve node ls`, `pdm pve node network`, `pdm pve node rrddata`, `pdm pve node sdn vnet mac-vrf`, `pdm pve node sdn zone ip-vrf`, `pdm pve node status`, `pdm pve node subscription`, `pdm pve options`, `pdm pve qemu config`, `pdm pve qemu firewall options show`, `pdm pve qemu firewall options update`, `pdm pve qemu firewall rules`, `pdm pve qemu ls`, `pdm pve qemu migrate-preconditions`, `pdm pve qemu pending`, `pdm pve qemu rrddata`, `pdm pve qemu snapshot ls`, `pdm pve qemu status`, `pdm pve realms`, `pdm pve storage ls`, `pdm pve storage rrddata`, `pdm pve storage status`, `pdm pve task log`, `pdm pve task ls`, `pdm pve task status`, `pdm pve updates`, `pdm realm ad ls`, `pdm realm ad show`, `pdm realm ldap ls`, `pdm realm ldap show`, `pdm realm openid ls`, `pdm realm openid show`, `pdm realm pam show`, `pdm realm pdm show`, `pdm remote metric-collection status`, `pdm remote rrddata`, `pdm remote show`, `pdm remote task ls`, `pdm remote task refresh`, `pdm remote task statistics`, `pdm remote updates summary`, `pdm remote version`, `pdm resource subscription`, `pdm resource top-entities`, `pdm sdn controller ls`, `pdm sdn vnet add`, `pdm sdn vnet ls`, `pdm sdn zone add`, `pdm sdn zone ls`, `pdm subscription key show`, `pdm subscription node-status`, `pdm tfa ls`, `pdm tfa show`, `pdm token ls`, `pdm token show`, `pdm user show`
-
-**`pve`** (5) — `pve cluster replication get`, `pve lxc hookscript set`, `pve lxc hookscript unset`, `pve qemu hookscript set`, `pve qemu hookscript unset`
+_None — every leaf is exercised or explicitly deferred._
 
 ## Running the suites
 

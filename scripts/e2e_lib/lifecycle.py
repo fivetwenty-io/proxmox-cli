@@ -190,7 +190,18 @@ class Runner:
     # failure is a real bug — record FAIL and raise.
     def soft_step(self, guest: str, verb: str, label: str, *args: str,
                   skip_markers: tuple[str, ...] = (), skip_reason: str = "") -> bool:
-        res = self.pmx(*args)
+        return self._record_soft(guest, verb, label, self.pmx(*args),
+                                 skip_markers, skip_reason)
+
+    # soft_step's counterpart for verbs driven against a scratch `--config`
+    # file or an explicit --context, the way step_raw relates to step.
+    def soft_step_raw(self, guest: str, verb: str, label: str, *args: str,
+                      skip_markers: tuple[str, ...] = (), skip_reason: str = "") -> bool:
+        return self._record_soft(guest, verb, label, self.pmx_raw(*args),
+                                 skip_markers, skip_reason)
+
+    def _record_soft(self, guest: str, verb: str, label: str, res: Cmd,
+                     skip_markers: tuple[str, ...], skip_reason: str) -> bool:
         if res.rc == 0:
             print(f"  {GREEN('✓')} {label}")
             self.cov.append(Step(guest, verb, PASS))
@@ -1423,16 +1434,24 @@ def auth_lifecycle(r: Runner) -> None:
         r.step_raw("api", "auth refresh", "auth refresh",
                    "--config", cfg, "auth", "refresh", "--context", "authprobe")
 
-        # logout → invalidate the ticket server-side and clear it locally.
-        r.step_raw("api", "auth logout", "auth logout",
-                   "--config", cfg, "auth", "logout", "--context", "authprobe")
-        st = r.pmx_raw("--config", cfg, "auth", "status", "--context", "authprobe",
-                       json_out=True)
-        if st.rc == 0:
-            sd = st.json()
-            sd = sd.get("data", sd) if isinstance(sd, dict) else {}
-            if str(sd.get("Session", "")) != "none":
-                raise LifecycleError("auth logout did not clear the session")
+        # logout → invalidate the ticket server-side and clear it locally. Not
+        # every PVE build implements DELETE /access/ticket; those answer 501,
+        # which is the server's gap rather than a CLI fault, so it records a
+        # SKIP and the session assertion below is skipped with it.
+        logged_out = r.soft_step_raw(
+            "api", "auth logout", "auth logout",
+            "--config", cfg, "auth", "logout", "--context", "authprobe",
+            skip_markers=("not implemented", "501"),
+            skip_reason="server does not implement DELETE /access/ticket",
+        )
+        if logged_out:
+            st = r.pmx_raw("--config", cfg, "auth", "status", "--context", "authprobe",
+                           json_out=True)
+            if st.rc == 0:
+                sd = st.json()
+                sd = sd.get("data", sd) if isinstance(sd, dict) else {}
+                if str(sd.get("Session", "")) != "none":
+                    raise LifecycleError("auth logout did not clear the session")
     finally:
         if created:
             r.undo(f"user delete {user}", "pve", "access", "user", "delete", user, "--yes")

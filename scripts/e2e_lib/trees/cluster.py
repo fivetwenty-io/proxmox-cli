@@ -290,8 +290,20 @@ def run(ctx: Ctx) -> None:
     )
 
     # Storage replication jobs: the list is an array (empty on a fresh cluster).
-    ctx.check("replication list", "pve", "cluster", "replication", "list", validate=is_list)
+    repl = ctx.check("replication list", "pve", "cluster", "replication", "list", validate=is_list)
     ctx.check("replication create --help", "pve", "cluster", "replication", "create", "--help", fmt="")
+    # `get` needs an existing job id; a lab with no replication configured has
+    # none, so the read is gated on the list above.
+    repl_id = None
+    if repl.rc == 0:
+        try:
+            repl_id = ctx.first(repl.json(), "id")
+        except (ValueError, KeyError):
+            repl_id = None
+    if repl_id:
+        ctx.check("replication get", "pve", "cluster", "replication", "get", str(repl_id))
+    else:
+        ctx.skip("replication get", "no replication job configured")
     # The mutate phase exercises replication CRUD when a second node exists; the
     # single-node lab cannot host a replication target, so it records a skip there.
     ctx.defer(

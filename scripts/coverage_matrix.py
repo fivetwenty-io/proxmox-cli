@@ -244,7 +244,7 @@ def parse_e2e(leaves, map_leaf):
 # --------------------------------------------------------------------------- #
 def parse_mutate(leaves, map_leaf):
     mut = defaultdict(set)  # leaf -> {"PASS","SKIP"}
-    step_fns = {"step", "soft_step", "cover_skip", "del_step", "step_raw"}
+    step_fns = {"step", "soft_step", "soft_step_raw", "cover_skip", "del_step", "step_raw"}
     tree = ast.parse(open(LIFECYCLE).read())
 
     def cs(node):

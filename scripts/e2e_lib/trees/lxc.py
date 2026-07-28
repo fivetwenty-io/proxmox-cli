@@ -249,6 +249,20 @@ def run(ctx: Ctx) -> None:
     ctx.defer("snapshot create/rollback/delete",
               "mutates CT snapshots — covered live by `e2e --mutate`",
               "pmx pve lxc snapshot create <ctid> <name>", isolation=True, live_covered=True)
+    # Same guard as the VM side: PVE answers "only root can set 'hookscript'"
+    # for an API token even when it belongs to root@pam, which is what both
+    # suites authenticate with. `set` additionally needs a script already on a
+    # snippets-content storage, and PVE's upload endpoint takes only
+    # iso/vztmpl/import, so nothing can put one there.
+    ctx.defer("hookscript set",
+              "PVE restricts the hookscript config key to the root user and the suites run "
+              "on an API token; the volume must also already exist on a snippets storage; "
+              "covered by unit tests",
+              "pmx pve lxc hookscript set <ctid> local:snippets/hook.pl")
+    ctx.defer("hookscript unset",
+              "PVE restricts the hookscript config key to the root user, including its "
+              "deletion, and the suites run on an API token; covered by unit tests",
+              "pmx pve lxc hookscript unset <ctid>")
     ctx.defer(
         "clone",
         "clones a container — covered live by `e2e --mutate`",
