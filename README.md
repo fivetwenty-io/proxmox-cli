@@ -1184,9 +1184,11 @@ guest disks, and file storages for templates, ISOs, and backups — and the run
 header prints the three it chose. Discovery stays inside this project's own
 storages: on a lab shared between members, whose datasets are named after their
 owner off a common stem (`tank-lab-pmx`, `tank-lab-dbell`), the siblings that
-are not ours are excluded before anything is ranked, and a `move` verb with no
-second storage of ours to move to records a SKIP rather than relocating a volume
-into somebody else's pool. Set `PMX_E2E_ROOTDIR_STORAGE`,
+are not ours are excluded before anything is ranked. The disk and volume `move`
+verbs relocate to a scratch `dir` storage the run provisions on the test node
+(`pmx-cli-move`, removed at teardown along with its directory), so they need no
+second cluster storage and can never move a volume into somebody else's pool.
+Set `PMX_E2E_ROOTDIR_STORAGE`,
 `PMX_E2E_TMPL_STORAGE`, or `PMX_E2E_BACKUP_STORAGE` to pin any of them. Two
 verbs are environment-bound and recorded
 as SKIP with their reason rather than run as failures: qemu `reboot` (a diskless

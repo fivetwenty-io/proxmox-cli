@@ -16,7 +16,9 @@ Isolation — every resource is shielded from other lab efforts:
   * named/hostnamed with the `pmx-cli-` prefix,
   * placed in the `pmx-cli` resource pool and tagged `pmx-cli`,
   * attached to a dedicated `pmxcli` simple SDN zone / `pmxcli0` vnet on the
-    172.30.0.0/24 subnet — off the host management network.
+    172.30.0.0/24 subnet — off the host management network,
+  * moved only onto the scratch `pmx-cli-move` dir storage the run provisions
+    for the purpose, never onto a storage the lab already had.
 
 Teardown runs in a `finally` block and is idempotent, so a crashed prior run is
 cleaned up by the next one. Nothing here touches pre-existing lab resources.
@@ -76,6 +78,13 @@ CL_FW_COMMENT = "pmx-cli-e2e"   # marks the throwaway top-level cluster rule
 ROOTDIR_STORAGE = "local-lvm"   # supports rootdir/images (+ snapshots)
 TMPL_STORAGE = "local"          # holds vztmpl and iso content
 BACKUP_STORAGE = "local"        # holds backup content
+# Scratch storage the disk/volume `move` verbs relocate to, provisioned by the
+# run rather than discovered: a cluster is not obliged to offer a second
+# storage we may write to, and on the shared lab it does not. Never a
+# discovery candidate itself — see `_storage_rows`.
+MOVE_STORAGE = Isolation.NAME_PREFIX + "move"
+MOVE_STORAGE_PATH = "/var/lib/vz/" + Isolation.NAME_PREFIX + "move"
+_move_storage_ready = False
 BACKUP_JOB = "pmxcli-backup"    # isolated, disabled vzdump schedule id
 METRICS_SERVER = "pmx-cli-graphite"  # isolated, disabled external metric server
 GOTIFY_ENDPOINT = "pmx-cli-gotify"   # isolated, disabled gotify notification endpoint
@@ -369,7 +378,11 @@ def _foreign_ids(rows: list[dict]) -> set[str]:
 def _storage_rows(r: Runner) -> list[dict]:
     """Cluster storages usable on the run's node, as decoded config rows.
 
-    Storages owned by another member of a shared lab are excluded outright.
+    Storages owned by another member of a shared lab are excluded outright, and
+    so are the suite's own scratch objects: a `pmx-cli-` definition left behind
+    by a crashed run carries this project's token, and without the exclusion it
+    would win the ownership restriction and land the test guests' disks on a
+    scratch dir storage.
     """
     res = r.pmx("pve", "storage", "list", json_out=True, node=False)
     if res.rc != 0:
@@ -386,7 +399,8 @@ def _storage_rows(r: Runner) -> list[dict]:
 
     usable = []
     for s in rows:
-        if str(s["storage"]) in foreign:
+        sid = str(s["storage"])
+        if sid in foreign or sid.startswith(Isolation.NAME_PREFIX):
             continue
         if str(s.get("disable", "0")) not in ("0", "", "False"):
             continue
@@ -444,15 +458,19 @@ def resolve_storages(r: Runner) -> None:
 
 
 def _alt_storage(r: Runner, exclude: str, need: str) -> str:
-    """Id of a second storage carrying `need` content, or "" if there is none.
+    """Where the disk/volume `move` verbs relocate to.
 
-    Used by the disk/volume `move` verbs so the relocation lands somewhere
-    genuinely different. A move is a write, so it goes through the same
-    ownership rule as the primary pick: on a shared lab the choice is confined
-    to this project's own storages, and when there is only one of those the
-    caller gets "" and records the move as skipped rather than relocating a
-    volume into a neighbour's dataset.
+    Normally this is MOVE_STORAGE, the scratch storage the run provisions for
+    the purpose — a cluster is not required to offer a second storage we are
+    allowed to write to, and the shared lab does not. When provisioning it
+    failed the cluster is searched instead, under the same ownership rule as
+    the primary pick: a lab with only one storage of ours yields "" and the
+    caller records the move as skipped rather than relocating a volume into a
+    neighbour's dataset.
     """
+    if _move_storage_ready and MOVE_STORAGE != exclude:
+        return MOVE_STORAGE
+
     rows = _storage_rows(r)
     pool = [s for s in (_ours(rows) or rows) if str(s.get("storage", "")) != exclude]
     return _pick_storage(pool, (need,), _VOLUME_TYPE_RANK)
@@ -466,6 +484,52 @@ def _alt_image_storage(r: Runner, exclude: str) -> str:
 def _alt_rootdir_storage(r: Runner, exclude: str) -> str:
     """Alternate storage for the lxc volume `move` verb."""
     return _alt_storage(r, exclude, "rootdir")
+
+
+def provision_move_storage(r: Runner) -> None:
+    """Create the scratch storage the disk/volume `move` verbs relocate to.
+
+    A `dir` backend under /var/lib/vz, restricted to the run's node, with PVE
+    creating the directory tree itself (--create-base-path/--create-subdirs)
+    since nothing else will. The volumes moved into it are the 1G test disks,
+    written sparse, so it costs the node almost nothing.
+
+    This is scaffolding rather than a covered verb — `storage_lifecycle` is
+    what proves storage create/set/delete — so a cluster that refuses the
+    definition does not abort the run: the flag stays unset and the move verbs
+    fall back to searching for a second storage.
+    """
+    global _move_storage_ready
+
+    # Best-effort clean of a definition left by a crashed prior run.
+    r.undo(f"pre-clean {MOVE_STORAGE}", "pve", "storage", "delete", MOVE_STORAGE, "--yes")
+
+    res = r.pmx("pve", "storage", "create", "--storage", MOVE_STORAGE, "--type", "dir",
+                "--path", MOVE_STORAGE_PATH, "--content", "images,rootdir",
+                "--nodes", r.node, "--create-base-path", "--create-subdirs")
+    _move_storage_ready = res.rc == 0
+    if _move_storage_ready:
+        print(f"  {GREEN('✓')} move target {MOVE_STORAGE} at {MOVE_STORAGE_PATH}")
+        return
+
+    detail = (res.err.strip() or res.out.strip()).splitlines()
+    tail = detail[-1][:160] if detail else "create failed"
+    print(f"  {YELLOW('·')} move target unavailable {DIM('(' + tail + ')')}")
+
+
+def teardown_move_storage(r: Runner) -> None:
+    """Remove the scratch move storage and the directory tree PVE made for it.
+
+    Both halves are best-effort: the config goes first so the storage stops
+    being offered even if the host is unreachable over SSH, and the directory
+    removal is SSH-gated like the rest of the node verbs.
+    """
+    global _move_storage_ready
+
+    r.undo(f"delete {MOVE_STORAGE}", "pve", "storage", "delete", MOVE_STORAGE, "--yes")
+    r.undo(f"rm host {MOVE_STORAGE_PATH}",
+           "pve", "node", "exec", r.node, "--", "rm", "-rf", MOVE_STORAGE_PATH)
+    _move_storage_ready = False
 
 
 def _next_id(r: Runner) -> str:
@@ -1695,6 +1759,10 @@ def storage_lifecycle(r: Runner) -> None:
     finally:
         r.del_step("storage", "delete", f"storage delete {sid}",
                    "pve", "storage", "delete", sid, "--yes")
+        # PVE materialises the path when it activates the storage, and deleting
+        # the definition leaves the tree behind. Remove it too (SSH-gated, so
+        # best-effort) rather than accumulating scratch directories on the node.
+        r.undo(f"rm host {spath}", "pve", "node", "exec", r.node, "--", "rm", "-rf", spath)
 
 
 def storage_volume_lifecycle(r: Runner) -> None:
@@ -4234,10 +4302,12 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
     try:
         # Clean any leftovers from a crashed prior run before provisioning.
         sweep_stale_guests(r)
+        teardown_move_storage(r)
         teardown_network(r)
         print()
 
         provision_network(r)
+        provision_move_storage(r)
         print()
 
         # Access + storage verb blocks run regardless of --vm-only/--ct-only:
@@ -4323,6 +4393,7 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
         print()
         teardown_network(r)
         sweep_stale_guests(r)
+        teardown_move_storage(r)
 
     print()
     _print_coverage(r)
