@@ -84,7 +84,14 @@ func Prune(opts PruneOptions) (PruneStats, error) {
 
 	walkErr := filepath.WalkDir(opts.Dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			errs = append(errs, err)
+			// A concurrent prune (two invocations past the sentinel gate at
+			// once) removes entries while this walk is in progress, so the
+			// lstat behind the directory listing fails for something that is
+			// already gone. That is the outcome both prunes wanted; only a
+			// real access failure is worth reporting.
+			if !errors.Is(err, fs.ErrNotExist) {
+				errs = append(errs, err)
+			}
 			return nil //nolint:nilerr // best-effort: skip unreadable entries, keep walking
 		}
 		if path == opts.Dir {
@@ -92,6 +99,15 @@ func Prune(opts PruneOptions) (PruneStats, error) {
 		}
 		dirParents[filepath.Dir(path)] = append(dirParents[filepath.Dir(path)], path)
 		if d.IsDir() {
+			// Record the directory itself, not just as its parent's child, so
+			// one that is *already* empty is considered for removal too. A
+			// directory only ever entered dirParents by having a child walked,
+			// which meant an empty directory — left by an earlier prune, or by
+			// a concurrent one that removed its files first — survived every
+			// subsequent run.
+			if _, seen := dirParents[path]; !seen {
+				dirParents[path] = nil
+			}
 			return nil
 		}
 		if !strings.HasSuffix(d.Name(), ".jsonl") {
@@ -100,7 +116,11 @@ func Prune(opts PruneOptions) (PruneStats, error) {
 
 		info, err := d.Info()
 		if err != nil {
-			errs = append(errs, err)
+			// Same race as above, one step later: the entry was listed and
+			// then removed before it could be stat'd.
+			if !errors.Is(err, fs.ErrNotExist) {
+				errs = append(errs, err)
+			}
 			return nil //nolint:nilerr // best-effort
 		}
 
@@ -113,10 +133,18 @@ func Prune(opts PruneOptions) (PruneStats, error) {
 		if !opts.DryRun {
 			// A concurrent prune (two invocations past the sentinel gate at
 			// once) may have removed the file first; that is success, not an
-			// error worth surfacing.
-			if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			// error worth surfacing. It does not count towards this call's
+			// stats though — the bytes it reports are the bytes it reclaimed,
+			// and claiming another process's deletions would double-count
+			// them across the two runs.
+			switch err := os.Remove(path); {
+			case err == nil:
+			case errors.Is(err, fs.ErrNotExist):
+				removed[path] = true
+				return nil
+			default:
 				errs = append(errs, err)
-				return nil //nolint:nilerr // best-effort
+				return nil
 			}
 		}
 		removed[path] = true
