@@ -816,3 +816,54 @@ func TestContextCopyEditValidateAreNoClient(t *testing.T) {
 		})
 	}
 }
+
+// TestContextValidate_ReportsUnknownConfigKeys covers the strict re-parse.
+// config.Load ignores a key it does not recognise, so `fingerprnt` under a
+// context means TLS pinning is quietly not happening; validate is the verb
+// that exists to say so.
+func TestContextValidate_ReportsUnknownConfigKeys(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": labContext()},
+	}
+	p := scratchConfig(t, cfg)
+
+	// Append keys no field accepts, as a typo in a hand-edited config would.
+	raw, err := os.ReadFile(p)
+	require.NoError(t, err)
+	raw = append(raw, []byte("\nretenton: 30\n")...)
+	require.NoError(t, os.WriteFile(p, raw, 0o600))
+
+	var out, errOut bytes.Buffer
+	deps := &cli.Deps{Cfg: cfg, ConfigPath: p, Out: output.New(), Format: output.FormatJSON}
+	cmd := Group(nil)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"validate", "lab"})
+
+	require.NoError(t, cmd.Execute(), "an unknown key must not fail the command")
+	require.Contains(t, errOut.String(), "retenton", "the offending key must be named")
+	require.Contains(t, out.String(), "OK", "the context itself is still valid")
+}
+
+// TestContextValidate_SilentOnACleanConfig is the other half: no warning when
+// every key is known, or operators learn to ignore the one that matters.
+func TestContextValidate_SilentOnACleanConfig(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": labContext()},
+	}
+	p := scratchConfig(t, cfg)
+
+	var out, errOut bytes.Buffer
+	deps := &cli.Deps{Cfg: cfg, ConfigPath: p, Out: output.New(), Format: output.FormatJSON}
+	cmd := Group(nil)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"validate", "lab"})
+
+	require.NoError(t, cmd.Execute())
+	require.NotContains(t, errOut.String(), "no setting matches")
+}

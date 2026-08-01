@@ -53,6 +53,10 @@ func newValidateCmd() *cobra.Command {
 			"secret is checked for resolvability.\n\n" +
 			"An unreachable context fails the command. A product mismatch is only a " +
 			"warning.\n\n" +
+			"The config file is also re-read strictly, and any key no setting matches is " +
+			"listed on stderr. Such a key is ignored when the config loads, so a misspelling " +
+			"costs you the setting silently. It does not affect the exit status: a config " +
+			"shared with a newer pmx may legitimately carry keys this build does not know.\n\n" +
 			"Exit status is 0 when every validated context is valid, and 1 when any is not.",
 		Example: `  pmx context validate
   pmx context validate lab
@@ -223,6 +227,8 @@ func newValidateCmd() *cobra.Command {
 				return err
 			}
 
+			reportUnknownConfigKeys(cmd, deps)
+
 			if anyInvalid {
 				return fmt.Errorf("one or more contexts are invalid or unreachable")
 			}
@@ -238,4 +244,37 @@ func newValidateCmd() *cobra.Command {
 	cmd.ValidArgsFunction = cli.FirstArgContextNames
 
 	return cmd
+}
+
+// reportUnknownConfigKeys names every key in the config file that no field
+// accepts, on stderr, after the validation table.
+//
+// config.Load is permissive by design — a config carrying a key this binary
+// does not know must still load — so a typo costs the operator the setting
+// silently: `fingerprnt` under a context means TLS pinning is simply not
+// happening. `validate` is the verb that exists to answer "what is wrong with
+// my config", so the strict pass belongs here.
+//
+// It does not affect the exit code. An unknown key is not necessarily a
+// mistake: a config shared with a newer pmx, or written by one, legitimately
+// carries keys this build has never heard of, and failing on those would make
+// the verb unusable exactly when an operator most needs it. The same reasoning
+// makes an unreadable or unparseable file silent here — validate has already
+// reported what it could, and the loader reports the rest.
+func reportUnknownConfigKeys(cmd *cobra.Command, deps *cli.Deps) {
+	if deps.ConfigPath == "" {
+		return
+	}
+
+	keys, err := config.UnknownKeys(deps.ConfigPath)
+	if err != nil || len(keys) == 0 {
+		return
+	}
+
+	w := cmd.ErrOrStderr()
+	_, _ = fmt.Fprintf(w, "WARN: %s contains %d key(s) no setting matches, which are ignored:\n",
+		deps.ConfigPath, len(keys))
+	for _, k := range keys {
+		_, _ = fmt.Fprintf(w, "  %s\n", k)
+	}
 }
