@@ -9,9 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -1179,12 +1181,53 @@ func RequireSubcommands(cmd *cobra.Command) {
 // The log file closer captured by PersistentPreRunE is deferred here, after
 // root.Execute() returns, so that all log records written during RunE are
 // flushed and the fd is released only once the full command has completed.
+// signalContext returns the root command context, cancelled by the first
+// SIGINT or SIGTERM, plus a stop function the caller defers.
+//
+// Cancelling rather than dying is what makes the cancellation handling the
+// tree already carries reachable: the task-wait poll, the lab SSH wait, and
+// the SDK's retry backoff all select on ctx.Done() but could never observe it
+// while the root context was context.Background(). It also means Execute
+// still reaches its exit audit record, its retention prune, and its log-file
+// close on the interrupted path, instead of leaving an invocation record with
+// no matching exit record — indistinguishable from a crash.
+//
+// Only the first signal is absorbed. signal.Stop restores the default
+// disposition (no other handler is registered for these signals unless a
+// child is running, in which case internal/exec's shield deliberately holds
+// its own), so a second ^C terminates immediately and an operator whose
+// command is not unwinding fast enough is never trapped.
+func signalContext() (context.Context, func()) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		select {
+		case <-ch:
+			signal.Stop(ch)
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	return ctx, func() {
+		signal.Stop(ch)
+		cancel()
+	}
+}
+
 func Execute(persona string, factories []GroupFactory) error {
 	root, cleanup := NewRootCmd(persona)
 	defer cleanup()
 
-	// Inject a background context so that commands can always call cmd.Context().
-	root.SetContext(context.Background())
+	// Inject the signal-cancelled context so that commands can always call
+	// cmd.Context(), and so ^C unwinds the command instead of killing pmx
+	// outright.
+	ctx, stopSignals := signalContext()
+	defer stopSignals()
+	root.SetContext(ctx)
 
 	// AddGroups with a stub Deps so factories can register sub-commands; the
 	// real Deps will be injected per-invocation in PersistentPreRunE.
