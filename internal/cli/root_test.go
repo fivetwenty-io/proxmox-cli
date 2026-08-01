@@ -1437,6 +1437,52 @@ func TestLogLayout_NestedDefaultAndFlatOverride(t *testing.T) {
 }
 
 // readLogRecords parses every JSONL record found under logDir into maps.
+// TestShellCompletion_WritesNoLogFile covers the log-tree growth an
+// interactive shell caused on its own: cobra dispatches its hidden
+// "__complete" command through the same PersistentPreRunE as a real command,
+// so every tab press opened a JSONL file under a "__complete" directory and
+// wrote an invocation record into it. A keystroke mutates nothing and answers
+// no audit question, so it must leave the log tree untouched.
+func TestShellCompletion_WritesNoLogFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	completed := &cobra.Command{
+		Use:         "widget",
+		Annotations: map[string]string{"noClient": "true"},
+		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return []string{"alpha", "beta"}, cobra.ShellCompDirectiveNoFileComp
+		},
+		RunE: func(_ *cobra.Command, _ []string) error { return nil },
+	}
+	root.AddCommand(completed)
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{
+		"--config", filepath.Join(tmpDir, "config.yml"),
+		cobra.ShellCompRequestCmd, "widget", "",
+	})
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), "alpha", "completion output must still be produced")
+
+	// The log directory is not merely empty — it is never created, since no
+	// log file is opened at all.
+	logDir := filepath.Join(tmpDir, ".pmx", "logs")
+	_, statErr := os.Stat(logDir)
+	require.ErrorIs(t, statErr, fs.ErrNotExist,
+		"a shell-completion request must not open a log file")
+}
+
 func readLogRecords(t *testing.T, logDir string) []map[string]any {
 	t.Helper()
 	var records []map[string]any

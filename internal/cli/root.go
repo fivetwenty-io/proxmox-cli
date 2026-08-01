@@ -442,12 +442,19 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	// Log layout: $PMX_LOG_LAYOUT > config log.layout > nested default.
 	logLayout := config.Resolve("", "PMX_LOG_LAYOUT", cfg.Log.Layout, config.LogLayoutNested)
 
+	// A shell-completion request is a keystroke, not an operation: it mutates
+	// nothing, and cobra dispatches it through this same PersistentPreRunE.
+	// Logging it opened a file per tab press under a "__complete" directory,
+	// which is most of what fills the log tree on an interactive shell, and
+	// no audit question is ever answered by it.
+	noLog := pf.noLog || cmd.Name() == cobra.ShellCompRequestCmd
+
 	// Initialise slog JSONL logger.
 	logger, logCloser, err := logx.Init(logx.Config{
 		Level:       logLevel,
 		Debug:       pf.debug,
 		Verbose:     pf.verbose,
-		NoLog:       pf.noLog,
+		NoLog:       noLog,
 		Flat:        logLayout == config.LogLayoutFlat,
 		CommandPath: cmdPath,
 		Command:     cmdName,
