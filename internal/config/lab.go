@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"regexp"
 	"strings"
 )
 
@@ -271,7 +273,7 @@ const nestedNetworkWarningPrefix = "warning: "
 // returns nil — that is today's unbonded-NIC shape, so labs written before
 // this field existed keep validating cleanly.
 //
-// Four checks, matching the multi-node lab plan §1:
+// Four coherence checks, matching the multi-node lab plan §1:
 //  1. A bond's Mode outside {NestedBondModeActiveBackup, NestedBondMode8023ad}
 //     is a hard error.
 //  2. A NestedBondMode8023ad bond is flagged with a nestedNetworkWarningPrefix
@@ -283,11 +285,19 @@ const nestedNetworkWarningPrefix = "warning: "
 //  4. A bond whose NICs has fewer than 2 entries is a hard error (nothing to
 //     bond).
 //
-// Broader cross-referencing against the lab's outer Network.Vnets/HostNICs
-// (e.g. HostNICs[].VnetID resolution, Vnets[].ID charset/uniqueness) is out
-// of this function's scope by design — it lives in
-// internal/cli/lab/netplan.go's labNestedNetworkPlanIssues wrapper, which
-// has access to the full LabNetwork, not just NestedNetwork.
+// Plus a charset/format check on every VlanZone identifier that reaches a
+// remote command line: ZoneName, Bridge, Vnets[].ID, Vnets[].CIDR, and
+// Vnets[].Gateway. internal/cli/lab/sdninner.go composes each of these into a
+// `pvesh` command string it hands to ssh, which evaluates it in the nested
+// node's root login shell, so a value carrying a space or a shell
+// metacharacter must be refused before it can get there. Vnets[].Alias is
+// deliberately NOT charset-checked — it is documented free text — and is
+// shell-quoted at the point of use instead.
+//
+// Cross-referencing against the lab's outer Network.Vnets/HostNICs (e.g.
+// HostNICs[].VnetID resolution against the outer vnet set) needs the full
+// LabNetwork rather than just NestedNetwork, so it stays in
+// internal/cli/lab/netplan.go's labVnetsPlanIssues.
 func ValidateNestedNetwork(name string, nn LabNestedNetwork) []string {
 	var issues []string
 
@@ -328,6 +338,66 @@ func ValidateNestedNetwork(name string, nn LabNestedNetwork) []string {
 			"lab %q: nested_network.vlan_zone.bridge %q has no matching nested_network.bonds[] entry "+
 				"with that bridge and vlan_aware: true",
 			name, nn.VlanZone.Bridge))
+	}
+
+	issues = append(issues, nestedVlanZoneCharsetIssues(name, nn.VlanZone)...)
+
+	return issues
+}
+
+// sdnIdentifierRE is the charset a nested SDN zone or vnet identifier must
+// match: PVE's own SDN ID rule, at most MaxVnetIDLen alphanumeric characters
+// with no hyphen. Identical to internal/cli/lab's configVnetIDPattern, which
+// enforces the same rule on the OUTER vnet IDs.
+var sdnIdentifierRE = regexp.MustCompile(`^[A-Za-z0-9]{1,8}$`)
+
+// ifaceNameRE is the charset a Linux interface (bridge) name must match:
+// letters, digits, and the three punctuation characters ip-link accepts, up
+// to the kernel's IFNAMSIZ-1 limit of 15.
+var ifaceNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,14}$`)
+
+// nestedVlanZoneCharsetIssues checks every vlan-zone value that
+// internal/cli/lab/sdninner.go interpolates into a `pvesh` command line run
+// through a remote root shell. Returns nil for a nil zone.
+func nestedVlanZoneCharsetIssues(name string, vz *LabNestedVlanZone) []string {
+	if vz == nil {
+		return nil
+	}
+
+	var issues []string
+
+	if !sdnIdentifierRE.MatchString(vz.ZoneName) {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: nested_network.vlan_zone.zone_name %q must be 1-%d alphanumeric characters "+
+				"with no hyphen", name, vz.ZoneName, MaxVnetIDLen))
+	}
+
+	if !ifaceNameRE.MatchString(vz.Bridge) {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: nested_network.vlan_zone.bridge %q is not a valid interface name (letters, "+
+				"digits, and _ . - only, at most 15 characters)", name, vz.Bridge))
+	}
+
+	for i, v := range vz.Vnets {
+		if !sdnIdentifierRE.MatchString(v.ID) {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: nested_network.vlan_zone.vnets[%d].id %q must be 1-%d alphanumeric "+
+					"characters with no hyphen", name, i, v.ID, MaxVnetIDLen))
+		}
+
+		if v.CIDR != "" {
+			if _, _, err := net.ParseCIDR(v.CIDR); err != nil {
+				issues = append(issues, fmt.Sprintf(
+					"lab %q: nested_network.vlan_zone.vnets[%d].cidr %q is not a valid CIDR: %v",
+					name, i, v.CIDR, err))
+			}
+		}
+
+		if v.Gateway != "" && net.ParseIP(v.Gateway) == nil {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: nested_network.vlan_zone.vnets[%d].gateway %q is not a valid IP address",
+				name, i, v.Gateway))
+		}
 	}
 
 	return issues

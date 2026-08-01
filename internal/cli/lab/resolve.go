@@ -41,6 +41,32 @@ func validateLabNameCharset(name string) error {
 	return nil
 }
 
+// labPoolCharsetRE is the charset a lab's ZFS base pool must match before any
+// mutating verb acts on it. It is ZFS's own pool-name rule (a leading letter,
+// then alphanumerics and the four permitted punctuation characters), so it
+// rejects nothing a real pool could be named. The reason it is enforced here
+// rather than left to zpool(8) is the same one labNameCharsetRE documents:
+// zfsDatasetPath composes this value into `zfs set`/`zfs create` command lines
+// that quota set, create, and nfs attach hand to ssh, which joins its trailing
+// argv with spaces and evaluates the result in the remote root login shell.
+var labPoolCharsetRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]{0,63}$`)
+
+// validateLabPoolCharset returns an error when a lab's explicitly configured
+// storage.pool does not match labPoolCharsetRE. An empty pool is valid: the
+// caller falls back to zfsBasePool's "tank" default.
+func validateLabPoolCharset(pool string) error {
+	if pool == "" {
+		return nil
+	}
+	if !labPoolCharsetRE.MatchString(pool) {
+		return fmt.Errorf(
+			"lab storage.pool %q contains characters outside the allowed charset (a leading "+
+				"letter, then letters, digits, and _ . : - only) — refusing before it can reach "+
+				"any remote command line", pool)
+	}
+	return nil
+}
+
 // resolveLab loads the active config via cli.GetDeps(cmd), resolves every
 // configured lab (inline cfg.Labs plus cfg.Include/cfg.LabsDir includes, see
 // config.ResolveLabs), and returns the one named name. Every read-only lab
@@ -97,9 +123,11 @@ func availableLabNames(labs map[string]*config.Lab) string {
 }
 
 // resolveLabForMutate resolves the named lab exactly as resolveLab does,
-// then builds a peppi.Target from every identifier the lab's resolved
-// definition exposes (vnet ID, access pool, storage ID, DNS zone, and VM
-// name) and calls peppi.Guard before returning. Every mutating verb
+// charset-checks the two config values that reach a remote root shell
+// unquoted (the lab name and its ZFS base pool), then builds a peppi.Target
+// from every identifier the lab's resolved definition exposes (vnet ID,
+// access pool, storage ID, DNS zone, and VM name) and calls peppi.Guard
+// before returning. Every mutating verb
 // (create, destroy, net apply, access grant, quota set, start, stop) must
 // call this instead of resolveLab, so no mutating code path can reach the
 // PVE API or a shell-out without first clearing the guard. VMID is passed as
@@ -114,6 +142,10 @@ func resolveLabForMutate(cmd *cobra.Command, name string) (*config.Lab, error) {
 	}
 
 	if err := validateLabNameCharset(lab.Name); err != nil {
+		return nil, err
+	}
+
+	if err := validateLabPoolCharset(lab.Storage.Pool); err != nil {
 		return nil, err
 	}
 

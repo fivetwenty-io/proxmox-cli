@@ -13,6 +13,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
 // labInnerZoneName and labInnerZoneMTU are fixed by the multi-node lab plan
@@ -310,6 +311,13 @@ func runSdnVlanApply(cmd *cobra.Command, name string, dryRun bool) error {
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 
+	// `lab config add` runs this same gate, but a lab may be hand-written or
+	// predate the check, and every identifier below reaches a root shell on
+	// node 0 through pvesh. Refuse here too rather than trusting the writer.
+	if err := labNestedNetworkMutateGate(lab.Name, lab.Network.NestedNetwork); err != nil {
+		return err
+	}
+
 	node0IP, err := labNodeMgmtIP(lab.Network, 0)
 	if err != nil {
 		return fmt.Errorf("resolve node 0 mgmt IP: %w", err)
@@ -492,7 +500,7 @@ func sdnEnsureVlanVnet(deps *cli.Deps, name, node0IP, zoneName string, v config.
 
 		args := []string{fmt.Sprintf("--zone %s", zoneName), fmt.Sprintf("--tag %d", v.Tag)}
 		if v.Alias != "" {
-			args = append(args, fmt.Sprintf("--alias %s", v.Alias))
+			args = append(args, fmt.Sprintf("--alias %s", sshcmd.ShellQuote(v.Alias)))
 		}
 		updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/vnets/%s %s", v.ID, strings.Join(args, " "))
 		if _, uerr := runGuestSSH(deps, node0IP, updateCmd); uerr != nil {
@@ -504,7 +512,7 @@ func sdnEnsureVlanVnet(deps *cli.Deps, name, node0IP, zoneName string, v config.
 	default:
 		createCmd := fmt.Sprintf("pvesh create /cluster/sdn/vnets --vnet %s --zone %s --tag %d", v.ID, zoneName, v.Tag)
 		if v.Alias != "" {
-			createCmd += fmt.Sprintf(" --alias %s", v.Alias)
+			createCmd += fmt.Sprintf(" --alias %s", sshcmd.ShellQuote(v.Alias))
 		}
 		if _, cerr := runGuestSSH(deps, node0IP, createCmd); cerr != nil {
 			return false, nil, fmt.Errorf("lab %q: create inner vlan sdn vnet %q on node 0: %w", name, v.ID, cerr)

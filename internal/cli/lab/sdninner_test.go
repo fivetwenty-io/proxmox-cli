@@ -179,6 +179,64 @@ func TestSdnVlanApply_NoVlanZoneConfigured_NoOp(t *testing.T) {
 	assert.Empty(t, fake.Calls)
 }
 
+// TestSdnVlanApply_RefusesShellMetacharacterIdentifiers covers the gate every
+// vlan-zone identifier must clear before it reaches a pvesh command line: ssh
+// evaluates that line in node 0's root shell, so a metacharacter in an
+// identifier would execute there. The refusal must happen before any runner
+// call, since the probe itself already interpolates the identifier.
+func TestSdnVlanApply_RefusesShellMetacharacterIdentifiers(t *testing.T) {
+	cases := []struct {
+		name  string
+		mutil func(*config.LabNestedVlanZone)
+	}{
+		{"zone name", func(vz *config.LabNestedVlanZone) { vz.ZoneName = "z; reboot" }},
+		{"bridge", func(vz *config.LabNestedVlanZone) { vz.Bridge = "vmbr2$(id)" }},
+		{"vnet id", func(vz *config.LabNestedVlanZone) { vz.Vnets[0].ID = "c40; rm -rf /" }},
+		{"cidr", func(vz *config.LabNestedVlanZone) { vz.Vnets[0].CIDR = "10.0.0.0/24 && reboot" }},
+		{"gateway", func(vz *config.LabNestedVlanZone) { vz.Vnets[0].Gateway = "10.0.0.1;reboot" }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lab := clientVlanZoneTestLab("wayne", 3)
+			tc.mutil(lab.Network.NestedNetwork.VlanZone)
+			path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+			cmd, fake := buildGuestSSHCmd(t, path, newSdnCmd())
+
+			_, err := runGuestCmd(t, cmd, "vlan", "apply", "wayne")
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "nested network plan is incoherent")
+			assert.Empty(t, fake.Calls, "must refuse before any ssh call")
+		})
+	}
+}
+
+// TestSdnVlanApply_QuotesFreeTextAlias covers the one vlan-zone field that is
+// documented free text rather than charset-restricted: a space or a
+// metacharacter in an alias must be quoted into a single remote argument, not
+// refused and not left to split the pvesh command line.
+func TestSdnVlanApply_QuotesFreeTextAlias(t *testing.T) {
+	lab := clientVlanZoneTestLab("wayne", 3)
+	lab.Network.NestedNetwork.VlanZone.Vnets[0].Alias = "client vlan 40; reboot"
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildGuestSSHCmd(t, path, newSdnCmd())
+	fake := exec.Fake(
+		exec.FakeResponse{ExitCode: 1}, // probe zone: absent
+		exec.FakeResponse{},            // create zone
+		exec.FakeResponse{ExitCode: 1}, // probe vnet: absent
+		exec.FakeResponse{},            // create vnet
+		exec.FakeResponse{ExitCode: 1}, // list subnets: none yet
+		exec.FakeResponse{},            // create subnet
+		exec.FakeResponse{},            // commit
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	_, err := runGuestCmd(t, cmd, "vlan", "apply", "wayne")
+	require.NoError(t, err)
+	assert.Contains(t, fake.Calls[3].Args,
+		"pvesh create /cluster/sdn/vnets --vnet cli40 --zone clivlan --tag 40 --alias 'client vlan 40; reboot'")
+}
+
 func TestSdnVlanApply_DryRun_NoRunnerCalls(t *testing.T) {
 	lab := clientVlanZoneTestLab("wayne", 3)
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
@@ -217,7 +275,7 @@ func TestSdnVlanApply_CreatesZoneVnetSubnetWhenMissing(t *testing.T) {
 
 	require.Len(t, fake.Calls, 7)
 	assert.Contains(t, fake.Calls[1].Args, "pvesh create /cluster/sdn/zones --zone clivlan --type vlan --bridge vmbr2")
-	assert.Contains(t, fake.Calls[3].Args, "pvesh create /cluster/sdn/vnets --vnet cli40 --zone clivlan --tag 40 --alias client-vlan40")
+	assert.Contains(t, fake.Calls[3].Args, "pvesh create /cluster/sdn/vnets --vnet cli40 --zone clivlan --tag 40 --alias 'client-vlan40'")
 	assert.Contains(t, fake.Calls[5].Args, "pvesh create /cluster/sdn/vnets/cli40/subnets --subnet 10.61.136.0/24 --type subnet --gateway 10.61.136.1")
 	assert.Contains(t, fake.Calls[6].Args, "pvesh set /cluster/sdn")
 }
@@ -244,7 +302,7 @@ func TestSdnVlanApply_UpdatesDriftedVnetAndSubnet(t *testing.T) {
 	assert.Contains(t, out, "committed")
 
 	require.Len(t, fake.Calls, 6)
-	assert.Contains(t, fake.Calls[2].Args, "pvesh set /cluster/sdn/vnets/cli40 --zone clivlan --tag 40 --alias client-vlan40")
+	assert.Contains(t, fake.Calls[2].Args, "pvesh set /cluster/sdn/vnets/cli40 --zone clivlan --tag 40 --alias 'client-vlan40'")
 	assert.Contains(t, fake.Calls[4].Args, "pvesh set /cluster/sdn/vnets/cli40/subnets/cli40-10.61.136.0-24 --gateway 10.61.136.1")
 }
 

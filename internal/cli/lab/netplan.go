@@ -3,6 +3,7 @@ package lab
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
@@ -252,6 +253,24 @@ func labHostNICsPlanIssues(n config.LabNetwork) []string {
 // returns nil, matching config.ValidateNestedNetwork's own contract.
 func labNestedNetworkPlanIssues(name string, nn config.LabNestedNetwork) []string {
 	return config.ValidateNestedNetwork(name, nn)
+}
+
+// labNestedNetworkMutateGate returns an error when nn carries any hard issue,
+// discarding the warning-class ones (see config.ValidateNestedNetwork). It is
+// the gate every verb that applies a nested-network plan to a live node must
+// pass first, so an incoherent — or shell-metacharacter-carrying — value
+// cannot reach a pvesh command line, whichever writer produced the config.
+func labNestedNetworkMutateGate(name string, nn config.LabNestedNetwork) error {
+	var hard []string
+	for _, issue := range labNestedNetworkPlanIssues(name, nn) {
+		if !strings.HasPrefix(issue, "warning: ") {
+			hard = append(hard, issue)
+		}
+	}
+	if len(hard) > 0 {
+		return fmt.Errorf("nested network plan is incoherent:\n  %s", strings.Join(hard, "\n  "))
+	}
+	return nil
 }
 
 // guestPrefixWarning inspects the guest-agent-reported interface addresses
