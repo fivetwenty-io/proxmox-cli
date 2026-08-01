@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -102,36 +101,30 @@ func newTapeMediaLsCmd() *cobra.Command {
 				return fmt.Errorf("list tape media: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]tapeMediaListEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e tapeMediaListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tape media entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[tapeMediaListEntry](rawItemsOf(resp), "tape media")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].LabelText < entries[j].LabelText })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.LabelText < table[j].Entry.LabelText })
 
 			headers := []string{
 				"LABEL-TEXT", "UUID", "STATUS", "LOCATION", "POOL", "MEDIA-SET-NAME",
 				"SEQ-NR", "BYTES-USED", "EXPIRED", "CATALOG",
 			}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.LabelText, e.Uuid, e.Status, e.Location, pbsFormatOptionalString(e.Pool),
 					pbsFormatOptionalString(e.MediaSetName), pbsFormatOptionalInt64(e.SeqNr),
 					pbsFormatOptionalInt64(e.BytesUsed), strconv.FormatBool(e.Expired), strconv.FormatBool(e.Catalog),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -214,40 +207,34 @@ func newTapeMediaContentCmd() *cobra.Command {
 				return fmt.Errorf("list tape media content: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]tapeMediaContentEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e tapeMediaContentEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tape media content entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[tapeMediaContentEntry](rawItemsOf(resp), "tape media content")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool {
-				if entries[i].Store != entries[j].Store {
-					return entries[i].Store < entries[j].Store
+			sort.Slice(table, func(i, j int) bool {
+				if table[i].Entry.Store != table[j].Entry.Store {
+					return table[i].Entry.Store < table[j].Entry.Store
 				}
 
-				return entries[i].Snapshot < entries[j].Snapshot
+				return table[i].Entry.Snapshot < table[j].Entry.Snapshot
 			})
 
 			headers := []string{
 				"STORE", "SNAPSHOT", "LABEL-TEXT", "UUID", "POOL", "MEDIA-SET-NAME", "SEQ-NR", "BACKUP-TIME",
 			}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Store, e.Snapshot, e.LabelText, e.Uuid, e.Pool, e.MediaSetName,
 					strconv.FormatInt(e.SeqNr, 10), strconv.FormatInt(e.BackupTime, 10),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -287,31 +274,25 @@ func newTapeMediaSetsCmd() *cobra.Command {
 				return fmt.Errorf("list tape media sets: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]tapeMediaSetEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e tapeMediaSetEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tape media set entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[tapeMediaSetEntry](rawItemsOf(resp), "tape media set")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].MediaSetName < entries[j].MediaSetName })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.MediaSetName < table[j].Entry.MediaSetName })
 
 			headers := []string{"MEDIA-SET-NAME", "MEDIA-SET-UUID", "POOL", "MEDIA-SET-CTIME"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.MediaSetName, e.MediaSetUuid, e.Pool, strconv.FormatInt(e.MediaSetCtime, 10),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

@@ -96,29 +96,23 @@ func newAcmeAccountLsCmd() *cobra.Command {
 				return fmt.Errorf("list acme accounts: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]acmeAccountListEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e acmeAccountListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode acme account entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[acmeAccountListEntry](rawItemsOf(resp), "acme account")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.Name})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -377,25 +371,18 @@ func newAcmePluginLsCmd() *cobra.Command {
 				return fmt.Errorf("list acme plugins: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]acmePluginEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e acmePluginEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode acme plugin entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[acmePluginEntry](rawItemsOf(resp), "acme plugin")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Plugin < entries[j].Plugin })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Plugin < table[j].Entry.Plugin })
 
 			headers := []string{"PLUGIN", "TYPE", "API", "DISABLE", "VALIDATION-DELAY"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Plugin,
 					e.Type,
@@ -403,9 +390,10 @@ func newAcmePluginLsCmd() *cobra.Command {
 					metricsFormatOptionalBool(e.Disable),
 					pbsFormatOptionalInt64(e.ValidationDelay),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -695,29 +683,23 @@ func newAcmeChallengeSchemaLsCmd() *cobra.Command {
 				return fmt.Errorf("list acme challenge schemas: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]acmeChallengeSchemaEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e acmeChallengeSchemaEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode acme challenge schema entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[acmeChallengeSchemaEntry](rawItemsOf(resp), "acme challenge schema")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Id < entries[j].Id })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Id < table[j].Entry.Id })
 
 			headers := []string{"ID", "NAME", "TYPE"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.Id, e.Name, e.Type})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -764,29 +746,23 @@ func newAcmeDirectoriesLsCmd() *cobra.Command {
 				return fmt.Errorf("list acme directories: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]acmeDirectoryEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e acmeDirectoryEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode acme directory entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[acmeDirectoryEntry](rawItemsOf(resp), "acme directory")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "URL"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.Name, e.Url})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

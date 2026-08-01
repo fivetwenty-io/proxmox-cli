@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -74,33 +73,27 @@ func newEncKeyLsCmd() *cobra.Command {
 				return fmt.Errorf("list encryption keys: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]encKeyEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e encKeyEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode encryption key entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[encKeyEntry](rawItemsOf(resp), "encryption key")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Id < entries[j].Id })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Id < table[j].Entry.Id })
 
 			headers := []string{"ID", "KDF", "FINGERPRINT", "HINT", "CREATED", "MODIFIED", "ARCHIVED-AT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Id, e.Kdf, pbsFormatOptionalString(e.Fingerprint), pbsFormatOptionalString(e.Hint),
 					strconv.FormatInt(e.Created, 10), strconv.FormatInt(e.Modified, 10),
 					pbsFormatOptionalInt64(e.ArchivedAt),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

@@ -79,6 +79,11 @@ func newNodeCmd() *cobra.Command {
 // return type, so the generator produced a method returning only error. This
 // bypasses it via the shared raw transport (the same *client.Client every
 // generated binding is itself built on) to recover the actual entries.
+// nodeListEntry is the decoded shape of one element of GET /nodes.
+type nodeListEntry struct {
+	Node string `json:"node"`
+}
+
 func newNodeLsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls",
@@ -103,19 +108,20 @@ func newNodeLsCmd() *cobra.Command {
 				return fmt.Errorf("list nodes: %w", err)
 			}
 
-			headers := []string{"NODE"}
-			rows := make([][]string, 0, len(items))
-			for _, raw := range items {
-				var e struct {
-					Node string `json:"node"`
-				}
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode node entry: %w", err)
-				}
-				rows = append(rows, []string{e.Node})
+			table, err := cli.DecodePairedRows[nodeListEntry](items, "node")
+			if err != nil {
+				return err
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			headers := []string{"NODE"}
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				rows = append(rows, []string{t.Entry.Node})
+				raws = append(raws, t.Raw)
+			}
+
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

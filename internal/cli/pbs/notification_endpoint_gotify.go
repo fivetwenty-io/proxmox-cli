@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -62,32 +61,26 @@ func newNotifEndpointGotifyLsCmd() *cobra.Command {
 				return fmt.Errorf("list gotify endpoints: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]notifGotifyEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e notifGotifyEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode gotify endpoint entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[notifGotifyEntry](rawItemsOf(resp), "gotify endpoint")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "SERVER", "DISABLE", "ORIGIN", "COMMENT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, e.Server, pbsFormatOptionalBool(e.Disable),
 					pbsFormatOptionalString(e.Origin), pbsFormatOptionalString(e.Comment),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

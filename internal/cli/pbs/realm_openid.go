@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -73,31 +72,25 @@ func newRealmOpenidLsCmd() *cobra.Command {
 				return fmt.Errorf("list OpenID realms: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]realmOpenidListEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e realmOpenidListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode OpenID realm entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[realmOpenidListEntry](rawItemsOf(resp), "OpenID realm")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Realm < entries[j].Realm })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Realm < table[j].Entry.Realm })
 
 			headers := []string{"REALM", "ISSUER-URL", "CLIENT-ID", "DEFAULT", "COMMENT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Realm, e.IssuerUrl, e.ClientId, realmFormatOptionalPVEBool(e.Default), pbsFormatOptionalString(e.Comment),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

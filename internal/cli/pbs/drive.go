@@ -94,24 +94,26 @@ func newTapeDriveLsCmd() *cobra.Command {
 				return fmt.Errorf("list tape drives: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries, err := nodeDecodeArray[tapeDriveListEntry](items)
+			table, err := cli.DecodePairedRows[tapeDriveListEntry](rawItemsOf(resp), "tape drive")
 			if err != nil {
-				return fmt.Errorf("decode tape drive entry: %w", err)
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "PATH", "CHANGER", "MODEL", "VENDOR", "SERIAL", "STATE", "ACTIVITY"}
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, e.Path, pbsFormatOptionalString(e.Changer), pbsFormatOptionalString(e.Model),
 					pbsFormatOptionalString(e.Vendor), pbsFormatOptionalString(e.Serial),
 					pbsFormatOptionalString(e.State), pbsFormatOptionalString(e.Activity),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -332,23 +334,25 @@ func newTapeDriveScanCmd() *cobra.Command {
 				return fmt.Errorf("scan tape drives: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries, err := nodeDecodeArray[tapeScanDriveEntry](items)
+			table, err := cli.DecodePairedRows[tapeScanDriveEntry](rawItemsOf(resp), "scanned tape drive")
 			if err != nil {
-				return fmt.Errorf("decode scanned tape drive entry: %w", err)
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Path < table[j].Entry.Path })
 
 			headers := []string{"PATH", "KIND", "MODEL", "VENDOR", "SERIAL", "MAJOR", "MINOR"}
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Path, e.Kind, e.Model, e.Vendor, e.Serial,
 					pbsFormatOptionalInt64(&e.Major), pbsFormatOptionalInt64(&e.Minor),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -415,19 +419,21 @@ func newTapeDriveCartridgeMemoryCmd() *cobra.Command {
 				return fmt.Errorf("get cartridge memory for drive %q: %w", drive, err)
 			}
 
-			items := rawItemsOf(resp)
-			entries, err := nodeDecodeArray[tapeCartridgeMemoryEntry](items)
+			table, err := cli.DecodePairedRows[tapeCartridgeMemoryEntry](rawItemsOf(resp), "cartridge memory")
 			if err != nil {
-				return fmt.Errorf("decode cartridge memory entry for drive %q: %w", drive, err)
+				return fmt.Errorf("drive %q: %w", drive, err)
 			}
 
 			headers := []string{"ID", "NAME", "VALUE"}
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{pbsFormatOptionalInt64(&e.Id), e.Name, e.Value})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -539,20 +545,22 @@ func newTapeDriveInventoryCmd() *cobra.Command {
 				return fmt.Errorf("list media inventory for drive %q: %w", drive, err)
 			}
 
-			items := rawItemsOf(resp)
-			entries, err := nodeDecodeArray[tapeInventoryEntry](items)
+			table, err := cli.DecodePairedRows[tapeInventoryEntry](rawItemsOf(resp), "media inventory")
 			if err != nil {
-				return fmt.Errorf("decode media inventory entry for drive %q: %w", drive, err)
+				return fmt.Errorf("drive %q: %w", drive, err)
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].LabelText < entries[j].LabelText })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.LabelText < table[j].Entry.LabelText })
 
 			headers := []string{"LABEL-TEXT", "UUID"}
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.LabelText, pbsFormatOptionalString(e.Uuid)})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

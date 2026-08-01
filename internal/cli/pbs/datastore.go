@@ -78,26 +78,24 @@ func newDatastoreLsCmd() *cobra.Command {
 				return fmt.Errorf("list datastores: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]datastoreListEntry, 0, len(items))
-			for _, raw := range items {
-				var e datastoreListEntry
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode datastore entry: %w", err)
-				}
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[datastoreListEntry](rawItemsOf(resp), "datastore")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.Name, e.Path, e.Comment, e.GcSchedule, e.PruneSchedule})
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{
 				Headers: []string{"NAME", "PATH", "COMMENT", "GC-SCHEDULE", "PRUNE-SCHEDULE"},
 				Rows:    rows,
-				Raw:     decodeRawList(items),
+				Raw:     raws,
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
@@ -566,19 +564,16 @@ func newDatastoreUsageCmd() *cobra.Command {
 				return fmt.Errorf("list datastore usage: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]datastoreUsageEntry, 0, len(items))
-			for _, raw := range items {
-				var e datastoreUsageEntry
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return fmt.Errorf("decode datastore usage entry: %w", err)
-				}
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[datastoreUsageEntry](rawItemsOf(resp), "datastore usage")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Store < entries[j].Store })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Store < table[j].Entry.Store })
 
-			rows := make([][]string, 0, len(entries))
-			for _, e := range entries {
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Store,
 					e.BackendType,
@@ -588,12 +583,13 @@ func newDatastoreUsageCmd() *cobra.Command {
 					int64PtrString(e.Avail),
 					strPtrString(e.Error),
 				})
+				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{
 				Headers: []string{"STORE", "BACKEND", "MOUNT", "TOTAL", "USED", "AVAIL", "ERROR"},
 				Rows:    rows,
-				Raw:     decodeRawList(items),
+				Raw:     raws,
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
@@ -685,21 +681,6 @@ func rawItemsOf[T ~[]json.RawMessage](resp *T) []json.RawMessage {
 		return nil
 	}
 	return []json.RawMessage(*resp)
-}
-
-// decodeRawList decodes each element of items into a generic map, preserving
-// every field the API returned (unlike a typed struct, which only captures
-// fields it declares). Elements that fail to decode as an object are skipped
-// rather than aborting the whole list.
-func decodeRawList(items []json.RawMessage) []map[string]any {
-	out := make([]map[string]any, 0, len(items))
-	for _, raw := range items {
-		var obj map[string]any
-		if err := json.Unmarshal(raw, &obj); err == nil {
-			out = append(out, obj)
-		}
-	}
-	return out
 }
 
 // flattenToMap re-marshals v (a typed API response struct) and unmarshals the

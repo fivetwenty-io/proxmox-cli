@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -67,37 +66,31 @@ func newACLLsCmd() *cobra.Command {
 				return fmt.Errorf("list acl: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]aclListEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e aclListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode acl entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[aclListEntry](rawItemsOf(resp), "acl")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool {
-				if entries[i].Path != entries[j].Path {
-					return entries[i].Path < entries[j].Path
+			sort.Slice(table, func(i, j int) bool {
+				if table[i].Entry.Path != table[j].Entry.Path {
+					return table[i].Entry.Path < table[j].Entry.Path
 				}
 
-				return entries[i].Ugid < entries[j].Ugid
+				return table[i].Entry.Ugid < table[j].Entry.Ugid
 			})
 
 			headers := []string{"PATH", "UGID", "UGID-TYPE", "ROLEID", "PROPAGATE"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Path, e.Ugid, e.UgidType, e.Roleid, pbsFormatOptionalBool(e.Propagate),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

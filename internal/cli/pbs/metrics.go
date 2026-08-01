@@ -116,27 +116,20 @@ func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
 				return fmt.Errorf("list influxdb-http metric servers: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]metricsInfluxdbHTTPEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e metricsInfluxdbHTTPEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode influxdb-http metric server entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[metricsInfluxdbHTTPEntry](rawItemsOf(resp), "influxdb-http metric server")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{
 				"NAME", "URL", "ENABLE", "BUCKET", "ORGANIZATION", "MAX-BODY-SIZE", "VERIFY-TLS", "COMMENT",
 			}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name,
 					e.Url,
@@ -147,9 +140,9 @@ func newMetricsInfluxdbHTTPLsCmd() *cobra.Command {
 					metricsFormatOptionalBool(e.VerifyTls),
 					pbsFormatOptionalString(e.Comment),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			raws := decodeRawList(items)
 			for _, m := range raws {
 				stripMetricsSecrets(m)
 			}
@@ -498,25 +491,18 @@ func newMetricsInfluxdbUDPLsCmd() *cobra.Command {
 				return fmt.Errorf("list influxdb-udp metric servers: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]metricsInfluxdbUDPEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e metricsInfluxdbUDPEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode influxdb-udp metric server entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[metricsInfluxdbUDPEntry](rawItemsOf(resp), "influxdb-udp metric server")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "HOST", "ENABLE", "MTU", "COMMENT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name,
 					e.Host,
@@ -524,9 +510,10 @@ func newMetricsInfluxdbUDPLsCmd() *cobra.Command {
 					pbsFormatOptionalInt64(e.Mtu),
 					pbsFormatOptionalString(e.Comment),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

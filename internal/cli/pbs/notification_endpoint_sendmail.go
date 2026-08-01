@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -66,33 +65,27 @@ func newNotifEndpointSendmailLsCmd() *cobra.Command {
 				return fmt.Errorf("list sendmail endpoints: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]notifSendmailEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e notifSendmailEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode sendmail endpoint entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[notifSendmailEntry](rawItemsOf(resp), "sendmail endpoint")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "MAILTO", "MAILTO-USER", "FROM-ADDRESS", "DISABLE", "COMMENT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, trafficJoin(e.Mailto), trafficJoin(e.MailtoUser),
 					pbsFormatOptionalString(e.FromAddress), pbsFormatOptionalBool(e.Disable),
 					pbsFormatOptionalString(e.Comment),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -72,33 +71,27 @@ func newTapeChangerLsCmd() *cobra.Command {
 				return fmt.Errorf("list tape changers: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]tapeChangerListEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e tapeChangerListEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tape changer entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[tapeChangerListEntry](rawItemsOf(resp), "tape changer")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "PATH", "MODEL", "VENDOR", "SERIAL", "EXPORT-SLOTS", "EJECT-BEFORE-UNLOAD"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, e.Path, pbsFormatOptionalString(e.Model), pbsFormatOptionalString(e.Vendor),
 					pbsFormatOptionalString(e.Serial), pbsFormatOptionalString(e.ExportSlots),
 					pbsFormatOptionalBool(e.EjectBeforeUnload),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -343,32 +336,26 @@ func newTapeChangerScanCmd() *cobra.Command {
 				return fmt.Errorf("scan tape changers: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]tapeChangerScanEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e tapeChangerScanEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tape changer scan entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[tapeChangerScanEntry](rawItemsOf(resp), "tape changer scan")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Path < table[j].Entry.Path })
 
 			headers := []string{"PATH", "KIND", "MODEL", "VENDOR", "SERIAL", "MAJOR", "MINOR"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Path, e.Kind, e.Model, e.Vendor, e.Serial,
 					strconv.FormatInt(e.Major, 10), strconv.FormatInt(e.Minor, 10),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -411,32 +398,26 @@ func newTapeChangerStatusCmd() *cobra.Command {
 				return fmt.Errorf("get tape changer status %q: %w", name, err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]tapeChangerStatusEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e tapeChangerStatusEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode tape changer status entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[tapeChangerStatusEntry](rawItemsOf(resp), "tape changer status")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].EntryId < entries[j].EntryId })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.EntryId < table[j].Entry.EntryId })
 
 			headers := []string{"ENTRY-ID", "KIND", "STATE", "LOADED-SLOT", "LABEL-TEXT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					strconv.FormatInt(e.EntryId, 10), e.EntryKind, pbsFormatOptionalString(e.State),
 					pbsFormatOptionalInt64(e.LoadedSlot), pbsFormatOptionalString(e.LabelText),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

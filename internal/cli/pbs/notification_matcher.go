@@ -1,7 +1,6 @@
 package pbs
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
@@ -70,33 +69,27 @@ func newNotifMatcherLsCmd() *cobra.Command {
 				return fmt.Errorf("list notification matchers: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]notifMatcherEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e notifMatcherEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode notification matcher entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[notifMatcherEntry](rawItemsOf(resp), "notification matcher")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME", "MODE", "TARGET", "MATCH-SEVERITY", "MATCH-FIELD", "MATCH-CALENDAR", "INVERT-MATCH", "DISABLE"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{
 					e.Name, pbsFormatOptionalString(e.Mode), trafficJoin(e.Target),
 					trafficJoin(e.MatchSeverity), trafficJoin(e.MatchField), trafficJoin(e.MatchCalendar),
 					pbsFormatOptionalBool(e.InvertMatch), pbsFormatOptionalBool(e.Disable),
 				})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -434,29 +427,23 @@ func newNotifMatcherFieldsLsCmd() *cobra.Command {
 				return fmt.Errorf("list notification matcher fields: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]notifMatcherFieldEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e notifMatcherFieldEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode notification matcher field entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[notifMatcherFieldEntry](rawItemsOf(resp), "notification matcher field")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+			sort.Slice(table, func(i, j int) bool { return table[i].Entry.Name < table[j].Entry.Name })
 
 			headers := []string{"NAME"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.Name})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
@@ -503,34 +490,28 @@ func newNotifMatcherFieldValuesLsCmd() *cobra.Command {
 				return fmt.Errorf("list notification matcher field values: %w", err)
 			}
 
-			items := rawItemsOf(resp)
-			entries := make([]notifMatcherFieldValueEntry, 0, len(items))
-
-			for _, raw := range items {
-				var e notifMatcherFieldValueEntry
-
-				err := json.Unmarshal(raw, &e)
-				if err != nil {
-					return fmt.Errorf("decode notification matcher field value entry: %w", err)
-				}
-
-				entries = append(entries, e)
+			table, err := cli.DecodePairedRows[notifMatcherFieldValueEntry](rawItemsOf(resp), "notification matcher field value")
+			if err != nil {
+				return err
 			}
-			sort.Slice(entries, func(i, j int) bool {
-				if entries[i].Field != entries[j].Field {
-					return entries[i].Field < entries[j].Field
+			sort.Slice(table, func(i, j int) bool {
+				if table[i].Entry.Field != table[j].Entry.Field {
+					return table[i].Entry.Field < table[j].Entry.Field
 				}
-				return entries[i].Value < entries[j].Value
+				return table[i].Entry.Value < table[j].Entry.Value
 			})
 
 			headers := []string{"FIELD", "VALUE", "COMMENT"}
-			rows := make([][]string, 0, len(entries))
+			rows := make([][]string, 0, len(table))
+			raws := make([]map[string]any, 0, len(table))
 
-			for _, e := range entries {
+			for _, t := range table {
+				e := t.Entry
 				rows = append(rows, []string{e.Field, e.Value, pbsFormatOptionalString(e.Comment)})
+				raws = append(raws, t.Raw)
 			}
 
-			res := output.Result{Headers: headers, Rows: rows, Raw: decodeRawList(items)}
+			res := output.Result{Headers: headers, Rows: rows, Raw: raws}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
