@@ -180,7 +180,7 @@ func uploadSnippetSSH(
 
 	remote.ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
 
-	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, deps.Node)
+	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, deps.Node, deps.Log)
 	if err != nil {
 		return fmt.Errorf("resolve address for node %q: %w", deps.Node, err)
 	}

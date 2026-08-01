@@ -262,7 +262,7 @@ func runNfsAttach(cmd *cobra.Command, name string, dryRun bool) error {
 			"lab %q: the server-side NFS export-ensure phase requires an active pmx context/ssh runner", name)
 	}
 
-	serverHost, herr := createDatasetSSHHost(cmd.Context(), deps.API, deps.Node)
+	serverHost, herr := createDatasetSSHHost(cmd.Context(), deps.API, deps.Node, deps.Log)
 	if herr != nil {
 		return fmt.Errorf("lab %q: resolve ssh host for NFS server-side ensure phase (node %q): %w", name, deps.Node, herr)
 	}
@@ -653,7 +653,7 @@ func runNfsDetach(cmd *cobra.Command, name string, dryRun, yes bool) error {
 				name, exportOwner.owner.Name)
 		}
 
-		serverHost, herr := createDatasetSSHHost(cmd.Context(), deps.API, deps.Node)
+		serverHost, herr := createDatasetSSHHost(cmd.Context(), deps.API, deps.Node, deps.Log)
 		if herr != nil {
 			return fmt.Errorf("lab %q: resolve ssh host for NFS export ACL narrowing (node %q): %w", name, deps.Node, herr)
 		}

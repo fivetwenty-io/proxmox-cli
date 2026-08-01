@@ -144,7 +144,7 @@ func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []s
 	case config.ProductPBS, config.ProductPDM:
 		host = deps.Ctx.Host
 	case config.ProductPVE, "":
-		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
+		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node, deps.Log)
 		if err != nil {
 			return fmt.Errorf("resolve address for node %q: %w", node, err)
 		}

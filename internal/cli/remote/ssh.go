@@ -120,7 +120,7 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 			return fmt.Errorf("a node argument is required for a PVE context")
 		}
 		var err error
-		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
+		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node, deps.Log)
 		if err != nil {
 			return fmt.Errorf("resolve address for node %q: %w", node, err)
 		}

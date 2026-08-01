@@ -352,7 +352,7 @@ func nodeConn(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string) 
 			"editing /etc/pve requires a root ssh login, but the ssh user is %q; "+
 				"/etc/pve is only writable by root (re-run with -l root)", f.User)
 	}
-	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
+	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node, deps.Log)
 	if err != nil {
 		return nil, fmt.Errorf("resolve address for node %q: %w", node, err)
 	}

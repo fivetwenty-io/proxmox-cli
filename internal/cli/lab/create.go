@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net/url"
 	"regexp"
@@ -931,8 +932,8 @@ func createDatasetSSHFlags(deps *cli.Deps) sshcmd.Flags {
 // buildCreatePlan's own node parameter — the same node every VM/QDevice
 // target in this plan is created on — so the dataset is always probed and
 // created on the machine that will actually host it.
-func createDatasetSSHHost(ctx context.Context, ac *apiclient.APIClient, node string) (string, error) {
-	host, err := nodeaddr.Resolve(ctx, ac.Cluster, node)
+func createDatasetSSHHost(ctx context.Context, ac *apiclient.APIClient, node string, log *slog.Logger) (string, error) {
+	host, err := nodeaddr.Resolve(ctx, ac.Cluster, node, log)
 	if err != nil {
 		return "", fmt.Errorf("resolve ssh address for node %q: %w", node, err)
 	}
@@ -1248,7 +1249,7 @@ func buildCreatePlan(
 	case dryRun:
 		datasetStep = createStep{desc: datasetDesc + " (verified at apply time, not previewed)"}
 	default:
-		datasetHost, herr := createDatasetSSHHost(ctx, ac, node)
+		datasetHost, herr := createDatasetSSHHost(ctx, ac, node, deps.Log)
 		if herr != nil {
 			return nil, herr
 		}

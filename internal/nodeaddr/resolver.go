@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 )
 
 // clusterStatusEntry is the minimal shape of each JSON object in the
@@ -38,7 +42,15 @@ type StatusLister interface {
 // is not found, or if any error occurs during resolution, node is returned
 // unchanged as the host string so that callers can still attempt a connection
 // using the symbolic node name as a hostname.
-func Resolve(ctx context.Context, svc StatusLister, node string) (string, error) {
+//
+// The empty-list and not-found fallbacks are ordinary (a single-node install
+// returns no cluster status at all), but a failed lookup is not: an expired
+// token or an unreachable API silently degrades into a node name that is
+// rarely a real hostname, so the operator sees "ssh: Could not resolve
+// hostname pve-1" — a DNS error naming neither the API call that failed nor
+// why. That one case is reported via log and stderr before falling back. log
+// may be nil.
+func Resolve(ctx context.Context, svc StatusLister, node string, log *slog.Logger) (string, error) {
 	if ctx == nil {
 		return "", fmt.Errorf("nodeaddr.Resolve: ctx must not be nil")
 	}
@@ -48,7 +60,9 @@ func Resolve(ctx context.Context, svc StatusLister, node string) (string, error)
 
 	resp, err := svc.ListStatus(ctx)
 	if err != nil {
-		// Non-fatal: fall back to the node name so callers can still proceed.
+		// Non-fatal: fall back to the node name so callers can still proceed,
+		// but say why, or the cause is lost behind a downstream DNS error.
+		warnLookupFailed(node, err, log)
 		return node, nil
 	}
 
@@ -74,4 +88,24 @@ func Resolve(ctx context.Context, svc StatusLister, node string) (string, error)
 
 	// Node not found in cluster status list; fall back to node name as host.
 	return node, nil
+}
+
+// warnLookupFailed reports a failed cluster-status lookup to log (when one was
+// supplied) and to stderr, naming both the node and the underlying cause.
+//
+// Writing to stderr from this package rather than threading a writer through
+// every caller follows the same reasoning as internal/apiclient's task-warning
+// notice: the message exists for the operator watching the command, and the
+// fallback it announces is invisible everywhere else. Query parameters are
+// redacted because a transport error can carry the request URL, and an
+// authentication ticket travels in it.
+func warnLookupFailed(node string, err error, log *slog.Logger) {
+	reason := redact.QueryParams(err.Error())
+	if log != nil {
+		log.Warn("cluster status lookup failed; using the node name as the host",
+			"node", node, "error", reason)
+	}
+	fmt.Fprintf(os.Stderr,
+		"WARN: could not look up node %q in cluster status (%s); using %q as the host\n",
+		node, reason, node)
 }

@@ -29,7 +29,7 @@ func sshBaseArgs(f *sshFlags, host string) []string {
 // resolveHost resolves node to an SSH host (IP) via cluster status, falling back
 // to the node name when no address is available.
 func resolveHost(cmd *cobra.Command, deps *cli.Deps, node string) (string, error) {
-	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node)
+	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node, deps.Log)
 	if err != nil {
 		return "", fmt.Errorf("resolve address for node %q: %w", node, err)
 	}
