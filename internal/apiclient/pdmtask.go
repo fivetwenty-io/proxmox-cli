@@ -53,7 +53,8 @@ func PDMUPIDNode(upid string) (string, error) {
 // timeout and polling interval.
 //
 // On success it returns nil; on task failure or context cancellation it
-// returns a descriptive error.
+// returns a descriptive error. A task that completed with warnings returns
+// nil but reports the warning via warnIfTaskWarned.
 func WaitPDMTask(ctx context.Context, pc *PDMClient, upid string, opts *tasks.WaitOptions) error {
 	node, err := PDMUPIDNode(upid)
 	if err != nil {
@@ -71,5 +72,6 @@ func WaitPDMTask(ctx context.Context, pc *PDMClient, upid string, opts *tasks.Wa
 		return fmt.Errorf("wait task %s: nil status returned", upid)
 	}
 
+	warnIfTaskWarned(status)
 	return nil
 }
