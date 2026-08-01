@@ -193,10 +193,10 @@ func buildCreateCmdWithSSH(
 		exec.FakeResponse{}, // wait-for-ssh probe (hostname)
 		exec.FakeResponse{}, // ensure user
 		exec.FakeResponse{}, // ensure ACL
-		exec.FakeResponse{}, // token remove
-		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
 		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
 		exec.FakeResponse{Stdout: "lab-wayne-0\n"},                   // hostname (for DefaultNode)
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
 	deps.Runner = fake
 	deps.Ctx = &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}

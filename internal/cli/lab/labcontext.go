@@ -168,12 +168,41 @@ func labMintToken(deps *cli.Deps, ip string) (string, error) {
 		return "", fmt.Errorf("remove existing token on %s: %w", ip, rerr)
 	}
 
+	// Past this point the previous secret is gone: PVE cannot re-read a token
+	// value, so removal is destructive and nothing can undo it. Every failure
+	// below therefore says so, otherwise the operator is left with a context
+	// whose stored secret no longer authenticates and an error that never
+	// mentions why.
 	addCmd := fmt.Sprintf("pveum user token add %s %s --privsep 0 --output-format json", labCtxUser, labCtxTokenName)
 	res, err := runGuestSSH(deps, ip, addCmd)
 	if err != nil {
-		return "", fmt.Errorf("mint token on %s: %w", ip, err)
+		return "", fmt.Errorf("mint token on %s: %w%s", ip, err, labRotationNote)
 	}
-	return parseTokenAddValue(res.Stdout)
+
+	secret, err := parseTokenAddValue(res.Stdout)
+	if err != nil {
+		return "", fmt.Errorf("%w%s", err, labRotationNote)
+	}
+	return secret, nil
+}
+
+// labRotationNote is appended to every error raised once the previous token
+// has been removed. Rotation is not recoverable in place — a re-run mints a
+// fresh token — so the operator needs to know that retrying with the old
+// credential cannot work.
+const labRotationNote = " (the previous pmx@pve!pmx token was already removed, so the lab has no valid token" +
+	" until a re-run mints one)"
+
+// afterRotation annotates a post-mint failure with labRotationNote when this
+// run actually rotated the token. Steps between the mint and the final probe
+// can each fail, and until the new secret is both stored and saved the lab is
+// left without a working credential; an error that does not say so reads as a
+// harmless transient.
+func afterRotation(rotated bool, err error) error {
+	if err == nil || !rotated {
+		return err
+	}
+	return fmt.Errorf("%w%s", err, labRotationNote)
 }
 
 // labFetchFingerprint reads and normalizes the node's API certificate
@@ -337,6 +366,19 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	// still be valid elsewhere. Any other failure — an auth rejection, an
 	// unresolvable secret ref, or a raw net/TLS error the client does not
 	// classify — falls through to a rotation that self-heals.
+	// Fetched before the mint, not after: neither depends on the token, and
+	// each is a fallible ssh round-trip. Run after rotation they would widen
+	// the window in which the previous secret is already destroyed and the
+	// new one not yet stored.
+	fp, err := labFetchFingerprint(deps, node0IP)
+	if err != nil {
+		return res, err
+	}
+	hostname, err := labFetchHostname(deps, node0IP)
+	if err != nil {
+		return res, err
+	}
+
 	secretRef := ""
 	if existing, ok := deps.Cfg.Contexts[res.ContextName]; ok && existing != nil &&
 		existing.Auth.Secret != "" && existing.Auth.Username == labCtxUser &&
@@ -351,21 +393,16 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 		if err != nil {
 			return res, err
 		}
+		// Rotated is set before the store: the token on the node has already
+		// been replaced, so every failure from here on is a post-rotation
+		// failure whether or not the new secret was persisted.
+		res.Rotated = true
+
 		ref, err := labStoreSecretFn(cmd, deps, service, account, secret)
 		if err != nil {
-			return res, err
+			return res, afterRotation(res.Rotated, err)
 		}
 		secretRef = ref
-		res.Rotated = true
-	}
-
-	fp, err := labFetchFingerprint(deps, node0IP)
-	if err != nil {
-		return res, err
-	}
-	hostname, err := labFetchHostname(deps, node0IP)
-	if err != nil {
-		return res, err
 	}
 
 	in := config.LabContextInput{
@@ -380,17 +417,18 @@ func syncLabContext(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, opts la
 	}
 	changed, err := config.UpsertLabContext(deps.Cfg, res.ContextName, in)
 	if err != nil {
-		return res, err
+		return res, afterRotation(res.Rotated, err)
 	}
 	res.Changed = changed
 
 	if err := config.Save(deps.ConfigPath, deps.Cfg); err != nil {
-		return res, fmt.Errorf("save config: %w", err)
+		return res, afterRotation(res.Rotated, fmt.Errorf("save config: %w", err))
 	}
 
 	// Mandatory end-to-end proof the context actually works.
 	if err := labProbeContextVersion(cmd, deps, res.ContextName); err != nil {
-		return res, fmt.Errorf("context %q written but GET /version failed: %w", res.ContextName, err)
+		return res, afterRotation(res.Rotated,
+			fmt.Errorf("context %q written but GET /version failed: %w", res.ContextName, err))
 	}
 	return res, nil
 }

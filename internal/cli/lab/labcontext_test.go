@@ -2,6 +2,7 @@ package lab
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -676,10 +677,10 @@ func TestSyncLabContext_FreshMintsAndWritesContext(t *testing.T) {
 	fake := exec.Fake(
 		exec.FakeResponse{}, // ensure user
 		exec.FakeResponse{}, // ensure ACL
-		exec.FakeResponse{}, // token remove
-		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
 		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
 		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
 	cmd, deps := syncTestDeps(t, fake)
 	lab := multiNodeTestLab("demo", 1, "never")
@@ -761,10 +762,10 @@ func TestSyncLabContext_RefusesReuseWhenIdentityDiffers(t *testing.T) {
 	fake := exec.Fake(
 		exec.FakeResponse{}, // ensure user
 		exec.FakeResponse{}, // ensure ACL
-		exec.FakeResponse{}, // token remove
-		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
 		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
 		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
 	cmd, deps := syncTestDeps(t, fake)
 	deps.Cfg.Contexts["lab-demo"] = &config.Context{
@@ -827,10 +828,10 @@ func TestSyncLabContext_RotatesOnAuthProbeFailure(t *testing.T) {
 	fake := exec.Fake(
 		exec.FakeResponse{}, // ensure user
 		exec.FakeResponse{}, // ensure ACL
-		exec.FakeResponse{}, // token remove
-		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},          // token add
 		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
 		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
 	cmd, deps := syncTestDeps(t, fake)
 	deps.Cfg.Contexts["lab-demo"] = &config.Context{
@@ -858,10 +859,12 @@ func TestSyncLabContext_RotatesOnAuthProbeFailure(t *testing.T) {
 func TestSyncLabContext_ProbeFailureIsFatal(t *testing.T) {
 	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
 	fake := exec.Fake(
-		exec.FakeResponse{}, exec.FakeResponse{}, exec.FakeResponse{},
-		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},
-		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"},
-		exec.FakeResponse{Stdout: "lab-demo-0\n"},
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
 	cmd, deps := syncTestDeps(t, fake)
 	// Force the end-to-end probe (after upsert) to fail.
@@ -891,10 +894,12 @@ func TestSyncLabContext_ProbeFailureIsFatal(t *testing.T) {
 func TestContextSyncCommand_WritesContextAndRenders(t *testing.T) {
 	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
 	fake := exec.Fake(
-		exec.FakeResponse{}, exec.FakeResponse{}, exec.FakeResponse{},
-		exec.FakeResponse{Stdout: `{"value":"the-secret"}`},
-		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"},
-		exec.FakeResponse{Stdout: "lab-demo-0\n"},
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+		exec.FakeResponse{}, // token remove
+		exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
 	)
 	_, deps := syncTestDeps(t, fake)
 	// Write a lab config the command can resolve.
@@ -1055,4 +1060,137 @@ func writeLabConfig(t *testing.T, path, name string) {
 		"    name: " + name + "\n" +
 		"    network:\n      mgmt:\n        subnet: 10.10.1.0/24\n        gateway: 10.10.1.1\n"
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+}
+
+// TestSyncLabContext_PostRotationFailuresNameTheRotation covers each step that
+// can fail after the token has been replaced on the node. PVE hands out a
+// token value exactly once, so removal is irreversible: the stored secret is
+// dead the moment the mint runs, and an error that does not say so reads as a
+// transient the operator should retry with the credential they still have.
+func TestSyncLabContext_PostRotationFailuresNameTheRotation(t *testing.T) {
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+
+	newFake := func() *exec.FakeRunner {
+		return exec.Fake(
+			exec.FakeResponse{}, // ensure user
+			exec.FakeResponse{}, // ensure ACL
+			exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+			exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+			exec.FakeResponse{}, // token remove
+			exec.FakeResponse{Stdout: `{"value":"the-secret"}`}, // token add
+		)
+	}
+
+	cases := []struct {
+		name string
+		// arrange installs the failure and runs after syncTestDeps.
+		arrange func(t *testing.T, deps *cli.Deps)
+	}{
+		{
+			name: "keychain store fails",
+			arrange: func(t *testing.T, _ *cli.Deps) {
+				t.Helper()
+				labStoreSecretFn = func(*cobra.Command, *cli.Deps, string, string, string) (string, error) {
+					return "", errors.New("keychain store refused")
+				}
+			},
+		},
+		{
+			name: "config save fails",
+			arrange: func(t *testing.T, deps *cli.Deps) {
+				t.Helper()
+				// A directory where the config file belongs makes the write
+				// fail without any stubbing of the config package.
+				deps.ConfigPath = t.TempDir()
+			},
+		},
+		{
+			name: "end-to-end probe fails",
+			arrange: func(t *testing.T, _ *cli.Deps) {
+				t.Helper()
+				labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
+					return assertAnErr{}
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, deps := syncTestDeps(t, newFake())
+			tc.arrange(t, deps)
+
+			lab := multiNodeTestLab("demo", 1, "never")
+			lab.Name = "demo"
+
+			res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+			require.Error(t, err)
+			assert.True(t, res.Rotated, "the token was replaced, so the result must record it")
+			assert.Contains(t, err.Error(), "already removed",
+				"the failure must say the previous token is gone")
+		})
+	}
+}
+
+// TestLabMintToken_AddFailureNamesTheRotation covers the narrower window
+// inside the mint itself: the remove has succeeded and the add has not, so the
+// node is left with no token at all.
+func TestLabMintToken_AddFailureNamesTheRotation(t *testing.T) {
+	cases := map[string]exec.FakeResponse{
+		"add exits non-zero":  {ExitCode: 1, Stderr: "permission denied"},
+		"add returns garbage": {Stdout: "not json"},
+	}
+
+	for name, addResp := range cases {
+		t.Run(name, func(t *testing.T) {
+			fake := exec.Fake(
+				exec.FakeResponse{}, // token remove
+				addResp,
+			)
+			deps := &cli.Deps{
+				Runner: fake,
+				Ctx:    &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}},
+			}
+
+			_, err := labMintToken(deps, "192.0.2.1")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "already removed")
+		})
+	}
+}
+
+// TestSyncLabContext_ReuseFailuresDoNotClaimRotation is the other half: a run
+// that reuses a still-valid secret rotates nothing, so its errors must not
+// tell the operator their credential was destroyed.
+func TestSyncLabContext_ReuseFailuresDoNotClaimRotation(t *testing.T) {
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+	deps.Cfg.Contexts["lab-demo"] = &config.Context{
+		Host: "10.10.1.10", Port: 8006, Protocol: "https", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx",
+			Secret: "keychain:pmx-lab-demo/pmx@pve!pmx"},
+	}
+	probeCalls := 0
+	labProbeContextVersion = func(*cobra.Command, *cli.Deps, string) error {
+		probeCalls++
+		if probeCalls == 1 {
+			return nil // reuse probe succeeds, so no rotation happens
+		}
+		return assertAnErr{}
+	}
+
+	lab := multiNodeTestLab("demo", 1, "never")
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.Error(t, err)
+	assert.False(t, res.Rotated)
+	assert.NotContains(t, err.Error(), "already removed",
+		"nothing was rotated, so the error must not say a token was removed")
 }
