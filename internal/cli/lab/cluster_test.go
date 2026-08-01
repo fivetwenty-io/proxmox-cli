@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -488,11 +489,34 @@ func TestClusterWaitForJoin_DoesNotSleepAfterFinalAttempt(t *testing.T) {
 
 	deps := &cli.Deps{Runner: exec.Fake(), Ctx: &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}}
 
-	err := clusterWaitForJoin(deps, "10.10.1.10", 3)
+	err := clusterWaitForJoin(context.Background(), deps, "10.10.1.10", 3)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "timed out")
 	assert.Equal(t, clusterJoinPollAttempts-1, sleepCalls,
 		"must sleep only between attempts, never after the final one")
+}
+
+// TestClusterWaitForJoin_HonorsCancelledContext covers the ^C path. `pvecm
+// add` restarts corosync on the joining node, so this loop is where an
+// interrupted join most often sits; it must unwind on the first attempt
+// rather than spend its whole budget on ssh calls that cannot succeed.
+func TestClusterWaitForJoin_HonorsCancelledContext(t *testing.T) {
+	sleepCalls := 0
+	orig := clusterPollSleep
+	clusterPollSleep = func(_ time.Duration) { sleepCalls++ }
+	defer func() { clusterPollSleep = orig }()
+
+	fake := exec.Fake()
+	deps := &cli.Deps{Runner: fake, Ctx: &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := clusterWaitForJoin(ctx, deps, "10.10.1.10", 3)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, fake.Calls, "must not issue an ssh probe after cancellation")
+	assert.Zero(t, sleepCalls)
 }
 
 func TestClusterStatus_RendersFields(t *testing.T) {

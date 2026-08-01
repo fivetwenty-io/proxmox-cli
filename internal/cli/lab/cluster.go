@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -281,7 +282,7 @@ func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) erro
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 
-	message, err := ensureClusterJoin(deps, lab, name, idx, node0IP, nodeIP)
+	message, err := ensureClusterJoin(cmd.Context(), deps, lab, name, idx, node0IP, nodeIP)
 	if err != nil {
 		return err
 	}
@@ -295,7 +296,9 @@ func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) erro
 // error string is already fully formed exactly as runClusterJoin's original
 // inline version produced it — see runClusterJoin for the byte-for-byte
 // equivalence this preserves.
-func ensureClusterJoin(deps *cli.Deps, lab *config.Lab, name string, idx int, node0IP, nodeIP string) (message string, err error) {
+func ensureClusterJoin(
+	ctx context.Context, deps *cli.Deps, lab *config.Lab, name string, idx int, node0IP, nodeIP string,
+) (message string, err error) {
 	joinCmd := fmt.Sprintf("pvecm add %s --link0 %s --use_ssh", node0IP, nodeIP)
 
 	probe, perr := runGuestSSH(deps, nodeIP, "pvecm status")
@@ -360,7 +363,7 @@ func ensureClusterJoin(deps *cli.Deps, lab *config.Lab, name string, idx int, no
 			strings.TrimSpace(joinRes.Stdout), strings.TrimSpace(joinRes.Stderr))
 	}
 
-	if err := clusterWaitForJoin(deps, node0IP, idx+1); err != nil {
+	if err := clusterWaitForJoin(ctx, deps, node0IP, idx+1); err != nil {
 		return "", fmt.Errorf("lab %q: node %d joined, but %w", name, idx, err)
 	}
 
@@ -523,10 +526,22 @@ func clusterCountGuestListRows(output string) int {
 // until it reports exactly wantVotes expected and total votes, quorate, and
 // every corosync link connected — or clusterJoinPollAttempts is exhausted,
 // in which case it returns a descriptive error rather than hanging forever.
-func clusterWaitForJoin(deps *cli.Deps, node0IP string, wantVotes int) error {
+//
+// ctx is checked once per attempt, mirroring labWaitForSSH: `pvecm add`
+// restarts corosync on the joining node, so this loop is exactly where an
+// operator is most likely to reach for ^C, and it must unwind rather than run
+// its full attempt budget.
+func clusterWaitForJoin(ctx context.Context, deps *cli.Deps, node0IP string, wantVotes int) error {
 	var lastErr error
 
 	for attempt := 1; attempt <= clusterJoinPollAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				return fmt.Errorf("waiting for quorum: %w (last state: %v)", err, lastErr)
+			}
+			return fmt.Errorf("waiting for quorum: %w", err)
+		}
+
 		statusRes, serr := runGuestSSH(deps, node0IP, "pvecm status")
 		if serr != nil {
 			lastErr = fmt.Errorf("query node 0 (%s) pvecm status: %w", node0IP, serr)

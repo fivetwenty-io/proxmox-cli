@@ -631,7 +631,7 @@ func executeScalePlan(
 				break // serial order: never join node i+1 before node i.
 			}
 
-			joinMsg, err := ensureClusterJoin(deps, lab, name, i, node0IP, nodeIP)
+			joinMsg, err := ensureClusterJoin(ctx, deps, lab, name, i, node0IP, nodeIP)
 			if err != nil {
 				return nil, err
 			}
