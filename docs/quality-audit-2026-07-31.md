@@ -26,8 +26,8 @@ every commit. The defects below are the ones those tools cannot see.
 
 ## Closed
 
-Nineteen commits, each with regression tests where behavior changed. Grouped
-by what was actually wrong.
+Twenty-seven commits, each with regression tests where behavior changed.
+Grouped by what was actually wrong.
 
 ### Values reaching a remote root shell unvalidated
 
@@ -226,56 +226,118 @@ the order is wrong and if a raw object is paired with the wrong row. It covers
 one command per decode shape, including the site that strips secrets from the
 raw objects, and all eight cases fail against the pre-fix code.
 
+### Failures that named neither their cause nor their cost
+
+Three commands lost the one fact an operator needed to act.
+
+`nodeaddr.Resolve` falls back to the node name when the cluster-status call
+fails. The fallback is deliberate, but the name is rarely a real hostname, so
+an expired token surfaced as `ssh: Could not resolve hostname pve-1` — a DNS
+error naming neither the API call nor the credential behind it. The cause is
+now reported on the log and stderr before falling back. The empty-list and
+node-not-found fallbacks stay silent: a single-node install returns no cluster
+status at all, and warning on the ordinary case teaches operators to ignore the
+warning that matters.
+
+`pmx lab context sync` rotates the lab token by removing it and minting a new
+one. PVE returns a token value exactly once, so from the mint onwards the
+stored secret is dead — yet the keychain store, the config write, and the
+end-to-end probe could each fail with an error that never mentioned it, leaving
+a broken context and a message that read like a transient. Every post-mint
+failure now says the token was already rotated, and the fingerprint and
+hostname are fetched *before* the mint, since neither depends on the token and
+running them after only widened the window.
+
+The container security audit returned the first config-read error, so one
+unreadable container out of hundreds produced no report at all, while the VM
+twin degraded that row and carried on. They now behave alike. That audit's row
+struct also had no exported fields, so `-o json` and `-o yaml` rendered a list
+of empty objects.
+
+### Audits that took one round trip per guest
+
+Both security audits are N+1 by nature — one cluster-resources scan, then one
+config read per guest — and both ran the reads back to back. They now fan out
+eight at a time: well inside what a default pveproxy accepts, where unbounded
+would point hundreds of simultaneous connections at a single pvedaemon. Rows
+are written by index rather than appended as reads finish, so the report stays
+in VMID order and can be diffed against yesterday's run.
+
+The fan-out is proved rather than asserted: the fake server records how many
+reads are in flight, and the test fails when the cap is lowered to one.
+
+### A prune that kept the tree's skeleton, and shouted when run twice
+
+Two findings surfaced while covering `internal/logx/prune.go`'s error branches,
+both from tests written to exercise paths nothing had reached.
+
+A directory only entered the prune's bookkeeping by having a child walked, so a
+directory left empty by an earlier run survived every run after it — the log
+tree kept its skeleton forever, which is part of how the 407 MB tree above got
+its 112,580 entries.
+
+And two invocations can pass the daily sentinel gate at once, after which the
+walk lstats entries the other prune has already removed. Only `os.Remove`
+tolerated that; the walk itself reported it, so a routine concurrent prune
+printed a list of `no such file or directory`. Writing that test also turned up
+a filesystem detail worth recording: on darwin, two concurrent `unlink` calls
+on one path can *both* report success, so per-call deletion counts cannot be
+exact under concurrency, and the test asserts bounds rather than a split.
+
+### Two names for one thing
+
+`migrate` names its storage mapping `--targetstorage` and `remote-migrate`
+names the same thing `--target-storage`, each mirroring the API parameter it
+carries. Mirroring the API keeps a flag findable from the Proxmox
+documentation, but an operator who learned one spelling got "unknown flag" from
+the neighbouring command. Both spellings now resolve to the same flag through
+pflag's name normaliser, so help and completion still show one name each.
+
+Likewise `template`: `lxc` had to call the conversion `to-template` because
+`lxc template` is the appliance-download group, so one word meant a destructive
+verb for VMs and a noun group for containers. `qemu template` now answers to
+`to-template` too, and both commands say in their help why the other name
+exists.
+
+### Warnings, on the operator's terms
+
+A task can finish with a `WARNINGS: N` exit status — a vzdump that skipped an
+unreachable guest. The warning reaches stderr, and the command still exits 0.
+
+Whether that is a failure depends on the fleet, and scripts already branch on
+the current codes, so it is opt-in rather than a changed default:
+`--warnings-as-errors`, `PMX_WARNINGS_AS_ERRORS`, or `warnings-as-errors` in
+the config file. Such a task exits 8, not the generic 1 — the work was done, so
+a script treating it like a command that failed to run would retry what already
+happened.
+
+### Config keys that no setting matches
+
+`config.Load` is permissive on purpose: a config carrying a key this binary
+does not know must still load, or the operator cannot run the CLI at all. The
+cost is that a typo is indistinguishable from silence — `fingerprnt` under a
+context means TLS pinning is simply not happening.
+
+`pmx context validate` now re-reads the file strictly and names each unmatched
+key by its full dotted path. It does not affect the exit status: a config
+shared with a newer pmx legitimately carries keys this build has never heard
+of, and failing on those would make the verb unusable exactly when it is most
+needed.
+
 ## Deferred, with reasons
 
-These are real, and deliberately not changed here.
+One item remains open by choice.
 
 - **Log retention is disabled by default** (`internal/config/config.go`). This
-  is the direct cause of the 407 MB tree above, and the completion fix removes
-  the largest contributor but not the default. Turning retention on by default
-  would start deleting an operator's existing logs on upgrade. That is a
-  destructive default change and belongs to the maintainer, not to a hardening
-  pass. `pmx logs prune` already exists for it.
+  is the direct cause of the 407 MB tree above. The completion fix removed the
+  largest contributor, and the prune fixes above stop the tree keeping its
+  skeleton, but the default is still off. Turning retention on by default would
+  start deleting an operator's existing logs on upgrade. That is a destructive
+  default change and belongs to the maintainer, not to a hardening pass;
+  `pmx logs prune` and `log.retention` already exist for anyone who wants it.
 
-- **Whether a `WARNINGS: N` task should exit non-zero.** The warning is now
-  reported (above), but the exit code is still 0. Changing it is a contract
-  decision for scripts already depending on the current codes.
-
-- **Config is parsed non-strictly, so a misspelled key is silently ignored**
-  (`internal/config/loader.go`). Switching `Load` to strict parsing would make
-  every existing config carrying an unknown key fail to load, which could leave
-  an operator unable to run the CLI at all. The better shape, if wanted: keep
-  `Load` permissive and add a strict re-parse reporting unknown keys inside
-  `pmx context validate`, which is already the "tell me what's wrong with my
-  config" verb.
-
-- **`nodeaddr.Resolve` swallows the cluster-status error** and falls back to
-  the symbolic node name, so an expired token surfaces as `ssh: Could not
-  resolve hostname pve-1`. The fallback itself is deliberate and documented;
-  making the cause visible needs a logger the function does not currently have.
-
-- **`labMintToken` deletes the old token before five more fallible steps**
-  (`internal/cli/lab/labcontext.go`), and no error mentions the rotation
-  already happened. The guard above it means the old secret is usually already
-  known-bad, which is why this is not higher: hoisting the two independent
-  fetches above the mint and naming the rotation in post-mint errors would
-  close it.
-
-- **N+1 sequential config reads in the lxc/qemu security audits**, and the
-  related divergence where the lxc twin aborts on one unreadable container
-  while the qemu twin degrades gracefully. Worth fixing; a behavior-shaping
-  change large enough to want its own review.
-
-- **Cross-persona duplication** (pbs/pdm near-identical command bodies, two
-  names for one helper, `--targetstorage` vs `--target-storage`, `template`
-  meaning opposite things for VMs and containers). Genuine maintainability
-  debt, and the user-visible flag naming items are breaking changes.
-
-- **Remaining test-suite gaps.** The two CI gates and the two self-disabling
-  tests are closed (above). Still open: `internal/logx/prune.go`'s deletion
-  error branches are unexercised, `cmd/pmx` has no test files, and 32 tests
-  assert only `require.NoError` with no value assertion. Worth a dedicated pass
-  with `go-testing-analysis`.
+Everything else previously listed here has since been closed and is described
+above.
 
 ### CI gates
 
@@ -304,7 +366,11 @@ assert.
 
 **CHANGES REQUIRED → PASS** for everything remediated above. The full gate
 block — `go test`, `go test -race`, `go vet`, `staticcheck`, `golangci-lint`,
-`gosec` — is green, and `gosec` is back to its pre-audit baseline with no new
-findings introduced. The deferred items are listed above rather than closed
-because each one either destroys operator data, changes a documented contract,
-or is large enough to deserve its own review.
+`gosec` — is green. `gosec` reports 26 findings against a pre-audit 25: the one
+addition is `internal/config/unknownkeys.go` reading the config path, the same
+already-reviewed G304 pattern as `config.Load` two lines of which it mirrors,
+carrying the same annotation.
+
+One item is deferred rather than closed, because changing it would delete an
+operator's existing data on upgrade. That is the maintainer's call, not a
+hardening pass's.
