@@ -220,17 +220,36 @@ func TestBatchOptionArgs(t *testing.T) {
 		{
 			name: "defaults",
 			f:    Flags{User: "root", Port: 22},
-			want: []string{"-p", "22", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"},
+			want: []string{
+				"-p", "22",
+				"-o", "BatchMode=yes",
+				"-o", "ConnectTimeout=10",
+				"-o", "ServerAliveInterval=15",
+				"-o", "ServerAliveCountMax=4",
+			},
 		},
 		{
 			name: "custom port",
 			f:    Flags{User: "root", Port: 2222},
-			want: []string{"-p", "2222", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"},
+			want: []string{
+				"-p", "2222",
+				"-o", "BatchMode=yes",
+				"-o", "ConnectTimeout=10",
+				"-o", "ServerAliveInterval=15",
+				"-o", "ServerAliveCountMax=4",
+			},
 		},
 		{
 			name: "identity file",
 			f:    Flags{User: "root", Port: 22, Identity: "/home/root/.ssh/id_rsa"},
-			want: []string{"-p", "22", "-i", "/home/root/.ssh/id_rsa", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"},
+			want: []string{
+				"-p", "22",
+				"-i", "/home/root/.ssh/id_rsa",
+				"-o", "BatchMode=yes",
+				"-o", "ConnectTimeout=10",
+				"-o", "ServerAliveInterval=15",
+				"-o", "ServerAliveCountMax=4",
+			},
 		},
 		{
 			name: "all combined",
@@ -248,6 +267,8 @@ func TestBatchOptionArgs(t *testing.T) {
 				"-o", "StrictHostKeyChecking=no",
 				"-o", "BatchMode=yes",
 				"-o", "ConnectTimeout=10",
+				"-o", "ServerAliveInterval=15",
+				"-o", "ServerAliveCountMax=4",
 			},
 		},
 	}
@@ -260,8 +281,8 @@ func TestBatchOptionArgs(t *testing.T) {
 }
 
 // TestBatchOptionArgs_IsOptionArgsPlusBatch locks in that BatchOptionArgs stays
-// exactly OptionArgs followed by the two non-interactive hardening options, so
-// the interactive OptionArgs/BaseArgs paths keep their behavior unchanged.
+// exactly OptionArgs followed by the non-interactive hardening options, so the
+// interactive OptionArgs/BaseArgs paths keep their behavior unchanged.
 func TestBatchOptionArgs_IsOptionArgsPlusBatch(t *testing.T) {
 	cases := []Flags{
 		{User: "root", Port: 22},
@@ -270,6 +291,7 @@ func TestBatchOptionArgs_IsOptionArgsPlusBatch(t *testing.T) {
 
 	for _, f := range cases {
 		want := append(OptionArgs(&f), "-o", "BatchMode=yes", "-o", "ConnectTimeout=10")
+		want = append(want, KeepaliveOptionArgs()...)
 		require.Equal(t, want, BatchOptionArgs(&f))
 	}
 }

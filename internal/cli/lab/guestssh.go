@@ -98,6 +98,10 @@ func labGuestSSHArgs(f sshcmd.Flags, host string) []string {
 		"-o", "StrictHostKeyChecking=accept-new",
 		"-o", "ForwardAgent=no",
 	)
+	// See sshcmd.KeepaliveOptionArgs: `pvecm add` and the hostnet apply verbs
+	// reconfigure the very network this session runs over, so an established
+	// session going silent is an expected outcome here, not an exotic one.
+	args = append(args, sshcmd.KeepaliveOptionArgs()...)
 	args = append(args, sshcmd.Dest(&f, host))
 	return args
 }

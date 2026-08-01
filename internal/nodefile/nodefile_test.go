@@ -31,7 +31,13 @@ func testFlags() *sshcmd.Flags {
 
 // batchOpts is the leading ssh option argv every non-interactive call carries.
 func batchOpts() []string {
-	return []string{"-p", "22", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"}
+	return []string{
+		"-p", "22",
+		"-o", "BatchMode=yes",
+		"-o", "ConnectTimeout=10",
+		"-o", "ServerAliveInterval=15",
+		"-o", "ServerAliveCountMax=4",
+	}
 }
 
 func TestRead_ArgvAndSHA(t *testing.T) {

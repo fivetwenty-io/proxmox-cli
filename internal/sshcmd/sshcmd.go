@@ -49,18 +49,44 @@ func OptionArgs(f *Flags) []string {
 // (non-interactive) ssh invocations built by BatchOptionArgs.
 const DefaultConnectTimeoutSec = 10
 
+// Keepalive bounds for scripted ssh invocations. ConnectTimeout covers only
+// connection establishment; once the session is up, a peer that stops
+// answering without sending a RST or FIN leaves ssh blocked with no wall-clock
+// bound at all. That is not an exotic fault here: `pvecm add` restarts
+// corosync, which reconfigures the management network and can transiently
+// partition it, and the ssh session running that very command is what
+// blackholes. These two options make ssh probe a silent peer and give up
+// after DefaultServerAliveIntervalSec * DefaultServerAliveCountMax seconds.
+// Scripted invocations have no interactive session worth preserving, so
+// disconnecting is always better than hanging.
+const (
+	DefaultServerAliveIntervalSec = 15
+	DefaultServerAliveCountMax    = 4
+)
+
+// KeepaliveOptionArgs returns the ssh keepalive options shared by every
+// scripted invocation.
+func KeepaliveOptionArgs() []string {
+	return []string{
+		"-o", fmt.Sprintf("ServerAliveInterval=%d", DefaultServerAliveIntervalSec),
+		"-o", fmt.Sprintf("ServerAliveCountMax=%d", DefaultServerAliveCountMax),
+	}
+}
+
 // BatchOptionArgs builds the ssh option argv for scripted, non-interactive
-// invocations: OptionArgs plus the two options that make ssh safe to run
-// without a terminal. BatchMode=yes makes ssh fail instead of prompting for a
-// password, passphrase, or host-key confirmation, and ConnectTimeout bounds
-// how long connection establishment may hang. It never mutates the OptionArgs
+// invocations: OptionArgs plus the options that make ssh safe to run without
+// a terminal. BatchMode=yes makes ssh fail instead of prompting for a
+// password, passphrase, or host-key confirmation, ConnectTimeout bounds how
+// long connection establishment may hang, and the keepalive pair bounds how
+// long an established session may hang. It never mutates the OptionArgs
 // result: interactive callers (pmx ssh, node shell, qemu ssh) keep their
 // prompting behavior.
 func BatchOptionArgs(f *Flags) []string {
-	return append(OptionArgs(f),
+	args := append(OptionArgs(f),
 		"-o", "BatchMode=yes",
 		"-o", fmt.Sprintf("ConnectTimeout=%d", DefaultConnectTimeoutSec),
 	)
+	return append(args, KeepaliveOptionArgs()...)
 }
 
 // Dest builds the ssh destination ("user@host") for the given host using the
