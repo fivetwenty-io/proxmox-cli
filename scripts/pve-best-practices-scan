@@ -1,0 +1,1271 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Scan PVE hosts and clusters for best-practice conformance and report.
+
+Runs read-only `pmx` commands against one or more configured pmx contexts
+(single hosts or clusters) and evaluates the results against Proxmox VE
+operational best practices: quorum and corosync design, HA policy, firewall
+posture, backup coverage, storage headroom and provisioning, update
+repositories, node health, host networking, and Ceph replication.
+
+Usage:
+    scripts/pve-best-practices-scan                    # scan current context
+    scripts/pve-best-practices-scan lab-pmx lab        # scan named contexts
+    scripts/pve-best-practices-scan --output json lab-pmx
+    scripts/pve-best-practices-scan --only storage,backup lab-pmx
+    scripts/pve-best-practices-scan --list-checks
+
+Every check is read-only. Exit status: 0 clean (no FAIL), 1 at least one
+FAIL finding, 2 usage error or execution error (any ERROR finding),
+130 interrupted.
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+# --- severities -------------------------------------------------------------
+
+PASS = "PASS"
+INFO = "INFO"
+WARN = "WARN"
+FAIL = "FAIL"
+SKIP = "SKIP"
+ERROR = "ERROR"
+
+SEVERITY_ORDER = {FAIL: 0, ERROR: 1, WARN: 2, INFO: 3, PASS: 4, SKIP: 5}
+
+ANSI = {
+    PASS: "\033[32m",
+    INFO: "\033[36m",
+    WARN: "\033[33m",
+    FAIL: "\033[31m",
+    SKIP: "\033[90m",
+    ERROR: "\033[35m",
+}
+RESET = "\033[0m"
+BOLD = "\033[1m"
+
+ABORT = threading.Event()
+ACTIVE_PROCS: set[subprocess.Popen] = set()
+ACTIVE_LOCK = threading.Lock()
+
+
+@dataclass
+class Finding:
+    severity: str
+    category: str
+    check: str
+    target: str  # "cluster" or a node name
+    message: str
+    recommendation: str = ""
+
+
+@dataclass
+class CmdResult:
+    ok: bool
+    data: Any = None
+    error: str = ""
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        proc.kill()
+
+
+def _extract_error(stderr: str, stdout: str) -> str:
+    lines = [
+        ln.strip()
+        for ln in (stderr or stdout or "").splitlines()
+        if ln.strip() and not ln.startswith("WARN: TLS")
+    ]
+    if not lines:
+        return "command failed"
+    # cobra prints "Error: ..." first, then usage; keep the informative part.
+    errs = [ln for ln in lines if ln.lower().startswith("error")]
+    return "; ".join((errs or lines)[:3])
+
+
+class Pmx:
+    """Thin runner around the pmx CLI with per-context result caching."""
+
+    def __init__(self, binary: str, context: str, timeout: float) -> None:
+        self.binary = binary
+        self.context = context
+        self.timeout = timeout
+        self._cache: dict[tuple[str, ...], CmdResult] = {}
+
+    def run(self, *args: str, node: str | None = None) -> CmdResult:
+        argv = [self.binary, "-o", "json", "--no-log"]
+        if self.context:
+            argv += ["-c", self.context]
+        if node:
+            argv += ["--node", node]
+        argv += list(args)
+        key = tuple(argv)
+        if key in self._cache:
+            return self._cache[key]
+        if ABORT.is_set():
+            return CmdResult(False, error="scan aborted")
+        try:
+            proc = subprocess.Popen(
+                argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                start_new_session=True,
+            )
+        except FileNotFoundError:
+            res = CmdResult(False, error=f"pmx binary not found: {self.binary}")
+            self._cache[key] = res
+            return res
+        with ACTIVE_LOCK:
+            ACTIVE_PROCS.add(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            proc.communicate()
+            res = CmdResult(False, error=f"timed out after {self.timeout:.0f}s")
+            self._cache[key] = res
+            return res
+        finally:
+            with ACTIVE_LOCK:
+                ACTIVE_PROCS.discard(proc)
+        if ABORT.is_set() and proc.returncode != 0:
+            return CmdResult(False, error="scan aborted")
+        out = stdout.strip()
+        if proc.returncode != 0 or not out:
+            res = CmdResult(False, error=_extract_error(stderr, out))
+            self._cache[key] = res
+            return res
+        try:
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            res = CmdResult(False, error=f"non-JSON output: {out[:120]}")
+            self._cache[key] = res
+            return res
+        if data is None:
+            res = CmdResult(False, error="empty (null) JSON response")
+        else:
+            res = CmdResult(True, data=data)
+        self._cache[key] = res
+        return res
+
+
+# --- value coercion (raw PVE passthrough delivers 0/1 and numbers as strings)
+
+
+def truthy(v: Any) -> bool:
+    if isinstance(v, str):
+        return v.strip().lower() not in ("", "0", "false", "no", "off")
+    return bool(v)
+
+
+def num(v: Any, default: float | None = 0.0) -> float | None:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def pct(used: Any, total: Any) -> float | None:
+    u, t = num(used, None), num(total, None)
+    if u is None or not t:
+        return None
+    return (u / t) * 100.0
+
+
+# --- scan context -----------------------------------------------------------
+
+
+@dataclass
+class Scan:
+    pmx: Pmx
+    findings: list[Finding] = field(default_factory=list)
+    nodes: list[str] = field(default_factory=list)
+    online_nodes: list[str] = field(default_factory=list)
+    clustered: bool = False
+    quorate: bool | None = None
+    dc_options: dict[str, Any] = field(default_factory=dict)
+    ha_resources: list[dict[str, Any]] = field(default_factory=list)
+    ha_ok: bool = False
+    ha_error: str = ""
+    ceph_active: bool = False
+    ceph_error: str = ""
+
+    def add(
+        self,
+        severity: str,
+        category: str,
+        check: str,
+        target: str,
+        message: str,
+        recommendation: str = "",
+    ) -> None:
+        self.findings.append(
+            Finding(severity, category, check, target, message, recommendation)
+        )
+
+    def node_status(self, node: str) -> CmdResult:
+        # raw API status: includes swap and pveversion, unlike the typed leaf.
+        return self.pmx.run("api", "get", f"/nodes/{node}/status")
+
+
+CheckFn = Callable[[Scan], None]
+CHECKS: list[tuple[str, str, str, CheckFn]] = []
+
+
+def check(category: str, name: str, description: str) -> Callable[[CheckFn], CheckFn]:
+    def wrap(fn: CheckFn) -> CheckFn:
+        CHECKS.append((category, name, description, fn))
+        return fn
+
+    return wrap
+
+
+# --- cluster checks ---------------------------------------------------------
+
+
+@check("cluster", "membership", "Cluster membership, quorum, and node reachability")
+def check_membership(s: Scan) -> None:
+    res = s.pmx.run("pve", "cluster", "status")
+    if not res.ok:
+        s.add(ERROR, "cluster", "membership", "cluster", f"cluster status failed: {res.error}")
+        return
+    rows = [r for r in res.data if isinstance(r, dict)] if isinstance(res.data, list) else []
+    cluster_row = next((r for r in rows if r.get("type") == "cluster"), None)
+    node_rows = [r for r in rows if r.get("type") == "node"]
+    s.nodes = [r["name"] for r in node_rows if r.get("name")]
+    s.online_nodes = [r["name"] for r in node_rows if truthy(r.get("online", 1)) and r.get("name")]
+    if not node_rows:
+        s.add(ERROR, "cluster", "membership", "cluster",
+              "cluster status returned no node rows — cannot scan")
+        return
+    if cluster_row is None:
+        s.clustered = False
+        s.add(INFO, "cluster", "membership", "cluster",
+              "standalone node (no cluster configured); cluster-level checks skipped")
+        return
+    s.clustered = True
+    s.quorate = truthy(cluster_row.get("quorate"))
+    offline = sorted(set(s.nodes) - set(s.online_nodes))
+    if not s.quorate:
+        s.add(FAIL, "cluster", "membership", "cluster",
+              "cluster is NOT quorate — /etc/pve is read-only and guests cannot start",
+              "restore corosync connectivity on the unreachable nodes")
+    elif offline:
+        s.add(WARN, "cluster", "membership", "cluster",
+              f"quorate, but offline node(s): {', '.join(offline)}",
+              "bring offline nodes back or remove them with pvecm delnode")
+    else:
+        s.add(PASS, "cluster", "membership", "cluster",
+              f"quorate with all {len(s.nodes)} node(s) online")
+
+
+QDEVICE_ABSENT_RE = re.compile(r"not configured|no such|not found|404|no qdevice", re.I)
+
+
+@check("cluster", "qdevice", "Even-node clusters carry a QDevice tie-breaker")
+def check_qdevice(s: Scan) -> None:
+    if not s.clustered:
+        return
+    n = len(s.nodes)
+    res = s.pmx.run("pve", "cluster", "config", "qdevice")
+    if not res.ok and not QDEVICE_ABSENT_RE.search(res.error):
+        s.add(SKIP, "cluster", "qdevice", "cluster",
+              f"QDevice status unavailable: {res.error}")
+        return
+    has_qdevice = res.ok and bool(res.data)
+    if n % 2 == 1:
+        if has_qdevice:
+            s.add(WARN, "cluster", "qdevice", "cluster",
+                  f"QDevice present on an odd {n}-node cluster (Last-Man-Standing mode)",
+                  "remove the QDevice; forcing one onto odd votes weakens quorum math")
+        else:
+            s.add(PASS, "cluster", "qdevice", "cluster",
+                  f"odd node count ({n}); no QDevice needed")
+        return
+    if has_qdevice:
+        s.add(PASS, "cluster", "qdevice", "cluster",
+              f"even node count ({n}) with QDevice tie-breaker configured")
+    elif n == 2:
+        sev = FAIL if s.ha_resources else WARN
+        s.add(sev, "cluster", "qdevice", "cluster",
+              "2-node cluster without a QDevice: losing either node loses quorum"
+              + (" and HA fencing will reboot the survivor" if s.ha_resources else ""),
+              "add an external QDevice (corosync-qnetd host + corosync-qdevice on nodes)")
+    elif n <= 24:
+        s.add(INFO, "cluster", "qdevice", "cluster",
+              f"even node count ({n}) without a QDevice; a clean split loses quorum",
+              "consider a QDevice for maintenance flexibility (two nodes down at once)")
+
+
+@check("cluster", "corosync-links", "Corosync has redundant links")
+def check_corosync_links(s: Scan) -> None:
+    if not s.clustered:
+        return
+    res = s.pmx.run("pve", "cluster", "config", "totem")
+    if not res.ok:
+        s.add(SKIP, "cluster", "corosync-links", "cluster",
+              f"totem settings unavailable: {res.error}")
+        return
+    totem = res.data if isinstance(res.data, dict) else {}
+    links = totem.get("interface")
+    count = len(links) if isinstance(links, (dict, list)) else 1
+    if count < 2:
+        s.add(WARN, "cluster", "corosync-links", "cluster",
+              "corosync has a single link — one NIC/switch failure fences otherwise-healthy nodes",
+              "add a second ring on a dedicated switch, latency <5ms; retrofitting links on a "
+              "live cluster is error-prone, so plan the change carefully")
+    else:
+        s.add(PASS, "cluster", "corosync-links", "cluster",
+              f"{count} corosync links configured (link liveness is not visible via the API; "
+              "cross-check with corosync-cfgtool -s)")
+
+
+@check("cluster", "size", "Cluster size stays within a manageable blast radius")
+def check_cluster_size(s: Scan) -> None:
+    if not s.clustered:
+        return
+    n = len(s.nodes)
+    if n > 25:
+        s.add(INFO, "cluster", "size", "cluster",
+              f"{n} nodes: beyond ~25 nodes corosync needs large-cluster tuning",
+              "consider splitting into smaller clusters and managing the fleet via PDM")
+
+
+@check("cluster", "version-drift", "All nodes run the same PVE version")
+def check_version_drift(s: Scan) -> None:
+    if len(s.online_nodes) < 2:
+        return
+    versions: dict[str, str] = {}
+    unreadable: list[str] = []
+    for node in s.online_nodes:
+        res = s.node_status(node)
+        v = res.data.get("pveversion", "") if res.ok and isinstance(res.data, dict) else ""
+        if v:
+            versions[node] = str(v)
+        else:
+            unreadable.append(node)
+    if not versions:
+        s.add(SKIP, "cluster", "version-drift", "cluster",
+              "node status unreadable on every node")
+        return
+    if len(set(versions.values())) > 1:
+        detail = ", ".join(f"{k}={v}" for k, v in sorted(versions.items()))
+        s.add(WARN, "cluster", "version-drift", "cluster",
+              f"PVE version drift across nodes: {detail}",
+              "update the lagging nodes one at a time (migrate guests off, pveupgrade, reboot)")
+    elif unreadable:
+        s.add(SKIP, "cluster", "version-drift", "cluster",
+              f"no drift among readable nodes, but status unreadable on: {', '.join(unreadable)}")
+    else:
+        s.add(PASS, "cluster", "version-drift", "cluster",
+              f"all nodes on {next(iter(versions.values()))}")
+
+
+# --- HA checks --------------------------------------------------------------
+
+
+@check("ha", "shutdown-policy", "HA shutdown policy is a deliberate choice")
+def check_ha_policy(s: Scan) -> None:
+    if not s.ha_ok:
+        s.add(SKIP, "ha", "shutdown-policy", "cluster",
+              f"HA resources unavailable: {s.ha_error}")
+        return
+    if not s.ha_resources:
+        s.add(INFO, "ha", "shutdown-policy", "cluster",
+              "no HA-managed resources; HA checks skipped")
+        return
+    ha_opt = s.dc_options.get("ha")
+    policy = ""
+    if isinstance(ha_opt, dict):
+        policy = str(ha_opt.get("shutdown_policy", ""))
+    elif isinstance(ha_opt, str):
+        m = re.search(r"shutdown_policy=(\w+)", ha_opt)
+        policy = m.group(1) if m else ""
+    if policy == "migrate":
+        s.add(PASS, "ha", "shutdown-policy", "cluster", "HA shutdown policy is migrate")
+    elif policy in ("shutdown", "failover", "freeze"):
+        s.add(INFO, "ha", "shutdown-policy", "cluster",
+              f"HA shutdown policy is {policy} — appropriate for whole-cluster power events "
+              "(nowhere to migrate to); verify that is the intent",
+              "use migrate for routine single-node maintenance")
+    else:
+        s.add(WARN, "ha", "shutdown-policy", "cluster",
+              "HA shutdown policy is conditional (default); it behaves differently on reboot vs shutdown",
+              "set Datacenter > HA > Options > Shutdown Policy to migrate for node maintenance")
+
+
+@check("ha", "restart-limits", "HA restart/relocate limits are conservative")
+def check_ha_limits(s: Scan) -> None:
+    for r in s.ha_resources:
+        sid = str(r.get("sid", r.get("id", "?")))
+        for key in ("max_restart", "max_relocate"):
+            v = num(r.get(key), None)
+            if v is not None and v > 3:
+                s.add(INFO, "ha", "restart-limits", "cluster",
+                      f"{sid}: {key}={int(v)} — retrying that often just delays surfacing a real failure",
+                      "keep max_restart/max_relocate at 2-3 so failures surface promptly")
+
+
+@check("ha", "pinning", "HA rules avoid strict single-node confinement")
+def check_ha_pinning(s: Scan) -> None:
+    if not s.ha_resources:
+        return
+    res = s.pmx.run("pve", "cluster", "ha", "rule", "list")
+    entries: list[dict[str, Any]] = []
+    kind = "rule"
+    if res.ok and isinstance(res.data, list):
+        entries = [e for e in res.data if isinstance(e, dict)]
+    else:
+        # pre-PVE-9 fallback: groups (the groups API returns 500 on 9.x)
+        grp = s.pmx.run("pve", "cluster", "ha", "group", "list")
+        if grp.ok and isinstance(grp.data, list):
+            entries = [e for e in grp.data if isinstance(e, dict)]
+            kind = "group"
+        else:
+            s.add(SKIP, "ha", "pinning", "cluster",
+                  f"HA rules unavailable: {res.error}")
+            return
+    for e in entries:
+        if kind == "rule" and "affinity" not in str(e.get("type", "")):
+            continue
+        nodes_raw = str(e.get("nodes", ""))
+        node_names = [n.split(":")[0].strip() for n in nodes_raw.split(",") if n.strip()]
+        ident = e.get("rule", e.get("group", "?"))
+        if truthy(e.get("restricted")) or truthy(e.get("strict")):
+            if len(node_names) == 1:
+                s.add(WARN, "ha", "pinning", "cluster",
+                      f"HA {kind} '{ident}' strictly pins to a single node ({node_names[0]})",
+                      "strict single-node pins block failover and can wedge that node's reboot")
+
+
+@check("ha", "resource-state", "No HA resource is stuck in error or recovery")
+def check_ha_resource_state(s: Scan) -> None:
+    if not s.ha_resources:
+        return
+    res = s.pmx.run("pve", "cluster", "ha", "status", "current")
+    if not res.ok or not isinstance(res.data, list):
+        s.add(SKIP, "ha", "resource-state", "cluster",
+              f"HA status unavailable: {res.error}")
+        return
+    stuck: list[str] = []
+    for row in res.data:
+        if not isinstance(row, dict) or row.get("type") != "service":
+            continue
+        state = f"{row.get('state', '')} {row.get('status', '')}".lower()
+        if "error" in state or "recovery" in state or "fence" in state:
+            stuck.append(f"{row.get('sid', row.get('id', '?'))} ({row.get('status', row.get('state'))})")
+    if stuck:
+        s.add(FAIL, "ha", "resource-state", "cluster",
+              f"HA resource(s) stuck: {', '.join(stuck)}",
+              "an errored resource has exhausted its restart/relocate attempts and will not "
+              "recover on its own; investigate, then disable and re-enable the resource")
+    else:
+        s.add(PASS, "ha", "resource-state", "cluster",
+              f"all {len(s.ha_resources)} HA resource(s) healthy")
+
+
+# --- firewall checks --------------------------------------------------------
+
+
+@check("firewall", "datacenter", "Datacenter firewall posture")
+def check_dc_firewall(s: Scan) -> None:
+    res = s.pmx.run("pve", "cluster", "firewall", "options", "get")
+    if not res.ok:
+        s.add(SKIP, "firewall", "datacenter", "cluster",
+              f"firewall options unavailable: {res.error}")
+        return
+    opts = res.data if isinstance(res.data, dict) else {}
+    if not truthy(opts.get("enable")):
+        s.add(INFO, "firewall", "datacenter", "cluster",
+              "datacenter firewall master switch is off",
+              "if you use the PVE firewall, use it consistently everywhere or not at all")
+        return
+    s.add(PASS, "firewall", "datacenter", "cluster", "datacenter firewall is enabled")
+    policy_in = str(opts.get("policy_in", "DROP")).upper()
+    if policy_in == "DROP":
+        s.add(INFO, "firewall", "datacenter", "cluster",
+              "default input policy is DROP: blocked connections hang with no feedback",
+              "prefer REJECT on internal/trusted networks; keep DROP only for internet-facing rules")
+    if s.ceph_active:
+        s.add(INFO, "firewall", "datacenter", "cluster",
+              "firewall is enabled with Ceph in use: Ceph traffic is NOT allowed automatically",
+              "verify explicit rules permit Ceph monitor/OSD traffic or storage will break")
+
+
+@check("firewall", "host-consistency", "Host firewall state is consistent across nodes")
+def check_host_firewall(s: Scan) -> None:
+    dc = s.pmx.run("pve", "cluster", "firewall", "options", "get")
+    dc_enabled = dc.ok and isinstance(dc.data, dict) and truthy(dc.data.get("enable"))
+    states: dict[str, bool] = {}
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "firewall", "options", "get", node=node)
+        if res.ok and isinstance(res.data, dict):
+            # host firewall enable defaults to 1 when unset
+            states[node] = truthy(res.data.get("enable", 1))
+    if not states:
+        return
+    disabled = sorted(n for n, en in states.items() if not en)
+    if dc_enabled and disabled:
+        s.add(WARN, "firewall", "host-consistency", "cluster",
+              f"datacenter firewall on, but host firewall disabled on: {', '.join(disabled)}",
+              "partial firewall coverage makes it the last place anyone looks during an incident")
+    elif dc_enabled:
+        s.add(PASS, "firewall", "host-consistency", "cluster",
+              "host firewall enabled on every reachable node")
+
+
+# --- backup checks ----------------------------------------------------------
+
+
+@check("backup", "jobs", "Scheduled backup jobs exist")
+def check_backup_jobs(s: Scan) -> None:
+    res = s.pmx.run("pve", "cluster", "backup", "list")
+    if not res.ok:
+        s.add(ERROR, "backup", "jobs", "cluster", f"backup job list failed: {res.error}")
+        return
+    jobs = [j for j in res.data if isinstance(j, dict)] if isinstance(res.data, list) else []
+    enabled = [j for j in jobs if truthy(j.get("enabled", 1))]
+    if not enabled:
+        s.add(WARN, "backup", "jobs", "cluster",
+              "no enabled scheduled backup jobs configured",
+              "schedule backups to a PBS datastore; use an include-critical + exclude-critical job pair")
+        return
+    s.add(PASS, "backup", "jobs", "cluster",
+          f"{len(enabled)} enabled backup job(s) configured")
+    storages = s.pmx.run("pve", "storage", "list")
+    by_name = {}
+    if storages.ok and isinstance(storages.data, list):
+        by_name = {st.get("storage"): st for st in storages.data if isinstance(st, dict)}
+    for j in enabled:
+        target = j.get("storage")
+        st = by_name.get(target)
+        if st and st.get("type") != "pbs":
+            s.add(INFO, "backup", "jobs", "cluster",
+                  f"backup job '{j.get('id', target)}' targets non-PBS storage "
+                  f"'{target}' ({st.get('type')}): full-copy vzdump, no dedup or file restore",
+                  "prefer a Proxmox Backup Server target for scheduled backups")
+
+
+@check("backup", "coverage", "Every guest is covered by a backup job")
+def check_backup_coverage(s: Scan) -> None:
+    res = s.pmx.run("pve", "cluster", "backup-info", "not-backed-up")
+    if not res.ok:
+        s.add(SKIP, "backup", "coverage", "cluster",
+              f"backup coverage unavailable: {res.error}")
+        return
+    uncovered = [g for g in res.data if isinstance(g, dict)] if isinstance(res.data, list) else []
+    if not uncovered:
+        s.add(PASS, "backup", "coverage", "cluster", "all guests are covered by a backup job")
+        return
+    names = ", ".join(
+        f"{g.get('vmid')}({g.get('name', '?')})" for g in uncovered[:8]
+    )
+    more = f" and {len(uncovered) - 8} more" if len(uncovered) > 8 else ""
+    s.add(WARN, "backup", "coverage", "cluster",
+          f"{len(uncovered)} guest(s) not covered by any backup job: {names}{more}",
+          "add them to a job, or use an exclude-based catch-all job so new guests are covered by default")
+
+
+@check("backup", "retention", "Retention lives on PBS, not the PVE storage definition")
+def check_backup_retention(s: Scan) -> None:
+    res = s.pmx.run("pve", "storage", "list")
+    if not res.ok or not isinstance(res.data, list):
+        return
+    for st in res.data:
+        if isinstance(st, dict) and st.get("type") == "pbs" and st.get("prune-backups"):
+            s.add(WARN, "backup", "retention", "cluster",
+                  f"PVE-side retention set on PBS storage '{st.get('storage')}'",
+                  "manage retention with a PBS prune job; PVE-side pruning conflicts with "
+                  "PBS permissions and protected snapshots — leave the retention tab blank")
+
+
+# --- storage checks ---------------------------------------------------------
+
+# copy-on-write backends degrade sharply as they fill
+COW_TYPES = {"zfspool", "zfs", "rbd", "cephfs", "btrfs"}
+ZFS_SPARSE_TYPES = {"zfspool"}
+COW_INFO_PCT = 60.0
+COW_WARN_PCT = 80.0
+COW_FAIL_PCT = 90.0
+GEN_WARN_PCT = 85.0
+GEN_FAIL_PCT = 95.0
+
+
+@check("storage", "usage", "Storage pools keep working headroom")
+def check_storage_usage(s: Scan) -> None:
+    seen: set[str] = set()
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "storage", "node-list", node=node)
+        if not res.ok:
+            s.add(SKIP, "storage", "usage", node, f"storage usage unavailable: {res.error}")
+            continue
+        if not isinstance(res.data, list):
+            s.add(SKIP, "storage", "usage", node, "storage usage unavailable: unexpected response shape")
+            continue
+        for st in res.data:
+            if not isinstance(st, dict):
+                continue
+            name = st.get("storage", "?")
+            key = f"{name}" if truthy(st.get("shared")) else f"{node}/{name}"
+            if key in seen:
+                continue
+            seen.add(key)
+            target = "cluster" if truthy(st.get("shared")) else node
+            if not truthy(st.get("active")):
+                if truthy(st.get("enabled", 1)):
+                    s.add(WARN, "storage", "usage", target,
+                          f"storage '{name}' ({st.get('type')}) is enabled but inactive",
+                          "an enabled-but-inactive storage usually means the backing server is unreachable")
+                continue
+            used = pct(st.get("used", 0), st.get("total", 0))
+            if used is None:
+                s.add(SKIP, "storage", "usage", target,
+                      f"storage '{name}': usage figures unavailable")
+                continue
+            cow = st.get("type") in COW_TYPES
+            label = f"storage '{name}' ({st.get('type')}) at {used:.0f}%"
+            if cow and used >= COW_FAIL_PCT:
+                s.add(FAIL, "storage", "usage", target,
+                      f"{label}: copy-on-write performance collapses near full "
+                      "(Ceph goes read-only at its full ratio)",
+                      "free or add capacity now; set a quota so the pool can never fill completely")
+            elif cow and used >= COW_WARN_PCT:
+                s.add(WARN, "storage", "usage", target,
+                      f"{label}: copy-on-write backends degrade sharply beyond 80%",
+                      "plan capacity; keep explicit quotas/ratios so recovery headroom remains")
+            elif cow and used >= COW_INFO_PCT:
+                s.add(INFO, "storage", "usage", target,
+                      f"{label}: copy-on-write slowdown begins around 50-60% utilization")
+            elif not cow and used >= GEN_FAIL_PCT:
+                s.add(FAIL, "storage", "usage", target, f"{label}: nearly full",
+                      "free or add capacity before writes start failing")
+            elif not cow and used >= GEN_WARN_PCT:
+                s.add(WARN, "storage", "usage", target, f"{label}: low headroom")
+
+
+@check("storage", "zfs-thin", "ZFS storage definitions enable thin provisioning")
+def check_zfs_thin(s: Scan) -> None:
+    res = s.pmx.run("pve", "storage", "list")
+    if not res.ok or not isinstance(res.data, list):
+        return
+    for st in res.data:
+        if isinstance(st, dict) and st.get("type") in ZFS_SPARSE_TYPES and not truthy(st.get("sparse", 0)):
+            s.add(INFO, "storage", "zfs-thin", "cluster",
+                  f"ZFS storage '{st.get('storage')}' has thin provisioning disabled",
+                  "enable the Thin provision flag (affects new disks only); "
+                  "clear old reservations with zfs set refreservation=none")
+
+
+@check("storage", "nfs-version", "NFS storages avoid version 4.0")
+def check_nfs_version(s: Scan) -> None:
+    res = s.pmx.run("pve", "storage", "list")
+    if not res.ok or not isinstance(res.data, list):
+        return
+    for st in res.data:
+        if not isinstance(st, dict) or st.get("type") != "nfs":
+            continue
+        opts = str(st.get("options", ""))
+        if re.search(r"vers=4\.0(?![0-9])", opts) or re.search(r"vers=4(?![.0-9])", opts):
+            s.add(WARN, "storage", "nfs-version", "cluster",
+                  f"NFS storage '{st.get('storage')}' pins NFS 4.0 ({opts})",
+                  "use NFS 3, 4.1, or 4.2; multiple field failures trace to 4.0")
+
+
+# --- node health checks -----------------------------------------------------
+
+
+@check("node", "rootfs", "Root filesystem has headroom")
+def check_rootfs(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.node_status(node)
+        if not res.ok or not isinstance(res.data, dict):
+            s.add(ERROR, "node", "rootfs", node, f"node status failed: {res.error}")
+            continue
+        root = res.data.get("rootfs") or {}
+        used = pct(root.get("used"), root.get("total")) if isinstance(root, dict) else None
+        if used is None:
+            s.add(SKIP, "node", "rootfs", node, "root filesystem usage unavailable")
+        elif used >= 90:
+            s.add(FAIL, "node", "rootfs", node,
+                  f"root filesystem {used:.0f}% full",
+                  "a full root disk breaks services (and trips Ceph monitor 'near full' warnings)")
+        elif used >= 80:
+            s.add(WARN, "node", "rootfs", node, f"root filesystem {used:.0f}% full")
+        else:
+            s.add(PASS, "node", "rootfs", node, f"root filesystem {used:.0f}% full")
+
+
+@check("node", "memory", "Host memory is not overcommitted into OOM territory")
+def check_memory(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.node_status(node)
+        if not res.ok or not isinstance(res.data, dict):
+            continue
+        mem = res.data.get("memory") or {}
+        used = pct(mem.get("used"), mem.get("total")) if isinstance(mem, dict) else None
+        if used is not None and used >= 90:
+            s.add(WARN, "node", "memory", node,
+                  f"host memory {used:.0f}% used",
+                  "the OOM killer targets the largest VM; migrate or shrink guests before it does")
+        swap = res.data.get("swap") or {}
+        swap_used = pct(swap.get("used"), swap.get("total")) if isinstance(swap, dict) else None
+        if swap_used is not None and swap_used >= 25:
+            s.add(WARN, "node", "memory", node,
+                  f"swap {swap_used:.0f}% used — host is under memory pressure")
+
+
+@check("node", "load", "CPU load stays under the core count")
+def check_load(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.node_status(node)
+        if not res.ok or not isinstance(res.data, dict):
+            continue
+        loadavg = res.data.get("loadavg") or []
+        cpuinfo = res.data.get("cpuinfo") or {}
+        cores = num(cpuinfo.get("cpus"), 0.0) if isinstance(cpuinfo, dict) else 0.0
+        load5 = num(loadavg[1], None) if isinstance(loadavg, list) and len(loadavg) > 1 else None
+        if cores and load5 is not None and load5 > cores:
+            s.add(WARN, "node", "load", node,
+                  f"5-minute load {load5:.1f} exceeds {cores:.0f} cores")
+
+
+@check("node", "disks", "Physical disks report healthy SMART status")
+def check_disks(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "disks", "list", node=node)
+        if not res.ok or not isinstance(res.data, list):
+            s.add(SKIP, "node", "disks", node, f"disk list unavailable: {res.error}")
+            continue
+        disks = [d for d in res.data if isinstance(d, dict)]
+        if not disks:
+            s.add(SKIP, "node", "disks", node, "no physical disks reported")
+            continue
+        bad = []
+        worn = []
+        unknown = 0
+        for d in disks:
+            health = str(d.get("health", "")).upper()
+            if health in ("", "UNKNOWN", "N/A"):
+                unknown += 1
+            elif health not in ("OK", "PASSED"):
+                bad.append(f"{d.get('devpath')} ({health})")
+            wear = num(d.get("wearout"), None)
+            if wear is not None and wear != -1 and wear <= 10:
+                worn.append(f"{d.get('devpath')} ({wear:.0f}% life left)")
+        if bad:
+            s.add(FAIL, "node", "disks", node,
+                  f"SMART failure on: {', '.join(bad)}",
+                  "replace the disk; for ZFS boot mirrors remember proxmox-boot-tool for the new disk")
+        if worn:
+            s.add(WARN, "node", "disks", node, f"SSD wear critical: {', '.join(worn)}")
+        if not bad and not worn:
+            if unknown == len(disks):
+                s.add(SKIP, "node", "disks", node,
+                      f"SMART data unavailable for all {len(disks)} disk(s)")
+            else:
+                s.add(PASS, "node", "disks", node, f"{len(disks)} disk(s) healthy")
+
+
+TIMESYNC_SERVICES = ("chrony", "systemd-timesyncd")
+
+
+@check("node", "services", "Core PVE services are running")
+def check_services(s: Scan) -> None:
+    core = ["pveproxy", "pvedaemon", "pvestatd", "pve-cluster", "pvescheduler"]
+    if s.clustered:
+        core.append("corosync")
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "services", "list", node)
+        if not res.ok or not isinstance(res.data, list):
+            s.add(SKIP, "node", "services", node, f"service list unavailable: {res.error}")
+            continue
+        states = {
+            sv.get("service", sv.get("name")): str(sv.get("state", ""))
+            for sv in res.data
+            if isinstance(sv, dict)
+        }
+        down = [n for n in core if states.get(n, "missing") != "running"]
+        if down:
+            missing = [n for n in down if n not in states]
+            stopped = [n for n in down if n in states]
+            parts = []
+            if stopped:
+                parts.append(f"not running: {', '.join(stopped)}")
+            if missing:
+                parts.append(f"not reported at all: {', '.join(missing)}")
+            s.add(FAIL, "node", "services", node, f"core service(s) {'; '.join(parts)}")
+        else:
+            s.add(PASS, "node", "services", node, "core PVE services running")
+        timesync = [n for n in TIMESYNC_SERVICES if states.get(n) == "running"]
+        if not timesync:
+            s.add(WARN, "node", "services", node,
+                  "no time-sync service (chrony/systemd-timesyncd) reported running",
+                  "cluster and Ceph health depend on synchronized clocks")
+
+
+@check("node", "dns", "DNS resolvers are configured")
+def check_dns(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "dns", "get", node=node)
+        if not res.ok or not isinstance(res.data, dict):
+            continue
+        if not res.data.get("dns1"):
+            s.add(WARN, "node", "dns", node, "no DNS resolver configured")
+
+
+@check("node", "certificates", "TLS certificates are not expiring")
+def check_certs(s: Scan) -> None:
+    now = time.time()
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "cert", "list", node=node)
+        if not res.ok or not isinstance(res.data, list):
+            continue
+        for cert in res.data:
+            if not isinstance(cert, dict):
+                continue
+            notafter = num(cert.get("notafter"), None)
+            if notafter is None:
+                continue
+            days = (notafter - now) / 86400.0
+            fn = cert.get("filename", "?")
+            if days < 0:
+                s.add(FAIL, "node", "certificates", node, f"{fn} EXPIRED {-days:.0f} days ago")
+            elif days < 30:
+                s.add(WARN, "node", "certificates", node, f"{fn} expires in {days:.0f} days")
+
+
+# --- updates checks ---------------------------------------------------------
+
+
+@check("updates", "repositories", "A supported Proxmox update repository is enabled")
+def check_repos(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "apt", "repositories", "list", node=node)
+        if not res.ok or not isinstance(res.data, dict):
+            s.add(SKIP, "updates", "repositories", node, f"repositories unavailable: {res.error}")
+            continue
+        enterprise = nosub = test = False
+        for f in res.data.get("files", []) or []:
+            if not isinstance(f, dict):
+                continue
+            for repo in f.get("repositories", []) or []:
+                if not isinstance(repo, dict) or not truthy(repo.get("Enabled")):
+                    continue
+                uris = " ".join(repo.get("URIs", []) or [])
+                comps = " ".join(repo.get("Components", []) or [])
+                blob = f"{uris} {comps}"
+                if "enterprise.proxmox.com" in uris or "pve-enterprise" in comps or "pbs-enterprise" in comps:
+                    enterprise = True
+                if "pve-no-subscription" in blob or "pbs-no-subscription" in blob:
+                    nosub = True
+                if "pvetest" in blob or "pve-test" in blob:
+                    test = True
+        if test:
+            s.add(WARN, "updates", "repositories", node,
+                  "pvetest repository is enabled — developer channel, not for production")
+        if enterprise and nosub:
+            s.add(WARN, "updates", "repositories", node,
+                  "both enterprise and no-subscription repositories enabled",
+                  "pick one channel; mixing them causes inconsistent package versions")
+        elif enterprise:
+            sub = s.pmx.run("pve", "node", "subscription", "get", node=node)
+            status = str(sub.data.get("status", "")) if sub.ok and isinstance(sub.data, dict) else ""
+            if status.lower() != "active":
+                s.add(FAIL, "updates", "repositories", node,
+                      f"enterprise repository enabled but subscription is '{status or 'unknown'}' — updates will fail",
+                      "activate a subscription or switch to the no-subscription repository")
+            else:
+                s.add(PASS, "updates", "repositories", node, "enterprise repository with active subscription")
+        elif nosub:
+            s.add(PASS, "updates", "repositories", node, "no-subscription repository enabled")
+        elif not test:
+            s.add(WARN, "updates", "repositories", node,
+                  "no recognized Proxmox update repository enabled",
+                  "enable the enterprise (with subscription) or no-subscription repository; "
+                  "if this host uses a Proxmox Offline Mirror, verify its repo config manually")
+
+
+@check("updates", "pending", "Pending updates are applied on a regular cadence")
+def check_pending_updates(s: Scan) -> None:
+    for node in s.online_nodes:
+        res = s.pmx.run("pve", "node", "apt", "list", node=node)
+        if not res.ok or not isinstance(res.data, list):
+            s.add(SKIP, "updates", "pending", node, f"pending updates unavailable: {res.error}")
+            continue
+        pending = [p for p in res.data if isinstance(p, dict)]
+        if not pending:
+            s.add(PASS, "updates", "pending", node, "no pending updates")
+            continue
+        pkgs = [str(p.get("Package", "")) for p in pending]
+        kernel = [p for p in pkgs if "kernel" in p]
+        if kernel:
+            s.add(WARN, "updates", "pending", node,
+                  f"{len(pending)} pending update(s) including kernel ({', '.join(kernel[:3])})",
+                  "apply with pveupgrade (never plain apt upgrade) and reboot for the kernel")
+        elif len(pending) > 30:
+            s.add(WARN, "updates", "pending", node,
+                  f"{len(pending)} pending updates — host looks unpatched for a while",
+                  "adopt a monthly update cadence with pveupgrade")
+        else:
+            s.add(INFO, "updates", "pending", node, f"{len(pending)} pending update(s)")
+
+
+# --- network checks ---------------------------------------------------------
+
+
+@check("network", "interfaces", "Host networking follows bonding and VLAN guidance")
+def check_network(s: Scan) -> None:
+    mtu_map: dict[str, dict[str, str]] = {}
+    for node in s.online_nodes:
+        # raw API: the typed `node network list` output omits bond/VLAN/MTU fields
+        res = s.pmx.run("api", "get", f"/nodes/{node}/network")
+        if not res.ok or not isinstance(res.data, list):
+            s.add(SKIP, "network", "interfaces", node, f"network list unavailable: {res.error}")
+            continue
+        for iface in res.data:
+            if not isinstance(iface, dict):
+                continue
+            name = str(iface.get("iface", ""))
+            itype = iface.get("type")
+            if itype == "bridge" and truthy(iface.get("bridge_vlan_aware", 0)):
+                s.add(WARN, "network", "interfaces", node,
+                      f"bridge {name} is VLAN-aware — any VM editor can type in any VLAN tag, "
+                      "with no per-user restriction and no typo protection",
+                      "prefer SDN VLAN zones with named VNets: enforced tags and per-role access")
+            if itype == "bond":
+                mode = str(iface.get("bond_mode", ""))
+                if mode == "balance-alb":
+                    s.add(INFO, "network", "interfaces", node,
+                          f"bond {name} uses balance-alb — ARP-based, fully supported for IPv4 only")
+                elif mode and mode not in ("active-backup", "802.3ad", "lacp-balance-tcp"):
+                    s.add(WARN, "network", "interfaces", node,
+                          f"bond {name} uses mode {mode}",
+                          "Proxmox-recommended modes are active-backup or LACP (802.3ad)")
+                if mode == "802.3ad":
+                    hashp = str(iface.get("bond_xmit_hash_policy", ""))
+                    if hashp and hashp != "layer3+4":
+                        s.add(INFO, "network", "interfaces", node,
+                              f"bond {name} hash policy {hashp} pins same-endpoint (storage) traffic to one link",
+                              "use layer3+4 on host and switch to spread connections across members")
+                slaves = str(iface.get("slaves", "")).split()
+                if len(slaves) == 1:
+                    s.add(WARN, "network", "interfaces", node,
+                          f"bond {name} has a single member — no redundancy and no aggregation")
+                elif slaves and len(slaves) not in (2, 4, 8):
+                    s.add(INFO, "network", "interfaces", node,
+                          f"bond {name} has {len(slaves)} members; powers of two align with hashing")
+                if not name.startswith("bond"):
+                    s.add(WARN, "network", "interfaces", node,
+                          f"bond named '{name}' without the required bond prefix",
+                          "the network stack regex-matches interface names; keep the bond prefix")
+            mtu = iface.get("mtu")
+            if mtu:
+                mtu_map.setdefault(name, {})[node] = str(mtu)
+    for name, per_node in mtu_map.items():
+        if len(per_node) > 1 and len(set(per_node.values())) > 1:
+            detail = ", ".join(f"{n}={m}" for n, m in sorted(per_node.items()))
+            s.add(WARN, "network", "interfaces", "cluster",
+                  f"MTU mismatch on {name} across nodes: {detail}",
+                  "inconsistent MTU along a path causes hard-to-trace connectivity failures")
+
+
+# --- ceph checks ------------------------------------------------------------
+
+CEPH_UNCONFIGURED_RE = re.compile(r"not (?:installed|initialized|configured)|no such", re.I)
+
+
+@check("ceph", "health", "Ceph cluster health and design")
+def check_ceph(s: Scan) -> None:
+    if not s.ceph_active:
+        if s.ceph_error and not CEPH_UNCONFIGURED_RE.search(s.ceph_error):
+            s.add(SKIP, "ceph", "health", "cluster",
+                  f"Ceph status unavailable: {s.ceph_error}")
+        else:
+            s.add(SKIP, "ceph", "health", "cluster", "Ceph not configured")
+        return
+    res = s.pmx.run("pve", "cluster", "ceph", "status")
+    status = res.data if res.ok and isinstance(res.data, dict) else {}
+    health = str((status.get("health") or {}).get("status", ""))
+    if health == "HEALTH_OK":
+        s.add(PASS, "ceph", "health", "cluster", "Ceph reports HEALTH_OK")
+    elif health == "HEALTH_WARN":
+        checks = ", ".join(((status.get("health") or {}).get("checks") or {}).keys())
+        s.add(WARN, "ceph", "health", "cluster", f"Ceph HEALTH_WARN: {checks or 'see ceph -s'}")
+    elif health:
+        s.add(FAIL, "ceph", "health", "cluster", f"Ceph health is {health}")
+
+    monmap = status.get("monmap") or {}
+    mons = monmap.get("mons")
+    num_mons = len(mons) if isinstance(mons, list) else int(num(monmap.get("num_mons"), 0) or 0)
+    if num_mons and num_mons not in (3, 5):
+        s.add(WARN, "ceph", "health", "cluster",
+              f"{num_mons} Ceph monitor(s); use 3 or 5 regardless of node count")
+    if s.clustered and len(s.nodes) < 4:
+        s.add(WARN, "ceph", "health", "cluster",
+              f"Ceph on a {len(s.nodes)}-node cluster has zero failure slack",
+              "run at least min_size+1 nodes (4 with the standard 3/2 replication)")
+
+    flags = s.pmx.run("pve", "cluster", "ceph", "flags", "list")
+    if flags.ok and isinstance(flags.data, list):
+        risky = [f.get("name") for f in flags.data
+                 if isinstance(f, dict)
+                 and f.get("name") in ("noout", "norebalance", "norecover", "nobackfill")
+                 and truthy(f.get("value"))]
+        if risky:
+            s.add(WARN, "ceph", "health", "cluster",
+                  f"maintenance flag(s) left set: {', '.join(map(str, risky))}",
+                  "a forgotten noout leaves the cluster silently unprotected after a real failure")
+
+    pools = CmdResult(False, error="no reachable node answered")
+    for candidate in s.online_nodes:
+        pools = s.pmx.run("pve", "node", "ceph", "pool", "list", node=candidate)
+        if pools.ok and isinstance(pools.data, list):
+            break
+    if not (pools.ok and isinstance(pools.data, list)):
+        s.add(SKIP, "ceph", "health", "cluster",
+              f"Ceph pool settings unavailable: {pools.error}")
+        return
+    for p in pools.data:
+        if not isinstance(p, dict):
+            continue
+        size = int(num(p.get("size"), 0) or 0)
+        min_size = int(num(p.get("min_size"), 0) or 0)
+        pname = p.get("pool_name", p.get("name", "?"))
+        if size and size < 3:
+            s.add(FAIL, "ceph", "health", "cluster",
+                  f"pool '{pname}' has size={size} — a latent outage trap",
+                  "use the time-tested size=3/min_size=2 unless a specific analysis says otherwise")
+        if min_size and min_size < 2:
+            s.add(WARN, "ceph", "health", "cluster",
+                  f"pool '{pname}' has min_size={min_size}; below 2 risks inconsistency")
+        fill = num(p.get("percent_used"), None)
+        if fill is not None:
+            fill *= 100.0
+            if fill >= 90:
+                s.add(FAIL, "ceph", "health", "cluster",
+                      f"pool '{pname}' at {fill:.0f}% — at 95% the pool goes read-only, "
+                      "the hardest Ceph situation to recover from",
+                      "add OSDs or delete data immediately; rebalancing stops at the backfill-full ratio (90%)")
+            elif fill >= 85:
+                s.add(WARN, "ceph", "health", "cluster",
+                      f"pool '{pname}' at {fill:.0f}% — past the near-full ratio")
+            elif fill >= 70:
+                s.add(INFO, "ceph", "health", "cluster",
+                      f"pool '{pname}' at {fill:.0f}%; small clusters should alert near 70%")
+
+
+# --- shared state preload ---------------------------------------------------
+
+
+def preload(s: Scan) -> None:
+    """Fetch shared state used by multiple checks.
+
+    Runs unconditionally (even under --only) so cross-check prerequisites
+    like Ceph detection never depend on which categories were selected.
+    """
+    opts = s.pmx.run("pve", "cluster", "options", "get")
+    if opts.ok and isinstance(opts.data, dict):
+        s.dc_options = opts.data
+    ha = s.pmx.run("pve", "cluster", "ha", "resource", "list")
+    if ha.ok and isinstance(ha.data, list):
+        s.ha_ok = True
+        s.ha_resources = [r for r in ha.data if isinstance(r, dict)]
+    else:
+        s.ha_error = ha.error
+    ceph = s.pmx.run("pve", "cluster", "ceph", "status")
+    if ceph.ok and isinstance(ceph.data, dict):
+        s.ceph_active = True
+    else:
+        s.ceph_error = ceph.error
+
+
+# --- reporting --------------------------------------------------------------
+
+
+def color(sev: str, text: str, enable: bool) -> str:
+    return f"{ANSI.get(sev, '')}{text}{RESET}" if enable else text
+
+
+def report_text(context: str, findings: list[Finding], use_color: bool, verbose: bool) -> None:
+    print(f"\n{BOLD if use_color else ''}=== {context} ==={RESET if use_color else ''}")
+    ordered = sorted(
+        findings, key=lambda f: (f.category, SEVERITY_ORDER.get(f.severity, 9), f.target)
+    )
+    current_cat = None
+    for f in ordered:
+        if not verbose and f.severity in (PASS, SKIP):
+            continue
+        if f.category != current_cat:
+            current_cat = f.category
+            print(f"\n  [{current_cat}]")
+        tag = color(f.severity, f"{f.severity:5s}", use_color)
+        print(f"    {tag}  {f.target}: {f.message}")
+        if f.recommendation and f.severity in (WARN, FAIL):
+            print(f"           -> {f.recommendation}")
+    counts: dict[str, int] = {}
+    for f in findings:
+        counts[f.severity] = counts.get(f.severity, 0) + 1
+    summary = "  ".join(
+        color(sev, f"{sev}={counts[sev]}", use_color)
+        for sev in (FAIL, ERROR, WARN, INFO, PASS, SKIP)
+        if counts.get(sev)
+    )
+    print(f"\n  summary: {summary}")
+
+
+def report_json(results: dict[str, list[Finding]]) -> None:
+    out = {
+        ctx: [
+            {
+                "severity": f.severity,
+                "category": f.category,
+                "check": f.check,
+                "target": f.target,
+                "message": f.message,
+                "recommendation": f.recommendation,
+            }
+            for f in findings
+        ]
+        for ctx, findings in results.items()
+    }
+    json.dump(out, sys.stdout, indent=2)
+    print()
+
+
+# --- main -------------------------------------------------------------------
+
+
+def scan_context(binary: str, context: str, timeout: float, only: set[str] | None) -> list[Finding]:
+    s = Scan(pmx=Pmx(binary, context, timeout))
+    # membership first: it discovers nodes for everything downstream.
+    try:
+        check_membership(s)
+        preload(s)
+    except Exception as exc:
+        s.add(ERROR, "cluster", "membership", "cluster", f"scan setup crashed: {exc!r}")
+        return s.findings
+    for category, name, _desc, fn in CHECKS:
+        if fn is check_membership:
+            continue
+        if only and category not in only:
+            continue
+        if ABORT.is_set():
+            break
+        try:
+            fn(s)
+        except Exception as exc:  # a broken check must not kill the scan
+            s.add(ERROR, category, name, "cluster", f"check crashed: {exc!r}")
+    if only:
+        s.findings = [f for f in s.findings if f.category in only or f.check == "membership"]
+    return s.findings
+
+
+def main() -> int:
+    categories = sorted({c[0] for c in CHECKS})
+    parser = argparse.ArgumentParser(
+        description="Scan PVE hosts/clusters for best-practice conformance via pmx.",
+    )
+    parser.add_argument("contexts", nargs="*",
+                        help="pmx context names to scan (default: current context)")
+    parser.add_argument("--pmx", default="pmx", help="path to the pmx binary")
+    parser.add_argument("--output", choices=("text", "json"), default="text")
+    parser.add_argument("--only", metavar="CAT[,CAT...]",
+                        help=f"restrict to categories: {', '.join(categories)}")
+    parser.add_argument("--timeout", type=float, default=30.0,
+                        help="per-command timeout in seconds (default 30)")
+    parser.add_argument("--verbose", action="store_true",
+                        help="include PASS and SKIP findings (text output; JSON always includes them)")
+    parser.add_argument("--no-color", action="store_true")
+    parser.add_argument("--list-checks", action="store_true",
+                        help="list all checks and exit")
+    args = parser.parse_args()
+
+    if args.list_checks:
+        for category, name, desc, _fn in CHECKS:
+            print(f"{category:10s} {name:18s} {desc}")
+        return 0
+
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
+
+    only: set[str] | None = None
+    if args.only:
+        only = {c.strip() for c in args.only.split(",") if c.strip()}
+        unknown = only - set(categories)
+        if unknown:
+            print(f"unknown categories: {', '.join(sorted(unknown))}", file=sys.stderr)
+            print(f"valid: {', '.join(categories)}", file=sys.stderr)
+            return 2
+
+    contexts = list(dict.fromkeys(args.contexts)) or [None]
+
+    def on_sigint(_sig: int, _frame: Any) -> None:
+        ABORT.set()
+        with ACTIVE_LOCK:
+            for proc in list(ACTIVE_PROCS):
+                _kill_group(proc)
+        print("\ninterrupt received — aborting remaining commands", file=sys.stderr)
+
+    signal.signal(signal.SIGINT, on_sigint)
+
+    results: dict[str, list[Finding]] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {}
+        for ctx in contexts:
+            label = ctx or "(current context)"
+            futures[pool.submit(
+                scan_context, args.pmx, ctx or "", args.timeout, only
+            )] = label
+        for fut in concurrent.futures.as_completed(futures):
+            label = futures[fut]
+            try:
+                results[label] = fut.result()
+            except Exception as exc:
+                results[label] = [
+                    Finding(ERROR, "cluster", "membership", "cluster", f"scan crashed: {exc!r}")
+                ]
+
+    if ABORT.is_set():
+        return 130
+
+    use_color = sys.stdout.isatty() and not args.no_color and not os.environ.get("NO_COLOR")
+    if args.output == "json":
+        report_json({ctx: results[ctx] for ctx in sorted(results)})
+    else:
+        for ctx in (c or "(current context)" for c in contexts):
+            report_text(ctx, results[ctx], use_color, args.verbose)
+
+    worst = min(
+        (SEVERITY_ORDER.get(f.severity, 9) for fs in results.values() for f in fs),
+        default=9,
+    )
+    if worst == 0:
+        return 1
+    if worst == 1:
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
