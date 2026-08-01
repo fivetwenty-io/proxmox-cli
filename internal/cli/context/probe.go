@@ -1,7 +1,10 @@
 package context
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,18 +32,36 @@ type probeResult struct {
 // unauthenticated GET of /api2/json/version, which every Proxmox product
 // serves without credentials. It uses a bare http.Client built from the
 // context fields — never a product API client — so the validate verb keeps
-// its noClient annotation. TLS verification honors the context's
-// tls.insecure flag. ctx must already have defaults applied
+// its noClient annotation. ctx must already have defaults applied
 // (config.ApplyDefaults) so Port and Protocol are populated.
-func probeContext(ctx *config.Context, timeout time.Duration) probeResult {
+//
+// TLS trust mirrors what a real API call would do rather than a subset of it.
+// insecure is the merged flag-or-context value the rest of the CLI computes,
+// and a pinned tls.fingerprint is honored via a certificate pin. Probing with
+// stock x509 verification alone reported a correctly pinned context — the
+// normal shape for Proxmox, whose certificates are self-signed, and the shape
+// `pmx lab` mints automatically — as unreachable. The one lever that made
+// validate pass was then setting tls.insecure, so a diagnostic talked
+// operators into permanently disabling verification for every real call that
+// context made.
+func probeContext(ctx *config.Context, timeout time.Duration, insecure bool) probeResult {
 	url := fmt.Sprintf("%s://%s:%d/api2/json/version", ctx.Protocol, ctx.Host, ctx.Port)
+
+	//nolint:gosec // G402: InsecureSkipVerify is the caller's explicit opt-in, warned about at the call site
+	tlsCfg := &tls.Config{InsecureSkipVerify: insecure}
+	if !insecure && ctx.TLS.Fingerprint != "" {
+		// Pin instead of trusting the system roots: a self-signed Proxmox
+		// certificate never chains to one, so this is the only way a pinned
+		// context probes the same way it connects.
+		tlsCfg.InsecureSkipVerify = true //nolint:gosec // G402: replaced by the pin check below
+		tlsCfg.VerifyPeerCertificate = fingerprintVerifier(ctx.TLS.Fingerprint)
+	}
 
 	client := &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			//nolint:gosec // G402: honors the context's explicit tls.insecure opt-in, mirroring the API clients
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: ctx.TLS.Insecure},
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: tlsCfg,
 		},
 	}
 
@@ -57,6 +78,30 @@ func probeContext(ctx *config.Context, timeout time.Duration) probeResult {
 	return probeResult{
 		Reachable:    true,
 		ProductGuess: productFromServerHeader(resp.Header.Get("Server")),
+	}
+}
+
+// fingerprintVerifier returns a tls.Config.VerifyPeerCertificate that accepts
+// the peer only when its leaf certificate's SHA-256 matches want. Comparison
+// is case-insensitive and ignores colons, so a fingerprint copied from the
+// PVE UI, from `pvenode cert info`, or from a pmx-written context all compare
+// equal.
+func fingerprintVerifier(want string) func([][]byte, [][]*x509.Certificate) error {
+	normalize := func(s string) string {
+		return strings.ToLower(strings.ReplaceAll(s, ":", ""))
+	}
+	wantNorm := normalize(want)
+
+	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+		if len(rawCerts) == 0 {
+			return fmt.Errorf("tls fingerprint pin: peer presented no certificate")
+		}
+		sum := sha256.Sum256(rawCerts[0])
+		got := hex.EncodeToString(sum[:])
+		if got != wantNorm {
+			return fmt.Errorf("tls fingerprint pin: peer certificate is %s, context pins %s", got, wantNorm)
+		}
+		return nil
 	}
 }
 

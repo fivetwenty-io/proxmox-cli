@@ -138,7 +138,17 @@ func newValidateCmd() *cobra.Command {
 					probeCtx := *ctx
 					config.ApplyDefaults(&probeCtx)
 
-					pr := probeContext(&probeCtx, connectTimeout)
+					// Merge the flag with the context the same way every
+					// other verb does (see buildContextOptions), so
+					// `validate --connect --insecure` behaves like the rest
+					// of the CLI, and warn on the insecure path exactly as
+					// the real client paths do.
+					insecure := deps.Insecure || probeCtx.TLS.Insecure
+					if insecure {
+						cli.WarnInsecureTLS(cmd.ErrOrStderr())
+					}
+
+					pr := probeContext(&probeCtx, connectTimeout, insecure)
 					if pr.Reachable {
 						r.reachable = "yes"
 					} else {
