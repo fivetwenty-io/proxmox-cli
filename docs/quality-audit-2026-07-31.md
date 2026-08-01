@@ -8,9 +8,17 @@ design, readability, error handling, testing, concurrency and context,
 performance, security, observability, and CI gates.
 
 Method: six parallel adversarial review passes (one per checklist area), then
-independent verification of each high-severity claim against the source — and,
-where the claim was about runtime behavior, against a running binary or a
-purpose-built harness. Claims that could not be reproduced were dropped.
+an independent verification round instructed to refute rather than confirm.
+Every claim was checked against the source and, where it concerned runtime
+behavior, against a running binary or a purpose-built harness.
+
+The verification round earned its keep twice. It found the credential-in-logs
+disclosure below, which the first pass had graded MEDIUM as "logging hygiene"
+and cited only against a deliberately-misused passthrough flag; tracing it to
+`node scan pbs`, where `--password` is mandatory, moved it to the most serious
+finding here. And it corrected an over-reach in the opposite direction: `pmx
+version` was reported as failing when it should print help, but it reports the
+connected server's version and genuinely needs a client, so it was left alone.
 
 Baseline before any change: `go build`, `go test`, `go test -race`, `go vet`,
 `staticcheck`, and `golangci-lint` were all clean, and remained clean after
@@ -18,7 +26,7 @@ every commit. The defects below are the ones those tools cannot see.
 
 ## Closed
 
-Thirteen commits, each with regression tests. Grouped by what was actually
+Seventeen commits, each with regression tests. Grouped by what was actually
 wrong.
 
 ### Values reaching a remote root shell unvalidated
@@ -131,6 +139,39 @@ Confirmed live against the lab context: `unreachable` before, `yes / match
 (pve)` after. The pin runs in `VerifyConnection`, not `VerifyPeerCertificate`,
 so a resumed session cannot slip past it.
 
+### A credential written to disk in cleartext
+
+The SDK encodes GET and DELETE parameters into the request URL and logs that
+URL verbatim. Four typed commands take a `--password` and issue one of those
+methods — `pve node scan pbs`, where the flag is **required**, `pve node scan
+cifs`, and the two `access tfa delete` verbs including the PDM twin — so the
+credential was written to the log file in the clear.
+
+Captured against a local endpoint: the password appeared three times per
+invocation, in `http.request`, in `http.response`, and in pmx's own exit
+record. Two of those are logged at error level, so lowering `log.level` did not
+suppress it, and per the retention item below the file is kept indefinitely.
+The wrapped error also printed the full URL to stderr, putting the credential
+into terminal scrollback and CI job output.
+
+`redact.QueryParams` now masks the value of any query parameter whose key looks
+like a credential — reusing the marker list the audit-arg redaction already
+applies — at the log adapter, the exit record, and the stderr path.
+Non-sensitive parameters are preserved so the error stays diagnosable.
+
+This one was found by the verification round, not the first review pass, and
+graded MEDIUM ("logging hygiene") before it was traced to a command whose
+password flag is mandatory.
+
+### Tasks that finished with warnings reported clean success
+
+The SDK returns a `WARNINGS: N` task as a success with `Status.Warned` set, and
+all three wait helpers discarded it across 33 call sites, so a vzdump that
+skipped a guest printed "Backup completed" and exited 0. The helpers now report
+the UPID and exit status on stderr. The exit code is deliberately unchanged —
+whether a warning is a failure is a contract question for existing scripts, and
+making the outcome visible does not require answering it.
+
 ### Observability
 
 Shell completion was dispatched through the same `PersistentPreRunE` as a real
@@ -138,6 +179,21 @@ command. The client build was already skipped for it, but only after the log
 file was opened and the invocation record written, so every tab press created a
 JSONL file under a `__complete` directory. The live tree on this workstation
 had reached **112,580 files / 407 MB**, 12,300 of them under 1 KB.
+
+Log filenames carry one-second granularity and are opened `O_APPEND`, so
+invocations starting within the same second shared a file with no way to tell
+their records apart — six concurrent runs produced one file whose invocation
+and exit records could not be paired to a run. Every record now carries the
+pid.
+
+A bare grouping command (`pmx pve`, `pmx pbs`, `pmx context`) resolved the
+context secret and shelled out to the keychain purely to print help, and failed
+with a credential error instead of helping when that lookup failed.
+`RequireSubcommands` had made those commands runnable so a stray positional
+exits non-zero, which also subjected them to client construction; they are now
+annotated `noClient`. `pmx version` was reported as part of this and is
+deliberately unchanged — it reports the connected server's version, so it does
+need a client.
 
 The audit record also carried the context name but nothing about what that
 context pointed at. Contexts get renamed, repointed, and copied between
@@ -157,17 +213,29 @@ These are real, and deliberately not changed here.
   destructive default change and belongs to the maintainer, not to a hardening
   pass. `pmx logs prune` already exists for it.
 
-- **A task finishing with `WARNINGS: N` reports success and exit 0**
-  (`internal/apiclient/upid.go`). Real, and misleading for a vzdump backup that
-  partially failed. Fixing it changes documented exit-code semantics that
-  scripts depend on, so it needs an explicit decision about whether a warning
-  exit is a failure.
+- **Whether a `WARNINGS: N` task should exit non-zero.** The warning is now
+  reported (above), but the exit code is still 0. Changing it is a contract
+  decision for scripts already depending on the current codes.
 
 - **Config is parsed non-strictly, so a misspelled key is silently ignored**
-  (`internal/config/loader.go`). Switching to strict parsing would make every
-  existing config carrying an unknown key fail to load, which could leave an
-  operator unable to run the CLI at all. Warranted, but it needs a migration
-  path rather than a flag flip.
+  (`internal/config/loader.go`). Switching `Load` to strict parsing would make
+  every existing config carrying an unknown key fail to load, which could leave
+  an operator unable to run the CLI at all. The better shape, if wanted: keep
+  `Load` permissive and add a strict re-parse reporting unknown keys inside
+  `pmx context validate`, which is already the "tell me what's wrong with my
+  config" verb.
+
+- **`nodeaddr.Resolve` swallows the cluster-status error** and falls back to
+  the symbolic node name, so an expired token surfaces as `ssh: Could not
+  resolve hostname pve-1`. The fallback itself is deliberate and documented;
+  making the cause visible needs a logger the function does not currently have.
+
+- **`labMintToken` deletes the old token before five more fallible steps**
+  (`internal/cli/lab/labcontext.go`), and no error mentions the rotation
+  already happened. The guard above it means the old secret is usually already
+  known-bad, which is why this is not higher: hoisting the two independent
+  fetches above the mint and naming the rotation in post-mint errors would
+  close it.
 
 - **N+1 sequential config reads in the lxc/qemu security audits**, and the
   related divergence where the lxc twin aborts on one unreadable container
