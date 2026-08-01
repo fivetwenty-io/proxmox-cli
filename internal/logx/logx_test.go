@@ -590,3 +590,41 @@ func TestInit_CloserNonNilAndReleasesFile(t *testing.T) {
 		)
 	})
 }
+
+// TestInit_RecordsCarryPID covers demultiplexing. Log filenames have
+// one-second granularity and are opened O_APPEND, so invocations started
+// within the same second share a file; without a pid their records interleave
+// with no way to pair one run's invocation record with its exit record, which
+// is the whole point of the audit trail.
+func TestInit_RecordsCarryPID(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	logger, closer, err := logx.Init(logx.Config{LogDir: dir, Command: "probe"})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = closer.Close() })
+
+	logger.Info("invocation")
+	logger.Info("exit")
+	require.NoError(t, closer.Close())
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	data, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	require.NoError(t, err)
+
+	var seen int
+	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var rec map[string]any
+		require.NoError(t, json.Unmarshal([]byte(line), &rec))
+		pid, ok := rec["pid"].(float64)
+		require.True(t, ok, "every record must carry a pid: %s", line)
+		require.Equal(t, float64(os.Getpid()), pid)
+		seen++
+	}
+	require.Equal(t, 2, seen)
+}

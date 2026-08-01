@@ -202,7 +202,12 @@ func buildFilename(command, subcommand string, ts time.Time) string {
 // withBaseAttrs attaches non-empty base attributes (command, node, vmid)
 // to the logger and returns it.
 func withBaseAttrs(l *slog.Logger, cfg Config) *slog.Logger {
-	var attrs []any
+	// Log filenames carry one-second granularity and are opened O_APPEND, so
+	// invocations started within the same second share a file. Without a pid
+	// their records interleave with nothing to tell them apart: the
+	// invocation and exit records of one run cannot be paired, which is
+	// exactly what the audit trail exists to allow.
+	attrs := []any{slog.Int("pid", os.Getpid())}
 	if cfg.Command != "" {
 		attrs = append(attrs, slog.String("command", cfg.Command))
 	}
@@ -214,9 +219,6 @@ func withBaseAttrs(l *slog.Logger, cfg Config) *slog.Logger {
 	}
 	if cfg.VMID != "" {
 		attrs = append(attrs, slog.String("vmid", cfg.VMID))
-	}
-	if len(attrs) == 0 {
-		return l
 	}
 	return l.With(attrs...)
 }
