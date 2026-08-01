@@ -1,0 +1,193 @@
+# pmx CLI — Code Quality Audit
+
+Date: 2026-07-31
+
+Scope: the whole Go module at HEAD (~115k LOC non-test, 41 packages), scored
+against the Go merge-gate checklist: formatting and style, package and API
+design, readability, error handling, testing, concurrency and context,
+performance, security, observability, and CI gates.
+
+Method: six parallel adversarial review passes (one per checklist area), then
+independent verification of each high-severity claim against the source — and,
+where the claim was about runtime behavior, against a running binary or a
+purpose-built harness. Claims that could not be reproduced were dropped.
+
+Baseline before any change: `go build`, `go test`, `go test -race`, `go vet`,
+`staticcheck`, and `golangci-lint` were all clean, and remained clean after
+every commit. The defects below are the ones those tools cannot see.
+
+## Closed
+
+Thirteen commits, each with regression tests. Grouped by what was actually
+wrong.
+
+### Values reaching a remote root shell unvalidated
+
+`lab.Name` was charset-checked before mutating verbs ran, and the comment
+explaining why named dataset paths as the reason. The other half of those same
+dataset paths was not checked. `storage.pool` flows through `zfsDatasetPath`
+into `zfs set` / `zfs create` command lines that `quota set`, `create`, and
+`nfs attach` hand to ssh, which joins its trailing argv with spaces and
+evaluates the result in the remote root login shell.
+
+The nested SDN identifiers had the same gap, with a sharper edge: the struct
+docs asserted a charset constraint, and `ValidateNestedNetwork` delegated it in
+a comment to a wrapper that turned out to be a pure passthrough. The outer vnet
+IDs were validated against exactly the pattern the nested ones were missing.
+`vnets[].alias` is documented free text, so it is shell-quoted at the point of
+use rather than restricted.
+
+`sdn vlan apply` now runs the coherence gate itself instead of assuming
+`lab config add` wrote the config, so a hand-written lab cannot bypass it.
+
+### Signals: an uninterruptible ssh, and an orphaned one
+
+The parent shielded itself from SIGINT with `signal.Ignore` so it could survive
+^C long enough to read the child's exit status. The comment claimed the
+inherited `SIG_IGN` was harmless because ssh installs its own handlers. It does
+not — ssh guards the install on the inherited disposition
+(`if ssh_signal(SIGINT, SIG_IGN) != SIG_IGN`), so it kept the inherited
+`SIG_IGN` and never installed a handler.
+
+Every scripted ssh — `node exec`, `lab create`, `cluster join`, `quota set`,
+snippet upload — was uninterruptible from the invoking terminal, by ^C or ^\,
+with no way to abort a wrong destructive remote command. rsync was unaffected;
+it installs unconditionally.
+
+Reproduced two ways before the fix: a harness mirroring the runner (ssh child
+survived SIGINT indefinitely; without the shield it died in 2s), and the same
+asymmetry in a plain `/bin/sh` child, which is now the regression test.
+
+Two adjacent defects shared that one design decision. A signal directed at pmx
+alone (`kill <pid>`) never reaches the process group, so it killed pmx and left
+ssh running a remote command unsupervised — now relayed. And the root context
+was `context.Background()`, so nothing could observe cancellation: the
+task-wait poll, the lab SSH wait, and the SDK's retry backoff all select on
+`ctx.Done()` that could never fire, and ^C killed the process before the exit
+audit record, the log close, or the retention prune ran.
+
+Verified end-to-end against a real hung `node exec`: the command now exits on
+^C, its ssh child exits with it, no orphan remains, and the exit record is
+written.
+
+### Waits with no wall-clock bound
+
+`ConnectTimeout` bounds connection establishment only. A peer that goes silent
+without a RST or FIN left ssh blocked indefinitely, and pmx blocked behind it.
+That is an expected outcome here, not an exotic fault: `pvecm add` restarts
+corosync, which reconfigures the very management network the ssh session
+carrying that command travels over. Keepalives now bound an established
+session for both scripted argv builders; interactive paths are untouched.
+
+`clusterWaitForJoin` compounded it — no context, and its documented one-minute
+ceiling counted sleep time only, while each of its 30 iterations made two
+unbounded ssh calls. It now takes a context and checks it per attempt.
+
+### An error read as a fact
+
+`scaleNodeStillMember` tolerated any non-transport error from `pvecm status`
+and then searched the resulting empty output for the node's IP. An inquorate or
+corosync-down node 0 exits non-zero with no output, which is indistinguishable
+from "the node already left" — so a failed `pvecm delnode` was taken as
+idempotent success and the still-joined node's VM was destroyed underneath the
+cluster. The neighbouring "could not confirm membership" error also dropped the
+confirmation error it named.
+
+### Data at risk of silent loss or disclosure
+
+The snippet upload redirected `cat` straight onto its destination, which the
+remote shell truncates on open: an interrupted upload left the previous snippet
+truncated with no rollback, and a snippet is a cloud-init or hookscript the
+next guest boot consumes. It now streams to a sibling temp file and renames,
+matching `internal/nodefile`.
+
+`security -i` consumes a backslash as an escape and still exits 0, so storing
+`Domain\pass` left `Domainpass` in the keychain and reported success. Measured
+against a throwaway keychain: quotes, `$`, and backticks round-trip; only
+backslash does not.
+
+`context edit` wrote the whole context — `Auth.Secret` included, possibly an
+inline literal — to `$TMPDIR`, and two failure paths deliberately preserve that
+file. Nothing ever removed it. It now lives in the 0700 config directory.
+
+Every failure path in `parseOIDCRedirect` embedded the full redirect URL, whose
+query carries the single-use authorization code, in errors that reach the JSONL
+log. The function had no tests; the disclosure assertion added with the fix
+immediately caught a second leak, where `url.Parse`'s own error re-embedded the
+URL that the outer message had just redacted.
+
+### A diagnostic that argued for disabling security
+
+`context validate --connect` built its TLS config from `tls.insecure` alone. It
+ignored `tls.fingerprint` — which is how a Proxmox context is normally trusted,
+since the certificates are self-signed and `pmx lab` pins one automatically —
+so a healthy pinned context was reported `unreachable: x509: certificate is not
+trusted`, with a non-zero exit. It also ignored `--insecure`, unlike every
+other verb, and skipped the warning both other verification-disabling paths
+emit. The one lever that made validate pass was setting `tls.insecure`, which
+then disabled verification for every real API call that context made.
+
+Confirmed live against the lab context: `unreachable` before, `yes / match
+(pve)` after. The pin runs in `VerifyConnection`, not `VerifyPeerCertificate`,
+so a resumed session cannot slip past it.
+
+### Observability
+
+Shell completion was dispatched through the same `PersistentPreRunE` as a real
+command. The client build was already skipped for it, but only after the log
+file was opened and the invocation record written, so every tab press created a
+JSONL file under a `__complete` directory. The live tree on this workstation
+had reached **112,580 files / 407 MB**, 12,300 of them under 1 KB.
+
+The audit record also carried the context name but nothing about what that
+context pointed at. Contexts get renamed, repointed, and copied between
+machines, so a log read months later could not answer the first question an
+audit trail exists for: which machine did this mutation reach. It now records
+host, port, product, and username — never the secret, which the test asserts
+against every record a run produces.
+
+## Deferred, with reasons
+
+These are real, and deliberately not changed here.
+
+- **Log retention is disabled by default** (`internal/config/config.go`). This
+  is the direct cause of the 407 MB tree above, and the completion fix removes
+  the largest contributor but not the default. Turning retention on by default
+  would start deleting an operator's existing logs on upgrade. That is a
+  destructive default change and belongs to the maintainer, not to a hardening
+  pass. `pmx logs prune` already exists for it.
+
+- **A task finishing with `WARNINGS: N` reports success and exit 0**
+  (`internal/apiclient/upid.go`). Real, and misleading for a vzdump backup that
+  partially failed. Fixing it changes documented exit-code semantics that
+  scripts depend on, so it needs an explicit decision about whether a warning
+  exit is a failure.
+
+- **Config is parsed non-strictly, so a misspelled key is silently ignored**
+  (`internal/config/loader.go`). Switching to strict parsing would make every
+  existing config carrying an unknown key fail to load, which could leave an
+  operator unable to run the CLI at all. Warranted, but it needs a migration
+  path rather than a flag flip.
+
+- **N+1 sequential config reads in the lxc/qemu security audits**, and the
+  related divergence where the lxc twin aborts on one unreadable container
+  while the qemu twin degrades gracefully. Worth fixing; a behavior-shaping
+  change large enough to want its own review.
+
+- **Cross-persona duplication** (pbs/pdm near-identical command bodies, two
+  names for one helper, `--targetstorage` vs `--target-storage`, `template`
+  meaning opposite things for VMs and containers). Genuine maintainability
+  debt, and the user-visible flag naming items are breaking changes.
+
+- **Test-suite gaps**: CI never compiles the macOS keychain backend, runs bare
+  `go test` rather than the repo's own race target, and two tests self-disable
+  into SKIP on regression. Worth a dedicated pass with `go-testing-analysis`.
+
+## Verdict
+
+**CHANGES REQUIRED → PASS** for everything remediated above. The full gate
+block — `go test`, `go test -race`, `go vet`, `staticcheck`, `golangci-lint`,
+`gosec` — is green, and `gosec` is back to its pre-audit baseline with no new
+findings introduced. The deferred items are listed above rather than closed
+because each one either destroys operator data, changes a documented contract,
+or is large enough to deserve its own review.
