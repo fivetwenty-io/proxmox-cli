@@ -4,6 +4,8 @@ import (
 	"log/slog"
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 )
 
 // slogAdapter bridges the application's *slog.Logger onto the pve.Logger
@@ -23,12 +25,26 @@ func newSlogAdapter(l *slog.Logger) pve.Logger {
 	return &slogAdapter{log: l}
 }
 
+// fieldsToAttrs flattens the SDK's field map into slog attributes, masking
+// the value of every sensitive query parameter in any string field along the
+// way.
+//
+// The SDK encodes GET and DELETE parameters into the request URL and logs
+// that URL verbatim, so a command that takes a --password and issues a GET —
+// `node scan pbs`, where it is required, plus `node scan cifs` and the two
+// `tfa delete` verbs — wrote the cleartext credential into the log file. Two
+// of the three records it appeared in are logged at error level, so lowering
+// log.level did not suppress it, and the file is retained indefinitely by
+// default.
 func fieldsToAttrs(fields map[string]any) []any {
 	if len(fields) == 0 {
 		return nil
 	}
 	attrs := make([]any, 0, len(fields)*2)
 	for k, v := range fields {
+		if s, ok := v.(string); ok {
+			v = redact.QueryParams(s)
+		}
 		attrs = append(attrs, k, v)
 	}
 	return attrs

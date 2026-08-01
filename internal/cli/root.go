@@ -28,6 +28,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/fivetwenty-io/proxmox-cli/internal/logx"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 	"github.com/fivetwenty-io/proxmox-cli/internal/version"
 )
 
@@ -1065,7 +1066,10 @@ func logInvocationExit(c *cobra.Command, err error) {
 	}
 
 	if err != nil {
-		deps.Log.Error("exit", append(attrs, slog.String("error", err.Error()))...)
+		// The error text routinely quotes the failing request URL, whose
+		// query string carries GET/DELETE parameters — including a
+		// --password on the commands that take one.
+		deps.Log.Error("exit", append(attrs, slog.String("error", redact.QueryParams(err.Error())))...)
 		return
 	}
 	deps.Log.Info("exit", attrs...)
@@ -1209,18 +1213,19 @@ func RequireSubcommands(cmd *cobra.Command) {
 			}
 			return c.Help()
 		}
+		// Installing that RunE made the grouping command runnable, which also
+		// made it subject to client construction — so a bare `pmx pve`,
+		// `pmx version`, or `pmx context` resolved the context secret and
+		// shelled out to the keychain purely to print help, and failed with a
+		// credential error instead of helping when that lookup failed. Neither
+		// branch above touches an API client. noClient is checked per-command
+		// rather than inherited, so this stays contained to the grouping
+		// commands themselves, and the unknown-command branch still exits
+		// non-zero.
+		setNoClient(cmd)
 	}
 }
 
-// Execute builds the root command, wires the provided group factories, and
-// executes cobra. It returns the first error encountered, or nil on success.
-//
-// factories is the ordered list of GroupFactory values supplied by
-// cmd/pmx/main.go. The order determines the help-output listing order.
-//
-// The log file closer captured by PersistentPreRunE is deferred here, after
-// root.Execute() returns, so that all log records written during RunE are
-// flushed and the fd is released only once the full command has completed.
 // signalContext returns the root command context, cancelled by the first
 // SIGINT or SIGTERM, plus a stop function the caller defers.
 //
@@ -1258,6 +1263,15 @@ func signalContext() (context.Context, func()) {
 	}
 }
 
+// Execute builds the root command, wires the provided group factories, and
+// executes cobra. It returns the first error encountered, or nil on success.
+//
+// factories is the ordered list of GroupFactory values supplied by
+// cmd/pmx/main.go. The order determines the help-output listing order.
+//
+// The log file closer captured by PersistentPreRunE is deferred here, after
+// root.Execute() returns, so that all log records written during RunE are
+// flushed and the fd is released only once the full command has completed.
 func Execute(persona string, factories []GroupFactory) error {
 	root, cleanup := NewRootCmd(persona)
 	defer cleanup()
@@ -1305,7 +1319,10 @@ func Execute(persona string, factories []GroupFactory) error {
 
 		var exitErr *exec.ExitError
 		if isCaptured || !errors.As(err, &exitErr) {
-			fmt.Fprintln(os.Stderr, err)
+			// Redacted for the same reason as the exit record above:
+			// terminal scrollback and CI job logs are no safer a home for a
+			// credential than the log file is.
+			fmt.Fprintln(os.Stderr, redact.QueryParams(err.Error()))
 			if hint := AuthHint(err); hint != "" {
 				fmt.Fprintln(os.Stderr, hint)
 			}

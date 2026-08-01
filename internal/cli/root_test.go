@@ -2192,3 +2192,110 @@ func TestAuthWhoamiResolvesByContextUnderEveryPersona(t *testing.T) {
 		"auth whoami must resolve by the active context's own product under every persona, "+
 			"including pbs, rather than inheriting the persona root's product tag")
 }
+
+// TestRequireSubcommands_GroupingCommandsNeedNoClient covers a help path that
+// failed on credentials. RequireSubcommands makes a grouping command runnable
+// so a stray positional exits non-zero, but that also subjected it to client
+// construction: a bare `pmx pve` or `pmx context` resolved the context secret
+// and shelled out to the keychain just to print help, and reported a
+// credential error instead of helping when the entry was missing.
+func TestRequireSubcommands_GroupingCommandsNeedNoClient(t *testing.T) {
+	root := &cobra.Command{Use: "pmx"}
+	group := &cobra.Command{Use: "grp", Short: "a grouping command"}
+	group.AddCommand(&cobra.Command{
+		Use:  "leaf",
+		RunE: func(*cobra.Command, []string) error { return nil },
+	})
+	root.AddCommand(group)
+
+	cli.RequireSubcommands(root)
+
+	require.Equal(t, "true", group.Annotations["noClient"],
+		"a grouping command only prints help or rejects a positional; it must not build a client")
+
+	// The leaf keeps whatever it declared: noClient is per-command, never
+	// inherited, so this must not have widened to real commands.
+	leaf, _, err := group.Find([]string{"leaf"})
+	require.NoError(t, err)
+	require.NotEqual(t, "true", leaf.Annotations["noClient"],
+		"noClient must not leak onto commands that do real work")
+}
+
+// TestRequireSubcommands_StrayPositionalStillFails pins the property the RunE
+// exists for, so the noClient change above cannot quietly restore cobra's
+// exit-0-on-unknown-subcommand behavior.
+func TestRequireSubcommands_StrayPositionalStillFails(t *testing.T) {
+	root := &cobra.Command{Use: "pmx"}
+	group := &cobra.Command{Use: "grp"}
+	group.AddCommand(&cobra.Command{
+		Use:  "leaf",
+		RunE: func(*cobra.Command, []string) error { return nil },
+	})
+	root.AddCommand(group)
+	cli.RequireSubcommands(root)
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+
+	root.SetArgs([]string{"grp", "bogus"})
+	require.Error(t, root.Execute(), "an unknown subcommand must not exit 0")
+
+	buf.Reset()
+	root.SetArgs([]string{"grp"})
+	require.NoError(t, root.Execute(), "a bare grouping command must print help and exit 0")
+	require.Contains(t, buf.String(), "Usage")
+}
+
+// TestExitRecord_RedactsCredentialsInErrorURLs covers the disclosure path a
+// GET or DELETE opens. The SDK encodes parameters into the request URL and
+// quotes that URL in its error, so a command taking --password (node scan pbs
+// requires one) wrote the cleartext credential into the exit record — a file
+// retained indefinitely by default — and printed it to stderr as well.
+func TestExitRecord_RedactsCredentialsInErrorURLs(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_LOG_LAYOUT", "")
+	t.Setenv("PMX_LOG_LEVEL", "")
+
+	const password = "SUPERSECRET123"
+
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(*cobra.Command, []string) error {
+				// Shaped exactly like the SDK's transport error.
+				return fmt.Errorf(
+					"failed to execute GET request to %q: connection refused",
+					"https://h:8006/api2/json/nodes/n1/scan/pbs?password="+password+"&server=pbs.example.com")
+			},
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", filepath.Join(tmpDir, "c.yml"), "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	require.Error(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
+
+	for _, rec := range readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs")) {
+		raw, err := json.Marshal(rec)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), password,
+			"a credential in a request URL must never reach the audit log")
+	}
+
+	// The non-sensitive part of the URL must survive, or the error stops
+	// being diagnosable.
+	records := readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs"))
+	exit := findRecord(records, "exit")
+	require.NotNil(t, exit)
+	errText, _ := exit["error"].(string)
+	require.Contains(t, errText, "scan/pbs")
+	require.Contains(t, errText, "server=pbs.example.com")
+	require.Contains(t, errText, "password=<redacted>")
+}
