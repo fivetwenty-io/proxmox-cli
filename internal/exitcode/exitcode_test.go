@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exitcode"
 	"github.com/stretchr/testify/require"
@@ -251,4 +252,33 @@ func TestFromError_Constants(t *testing.T) {
 	require.Equal(t, 5, exitcode.NotFound)
 	require.Equal(t, 6, exitcode.Conflict)
 	require.Equal(t, 7, exitcode.TFARequired)
+}
+
+// TestFromError_TaskWarned verifies that a task which finished with warnings
+// maps to its own code rather than Generic. The distinction matters to a
+// script: the task ran and did its work, so retrying it is not the same
+// remedy as retrying a command that failed to run at all.
+func TestFromError_TaskWarned(t *testing.T) {
+	t.Parallel()
+
+	warned := &apiclient.TaskWarnedError{
+		UPID:       "UPID:pve1:000A1B2C:00000000:00000000:vzdump::root@pam:",
+		ExitStatus: "WARNINGS: 1",
+	}
+
+	require.Equal(t, exitcode.TaskWarned, exitcode.FromError(warned), "direct")
+	require.Equal(t, exitcode.TaskWarned, exitcode.FromError(wrap(warned)), "wrapped once")
+	require.Equal(t, exitcode.TaskWarned, exitcode.FromError(wrap(wrap(warned))), "wrapped twice")
+	require.NotEqual(t, exitcode.Generic, exitcode.FromError(warned))
+}
+
+// TestFromError_ExitErrorBeatsTaskWarned pins the precedence: a subprocess
+// that has already exited with its own code is the more specific outcome.
+func TestFromError_ExitErrorBeatsTaskWarned(t *testing.T) {
+	t.Parallel()
+
+	warned := &apiclient.TaskWarnedError{UPID: "UPID:pve1:x", ExitStatus: "WARNINGS: 1"}
+	ee := &exec.ExitError{Code: 23, Err: warned}
+
+	require.Equal(t, 23, exitcode.FromError(ee))
 }

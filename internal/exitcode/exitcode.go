@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 )
 
@@ -27,6 +29,11 @@ const (
 	Conflict = 6
 	// TFARequired indicates that two-factor authentication is required to proceed.
 	TFARequired = 7
+	// TaskWarned indicates a task that reached a terminal state with a
+	// "WARNINGS: N" exit status while --warnings-as-errors was in effect. It
+	// is distinct from Generic so a script can tell "the task ran and warned"
+	// from "the command failed": the work was done in the first case.
+	TaskWarned = 8
 )
 
 // FromError maps a proxmox-apiclient-go error value to the appropriate exit code.
@@ -35,14 +42,16 @@ const (
 //  0. *exec.ExitError (child process exit, e.g. from `pmx ssh`/`pmx rsync`) →
 //     the child's own exit code, verbatim, regardless of any other mapping
 //     the error chain might also match
-//  1. TFARequiredError or AuthenticationError with TFA=true → TFARequired (7)
-//  2. AuthenticationError (TFA=false) or PermissionError → Auth (4)
-//  3. ParameterError → BadArgs (2)
-//  4. ErrNotFound sentinel or APIError with IsNotFound() → NotFound (5)
-//  5. ErrConflict sentinel or APIError with CodeResourceLocked HTTP code → Conflict (6)
-//  6. ConnectionError, SSLError, TimeoutError → Infra (3)
-//  7. nil → OK (0)
-//  8. anything else → Generic (1)
+//  1. *apiclient.TaskWarnedError (a task that finished with "WARNINGS: N"
+//     while --warnings-as-errors was in effect) → TaskWarned (8)
+//  2. TFARequiredError or AuthenticationError with TFA=true → TFARequired (7)
+//  3. AuthenticationError (TFA=false) or PermissionError → Auth (4)
+//  4. ParameterError → BadArgs (2)
+//  5. ErrNotFound sentinel or APIError with IsNotFound() → NotFound (5)
+//  6. ErrConflict sentinel or APIError with CodeResourceLocked HTTP code → Conflict (6)
+//  7. ConnectionError, SSLError, TimeoutError → Infra (3)
+//  8. nil → OK (0)
+//  9. anything else → Generic (1)
 func FromError(err error) int {
 	if err == nil {
 		return OK
@@ -55,7 +64,15 @@ func FromError(err error) int {
 		return exitErr.Code
 	}
 
-	// 1. TFA required — check before generic auth so TFA path is preferred.
+	// 1. A warned task is a terminal outcome rather than a class of API
+	// failure, so it gets its own code instead of falling through to Generic:
+	// the operation ran, and a script that treats "warned" like "failed to
+	// run" would retry work that already happened.
+	if _, ok := errors.AsType[*apiclient.TaskWarnedError](err); ok {
+		return TaskWarned
+	}
+
+	// 2. TFA required — check before generic auth so TFA path is preferred.
 	if pveerrors.IsTFARequired(err) {
 		return TFARequired
 	}
@@ -66,7 +83,7 @@ func FromError(err error) int {
 		return TFARequired
 	}
 
-	// 2. Authentication / permission failures.
+	// 3. Authentication / permission failures.
 	if errors.As(err, &authErr) {
 		return Auth
 	}
@@ -78,12 +95,12 @@ func FromError(err error) int {
 		return Auth
 	}
 
-	// 3. Parameter / bad-argument errors.
+	// 4. Parameter / bad-argument errors.
 	if _, ok := errors.AsType[*pveerrors.ParameterError](err); ok {
 		return BadArgs
 	}
 
-	// 4. Not-found errors.
+	// 5. Not-found errors.
 	if errors.Is(err, pveerrors.ErrNotFound) {
 		return NotFound
 	}
@@ -92,7 +109,7 @@ func FromError(err error) int {
 		return NotFound
 	}
 
-	// 5. Conflict / resource-locked errors.
+	// 6. Conflict / resource-locked errors.
 	if errors.Is(err, pveerrors.ErrConflict) {
 		return Conflict
 	}
@@ -103,11 +120,11 @@ func FromError(err error) int {
 		}
 	}
 
-	// 6. Infrastructure errors: connection, SSL, timeout.
+	// 7. Infrastructure errors: connection, SSL, timeout.
 	if pveerrors.IsConnectionError(err) || pveerrors.IsSSLError(err) || pveerrors.IsTimeoutError(err) {
 		return Infra
 	}
 
-	// 8. Fallback.
+	// 9. Fallback.
 	return Generic
 }

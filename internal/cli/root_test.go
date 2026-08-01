@@ -19,6 +19,7 @@ import (
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/api"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/pbs"
@@ -2293,4 +2294,86 @@ func TestExitRecord_RedactsCredentialsInErrorURLs(t *testing.T) {
 	require.Contains(t, errText, "scan/pbs")
 	require.Contains(t, errText, "server=pbs.example.com")
 	require.Contains(t, errText, "password=<redacted>")
+}
+
+// warningsAsErrorsConfig writes a config whose warnings-as-errors key is set
+// to want, and returns its path. The context is never dialled: the test only
+// needs PersistentPreRunE to reach its flag/env/config resolution.
+func warningsAsErrorsConfig(t *testing.T, want bool) string {
+	t.Helper()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	cfg := &config.Config{
+		CurrentContext:   "prod",
+		WarningsAsErrors: want,
+		Contexts: map[string]*config.Context{
+			"prod": {
+				Host: "127.0.0.1", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth: config.AuthBlock{
+					Type: "token", Username: "root@pam", TokenID: "cli", Secret: "literal-secret",
+				},
+			},
+		},
+	}
+	require.NoError(t, config.SaveForce(cfgPath, cfg))
+
+	return cfgPath
+}
+
+// TestPersistentPreRunE_WarningsAsErrors_Precedence pins the resolution order
+// for the opt-in that turns a "WARNINGS: N" task into a failure. The flag has
+// to beat the environment and the config file, and --warnings-as-errors=false
+// has to be able to switch off a config file that enables it — otherwise an
+// operator whose config sets it has no per-invocation escape hatch.
+func TestPersistentPreRunE_WarningsAsErrors_Precedence(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  bool
+		env  string
+		args []string
+		want bool
+	}{
+		{name: "default is off", want: false},
+		{name: "config enables", cfg: true, want: true},
+		{name: "env enables", env: "1", want: true},
+		{name: "env disables what config enabled", cfg: true, env: "0", want: false},
+		{name: "flag beats env", env: "0", args: []string{"--warnings-as-errors"}, want: true},
+		{
+			name: "explicit false flag beats config",
+			cfg:  true,
+			args: []string{"--warnings-as-errors=false"},
+			want: false,
+		},
+		{name: "unparseable env falls through to config", cfg: true, env: "maybe", want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PMX_OUTPUT", "table")
+			t.Setenv("PMX_NODE", "")
+			t.Setenv("PMX_CONTEXT", "")
+			t.Setenv("PMX_WARNINGS_AS_ERRORS", tc.env)
+
+			// The policy is process-wide; leave it as found.
+			apiclient.SetWarningsAsErrors(false)
+			t.Cleanup(func() { apiclient.SetWarningsAsErrors(false) })
+
+			root, cleanup := cli.NewRootCmd("pmx")
+			defer cleanup()
+			root.SetContext(context.Background())
+
+			called := false
+			root.AddCommand(buildNoopCmd(&called))
+
+			var outBuf, errBuf bytes.Buffer
+			root.SetOut(&outBuf)
+			root.SetErr(&errBuf)
+			root.SetArgs(append([]string{"--config", warningsAsErrorsConfig(t, tc.cfg)}, append(tc.args, "noop")...))
+
+			require.NoError(t, root.Execute())
+			require.True(t, called)
+			require.Equal(t, tc.want, apiclient.WarningsAsErrorsEnabled(),
+				"resolved policy for flags=%v env=%q config=%v", tc.args, tc.env, tc.cfg)
+		})
+	}
 }

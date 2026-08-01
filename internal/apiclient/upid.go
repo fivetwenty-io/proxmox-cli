@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 )
@@ -46,7 +47,7 @@ func UPIDFromRaw(raw json.RawMessage) (string, error) {
 //
 // On success it returns nil; on task failure or context cancellation it returns
 // a descriptive error. A task that completed with warnings returns nil — the
-// task did finish — but reports the warning via warnIfTaskWarned.
+// task did finish — but reports the warning via taskWarned.
 func WaitTask(ctx context.Context, ac *APIClient, upid string, opts *tasks.WaitOptions) error {
 	status, err := ac.Tasks.WaitForUPID(ctx, upid, opts)
 	if err != nil {
@@ -59,25 +60,68 @@ func WaitTask(ctx context.Context, ac *APIClient, upid string, opts *tasks.WaitO
 		return fmt.Errorf("wait task %s: nil status returned", upid)
 	}
 
-	warnIfTaskWarned(status)
-	return nil
+	return taskWarned(status)
 }
 
-// warnIfTaskWarned writes a notice to stderr when a task reached a terminal
-// state with a "WARNINGS: N" exit status.
+// warningsAreErrors selects what a "WARNINGS: N" task means to the exit code.
+// It is process-wide state set once from the root command's flag/config
+// resolution, for the same reason the warning itself goes straight to stderr:
+// the alternative is threading a policy value through 33 call sites that
+// otherwise have no interest in it.
+var warningsAreErrors atomic.Bool
+
+// SetWarningsAsErrors selects whether a task that finished with warnings is
+// reported as a failure. It is called once, from the root command, before any
+// task runs.
+//
+// The default (false) is the historical behaviour: the warning is printed and
+// the command still exits 0. Whether a warning constitutes failure is a
+// judgement about the operator's own tolerances — a vzdump that skipped one
+// unreachable guest is routine for some fleets and an incident for others —
+// and scripts already branch on the current codes, so it is opt-in rather
+// than a changed default.
+func SetWarningsAsErrors(v bool) { warningsAreErrors.Store(v) }
+
+// WarningsAsErrorsEnabled reports the policy currently in effect. It exists so
+// the root command's flag/env/config resolution can be asserted end to end
+// without running a real task.
+func WarningsAsErrorsEnabled() bool { return warningsAreErrors.Load() }
+
+// TaskWarnedError reports a task that reached a terminal state with a
+// "WARNINGS: N" exit status while --warnings-as-errors was in effect. The task
+// itself completed: the work it did is done, and this error describes the
+// outcome rather than an aborted operation.
+type TaskWarnedError struct {
+	// UPID identifies the task on the server, so the full log is one
+	// `pmx pve task log <upid>` away.
+	UPID string
+	// ExitStatus is the server's verbatim terminal status, e.g. "WARNINGS: 2".
+	ExitStatus string
+}
+
+func (e *TaskWarnedError) Error() string {
+	return fmt.Sprintf("task %s finished with %q", e.UPID, e.ExitStatus)
+}
+
+// taskWarned reports a task that reached a terminal state with a
+// "WARNINGS: N" exit status.
 //
 // The SDK returns such a task as a success with Status.Warned set, and all
 // three wait helpers discarded that flag, so a vzdump that skipped a guest
 // printed "Backup completed" and exited 0 with nothing anywhere saying
-// otherwise. The exit code is deliberately left alone: whether a warning
-// constitutes failure is a contract question for scripts that already depend
-// on the current codes. Making the warning visible is not.
+// otherwise. The warning now always reaches stderr; it additionally becomes an
+// error when the operator opted in via SetWarningsAsErrors.
 //
 // Writing to stderr from here rather than threading a writer through 33 call
 // sites follows internal/config's existing inline-secret warning.
-func warnIfTaskWarned(status *tasks.Status) {
+func taskWarned(status *tasks.Status) error {
 	if status == nil || !status.Warned {
-		return
+		return nil
 	}
 	fmt.Fprintf(os.Stderr, "WARN: task %s finished with %q\n", status.UpID, status.ExitStatus)
+
+	if warningsAreErrors.Load() {
+		return &TaskWarnedError{UPID: status.UpID, ExitStatus: status.ExitStatus}
+	}
+	return nil
 }

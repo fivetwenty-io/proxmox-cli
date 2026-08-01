@@ -222,3 +222,15 @@ task UPID immediately instead.
 | 5 | Not found |
 | 6 | Conflict (resource locked) |
 | 7 | Two-factor authentication required |
+| 8 | Task finished with warnings (only with `--warnings-as-errors`) |
+
+A Proxmox task can reach a terminal state with a `WARNINGS: N` exit status —
+a vzdump that skipped an unreachable guest, for example. The task did run, so
+by default the command reports the warning on stderr and still exits 0.
+
+Whether that is a failure depends on the fleet, so it is opt-in rather than a
+changed default: `--warnings-as-errors`, `PMX_WARNINGS_AS_ERRORS=1`, or
+`warnings-as-errors: true` in the config file makes such a task exit 8. The
+code is distinct from the generic error so a script can tell "the task ran and
+warned" from "the command failed" — retrying is the wrong remedy for the
+first.

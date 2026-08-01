@@ -210,6 +210,10 @@ type persistentFlags struct {
 	noLog    bool
 	async    bool
 	insecure bool
+	// warningsAsErrors is read together with its Changed state, since
+	// --warnings-as-errors=false must be able to override a config file
+	// that enables it (see config.ResolveBool).
+	warningsAsErrors bool
 }
 
 // Persona maps the invocation name (os.Args[0]) to a command surface:
@@ -337,6 +341,8 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 	root.PersistentFlags().BoolVar(&pf.noLog, "no-log", false, "suppress JSONL log file creation")
 	root.PersistentFlags().BoolVar(&pf.async, "async", false, "return task UPID immediately without waiting")
 	root.PersistentFlags().BoolVar(&pf.insecure, "insecure", false, "disable TLS certificate verification")
+	root.PersistentFlags().BoolVar(&pf.warningsAsErrors, "warnings-as-errors", false,
+		"treat a task that finishes with warnings as a failure (exit 8)")
 
 	wrapFlagUsages(root)
 
@@ -442,6 +448,14 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 
 	// Log layout: $PMX_LOG_LAYOUT > config log.layout > nested default.
 	logLayout := config.Resolve("", "PMX_LOG_LAYOUT", cfg.Log.Layout, config.LogLayoutNested)
+
+	// Whether a "WARNINGS: N" task fails the command. Resolved here, before
+	// any command runs, because the wait helpers that observe it sit far
+	// below this hook: --warnings-as-errors > $PMX_WARNINGS_AS_ERRORS >
+	// config warnings-as-errors > false (the historical behaviour).
+	apiclient.SetWarningsAsErrors(config.ResolveBool(
+		cmd.Flags().Changed("warnings-as-errors"), pf.warningsAsErrors,
+		"PMX_WARNINGS_AS_ERRORS", cfg.WarningsAsErrors))
 
 	// A shell-completion request is a keystroke, not an operation: it mutates
 	// nothing, and cobra dispatches it through this same PersistentPreRunE.

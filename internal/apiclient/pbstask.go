@@ -49,7 +49,7 @@ func PBSUPIDNode(upid string) (string, error) {
 //
 // On success it returns nil; on task failure or context cancellation it
 // returns a descriptive error. A task that completed with warnings returns
-// nil but reports the warning via warnIfTaskWarned.
+// nil but reports the warning via taskWarned.
 func WaitPBSTask(ctx context.Context, pc *PBSClient, upid string, opts *tasks.WaitOptions) error {
 	node, err := PBSUPIDNode(upid)
 	if err != nil {
@@ -67,6 +67,5 @@ func WaitPBSTask(ctx context.Context, pc *PBSClient, upid string, opts *tasks.Wa
 		return fmt.Errorf("wait task %s: nil status returned", upid)
 	}
 
-	warnIfTaskWarned(status)
-	return nil
+	return taskWarned(status)
 }

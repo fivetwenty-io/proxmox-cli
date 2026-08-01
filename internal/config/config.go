@@ -63,6 +63,13 @@ type Config struct {
 
 	// Log holds JSONL command-log preferences (layout and level).
 	Log ConfigLog `yaml:"log,omitempty" json:"log,omitzero"`
+
+	// WarningsAsErrors makes a task that finished with a "WARNINGS: N" exit
+	// status fail the command (exit code 8) instead of succeeding with a
+	// warning on stderr. Overridable per-invocation by --warnings-as-errors
+	// and $PMX_WARNINGS_AS_ERRORS. Unset means false, the historical
+	// behaviour.
+	WarningsAsErrors bool `yaml:"warnings-as-errors,omitempty" json:"warnings-as-errors,omitempty"`
 }
 
 // Log layout values for ConfigLog.Layout.
