@@ -85,6 +85,28 @@ func TestStoreKeychainSecret_RejectsInjectionChars(t *testing.T) {
 	assert.True(t, called)
 }
 
+// TestStoreKeychainSecret_RejectsBackslashSecret pins the one silent-corruption
+// case: `security -i` consumes a backslash as an escape and still exits 0, so
+// storing "Domain\pass" would leave "Domainpass" in the keychain and report
+// success. Every later lookup then fails with an opaque auth error against a
+// keychain item that looks present and correct.
+func TestStoreKeychainSecret_RejectsBackslashSecret(t *testing.T) {
+	orig := keychainRun
+	called := false
+	inner := fakeEmptyKeychain(nil, nil, nil)
+	keychainRun = func(stdin string, args ...string) (string, error) {
+		called = true
+		return inner(stdin, args...)
+	}
+	defer func() { keychainRun = orig }()
+
+	err := StoreKeychainSecret("svc", "acct", `Domain\pass`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backslash")
+	assert.NotContains(t, err.Error(), "Domain", "the error must never echo the secret")
+	require.False(t, called, "keychainRun must not run when validation fails")
+}
+
 func TestStoreKeychainSecret_SurfacesAddError(t *testing.T) {
 	orig := keychainRun
 	keychainRun = func(_ string, args ...string) (string, error) {

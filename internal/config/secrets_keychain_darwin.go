@@ -69,16 +69,21 @@ var keychainRun = func(stdin string, args ...string) (string, error) {
 	return stderr.String(), err
 }
 
-// keychainFieldSafe reports whether s is a single non-empty token safe to
-// interpolate into the whitespace-tokenized `security -i` command line: no
-// whitespace (which would split the token) and no control characters (a
-// newline would inject a second command into the interactive session).
+// keychainFieldSafe reports whether s is a single non-empty token that
+// survives `security -i` verbatim. That reader tokenizes each line with
+// shell-like rules, so three classes of character do not round-trip:
+// whitespace (splits the token), control characters (a newline injects a
+// second command into the interactive session), and backslash (consumed as an
+// escape — storing "a\b" yields "ab", and the add still reports success, so a
+// caller would otherwise be told a credential was stored that no lookup can
+// ever match). Quotes, $, and backticks were measured and do round-trip
+// unchanged, so they stay allowed.
 func keychainFieldSafe(s string) bool {
 	if s == "" {
 		return false
 	}
 	for _, r := range s {
-		if unicode.IsSpace(r) || unicode.IsControl(r) {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || r == '\\' {
 			return false
 		}
 	}
@@ -127,8 +132,12 @@ func StoreKeychainSecret(service, account, secret string) error {
 		return fmt.Errorf("keychain store requires non-empty, whitespace-free service and account")
 	}
 	if !keychainFieldSafe(secret) {
-		// Never echo the secret; report only the shape violation.
-		return fmt.Errorf("keychain store: secret must be non-empty and free of whitespace and control characters")
+		// Never echo the secret; report only the shape violation. Refusing is
+		// the point: `security -i` would store a silently altered value and
+		// still report success (see keychainFieldSafe).
+		return fmt.Errorf(
+			"keychain store: secret must be non-empty and free of whitespace, control characters, " +
+				"and backslashes")
 	}
 	if err := purgeKeychainItems(service, account); err != nil {
 		return fmt.Errorf("keychain store: clear existing items: %w", err)
