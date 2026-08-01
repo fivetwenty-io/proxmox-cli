@@ -598,8 +598,14 @@ func (assertAnErr) Error() string { return "dial tcp: connection refused" }
 
 // waitDeps builds a *cli.Deps whose runner replays the given fake responses.
 func waitDeps(responses ...exec.FakeResponse) *cli.Deps {
+	return waitDepsWithFake(exec.Fake(responses...))
+}
+
+// waitDepsWithFake is waitDeps for a caller that needs the fake afterwards, to
+// assert how many probes the loop actually made.
+func waitDepsWithFake(fake *exec.FakeRunner) *cli.Deps {
 	return &cli.Deps{
-		Runner: exec.Fake(responses...),
+		Runner: fake,
 		Ctx:    &config.Context{SSH: config.SSHBlock{}},
 	}
 }
@@ -614,12 +620,17 @@ func TestLabWaitForSSH_SucceedsWhenProbeOK(t *testing.T) {
 // TestLabWaitForSSH_RetriesTransportThenSucceeds verifies the loop retries on
 // transport failures and returns success once a probe connects.
 func TestLabWaitForSSH_RetriesTransportThenSucceeds(t *testing.T) {
-	deps := waitDeps(
+	fake := exec.Fake(
 		exec.FakeResponse{Err: assertAnErr{}},
 		exec.FakeResponse{Err: assertAnErr{}},
 		exec.FakeResponse{Stdout: "node0\n"},
 	)
-	require.NoError(t, labWaitForSSH(context.Background(), deps, "10.10.1.10"))
+	require.NoError(t, labWaitForSSH(context.Background(), waitDepsWithFake(fake), "10.10.1.10"))
+
+	// Without this the test passes even if the loop gave up retrying and the
+	// first probe happened to succeed, which is the regression it exists for:
+	// a nested node needs up to two minutes to bring up sshd.
+	require.Len(t, fake.Calls, 3, "the loop must retry each transport failure until a probe connects")
 }
 
 // TestLabWaitForSSH_HonorsCancelledContext verifies the loop stops on a

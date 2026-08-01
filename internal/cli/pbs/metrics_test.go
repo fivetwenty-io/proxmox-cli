@@ -43,13 +43,9 @@ func TestMetricsInfluxdbHTTPLs_ListsServersSortedByName(t *testing.T) {
 
 func TestMetricsInfluxdbHTTPLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/metrics/influxdb-http", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbHTTPLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newMetricsInfluxdbHTTPLsCmd, "ls")
 }
 
 // TestMetricsInfluxdbHTTPLs_TokenStrippedFromRaw verifies the API token is
@@ -501,13 +497,9 @@ func TestMetricsInfluxdbUDPLs_ListsServersSortedByName(t *testing.T) {
 
 func TestMetricsInfluxdbUDPLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/metrics/influxdb-udp", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsInfluxdbUDPLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newMetricsInfluxdbUDPLsCmd, "ls")
 }
 
 func TestMetricsInfluxdbUDPLs_ServerErrorSurfaced(t *testing.T) {
@@ -968,13 +960,12 @@ func TestMetricsData_NoFlagsOmitsQueryParams(t *testing.T) {
 
 func TestMetricsData_EmptyResponse(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/status/metrics", &recordedRequest{}, nil)
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newMetricsDataCmd(), "data")
-	require.NoError(t, err)
+	// A null data field is the shape PBS returns when no metric server has
+	// ever reported, so it must render as an empty list rather than crash or
+	// print nothing.
+	requireEmptyListRenders(t, pc, newMetricsDataCmd, "data")
 }
 
 func TestMetricsData_MalformedElementSurfacesDecodeError(t *testing.T) {

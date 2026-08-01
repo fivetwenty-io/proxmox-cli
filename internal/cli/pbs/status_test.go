@@ -65,13 +65,9 @@ func TestStatusDatastoreUsage_HandlesErrorAndMissingOptionalFields(t *testing.T)
 
 func TestStatusDatastoreUsage_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/status/datastore-usage", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newPbsStatusDatastoreUsageCmd(), "datastore-usage")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newPbsStatusDatastoreUsageCmd, "datastore-usage")
 }
 
 func TestStatusDatastoreUsage_ServerErrorSurfaced(t *testing.T) {

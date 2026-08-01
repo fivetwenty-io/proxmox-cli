@@ -41,13 +41,9 @@ func TestAcmeAccountLs_ListsAccountsSortedByName(t *testing.T) {
 
 func TestAcmeAccountLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/acme/account", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeAccountLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newAcmeAccountLsCmd, "ls")
 }
 
 func TestAcmeAccountLs_ServerErrorSurfaced(t *testing.T) {
@@ -356,13 +352,9 @@ func TestAcmePluginLs_ListsPluginsSortedByPlugin(t *testing.T) {
 
 func TestAcmePluginLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/acme/plugins", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmePluginLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newAcmePluginLsCmd, "ls")
 }
 
 func TestAcmePluginLs_ServerErrorSurfaced(t *testing.T) {
@@ -717,13 +709,9 @@ func TestAcmeChallengeSchemaLs_RawPreservesSchema(t *testing.T) {
 
 func TestAcmeChallengeSchemaLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/acme/challenge-schema", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeChallengeSchemaLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newAcmeChallengeSchemaLsCmd, "ls")
 }
 
 func TestAcmeChallengeSchemaLs_ServerErrorSurfaced(t *testing.T) {
@@ -769,13 +757,9 @@ func TestAcmeDirectoriesLs_ListsSortedByName(t *testing.T) {
 
 func TestAcmeDirectoriesLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/acme/directories", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newAcmeDirectoriesLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newAcmeDirectoriesLsCmd, "ls")
 }
 
 func TestAcmeDirectoriesLs_ServerErrorSurfaced(t *testing.T) {

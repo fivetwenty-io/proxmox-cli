@@ -44,13 +44,9 @@ func TestTrafficLs_ListsRulesSortedByName(t *testing.T) {
 
 func TestTrafficLs_EmptyList(t *testing.T) {
 	f, pc := newFakeClient(t)
-	deps := depsFor(t, pc, output.FormatTable, false)
-
 	recordJSON(f, "GET /api2/json/config/traffic-control", &recordedRequest{}, []map[string]any{})
 
-	var buf bytes.Buffer
-	err := run(deps, &buf, newTrafficLsCmd(), "ls")
-	require.NoError(t, err)
+	requireEmptyListRenders(t, pc, newTrafficLsCmd, "ls")
 }
 
 func TestTrafficLs_ServerErrorSurfaced(t *testing.T) {

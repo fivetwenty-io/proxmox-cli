@@ -3,6 +3,7 @@ package pbs
 import (
 	"bytes"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -71,10 +72,17 @@ func TestPermissionLs_HandlesEmptyResponse(t *testing.T) {
 	f, pc := newFakeClient(t)
 	recordJSON(f, "GET "+permissionsPath, &recordedRequest{}, map[string]any{})
 
-	deps := depsFor(t, pc, output.FormatTable, false)
-	var buf bytes.Buffer
-	err := run(deps, &buf, newPermissionCmd(), "permission", "ls")
-	require.NoError(t, err)
+	// A user with no permissions at all: the table still needs its header row,
+	// and the raw view stays the path→privilege object this endpoint returns
+	// rather than becoming null.
+	var table bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatTable, false), &table, newPermissionCmd(), "permission", "ls"))
+	require.Contains(t, table.String(), "PATH")
+	require.Contains(t, table.String(), "PRIV")
+
+	var raw bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatJSON, false), &raw, newPermissionCmd(), "permission", "ls"))
+	require.Equal(t, "{}", strings.TrimSpace(raw.String()))
 }
 
 func TestPermissionLs_SurfacesAPIError(t *testing.T) {

@@ -3,6 +3,7 @@ package context
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -578,6 +579,14 @@ func TestContextValidate_AllValid(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate", "--all"))
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 2, "--all must report every context, not just the current one")
+	for _, r := range got {
+		require.Equal(t, "OK", r["status"], "context %v", r["name"])
+		require.Empty(t, r["errors"])
+	}
 }
 
 // TestContextValidate_AllSortedOrder verifies that `validate --all` emits rows
@@ -654,6 +663,12 @@ func TestContextValidate_ValidFingerprint(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, runOpsCmd(cfg, p, &buf, "validate", "ctx"))
+
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 1)
+	require.Equal(t, "OK", got[0]["status"], "a well-formed fingerprint must validate clean")
+	require.Empty(t, got[0]["errors"])
 }
 
 // ---- validation-drift regression (F2 remediation) --------------------------

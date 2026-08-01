@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -208,4 +209,26 @@ func TestChildFactories_MatchesGroupChildrenAndExcludesShared(t *testing.T) {
 	require.NotContains(t, factoryNames, "version")
 	require.NotContains(t, factoryNames, "api")
 	require.NotContains(t, factoryNames, "ping")
+}
+
+// requireEmptyListRenders runs a list command against an empty API response in
+// both views an operator can ask for, and asserts what each must show.
+//
+// A test that only asserts "no error" here passes just as happily when the
+// command prints nothing at all, or when -o json emits null instead of an
+// empty array — the difference between `pmx ... -o json | jq length` printing
+// 0 and failing. Both are regressions a caller feels immediately, and neither
+// is visible to require.NoError.
+func requireEmptyListRenders(t *testing.T, pc *apiclient.PBSClient, newCmd func() *cobra.Command, args ...string) {
+	t.Helper()
+
+	var table bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatTable, false), &table, newCmd(), args...))
+	require.NotEmpty(t, strings.TrimSpace(table.String()),
+		"an empty list must still render its header row, not nothing at all")
+
+	var raw bytes.Buffer
+	require.NoError(t, run(depsFor(t, pc, output.FormatJSON, false), &raw, newCmd(), args...))
+	require.Equal(t, "[]", strings.TrimSpace(raw.String()),
+		"an empty list must be an empty JSON array, never null")
 }

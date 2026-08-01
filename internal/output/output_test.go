@@ -140,6 +140,24 @@ func TestRenderer_Table_EmptyResult_NoError(t *testing.T) {
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatTable))
+	require.Empty(t, buf.String(),
+		"a Result with nothing in it prints nothing: there are no headers to draw a frame around")
+}
+
+// TestRenderer_Table_EmptyRowsKeepsHeaders separates the two empties a command
+// can produce. A list that returned no entries still has columns, and printing
+// nothing there would leave the operator unable to tell "no results" from "the
+// command produced no output".
+func TestRenderer_Table_EmptyRowsKeepsHeaders(t *testing.T) {
+	t.Parallel()
+	r := output.New()
+	var buf bytes.Buffer
+	require.NoError(t, r.Render(&buf,
+		output.Result{Headers: []string{"NAME", "NODE"}, Rows: [][]string{}}, output.FormatTable))
+
+	out := buf.String()
+	require.Contains(t, out, "NAME")
+	require.Contains(t, out, "NODE")
 }
 
 // ---- Plain renderer --------------------------------------------------------
@@ -195,6 +213,8 @@ func TestRenderer_Plain_EmptyResult_NoError(t *testing.T) {
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatPlain))
+	require.Empty(t, buf.String(),
+		"plain output is for piping: an empty Result must add no line for a reader to strip")
 }
 
 // ---- JSON renderer ---------------------------------------------------------
@@ -259,9 +279,21 @@ func TestRenderer_JSON_Empty(t *testing.T) {
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatJSON))
-	// Should produce valid JSON (empty object or similar).
-	var parsed any
-	require.NoError(t, json.Unmarshal(buf.Bytes(), &parsed))
+	require.Equal(t, "{}", strings.TrimSpace(buf.String()),
+		"an empty Result is an empty object, never null: `| jq` must not have to guard against it")
+}
+
+// TestRenderer_JSON_EmptyRawIsAnArray pins the list case separately. A command
+// whose list came back empty must emit [], since a consumer doing `| jq length`
+// gets 0 from an array and an error from null.
+func TestRenderer_JSON_EmptyRawIsAnArray(t *testing.T) {
+	t.Parallel()
+	r := output.New()
+	var buf bytes.Buffer
+	require.NoError(t, r.Render(&buf,
+		output.Result{Headers: []string{"NAME"}, Rows: [][]string{}, Raw: []map[string]any{}},
+		output.FormatJSON))
+	require.Equal(t, "[]", strings.TrimSpace(buf.String()))
 }
 
 // ---- YAML renderer ---------------------------------------------------------
@@ -325,9 +357,20 @@ func TestRenderer_YAML_Empty(t *testing.T) {
 	r := output.New()
 	var buf bytes.Buffer
 	require.NoError(t, r.Render(&buf, output.Result{}, output.FormatYAML))
-	// Should produce valid (possibly empty) YAML.
-	var parsed any
-	require.NoError(t, yaml.Unmarshal(buf.Bytes(), &parsed))
+	require.Equal(t, "{}", strings.TrimSpace(buf.String()),
+		"YAML mirrors JSON's empty shape, so a caller can switch formats without switching parsers")
+}
+
+// TestRenderer_YAML_EmptyRawIsAnArray is the YAML half of the empty-list
+// contract, kept alongside the JSON one so the two cannot drift apart.
+func TestRenderer_YAML_EmptyRawIsAnArray(t *testing.T) {
+	t.Parallel()
+	r := output.New()
+	var buf bytes.Buffer
+	require.NoError(t, r.Render(&buf,
+		output.Result{Headers: []string{"NAME"}, Rows: [][]string{}, Raw: []map[string]any{}},
+		output.FormatYAML))
+	require.Equal(t, "[]", strings.TrimSpace(buf.String()))
 }
 
 // TestRenderer_SingleMap_JSONAndYAMLSameShape verifies that a single-map Result
