@@ -155,3 +155,34 @@ func TestQemuRemoteMigrate_CommandTree(t *testing.T) {
 	}
 	require.True(t, names["remote-migrate"], "expected top-level sub-command 'remote-migrate'")
 }
+
+// TestQemuRemoteMigrate_AcceptsTargetstorageAlias covers the reverse of
+// TestQemuMigrate_AcceptsTargetStorageAlias: this command's own name for the
+// setting comes from its API parameter (target-storage), and `migrate` calls
+// the same thing targetstorage. Either spelling works here too, including
+// satisfying the required-flag check, which is what an alias registered as a
+// second flag would have got wrong.
+func TestQemuRemoteMigrate_AcceptsTargetstorageAlias(t *testing.T) {
+	for _, flag := range []string{"--target-storage", "--targetstorage"} {
+		t.Run(flag, func(t *testing.T) {
+			f, ac := newFakeClient(t)
+			handleClusterResources(f, 100, "pve1")
+			var body string
+			f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/remote_migrate",
+				func(w http.ResponseWriter, r *http.Request) {
+					body = readBody(t, r)
+					testhelper.WriteData(w, validUPID)
+				})
+			deps := depsFor(t, ac, output.FormatTable, "pve1", true)
+
+			var buf bytes.Buffer
+			require.NoError(t, run(deps, &buf, "remote-migrate", "100", "--yes",
+				"--target-endpoint", "https://remote:8006",
+				flag, "local-lvm",
+				"--target-bridge", "vmbr0"))
+
+			require.Equal(t, "local-lvm", parseForm(t, body).Get("target-storage"),
+				"%s must reach the same request parameter", flag)
+		})
+	}
+}

@@ -107,5 +107,9 @@ func newRemoteMigrateCmd() *cobra.Command {
 	cli.MustMarkRequired(cmd, "target-endpoint")
 	cli.MustMarkRequired(cmd, "target-storage")
 	cli.MustMarkRequired(cmd, "target-bridge")
+	// migrate spells the same setting --targetstorage, after its own API
+	// parameter; accept either here so the two commands agree.
+	cli.AliasFlags(cmd, map[string]string{"targetstorage": "target-storage"})
+
 	return cmd
 }

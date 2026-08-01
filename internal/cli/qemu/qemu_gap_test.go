@@ -384,3 +384,51 @@ func TestQemuGap_StopMigratedfromAbsent(t *testing.T) {
 	require.NoError(t, run(deps, &buf, "stop", "100"))
 	require.Empty(t, parseForm(t, body).Get("migratedfrom"))
 }
+
+// TestQemuMigrate_AcceptsTargetStorageAlias covers the spelling divergence the
+// two migration commands inherit from the PVE API: `migrate` names the setting
+// targetstorage, `remote-migrate` names it target-storage, and an operator who
+// learned one got "unknown flag" from the other.
+func TestQemuMigrate_AcceptsTargetStorageAlias(t *testing.T) {
+	for _, flag := range []string{"--targetstorage", "--target-storage"} {
+		t.Run(flag, func(t *testing.T) {
+			f, ac := newFakeClient(t)
+			handleClusterResources(f, 100, "pve1")
+			var body string
+			f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/migrate",
+				func(w http.ResponseWriter, r *http.Request) {
+					body = readBody(t, r)
+					testhelper.WriteData(w, validUPID)
+				})
+			deps := depsFor(t, ac, output.FormatTable, "pve1", true)
+
+			var buf bytes.Buffer
+			require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2",
+				flag, "local-lvm"))
+
+			require.Equal(t, "local-lvm", parseForm(t, body).Get("targetstorage"),
+				"%s must reach the same request parameter", flag)
+		})
+	}
+}
+
+// TestQemuTemplate_AnswersToToTemplate pins the alias that gives the
+// convert-to-template operation one name across guest types: `lxc` had to call
+// it to-template because `lxc template` is the appliance-download group, so
+// the same word was a destructive verb for VMs and a noun group for
+// containers.
+func TestQemuTemplate_AnswersToToTemplate(t *testing.T) {
+	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve1")
+	var gotPath string
+	f.HandleFunc("POST /api2/json/nodes/pve1/qemu/100/template",
+		func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			testhelper.WriteData(w, nil)
+		})
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "to-template", "100", "--yes"))
+	require.Equal(t, "/api2/json/nodes/pve1/qemu/100/template", gotPath)
+}

@@ -161,6 +161,9 @@ func newMigrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetstorage, "targetstorage", "",
 		"target storage mapping; a single storage ID maps all source storages, "+
 			"or '1' maps each source storage to itself")
+	// remote-migrate spells the same setting --target-storage, after its own
+	// API parameter; accept either here so the two commands agree.
+	cli.AliasFlags(cmd, map[string]string{"target-storage": "targetstorage"})
 
 	// Add the pre-flight check and capabilities leaf as sub-commands so both
 	// `pmx pve qemu migrate 100 --target-node pve2` and `pmx pve qemu migrate check

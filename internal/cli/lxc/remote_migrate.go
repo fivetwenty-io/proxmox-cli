@@ -135,5 +135,9 @@ func newRemoteMigrateCmd() *cobra.Command {
 		"delete the source container after a successful migration (default: keep a stopped copy)")
 	cmd.Flags().Float64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s")
 	cmd.Flags().Int64Var(&timeout, "timeout", 0, "shutdown timeout in seconds for restart migration")
+	// migrate spells the same setting --targetstorage, after its own API
+	// parameter; accept either here so the two commands agree.
+	cli.AliasFlags(cmd, map[string]string{"targetstorage": "target-storage"})
+
 	return cmd
 }

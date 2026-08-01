@@ -286,3 +286,32 @@ func TestCloneMigrate_NoLocalTargetFlag(t *testing.T) {
 			"%s must expose --target-node for destination selection", name)
 	}
 }
+
+// TestLxcMigrate_AcceptsTargetStorageAlias covers the spelling divergence the
+// two migration commands inherit from the PVE API: `migrate` names the setting
+// targetstorage, `remote-migrate` names it target-storage, and an operator who
+// learned one got "unknown flag" from the other. Both spellings now reach the
+// same request parameter.
+func TestLxcMigrate_AcceptsTargetStorageAlias(t *testing.T) {
+	for _, flag := range []string{"--targetstorage", "--target-storage"} {
+		t.Run(flag, func(t *testing.T) {
+			f := testhelper.NewFakePVE(t)
+			handleClusterResources(f, 101, "pve1")
+			var body map[string]any
+			f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/migrate",
+				func(w http.ResponseWriter, r *http.Request) {
+					body = recordBody(t, r)
+					testhelper.WriteData(w, "UPID:pve1:0:0:0:vzmigrate:101:root@pam:")
+				})
+
+			deps := newDeps(t, f, output.FormatTable, "pve1", true)
+			var buf bytes.Buffer
+			run := newTestCmd(t, deps, &buf, "migrate", "101", "--target-node", "pve2",
+				flag, "local-lvm")
+			require.NoError(t, run())
+
+			require.Equal(t, "local-lvm", body["target-storage"],
+				"%s must reach the same request parameter", flag)
+		})
+	}
+}

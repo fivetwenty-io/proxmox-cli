@@ -23,7 +23,10 @@ func newToTemplateCmd() *cobra.Command {
 		Short: "Convert a container into a template",
 		Long: "Convert an existing, stopped LXC container into a template. " +
 			"Templates cannot be started; clone them to create new containers. " +
-			"The container must be stopped before conversion.",
+			"The container must be stopped before conversion.\n\n" +
+			"Named to-template because `pmx pve lxc template` is the group for browsing and " +
+			"downloading appliance templates. The VM equivalent, `pmx pve qemu template`, " +
+			"answers to `to-template` as well, so this name works for both guest types.",
 		Example: `  pmx pve lxc to-template 200`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

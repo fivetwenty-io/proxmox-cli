@@ -17,6 +17,12 @@ import (
 // template cannot be started or converted back into a regular VM, so the
 // command refuses to run without --yes. With --disk only the named disk is
 // converted to a base image.
+//
+// It also answers to `to-template`, which is what the same operation is called
+// for containers (`pmx pve lxc to-template`, so named because `lxc template`
+// was already the appliance-download group). One word therefore means a
+// destructive verb here and a noun group there; the alias gives the conversion
+// a single name across both guest types without moving anyone's cheese.
 func newTemplateCmd() *cobra.Command {
 	var (
 		yes   bool
@@ -24,8 +30,9 @@ func newTemplateCmd() *cobra.Command {
 		disk  string
 	)
 	cmd := &cobra.Command{
-		Use:   "template <vmid|name>",
-		Short: "Convert a VM into a template (irreversible)",
+		Use:     "template <vmid|name>",
+		Aliases: []string{"to-template"},
+		Short:   "Convert a VM into a template (irreversible)",
 		Long: "Convert a VM into a template.\n\n" +
 			"This cannot be undone. A template can neither be started nor converted back into " +
 			"a regular VM, so the command refuses to run without --yes/-y.\n\n" +

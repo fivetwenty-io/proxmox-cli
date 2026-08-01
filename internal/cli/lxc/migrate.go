@@ -88,6 +88,9 @@ func newMigrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetStorage, "targetstorage", "",
 		"target storage mapping; a single storage ID maps all source storages, "+
 			"or '1' maps each source storage to itself")
+	// remote-migrate spells the same setting --target-storage, after its own
+	// API parameter; accept either here so the two commands agree.
+	cli.AliasFlags(cmd, map[string]string{"target-storage": "targetstorage"})
 	cmd.Flags().Int64Var(&timeout, "timeout", 0, "shutdown timeout in seconds for restart migration")
 	cmd.Flags().Float64Var(&bwlimit, "bwlimit", 0, "override I/O bandwidth limit in KiB/s")
 
