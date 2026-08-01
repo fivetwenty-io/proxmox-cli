@@ -26,8 +26,8 @@ every commit. The defects below are the ones those tools cannot see.
 
 ## Closed
 
-Seventeen commits, each with regression tests. Grouped by what was actually
-wrong.
+Nineteen commits, each with regression tests where behavior changed. Grouped
+by what was actually wrong.
 
 ### Values reaching a remote root shell unvalidated
 
@@ -247,9 +247,45 @@ These are real, and deliberately not changed here.
   meaning opposite things for VMs and containers). Genuine maintainability
   debt, and the user-visible flag naming items are breaking changes.
 
-- **Test-suite gaps**: CI never compiles the macOS keychain backend, runs bare
-  `go test` rather than the repo's own race target, and two tests self-disable
-  into SKIP on regression. Worth a dedicated pass with `go-testing-analysis`.
+- **PBS list commands sort the table but emit the raw API order in JSON and
+  YAML.** Twenty files build their rows from a sorted slice while passing the
+  unsorted `items` to `Raw`, so `-o json` disagrees with the table and inherits
+  whatever order the server returned: `acl`, `acme`, `changer`, `drive`,
+  `encryption_key`, `media`, `metrics`, `notification`, the four
+  `notification_endpoint_*`, `notification_matcher`, `realm`, `realm_ad`,
+  `realm_ldap`, `realm_openid`, `role`, `user`, and `user_token`. Each site
+  needs the raw list sorted on that command's own key, and it changes
+  user-visible output across twenty commands, so it wants its own change with
+  its own e2e run rather than a tail-end bulk edit.
+
+- **Remaining test-suite gaps.** The two CI gates and the two self-disabling
+  tests are closed (above). Still open: `internal/logx/prune.go`'s deletion
+  error branches are unexercised, `cmd/pmx` has no test files, and 32 tests
+  assert only `require.NoError` with no value assertion. Worth a dedicated pass
+  with `go-testing-analysis`.
+
+### CI gates
+
+CI ran `go test ./...` but never the race detector, though the repo ships a
+`make test-race` target for it. And because the job runs only on Linux, every
+`//go:build darwin` file was excluded from every check — including
+`internal/config/secrets_keychain_darwin.go`, the whole macOS keychain
+credential backend, which this audit itself modified.
+
+Demonstrated by appending a deliberate type error to that file: the old
+Linux-only pipeline built clean and would have shipped it; the added
+`GOOS=darwin` build-and-vet step fails on it. Cross-compiling costs seconds and
+needs no macOS runner.
+
+### Tests that could not fail
+
+Two tests wrapped `root.Execute()` in `if err != nil { t.Skipf(...) }`,
+attributing any failure to an "absent lab env". Both use a self-contained temp
+config with an inline secret and a host nothing ever dials, and client
+construction is lazy — as one of the comments states outright. There was no
+environmental failure mode to absorb, so the only thing those branches could
+ever catch was a regression, which they converted into a green SKIP. Both now
+assert.
 
 ## Verdict
 

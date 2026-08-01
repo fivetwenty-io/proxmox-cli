@@ -959,12 +959,11 @@ func TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient(t *testing.T) {
 	root.SetErr(&buf)
 	root.SetArgs([]string{"--config", cfgPath, "probe"})
 
-	// NewAPIClient with a non-listening host is lazy — construction succeeds.
-	err := root.Execute()
-	if err != nil {
-		// If construction fails for any reason skip rather than false-fail.
-		t.Skipf("API client construction failed (lab env absent): %v", err)
-	}
+	// NewAPIClient is lazy, and this config is entirely local: a temp file, an
+	// inline secret, and a host nothing ever dials. There is no environmental
+	// reason for this to fail, so a failure is a regression and must fail the
+	// test rather than skip it.
+	require.NoError(t, root.Execute())
 	require.NotNil(t, capturedDeps)
 	require.Equal(t, "json", string(capturedDeps.Format),
 		"$PMX_OUTPUT=json must beat context default-output=yaml in non-noClient path")
@@ -1020,13 +1019,9 @@ func TestPersistentPreRunE_Ctx_PopulatedForNonNoClient(t *testing.T) {
 	root.SetErr(&buf)
 	root.SetArgs([]string{"--config", cfgPath, "probe"})
 
-	err := root.Execute()
-	if err != nil {
-		// NewAPIClient with a non-listening host may fail in a sandboxed
-		// environment; skip rather than false-fail (mirrors the sibling test
-		// TestOutputPrecedence_EnvBeatsContextDefault_NonNoClient).
-		t.Skipf("API client construction failed (lab env absent): %v", err)
-	}
+	// See the sibling test: client construction is lazy and the config is
+	// local, so a failure here is a regression, not an absent lab.
+	require.NoError(t, root.Execute())
 	require.NotNil(t, capturedDeps)
 	require.NotNil(t, capturedDeps.Ctx, "Ctx must be populated after successful context resolution")
 	require.Equal(t, "127.0.0.1", capturedDeps.Ctx.Host)

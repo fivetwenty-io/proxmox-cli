@@ -39,6 +39,23 @@ jobs:
       - name: Unit tests
         run: go test ./...
 
+      # The race detector is the only gate that catches concurrent misuse of
+      # the signal-relay and log-writer paths, and the repo already ships a
+      # make target for it that CI never invoked.
+      - name: Unit tests (race detector)
+        run: go test -race ./...
+
+      # This job runs on Linux, so every //go:build darwin file — notably
+      # internal/config/secrets_keychain_darwin.go, the entire macOS keychain
+      # credential backend — is excluded from the build and from every check
+      # above it. A compile error or a vet failure in that backend would
+      # otherwise reach a release before anything noticed. Cross-compiling
+      # costs seconds and needs no macOS runner.
+      - name: Build and vet the darwin-only code paths
+        run: |
+          GOOS=darwin GOARCH=arm64 go build ./...
+          GOOS=darwin GOARCH=arm64 go vet ./...
+
       - name: Man generation smoke
         run: go run ./cmd/docgen -out "${RUNNER_TEMP}/man" -version dev -date 1970-01-01
 
