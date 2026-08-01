@@ -701,7 +701,10 @@ func newSecurityListCmd() *cobra.Command {
 				return fmt.Errorf("list cluster resources: %w", err)
 			}
 
-			rows := make([]securityListRow, 0)
+			// Select the VMs to audit first, then read their configs
+			// concurrently: one config read per guest run back to back is what
+			// makes this command crawl on a real fleet.
+			var targets []qemuResource
 			if resp != nil {
 				for _, raw := range *resp {
 					var r qemuResource
@@ -714,62 +717,79 @@ func newSecurityListCmd() *cobra.Command {
 					if deps.Node != "" && r.Node != deps.Node {
 						continue
 					}
-					vmid := r.vmidString()
-					m, _, err := readRawConfig(ctx, deps, r.Node, vmid)
-					if err != nil {
-						_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-							"warning: skipping VM %s security posture (%s): %v\n", vmid, r.Node, err)
-						rows = append(rows, securityListRow{
-							VMID:       vmid,
-							Name:       r.Name,
-							Node:       r.Node,
-							SecureBoot: "?",
-							TPM:        "?",
-							Conf:       "?",
-							Err:        err.Error(),
-						})
-						continue
-					}
+					targets = append(targets, r)
+				}
+			}
 
-					nics := parseNICs(m)
-					fwOn := 0
-					for _, n := range nics {
-						if n.Firewall {
-							fwOn++
-						}
-					}
-					boot := parseBootPosture(m)
-					tpm := parseTPMPosture(m)
-					conf := parseConfidentialPosture(m)
-					agentRaw, _ := rawStr(m, "agent")
-					ap := parseAgentPosture(agentRaw)
+			rows := make([]securityListRow, len(targets))
+			warnings := make([]string, len(targets))
 
-					confStr := "-"
-					if conf.Platform != "none" {
-						t := conf.Fields["type"]
-						if t == "" {
-							t = "?"
-						}
-						confStr = conf.Platform + ":" + t
-					}
-					tpmStr := "-"
-					if tpm.Present {
-						tpmStr = tpm.Version
-					}
+			cli.ForEachIndex(ctx, len(targets), cli.DefaultFanout, func(ctx context.Context, i int) {
+				r := targets[i]
+				vmid := r.vmidString()
 
-					rows = append(rows, securityListRow{
+				m, _, err := readRawConfig(ctx, deps, r.Node, vmid)
+				if err != nil {
+					warnings[i] = fmt.Sprintf(
+						"warning: skipping VM %s security posture (%s): %v\n", vmid, r.Node, err)
+					rows[i] = securityListRow{
 						VMID:       vmid,
 						Name:       r.Name,
 						Node:       r.Node,
-						Protection: rawBoolDefault(m, "protection", false),
-						SecureBoot: boot.Posture,
-						TPM:        tpmStr,
-						Conf:       confStr,
-						Agent:      ap.Enabled,
-						NICFWOn:    fwOn,
-						NICFWTotal: len(nics),
-						Risks:      detectRisks(m),
-					})
+						SecureBoot: "?",
+						TPM:        "?",
+						Conf:       "?",
+						Err:        err.Error(),
+					}
+					return
+				}
+
+				nics := parseNICs(m)
+				fwOn := 0
+				for _, n := range nics {
+					if n.Firewall {
+						fwOn++
+					}
+				}
+				boot := parseBootPosture(m)
+				tpm := parseTPMPosture(m)
+				conf := parseConfidentialPosture(m)
+				agentRaw, _ := rawStr(m, "agent")
+				ap := parseAgentPosture(agentRaw)
+
+				confStr := "-"
+				if conf.Platform != "none" {
+					t := conf.Fields["type"]
+					if t == "" {
+						t = "?"
+					}
+					confStr = conf.Platform + ":" + t
+				}
+				tpmStr := "-"
+				if tpm.Present {
+					tpmStr = tpm.Version
+				}
+
+				rows[i] = securityListRow{
+					VMID:       vmid,
+					Name:       r.Name,
+					Node:       r.Node,
+					Protection: rawBoolDefault(m, "protection", false),
+					SecureBoot: boot.Posture,
+					TPM:        tpmStr,
+					Conf:       confStr,
+					Agent:      ap.Enabled,
+					NICFWOn:    fwOn,
+					NICFWTotal: len(nics),
+					Risks:      detectRisks(m),
+				}
+			})
+
+			// Emitted after the fan-out, in target order, so concurrent reads
+			// cannot interleave a warning mid-line or reorder them run to run.
+			for _, w := range warnings {
+				if w != "" {
+					_, _ = fmt.Fprint(cmd.ErrOrStderr(), w)
 				}
 			}
 

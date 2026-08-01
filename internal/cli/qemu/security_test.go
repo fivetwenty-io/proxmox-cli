@@ -3,8 +3,12 @@ package qemu
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -302,5 +306,88 @@ func TestSecurityCommandTree(t *testing.T) {
 	want := []string{"show", "list", "protection", "agent", "secureboot", "tpm", "confidential", "cpu-flags", "nic"}
 	for _, w := range want {
 		require.True(t, names[w], "expected security sub-command %q", w)
+	}
+}
+
+// TestSecurityList_ReadsConfigsConcurrently proves the fan-out is real for the
+// VM twin as well. The audit is N+1 by nature — one cluster scan, then one
+// config read per guest — and run back to back a large fleet paid one round
+// trip per VM end to end.
+func TestSecurityList_ReadsConfigsConcurrently(t *testing.T) {
+	const vms = 24
+
+	var inFlight, peak atomic.Int64
+
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		entries := make([]any, 0, vms)
+		for vmid := 100; vmid < 100+vms; vmid++ {
+			entries = append(entries, map[string]any{
+				"type": "qemu", "vmid": vmid, "name": fmt.Sprintf("vm%d", vmid), "node": "pve1",
+			})
+		}
+		testhelper.WriteData(w, entries)
+	})
+	for vmid := 100; vmid < 100+vms; vmid++ {
+		f.HandleFunc(fmt.Sprintf("GET /api2/json/nodes/pve1/qemu/%d/config", vmid),
+			func(w http.ResponseWriter, _ *http.Request) {
+				n := inFlight.Add(1)
+				for {
+					old := peak.Load()
+					if n <= old || peak.CompareAndSwap(old, n) {
+						break
+					}
+				}
+				time.Sleep(20 * time.Millisecond)
+				inFlight.Add(-1)
+				testhelper.WriteData(w, map[string]any{})
+			})
+	}
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "security", "list"))
+
+	require.Greater(t, peak.Load(), int64(1), "config reads must overlap, not run one at a time")
+	require.LessOrEqual(t, peak.Load(), int64(cli.DefaultFanout),
+		"and must stay within the fan-out cap")
+}
+
+// TestSecurityList_RowOrderIsDeterministic guards the fan-out: rows are written
+// by index rather than appended as reads finish, so a report can be diffed
+// against yesterday's run.
+func TestSecurityList_RowOrderIsDeterministic(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		entries := make([]any, 0, 12)
+		for vmid := 100; vmid < 112; vmid++ {
+			entries = append(entries, map[string]any{
+				"type": "qemu", "vmid": vmid, "name": fmt.Sprintf("vm%d", vmid), "node": "pve1",
+			})
+		}
+		testhelper.WriteData(w, entries)
+	})
+	for vmid := 100; vmid < 112; vmid++ {
+		// Later VMIDs answer more slowly, so an append-as-completed
+		// implementation would emit them in a different order every run.
+		delay := time.Duration(112-vmid) * time.Millisecond
+		f.HandleFunc(fmt.Sprintf("GET /api2/json/nodes/pve1/qemu/%d/config", vmid),
+			func(w http.ResponseWriter, _ *http.Request) {
+				time.Sleep(delay)
+				testhelper.WriteData(w, map[string]any{})
+			})
+	}
+
+	deps := depsFor(t, ac, output.FormatJSON, "pve1", false)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "security", "list"))
+
+	var got []struct {
+		VMID string `json:"vmid"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 12)
+	for i, r := range got {
+		require.Equal(t, strconv.Itoa(100+i), r.VMID, "row %d is out of VMID order", i)
 	}
 }

@@ -1,6 +1,7 @@
 package lxc
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -192,14 +193,24 @@ func (r lxcResource) vmidString() string {
 
 // securityRow is one row of the `security list` audit table, retained in a
 // struct so privileged containers can be sorted ahead of unprivileged ones.
+//
+// Err is set instead of the posture fields when the per-container config read
+// failed; the row still renders rather than aborting the whole audit, matching
+// the VM twin. An audit that reports nothing because one container out of two
+// hundred is unreadable is an audit nobody can act on.
+//
+// The fields are exported with json tags because the row is what -o json and
+// -o yaml render: unexported fields marshal to an empty object, so the machine
+// -readable views of this audit used to be a list of {}.
 type securityRow struct {
-	vmid         string
-	name         string
-	node         string
-	unprivileged bool
-	features     string
-	caps         string
-	protection   bool
+	VMID         string `json:"vmid"`
+	Name         string `json:"name"`
+	Node         string `json:"node"`
+	Unprivileged bool   `json:"unprivileged"`
+	Features     string `json:"features"`
+	Caps         string `json:"caps"`
+	Protection   bool   `json:"protection"`
+	Err          string `json:"error,omitempty"`
 }
 
 // newSecurityListCmd builds `pmx pve lxc security list`.
@@ -224,7 +235,10 @@ func newSecurityListCmd() *cobra.Command {
 				return fmt.Errorf("list cluster resources: %w", err)
 			}
 
-			rows := make([]securityRow, 0)
+			// Select the containers to audit first, then read their configs
+			// concurrently: one config read per guest run back to back is what
+			// makes this command crawl on a real fleet.
+			var targets []lxcResource
 			if resp != nil {
 				for _, raw := range *resp {
 					var r lxcResource
@@ -237,33 +251,66 @@ func newSecurityListCmd() *cobra.Command {
 					if deps.Node != "" && r.Node != deps.Node {
 						continue
 					}
-					vmid := r.vmidString()
-					cfg, err := deps.API.Nodes.ListLxcConfig(ctx, r.Node, vmid, &nodes.ListLxcConfigParams{})
-					if err != nil {
-						return fmt.Errorf("get config for container %s: %w", vmid, err)
-					}
-					state, err := capsFromLxcArray(cfg.Lxc)
-					if err != nil {
-						return fmt.Errorf("parse capabilities for container %s: %w", vmid, err)
-					}
-					rows = append(rows, securityRow{
-						vmid:         vmid,
-						name:         r.Name,
-						node:         r.Node,
-						unprivileged: cfg.Unprivileged == nil || cfg.Unprivileged.Bool(),
-						features:     compactFeatures(parseFeatures(derefStr(cfg.Features))),
-						caps:         capsSummary(state),
-						protection:   cfg.Protection != nil && cfg.Protection.Bool(),
-					})
+					targets = append(targets, r)
 				}
 			}
 
-			// Privileged first, then numeric VMID order within each group.
-			sort.SliceStable(rows, func(i, j int) bool {
-				if rows[i].unprivileged != rows[j].unprivileged {
-					return !rows[i].unprivileged
+			rows := make([]securityRow, len(targets))
+			warnings := make([]string, len(targets))
+
+			cli.ForEachIndex(ctx, len(targets), cli.DefaultFanout, func(ctx context.Context, i int) {
+				r := targets[i]
+				vmid := r.vmidString()
+
+				fail := func(err error) {
+					warnings[i] = fmt.Sprintf(
+						"warning: skipping container %s security posture (%s): %v\n", vmid, r.Node, err)
+					rows[i] = securityRow{
+						VMID: vmid, Name: r.Name, Node: r.Node,
+						Features: "?", Caps: "?", Err: err.Error(),
+					}
 				}
-				return rows[i].vmid < rows[j].vmid
+
+				cfg, err := deps.API.Nodes.ListLxcConfig(ctx, r.Node, vmid, &nodes.ListLxcConfigParams{})
+				if err != nil {
+					fail(fmt.Errorf("get config: %w", err))
+					return
+				}
+				state, err := capsFromLxcArray(cfg.Lxc)
+				if err != nil {
+					fail(fmt.Errorf("parse capabilities: %w", err))
+					return
+				}
+
+				rows[i] = securityRow{
+					VMID:         vmid,
+					Name:         r.Name,
+					Node:         r.Node,
+					Unprivileged: cfg.Unprivileged == nil || cfg.Unprivileged.Bool(),
+					Features:     compactFeatures(parseFeatures(derefStr(cfg.Features))),
+					Caps:         capsSummary(state),
+					Protection:   cfg.Protection != nil && cfg.Protection.Bool(),
+				}
+			})
+
+			// Emitted after the fan-out, in target order, so concurrent reads
+			// cannot interleave a warning mid-line or reorder them run to run.
+			for _, w := range warnings {
+				if w != "" {
+					_, _ = fmt.Fprint(cmd.ErrOrStderr(), w)
+				}
+			}
+
+			// Privileged first (an unreadable row counts as risky too, since it
+			// hides whatever posture it would have reported), then numeric VMID
+			// order within each group.
+			sort.SliceStable(rows, func(i, j int) bool {
+				iRisky := !rows[i].Unprivileged || rows[i].Err != ""
+				jRisky := !rows[j].Unprivileged || rows[j].Err != ""
+				if iRisky != jRisky {
+					return iRisky
+				}
+				return rows[i].VMID < rows[j].VMID
 			})
 
 			res := output.Result{
@@ -271,15 +318,19 @@ func newSecurityListCmd() *cobra.Command {
 				Raw:     rows,
 			}
 			for _, r := range rows {
-				vmidCell := r.vmid
-				if !r.unprivileged {
-					vmidCell = "! " + r.vmid
+				vmidCell := r.VMID
+				if !r.Unprivileged || r.Err != "" {
+					vmidCell = "! " + r.VMID
+				}
+				capsCell := r.Caps
+				if r.Err != "" {
+					capsCell = "error: " + r.Err
 				}
 				res.Rows = append(res.Rows, []string{
-					vmidCell, r.name, r.node,
-					strconv.FormatBool(r.unprivileged),
-					r.features, r.caps,
-					strconv.FormatBool(r.protection),
+					vmidCell, r.Name, r.Node,
+					strconv.FormatBool(r.Unprivileged),
+					r.Features, capsCell,
+					strconv.FormatBool(r.Protection),
 				})
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
