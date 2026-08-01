@@ -271,3 +271,51 @@ func TestNewAuthClientForContext_UnsupportedProduct_Errors(t *testing.T) {
 	require.Contains(t, err.Error(), "bogus")
 	require.Nil(t, ac)
 }
+
+// --- parseOIDCRedirect -----------------------------------------------------
+
+// TestParseOIDCRedirect_ExtractsCodeAndState covers the happy path: both
+// parameters come back verbatim, including a state value carrying characters
+// that must survive query decoding.
+func TestParseOIDCRedirect_ExtractsCodeAndState(t *testing.T) {
+	code, state, err := parseOIDCRedirect(
+		"https://pve.example.test/?code=auth-code-123&state=csrf%2Fvalue%3D%3D")
+	require.NoError(t, err)
+	require.Equal(t, "auth-code-123", code)
+	require.Equal(t, "csrf/value==", state)
+}
+
+// TestParseOIDCRedirect_ErrorsNeverEchoTheCode covers the disclosure path.
+// The authorization code is a single-use credential, and these errors reach
+// both the terminal and the JSONL exit record, which persists to disk.
+func TestParseOIDCRedirect_ErrorsNeverEchoTheCode(t *testing.T) {
+	const secretCode = "super-secret-auth-code"
+
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"missing state", "https://pve.example.test/?code=" + secretCode},
+		{"missing code", "https://pve.example.test/?state=abc&token=" + secretCode},
+		{"unparseable", "https://pve.example.test/%zz?code=" + secretCode},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := parseOIDCRedirect(tc.url)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), secretCode,
+				"the authorization code must never reach an error message or the log")
+			require.Contains(t, err.Error(), "pve.example.test",
+				"the host must survive so the operator can still recognise the URL")
+		})
+	}
+}
+
+// TestParseOIDCRedirect_EmptyURL covers the guard that keeps an empty paste
+// from being reported as a parse failure.
+func TestParseOIDCRedirect_EmptyURL(t *testing.T) {
+	_, _, err := parseOIDCRedirect("")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty")
+}

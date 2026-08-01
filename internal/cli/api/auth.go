@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -299,24 +300,48 @@ func performOIDCLogin(
 // OIDC redirect URL (the URL the identity provider sends the browser to after
 // authentication). Returns an error if the URL cannot be parsed or if either
 // required parameter is absent.
+//
+// No error names the raw URL: its query string carries the authorization
+// code, which is a single-use credential, and these errors reach both the
+// terminal and the JSONL exit record. redactRedirectURL keeps the part an
+// operator needs to recognise which URL they pasted.
 func parseOIDCRedirect(rawURL string) (code, state string, err error) {
 	if rawURL == "" {
 		return "", "", fmt.Errorf("redirect URL is empty")
 	}
 	u, parseErr := url.Parse(rawURL)
 	if parseErr != nil {
-		return "", "", fmt.Errorf("parse redirect URL %q: %w", rawURL, parseErr)
+		// *url.Error embeds the offending URL in its own message, so only its
+		// wrapped reason is safe to surface here.
+		reason := parseErr
+		if urlErr, ok := errors.AsType[*url.Error](parseErr); ok {
+			reason = urlErr.Err
+		}
+		return "", "", fmt.Errorf("parse redirect URL %q: %w", redactRedirectURL(rawURL), reason)
 	}
 	q := u.Query()
 	code = q.Get("code")
 	state = q.Get("state")
 	if code == "" {
-		return "", "", fmt.Errorf("redirect URL %q is missing the 'code' query parameter", rawURL)
+		return "", "", fmt.Errorf("redirect URL %q is missing the 'code' query parameter",
+			redactRedirectURL(rawURL))
 	}
 	if state == "" {
-		return "", "", fmt.Errorf("redirect URL %q is missing the 'state' query parameter", rawURL)
+		return "", "", fmt.Errorf("redirect URL %q is missing the 'state' query parameter",
+			redactRedirectURL(rawURL))
 	}
 	return code, state, nil
+}
+
+// redactRedirectURL strips the query and fragment from an OIDC redirect URL,
+// leaving scheme, host, and path. A URL that will not parse is reported as
+// its portion before the first "?", since nothing beyond that can be trusted
+// to be free of the code.
+func redactRedirectURL(rawURL string) string {
+	if i := strings.IndexAny(rawURL, "?#"); i >= 0 {
+		return rawURL[:i] + "?<redacted>"
+	}
+	return rawURL
 }
 
 // newAuthRefreshCmd builds `pmx auth refresh`, re-obtaining a session ticket
