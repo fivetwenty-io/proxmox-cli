@@ -1570,6 +1570,70 @@ func TestInvocationAuditRecords(t *testing.T) {
 	require.Contains(t, exit, "duration_ms")
 }
 
+// TestInvocationAuditRecord_NamesTheTarget covers what the audit trail is for.
+// The context name alone does not say which machine a mutation reached:
+// contexts get renamed, repointed at another host, and copied between
+// workstations, so a log read months later cannot resolve one back to a
+// target. The record must name the host, product, and authenticated user —
+// and must still never carry the secret.
+func TestInvocationAuditRecord_NamesTheTarget(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_LOG_LAYOUT", "")
+	t.Setenv("PMX_LOG_LEVEL", "")
+
+	const secret = "tok-must-never-be-logged"
+	cfgPath := filepath.Join(tmpDir, "c.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "prod",
+		Contexts: map[string]*config.Context{
+			"prod": {
+				Host:    "pve1.example.test",
+				Port:    8006,
+				Product: "pve",
+				Auth: config.AuthBlock{
+					Type:     "token",
+					Username: "auditor@pve",
+					Secret:   secret,
+				},
+			},
+		},
+	}))
+
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			Args:        cobra.ArbitraryArgs,
+			RunE:        func(*cobra.Command, []string) error { return nil },
+		}
+	}
+
+	oldArgs := os.Args
+	os.Args = []string{"pmx", "--config", cfgPath, "probe"}
+	defer func() { os.Args = oldArgs }()
+
+	require.NoError(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
+
+	records := readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs"))
+	inv := findRecord(records, "invocation")
+	require.NotNil(t, inv)
+	require.Equal(t, "prod", inv["context"])
+	require.Equal(t, "pve1.example.test", inv["host"])
+	require.Equal(t, float64(8006), inv["port"])
+	require.Equal(t, "pve", inv["product"])
+	require.Equal(t, "auditor@pve", inv["user"])
+
+	for _, rec := range records {
+		raw, err := json.Marshal(rec)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), secret, "the secret must never reach any log record")
+	}
+}
+
 // TestInvocationExitRecord_Error verifies a failing command writes the exit
 // record at error level with the semantic exit code and the error text.
 func TestInvocationExitRecord_Error(t *testing.T) {

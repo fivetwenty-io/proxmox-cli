@@ -474,16 +474,19 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	// Do NOT defer here — deferring here was the F-01 regression.
 
 	// Invocation audit record: every log file opens with what ran, against
-	// which context, from which build; Execute writes the matching exit
-	// record. Together they guarantee a log file is never empty and turn the
-	// log into a per-invocation audit trail even for commands that make no
+	// which context and target, from which build; Execute writes the matching
+	// exit record. Together they guarantee a log file is never empty and turn
+	// the log into a per-invocation audit trail even for commands that make no
 	// API calls.
-	logger.Info("invocation",
+	ctxName := config.Resolve(pf.context, "PMX_CONTEXT", cfg.CurrentContext, "")
+	attrs := []any{
 		slog.String("command_path", cmd.CommandPath()),
 		slog.Any("args", invocationArgs(cmd, args)),
-		slog.String("context", config.Resolve(pf.context, "PMX_CONTEXT", cfg.CurrentContext, "")),
+		slog.String("context", ctxName),
 		slog.String("version", version.Version),
-	)
+	}
+	attrs = append(attrs, invocationTargetAttrs(cfg, ctxName)...)
+	logger.Info("invocation", attrs...)
 
 	renderer := output.New()
 
@@ -1014,6 +1017,36 @@ func invocationArgs(cmd *cobra.Command, args []string) []string {
 		return []string{fmt.Sprintf("(%d passthrough args redacted)", len(args))}
 	}
 	return redactArgs(args)
+}
+
+// invocationTargetAttrs returns the audit attributes naming what an
+// invocation was pointed at: the host, its product, and the authenticated
+// user. The context name alone does not answer "which machine did this
+// mutation hit" — contexts get renamed, repointed at a different host, and
+// copied between machines, so a log read months later cannot resolve one back
+// to a target.
+//
+// Resolution is config-only (no network, no secret lookup), and a context that
+// does not resolve simply contributes nothing: enriching an audit record must
+// never be able to fail a command. The secret itself is never recorded.
+func invocationTargetAttrs(cfg *config.Config, name string) []any {
+	if cfg == nil || name == "" {
+		return nil
+	}
+	ctx, _, err := config.ResolveContext(cfg, name)
+	if err != nil || ctx == nil {
+		return nil
+	}
+
+	attrs := []any{
+		slog.String("host", ctx.Host),
+		slog.Int("port", ctx.Port),
+		slog.String("product", ctx.Product),
+	}
+	if ctx.Auth.Username != "" {
+		attrs = append(attrs, slog.String("user", ctx.Auth.Username))
+	}
+	return attrs
 }
 
 // logInvocationExit writes the exit audit record matching the invocation
