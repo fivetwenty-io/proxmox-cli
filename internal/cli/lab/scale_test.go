@@ -317,6 +317,24 @@ func TestScaleNodeStillMember_NotFound(t *testing.T) {
 	assert.False(t, found)
 }
 
+// TestScaleNodeStillMember_ErrorIsNotAbsence covers the branch that decides
+// whether a scale-down may destroy a node's VM. `pvecm status` on an
+// inquorate or corosync-down node 0 exits non-zero with empty stdout, which
+// looks exactly like "the node already left" if only the output is consulted.
+// The caller uses this answer to treat a failed delnode as idempotent
+// success, so reading a failed probe as absence would destroy the VM of a
+// node still in the cluster.
+func TestScaleNodeStillMember_ErrorIsNotAbsence(t *testing.T) {
+	deps := &cli.Deps{
+		Runner: exec.Fake(exec.FakeResponse{ExitCode: 2, Stderr: "Cannot initialize CMAP service"}),
+		Ctx:    &config.Context{SSH: config.SSHBlock{User: "root", Port: 22}},
+	}
+
+	found, err := scaleNodeStillMember(deps, "10.10.1.10", "10.10.1.11")
+	require.Error(t, err, "a failed probe must not be reported as a clean absence")
+	assert.False(t, found)
+}
+
 // --- scaleRenameLegacyNodeZero (decision D3 preflight safety net) ---------
 
 func TestScaleRenameLegacyNodeZero_RenamesLegacyVM(t *testing.T) {

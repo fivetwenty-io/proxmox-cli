@@ -2,6 +2,7 @@ package lab
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -949,9 +950,15 @@ func parseQmListVMIDs(output string) []string {
 // but pvecm's exact error text is not a stable, documented interface to
 // pattern-match against, so this re-probes live membership state directly
 // instead.
+// Any error — transport-level or a non-zero `pvecm status` exit — is reported
+// as such rather than read as absence. An inquorate or corosync-down node 0
+// exits non-zero here with empty stdout, which is indistinguishable from "the
+// node is gone" by output alone; treating that as gone would let the caller
+// conclude a still-joined node had left and destroy its VM underneath the
+// cluster.
 func scaleNodeStillMember(deps *cli.Deps, node0IP, nodeIP string) (bool, error) {
 	res, err := runGuestSSH(deps, node0IP, "pvecm status")
-	if err != nil && guestCommandTransportFailed(err) {
+	if err != nil {
 		return false, err
 	}
 	return strings.Contains(res.Stdout, nodeIP), nil
@@ -1010,7 +1017,11 @@ func scaleEvacuateAndRemoveNode(ctx context.Context, deps *cli.Deps, lab *config
 	if _, derr := runGuestSSH(deps, node0IP, delnodeCmd); derr != nil {
 		stillMember, perr := scaleNodeStillMember(deps, node0IP, nodeIP)
 		if perr != nil {
-			return nil, fmt.Errorf("delnode %s failed and could not confirm membership afterward: %w", nodeHostname, derr)
+			// Both errors matter: derr says what the removal attempt did,
+			// perr says why the state could not be read afterwards, and
+			// neither alone tells an operator which of the two to chase.
+			return nil, fmt.Errorf("delnode %s failed and could not confirm membership afterward: %w",
+				nodeHostname, errors.Join(derr, perr))
 		}
 		if stillMember {
 			return nil, fmt.Errorf("delnode %s from node 0 (%s): %w", nodeHostname, node0IP, derr)

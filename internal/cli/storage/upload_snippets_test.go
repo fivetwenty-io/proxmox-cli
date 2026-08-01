@@ -99,9 +99,17 @@ func TestStorageUploadSnippets_StreamsOverSSH(t *testing.T) {
 	require.False(t, c.Interactive)
 	require.Contains(t, c.Args, "BatchMode=yes")
 	require.Contains(t, c.Args, "root@10.0.0.5")
-	require.Equal(t,
-		"mkdir -p '/var/lib/vz/snippets' && cat > '/var/lib/vz/snippets/user-data.yaml'",
-		c.Args[len(c.Args)-1])
+	// The body streams into a temp file that is renamed over the destination
+	// only once cat succeeded, so an interrupted upload never truncates an
+	// existing snippet a guest boot would then consume.
+	remoteCmd := c.Args[len(c.Args)-1]
+	require.Equal(t, `d='/var/lib/vz/snippets'
+p='/var/lib/vz/snippets/user-data.yaml'
+mkdir -p -- "$d"
+t="$p.tmp.$$"
+cat > "$t" || { rm -f -- "$t"; exit 1; }
+mv -- "$t" "$p"`, remoteCmd)
+	require.NotContains(t, remoteCmd, `cat > "$p"`, "must never redirect straight onto the destination")
 	require.Equal(t, "#cloud-config\npackages: [qemu-guest-agent]\n", string(c.StdinContents))
 	require.Contains(t, buf.String(), "Uploaded snippet")
 	require.Contains(t, buf.String(), "#2208")

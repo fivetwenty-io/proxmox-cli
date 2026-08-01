@@ -187,7 +187,20 @@ func uploadSnippetSSH(
 
 	snippetDir := path.Join(scfg.Path, "snippets")
 	destPath := path.Join(snippetDir, dest)
-	remoteCmd := fmt.Sprintf("mkdir -p %s && cat > %s",
+
+	// Write to a sibling temp file and rename, rather than redirecting
+	// straight onto destPath: `cat > dest` truncates the destination the
+	// moment the remote shell opens it, so a local read error or a dropped
+	// connection midway leaves the previously-good snippet truncated with
+	// nothing to roll back to — and a snippet is a cloud-init or hookscript
+	// the next guest boot consumes. Same shape internal/nodefile already
+	// uses for remote config writes.
+	remoteCmd := fmt.Sprintf(`d=%s
+p=%s
+mkdir -p -- "$d"
+t="$p.tmp.$$"
+cat > "$t" || { rm -f -- "$t"; exit 1; }
+mv -- "$t" "$p"`,
 		sshcmd.ShellQuote(snippetDir), sshcmd.ShellQuote(destPath))
 
 	argv := append(sshcmd.BatchOptionArgs(f), sshcmd.Dest(f, host), remoteCmd)
