@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +31,55 @@ func TestReal_Echo(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "hello world\n", stdout.String())
 	require.Empty(t, stderr.String())
+}
+
+// TestReal_ChildStaysInterruptible pins the disposition the child inherits
+// while the parent is shielded from terminal signals. The child signals
+// itself: with SIG_DFL it dies before reaching the echo, which is what lets an
+// operator ^C out of a wrong `node exec` or a wrong `lab create`. A parent
+// that shields itself with signal.Ignore instead of signal.Notify would leak
+// SIG_IGN across execve — a non-interactive shell keeps an inherited SIG_IGN,
+// and so does ssh, whose handler install is guarded on it — and the child
+// would print SURVIVED and exit 0.
+func TestReal_ChildStaysInterruptible(t *testing.T) {
+	t.Parallel()
+
+	r := execpkg.Real()
+	var stdout, stderr bytes.Buffer
+
+	err := r.Run("/bin/sh", []string{"-c", "kill -INT $$; echo SURVIVED"}, nil, nil, &stdout, &stderr)
+	require.Error(t, err, "child must die from its own SIGINT, not ignore it")
+	require.NotContains(t, stdout.String(), "SURVIVED",
+		"child inherited SIG_IGN: a scripted ssh would be uninterruptible")
+}
+
+// TestReal_RelaysDirectedSignalToChild covers the orphan case. A terminal ^C
+// reaches the child on its own (same process group), but `kill <pmx-pid>`
+// from another terminal does not: before the relay, that killed pmx and left
+// the ssh running its remote command with nothing supervising it, and with no
+// exit record ever written. The shield keeps this process alive across the
+// SIGTERM — which is also why the test binary survives sending one to itself
+// — and passes it on, so the child stops too.
+//
+// Not parallel: it signals the whole test process, so it must not overlap
+// with a window where no Run has the shield installed.
+func TestReal_RelaysDirectedSignalToChild(t *testing.T) {
+	go func() {
+		// Long enough for Run below to have installed the shield and started
+		// the child; short enough to keep the test quick.
+		time.Sleep(300 * time.Millisecond)
+		p, err := os.FindProcess(os.Getpid())
+		if err == nil {
+			_ = p.Signal(syscall.SIGTERM)
+		}
+	}()
+
+	start := time.Now()
+	err := execpkg.Real().Run("/bin/sleep", []string{"30"}, nil, nil, nil, nil)
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "child must be stopped by the relayed signal")
+	require.Less(t, elapsed, 10*time.Second, "child was orphaned rather than signalled")
 }
 
 // TestReal_EchoEnv verifies that extra env entries are available to the child

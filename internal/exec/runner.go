@@ -100,6 +100,88 @@ func (e *CapturedError) Error() string { return e.err.Error() }
 // whatever real error/exit-code information is underneath it.
 func (e *CapturedError) Unwrap() error { return e.err }
 
+// shieldParentSignals keeps this process alive across a terminal signal while
+// a child (ssh, rsync) runs, so it survives long enough to read the child's
+// real exit status and propagate it as an *ExitError. It returns a stop
+// function the caller defers.
+//
+// It uses signal.Notify rather than signal.Ignore deliberately. SIG_IGN is
+// inherited across execve and — unlike rsync, which installs its handlers
+// unconditionally — ssh installs its own with the guarded POSIX idiom
+// (`if ssh_signal(SIGINT, SIG_IGN) != SIG_IGN`), which preserves an inherited
+// SIG_IGN and never installs the handler. An ignoring parent therefore made
+// every scripted ssh uninterruptible: neither ^C nor ^\ reached it, and the
+// only way to stop a wrong `node exec` or a wrong `lab create` was to kill
+// pmx from another terminal, which orphaned the ssh. A Notify-registered
+// signal instead leaves the child with SIG_DFL across execve, so ssh installs
+// its handler and dies on ^C exactly as an operator expects, while the Go
+// runtime keeps this process from dying.
+//
+// The child is deliberately left in this process's own process group, so a
+// terminal-generated SIGINT/SIGQUIT still reaches it directly. A signal
+// directed at pmx alone (`kill <pid>`, which the group never sees) is relayed
+// instead, so a killed pmx never leaves an orphaned ssh running a remote
+// command with nothing supervising it.
+// It returns a relay function and a stop function. Catching begins
+// immediately — before the child is started, so no signal in that window can
+// kill this process — while relay is called with the started child, handing
+// the process over the channel rather than sharing it, since cmd.Process is
+// written by Start and must not be read concurrently.
+func shieldParentSignals() (relay func(*os.Process), stop func()) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
+
+	procCh := make(chan *os.Process, 1)
+	done := make(chan struct{})
+
+	go func() {
+		var proc *os.Process
+		for {
+			select {
+			case proc = <-procCh:
+			case sig := <-ch:
+				if proc != nil {
+					// An already-exited child returns an error here, which
+					// is the expected case when the terminal just delivered
+					// the same signal to the whole process group.
+					_ = proc.Signal(sig)
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	return func(p *os.Process) { procCh <- p }, func() {
+		signal.Stop(ch)
+		close(done)
+	}
+}
+
+// runShielded starts cmd under shieldParentSignals, waits for it, and maps a
+// non-zero exit to *ExitError. what names the operation for the start-failure
+// message ("exec ssh", "exec interactive ssh").
+func runShielded(cmd *exec.Cmd, what string) error {
+	relay, stop := shieldParentSignals()
+	defer stop()
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	relay(cmd.Process)
+
+	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+			return &ExitError{
+				Code: exitErr.ExitCode(),
+				Err:  exitErr,
+			}
+		}
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return nil
+}
+
 // realRunner is the production Runner backed by os/exec.
 type realRunner struct{}
 
@@ -118,29 +200,7 @@ func (r *realRunner) Run(name string, args []string, env []string, stdin io.Read
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	// The parent must not die from SIGINT/SIGQUIT while the child runs: both
-	// signals are delivered to the whole foreground process group (parent and
-	// child alike), so without this the shell's ^C would kill pve itself
-	// before it can read the child's real exit status and propagate it via
-	// ExitError. signal.Ignore sets SIG_IGN in this process, and SIG_IGN is
-	// inherited across execve by the child — that is fine here because ssh
-	// and rsync each install their own SIGINT/SIGQUIT handlers at startup, so
-	// the child still responds to ^C normally; the point of ignoring here is
-	// only that the PARENT survives ^C long enough to read and report the
-	// child's real exit status.
-	signal.Ignore(os.Interrupt, syscall.SIGQUIT)
-	defer signal.Reset(os.Interrupt, syscall.SIGQUIT)
-
-	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return &ExitError{
-				Code: exitErr.ExitCode(),
-				Err:  exitErr,
-			}
-		}
-		return fmt.Errorf("exec %s: %w", name, err)
-	}
-	return nil
+	return runShielded(cmd, "exec "+name)
 }
 
 // RunInteractive executes name with the given args and wires the current
@@ -154,24 +214,5 @@ func (r *realRunner) RunInteractive(name string, args []string, env []string) er
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// See the matching comment in Run: without this, ^C (SIGINT) or SIGQUIT
-	// delivered to the foreground process group would kill pve itself, not
-	// just the interactive child (ssh, shell), preventing pve from reading
-	// and propagating the child's real exit code. SIG_IGN is inherited by
-	// the child, but ssh installs its own SIGINT/SIGQUIT handlers at
-	// startup, so it still responds to ^C normally (e.g. forwarding it to
-	// the remote session).
-	signal.Ignore(os.Interrupt, syscall.SIGQUIT)
-	defer signal.Reset(os.Interrupt, syscall.SIGQUIT)
-
-	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return &ExitError{
-				Code: exitErr.ExitCode(),
-				Err:  exitErr,
-			}
-		}
-		return fmt.Errorf("exec interactive %s: %w", name, err)
-	}
-	return nil
+	return runShielded(cmd, "exec interactive "+name)
 }
