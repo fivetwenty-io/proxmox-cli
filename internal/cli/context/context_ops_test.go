@@ -324,7 +324,14 @@ func TestContextEdit_InvalidYAMLRejected(t *testing.T) {
 	err := runOpsCmd(cfg, p, &buf, "edit", "lab")
 	require.Error(t, err)
 	// Error must contain a temp file path for recovery.
-	require.Contains(t, err.Error(), "pve-context-")
+	require.Contains(t, err.Error(), ".pmx-context-")
+
+	// That preserved file holds the context verbatim, secret included, and
+	// nothing ever removes it. It must therefore live in the 0700 config
+	// directory, not in a world-traversable $TMPDIR.
+	require.Contains(t, err.Error(), filepath.Dir(p),
+		"the preserved credential-bearing file must sit beside the config, not in $TMPDIR")
+	require.NotContains(t, err.Error(), os.TempDir()+string(os.PathSeparator)+"pve-context-")
 }
 
 // TestContextEdit_NoEditorEnvReturnsError verifies that an unset $EDITOR (and

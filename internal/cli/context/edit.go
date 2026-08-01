@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
@@ -95,8 +96,20 @@ func newEditCmd() *cobra.Command {
 				return fmt.Errorf("marshal context %q to YAML: %w", name, err)
 			}
 
-			// Write to a 0600 tempfile.
-			tmp, err := os.CreateTemp("", "pve-context-*.yml")
+			// Write to a 0600 tempfile inside the config directory rather than
+			// $TMPDIR. The marshalled context carries Auth.Secret verbatim,
+			// which may be an inline literal password or token, and the two
+			// failure paths below deliberately preserve the file so the
+			// operator can recover their edits — leaving a plaintext
+			// credential in a world-traversable /tmp until the OS reaps it,
+			// which on macOS is days and on a long-lived host may be never.
+			// The config directory is already the 0700 home for exactly this
+			// material (config.WriteRaw tightens it on every write).
+			tmpDir := filepath.Dir(deps.ConfigPath)
+			if tmpDir == "" || tmpDir == "." {
+				tmpDir = ""
+			}
+			tmp, err := os.CreateTemp(tmpDir, ".pmx-context-*.yml")
 			if err != nil {
 				return fmt.Errorf("create temp file for editing: %w", err)
 			}
@@ -112,6 +125,7 @@ func newEditCmd() *cobra.Command {
 			}()
 
 			if err := tmp.Chmod(0o600); err != nil {
+				_ = tmp.Close()
 				return fmt.Errorf("chmod temp file: %w", err)
 			}
 			if _, err := tmp.Write(data); err != nil {
