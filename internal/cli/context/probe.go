@@ -3,7 +3,6 @@ package context
 import (
 	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -52,9 +51,12 @@ func probeContext(ctx *config.Context, timeout time.Duration, insecure bool) pro
 	if !insecure && ctx.TLS.Fingerprint != "" {
 		// Pin instead of trusting the system roots: a self-signed Proxmox
 		// certificate never chains to one, so this is the only way a pinned
-		// context probes the same way it connects.
-		tlsCfg.InsecureSkipVerify = true //nolint:gosec // G402: replaced by the pin check below
-		tlsCfg.VerifyPeerCertificate = fingerprintVerifier(ctx.TLS.Fingerprint)
+		// context probes the same way it connects. The pin runs in
+		// VerifyConnection rather than VerifyPeerCertificate because the
+		// latter is skipped on a resumed session, which would let a resumed
+		// handshake past the pin (gosec G123).
+		tlsCfg.InsecureSkipVerify = true //nolint:gosec // G402: replaced by the pin in VerifyConnection
+		tlsCfg.VerifyConnection = fingerprintVerifier(ctx.TLS.Fingerprint)
 	}
 
 	client := &http.Client{
@@ -81,22 +83,19 @@ func probeContext(ctx *config.Context, timeout time.Duration, insecure bool) pro
 	}
 }
 
-// fingerprintVerifier returns a tls.Config.VerifyPeerCertificate that accepts
-// the peer only when its leaf certificate's SHA-256 matches want. Comparison
-// is case-insensitive and ignores colons, so a fingerprint copied from the
-// PVE UI, from `pvenode cert info`, or from a pmx-written context all compare
+// fingerprintVerifier returns a tls.Config.VerifyConnection that accepts the
+// peer only when its leaf certificate's SHA-256 matches want. Comparison is
+// case-insensitive and ignores colons, so a fingerprint copied from the PVE
+// UI, from `pvenode cert info`, or from a pmx-written context all compare
 // equal.
-func fingerprintVerifier(want string) func([][]byte, [][]*x509.Certificate) error {
-	normalize := func(s string) string {
-		return strings.ToLower(strings.ReplaceAll(s, ":", ""))
-	}
-	wantNorm := normalize(want)
+func fingerprintVerifier(want string) func(tls.ConnectionState) error {
+	wantNorm := strings.ToLower(strings.ReplaceAll(want, ":", ""))
 
-	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-		if len(rawCerts) == 0 {
+	return func(cs tls.ConnectionState) error {
+		if len(cs.PeerCertificates) == 0 {
 			return fmt.Errorf("tls fingerprint pin: peer presented no certificate")
 		}
-		sum := sha256.Sum256(rawCerts[0])
+		sum := sha256.Sum256(cs.PeerCertificates[0].Raw)
 		got := hex.EncodeToString(sum[:])
 		if got != wantNorm {
 			return fmt.Errorf("tls fingerprint pin: peer certificate is %s, context pins %s", got, wantNorm)
