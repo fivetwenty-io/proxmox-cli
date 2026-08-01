@@ -202,6 +202,30 @@ audit trail exists for: which machine did this mutation reach. It now records
 host, port, product, and username — never the secret, which the test asserts
 against every record a run produces.
 
+### Table and JSON disagreed on the order of the same list
+
+Most PBS `ls` commands sort their table rows, but across twenty-two files they
+passed the *unsorted* API response to `Raw`, so `-o json` and `-o yaml` emitted
+whatever order the server happened to return. A table reader and a JSON
+consumer looking at the same command saw different orderings, and nothing tied
+a raw object to the row above it.
+
+The package already had the fix — `cli.DecodePairedRows` keeps each decoded
+entry with the raw object it came from, and `pbs/remote.go` plus all of `pdm/`
+were using it. Thirty-six sites were converted to it, thirty-four of which
+sort, so rows and raw entries are now appended in one loop from one sorted
+slice and cannot drift apart. The helper that made the split possible,
+`decodeRawList`, is deleted rather than left as a footgun; its last two
+callers, `node ls` and `drive cartridge-memory`, do not sort and were converted
+with it. PDM was checked for the same defect and has none — no PDM list sorts.
+
+Ordering is unchanged for tables and now matches it for JSON; no sort keys were
+added or altered. The regression test serves each list in reverse of its sorted
+order with a marker field the row struct does not declare, so it fails both if
+the order is wrong and if a raw object is paired with the wrong row. It covers
+one command per decode shape, including the site that strips secrets from the
+raw objects, and all eight cases fail against the pre-fix code.
+
 ## Deferred, with reasons
 
 These are real, and deliberately not changed here.
@@ -246,17 +270,6 @@ These are real, and deliberately not changed here.
   names for one helper, `--targetstorage` vs `--target-storage`, `template`
   meaning opposite things for VMs and containers). Genuine maintainability
   debt, and the user-visible flag naming items are breaking changes.
-
-- **PBS list commands sort the table but emit the raw API order in JSON and
-  YAML.** Twenty files build their rows from a sorted slice while passing the
-  unsorted `items` to `Raw`, so `-o json` disagrees with the table and inherits
-  whatever order the server returned: `acl`, `acme`, `changer`, `drive`,
-  `encryption_key`, `media`, `metrics`, `notification`, the four
-  `notification_endpoint_*`, `notification_matcher`, `realm`, `realm_ad`,
-  `realm_ldap`, `realm_openid`, `role`, `user`, and `user_token`. Each site
-  needs the raw list sorted on that command's own key, and it changes
-  user-visible output across twenty commands, so it wants its own change with
-  its own e2e run rather than a tail-end bulk edit.
 
 - **Remaining test-suite gaps.** The two CI gates and the two self-disabling
   tests are closed (above). Still open: `internal/logx/prune.go`'s deletion
