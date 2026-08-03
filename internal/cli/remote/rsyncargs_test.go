@@ -1,9 +1,13 @@
 package remote
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
 // --- extractPMXFlags --------------------------------------------------------
@@ -49,6 +53,50 @@ func TestExtractPMXFlags_ConfigInsecureDebugAllForms(t *testing.T) {
 		"debug":    "true",
 	}, vals.Root)
 	require.Equal(t, []string{"src", "dst"}, rest)
+}
+
+// Every root persistent flag must be extractable here. One that is missing is
+// handed to rsync(1) verbatim — `pmx --no-log rsync src dst` then dies with
+// "rsync: --no-log: unknown option" and nothing points back at pmx. The short
+// forms are deliberately excluded: rsync owns -o, -v, and -t.
+func TestExtractPMXFlags_CoversEveryRootPersistentFlag(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+
+	extractable := map[string]bool{}
+	for _, spec := range pmxFlagTable {
+		if spec.target != "root" {
+			continue
+		}
+		for _, n := range spec.names {
+			extractable[strings.TrimLeft(n, "-")] = true
+		}
+	}
+
+	root.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		// help and version are cobra's own and never reach a sub-command.
+		if f.Name == "help" || f.Name == "version" {
+			return
+		}
+		require.True(t, extractable[f.Name],
+			"root persistent flag --%s is not in pmxFlagTable; `pmx --%s rsync ...` "+
+				"would pass it to rsync(1)", f.Name, f.Name)
+	})
+}
+
+// The extracted names have to be settable on the root's flag set, or applying
+// them panics or silently no-ops at run time.
+func TestExtractPMXFlags_RootDestinationsExistOnRoot(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+
+	for _, spec := range pmxFlagTable {
+		if spec.target != "root" {
+			continue
+		}
+		require.NotNil(t, root.PersistentFlags().Lookup(spec.dest),
+			"pmxFlagTable dest %q is not a root persistent flag", spec.dest)
+	}
 }
 
 func TestExtractPMXFlags_SSHFlagsLongOnly(t *testing.T) {

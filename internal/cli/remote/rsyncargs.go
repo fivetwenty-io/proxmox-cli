@@ -38,14 +38,34 @@ type pmxFlagSpec struct {
 }
 
 // pmxFlagTable lists every flag extractPMXFlags recognises at the front of a
-// `pmx rsync` argv. "-c/--context", "--config", "--insecure", and "--debug"
-// apply to the shared root persistent flag set; the "--ssh-*"/"--no-strict"
-// flags are long-only because rsync itself owns the short forms -l, -p, -i.
+// `pmx rsync` argv: the root's persistent flags plus this command's own
+// long-only "--ssh-*"/"--no-strict" connection flags.
+//
+// Every root persistent flag has to be here, not just the ones a user is
+// likely to type. Cobra locates a sub-command by scanning for the first
+// non-flag token and hands the command everything else — so `pmx --no-log
+// rsync src dst`, with the flag in the position cobra documents, arrives here
+// as an argument. With flag parsing disabled (rsync owns the short flags) a
+// root flag that is missing from this table is passed straight to rsync(1),
+// which rejects it: the run fails with "rsync: --no-log: unknown option" and
+// nothing points at pmx.
+//
+// The short forms are deliberately absent for everything but -c/--context:
+// rsync owns -o (preserve owner), -v (verbose), and -t (times), so extracting
+// those would silently steal them from the transfer.
 var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"-c", "--context"}, takesValue: true, target: "root", dest: "context"},
 	{names: []string{"--config"}, takesValue: true, target: "root", dest: "config"},
 	{names: []string{"--insecure"}, takesValue: false, target: "root", dest: "insecure"},
 	{names: []string{"--debug"}, takesValue: false, target: "root", dest: "debug"},
+	{names: []string{"--output"}, takesValue: true, target: "root", dest: "output"},
+	{names: []string{"--node"}, takesValue: true, target: "root", dest: "node"},
+	{names: []string{"--no-log"}, takesValue: false, target: "root", dest: "no-log"},
+	{names: []string{"--trace"}, takesValue: false, target: "root", dest: "trace"},
+	{names: []string{"--verbose"}, takesValue: false, target: "root", dest: "verbose"},
+	{names: []string{"--async"}, takesValue: false, target: "root", dest: "async"},
+	{names: []string{"--warnings-as-errors"}, takesValue: false, target: "root",
+		dest: "warnings-as-errors"},
 	{names: []string{"--ssh-user"}, takesValue: true, target: "ssh", dest: "ssh-user"},
 	{names: []string{"--ssh-port"}, takesValue: true, target: "ssh", dest: "ssh-port"},
 	{names: []string{"--ssh-identity"}, takesValue: true, target: "ssh", dest: "ssh-identity"},
