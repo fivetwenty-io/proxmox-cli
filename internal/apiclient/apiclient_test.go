@@ -45,12 +45,30 @@ func TestUPIDFromRaw_EmptyRawMessage(t *testing.T) {
 	require.Contains(t, err.Error(), "empty raw message")
 }
 
+// An empty UPID string means the server did the work synchronously, which is a
+// distinct outcome from a malformed response: callers have to be able to tell
+// "nothing to wait for" from "this response makes no sense".
 func TestUPIDFromRaw_EmptyStringValue(t *testing.T) {
 	t.Parallel()
 	raw := json.RawMessage(`""`)
 	_, err := apiclient.UPIDFromRaw(raw)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "empty UPID string")
+	require.ErrorIs(t, err, apiclient.ErrNoTask)
+}
+
+// The other failure modes must NOT be reported as "no task": a body that is not
+// a UPID at all is a response the caller cannot act on.
+func TestUPIDFromRaw_OtherFailuresAreNotErrNoTask(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(``),
+		json.RawMessage(`"not-a-upid"`),
+		json.RawMessage(`{"upid":"UPID:x"}`),
+	} {
+		_, err := apiclient.UPIDFromRaw(raw)
+		require.Error(t, err)
+		require.NotErrorIs(t, err, apiclient.ErrNoTask, "raw=%s", raw)
+	}
 }
 
 func TestUPIDFromRaw_NonUPIDString(t *testing.T) {

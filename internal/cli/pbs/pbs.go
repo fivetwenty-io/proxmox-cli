@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/spf13/cobra"
 
@@ -64,6 +65,13 @@ func wrap(ctor func() *cobra.Command) cli.GroupFactory {
 // completes and prints msg. The raw response carries the UPID JSON string.
 func finishAsync(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, msg string) error {
 	upid, err := apiclient.UPIDFromRaw(raw)
+	if errors.Is(err, apiclient.ErrNoTask) {
+		// The endpoint did the work synchronously and returned no task handle —
+		// removing a directory mount is one such, a background task on PVE and
+		// immediate here. There is nothing to wait on and nothing went wrong,
+		// so the operation is simply complete. --async has no UPID to hand back.
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: msg}, deps.Format)
+	}
 	if err != nil {
 		return err
 	}

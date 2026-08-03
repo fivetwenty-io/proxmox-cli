@@ -168,6 +168,26 @@ func TestNodeDisksDirectoryDelete_RequiresYes(t *testing.T) {
 	require.Contains(t, err.Error(), "--yes/-y")
 }
 
+// A real PBS removes the mount unit synchronously and answers with a null
+// UPID. There is no task to wait for and nothing went wrong, so the command has
+// to report success rather than a decode failure.
+func TestNodeDisksDirectoryDelete_SynchronousResponseSucceeds(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("DELETE "+nodeAPIBase+"/disks/directory/store1",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":null}`))
+		})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeCmd(), "node", "disks", "directory", "delete",
+		"store1", "--yes")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "removed")
+}
+
 func TestNodeDisksDirectoryDelete_BlocksUntilTaskFinishes(t *testing.T) {
 	f, pc := newFakeClient(t)
 	handleTaskStatus(f, validUPID)

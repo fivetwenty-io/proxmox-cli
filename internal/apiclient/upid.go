@@ -3,6 +3,7 @@ package apiclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,15 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 )
+
+// ErrNoTask reports a response that carries no task handle: the server answered
+// with a null or empty UPID because it did the work synchronously.
+//
+// Some endpoints are asynchronous on one product and synchronous on another —
+// removing a directory-backed datastore mount is a background task on Proxmox
+// VE and immediate on Proxmox Backup Server — so a caller that waits on a task
+// has to be able to tell "no task to wait for" apart from a malformed response.
+var ErrNoTask = errors.New("response carries no task handle (the server completed it synchronously)")
 
 // UPIDFromRaw extracts a UPID string from a json.RawMessage.
 //
@@ -31,7 +41,7 @@ func UPIDFromRaw(raw json.RawMessage) (string, error) {
 	}
 
 	if upid == "" {
-		return "", fmt.Errorf("decode UPID: empty UPID string in response")
+		return "", ErrNoTask
 	}
 
 	if !strings.HasPrefix(upid, "UPID:") {

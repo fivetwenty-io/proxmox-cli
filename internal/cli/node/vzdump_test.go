@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -87,8 +88,10 @@ func TestNodeVzdump_APIError(t *testing.T) {
 	require.Contains(t, err.Error(), "start vzdump on node")
 }
 
-// TestNodeVzdump_BadUPID verifies that a POST returning no usable UPID surfaces
-// a clear decode error instead of silently proceeding to wait on an empty task.
+// TestNodeVzdump_BadUPID verifies that a POST returning no usable UPID fails
+// instead of silently proceeding to wait on an empty task. A vzdump is always a
+// background job on PVE, so "no task handle" is a broken response here, not the
+// synchronous completion it can legitimately mean elsewhere.
 func TestNodeVzdump_BadUPID(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("POST /api2/json/nodes/pve1/vzdump", func(w http.ResponseWriter, _ *http.Request) {
@@ -100,7 +103,7 @@ func TestNodeVzdump_BadUPID(t *testing.T) {
 
 	err := root.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "decode UPID")
+	require.ErrorIs(t, err, apiclient.ErrNoTask)
 }
 
 // TestNodeVzdump_NoLocalTargetFlag guards against shadowing the root's persistent
