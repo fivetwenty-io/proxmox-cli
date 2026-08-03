@@ -545,8 +545,10 @@ def run(ctx: Ctx) -> None:
     # create/set/delete/revert are covered live by `e2e --mutate`: it stages a
     # throwaway bridge (vmbr987), edits it, deletes it, and reverts the staged
     # file — all entirely in interfaces.new, so the live config is never
-    # touched. Only `network apply` reloads the host networking stack (and could
-    # cut the node off the network), so apply alone stays deferred.
+    # touched. `network apply` reloads the host networking stack, which the
+    # mutate phase does have to do — the isolated SDN vnet exists only in each
+    # node's config until that node reloads — but only after checking the node
+    # carries no staged interface edits of somebody else's to commit.
     ctx.defer(
         "network create",
         "creates a host network interface — covered live by `e2e --mutate`, which stages a throwaway bridge and reverts it (never applied)",
@@ -567,9 +569,11 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "network apply",
-        "reloads the staged host network configuration — could cut the node off the network; not exercised live",
+        "reloads the host network configuration — covered live by `e2e --mutate`, "
+        "which reloads each node to bring its isolated SDN bridge up and drops it "
+        "again at teardown, skipping any node holding staged interface edits",
         "pmx pve node network apply --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "network revert",
@@ -715,14 +719,17 @@ def run(ctx: Ctx) -> None:
         isolation=True, live_covered=True,
     )
     # node config set mutates node-level configuration (description, ACME,
-    # wake-on-LAN, ballooning target, startall delay). Unlike dns/time set it is
-    # not yet driven by the mutate phase, so it is parsed-and-deferred here.
+    # wake-on-LAN, ballooning target, startall delay). The mutate phase drives
+    # two of those and restores both: a description on its own node, read back
+    # to prove it landed, and a wake-on-LAN MAC on the peer so `wakeonlan` has
+    # something to address.
     ctx.defer(
         "config set",
-        "mutates node-level configuration (description, ACME, wake-on-LAN, "
-        "ballooning target, startall delay); not exercised live; covered by unit tests",
+        "mutates node-level configuration — covered live by `e2e --mutate`, which "
+        "round-trips the node description and stages a wake-on-LAN MAC on the peer, "
+        "restoring both",
         "pmx pve node config set --node <node> --description 'pmx-cli-e2e'",
-        isolation=False, live_covered=False,
+        isolation=True, live_covered=True,
     )
     # /etc/hosts is covered live by `e2e --mutate`: it reads the current file
     # plus its digest and writes the identical bytes back under that digest
@@ -798,14 +805,16 @@ def run(ctx: Ctx) -> None:
         isolation=False, live_covered=False,
     )
 
-    # Triggering a replication run forces an immediate sync that consumes I/O and
-    # bandwidth to the target node, and needs a configured job (none exists on a
-    # standalone node), so it is not exercised live.
+    # Triggering a replication run forces an immediate sync to the target node, so
+    # the read-only sweep cannot run it. The mutate phase builds a throwaway ZFS
+    # pair across two nodes and syncs its own guest over it, which is the only way
+    # to prove the job runs rather than merely parses.
     ctx.defer(
         "replication run",
-        "triggers an immediate replication sync to the target node (needs a configured job); not exercised live",
+        "syncs a replication job to its target node; driven live by the mutate phase "
+        "over a throwaway two-node ZFS pair",
         "pmx pve node replication run <id> --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )
 
     # The remote storage scans each probe a storage server for its
@@ -1046,10 +1055,9 @@ def run(ctx: Ctx) -> None:
               "pmx pve node services reload <node> <svc>", isolation=False, live_covered=True)
 
     # Node-wide bulk actions act on every guest on the node by default, but
-    # --vmids narrows them to a subset. startall/stopall/suspendall are driven
-    # live by the mutate phase scoped to ONLY the isolated pmx-cli VM, so they
-    # touch no other workload. migrateall needs a second node and wakeonlan
-    # powers a node on, so both stay deferred; --help exercises their parsing.
+    # --vmids narrows them to a subset. All four are driven live by the mutate
+    # phase scoped to ONLY the isolated pmx-cli guest, so they touch no other
+    # workload; --help exercises their parsing here.
     ctx.check("startall --help", "pve", "node", "startall", "--help", fmt="")
     ctx.check("stopall --help", "pve", "node", "stopall", "--help", fmt="")
     ctx.check("suspendall --help", "pve", "node", "suspendall", "--help", fmt="")
@@ -1061,15 +1069,16 @@ def run(ctx: Ctx) -> None:
               "pmx pve node stopall --vmids <vmid> --yes", isolation=True, live_covered=True)
     ctx.defer("suspendall", "suspends guests on the node — covered live by `e2e --mutate` scoped to the isolated pmx-cli VM via --vmids (pauses the QEMU process)",
               "pmx pve node suspendall --vmids <vmid> --yes", isolation=True, live_covered=True)
-    ctx.defer("migrateall", "migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests",
-              "pmx pve node migrateall --node <node> --target <node2> --yes", isolation=False, live_covered=False)
+    ctx.defer("migrateall", "migrates guests off the node to a target — covered live by `e2e --mutate` scoped to the isolated pmx-cli clone via --vmids",
+              "pmx pve node migrateall --vmids <vmid> --target-node <node2> --yes", isolation=True, live_covered=True)
     # wakeonlan targets another cluster node by its configured MAC; the API
     # refuses to wake the local node ("'pve' is local node, cannot wake my self!"),
-    # so on a single-node cluster there is no valid target — not exercisable live.
+    # so the mutate phase addresses the peer, having first staged a MAC that
+    # belongs to no real interface — the packet is sent and reaches nothing.
     ctx.defer(
         "wakeonlan",
-        "sends a Wake-on-LAN packet to power on another node — the API rejects waking the local "
-        "node, and this is a single-node cluster, so there is no remote target; not exercised live; covered by unit tests",
+        "sends a Wake-on-LAN packet to another node — covered live by `e2e --mutate` "
+        "against the peer node, addressed to a MAC no interface answers to",
         "pmx pve node wakeonlan --node <node> --yes",
-        isolation=False, live_covered=False,
+        isolation=False, live_covered=True,
     )

@@ -93,13 +93,13 @@ swept clean before the next provisions.
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 270 | 0 | 122 | 104 | 42 | 2 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 52 | 4 | 0 | 0 |
-| `pve` | 676 | 80 | 181 | 394 | 6 | 82 | 7 | 0 |
+| `pve` | 676 | 80 | 181 | 410 | 1 | 75 | 7 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1261** | **101** | **452** | **565** | **100** | **108** | **9** | **0** |
+| **Total** | **1261** | **101** | **452** | **581** | **95** | **101** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1144** are exercised by at least one live suite, **108** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1151** are exercised by at least one live suite, **101** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -783,7 +783,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster backup list` | ✓ | ✓ |  |
 | `pve cluster backup set` | — | ✓ |  |
 | `pve cluster backup-info not-backed-up` | ◑ | — |  |
-| `pve cluster bulk migrate` | — | — | deferred — migrates guests cluster-wide — requires a second node; not exercisable on a single-node lab |
+| `pve cluster bulk migrate` | — | ✓ |  |
 | `pve cluster bulk shutdown` | — | ✓ |  |
 | `pve cluster bulk start` | — | ✓ |  |
 | `pve cluster bulk suspend` | — | ✓ |  |
@@ -846,8 +846,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster ha resource delete` | — | ✓ |  |
 | `pve cluster ha resource get` | — | ✓ |  |
 | `pve cluster ha resource list` | ✓ | ✓ |  |
-| `pve cluster ha resource migrate` | — | · |  |
-| `pve cluster ha resource relocate` | — | — | deferred — requires a second node as the relocation target — not exercisable on a single-node lab |
+| `pve cluster ha resource migrate` | — | ✓ |  |
+| `pve cluster ha resource relocate` | — | ✓ |  |
 | `pve cluster ha resource set` | — | ✓ |  |
 | `pve cluster ha rule create` | — | ✓ |  |
 | `pve cluster ha rule delete` | — | ✓ |  |
@@ -921,11 +921,11 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster options get` | ✓ | ✓ |  |
 | `pve cluster options set` | — | ✓ |  |
 | `pve cluster qemu cpu-flags` | ✓ | — |  |
-| `pve cluster replication create` | — | · |  |
-| `pve cluster replication delete` | — | · |  |
-| `pve cluster replication get` | ◑ | · |  |
+| `pve cluster replication create` | — | ✓ |  |
+| `pve cluster replication delete` | — | ✓ |  |
+| `pve cluster replication get` | ◑ | ✓ |  |
 | `pve cluster replication list` | ✓ | ✓ |  |
-| `pve cluster replication set` | — | · |  |
+| `pve cluster replication set` | — | ✓ |  |
 | `pve cluster resources` | ✓ | — |  |
 | `pve cluster status` | ✓ | — |  |
 | `pve cluster tasks` | ✓ | — |  |
@@ -1064,7 +1064,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node cert list` | ◑ | — |  |
 | `pve node config describe` | ✓ | — |  |
 | `pve node config get` | ◑ | — |  |
-| `pve node config set` | — | — | deferred — mutates node-level configuration (description, ACME, wake-on-LAN, ballooning target, startall delay); not exercised live; covered by unit tests |
+| `pve node config set` | — | ✓ |  |
 | `pve node console` | — | — | deferred — opens a live SSH terminal aliased to `node shell`, so it cannot be driven head-less; not run live; covered by unit tests |
 | `pve node disks create directory` | — | ✓ |  |
 | `pve node disks create lvm` | — | ✓ |  |
@@ -1103,9 +1103,9 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node hosts set` | — | ✓ |  |
 | `pve node journal` | ◑ | — |  |
 | `pve node list` | ✓ | — |  |
-| `pve node migrateall` | — | — | deferred — migrates every guest off the node to a target (needs a second node); not exercised live; covered by unit tests |
+| `pve node migrateall` | — | ✓ |  |
 | `pve node netstat` | ◑ | — |  |
-| `pve node network apply` | — | — | deferred — reloads the staged host network configuration — could cut the node off the network; not exercised live |
+| `pve node network apply` | — | ✓ |  |
 | `pve node network create` | — | ✓ |  |
 | `pve node network delete` | — | ✓ |  |
 | `pve node network get` | ◑ | — |  |
@@ -1120,11 +1120,11 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node permissions revoke` | — | — | deferred — revokes ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve node query-url-metadata` | — | ✓ |  |
 | `pve node reboot` | — | — | n/a — reboots the real host — would take the shared lab node offline; not automatable |
-| `pve node replication get` | ◑ | — |  |
-| `pve node replication list` | ◑ | — |  |
-| `pve node replication log` | ◑ | — |  |
-| `pve node replication run` | — | — | deferred — triggers an immediate replication sync to the target node (needs a configured job); not exercised live |
-| `pve node replication status` | ◑ | — |  |
+| `pve node replication get` | ◑ | ✓ |  |
+| `pve node replication list` | ◑ | ✓ |  |
+| `pve node replication log` | ◑ | ✓ |  |
+| `pve node replication run` | — | ✓ |  |
+| `pve node replication status` | ◑ | ✓ |  |
 | `pve node report` | ◑ | — |  |
 | `pve node rrddata` | ◑ | — |  |
 | `pve node rsync` | — | ✓ |  |
@@ -1167,7 +1167,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node vzdump` | — | ✓ |  |
 | `pve node vzdump defaults` | ◑ | — |  |
 | `pve node vzdump extract-config` | ◑ | — |  |
-| `pve node wakeonlan` | — | — | deferred — sends a Wake-on-LAN packet to power on another node — the API rejects waking the local node, and this is a single-node cluster, so there is no remote target; not exercised live; covered by unit tests |
+| `pve node wakeonlan` | — | ✓ |  |
 | `pve pool create` | — | ✓ | error-contract checked |
 | `pve pool delete` | — | ✓ |  |
 | `pve pool get` | ◑ | — |  |

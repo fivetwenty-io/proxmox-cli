@@ -75,21 +75,23 @@ def run(ctx: Ctx) -> None:
         "pmx pve cluster ha resource create vm:<id> --state started ... && ... delete vm:<id> --yes",
         isolation=True, live_covered=True,
     )
-    # migrate/relocate need a second node to accept the guest; the single-node lab
-    # cannot satisfy them, so each verb is parsed-and-deferred rather than run live.
-    # Both require --target-node and are covered by unit tests (forwards the node;
-    # refuses without it).
+    # migrate/relocate hand a guest to another node, so the read-only sweep cannot
+    # run them. The mutate phase drives both against its own HA-managed guest —
+    # migrate out to the peer, relocate back — so they are covered live, just not
+    # from here.
     ctx.defer(
         "ha resource migrate",
-        "requires a second node as the migration target — not exercisable on a single-node lab",
+        "moves an HA guest to another node; driven live by the mutate phase against "
+        "its own isolated guest",
         "pmx pve cluster ha resource migrate vm:<id> --target-node <other>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "ha resource relocate",
-        "requires a second node as the relocation target — not exercisable on a single-node lab",
+        "stops and restarts an HA guest on another node; driven live by the mutate "
+        "phase against its own isolated guest",
         "pmx pve cluster ha resource relocate vm:<id> --target-node <other>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
 
     # HA rules: the list is an array (empty on a fresh cluster). HA groups were
@@ -560,10 +562,10 @@ def run(ctx: Ctx) -> None:
     )
     ctx.defer(
         "bulk migrate",
-        "migrates guests cluster-wide — requires a second node; not exercisable "
-        "on a single-node lab",
-        "pmx pve cluster bulk migrate --target-node <node> --yes",
-        isolation=False, live_covered=False,
+        "migrates guests cluster-wide — covered live by `e2e --mutate` scoped to the "
+        "isolated pmx-cli clone via --vmids",
+        "pmx pve cluster bulk migrate --vmids <vmid> --target-node <node> --yes",
+        isolation=True, live_covered=True,
     )
 
     # Cluster-wide QEMU CPU flags: a static capability catalog, always present

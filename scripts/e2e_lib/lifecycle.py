@@ -266,8 +266,8 @@ class Runner:
         self.cov.append(Step(guest, verb, SKIP, reason))
 
     # A teardown step: print result, never raise, not coverage-recorded.
-    def undo(self, name: str, *args: str) -> None:
-        res = self.pmx(*args)
+    def undo(self, name: str, *args: str, node: bool = True) -> None:
+        res = self.pmx(*args, node=node)
         if res.rc == 0:
             print(f"  {GREEN('✓')} {name}")
         else:
@@ -346,20 +346,34 @@ def _volume_set_roundtrip(r: Runner, vmid: str) -> str | None:
     return err
 
 
-def _node_count(r: Runner) -> int:
-    """Return number of cluster nodes, or 1 on error (single-node assumption)."""
+def _node_names(r: Runner) -> list[str]:
+    """Every node name in the cluster, in the order the API lists them."""
     res = r.pmx("pve", "node", "list", json_out=True, node=False)
     if res.rc != 0:
-        return 1
+        return []
     try:
         data = res.json()
-        if isinstance(data, list):
-            return max(len(data), 1)
-        if isinstance(data, dict) and isinstance(data.get("rows"), list):
-            return max(len(data["rows"]), 1)
-    except (ValueError, KeyError):
-        pass
-    return 1
+    except ValueError:
+        return []
+    if isinstance(data, dict) and isinstance(data.get("rows"), list):
+        return [str(row[0]) for row in data["rows"] if row]
+    if not isinstance(data, list):
+        return []
+    return [str(nd.get("node") or "") for nd in data
+            if isinstance(nd, dict) and nd.get("node")]
+
+
+def _other_node(r: Runner) -> str:
+    """A cluster node that is not the one the suite is driving, or "".
+
+    Every verb that needs somewhere else to send a guest — qemu/lxc migrate, HA
+    migrate and relocate, a replication target — resolves its peer through here,
+    so they all agree on which node that is.
+    """
+    for name in _node_names(r):
+        if name and name != r.node:
+            return name
+    return ""
 
 
 # Preference order when several storages can host guest volumes. The snapshot
@@ -511,10 +525,15 @@ def _alt_rootdir_storage(r: Runner, exclude: str) -> str:
 def provision_move_storage(r: Runner) -> None:
     """Create the scratch storage the disk/volume `move` verbs relocate to.
 
-    A `dir` backend under /var/lib/vz, restricted to the run's node, with PVE
-    creating the directory tree itself (--create-base-path/--create-subdirs)
-    since nothing else will. The volumes moved into it are the 1G test disks,
-    written sparse, so it costs the node almost nothing.
+    A `dir` backend under /var/lib/vz, with PVE creating the directory tree
+    itself (--create-base-path/--create-subdirs) since nothing else will. The
+    volumes moved into it are the 1G test disks, written sparse, so it costs a
+    node almost nothing.
+
+    It is offered on every node in the cluster, not just this one. A guest whose
+    volume has been moved here cannot leave a node the storage is missing from —
+    "storage 'pmx-cli-move' is not available on node ..." — which silently
+    breaks every migration verb that runs after the move verbs.
 
     This is scaffolding rather than a covered verb — `storage_lifecycle` is
     what proves storage create/set/delete — so a cluster that refuses the
@@ -526,9 +545,10 @@ def provision_move_storage(r: Runner) -> None:
     # Best-effort clean of a definition left by a crashed prior run.
     r.undo(f"pre-clean {MOVE_STORAGE}", "pve", "storage", "delete", MOVE_STORAGE, "--yes")
 
+    nodes = ",".join(_node_names(r)) or r.node
     res = r.pmx("pve", "storage", "create", "--storage", MOVE_STORAGE, "--type", "dir",
                 "--path", MOVE_STORAGE_PATH, "--content", "images,rootdir",
-                "--nodes", r.node, "--create-base-path", "--create-subdirs")
+                "--nodes", nodes, "--create-base-path", "--create-subdirs")
     _move_storage_ready = res.rc == 0
     if _move_storage_ready:
         print(f"  {GREEN('✓')} move target {MOVE_STORAGE} at {MOVE_STORAGE_PATH}")
@@ -542,14 +562,16 @@ def teardown_move_storage(r: Runner) -> None:
     """Remove the scratch move storage and the directory tree PVE made for it.
 
     Both halves are best-effort: the config goes first so the storage stops
-    being offered even if the host is unreachable over SSH, and the directory
-    removal is SSH-gated like the rest of the node verbs.
+    being offered even if a host is unreachable, and the directory is removed
+    from every node the storage was offered on, since PVE creates the tree
+    wherever a volume actually lands.
     """
     global _move_storage_ready
 
     r.undo(f"delete {MOVE_STORAGE}", "pve", "storage", "delete", MOVE_STORAGE, "--yes")
-    r.undo(f"rm host {MOVE_STORAGE_PATH}",
-           "pve", "node", "exec", r.node, "--", "rm", "-rf", MOVE_STORAGE_PATH)
+    for name in _node_names(r) or [r.node]:
+        r.undo(f"rm {MOVE_STORAGE_PATH} on {name}",
+               "pve", "node", "exec", name, "--", "rm", "-rf", MOVE_STORAGE_PATH)
     _move_storage_ready = False
 
 
@@ -868,17 +890,30 @@ def _ensure_template(r: Runner) -> str:
     return f"{TMPL_STORAGE}:vztmpl/{template}"
 
 
-def _sweep_stale(r: Runner) -> list[str]:
-    """Best-effort: find leftover VMs/CTs named with our prefix from a crash."""
+def _sweep_stale(r: Runner) -> list[tuple[str, str, str]]:
+    """Leftover VMs/CTs carrying our prefix, as (kind, vmid, node) triples.
+
+    Read from the cluster-wide resource list rather than per-node `qemu list`:
+    a guest the suite migrated to the peer and failed to bring home is invisible
+    to a list scoped to this node, which is exactly how a run can strand two
+    clones and still report success.
+    """
+    res = r.pmx("pve", "cluster", "resources", json_out=True, node=False)
+    if res.rc != 0:
+        return []
+    try:
+        rows = res.json()
+    except ValueError:
+        return []
+    if not isinstance(rows, list):
+        return []
     stale = []
-    for kind in ("qemu", "lxc"):
-        res = r.pmx("pve", kind, "list", json_out=True)
-        if res.rc != 0:
+    for row in rows:
+        if not isinstance(row, dict) or row.get("type") not in ("qemu", "lxc"):
             continue
-        for guest in res.json():
-            name = str(guest.get("name") or guest.get("hostname") or "")
-            if name.startswith(Isolation.NAME_PREFIX):
-                stale.append(f"{kind}:{guest.get('vmid')}")
+        if not str(row.get("name") or "").startswith(Isolation.NAME_PREFIX):
+            continue
+        stale.append((str(row["type"]), str(row.get("vmid")), str(row.get("node") or "")))
     return stale
 
 
@@ -971,10 +1006,74 @@ def provision_network(r: Runner) -> None:
                 skip_markers=("evpn", "not supported", "not implemented", "no such",
                               "not found"),
                 skip_reason="MAC-VRF data only applies to EVPN zones; pmxcli is a simple vnet")
+    _sdn_materialize(r)
     r.step("infra", "pool create", f"pool create {Isolation.POOL}",
            "pve", "pool", "create", "--poolid", Isolation.POOL)
     r.step("infra", "pool set", f"pool set {Isolation.POOL}",
            "pve", "pool", "set", Isolation.POOL, "--comment", "pmx-cli e2e")
+
+
+def _has_staged_network(host: str) -> bool | None:
+    """Whether a node holds staged host-network edits. None if it cannot be told.
+
+    PVE writes pending interface changes to /etc/network/interfaces.new and
+    leaves them there until somebody reloads. A reload commits them — including
+    any a different operator staged — so the file's absence is what makes the
+    reload below safe to issue.
+    """
+    rc, out, _ = _ssh_node(host, "test -e /etc/network/interfaces.new && echo STAGED || echo CLEAN")
+    if rc != 0:
+        return None
+    if "STAGED" in out:
+        return True
+    if "CLEAN" in out:
+        return False
+    return None
+
+
+def _sdn_materialize(r: Runner) -> None:
+    """Reload the host network on every node so the isolated vnet really exists.
+
+    `sdn apply` writes the vnet into each node's SDN config, but only the node
+    that served the request brings the bridge up; everywhere else pvestatd just
+    logs "local sdn network configuration is too old, please reload". A guest
+    started on one of those nodes fails with `bridge 'pmxcli0' does not exist`,
+    which is what a migrate, an HA relocate, or simply picking the other node
+    runs into.
+
+    The reload is the same operation PVE's own UI offers, but it commits every
+    staged host-interface change on that node — so a node carrying edits this
+    suite did not make is left alone, and its bridge simply stays absent.
+    """
+    addrs = _node_addresses(r)
+    if not addrs:
+        r.cover_skip("node", "network apply", "node network apply",
+                     "could not resolve the cluster's node addresses")
+        return
+    applied, held_back = [], []
+    for name in sorted(addrs):
+        staged = _has_staged_network(addrs[name])
+        if staged is None:
+            held_back.append(f"{name} (unreachable over root SSH)")
+            continue
+        if staged:
+            held_back.append(f"{name} (has staged host-network changes)")
+            continue
+        res = r.pmx("--node", name, "pve", "node", "network", "apply", "--yes", node=False)
+        if res.rc != 0:
+            held_back.append(f"{name} ({_one_line(res.reason, 'reload failed', limit=60)})")
+            continue
+        applied.append(name)
+
+    label = "node network apply (materialise " + Isolation.SDN_VNET + ")"
+    if applied:
+        print(f"  {GREEN('✓')} {label} on {', '.join(applied)}")
+        r.cov.append(Step("node", "network apply", PASS))
+    else:
+        r.cover_skip("node", "network apply", label,
+                     "no node could be reloaded: " + "; ".join(held_back))
+    if held_back and applied:
+        print(DIM(f"      not reloaded: {'; '.join(held_back)}"))
 
 
 def vm_lifecycle(r: Runner) -> None:
@@ -1169,34 +1268,7 @@ def vm_lifecycle(r: Runner) -> None:
 
             # Migrate: only meaningful when the cluster has more than one node.
             # On a single-node lab, record as SKIP rather than failing.
-            n_nodes = _node_count(r)
-            if n_nodes < 2:
-                r.cover_skip("qemu", "migrate", f"migrate clone {clone_id}",
-                             "single-node cluster — migrate requires a second node")
-            else:
-                # Pick a target node that is not the current node.
-                node_res = r.pmx("pve", "node", "list", json_out=True, node=False)
-                other = ""
-                if node_res.rc == 0:
-                    try:
-                        for nd in node_res.json():
-                            nd_name = (nd.get("node") or "") if isinstance(nd, dict) else ""
-                            if nd_name and nd_name != r.node:
-                                other = nd_name
-                                break
-                    except (ValueError, KeyError):
-                        pass
-                if not other:
-                    r.cover_skip("qemu", "migrate", f"migrate clone {clone_id}",
-                                 "could not determine a second node name")
-                else:
-                    r.soft_step(
-                        "qemu", "migrate", f"migrate clone {clone_id} -> {other}",
-                        "pve", "qemu", "migrate", clone_id, "--target-node", other,
-                        skip_markers=("shared storage", "local disk", "not supported",
-                                      "cannot migrate", "no route"),
-                        skip_reason="migration blocked by storage or network constraints",
-                    )
+            _clone_migrate_lifecycle(r, clone_id)
         finally:
             if clone_created:
                 r.undo(f"stop clone {clone_id}", "pve", "qemu", "stop", clone_id)
@@ -1462,34 +1534,26 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                    "pve", "lxc", "status", clone_id, json_out=True)
 
             # Migrate: only meaningful when the cluster has more than one node.
-            n_nodes = _node_count(r)
-            if n_nodes < 2:
+            other = _other_node(r)
+            if not other:
                 r.cover_skip("lxc", "migrate", f"migrate clone {clone_id}",
-                             "single-node cluster — migrate requires a second node")
+                             "no second node in the cluster to migrate to")
             else:
-                node_res = r.pmx("pve", "node", "list", json_out=True, node=False)
-                other = ""
-                if node_res.rc == 0:
-                    try:
-                        for nd in node_res.json():
-                            nd_name = (nd.get("node") or "") if isinstance(nd, dict) else ""
-                            if nd_name and nd_name != r.node:
-                                other = nd_name
-                                break
-                    except (ValueError, KeyError):
-                        pass
-                if not other:
-                    r.cover_skip("lxc", "migrate", f"migrate clone {clone_id}",
-                                 "could not determine a second node name")
-                else:
-                    # A stopped CT migrates offline; --restart is unnecessary.
-                    r.soft_step(
-                        "lxc", "migrate", f"migrate clone {clone_id} -> {other}",
-                        "pve", "lxc", "migrate", clone_id, "--target-node", other,
-                        skip_markers=("shared storage", "local disk", "not supported",
-                                      "cannot migrate", "no route"),
-                        skip_reason="migration blocked by storage or network constraints",
-                    )
+                # A stopped CT migrates offline; --restart is unnecessary.
+                moved = r.soft_step(
+                    "lxc", "migrate", f"migrate clone {clone_id} -> {other}",
+                    "pve", "lxc", "migrate", clone_id, "--target-node", other,
+                    skip_markers=("shared storage", "local disk", "not supported",
+                                  "cannot migrate", "no route"),
+                    skip_reason="migration blocked by storage or network constraints",
+                )
+                if moved:
+                    # Send it home before teardown, which addresses the suite's
+                    # own node; no --node here so the source is resolved from
+                    # the cluster instead of assumed.
+                    r.undo(f"migrate clone {clone_id} back to {r.node}",
+                           "pve", "lxc", "migrate", clone_id, "--target-node", r.node,
+                           node=False)
         finally:
             if clone_created:
                 r.del_step("lxc", "clone delete", f"delete clone {clone_id}",
@@ -1664,6 +1728,10 @@ def teardown_network(r: Runner) -> None:
                 # pending for the operator to review).
                 r.undo("sdn lock release", "pve", "sdn", "lock", "release",
                        "--lock-token", token, "--yes")
+    # The vnet is gone from the config, but the bridge each node brought up for
+    # it stays in the kernel until that node reloads — so undo the reload the
+    # provision did, on the same terms.
+    _sdn_dematerialize(r)
     # Deleting the isolated pmx-cli pool is the live coverage for `pool delete`:
     # it removes the exact pool this suite provisioned, recorded as a del_step
     # (PASS on a normal teardown, SKIP when a prior run already cleaned it up).
@@ -1671,18 +1739,35 @@ def teardown_network(r: Runner) -> None:
                "pve", "pool", "delete", Isolation.POOL, "--yes")
 
 
+def _sdn_dematerialize(r: Runner) -> None:
+    """Reload each node once more so the removed vnet's bridge goes away too."""
+    addrs = _node_addresses(r)
+    for name in sorted(addrs):
+        if _has_staged_network(addrs[name]) is not False:
+            continue
+        r.undo(f"network reload on {name} (drop {Isolation.SDN_VNET} bridge)",
+               "--node", name, "pve", "node", "network", "apply", "--yes", node=False)
+
+
 def sweep_stale_guests(r: Runner) -> None:
-    stale = _sweep_stale(r)
-    for ref in stale:
-        kind, vmid = ref.split(":")
-        print(f"  {YELLOW('·')} cleaning stale {kind} {vmid} from a prior run")
+    """Remove every prefixed guest still standing, wherever in the cluster it is.
+
+    Each delete is addressed at the node the cluster says holds the guest, not at
+    the node the suite happens to be driving, so a stray left on a peer is cleaned
+    rather than reported as "does not exist".
+    """
+    for kind, vmid, node in _sweep_stale(r):
+        where = f" on {node}" if node and node != r.node else ""
+        print(f"  {YELLOW('·')} cleaning stale {kind} {vmid}{where} from a prior run")
+        at = ("--node", node) if node else ()
         if kind == "qemu":
-            r.undo(f"delete VM {vmid}", "pve", "qemu", "stop", vmid)
-            r.undo(f"delete VM {vmid}", "pve", "qemu", "delete", vmid, "--yes", "--purge",
-                   "--destroy-unreferenced-disks")
+            r.undo(f"delete VM {vmid}", *at, "pve", "qemu", "stop", vmid, node=not at)
+            r.undo(f"delete VM {vmid}", *at, "pve", "qemu", "delete", vmid, "--yes",
+                   "--purge", "--destroy-unreferenced-disks", node=not at)
         else:
-            r.undo(f"delete CT {vmid}", "pve", "lxc", "stop", vmid)
-            r.undo(f"delete CT {vmid}", "pve", "lxc", "delete", vmid, "--yes", "--force", "--purge")
+            r.undo(f"delete CT {vmid}", *at, "pve", "lxc", "stop", vmid, node=not at)
+            r.undo(f"delete CT {vmid}", *at, "pve", "lxc", "delete", vmid, "--yes",
+                   "--force", "--purge", node=not at)
 
 
 # --- access / storage / node lifecycle --------------------------------------
@@ -2212,9 +2297,9 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
     if create.rc != 0:
         reason = _err_reason(create, "HA stack unavailable")
         for verb in ("ha resource create", "ha resource get",
-                     "ha resource set", "ha resource delete"):
+                     "ha resource set", "ha resource delete",
+                     "ha resource migrate", "ha resource relocate"):
             r.cover_skip(guest, verb, f"{verb} {sid}", reason)
-        r.cover_skip(guest, "ha resource migrate", f"ha resource migrate {sid}", reason)
         return
     print(f"  {GREEN('✓')} ha resource create {sid}")
     r.cov.append(Step(guest, "ha resource create", PASS))
@@ -2226,12 +2311,200 @@ def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
         r.step(guest, "ha resource set", f"ha resource set {sid}",
                "pve", "cluster", "ha", "resource", "set", sid, "--comment", "pmx-cli-e2e-upd")
         _ha_config_lifecycle(r, guest, sid)
-        if _node_count(r) < 2:
-            r.cover_skip(guest, "ha resource migrate", f"ha resource migrate {sid}",
-                         "needs a second node as the migration target")
+        _ha_move_lifecycle(r, guest, sid)
     finally:
         r.del_step(guest, "ha resource delete", f"ha resource delete {sid}",
                    "pve", "cluster", "ha", "resource", "delete", sid, "--yes", "--purge")
+
+
+def _clone_migrate_lifecycle(r: Runner, clone_id: str) -> None:
+    """Walk the throwaway VM clone across the cluster with each migration verb.
+
+    Three verbs move the same guest and each takes it one hop: the per-guest
+    `qemu migrate` out to the peer, the cluster-wide `cluster bulk migrate` back,
+    and the node-wide `node migrateall` out again. The bulk verbs default to
+    *every* guest, which on a shared lab would sweep up other people's workloads,
+    so both are pinned with --vmids to this one clone — the same guard the bulk
+    power verbs use. A final unrecorded hop brings the clone home, because the
+    teardown that deletes it addresses the suite's own node.
+    """
+    other = _other_node(r)
+    if not other:
+        why = "no second node in the cluster to migrate to"
+        r.cover_skip("qemu", "migrate", f"migrate clone {clone_id}", why)
+        r.cover_skip("cluster", "bulk migrate", "bulk migrate", why)
+        r.cover_skip("node", "migrateall", "migrateall", why)
+        return
+
+    markers = ("shared storage", "local disk", "not supported",
+               "cannot migrate", "no route")
+    blocked = "migration blocked by storage or network constraints"
+
+    # The clone is stopped, so every hop here is an offline migration: PVE moves
+    # a local disk across by itself and needs no --with-local-disks.
+    moved = r.soft_step(
+        "qemu", "migrate", f"migrate clone {clone_id} -> {other}",
+        "pve", "qemu", "migrate", clone_id, "--target-node", other,
+        skip_markers=markers, skip_reason=blocked)
+    if not moved:
+        r.cover_skip("cluster", "bulk migrate", "bulk migrate", blocked)
+        r.cover_skip("node", "migrateall", "migrateall", blocked)
+        return
+    if not _wait_guest_node(r, clone_id, other):
+        raise LifecycleError(f"migrate clone {clone_id}: never arrived on {other}")
+
+    if r.soft_step(
+            "cluster", "bulk migrate", f"bulk migrate --vmids {clone_id} -> {r.node}",
+            "pve", "cluster", "bulk", "migrate", "--vmids", clone_id,
+            "--target-node", r.node, "--yes",
+            skip_markers=markers, skip_reason=blocked):
+        if not _wait_guest_node(r, clone_id, r.node):
+            raise LifecycleError(f"bulk migrate clone {clone_id}: never returned to {r.node}")
+
+    # migrateall acts on the guests of the node it resolves, so it only has
+    # something to do while the clone is here.
+    if _guest_node(r, clone_id) != r.node:
+        r.cover_skip("node", "migrateall", "migrateall",
+                     f"clone {clone_id} is not on {r.node} to migrate off it")
+    elif r.soft_step(
+            "node", "migrateall", f"migrateall --vmids {clone_id} -> {other}",
+            # PVE rejects this endpoint outright unless a concurrency limit is
+            # given here or in datacenter.cfg; one worker is plenty for one guest.
+            "pve", "node", "migrateall", "--vmids", clone_id,
+            "--target-node", other, "--max-workers", "1", "--yes",
+            skip_markers=markers, skip_reason=blocked):
+        _wait_guest_node(r, clone_id, other)
+
+    if _guest_node(r, clone_id) != r.node:
+        # No --node of its own, so the migrate resolves the source from the
+        # cluster rather than assuming the clone is still here.
+        r.undo(f"migrate clone {clone_id} back to {r.node}",
+               "pve", "qemu", "migrate", clone_id, "--target-node", r.node, node=False)
+        _wait_guest_node(r, clone_id, r.node, timeout=120.0)
+
+
+def _guest_node(r: Runner, vmid: str) -> str:
+    """The node a guest currently runs on, as the cluster reports it, or ""."""
+    res = r.pmx("pve", "cluster", "resources", json_out=True, node=False)
+    if res.rc != 0:
+        return ""
+    try:
+        rows = res.json()
+    except ValueError:
+        return ""
+    if not isinstance(rows, list):
+        return ""
+    for row in rows:
+        if isinstance(row, dict) and str(row.get("vmid", "")) == str(vmid):
+            return str(row.get("node") or "")
+    return ""
+
+
+def _wait_guest_node(r: Runner, vmid: str, want: str, timeout: float = 180.0) -> bool:
+    """Block until the cluster reports `vmid` on node `want`.
+
+    An HA move is a request, not an action: the command returns as soon as the
+    manager has recorded it, and the CRM acts on its next round a few seconds
+    later. Anything that reads or writes the guest afterwards has to wait for it
+    to actually arrive.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _guest_node(r, vmid) == want:
+            return True
+        time.sleep(3)
+    return False
+
+
+def _ha_service(r: Runner, sid: str) -> tuple[str, str]:
+    """The (state, node) the HA manager currently records for `sid`."""
+    res = r.pmx("pve", "cluster", "ha", "status", "current", json_out=True, node=False)
+    if res.rc != 0:
+        return "", ""
+    try:
+        rows = res.json()
+    except ValueError:
+        return "", ""
+    if not isinstance(rows, list):
+        return "", ""
+    for row in rows:
+        if isinstance(row, dict) and row.get("type") == "service" and row.get("sid") == sid:
+            return str(row.get("state") or ""), str(row.get("node") or "")
+    return "", ""
+
+
+def _wait_ha_settled(r: Runner, sid: str, node: str = "", timeout: float = 180.0) -> bool:
+    """Block until the HA manager records `sid` as stopped, optionally on `node`.
+
+    Waiting on the guest's own power state is not enough: the guest stops first
+    and the manager records the service's new state on its next round, so a
+    command issued in between arrives while the service is still in
+    `request_stop` and is consumed without being acted on — the CRM logs that it
+    got the command and nothing moves. The manager's own view is the one that
+    decides whether the next command will be honoured.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        state, at = _ha_service(r, sid)
+        if state == "stopped" and (not node or at == node):
+            return True
+        time.sleep(3)
+    return False
+
+
+def _ha_move_lifecycle(r: Runner, guest: str, sid: str) -> None:
+    """Hand the HA resource to the other node with `migrate`, then bring it back
+    with `relocate`.
+
+    The two verbs are the HA manager's two ways of moving a resource — migrate
+    keeps a running guest running, relocate stops and restarts it on the target
+    — so driving one each way covers both and leaves the guest where it started.
+    That last part matters: the teardown after this addresses the suite's own
+    node, so a resource left on the peer would be stranded.
+    """
+    other = _other_node(r)
+    if not other:
+        for verb in ("ha resource migrate", "ha resource relocate"):
+            r.cover_skip(guest, verb, f"{verb} {sid}",
+                         "no second node in the cluster to move the resource to")
+        return
+
+    vmid = sid.split(":", 1)[-1]
+    markers = ("not a cluster member", "no such node", "no route", "not supported")
+
+    # Park the resource stopped and wait for the manager to say so, before asking
+    # for either move. Two things make that necessary. The CRM takes one command
+    # per round and consumes one that arrives while the service is still
+    # transitioning without acting on it — it logs that it got the command and
+    # nothing moves. And an HA move carries no --with-local-disks, so a *running*
+    # guest whose disk is on node-local storage cannot go anywhere; stopped, the
+    # move is an offline one and PVE copies the disk across itself. The state
+    # change is fixture, not a coverage target: `ha resource set` earns its own
+    # PASS above.
+    parked = r.pmx("pve", "cluster", "ha", "resource", "set", sid, "--state", "stopped")
+    if parked.rc != 0 or not _wait_ha_settled(r, sid, r.node):
+        for verb in ("ha resource migrate", "ha resource relocate"):
+            r.cover_skip(guest, verb, f"{verb} {sid}",
+                         "the HA manager never settled the resource in the stopped state, "
+                         "so a move would have to live-migrate a node-local disk")
+        return
+
+    moved = r.soft_step(
+        guest, "ha resource migrate", f"ha resource migrate {sid} -> {other}",
+        "pve", "cluster", "ha", "resource", "migrate", sid, "--target-node", other,
+        skip_markers=markers, skip_reason="HA manager rejected the migration target")
+    if moved:
+        if not _wait_guest_node(r, vmid, other):
+            raise LifecycleError(f"ha resource migrate {sid}: guest never arrived on {other}")
+        if not _wait_ha_settled(r, sid, other):
+            raise LifecycleError(f"ha resource migrate {sid}: manager never settled it on {other}")
+
+    back = r.soft_step(
+        guest, "ha resource relocate", f"ha resource relocate {sid} -> {r.node}",
+        "pve", "cluster", "ha", "resource", "relocate", sid, "--target-node", r.node,
+        skip_markers=markers, skip_reason="HA manager rejected the relocation target")
+    if back and not _wait_guest_node(r, vmid, r.node):
+        raise LifecycleError(f"ha resource relocate {sid}: guest never returned to {r.node}")
 
 
 def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
@@ -3337,6 +3610,63 @@ def node_disks_lifecycle(r: Runner) -> None:
         print(DIM(f"  spare {dev} restored to unused state"))
 
 
+def _residue(r: Runner) -> list[str]:
+    """Anything carrying the isolation prefix that outlived the teardown.
+
+    The suite's own teardown is deliberately forgiving — a cleanup step that
+    finds its resource already gone records a skip and moves on — which means a
+    delete that failed for a *real* reason can pass unnoticed. This is the check
+    that closes that gap: it runs after teardown, names whatever is left, and
+    fails the run. Without it a run that stranded two migrated clones on the
+    peer node still reported PASSED.
+    """
+    left: list[str] = []
+    for kind, vmid, node in _sweep_stale(r):
+        left.append(f"{kind} {vmid} on {node or 'unknown node'}")
+
+    pools = r.pmx("pve", "pool", "list", json_out=True, node=False)
+    if pools.rc == 0:
+        try:
+            rows = pools.json()
+        except ValueError:
+            rows = []
+        left += [f"pool {row['poolid']}" for row in rows
+                 if isinstance(row, dict) and str(row.get("poolid", "")) == Isolation.POOL]
+
+    # Storage ids the suite creates come in two spellings — "pmx-cli-move" for
+    # the ones PVE lets us punctuate, "pmxcli-repl" for the ones it does not.
+    # Matching on both keeps a shared lab's `tank-lab-pmx` out of the result,
+    # which merely contains the token.
+    stores = r.pmx("pve", "storage", "list", json_out=True, node=False)
+    if stores.rc == 0:
+        try:
+            rows = stores.json()
+        except ValueError:
+            rows = []
+        left += [f"storage {row['storage']}" for row in rows
+                 if isinstance(row, dict)
+                 and str(row.get("storage", "")).startswith(
+                     (Isolation.NAME_PREFIX, Isolation.SDN_ZONE))]
+
+    for obj, key in (("zone", "zone"), ("vnet", "vnet")):
+        res = r.pmx("pve", "sdn", obj, "list", json_out=True, node=False)
+        if res.rc != 0:
+            continue
+        try:
+            rows = res.json()
+        except ValueError:
+            continue
+        left += [f"sdn {obj} {row[key]}" for row in rows
+                 if isinstance(row, dict)
+                 and str(row.get(key, "")).startswith(Isolation.SDN_ZONE)]
+
+    if left:
+        print(RED("lifecycle: isolation residue left behind after teardown:"))
+        for item in left:
+            print(RED(f"  - {item}"))
+    return left
+
+
 # --- coverage report --------------------------------------------------------
 
 
@@ -3492,6 +3822,68 @@ def node_firewall_lifecycle(r: Runner) -> None:
         if created_pos is not None:
             r.del_step("node", "firewall rules delete", f"firewall rules delete {created_pos}",
                        "pve", "node", "firewall", "rules", "delete", created_pos, "--yes")
+
+
+# A locally-administered MAC that belongs to no real interface. The wake-on-LAN
+# verb only has to be accepted and sent; addressing a MAC nothing answers to
+# means the magic packet cannot wake a machine that was meant to stay down.
+_WOL_MAC = "02:00:00:00:00:01"
+
+
+def node_config_lifecycle(r: Runner) -> None:
+    """Round-trip the node config verbs, including a real wake-on-LAN send.
+
+    Two writes, both restored: a description on this node, read back through
+    `config get` to prove it landed, and a wake-on-LAN MAC on the *peer* — the
+    API refuses to wake the node serving the request, so the only way to send a
+    packet is to address the other one. The MAC is deliberately fictional, so
+    the packet reaches nothing.
+    """
+    print(BOLD("node: config description + wake-on-LAN (reversible)"))
+    desc = Isolation.NAME_PREFIX + "e2e"
+    original = ""
+    cfg = r.pmx("pve", "node", "config", "get", json_out=True)
+    if cfg.rc == 0:
+        try:
+            data = cfg.json()
+            if isinstance(data, dict):
+                original = str(data.get("description") or "")
+        except ValueError:
+            original = ""
+    try:
+        r.step("node", "config set", f"config set description on {r.node}",
+               "pve", "node", "config", "set", "--description", desc)
+        got = r.pmx("pve", "node", "config", "get", json_out=True)
+        if desc not in got.out:
+            raise LifecycleError(f"node config set: description {desc!r} not reflected in config get")
+    finally:
+        if original:
+            r.undo("restore node description",
+                   "pve", "node", "config", "set", "--description", original)
+        else:
+            r.undo("clear node description",
+                   "pve", "node", "config", "set", "--delete", "description")
+
+    peer = _other_node(r)
+    if not peer:
+        r.cover_skip("node", "wakeonlan", "wakeonlan",
+                     "the API refuses to wake the node serving the request, and this "
+                     "cluster has no other node to address")
+        return
+    set_wol = r.pmx("--node", peer, "pve", "node", "config", "set",
+                    "--wakeonlan", f"mac={_WOL_MAC}", node=False)
+    if set_wol.rc != 0:
+        r.cover_skip("node", "wakeonlan", "wakeonlan",
+                     f"could not stage a wake-on-LAN MAC on {peer}: "
+                     f"{_one_line(set_wol.reason, 'config set failed', limit=80)}")
+        return
+    try:
+        r.step("node", "wakeonlan", f"wakeonlan {peer}",
+               "--node", peer, "pve", "node", "wakeonlan", "--yes", node=False)
+    finally:
+        r.undo(f"clear wake-on-LAN MAC on {peer}",
+               "--node", peer, "pve", "node", "config", "set",
+               "--delete", "wakeonlan", node=False)
 
 
 def node_system_lifecycle(r: Runner) -> None:
@@ -3725,39 +4117,201 @@ def cluster_options_lifecycle(r: Runner) -> None:
                        "pve", "cluster", "options", "set", "--delete", "description")
 
 
-def cluster_replication_lifecycle(r: Runner) -> None:
-    """Exercise storage replication.
+# Storage replication fixture. PVE replicates ZFS datasets and nothing else, so
+# the verbs need a zfspool storage of the same name on two nodes — something no
+# lab is obliged to have. `_REPL_VDEV` is a sparse file the suite stages on each
+# node over root SSH and destroys again; a pool built on it is indistinguishable
+# from a pool on a disk as far as every API path here is concerned, and it
+# borrows no space from the lab's real storage.
+_REPL_POOL = "pmxclirepl"
+_REPL_VDEV = "/var/lib/pmx-cli-repl.img"
+_REPL_STORAGE = "pmxcli-repl"
+_REPL_VDEV_SIZE = "2G"
+# Replication verbs live in two places: the cluster-wide job CRUD and the
+# node-scoped view of a job's progress. Both are driven off the one job below.
+_REPL_CLUSTER_VERBS = ("replication create", "replication get", "replication set",
+                       "replication delete")
+_REPL_NODE_VERBS = ("replication list", "replication get", "replication status",
+                    "replication log", "replication run")
 
-    The job list is read live (always safe). Replication targets a *second* node,
-    so on the single-node lab the create/set/delete verbs cannot run — they are
-    recorded as coverage skips with the environment reason, mirroring the HA
-    migrate single-node pattern. On a multi-node cluster a job would be created
-    against the isolated guest in the guest lifecycle.
+
+def _node_addresses(r: Runner) -> dict[str, str]:
+    """Map each cluster node name to the address corosync knows it by."""
+    res = r.pmx("pve", "cluster", "status", json_out=True, node=False)
+    if res.rc != 0:
+        return {}
+    try:
+        rows = res.json()
+    except ValueError:
+        return {}
+    if not isinstance(rows, list):
+        return {}
+    return {str(row.get("name")): str(row.get("ip"))
+            for row in rows
+            if isinstance(row, dict) and row.get("type") == "node"
+            and row.get("name") and row.get("ip")}
+
+
+def _repl_pool_create(host: str) -> str:
+    """Build the throwaway ZFS pool on one node. Returns "" on success, else why.
+
+    The pool is created with `-f` on a freshly truncated file and mounted out of
+    the way under /mnt: PVE only ever addresses it by pool name, so where it
+    mounts does not matter, and keeping it off / avoids colliding with anything.
     """
-    print(BOLD("cluster: storage replication job"))
+    rc, out, err = _ssh_node(
+        host,
+        f"modprobe zfs 2>&1 && "
+        f"rm -f {_REPL_VDEV} && truncate -s {_REPL_VDEV_SIZE} {_REPL_VDEV} && "
+        f"zpool create -f -m /mnt/{_REPL_POOL} {_REPL_POOL} {_REPL_VDEV} 2>&1",
+        timeout=60)
+    if rc != 0:
+        return _one_line(err or out, f"zpool create exited {rc}", limit=120)
+    return ""
+
+
+def _repl_pool_destroy(host: str) -> None:
+    """Remove the throwaway pool and its backing file. Idempotent, never raises."""
+    _ssh_node(host, f"zpool destroy -f {_REPL_POOL} 2>/dev/null; "
+                    f"rm -f {_REPL_VDEV}; true", timeout=60)
+
+
+def cluster_replication_lifecycle(r: Runner) -> None:
+    """Drive a storage replication job end to end across two nodes.
+
+    Replication is ZFS-only and needs the target storage present on both the
+    source and the target node, so the block stages a throwaway zpool on each
+    (see `_REPL_VDEV`), declares it to PVE as a two-node zfspool storage, and
+    puts a single-purpose VM's disk on it. That job then covers both halves of
+    the verb surface: the cluster-wide create/get/set/delete, and the node-scoped
+    list/get/status/log plus an actual `run` — a real sync of a 2G empty dataset
+    between two lab nodes, which is the only way to prove the job works rather
+    than merely parses.
+
+    Everything is removed in reverse order in the finally block. On a single-node
+    cluster, or when the pool cannot be staged, every verb is recorded as a skip
+    naming what was missing.
+    """
+    print(BOLD("cluster: storage replication (throwaway ZFS pair across two nodes)"))
 
     r.step("cluster", "replication list", "replication list",
            "pve", "cluster", "replication", "list", json_out=True)
 
-    if _node_count(r) < 2:
-        reason = "replication needs a second node as the target — single-node lab"
-        r.cover_skip("cluster", "replication create", "replication create", reason)
-        r.cover_skip("cluster", "replication get", "replication get", reason)
-        r.cover_skip("cluster", "replication set", "replication set", reason)
-        r.cover_skip("cluster", "replication delete", "replication delete", reason)
+    def skip_all(why: str) -> None:
+        for verb in _REPL_CLUSTER_VERBS:
+            r.cover_skip("cluster", verb, verb, why)
+        for verb in _REPL_NODE_VERBS:
+            r.cover_skip("node", verb, "node " + verb, why)
+
+    other = _other_node(r)
+    if not other:
+        skip_all("replication needs a second node as the target — single-node lab")
         return
 
-    # Multi-node cluster: replication still requires an existing guest, which is
-    # provisioned by the guest lifecycle; a standalone job has no guest to bind
-    # to, so record the gap honestly rather than create an orphaned job.
-    r.cover_skip("cluster", "replication create", "replication create",
-                 "no isolated guest available in the cluster-scoped block")
-    r.cover_skip("cluster", "replication get", "replication get",
-                 "no isolated guest available in the cluster-scoped block")
-    r.cover_skip("cluster", "replication set", "replication set",
-                 "no isolated guest available in the cluster-scoped block")
-    r.cover_skip("cluster", "replication delete", "replication delete",
-                 "no isolated guest available in the cluster-scoped block")
+    addrs = _node_addresses(r)
+    src_host, dst_host = addrs.get(r.node, ""), addrs.get(other, "")
+    if not src_host or not dst_host:
+        skip_all("could not resolve both node addresses for the ZFS fixture")
+        return
+    for host in (src_host, dst_host):
+        if _ssh_node(host, "true")[0] != 0:
+            skip_all(f"node {host} not reachable over root SSH to stage the ZFS pool")
+            return
+
+    # Clear anything a crashed earlier run left behind before building.
+    for host in (src_host, dst_host):
+        _repl_pool_destroy(host)
+    staged: list[str] = []
+    try:
+        for host in (src_host, dst_host):
+            why = _repl_pool_create(host)
+            if why:
+                skip_all(f"could not stage the ZFS pool on {host}: {why}")
+                return
+            staged.append(host)
+        print(DIM(f"  zpool {_REPL_POOL} staged on {r.node} and {other}"))
+        _repl_job_lifecycle(r, other)
+    finally:
+        for host in staged:
+            _repl_pool_destroy(host)
+        print(DIM(f"  zpool {_REPL_POOL} removed from both nodes"))
+
+
+def _repl_job_lifecycle(r: Runner, other: str) -> None:
+    """Declare the staged pool to PVE, park a VM on it, and drive the job verbs.
+
+    Split out from the pool staging so the finally blocks nest in the order the
+    resources depend on each other: job, then guest, then storage, with the pool
+    itself torn down by the caller.
+    """
+    # Storage create/delete are fixture here — they earn their coverage against a
+    # dir storage in storage_lifecycle — so neither call is recorded twice.
+    decl = r.pmx("pve", "storage", "create", "--storage", _REPL_STORAGE, "--type", "zfspool",
+                 "--pool", _REPL_POOL, "--nodes", f"{r.node},{other}",
+                 "--content", "images,rootdir", node=False)
+    if decl.rc != 0:
+        raise LifecycleError(
+            f"create zfspool storage {_REPL_STORAGE}: {_one_line(decl.reason, 'failed', limit=200)}")
+    print(f"  {GREEN('✓')} zfspool storage {_REPL_STORAGE} on {r.node},{other}")
+    try:
+        # The guest here is fixture, not subject: qemu create/delete earn their
+        # coverage in vm_lifecycle, so these two calls stay out of the report and
+        # simply have to work.
+        vmid = _next_id(r)
+        made = r.pmx("pve", "qemu", "create", vmid,
+                     "--name", Isolation.NAME_PREFIX + "repl",
+                     "--memory", "512", "--cores", "1",
+                     "--scsi0", f"{_REPL_STORAGE}:1",
+                     "--pool", Isolation.POOL, "--tags", Isolation.TAG)
+        if made.rc != 0:
+            raise LifecycleError(
+                f"create replication VM {vmid}: {_one_line(made.reason, 'failed', limit=200)}")
+        print(f"  {GREEN('✓')} replication VM {vmid} on {_REPL_STORAGE}")
+        try:
+            _repl_verbs(r, other, vmid)
+        finally:
+            r.undo(f"delete replication VM {vmid}",
+                   "pve", "qemu", "delete", vmid, "--yes",
+                   "--purge", "--destroy-unreferenced-disks")
+    finally:
+        r.undo(f"delete storage {_REPL_STORAGE}",
+               "pve", "storage", "delete", _REPL_STORAGE, "--yes", node=False)
+
+
+def _repl_verbs(r: Runner, other: str, vmid: str) -> None:
+    """The replication verbs themselves, against job `<vmid>-0`."""
+    job = f"{vmid}-0"
+    r.step("cluster", "replication create", f"replication create {job} -> {other}",
+           "pve", "cluster", "replication", "create",
+           "--id", job, "--target-node", other,
+           "--schedule", "*/15", "--comment", "pmx-cli-e2e", node=False)
+    try:
+        r.step("cluster", "replication get", f"replication get {job}",
+               "pve", "cluster", "replication", "get", job, json_out=True, node=False)
+        r.step("cluster", "replication set", f"replication set {job}",
+               "pve", "cluster", "replication", "set", job,
+               "--schedule", "*/30", "--rate", "10", node=False)
+
+        # The node-scoped side of the same job. `run` performs the sync, so the
+        # status and log reads that follow it describe a job that has actually
+        # transferred something rather than one that has never fired.
+        r.step("node", "replication list", f"node replication list on {r.node}",
+               "pve", "node", "replication", "list", json_out=True)
+        r.step("node", "replication get", f"node replication get {job}",
+               "pve", "node", "replication", "get", job, json_out=True)
+        r.step("node", "replication run", f"node replication run {job}",
+               "pve", "node", "replication", "run", job, "--yes")
+        r.step("node", "replication status", f"node replication status {job}",
+               "pve", "node", "replication", "status", job, json_out=True)
+        r.step("node", "replication log", f"node replication log {job}",
+               "pve", "node", "replication", "log", job, json_out=True)
+    finally:
+        # `--force` removes the job without waiting for the scheduled cleanup
+        # pass to clear the replicated dataset on the target; the pool it landed
+        # in is destroyed moments later either way.
+        r.del_step("cluster", "replication delete", f"replication delete {job}",
+                   "pve", "cluster", "replication", "delete", job, "--yes", "--force",
+                   node=False)
 
 
 def cluster_firewall_lifecycle(r: Runner) -> None:
@@ -4704,6 +5258,10 @@ def storage_transfer_lifecycle(r: Runner) -> None:
 
 def run(context: str, binary: str | None, build: bool, strict: bool,
         skip_ct: bool, skip_vm: bool) -> int:
+    # Line-buffer stdout: redirected to a file or a CI log it is otherwise
+    # block-buffered, so a run that stalls on a slow step appears to be stuck
+    # several steps earlier — whichever one last filled a 4K block.
+    sys.stdout.reconfigure(line_buffering=True)
     bin_path = find_binary(binary, build=build)
     ok, why = target_configured(bin_path, context)
     if not ok:
@@ -4773,6 +5331,8 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
         print()
         node_system_lifecycle(r)
         print()
+        node_config_lifecycle(r)
+        print()
         cluster_options_lifecycle(r)
         print()
         cluster_replication_lifecycle(r)
@@ -4837,6 +5397,8 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
     _print_coverage(r)
     # A recorded FAIL means a mutating verb did not behave; surface it.
     if any(s.status == FAIL for s in r.cov):
+        failed = True
+    if _residue(r):
         failed = True
 
     dur = time.monotonic() - started

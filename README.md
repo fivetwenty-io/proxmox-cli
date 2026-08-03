@@ -1204,10 +1204,32 @@ what to change rather than reading as a pass. What each one needs:
 
   working CRIU support on the host.
 
-- qemu `migrate`, lxc `migrate`, `replication`, HA `relocate`
+- qemu `migrate`, lxc `migrate`, `bulk migrate`, `migrateall`, HA
+  `migrate`/`relocate`, `wakeonlan`
 
-  a second cluster node to accept the guest. A single-node lab cannot cover
-  them; scale the lab to two nodes to unlock them.
+  a second cluster node to accept the guest, or in `wakeonlan`'s case simply to
+  address — the API refuses to wake the node serving the request. The bulk verbs
+  are always pinned with `--vmids` to the run's own throwaway clone, so they
+  never sweep up another workload. A single-node lab records all of them as
+  skips; scale the lab to two nodes to unlock them.
+
+- `replication` (cluster CRUD and the node-scoped `run`/`status`/`log`)
+
+  two nodes plus a ZFS storage of the same name on both, which no lab is obliged
+  to have. The run stages its own: a sparse file per node under `/var/lib`, a
+  zpool on top, and a two-node `zfspool` storage that a single-purpose VM's disk
+  lands on. All of it is destroyed at teardown. Staging needs passwordless root
+  SSH to both nodes; without it the verbs skip.
+
+- `node network apply`
+
+  the isolated SDN vnet exists only in each node's config until that node
+  reloads its host network, so the run reloads every node after `sdn apply` and
+  again at teardown. A reload commits *all* staged interface changes on that
+  node, so a node holding edits the run did not make is skipped and its bridge
+  simply stays absent. Every node also needs `dnsmasq` installed (PVE's SDN DHCP
+  plugin refuses to reload without it) — the default instance should be disabled,
+  as PVE's own SDN setup requires.
 
 - `node disks` create/delete/init-gpt
 
