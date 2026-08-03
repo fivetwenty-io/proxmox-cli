@@ -38,11 +38,20 @@ scripts/stack init      # write a commented config/stack.toml, then edit it
 scripts/stack up        # idempotent: converges guests, tokens, contexts
 scripts/stack status    # per-product state at a glance
 scripts/stack e2e       # full sweep with --pbs-context/--pdm-context wired in
+scripts/stack mutate    # each product's destructive suite against its context
 scripts/stack down      # destroy the guests, remove the contexts
 ```
 
+`stack e2e` is read-only; `stack mutate` is the destructive counterpart, running
+`scripts/pbs-lifecycle` and `scripts/pdm-lifecycle` against whichever products
+are enabled. Both suites confine themselves to objects named with the `pmx-cli-`
+prefix and tear them down again, so they are safe to run repeatedly against a
+standing stack. Each also needs passwordless root SSH to its appliance for the
+fixtures it stages (a backup snapshot on PBS, a throwaway LDAP responder on
+both); without it those verbs are recorded as skips and the rest still runs.
+
 Make targets wrap the same verbs: `make stack-up`, `make stack-down`,
-`make stack-status`, and `make test-e2e-stack`.
+`make stack-status`, `make test-e2e-stack`, and `make test-mutate-stack`.
 
 `scripts/stack env` prints `PMX_E2E_PBS_CONTEXT` / `PMX_E2E_PDM_CONTEXT`
 exports for running `scripts/e2e` directly:

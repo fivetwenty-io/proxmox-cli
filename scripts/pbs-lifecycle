@@ -1,0 +1,58 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Destructive lifecycle suite for a Proxmox Backup Server.
+
+Creates a scratch datastore of its own and drives every mutating PBS verb
+against it — datastore, gc/prune/verify (ad-hoc and scheduled), remote and
+sync, users, tokens, ACLs, realms, notification endpoints, metric servers,
+the ACME challenge plugin, the tape configuration surface, and the host-level
+node verbs that cannot take the appliance off the network. Everything created
+carries the `pmx-cli-` prefix; teardown always runs and is idempotent, so a
+crashed prior run is swept clean before the next provisions.
+
+Usage:
+  scripts/pbs-lifecycle                      # against `pbs-e2e`
+  scripts/pbs-lifecycle --context lab-pbs
+  scripts/pbs-lifecycle --strict             # fail (not skip) if unconfigured
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from e2e_lib import pbs_lifecycle  # noqa: E402
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="pbs-lifecycle",
+        description="Destructive PBS lifecycle suite (scratch datastore, prefixed objects).",
+    )
+    parser.add_argument("--context", "-c",
+                        default=os.environ.get("PMX_E2E_PBS_CONTEXT", "pbs-e2e"),
+                        help="configured `product: pbs` context name "
+                             "(default: pbs-e2e, or $PMX_E2E_PBS_CONTEXT)")
+    parser.add_argument("--binary", help="path to the pmx binary (default: ./dist/pmx)")
+    parser.add_argument("--no-build", action="store_true",
+                        help="do not auto-build the binary if ./dist/pmx is missing")
+    parser.add_argument("--strict", action="store_true",
+                        help="exit non-zero if the context is not usable (default: skip)")
+    args = parser.parse_args()
+
+    sys.exit(pbs_lifecycle.run(
+        context=args.context,
+        binary=args.binary,
+        build=not args.no_build,
+        strict=args.strict,
+    ))
+
+
+if __name__ == "__main__":
+    main()

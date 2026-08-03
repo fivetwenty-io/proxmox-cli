@@ -207,6 +207,14 @@ test-e2e-mutate: ## Run the e2e sweep plus the destructive qemu/lxc verb matrix 
 test-lifecycle: ## Run destructive VM+CT lifecycle on an isolated SDN/pool (CONTEXT=lab-pmx)
 	$(SCRIPTS)/lifecycle $(if $(CONTEXT),--context $(CONTEXT),) $(LIFECYCLE_ARGS)
 
+.PHONY: test-pbs-lifecycle
+test-pbs-lifecycle: ## Run the destructive PBS verb matrix on a scratch datastore (PBS_CONTEXT=pbs-e2e)
+	$(SCRIPTS)/pbs-lifecycle $(if $(PBS_CONTEXT),--context $(PBS_CONTEXT),)
+
+.PHONY: test-pdm-lifecycle
+test-pdm-lifecycle: ## Run the destructive PDM verb matrix on the manager itself (PDM_CONTEXT=pdm-e2e)
+	$(SCRIPTS)/pdm-lifecycle $(if $(PDM_CONTEXT),--context $(PDM_CONTEXT),)
+
 .PHONY: stack-up
 stack-up: ## Provision the nested PBS+PDM(+PVE) e2e stack on the lab (config/stack.toml)
 	$(SCRIPTS)/stack up
@@ -222,6 +230,10 @@ stack-status: ## Show nested e2e stack state (guests, contexts)
 .PHONY: test-e2e-stack
 test-e2e-stack: ## Run the full e2e sweep with the stack's PBS/PDM contexts wired in
 	$(SCRIPTS)/stack e2e
+
+.PHONY: test-mutate-stack
+test-mutate-stack: ## Run the PBS and PDM destructive suites against the stack's contexts
+	$(SCRIPTS)/stack mutate
 
 .PHONY: test-race
 test-race: ## Run unit tests with race detector

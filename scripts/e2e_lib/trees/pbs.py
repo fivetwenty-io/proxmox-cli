@@ -58,7 +58,7 @@ def _rows(res: CmdResult) -> list:
 
 
 def _tail(res: CmdResult) -> str:
-    return (res.stderr.strip() or res.stdout.strip())[:80]
+    return res.reason("command failed", limit=80)
 
 
 def is_list(res: CmdResult) -> str | None:
@@ -632,12 +632,19 @@ def _tape(ctx: Ctx) -> None:
 # --------------------------------------------------------------------------- #
 def _defers(ctx: Ctx) -> None:
     # raw write passthrough (shared root "api" command, not nested under "pbs")
-    ctx.defer("api post", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pmx api post /pull --data store=main")
-    ctx.defer("api put", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pmx api put /config/datastore/main --data gc-schedule=daily")
-    ctx.defer("api delete", "raw write passthrough against the live PBS API — not automatable safely; covered by unit tests",
-              "pmx api delete /config/datastore/pmx-cli-ds")
+    # The raw write verbs are shared with the other products (the `api` command
+    # sits at the root, not under `pbs`), and the PVE mutate phase drives all
+    # three against a throwaway resource pool — so they are covered live, just
+    # not from here.
+    ctx.defer("api post", "raw write passthrough; driven live by the PVE mutate phase "
+                          "against a throwaway pool",
+              "pmx api post /pull --data store=main", live_covered=True)
+    ctx.defer("api put", "raw write passthrough; driven live by the PVE mutate phase "
+                         "against a throwaway pool",
+              "pmx api put /config/datastore/main --data gc-schedule=daily", live_covered=True)
+    ctx.defer("api delete", "raw write passthrough; driven live by the PVE mutate phase "
+                            "against a throwaway pool",
+              "pmx api delete /config/datastore/pmx-cli-ds", live_covered=True)
 
     # datastore + data-touching tasks
     ctx.defer("datastore create", "creates a datastore (allocates a chunk store on disk); covered by unit tests",

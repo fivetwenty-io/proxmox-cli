@@ -1,0 +1,59 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Destructive lifecycle suite for a Proxmox Datacenter Manager.
+
+Drives every mutating PDM verb that acts on the manager itself — users, tokens,
+ACLs, realms, dashboard views, WebAuthn and certificate configuration, the ACME
+challenge plugin, remotes, the subscription key pool and its pending-change
+queue, automated-installation answers and tokens, and the host-level node verbs
+that cannot take the appliance off the network. Verbs that would write *through*
+a managed remote onto somebody else's cluster are recorded as skips naming what
+they would do. Everything created carries the `pmx-cli-` prefix; teardown always
+runs and is idempotent.
+
+Usage:
+  scripts/pdm-lifecycle                      # against `pdm-e2e`
+  scripts/pdm-lifecycle --context lab-pdm
+  scripts/pdm-lifecycle --strict             # fail (not skip) if unconfigured
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from e2e_lib import pdm_lifecycle  # noqa: E402
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="pdm-lifecycle",
+        description="Destructive PDM lifecycle suite (prefixed objects, no remote writes).",
+    )
+    parser.add_argument("--context", "-c",
+                        default=os.environ.get("PMX_E2E_PDM_CONTEXT", "pdm-e2e"),
+                        help="configured `product: pdm` context name "
+                             "(default: pdm-e2e, or $PMX_E2E_PDM_CONTEXT)")
+    parser.add_argument("--binary", help="path to the pmx binary (default: ./dist/pmx)")
+    parser.add_argument("--no-build", action="store_true",
+                        help="do not auto-build the binary if ./dist/pmx is missing")
+    parser.add_argument("--strict", action="store_true",
+                        help="exit non-zero if the context is not usable (default: skip)")
+    args = parser.parse_args()
+
+    sys.exit(pdm_lifecycle.run(
+        context=args.context,
+        binary=args.binary,
+        build=not args.no_build,
+        strict=args.strict,
+    ))
+
+
+if __name__ == "__main__":
+    main()

@@ -21,6 +21,7 @@ Usage:
   scripts/stack status    # show guest, install, and context state per product
   scripts/stack env       # print PMX_E2E_*_CONTEXT exports for the sweep
   scripts/stack e2e       # run scripts/e2e with the stack contexts wired in
+  scripts/stack mutate    # run the PBS/PDM destructive suites against the stack
   scripts/stack down      # destroy guests and remove contexts
 
 The guests are addressed by static IPs from the config (no guest-agent
@@ -733,6 +734,29 @@ def cmd_e2e(args: argparse.Namespace) -> int:
     return subprocess.run(argv, cwd=repo_root()).returncode
 
 
+def cmd_mutate(args: argparse.Namespace) -> int:
+    """Run each enabled product's destructive suite against its stack context.
+
+    Every suite is run even if an earlier one failed — a PBS failure says
+    nothing about PDM, and stopping at the first would hide the second's
+    result. The exit code is the worst of them.
+    """
+    cfg = load_config()
+    rc = 0
+    for product, script in (("pbs", "pbs-lifecycle"), ("pdm", "pdm-lifecycle")):
+        p = cfg.get("products", {}).get(product, {})
+        if not p.get("enabled"):
+            continue
+        argv = [os.path.join(repo_root(), "scripts", script),
+                "--context", p["context"], *args.rest]
+        print(DIM(f"stack: exec {' '.join(argv)}"))
+        rc = max(rc, subprocess.run(argv, cwd=repo_root()).returncode)
+    if rc == 0 and not any(cfg.get("products", {}).get(k, {}).get("enabled")
+                           for k in ("pbs", "pdm")):
+        print("stack: no pbs/pdm product enabled in config/stack.toml — nothing to run")
+    return rc
+
+
 def main() -> int:
     if not shutil.which("ssh"):
         die("ssh not found in PATH")
@@ -747,6 +771,10 @@ def main() -> int:
     sub.add_parser("env", help="print PMX_E2E_*_CONTEXT exports").set_defaults(fn=cmd_env)
     p_e2e = sub.add_parser("e2e", help="run scripts/e2e with stack contexts wired in")
     p_e2e.add_argument("rest", nargs="*", help="extra args passed through to scripts/e2e")
+    p_mut = sub.add_parser("mutate",
+                           help="run each enabled product's destructive suite against its stack context")
+    p_mut.add_argument("rest", nargs="*", help="extra args passed through to each suite")
+    p_mut.set_defaults(fn=cmd_mutate)
     p_e2e.set_defaults(fn=cmd_e2e)
     args = parser.parse_args()
     return args.fn(args)
