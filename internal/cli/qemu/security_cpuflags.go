@@ -103,6 +103,12 @@ func levenshtein(a, b string) int {
 	return prev[lb]
 }
 
+// defaultCPUType is the cputype PVE falls back to when cpu= is unset on an
+// x86_64 guest with KVM enabled (PVE::QemuServer::CPUConfig::get_default_cpu_type).
+// Writing flags without a cputype is a parameter error, so this is what gets
+// spelled out when a VM has no cpu= of its own yet.
+const defaultCPUType = "kvm64"
+
 // splitFlagTokens splits a cpu= flags= sub-value ("+aes;-pcid") into its
 // individual ;-separated tokens, dropping empty segments.
 func splitFlagTokens(v string) []string {
@@ -353,7 +359,18 @@ func newSecurityCpuFlagsSetCmd() *cobra.Command {
 				}
 				msg = fmt.Sprintf("VM %s CPU flags updated (%s).", vmid, strings.Join(parts, " "))
 				if !hasCPU {
-					msg += " No cpu= was previously set; cputype is left to the PVE default (kvm64)."
+					msg += fmt.Sprintf(" No cpu= was previously set; cputype is written out as the"+
+						" PVE default (%s).", defaultCPUType)
+				}
+			}
+
+			// PVE rejects a cpu= property string that carries sub-keys but no
+			// cputype ("invalid format - CPU is missing cputype"), so a VM that
+			// never had cpu= set needs the schema default spelled out next to
+			// the flags rather than left implicit.
+			if len(list) > 0 {
+				if _, ok := list.Get("cputype"); !ok {
+					list = append(propstr.List{{Key: "cputype", Value: defaultCPUType, Bare: true}}, list...)
 				}
 			}
 

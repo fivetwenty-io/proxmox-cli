@@ -64,7 +64,10 @@ func TestSecurityCpuFlagsSet_ClearRemovesOnlyFlagsPair(t *testing.T) {
 	require.Equal(t, "host,hidden=1", parseForm(t, body).Get("cpu"))
 }
 
-func TestSecurityCpuFlagsSet_NoCPUKeyComposesFlagsOnly(t *testing.T) {
+// TestSecurityCpuFlagsSet_NoCPUKeyAddsDefaultCputype covers a VM whose config
+// carries no cpu= at all: the composed property string must name a cputype
+// alongside the flags, or PVE rejects it outright.
+func TestSecurityCpuFlagsSet_NoCPUKeyAddsDefaultCputype(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, map[string]any{})
@@ -79,7 +82,9 @@ func TestSecurityCpuFlagsSet_NoCPUKeyComposesFlagsOnly(t *testing.T) {
 	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "security", "cpu-flags", "set", "100", "--enable", "aes"))
-	require.Equal(t, "flags=+aes", parseForm(t, body).Get("cpu"))
+	// A VM with no cpu= of its own still needs an explicit cputype: PVE rejects
+	// "flags=+aes" alone with "invalid format - CPU is missing cputype".
+	require.Equal(t, "kvm64,flags=+aes", parseForm(t, body).Get("cpu"))
 }
 
 // TestSecurityCpuFlagsSet_MitigationDisableGate is a regression pillar for the
@@ -116,7 +121,7 @@ func TestSecurityCpuFlagsSet_DuplicateNamesDeduped(t *testing.T) {
 	require.NoError(t, run(deps, &buf, "security", "cpu-flags", "set", "100",
 		"--enable", "spec-ctrl,spec-ctrl", "--disable", "pcid,pcid"))
 
-	require.Equal(t, "flags=+spec-ctrl;-pcid", parseForm(t, body).Get("cpu"))
+	require.Equal(t, "kvm64,flags=+spec-ctrl;-pcid", parseForm(t, body).Get("cpu"))
 	out := buf.String()
 	require.Equal(t, 1, strings.Count(out, "+spec-ctrl"), "message must list the flag once")
 	require.Equal(t, 1, strings.Count(out, "-pcid"), "message must list the flag once")
