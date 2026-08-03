@@ -3,6 +3,7 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +13,19 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
+// haGroupErr wraps an HA-group API failure, adding the migration hint when the
+// server is Proxmox VE 9 or newer. There, HA groups were replaced by HA rules
+// and every /cluster/ha/groups endpoint — the read ones included — refuses the
+// request with "ha groups have been migrated to rules", which on its own leaves
+// the caller no idea what to run instead.
+func haGroupErr(action string, err error) error {
+	if strings.Contains(err.Error(), "migrated to rules") {
+		return fmt.Errorf("%s: HA groups were removed in Proxmox VE 9 and replaced by HA rules; "+
+			"use `pmx pve cluster ha rule` with --type node-affinity instead: %w", action, err)
+	}
+	return fmt.Errorf("%s: %w", action, err)
+}
+
 // newHaGroupCmd builds the `pmx pve cluster ha group` sub-tree: HA group management.
 // A group pins HA resources to a preferred set of nodes with optional priorities.
 func newHaGroupCmd() *cobra.Command {
@@ -20,7 +34,11 @@ func newHaGroupCmd() *cobra.Command {
 		Aliases: []string{"groups"},
 		Short:   "Manage HA groups",
 		Long: "List, create, inspect, update, and delete HA groups. A group binds HA resources to a " +
-			"preferred set of nodes (with optional priorities) and controls failback behavior.",
+			"preferred set of nodes (with optional priorities) and controls failback behavior.\n\n" +
+			"Proxmox VE 9 removed HA groups in favour of HA rules: against a PVE 9 server every " +
+			"command here fails with \"ha groups have been migrated to rules\". Use " +
+			"`pmx pve cluster ha rule` with --type node-affinity instead. These commands remain " +
+			"for PVE 8 targets.",
 	}
 	cmd.AddCommand(
 		newHaGroupListCmd(),
@@ -46,7 +64,7 @@ func newHaGroupListCmd() *cobra.Command {
 
 			resp, err := deps.API.Cluster.ListHaGroups(cmd.Context())
 			if err != nil {
-				return fmt.Errorf("list HA groups: %w", err)
+				return haGroupErr("list HA groups", err)
 			}
 
 			headers := []string{"GROUP", "NODES", "RESTRICTED", "NOFAILBACK", "TYPE", "COMMENT"}
@@ -91,7 +109,7 @@ func newHaGroupGetCmd() *cobra.Command {
 
 			resp, err := deps.API.Cluster.GetHaGroups(cmd.Context(), group)
 			if err != nil {
-				return fmt.Errorf("get HA group %q: %w", group, err)
+				return haGroupErr(fmt.Sprintf("get HA group %q", group), err)
 			}
 
 			single, raw, err := objectToSingle(resp)
@@ -160,7 +178,7 @@ func newHaGroupCreateCmd() *cobra.Command {
 			}
 
 			if err := deps.API.Cluster.CreateHaGroups(cmd.Context(), params); err != nil {
-				return fmt.Errorf("create HA group %q: %w", group, err)
+				return haGroupErr(fmt.Sprintf("create HA group %q", group), err)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf("HA group %q created.", group)}, deps.Format)
@@ -212,7 +230,7 @@ func newHaGroupSetCmd() *cobra.Command {
 			}
 
 			if err := deps.API.Cluster.UpdateHaGroups(cmd.Context(), group, params); err != nil {
-				return fmt.Errorf("update HA group %q: %w", group, err)
+				return haGroupErr(fmt.Sprintf("update HA group %q", group), err)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf("HA group %q updated.", group)}, deps.Format)
@@ -241,7 +259,7 @@ func newHaGroupDeleteCmd() *cobra.Command {
 			}
 
 			if err := deps.API.Cluster.DeleteHaGroups(cmd.Context(), group); err != nil {
-				return fmt.Errorf("delete HA group %q: %w", group, err)
+				return haGroupErr(fmt.Sprintf("delete HA group %q", group), err)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf("HA group %q deleted.", group)}, deps.Format)

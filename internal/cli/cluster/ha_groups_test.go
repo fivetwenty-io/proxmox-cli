@@ -428,3 +428,54 @@ func TestHaGroupRuleTree(t *testing.T) {
 		}
 	}
 }
+
+// TestHaGroup_PVE9MigrationHint verifies that the "ha groups have been migrated
+// to rules" answer a Proxmox VE 9 server gives — on reads as well as writes —
+// is turned into an error that names the replacement command, instead of being
+// passed through raw.
+func TestHaGroup_PVE9MigrationHint(t *testing.T) {
+	const apiMsg = "cannot index groups: ha groups have been migrated to rules"
+
+	for _, tc := range []struct {
+		name   string
+		route  string
+		args   []string
+		status int
+	}{
+		{"list", "GET /api2/json/cluster/ha/groups", []string{"ha", "group", "list"}, http.StatusInternalServerError},
+		{"get", "GET /api2/json/cluster/ha/groups/ha1", []string{"ha", "group", "get", "ha1"}, http.StatusInternalServerError},
+		{"create", "POST /api2/json/cluster/ha/groups", []string{"ha", "group", "create", "ha1", "--nodes", "pve1"}, http.StatusInternalServerError},
+		{"delete", "DELETE /api2/json/cluster/ha/groups/ha1", []string{"ha", "group", "delete", "ha1", "--yes"}, http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, ac := newFakeClient(t)
+			f.HandleFunc(tc.route, func(w http.ResponseWriter, _ *http.Request) {
+				testhelper.WriteError(w, tc.status, apiMsg)
+			})
+
+			deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "removed in Proxmox VE 9")
+			require.Contains(t, err.Error(), "pmx pve cluster ha rule")
+			require.Contains(t, err.Error(), apiMsg, "the server's own text must still be visible")
+		})
+	}
+}
+
+// TestHaGroup_OtherErrorsUnchanged verifies the migration hint is not glued onto
+// unrelated failures.
+func TestHaGroup_OtherErrorsUnchanged(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/ha/groups", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusForbidden, "permission denied")
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+	var buf bytes.Buffer
+	err := run(deps, &buf, "ha", "group", "list")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "permission denied")
+	require.NotContains(t, err.Error(), "removed in Proxmox VE 9")
+}
