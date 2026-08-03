@@ -56,6 +56,7 @@ from .runner import (
     find_binary,
     target_configured,
 )
+from .text import clean_output, one_line
 
 # Fixed resource names (all carry the isolation prefix/tag/pool).
 VM_NAME = Isolation.NAME_PREFIX + "vm"
@@ -105,6 +106,7 @@ SDN_FABRIC = "pmxclifb"              # isolated openfabric SDN fabric (staged co
 SDN_PREFIX = "pmxclipl"              # isolated SDN prefix list (staged config only, never applied)
 SDN_RTMAP = "pmxclirm"               # isolated SDN route map (staged config only, never applied)
 DUMMY_HOST = "172.30.0.250"     # unused address on the e2e subnet (never contacted)
+IPAM_TEST_IP = "172.30.0.240"   # IPAM allocation probe; inside SDN_SUBNET, clear of CT_IP
 CT_IP = "172.30.0.50/24"
 CT_GW = Isolation.SDN_GATEWAY
 
@@ -117,6 +119,12 @@ class LifecycleError(Exception):
     """A required (non-teardown) step failed; abort the create-chain."""
 
 
+# Failure-text cleaning is shared with the read-only sweep; see e2e_lib.text
+# for why every reason has to be laundered before it is truncated.
+_clean_output = clean_output
+_one_line = one_line
+
+
 @dataclass
 class Cmd:
     rc: int
@@ -125,6 +133,16 @@ class Cmd:
 
     def json(self):
         return json.loads(self.out)
+
+    @property
+    def reason(self) -> str:
+        """The failure text worth reporting: stderr first, warning banners gone.
+
+        Every caller that renders a detail or skip reason must go through this
+        rather than reading `.err` directly, so no message can be truncated down
+        to a warning banner.
+        """
+        return _clean_output(self.err) or _clean_output(self.out) or f"exit {self.rc}"
 
 
 @dataclass
@@ -180,7 +198,10 @@ class Runner:
             self.cov.append(Step(guest, verb, PASS))
             return res
         print(f"  {RED('✗')} {label}")
-        detail = (res.err.strip() or res.out.strip())[:300]
+        # The CLI wraps an API error in one `<context>:` layer per call site, so
+        # the raw text spends its first ~200 characters restating the request
+        # before it reaches the server's complaint. Report the complaint.
+        detail = _one_line(res.reason, f"exit {res.rc}", limit=300)
         if detail:
             print(RED(f"      {detail}"))
         self.cov.append(Step(guest, verb, FAIL, detail))
@@ -223,7 +244,7 @@ class Runner:
             print(f"  {GREEN('✓')} {label}")
             self.cov.append(Step(guest, verb, PASS))
             return True
-        detail = (res.err.strip() or res.out.strip())
+        detail = res.reason
         low = detail.lower()
         if skip_markers and any(m in low for m in skip_markers):
             reason = skip_reason or "unsupported in this environment"
@@ -231,9 +252,12 @@ class Runner:
             self.cov.append(Step(guest, verb, SKIP, reason))
             return False
         print(f"  {RED('✗')} {label}")
+        # Markers are matched against the whole text above; what gets *reported*
+        # is the server's own line, not the CLI's wrapper chain.
+        detail = _one_line(detail, f"exit {res.rc}", limit=300)
         if detail:
-            print(RED(f"      {detail[:300]}"))
-        self.cov.append(Step(guest, verb, FAIL, detail[:300]))
+            print(RED(f"      {detail}"))
+        self.cov.append(Step(guest, verb, FAIL, detail))
         raise LifecycleError(label)
 
     # A non-fatal, coverage-recorded skip (e.g. a verb a guest can't support).
@@ -247,8 +271,7 @@ class Runner:
         if res.rc == 0:
             print(f"  {GREEN('✓')} {name}")
         else:
-            detail = (res.err.strip() or res.out.strip()).splitlines()
-            tail = detail[-1][:160] if detail else "failed"
+            tail = _one_line(res.reason, "failed")
             print(f"  {YELLOW('·')} {name} {DIM('(skip: ' + tail + ')')}")
 
     # A teardown step that IS coverage-recorded but never raises, so the rest of
@@ -264,10 +287,9 @@ class Runner:
             print(f"  {GREEN('✓')} {label}")
             self.cov.append(Step(guest, verb, PASS))
             return
-        detail = (res.err.strip() or res.out.strip()).splitlines()
-        tail = detail[-1][:160] if detail else "failed"
+        tail = _one_line(res.reason, "failed")
         print(f"  {YELLOW('·')} {label} {DIM('(cleanup: ' + tail + ')')}")
-        self.cov.append(Step(guest, verb, SKIP, "cleanup: " + tail[:120]))
+        self.cov.append(Step(guest, verb, SKIP, "cleanup: " + tail))
 
 
 VOLUME_NOTE = "pmx-cli-e2e marker"
@@ -512,8 +534,7 @@ def provision_move_storage(r: Runner) -> None:
         print(f"  {GREEN('✓')} move target {MOVE_STORAGE} at {MOVE_STORAGE_PATH}")
         return
 
-    detail = (res.err.strip() or res.out.strip()).splitlines()
-    tail = detail[-1][:160] if detail else "create failed"
+    tail = _one_line(res.reason, "create failed")
     print(f"  {YELLOW('·')} move target unavailable {DIM('(' + tail + ')')}")
 
 
@@ -530,6 +551,266 @@ def teardown_move_storage(r: Runner) -> None:
     r.undo(f"rm host {MOVE_STORAGE_PATH}",
            "pve", "node", "exec", r.node, "--", "rm", "-rf", MOVE_STORAGE_PATH)
     _move_storage_ready = False
+
+
+# --- ACL probe principal ----------------------------------------------------
+#
+# The per-object `permissions grant/revoke` verbs need a principal to grant TO,
+# and it has to still exist when the guest blocks run near the end of the suite.
+# access_lifecycle's probe user is created and deleted in one block long before
+# the guests exist, so those verbs get their own longer-lived user: created
+# right after the isolated network, removed in the same finally that tears the
+# network down. It is granted nothing outside the objects this suite creates.
+
+ACL_USER = Isolation.NAME_PREFIX + "acl@pve"
+ACL_ROLE = "PVEAuditor"          # read-only; the weakest built-in role
+_acl_probe_ready = False
+
+
+def provision_acl_probe(r: Runner) -> None:
+    """Create the throwaway principal the permissions verbs grant roles to."""
+    global _acl_probe_ready
+
+    print(BOLD("provision: ACL probe principal"))
+    # A crashed prior run may have left the user behind; deleting first keeps
+    # this idempotent without treating the leftover as a failure.
+    r.undo(f"pre-clean {ACL_USER}", "pve", "access", "user", "delete", ACL_USER, "--yes")
+    res = r.pmx("pve", "access", "user", "create", ACL_USER, "--comment", "pmx-cli e2e acl probe")
+    _acl_probe_ready = res.rc == 0
+    if _acl_probe_ready:
+        print(f"  {GREEN('✓')} acl probe user {ACL_USER}")
+    else:
+        print(f"  {YELLOW('·')} acl probe user unavailable "
+              f"{DIM('(' + _one_line(res.reason, 'create failed') + ')')}")
+
+
+def teardown_acl_probe(r: Runner) -> None:
+    """Remove the ACL probe principal; safe to call when it was never created."""
+    global _acl_probe_ready
+
+    r.undo(f"delete {ACL_USER}", "pve", "access", "user", "delete", ACL_USER, "--yes")
+    _acl_probe_ready = False
+
+
+def permissions_roundtrip(r: Runner, tree: str, label: str, argv: tuple[str, ...],
+                          obj: str, extra: tuple[str, ...] = (), node: bool = True) -> None:
+    """grant → list → effective → revoke on one object's own ACL path.
+
+    `argv` is the namespace prefix (e.g. ("pve", "qemu", "permissions")) and
+    `obj` the object the path is derived from. The revoke runs in a finally so a
+    failed read never leaves a stray ACL entry on the cluster.
+    """
+    verbs = ("permissions grant", "permissions list",
+             "permissions effective", "permissions revoke")
+    if not _acl_probe_ready:
+        for verb in verbs:
+            r.cover_skip(tree, verb, f"{label} {verb}",
+                         f"ACL probe user {ACL_USER} unavailable")
+        return
+
+    print(BOLD(f"{tree}: permissions grant / list / effective / revoke ({label})"))
+    try:
+        r.step(tree, "permissions grant", f"{label} permissions grant {ACL_ROLE}",
+               *argv, "grant", obj, *extra, "--roles", ACL_ROLE, "--users", ACL_USER,
+               node=node)
+        got = r.step(tree, "permissions list", f"{label} permissions list",
+                     *argv, "list", obj, *extra, json_out=True, node=node)
+        if ACL_USER not in got.out:
+            raise LifecycleError(f"{label}: granted role not visible in permissions list")
+        r.step(tree, "permissions effective", f"{label} permissions effective",
+               *argv, "effective", obj, *extra, "--userid", ACL_USER,
+               json_out=True, node=node)
+    finally:
+        r.del_step(tree, "permissions revoke", f"{label} permissions revoke {ACL_ROLE}",
+                   *argv, "revoke", obj, *extra, "--roles", ACL_ROLE, "--users", ACL_USER,
+                   node=node)
+
+
+def qemu_security_lifecycle(r: Runner, vmid: str) -> None:
+    """Drive the qemu security verb block on the stopped throwaway VM.
+
+    Every toggle is undone before the next one runs, the TPM state disk is
+    allocated on our own storage and destroyed again, and `protection` is
+    enabled last and cleared in a finally — it blocks both `qemu delete` and
+    disk removal, so leaving it set would strand the VM at teardown.
+    """
+    print(BOLD(f"qemu: security verbs on VM {vmid} "
+               "(agent / nic / cpu-flags / tpm / secureboot / cc / protection)"))
+
+    r.step("qemu", "security show", f"security show VM {vmid}",
+           "pve", "qemu", "security", "show", vmid, json_out=True)
+    r.step("qemu", "security nic show", f"security nic show VM {vmid}",
+           "pve", "qemu", "security", "nic", "show", vmid, json_out=True)
+
+    # Guest-agent config option (agent=), then removed again with --reset.
+    r.step("qemu", "security agent set", f"security agent set VM {vmid}",
+           "pve", "qemu", "security", "agent", "set", vmid, "--enabled", "--type", "virtio")
+    r.step("qemu", "security agent set", f"security agent reset VM {vmid}",
+           "pve", "qemu", "security", "agent", "set", vmid, "--reset")
+
+    # Per-NIC firewall coverage on the VM's own NIC, then back off.
+    r.step("qemu", "security nic firewall", f"security nic firewall --on VM {vmid}",
+           "pve", "qemu", "security", "nic", "firewall", vmid, "--on", "--all")
+    r.step("qemu", "security nic firewall", f"security nic firewall --off VM {vmid}",
+           "pve", "qemu", "security", "nic", "firewall", vmid, "--off", "--all")
+
+    # Spectre/Meltdown mitigation flags, then cleared off cpu= entirely.
+    r.step("qemu", "security cpu-flags set", f"security cpu-flags set VM {vmid}",
+           "pve", "qemu", "security", "cpu-flags", "set", vmid, "--enable", "spec-ctrl,ssbd")
+    r.step("qemu", "security cpu-flags set", f"security cpu-flags clear VM {vmid}",
+           "pve", "qemu", "security", "cpu-flags", "set", vmid, "--clear")
+
+    # TPM state device: allocated on our own storage, then destroyed.
+    r.step("qemu", "security tpm add", f"security tpm add VM {vmid}",
+           "pve", "qemu", "security", "tpm", "add", vmid, "--storage", ROOTDIR_STORAGE)
+    r.step("qemu", "security tpm show", f"security tpm show VM {vmid}",
+           "pve", "qemu", "security", "tpm", "show", vmid, json_out=True)
+    r.del_step("qemu", "security tpm remove", f"security tpm remove VM {vmid}",
+               "pve", "qemu", "security", "tpm", "remove", vmid, "--force")
+
+    # Secure Boot switches the VM to OVMF and allocates an EFI vars disk. There
+    # is no disable verb; the vars disk is owned by this VM and is destroyed
+    # with it at teardown.
+    r.step("qemu", "security secureboot enable", f"security secureboot enable VM {vmid}",
+           "pve", "qemu", "security", "secureboot", "enable", vmid,
+           "--storage", ROOTDIR_STORAGE)
+    r.step("qemu", "security secureboot show", f"security secureboot show VM {vmid}",
+           "pve", "qemu", "security", "secureboot", "show", vmid, json_out=True)
+
+    # Confidential computing has two gates, and both are environment limits
+    # rather than CLI faults: PVE restricts the amd-sev/intel-tdx config keys to
+    # root@pam (the suites authenticate with an API token), and even as root the
+    # host CPU/firmware has to offer AMD SEV or Intel TDX. Match those two
+    # signatures exactly — a broader marker list would swallow a genuine
+    # parameter-composition bug the way "cpu" once did.
+    if r.soft_step("qemu", "security confidential set", f"security confidential set VM {vmid}",
+                   "pve", "qemu", "security", "confidential", "set", vmid, "--sev", "std",
+                   skip_markers=("only root can set",
+                                 "your cpu does not support amd sev",
+                                 "your cpu does not support intel tdx"),
+                   skip_reason="PVE restricts the amd-sev/intel-tdx config keys to root@pam and "
+                               "the suites run on an API token"):
+        r.step("qemu", "security confidential clear", f"security confidential clear VM {vmid}",
+               "pve", "qemu", "security", "confidential", "clear", vmid)
+    else:
+        r.cover_skip("qemu", "security confidential clear",
+                     f"security confidential clear VM {vmid}",
+                     "confidential set unavailable on this host")
+
+    try:
+        r.step("qemu", "security protection enable", f"security protection enable VM {vmid}",
+               "pve", "qemu", "security", "protection", "enable", vmid)
+        r.step("qemu", "security show", f"security show VM {vmid} (protected)",
+               "pve", "qemu", "security", "show", vmid, json_out=True)
+    finally:
+        r.del_step("qemu", "security protection disable",
+                   f"security protection disable VM {vmid}",
+                   "pve", "qemu", "security", "protection", "disable", vmid)
+
+
+def lxc_security_lifecycle(r: Runner, ctid: str) -> None:
+    """Drive the lxc security verb block on the throwaway container.
+
+    `features` goes through the config API. `caps` edits lxc.cap.* keys in
+    /etc/pve/lxc/<vmid>.conf over root SSH — the same channel `node exec`,
+    `node disks`, and the storage-import block already use — so it is gated on
+    the same reachability probe and skipped, not failed, on a host we cannot
+    reach. Every edit is undone in the same block: `caps reset` restores the PVE
+    defaults and `features set --reset` clears features= entirely.
+    """
+    print(BOLD(f"lxc: security verbs on CT {ctid} (features / caps)"))
+
+    r.step("lxc", "security show", f"security show CT {ctid}",
+           "pve", "lxc", "security", "show", ctid, json_out=True)
+    r.step("lxc", "security features show", f"security features show CT {ctid}",
+           "pve", "lxc", "security", "features", "show", ctid, json_out=True)
+
+    # features= is plain container config, but PVE gates writes to it on
+    # root@pam ("changing feature flags for containers is only allowed for
+    # root@pam") and the suites authenticate with an API token. Record that as a
+    # SKIP against the exact signature; only clear the flag again if the set
+    # actually took, so a permitted run still exercises both directions.
+    # keyctl is unprivileged-only and the throwaway CT is unprivileged.
+    if r.soft_step("lxc", "security features set", f"security features set CT {ctid}",
+                   "pve", "lxc", "security", "features", "set", ctid, "--keyctl",
+                   skip_markers=("only allowed for root", "changing feature flags"),
+                   skip_reason="PVE restricts container feature flags to root@pam and the "
+                               "suites run on an API token"):
+        r.step("lxc", "security features set", f"security features reset CT {ctid}",
+               "pve", "lxc", "security", "features", "set", ctid, "--reset")
+
+    caps_verbs = ("security caps add", "security caps show",
+                  "security caps remove", "security caps set", "security caps reset")
+    probe = r.pmx("pve", "node", "exec", r.node, "--", "true")
+    if probe.rc != 0:
+        reason = _one_line(probe.reason, "SSH to host unavailable", limit=80)
+        for verb in caps_verbs:
+            r.cover_skip("lxc", verb, f"{verb} CT {ctid}", reason)
+        return
+
+    try:
+        # `set` comes first: PVE containers ship without an explicit whitelist,
+        # and `caps add` refuses to edit one that does not exist yet.
+        r.step("lxc", "security caps set", f"security caps set --keep CT {ctid}",
+               "pve", "lxc", "security", "caps", "set", ctid,
+               "--keep", "chown,setuid,setgid,kill")
+        r.step("lxc", "security caps show", f"security caps show CT {ctid}",
+               "pve", "lxc", "security", "caps", "show", ctid, json_out=True)
+        r.step("lxc", "security caps add", f"security caps add net_bind_service CT {ctid}",
+               "pve", "lxc", "security", "caps", "add", ctid, "net_bind_service")
+        r.step("lxc", "security caps remove", f"security caps remove net_bind_service CT {ctid}",
+               "pve", "lxc", "security", "caps", "remove", ctid, "net_bind_service")
+    finally:
+        # Always restore the PVE defaults, even if a step above failed, so the
+        # container is destroyed with an unedited capability policy.
+        r.del_step("lxc", "security caps reset", f"security caps reset CT {ctid}",
+                   "pve", "lxc", "security", "caps", "reset", ctid)
+
+
+API_RAW_POOL = Isolation.NAME_PREFIX + "raw"
+
+
+def api_raw_lifecycle(r: Runner) -> None:
+    """POST → PUT → DELETE one throwaway pool through the raw passthrough.
+
+    The three write verbs of `pmx api` are a thin transport over whatever path
+    they are handed, so what has to be proven is the transport: that --data
+    reaches the server form-encoded, that a 2xx with no payload is not reported
+    as failure, and that the path is passed through untouched. A resource pool
+    is the smallest thing on a PVE that satisfies all three — it holds no data,
+    the create/update/delete cycle is synchronous, and the id carries the
+    isolation prefix so it can never collide with an operator's own pool.
+    """
+    print(BOLD("api: raw post/put/delete round-trip on a throwaway pool"))
+    r.undo(f"pre-clean {API_RAW_POOL}", "api", "delete", f"/pools/{API_RAW_POOL}")
+    r.step("api", "api post", f"api post /pools ({API_RAW_POOL})",
+           "api", "post", "/pools", "-d", f"poolid={API_RAW_POOL}",
+           "-d", "comment=pmx-cli e2e")
+    try:
+        r.step("api", "api put", f"api put /pools/{API_RAW_POOL}",
+               "api", "put", f"/pools/{API_RAW_POOL}", "-d", "comment=pmx-cli e2e (updated)")
+    finally:
+        r.del_step("api", "api delete", f"api delete /pools/{API_RAW_POOL}",
+                   "api", "delete", f"/pools/{API_RAW_POOL}")
+
+
+def infra_permissions_lifecycle(r: Runner) -> None:
+    """Permissions verbs for the objects that live for the whole run: the
+    isolated pool, the test node, and the isolated SDN zone and vnet.
+
+    The guest and storage objects are transient, so their permissions verbs run
+    inside the blocks that own them instead.
+    """
+    permissions_roundtrip(r, "pool", f"pool {Isolation.POOL}",
+                          ("pve", "pool", "permissions"), Isolation.POOL)
+    permissions_roundtrip(r, "node", f"node {r.node}",
+                          ("pve", "node", "permissions"), r.node)
+    permissions_roundtrip(r, "sdn", f"zone {Isolation.SDN_ZONE}",
+                          ("pve", "sdn", "zone", "permissions"), Isolation.SDN_ZONE,
+                          node=False)
+    permissions_roundtrip(r, "sdn", f"vnet {Isolation.SDN_VNET}",
+                          ("pve", "sdn", "vnet", "permissions"), Isolation.SDN_VNET,
+                          extra=("--zone", Isolation.SDN_ZONE), node=False)
 
 
 def _next_id(r: Runner) -> str:
@@ -842,6 +1123,8 @@ def vm_lifecycle(r: Runner) -> None:
                "pve", "qemu", "snapshot", "create", vmid, SNAP_NAME)
         r.step("qemu", "snapshot list", "snapshot list",
                "pve", "qemu", "snapshot", "list", vmid, json_out=True)
+        r.step("qemu", "snapshot show", f"snapshot show {SNAP_NAME}",
+               "pve", "qemu", "snapshot", "show", vmid, SNAP_NAME, json_out=True)
         # Edit the throwaway snapshot's description before it is rolled back and
         # deleted; touches only this VM's own snapshot metadata.
         r.step("qemu", "snapshot update", f"snapshot update {SNAP_NAME}",
@@ -942,6 +1225,11 @@ def vm_lifecycle(r: Runner) -> None:
         r.step("qemu", "disk unlink", f"disk unlink scsi0 on {vmid}",
                "pve", "qemu", "disk", "unlink", vmid, "--disk", "scsi0", "--force")
 
+        # Security verbs run here: the VM is stopped (so config changes apply
+        # rather than stack up as pending) and its data disk is already gone, so
+        # the TPM/EFI disks these verbs allocate are the only volumes in play.
+        qemu_security_lifecycle(r, vmid)
+
         # Firewall ops on the isolated VM's own config: enable the firewall,
         # add/inspect/remove a rule, an IP set with one member, and an address
         # alias. Every object is scoped to this throwaway VM and uses pmx-cli
@@ -973,6 +1261,10 @@ def vm_lifecycle(r: Runner) -> None:
                Isolation.SDN_SUBNET, "--comment", "pmx-cli-e2e-updated")
         r.step("qemu", "firewall ipset list", "firewall ipset member list",
                "pve", "qemu", "firewall", "ipset", "list", vmid, FW_IPSET, json_out=True)
+        r.step("qemu", "firewall ipset get-member",
+               f"firewall ipset get-member {Isolation.SDN_SUBNET}",
+               "pve", "qemu", "firewall", "ipset", "get-member", vmid, FW_IPSET,
+               Isolation.SDN_SUBNET, json_out=True)
         r.del_step("qemu", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
                    "pve", "qemu", "firewall", "ipset", "remove", vmid, FW_IPSET, Isolation.SDN_SUBNET, "--yes")
         r.del_step("qemu", "firewall ipset delete", f"firewall ipset delete {FW_IPSET}",
@@ -982,11 +1274,16 @@ def vm_lifecycle(r: Runner) -> None:
                "--comment", "pmx-cli-e2e")
         r.step("qemu", "firewall alias list", "firewall alias list",
                "pve", "qemu", "firewall", "alias", "list", vmid, json_out=True)
+        r.step("qemu", "firewall alias get", f"firewall alias get {FW_ALIAS}",
+               "pve", "qemu", "firewall", "alias", "get", vmid, FW_ALIAS, json_out=True)
         r.step("qemu", "firewall alias update", f"firewall alias update {FW_ALIAS}",
                "pve", "qemu", "firewall", "alias", "update", vmid, FW_ALIAS, "172.30.0.99",
                "--comment", "pmx-cli-e2e-updated")
         r.del_step("qemu", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "pve", "qemu", "firewall", "alias", "delete", vmid, FW_ALIAS, "--yes")
+        # The guest's ACL path (/vms/<vmid>) only exists while the guest does.
+        permissions_roundtrip(r, "qemu", f"vm {vmid}",
+                              ("pve", "qemu", "permissions"), vmid)
         # Console proxy: request a VNC ticket on the isolated VM. The ticket
         # carries a short-lived secret, so the step records exit status only and
         # never prints the response body.
@@ -1090,6 +1387,26 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                     skip_reason="container network not ready for interface enumeration")
         r.step("lxc", "config set", f"config set CT {ctid}",
                "pve", "lxc", "config", "set", ctid, "--description", "pmx-cli-e2e")
+        # The read-only sweep gates these on a container existing on the node,
+        # and the lab keeps none standing, so they only ever run here — against
+        # the container this block owns.
+        r.step("lxc", "config get", f"config get CT {ctid}",
+               "pve", "lxc", "config", "get", ctid, json_out=True)
+        r.step("lxc", "config pending", f"config pending CT {ctid}",
+               "pve", "lxc", "config", "pending", ctid, json_out=True)
+        r.step("lxc", "hookscript get", f"hookscript get CT {ctid}",
+               "pve", "lxc", "hookscript", "get", ctid, json_out=True)
+        r.step("lxc", "metrics", f"metrics CT {ctid}",
+               "pve", "lxc", "metrics", ctid, "--timeframe", "hour", json_out=True)
+        r.step("lxc", "rrd", f"rrd CT {ctid}",
+               "pve", "lxc", "rrd", ctid, "--ds", "cpu,mem", "--timeframe", "hour",
+               json_out=True)
+        r.step("lxc", "feature", f"feature snapshot CT {ctid}",
+               "pve", "lxc", "feature", ctid, "--feature", "snapshot", json_out=True)
+        # No --target-node: on a single-node cluster the only candidate is this
+        # node, and the unfiltered form still exercises the endpoint.
+        r.step("lxc", "migrate check", f"migrate check CT {ctid}",
+               "pve", "lxc", "migrate", "check", ctid, json_out=True)
         # Suspend/resume go through CRIU (`lxc-checkpoint`); on hosts without
         # working CRIU support this can't complete. Treat that as a SKIP rather
         # than a CLI failure, and only resume if the suspend took.
@@ -1111,6 +1428,8 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "pve", "lxc", "snapshot", "create", ctid, SNAP_NAME)
         r.step("lxc", "snapshot list", "snapshot list",
                "pve", "lxc", "snapshot", "list", ctid, json_out=True)
+        r.step("lxc", "snapshot show", f"snapshot show {SNAP_NAME}",
+               "pve", "lxc", "snapshot", "show", ctid, SNAP_NAME, json_out=True)
         # Edit the throwaway snapshot's description before rollback/delete;
         # touches only this CT's own snapshot metadata.
         r.step("lxc", "snapshot update", f"snapshot update {SNAP_NAME}",
@@ -1201,6 +1520,10 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
         # pmx-cli names plus the e2e subnet, so no other workload's policy is touched.
         r.step("lxc", "firewall options set", f"firewall options set on {ctid}",
                "pve", "lxc", "firewall", "options", "set", ctid, "--enable", "--policy-in", "ACCEPT")
+        r.step("lxc", "firewall log", f"firewall log on {ctid}",
+               "pve", "lxc", "firewall", "log", ctid, json_out=True)
+        r.step("lxc", "firewall refs", f"firewall refs on {ctid}",
+               "pve", "lxc", "firewall", "refs", ctid, json_out=True)
         r.step("lxc", "firewall options get", f"firewall options get on {ctid}",
                "pve", "lxc", "firewall", "options", "get", ctid, json_out=True)
         r.step("lxc", "firewall rules create", f"firewall rule add on {ctid}",
@@ -1226,6 +1549,10 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                Isolation.SDN_SUBNET, "--comment", "pmx-cli-e2e-updated")
         r.step("lxc", "firewall ipset list", "firewall ipset member list",
                "pve", "lxc", "firewall", "ipset", "list", ctid, FW_IPSET, json_out=True)
+        r.step("lxc", "firewall ipset get-member",
+               f"firewall ipset get-member {Isolation.SDN_SUBNET}",
+               "pve", "lxc", "firewall", "ipset", "get-member", ctid, FW_IPSET,
+               Isolation.SDN_SUBNET, json_out=True)
         r.del_step("lxc", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
                    "pve", "lxc", "firewall", "ipset", "remove", ctid, FW_IPSET, Isolation.SDN_SUBNET, "--yes")
         r.del_step("lxc", "firewall ipset delete", f"firewall ipset delete {FW_IPSET}",
@@ -1235,11 +1562,20 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "--comment", "pmx-cli-e2e")
         r.step("lxc", "firewall alias list", "firewall alias list",
                "pve", "lxc", "firewall", "alias", "list", ctid, json_out=True)
+        r.step("lxc", "firewall alias get", f"firewall alias get {FW_ALIAS}",
+               "pve", "lxc", "firewall", "alias", "get", ctid, FW_ALIAS, json_out=True)
         r.step("lxc", "firewall alias update", f"firewall alias update {FW_ALIAS}",
                "pve", "lxc", "firewall", "alias", "update", ctid, FW_ALIAS, "172.30.0.99",
                "--comment", "pmx-cli-e2e-updated")
         r.del_step("lxc", "firewall alias delete", f"firewall alias delete {FW_ALIAS}",
                    "pve", "lxc", "firewall", "alias", "delete", ctid, FW_ALIAS, "--yes")
+
+        # Security verbs (features via the config API, caps over root SSH) run
+        # on the stopped container, after the firewall objects are cleaned up.
+        lxc_security_lifecycle(r, ctid)
+        # The guest's ACL path (/vms/<vmid>) only exists while the guest does.
+        permissions_roundtrip(r, "lxc", f"ct {ctid}",
+                              ("pve", "lxc", "permissions"), ctid)
         # Console proxy: request a VNC ticket on the isolated CT. The ticket
         # carries a short-lived secret, so the step records exit status only and
         # never prints the response body. A container's vncproxy spawns a
@@ -1286,8 +1622,7 @@ def teardown_network(r: Runner) -> None:
     acq = r.pmx("pve", "sdn", "lock", "acquire", json_out=True, node=False)
     token = _sdn_lock_token(acq) if acq.rc == 0 else ""
     if acq.rc != 0:
-        lines = (acq.err.strip() or acq.out.strip()).splitlines()
-        why = lines[-1][:160] if lines else "acquire failed"
+        why = _one_line(acq.reason, "acquire failed")
         print(f"  {YELLOW('·')} sdn teardown skipped {DIM('(lock not acquired: ' + why + ')')}")
         print(DIM("      foreign pending SDN changes or a held lock; resolve them, then"))
         print(DIM("      delete the pmxcli zone/vnet/subnet and run `pmx sdn apply` manually"))
@@ -1320,8 +1655,7 @@ def teardown_network(r: Runner) -> None:
                 print(f"  {GREEN('✓')} sdn apply")
                 released = True
             else:
-                lines = (app.err.strip() or app.out.strip()).splitlines()
-                tail = lines[-1][:160] if lines else "failed"
+                tail = _one_line(app.reason, "failed")
                 print(f"  {YELLOW('·')} sdn apply {DIM('(skip: ' + tail + ')')}")
         finally:
             if not released:
@@ -1562,7 +1896,7 @@ def auth_lifecycle(r: Runner) -> None:
         create = r.pmx("pve", "access", "user", "create", user, "--password", probe_pw,
                        "--comment", "pmx-cli auth probe")
         if create.rc != 0:
-            detail = (create.err.strip() or create.out.strip())[:200]
+            detail = create.reason[:200]
             raise LifecycleError(f"auth probe user create: {detail}")
         created = True
         print(f"  {GREEN('✓')} user create {user}")
@@ -1669,7 +2003,7 @@ def tfa_lifecycle(r: Runner) -> None:
         create_user = r.pmx("pve", "access", "user", "create", user, "--password", probe_pw,
                             "--comment", "pmx-cli tfa probe")
         if create_user.rc != 0:
-            detail = (create_user.err.strip() or create_user.out.strip())[:200]
+            detail = create_user.reason[:200]
             raise LifecycleError(f"tfa probe user create: {detail}")
         created = True
         print(f"  {GREEN('✓')} user create {user}")
@@ -1683,7 +2017,7 @@ def tfa_lifecycle(r: Runner) -> None:
                   "--username", login_user, "--secret", probe_pw)
         login = r.pmx_raw("--config", cfg, "auth", "login", "--context", "tfaprobe")
         if login.rc != 0:
-            detail = (login.err.strip() or login.out.strip())[:200]
+            detail = login.reason[:200]
             raise LifecycleError(f"tfa probe login: {detail}")
 
         # Enroll a TOTP factor: the API verifies --value against the secret in the
@@ -1708,6 +2042,15 @@ def tfa_lifecycle(r: Runner) -> None:
             r.cover_skip("access", "tfa delete", "tfa delete", "enroll returned no entry id")
             return
 
+        # Read the factor back. The read-only sweep gates these two on some user
+        # on the target already having a TFA entry, which no lab guarantees, so
+        # the enrolled probe factor is the only place they are ever exercised.
+        r.step_raw("access", "tfa get", "tfa get (probe user's factors)",
+                   "--config", cfg, "--context", "tfaprobe",
+                   "pve", "access", "tfa", "get", user, json_out=True)
+        r.step_raw("access", "tfa get-entry", "tfa get-entry (the enrolled factor)",
+                   "--config", cfg, "--context", "tfaprobe",
+                   "pve", "access", "tfa", "get-entry", user, entry_id, json_out=True)
         r.step_raw("access", "tfa set", "tfa set (edit description)",
                    "--config", cfg, "--context", "tfaprobe",
                    "pve", "access", "tfa", "set", user, entry_id,
@@ -1756,6 +2099,10 @@ def storage_lifecycle(r: Runner) -> None:
                         "pve", "storage", "get", sid, json_out=True)
         if "keep-last=2" not in verify.out:
             raise LifecycleError(f"storage set did not update the prune-backups tunable for {sid}")
+        # The storage's ACL path only exists while the definition does, so its
+        # permissions verbs run here rather than in the infra block.
+        permissions_roundtrip(r, "storage", f"storage {sid}",
+                              ("pve", "storage", "permissions"), sid)
     finally:
         r.del_step("storage", "delete", f"storage delete {sid}",
                    "pve", "storage", "delete", sid, "--yes")
@@ -1782,7 +2129,10 @@ def storage_volume_lifecycle(r: Runner) -> None:
     print(BOLD("storage: volume alloc / delete (isolated, teardown-safe)"))
     test_sid = "local"
     test_vmid = "9999"
-    test_name = f"{test_sid}:vm-{test_vmid}-pmx-cli-test"
+    # `local` is a dir-type storage, whose plugin requires a format extension on
+    # the allocated name; a bare name is rejected with "unable to parse volume
+    # filename".
+    test_name = f"{test_sid}:vm-{test_vmid}-pmx-cli-test.raw"
     allocated_volid: str | None = None
     try:
         alloc = r.pmx("pve", "storage", "volume", "alloc",
@@ -1791,7 +2141,7 @@ def storage_volume_lifecycle(r: Runner) -> None:
                       "--size", "1G",
                       json_out=True)
         if alloc.rc != 0:
-            detail = (alloc.err.strip() or alloc.out.strip())[:200]
+            detail = alloc.reason[:200]
             reason = f"volume alloc rejected by server: {detail}"
             r.cover_skip("storage", "volume alloc", "volume alloc (pmx-cli-test)", reason)
             r.cover_skip("storage", "volume delete", "volume delete (pmx-cli-test)", reason)
@@ -1833,29 +2183,20 @@ def backup_lifecycle(r: Runner) -> None:
                "pve", "cluster", "backup", "get", BACKUP_JOB, json_out=True)
         r.step("cluster", "backup set", f"backup job set {BACKUP_JOB}",
                "pve", "cluster", "backup", "set", BACKUP_JOB, "--comment", "pmx-cli-e2e-upd")
+        # The read-only sweep gates this on a backup job already existing on the
+        # target, which no lab guarantees; the disabled pmx-cli job is the only
+        # place it is ever exercised. It resolves the pool's guests and their
+        # volumes — a read, even though the job itself never runs.
+        r.step("cluster", "backup included-volumes", f"backup included-volumes {BACKUP_JOB}",
+               "pve", "cluster", "backup", "included-volumes", BACKUP_JOB, json_out=True)
     finally:
         r.del_step("cluster", "backup delete", f"backup job delete {BACKUP_JOB}",
                    "pve", "cluster", "backup", "delete", BACKUP_JOB, "--yes")
 
 
 def _err_reason(res, fallback: str) -> str:
-    """Distil a short, human-readable skip reason from a failed command's output.
-    The CLI prints the API message followed by a trailing ` (code: N)` line, so the
-    last line is noise; pick the longest meaningful line instead."""
-    text = (res.err.strip() or res.out.strip())
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    lines = [ln for ln in lines if not ln.lower().startswith("(code:")]
-    if not lines:
-        return fallback
-    line = max(lines, key=len)
-    # The wrapped error reads "<context>: API request failed: <message>"; the
-    # trailing API message is the informative part, so prefer it over the prefix.
-    for marker in ("api request failed:", "api error:"):
-        idx = line.lower().rfind(marker)
-        if idx != -1:
-            line = line[idx + len(marker):].strip()
-            break
-    return line[:80]
+    """Distil a short, human-readable skip reason from a failed command's output."""
+    return _one_line(res.reason, fallback, limit=80)
 
 
 def ha_resource_lifecycle(r: Runner, guest: str, sid: str) -> None:
@@ -1904,13 +2245,29 @@ def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
     skipped), so a group failure is an environment limitation, not a bug."""
     group = Isolation.NAME_PREFIX + "ha"
     rule = Isolation.NAME_PREFIX + "rule"
-    grp_create = r.pmx("pve", "cluster", "ha", "group", "create", group, "--nodes", r.node)
-    grp_created = grp_create.rc == 0
-    if not grp_created:
+    # Probe with the read, not the create: on PVE 9 the whole /cluster/ha/groups
+    # family is gone — `list` fails exactly like `create` — so probing with a
+    # read tells us the endpoint's fate without mutating anything, and lets
+    # `ha group list` carry its own honest verdict instead of being silently
+    # dropped along with the write verbs.
+    grp_probe = r.pmx("pve", "cluster", "ha", "group", "list", json_out=True)
+    groups_supported = grp_probe.rc == 0
+    if not groups_supported:
+        reason = _err_reason(grp_probe, "HA groups unavailable")
+        if "migrated to rules" in grp_probe.reason:
+            reason = ("PVE 9 removed HA groups in favour of HA rules; the rule verbs below "
+                      "are the replacement and do run")
+        for verb in ("ha group list", "ha group create", "ha group get",
+                     "ha group set", "ha group delete"):
+            r.cover_skip(guest, verb, f"{verb} {group}", reason)
+    grp_create = (r.pmx("pve", "cluster", "ha", "group", "create", group, "--nodes", r.node)
+                  if groups_supported else grp_probe)
+    grp_created = groups_supported and grp_create.rc == 0
+    if groups_supported and not grp_created:
         reason = _err_reason(grp_create, "HA group create rejected")
         for verb in ("ha group create", "ha group get", "ha group set", "ha group delete"):
             r.cover_skip(guest, verb, f"{verb} {group}", reason)
-    else:
+    elif grp_created:
         print(f"  {GREEN('✓')} ha group create {group}")
         r.cov.append(Step(guest, "ha group create", PASS))
     try:
@@ -1961,10 +2318,7 @@ def node_ops(r: Runner) -> None:
     print(BOLD("node: exec / ssh / rsync (SSH-gated)"))
     probe = r.pmx("pve", "node", "exec", r.node, "--", "true")
     if probe.rc != 0:
-        reason = "SSH to host unavailable"
-        detail = (probe.err.strip() or probe.out.strip()).splitlines()
-        if detail:
-            reason = detail[-1][:80]
+        reason = _one_line(probe.reason, "SSH to host unavailable", limit=80)
         for verb in ("exec", "ssh", "rsync"):
             r.cover_skip("node", verb, f"node {verb} {r.node}", reason)
         return
@@ -1977,6 +2331,18 @@ def node_ops(r: Runner) -> None:
            "pve", "node", "exec", r.node, "--", "sh", "-c", f"echo pmx-cli-e2e > {scratch}")
     r.step("node", "rsync", f"rsync {r.node}:{scratch} -> local",
            "pve", "node", "rsync", r.node, f"{r.node}:{scratch}", scratch)
+    # The same two commands are also exposed at the root, where an operator
+    # reaches them as `pmx ssh` / `pmx rsync` without the `pve node` prefix.
+    # They share the implementation, but the root form resolves its target
+    # through the active context rather than the sub-command's own flags, and
+    # that resolution is only proven by driving it.
+    r.step("root", "ssh", f"pmx ssh {r.node} -- true",
+           "ssh", r.node, "--", "true", node=False)
+    # Unlike `pmx ssh`, the root rsync takes no node argument of its own: the
+    # node is the host part of the remote operand, and anything extra lands in
+    # rsync's own argv as a third operand.
+    r.step("root", "rsync", f"pmx rsync {r.node}:{scratch} -> local",
+           "rsync", f"{r.node}:{scratch}", scratch, node=False)
     r.undo(f"rm host {scratch}", "pve", "node", "exec", r.node, "--", "rm", "-f", scratch)
     try:
         import os as _os
@@ -2259,8 +2625,7 @@ def sdn_dns_lifecycle(r: Runner) -> None:
         # rather than left staged.
         acq = r.pmx("pve", "sdn", "lock", "acquire", json_out=True, node=False)
         if acq.rc != 0:
-            why = (acq.err.strip() or acq.out.strip()).splitlines()
-            skip_all("SDN lock unavailable: " + (why[-1][:80] if why else "failed"))
+            skip_all("SDN lock unavailable: " + _one_line(acq.reason, "failed", limit=80))
             return
         token = _sdn_lock_token(acq)
         if not token:
@@ -2314,11 +2679,45 @@ _AGENT_BASE_IMAGES = (
     "/var/lib/vz/template/iso/noble-server-cloudimg-amd64.img",
     "/var/lib/vz/template/iso/ubuntu-noble-cloudimg.img",
     "/var/lib/vz/template/iso/noble-amd64.img",
+    "/var/lib/vz/template/iso/debian-13-genericcloud-amd64.qcow2",
 )
+# Fetched onto the node when none of the candidates above is cached, so the five
+# agent verbs do not depend on somebody having hand-placed an image first. It
+# lands on the last candidate path and is left in place afterwards: the download
+# is ~350 MB, so caching it makes every later run cheap. Set
+# $PMX_E2E_NO_IMAGE_FETCH=1 on a bandwidth-constrained target to opt out and take
+# the skip instead.
+_AGENT_BASE_IMAGE_URL = ("https://cloud.debian.org/images/cloud/trixie/latest/"
+                         "debian-13-genericcloud-amd64.qcow2")
 # A throwaway password set on the guest's root user via `agent set-user-password`.
 # It is piped over stdin (never an argv) and is only ever applied to a disposable
 # VM that is destroyed at the end of the run, so it is a test value, not a secret.
 _AGENT_TEST_PASSWORD = "pmx-cli-e2e-throwaway"
+
+
+def _fetch_agent_base_image(host: str) -> str:
+    """Download the base cloud image onto the node, returning its path or "".
+
+    The agent verbs need a guest image that can have qemu-guest-agent baked in.
+    Requiring one to be staged by hand made those five verbs a permanent skip on
+    every freshly built lab, so fetch it once and cache it — the same shape as
+    `_ensure_template` for the LXC template. Best-effort: any failure returns ""
+    and the caller records skips.
+    """
+    if os.environ.get("PMX_E2E_NO_IMAGE_FETCH"):
+        return ""
+    dest = _AGENT_BASE_IMAGES[-1]
+    print(DIM(f"  fetching base cloud image -> {dest} (once; ~350MB)"))
+    got = _ssh_node(host, "curl", "-fsSL", "--retry", "2", "-o", dest,
+                    _AGENT_BASE_IMAGE_URL, timeout=900)
+    if got[0] != 0 or _ssh_node(host, "test", "-s", dest)[0] != 0:
+        # Never leave a truncated file behind to be picked up as "cached".
+        _ssh_node(host, "rm", "-f", dest)
+        print(DIM(f"  base image fetch failed: "
+                  f"{one_line(clean_output(got[2]), 'download failed', limit=80)}"))
+        return ""
+    print(f"  {GREEN('✓')} base cloud image cached at {dest}")
+    return dest
 
 
 def qemu_agent_lifecycle(r: Runner) -> None:
@@ -2366,7 +2765,10 @@ def qemu_agent_lifecycle(r: Runner) -> None:
             base = cand
             break
     if not base:
-        skip_all("no cached cloud image on host to bake the agent into"); return
+        base = _fetch_agent_base_image(host)
+    if not base:
+        skip_all("no cloud image on host to bake the agent into, and the fetch was "
+                 "unavailable or disabled ($PMX_E2E_NO_IMAGE_FETCH)"); return
 
     vmid = _next_id(r)
     print(DIM(f"  vmid={vmid}"))
@@ -2762,11 +3164,16 @@ def node_services_lifecycle(r: Runner) -> None:
         r.undo(f"ensure {svc} running", "pve", "node", "services", "start", r.node, svc)
 
 
-# Serial number of the single 1.7T NVMe on the lab node reserved for destructive
-# disk tests. It is pinned by serial (stable across /dev/nvmeXn1 renumbering); the
-# current device path is resolved from `disks list` at run time. NOTHING else may
-# use this disk — the runner hard-asserts it is unused before writing to it.
-_DISKS_SPARE_SERIAL = "PHAX405409TE1P9BGN"
+# The disk reserved for the destructive `node disks` verbs. Set
+# $PMX_E2E_SPARE_SERIAL to pin one specific disk by serial — the invariant that
+# survives /dev/ renumbering — on a host that has more than one idle disk.
+# Unset, the runner takes any disk the API reports as unused, which is what a
+# nested lab needs: its disks are virtual (/dev/sdX, serial drive-scsiN) and get
+# recreated whenever the lab VM is rebuilt, so a hard-coded serial pins the
+# suite to one physical host forever. Either way NOTHING else may be using the
+# disk: `used` must be empty from the API AND the host-side cleanliness probe
+# below must pass before a single byte is written.
+_DISKS_SPARE_SERIAL = os.environ.get("PMX_E2E_SPARE_SERIAL", "")
 # Isolation-prefixed storage IDs / pool names created and torn down on the spare.
 _DISKS_LVM = "pmxcli-lvm"
 _DISKS_LVMTHIN = "pmxcli-lvmthin"
@@ -2793,12 +3200,17 @@ def _disks_resolve_spare(r: Runner) -> str:
     if not isinstance(rows, list):
         return ""
     for d in rows:
-        if not isinstance(d, dict) or d.get("serial") != _DISKS_SPARE_SERIAL:
+        if not isinstance(d, dict):
             continue
+        if _DISKS_SPARE_SERIAL and d.get("serial") != _DISKS_SPARE_SERIAL:
+            continue
+        # `used` carries what the disk is doing ("LVM", "ZFS", "BIOS boot",
+        # "partitions", ...). Anything non-empty means it is in service.
         if d.get("used") not in (None, "", "0"):
-            return ""
+            continue
         dev = str(d.get("devpath") or "")
-        return dev if dev.startswith("/dev/nvme") else ""
+        if dev.startswith("/dev/"):
+            return dev
     return ""
 
 
@@ -2859,7 +3271,10 @@ def node_disks_lifecycle(r: Runner) -> None:
 
     dev = _disks_resolve_spare(r)
     if not dev:
-        skip_all(f"dedicated spare NVMe (serial {_DISKS_SPARE_SERIAL}) absent or in use")
+        pinned = (f" (pinned to serial {_DISKS_SPARE_SERIAL} via $PMX_E2E_SPARE_SERIAL)"
+                  if _DISKS_SPARE_SERIAL else "")
+        skip_all(f"no unused disk on {r.node} to run the destructive disk verbs against"
+                 f"{pinned}; attach a scratch disk to the node to cover them")
         return
 
     # Belt-and-suspenders: confirm the resolved device is physically pristine (no
@@ -2875,10 +3290,10 @@ def node_disks_lifecycle(r: Runner) -> None:
              f"&& echo SPARE_OK ) || echo SPARE_DIRTY")
     pr = _ssh_node(host, probe)
     if "SPARE_OK" not in (pr[1] + pr[2]):
-        skip_all(f"spare NVMe {dev} failed host-side cleanliness probe")
+        skip_all(f"spare disk {dev} failed the host-side cleanliness probe")
         return
 
-    print(DIM(f"  device={dev} (serial {_DISKS_SPARE_SERIAL})"))
+    print(DIM(f"  device={dev}"))
     leftover: list[tuple[str, str]] = []
     try:
         r.step("node", "disks init-gpt", f"init-gpt {dev}",
@@ -3440,6 +3855,9 @@ def cluster_firewall_lifecycle(r: Runner) -> None:
                Isolation.SDN_SUBNET, "--comment", "pmx-cli-e2e-updated")
         r.step("cluster", "firewall ipset list", "firewall ipset member list",
                "pve", "cluster", "firewall", "ipset", "list", CL_FW_IPSET, json_out=True)
+        r.step("cluster", "firewall ipset get", f"firewall ipset get {Isolation.SDN_SUBNET}",
+               "pve", "cluster", "firewall", "ipset", "get", CL_FW_IPSET,
+               Isolation.SDN_SUBNET, json_out=True)
         r.del_step("cluster", "firewall ipset remove", f"firewall ipset remove {Isolation.SDN_SUBNET}",
                    "pve", "cluster", "firewall", "ipset", "remove", CL_FW_IPSET, Isolation.SDN_SUBNET, "--yes")
 
@@ -3891,8 +4309,7 @@ def sdn_objects_lifecycle(r: Runner) -> None:
 
     acq = r.pmx("pve", "sdn", "lock", "acquire", json_out=True, node=False)
     if acq.rc != 0:
-        why = (acq.err.strip() or acq.out.strip()).splitlines()
-        tail = why[-1][:120] if why else "failed"
+        tail = _one_line(acq.reason, "failed", limit=120)
         print(YELLOW(f"      sdn lock acquire failed mid-run: {tail}"))
         print(YELLOW("      another operator holds the SDN lock or staged edits appeared;"))
         print(YELLOW("      refusing to edit the SDN config unlocked."))
@@ -4019,7 +4436,7 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         zset = r.pmx("pve", "sdn", "zone", "set", Isolation.SDN_ZONE, "--mtu", "1400",
                      "--lock-token", token)
         if zset.rc != 0:
-            reason_z = (zset.err.strip() or zset.out.strip())[:120]
+            reason_z = zset.reason[:200]
             r.cover_skip("sdn", "zone set", "zone set", f"zone set rejected: {reason_z}")
         else:
             print(f"  {GREEN('✓')} zone set {Isolation.SDN_ZONE} (mtu)")
@@ -4046,7 +4463,7 @@ def sdn_objects_lifecycle(r: Runner) -> None:
             sset = r.pmx("pve", "sdn", "subnet", "set", Isolation.SDN_VNET, subnet_id,
                          "--dnszoneprefix", "pmxcli", "--lock-token", token)
             if sset.rc != 0:
-                reason_s = (sset.err.strip() or sset.out.strip())[:120]
+                reason_s = sset.reason[:200]
                 r.cover_skip("sdn", "subnet set", "subnet set", f"subnet set rejected: {reason_s}")
             else:
                 print(f"  {GREEN('✓')} subnet set {subnet_id} (dnszoneprefix)")
@@ -4128,11 +4545,14 @@ def sdn_objects_lifecycle(r: Runner) -> None:
     # is rejected (no IPAM configured), record as SKIP rather than failing.
     # Runs unlocked: IPAM allocations are live data written immediately, not
     # staged SDN config, so the ips endpoints accept no lock-token.
-    TEST_IP = "10.241.0.10"
+    # The address MUST fall inside the zone's own subnet — PVE's IPAM refuses an
+    # allocation it cannot attribute to a subnet — so it is derived from the
+    # isolation contract rather than hard-coded to an unrelated network.
+    TEST_IP = IPAM_TEST_IP
     ips_create = r.pmx("pve", "sdn", "vnet", "ips", "create", Isolation.SDN_VNET,
                        "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE)
     if ips_create.rc != 0:
-        reason_ips = (ips_create.err.strip() or ips_create.out.strip())[:120]
+        reason_ips = ips_create.reason[:200]
         r.cover_skip("sdn", "vnet ips create", "vnet ips create",
                      f"vnet ips create rejected: {reason_ips}")
         r.cover_skip("sdn", "vnet ips set", "vnet ips set", "vnet ips create skipped")
@@ -4141,9 +4561,20 @@ def sdn_objects_lifecycle(r: Runner) -> None:
         print(f"  {GREEN('✓')} vnet ips create {TEST_IP}")
         r.cov.append(Step("sdn", "vnet ips create", PASS))
         try:
-            r.step("sdn", "vnet ips set", f"vnet ips set {TEST_IP} (vmid 9999)",
-                   "pve", "sdn", "vnet", "ips", "set", Isolation.SDN_VNET,
-                   "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE, "--vmid", "9999")
+            # PVE 9 loses the `ip` parameter on PUT /cluster/sdn/vnets/{vnet}/ips
+            # and dies with "Use of uninitialized value $ip ... can't find any
+            # subnet for ip". Reproduced with `pvesh set` directly on the node,
+            # so it is a server defect and not a CLI encoding fault; record the
+            # skip against that specific signature only, and let any other
+            # failure fail the suite.
+            r.soft_step("sdn", "vnet ips set", f"vnet ips set {TEST_IP} (vmid 9999)",
+                        "pve", "sdn", "vnet", "ips", "set", Isolation.SDN_VNET,
+                        "--ip", TEST_IP, "--zone", Isolation.SDN_ZONE, "--vmid", "9999",
+                        skip_markers=("uninitialized value $ip",
+                                      "can't find any subnet for ip "),
+                        skip_reason="PVE server drops the ip parameter on "
+                                    "PUT /cluster/sdn/vnets/{vnet}/ips (same failure from "
+                                    "pvesh set on the node, so not a CLI fault)")
         finally:
             r.del_step("sdn", "vnet ips delete", f"vnet ips delete {TEST_IP}",
                        "pve", "sdn", "vnet", "ips", "delete", Isolation.SDN_VNET,
@@ -4308,6 +4739,12 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
 
         provision_network(r)
         provision_move_storage(r)
+        provision_acl_probe(r)
+        print()
+
+        infra_permissions_lifecycle(r)
+        print()
+        api_raw_lifecycle(r)
         print()
 
         # Access + storage verb blocks run regardless of --vm-only/--ct-only:
@@ -4391,6 +4828,7 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
         print(RED("lifecycle: interrupted"))
     finally:
         print()
+        teardown_acl_probe(r)
         teardown_network(r)
         sweep_stale_guests(r)
         teardown_move_storage(r)

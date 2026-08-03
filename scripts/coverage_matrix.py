@@ -2,9 +2,9 @@
 """Generate docs/test-coverage-matrix.md from the live sources of truth.
 
 The matrix maps every invocable leaf command in the built CLI to its automated
-test coverage across the two suites (read-only `e2e` sweep and the destructive
-`lifecycle` / `--mutate` phase). Hand-maintaining ~550 rows drifts immediately,
-so this script derives the matrix mechanically:
+test coverage across the live suites (the read-only `e2e` sweep and the
+destructive per-product lifecycle suites). Hand-maintaining ~1200 rows drifts
+immediately, so this script derives the matrix mechanically:
 
   1. the leaf set, from a walk of `./dist/pmx ... --help` (the actual command
      tree), plus the handful of runnable parent commands that carry a `RunE`
@@ -14,8 +14,10 @@ so this script derives the matrix mechanically:
      `scripts/e2e_lib/trees/*.py` (a check at module scope is unconditional `✓`;
      one nested in an `if`/`for` is inventory-gated `◑`);
   3. the mutate coverage, by statically parsing every `Step(...)` record and
-     `step`/`soft_step`/`cover_skip`/`del_step` call in
-     `scripts/e2e_lib/lifecycle.py`.
+     `step`/`soft_step`/`cover_skip`/`del_step` call in each of
+     `scripts/e2e_lib/{lifecycle,pbs_lifecycle,pdm_lifecycle}.py`. A verb
+     recorded without an argv is resolved against its suite's product, so the
+     PDM suite's `pve qemu start` maps to `pdm pve qemu start`.
 
 Run from the repo root after building the binary:
 
@@ -36,7 +38,12 @@ from collections import Counter, defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(ROOT, "dist", "pmx")
 TREES_DIR = os.path.join(ROOT, "scripts", "e2e_lib", "trees")
-LIFECYCLE = os.path.join(ROOT, "scripts", "e2e_lib", "lifecycle.py")
+# One destructive suite per product; each records coverage the same way, so
+# they are parsed as a set rather than singled out.
+LIFECYCLES = [
+    os.path.join(ROOT, "scripts", "e2e_lib", name)
+    for name in ("lifecycle.py", "pbs_lifecycle.py", "pdm_lifecycle.py")
+]
 OUT = os.path.join(ROOT, "docs", "test-coverage-matrix.md")
 
 # Runnable parent commands: they have their own RunE *and* sub-commands, so the
@@ -245,33 +252,17 @@ def parse_e2e(leaves, map_leaf):
 def parse_mutate(leaves, map_leaf):
     mut = defaultdict(set)  # leaf -> {"PASS","SKIP"}
     step_fns = {"step", "soft_step", "soft_step_raw", "cover_skip", "del_step", "step_raw"}
-    tree = ast.parse(open(LIFECYCLE).read())
 
     def cs(node):
+        """The string value of a literal, else None."""
         return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
-    for n in ast.walk(tree):
-        if not isinstance(n, ast.Call):
-            continue
-        guest = verb = None
-        argv: list[str] = []
-        status = "PASS"
-        if isinstance(n.func, ast.Name) and n.func.id == "Step":
-            a = n.args
-            guest = cs(a[0]) if a else None
-            verb = cs(a[1]) if len(a) > 1 else None
-            if len(a) > 2 and isinstance(a[2], ast.Name):
-                status = a[2].id
-        elif isinstance(n.func, ast.Attribute) and n.func.attr in step_fns:
-            a = n.args
-            guest = cs(a[0]) if a else None
-            verb = cs(a[1]) if len(a) > 1 else None
-            argv = [cs(x) for x in a[3:] if cs(x) is not None]
-            if n.func.attr == "cover_skip":
-                status = "SKIP"
-        if not verb:
-            continue
+    def record(guest, verb, argv, status, product):
         leaf = map_leaf(argv) if argv else None
+        if not leaf:
+            leaf = map_leaf([product, *verb.split()])
+        if not leaf and guest:
+            leaf = map_leaf([product, guest, *verb.split()])
         if not leaf and guest:
             leaf = map_leaf([guest, *verb.split()])
         if not leaf:
@@ -282,8 +273,136 @@ def parse_mutate(leaves, map_leaf):
                 leaf = cands[0]
         if leaf:
             mut[leaf].add("PASS" if status == "PASS" else "SKIP")
+
+    for path in LIFECYCLES:
+        # The suite's product disambiguates a verb recorded without an argv:
+        # `cover_skip("proxy", "pve qemu start", ...)` in the PDM suite means
+        # `pdm pve qemu start`, not the PVE leaf of the same tail.
+        product = {"pbs_lifecycle.py": "pbs",
+                   "pdm_lifecycle.py": "pdm"}.get(os.path.basename(path), "pve")
+        tree = ast.parse(open(path).read())
+
+        # Module-level tuples/lists of string literals, so a loop over one of
+        # them can be expanded below.
+        consts: dict[str, ast.AST] = {}
+        for stmt in tree.body:
+            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 \
+                    and isinstance(stmt.targets[0], ast.Name):
+                consts[stmt.targets[0].id] = stmt.value
+
+        # A verb recorded inside a `for` over a literal sequence is as real as
+        # one written out — the suites record whole families that way. The
+        # binding has to be scoped to the loop body: `verb` is reused by a dozen
+        # unrelated loops in the same file, so a file-wide map would credit every
+        # loop's verbs to every other loop's calls.
+        Recorder(record, consts, product, cs, step_fns).visit(tree)
     return mut
 
+
+class Recorder(ast.NodeVisitor):
+    """Walks a lifecycle module, recording each coverage call it finds.
+
+    Loop variables bound to literal sequences are tracked as a scope stack, so a
+    call inside `for v in (...)` is recorded once per value of v and calls
+    outside it are unaffected.
+    """
+
+    def __init__(self, record, consts, product, cs, step_fns):
+        self._record = record
+        self._consts = consts
+        self._product = product
+        self._cs = cs
+        self._step_fns = step_fns
+        self._scopes: list[dict[str, list[str]]] = []
+
+    def _lookup(self, name: str) -> list[str]:
+        for scope in reversed(self._scopes):
+            if name in scope:
+                return scope[name]
+        return []
+
+    def _literal_strings(self, node):
+        """Resolve node to a list of string literals, or None."""
+        if isinstance(node, ast.Name):
+            node = self._consts.get(node.id)
+            if node is None:
+                return None
+        if not isinstance(node, (ast.Tuple, ast.List)):
+            return None
+        vals = [self._cs(e) for e in node.elts]
+        return vals if vals and all(v is not None for v in vals) else None
+
+    def _literal_rows(self, node, width):
+        """Resolve node to a list of `width`-tuples of string literals, or None.
+
+        This is the `for verb, why in ((...), (...))` shape: only the first
+        element of each row is a verb, but the row has to be destructured to
+        reach it.
+        """
+        if isinstance(node, ast.Name):
+            node = self._consts.get(node.id)
+            if node is None:
+                return None
+        if not isinstance(node, (ast.Tuple, ast.List)):
+            return None
+        rows = []
+        for e in node.elts:
+            if not isinstance(e, (ast.Tuple, ast.List)) or len(e.elts) != width:
+                return None
+            vals = [self._cs(x) for x in e.elts]
+            if any(v is None for v in vals):
+                return None
+            rows.append(vals)
+        return rows or None
+
+    def visit_For(self, n):
+        scope: dict[str, list[str]] = {}
+        if isinstance(n.target, ast.Name):
+            vals = self._literal_strings(n.iter)
+            if vals:
+                scope[n.target.id] = vals
+        elif isinstance(n.target, (ast.Tuple, ast.List)):
+            names = [e.id for e in n.target.elts if isinstance(e, ast.Name)]
+            if len(names) == len(n.target.elts):
+                rows = self._literal_rows(n.iter, len(names))
+                if rows:
+                    for i, name in enumerate(names):
+                        scope[name] = [row[i] for row in rows]
+        self._scopes.append(scope)
+        self.generic_visit(n)
+        self._scopes.pop()
+
+    def _verbs(self, node) -> list[str]:
+        lit = self._cs(node)
+        if lit is not None:
+            return [lit]
+        if isinstance(node, ast.Name):
+            return self._lookup(node.id)
+        return []
+
+    def visit_Call(self, n):
+        guest = None
+        verbs: list[str] = []
+        argv: list[str] = []
+        status = "PASS"
+        if isinstance(n.func, ast.Name) and n.func.id == "Step":
+            a = n.args
+            guest = self._cs(a[0]) if a else None
+            if len(a) > 1:
+                verbs = self._verbs(a[1])
+            if len(a) > 2 and isinstance(a[2], ast.Name):
+                status = a[2].id
+        elif isinstance(n.func, ast.Attribute) and n.func.attr in self._step_fns:
+            a = n.args
+            guest = self._cs(a[0]) if a else None
+            if len(a) > 1:
+                verbs = self._verbs(a[1])
+            argv = [self._cs(x) for x in a[3:] if self._cs(x) is not None]
+            if n.func.attr == "cover_skip":
+                status = "SKIP"
+        for verb in verbs:
+            self._record(guest, verb, argv, status, self._product)
+        self.generic_visit(n)
 
 # --------------------------------------------------------------------------- #
 # classification + rendering                                                   #
@@ -443,12 +562,12 @@ HEADER = """# Test Coverage Matrix
 > `make coverage-matrix`; CI runs `make check-coverage-matrix` and fails if
 > this file is stale. The classification is derived statically from the built
 > command tree, the read-only sweep definitions in
-> `scripts/e2e_lib/trees/*.py`, and the mutate phase in
-> `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and tests
-> change.
+> `scripts/e2e_lib/trees/*.py`, and the mutate phases in
+> `scripts/e2e_lib/{lifecycle,pbs_lifecycle,pdm_lifecycle}.py`, so it stays
+> correct as commands and tests change.
 
 This document maps every invocable leaf command to its automated test coverage
-across the two live suites:
+across the live suites:
 
 - **e2e** (`scripts/e2e`, `make test-e2e`) — a read-only, parallel happy-path
   sweep against a configured context. Mutating operations are never executed;
@@ -458,11 +577,19 @@ across the two live suites:
   `product: pbs`/`product: pdm` context whose server is reachable, so all of
   their leaves are prerequisite-gated (◑).
 
-- **lifecycle / mutate** (`scripts/lifecycle`, `make test-lifecycle`, or
-  `scripts/e2e --mutate`) — the destructive counterpart. It provisions an
-  isolated SDN zone and resource pool, drives the mutating sub-commands on
-  purpose-built throwaway resources, records each verb, and tears everything
-  down.
+- **lifecycle / mutate** — the destructive counterpart, one suite per product.
+  Each drives the mutating sub-commands on purpose-built throwaway resources,
+  records every verb individually, and tears everything down in a `finally`
+  block:
+
+  - `scripts/lifecycle` (`make test-lifecycle`, or `scripts/e2e --mutate`) for
+    PVE, on an isolated SDN zone and resource pool;
+
+  - `scripts/pbs-lifecycle` (`make test-pbs-lifecycle`) for PBS, on a scratch
+    datastore it creates and destroys;
+
+  - `scripts/pdm-lifecycle` (`make test-pdm-lifecycle`) for PDM, on the manager
+    itself — it writes nothing through a managed remote.
 
 A third tree, **negative** (`scripts/e2e_lib/trees/negative.py`), asserts the
 CLI's error contract: bad input must fail cleanly (non-zero exit plus a useful
@@ -493,8 +620,8 @@ failure path it guards are tagged `error-contract checked` in the Notes column.
 
 ## Isolation contract
 
-Every resource the lifecycle suite creates is shielded from other lab efforts
-(see `scripts/e2e_lib/model.py`, the single source of truth):
+Every resource the PVE lifecycle suite creates is shielded from other lab
+efforts (see `scripts/e2e_lib/model.py`, the single source of truth):
 
 - named or hostnamed with the `pmx-cli-` prefix,
 
@@ -502,6 +629,12 @@ Every resource the lifecycle suite creates is shielded from other lab efforts
 
 - attached to a dedicated `pmxcli` simple SDN zone and `pmxcli0` vnet on the
   `172.30.0.0/24` subnet, deliberately off the host management network.
+
+The PBS and PDM suites keep the same `pmx-cli-` naming, and add the constraint
+that fits their product: PBS confines all backup data to a scratch datastore of
+its own, so no pre-existing datastore is written to, pruned, verified, or
+garbage-collected; PDM writes nothing *through* a managed remote, so no guest on
+a registered cluster is touched and no subscription key reaches a remote's node.
 
 Teardown runs in a `finally` block and is idempotent: a crashed prior run is
 swept clean before the next provisions.
@@ -522,11 +655,14 @@ make test-lifecycle            # the destructive verb matrix only, against `lab`
 scripts/e2e --mutate --vm-only # sweep + VM verb matrix (skip the container)
 scripts/lifecycle --vm-only    # VM verb matrix only
 scripts/lifecycle --ct-only    # container verb matrix only
+
+make test-pbs-lifecycle        # the PBS verb matrix, against `pbs-e2e`
+make test-pdm-lifecycle        # the PDM verb matrix, against `pdm-e2e`
 ```
 
-Both suites skip gracefully (exit 0) when no context is configured; pass
-`--strict` to fail instead. The mutate phase prints a per-guest coverage table
-listing every verb it drove and its result.
+Every suite skips gracefully (exit 0) when no context is configured; pass
+`--strict` to fail instead. Each mutate phase prints a coverage table listing
+every verb it drove and its result.
 """
 
 

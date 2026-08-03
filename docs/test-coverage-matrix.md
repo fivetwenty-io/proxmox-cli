@@ -4,12 +4,12 @@
 > `make coverage-matrix`; CI runs `make check-coverage-matrix` and fails if
 > this file is stale. The classification is derived statically from the built
 > command tree, the read-only sweep definitions in
-> `scripts/e2e_lib/trees/*.py`, and the mutate phase in
-> `scripts/e2e_lib/lifecycle.py`, so it stays correct as commands and tests
-> change.
+> `scripts/e2e_lib/trees/*.py`, and the mutate phases in
+> `scripts/e2e_lib/{lifecycle,pbs_lifecycle,pdm_lifecycle}.py`, so it stays
+> correct as commands and tests change.
 
 This document maps every invocable leaf command to its automated test coverage
-across the two live suites:
+across the live suites:
 
 - **e2e** (`scripts/e2e`, `make test-e2e`) — a read-only, parallel happy-path
   sweep against a configured context. Mutating operations are never executed;
@@ -19,11 +19,19 @@ across the two live suites:
   `product: pbs`/`product: pdm` context whose server is reachable, so all of
   their leaves are prerequisite-gated (◑).
 
-- **lifecycle / mutate** (`scripts/lifecycle`, `make test-lifecycle`, or
-  `scripts/e2e --mutate`) — the destructive counterpart. It provisions an
-  isolated SDN zone and resource pool, drives the mutating sub-commands on
-  purpose-built throwaway resources, records each verb, and tears everything
-  down.
+- **lifecycle / mutate** — the destructive counterpart, one suite per product.
+  Each drives the mutating sub-commands on purpose-built throwaway resources,
+  records every verb individually, and tears everything down in a `finally`
+  block:
+
+  - `scripts/lifecycle` (`make test-lifecycle`, or `scripts/e2e --mutate`) for
+    PVE, on an isolated SDN zone and resource pool;
+
+  - `scripts/pbs-lifecycle` (`make test-pbs-lifecycle`) for PBS, on a scratch
+    datastore it creates and destroys;
+
+  - `scripts/pdm-lifecycle` (`make test-pdm-lifecycle`) for PDM, on the manager
+    itself — it writes nothing through a managed remote.
 
 A third tree, **negative** (`scripts/e2e_lib/trees/negative.py`), asserts the
 CLI's error contract: bad input must fail cleanly (non-zero exit plus a useful
@@ -54,8 +62,8 @@ failure path it guards are tagged `error-contract checked` in the Notes column.
 
 ## Isolation contract
 
-Every resource the lifecycle suite creates is shielded from other lab efforts
-(see `scripts/e2e_lib/model.py`, the single source of truth):
+Every resource the PVE lifecycle suite creates is shielded from other lab
+efforts (see `scripts/e2e_lib/model.py`, the single source of truth):
 
 - named or hostnamed with the `pmx-cli-` prefix,
 
@@ -64,6 +72,12 @@ Every resource the lifecycle suite creates is shielded from other lab efforts
 - attached to a dedicated `pmxcli` simple SDN zone and `pmxcli0` vnet on the
   `172.30.0.0/24` subnet, deliberately off the host management network.
 
+The PBS and PDM suites keep the same `pmx-cli-` naming, and add the constraint
+that fits their product: PBS confines all backup data to a scratch datastore of
+its own, so no pre-existing datastore is written to, pruned, verified, or
+garbage-collected; PDM writes nothing *through* a managed remote, so no guest on
+a registered cluster is touched and no subscription key reaches a remote's node.
+
 Teardown runs in a `finally` block and is idempotent: a crashed prior run is
 swept clean before the next provisions.
 
@@ -71,30 +85,30 @@ swept clean before the next provisions.
 
 | Tree | Leaves | e2e ✓ | e2e ◑ | mutate ✓ | mutate · | deferred | n/a | uncovered |
 |------|-------:|------:|------:|---------:|---------:|---------:|----:|----------:|
-| `api` | 4 | 0 | 1 | 0 | 0 | 0 | 3 | 0 |
+| `api` | 4 | 0 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `auth` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `context` | 11 | 10 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `lab` | 26 | 4 | 1 | 0 | 0 | 20 | 1 | 0 |
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `pbs` | 270 | 0 | 122 | 0 | 0 | 132 | 16 | 0 |
-| `pdm` | 260 | 0 | 145 | 0 | 0 | 112 | 3 | 0 |
-| `pve` | 676 | 80 | 181 | 354 | 4 | 101 | 7 | 0 |
-| `rsync` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
-| `ssh` | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
+| `pbs` | 270 | 0 | 122 | 104 | 42 | 2 | 0 | 0 |
+| `pdm` | 260 | 0 | 145 | 59 | 52 | 4 | 0 | 0 |
+| `pve` | 676 | 80 | 181 | 394 | 6 | 82 | 7 | 0 |
+| `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
+| `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1261** | **101** | **452** | **357** | **4** | **367** | **31** | **0** |
+| **Total** | **1261** | **101** | **452** | **565** | **100** | **108** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **863** are exercised by at least one live suite, **367** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **31** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1144** are exercised by at least one live suite, **108** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `api delete` | — | — | n/a — raw write passthrough against the live PBS API — not automatable safely; covered by unit tests |
+| `api delete` | — | ✓ |  |
 | `api get` | ◑ | — |  |
-| `api post` | — | — | n/a — raw write passthrough against the live PBS API — not automatable safely; covered by unit tests |
-| `api put` | — | — | n/a — raw write passthrough against the live PBS API — not automatable safely; covered by unit tests |
+| `api post` | — | ✓ |  |
+| `api put` | — | ✓ |  |
 
 ## `auth`
 
@@ -172,293 +186,293 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `pbs acl ls` | ◑ | — |  |
-| `pbs acl update` | — | — | deferred — modifies the access control list; covered by unit tests |
-| `pbs acme account add` | — | — | deferred — registers an account with a live certificate authority; covered by unit tests |
-| `pbs acme account delete` | — | — | deferred — deactivates the account at the certificate authority; covered by unit tests |
+| `pbs acl update` | — | ✓ |  |
+| `pbs acme account add` | — | · |  |
+| `pbs acme account delete` | — | · |  |
 | `pbs acme account ls` | ◑ | — |  |
 | `pbs acme account show` | ◑ | — |  |
-| `pbs acme account update` | — | — | deferred — updates the registration at the certificate authority; covered by unit tests |
+| `pbs acme account update` | — | · |  |
 | `pbs acme challenge-schema ls` | ◑ | — |  |
 | `pbs acme directories ls` | ◑ | — |  |
-| `pbs acme plugin add` | — | — | deferred — creates an ACME challenge plugin (stores API credentials); covered by unit tests |
-| `pbs acme plugin delete` | — | — | deferred — removes an ACME challenge plugin; covered by unit tests |
+| `pbs acme plugin add` | — | ✓ |  |
+| `pbs acme plugin delete` | — | ✓ |  |
 | `pbs acme plugin ls` | ◑ | — |  |
 | `pbs acme plugin show` | ◑ | — |  |
-| `pbs acme plugin update` | — | — | deferred — modifies an ACME challenge plugin; covered by unit tests |
+| `pbs acme plugin update` | — | ✓ |  |
 | `pbs acme tos show` | ◑ | — |  |
-| `pbs datastore create` | — | — | deferred — creates a datastore (allocates a chunk store on disk); covered by unit tests |
-| `pbs datastore delete` | — | — | deferred — removes a datastore definition; covered by unit tests |
+| `pbs datastore create` | — | ✓ |  |
+| `pbs datastore delete` | — | ✓ |  |
 | `pbs datastore ls` | ◑ | — |  |
 | `pbs datastore rrd` | ◑ | — |  |
 | `pbs datastore show` | ◑ | — |  |
 | `pbs datastore status` | ◑ | — |  |
-| `pbs datastore update` | — | — | deferred — modifies datastore configuration; covered by unit tests |
+| `pbs datastore update` | — | ✓ |  |
 | `pbs datastore usage` | ◑ | — |  |
-| `pbs encryption-key add` | — | — | deferred — creates a datastore encryption key; covered by unit tests |
-| `pbs encryption-key delete` | — | — | deferred — removes a datastore encryption key; covered by unit tests |
+| `pbs encryption-key add` | — | ✓ |  |
+| `pbs encryption-key delete` | — | ✓ |  |
 | `pbs encryption-key ls` | ◑ | — |  |
-| `pbs encryption-key toggle-archive` | — | — | n/a — flips the key's archive state on every call — not automatable idempotently; covered by unit tests |
+| `pbs encryption-key toggle-archive` | — | ✓ |  |
 | `pbs gc ls` | ◑ | — |  |
-| `pbs gc run` | — | — | deferred — runs garbage collection, which deletes unreferenced chunks; covered by unit tests |
+| `pbs gc run` | — | ✓ |  |
 | `pbs gc status` | ◑ | — |  |
-| `pbs group delete` | — | — | deferred — deletes an entire backup group and all its snapshots; covered by unit tests |
+| `pbs group delete` | — | ✓ |  |
 | `pbs group ls` | ◑ | — |  |
 | `pbs group notes` | ◑ | — |  |
 | `pbs metrics data` | ◑ | — |  |
-| `pbs metrics influxdb-http add` | — | — | deferred — creates an influxdb-http metric server; covered by unit tests |
-| `pbs metrics influxdb-http delete` | — | — | deferred — removes an influxdb-http metric server; covered by unit tests |
+| `pbs metrics influxdb-http add` | — | ✓ |  |
+| `pbs metrics influxdb-http delete` | — | ✓ |  |
 | `pbs metrics influxdb-http ls` | ◑ | — |  |
 | `pbs metrics influxdb-http show` | ◑ | — |  |
-| `pbs metrics influxdb-http update` | — | — | deferred — modifies an influxdb-http metric server; covered by unit tests |
-| `pbs metrics influxdb-udp add` | — | — | deferred — creates an influxdb-udp metric server; covered by unit tests |
-| `pbs metrics influxdb-udp delete` | — | — | deferred — removes an influxdb-udp metric server; covered by unit tests |
+| `pbs metrics influxdb-http update` | — | ✓ |  |
+| `pbs metrics influxdb-udp add` | — | ✓ |  |
+| `pbs metrics influxdb-udp delete` | — | ✓ |  |
 | `pbs metrics influxdb-udp ls` | ◑ | — |  |
 | `pbs metrics influxdb-udp show` | ◑ | — |  |
-| `pbs metrics influxdb-udp update` | — | — | deferred — modifies an influxdb-udp metric server; covered by unit tests |
+| `pbs metrics influxdb-udp update` | — | ✓ |  |
 | `pbs node apt changelog` | ◑ | — |  |
 | `pbs node apt ls` | ◑ | — |  |
-| `pbs node apt repo-add` | — | — | deferred — adds a package repository to the host; covered by unit tests |
-| `pbs node apt repo-update` | — | — | deferred — enables or disables a package repository on the host; covered by unit tests |
+| `pbs node apt repo-add` | — | ✓ |  |
+| `pbs node apt repo-update` | — | ✓ |  |
 | `pbs node apt repositories` | ◑ | — |  |
-| `pbs node apt update` | — | — | deferred — refreshes the package index on the host; covered by unit tests |
+| `pbs node apt update` | — | ✓ |  |
 | `pbs node apt versions` | ◑ | — |  |
-| `pbs node certificates acme order` | — | — | deferred — orders a real certificate from the CA and replaces the server cert; covered by unit tests |
-| `pbs node certificates acme renew` | — | — | deferred — renews the certificate at the CA and replaces the server cert; covered by unit tests |
-| `pbs node certificates custom delete` | — | — | deferred — removes the custom TLS certificate; covered by unit tests |
-| `pbs node certificates custom upload` | — | — | deferred — replaces the server's TLS certificate; covered by unit tests |
+| `pbs node certificates acme order` | — | · |  |
+| `pbs node certificates acme renew` | — | · |  |
+| `pbs node certificates custom delete` | — | · |  |
+| `pbs node certificates custom upload` | — | · |  |
 | `pbs node certificates info` | ◑ | — |  |
 | `pbs node config show` | ◑ | — |  |
-| `pbs node config update` | — | — | deferred — modifies host configuration; covered by unit tests |
-| `pbs node disks directory create` | — | — | n/a — formats a physical disk of the real host into a directory datastore; covered by unit tests |
-| `pbs node disks directory delete` | — | — | n/a — removes a directory mount backed by a physical disk of the real host; covered by unit tests |
+| `pbs node config update` | — | ✓ |  |
+| `pbs node disks directory create` | — | ✓ |  |
+| `pbs node disks directory delete` | — | ✓ |  |
 | `pbs node disks directory ls` | ◑ | — |  |
-| `pbs node disks initgpt` | — | — | n/a — writes a new GPT, destroying data on a physical disk of the real host; covered by unit tests |
+| `pbs node disks initgpt` | — | ✓ |  |
 | `pbs node disks ls` | ◑ | — |  |
 | `pbs node disks smart` | ◑ | — |  |
-| `pbs node disks wipe` | — | — | n/a — wipes a physical disk of the real host, destroying its data; covered by unit tests |
-| `pbs node disks zfs create` | — | — | n/a — creates a zpool consuming physical disks of the real host; covered by unit tests |
+| `pbs node disks wipe` | — | ✓ |  |
+| `pbs node disks zfs create` | — | ✓ |  |
 | `pbs node disks zfs ls` | ◑ | — |  |
 | `pbs node disks zfs show` | ◑ | — |  |
 | `pbs node dns show` | ◑ | — |  |
-| `pbs node dns update` | — | — | deferred — modifies host DNS configuration; covered by unit tests |
+| `pbs node dns update` | — | ✓ |  |
 | `pbs node identity` | ◑ | — |  |
 | `pbs node journal` | ◑ | — |  |
 | `pbs node ls` | ◑ | — |  |
-| `pbs node network apply` | — | — | deferred — applies staged host network changes; covered by unit tests |
-| `pbs node network create` | — | — | deferred — changes host network configuration; covered by unit tests |
-| `pbs node network delete` | — | — | deferred — changes host network configuration; covered by unit tests |
+| `pbs node network apply` | — | · |  |
+| `pbs node network create` | — | ✓ |  |
+| `pbs node network delete` | — | ✓ |  |
 | `pbs node network ls` | ◑ | — |  |
-| `pbs node network revert` | — | — | deferred — reverts staged host network changes; covered by unit tests |
+| `pbs node network revert` | — | ✓ |  |
 | `pbs node network show` | ◑ | — |  |
-| `pbs node network update` | — | — | deferred — changes host network configuration; covered by unit tests |
-| `pbs node reboot` | — | — | n/a — reboots the real host; covered by unit tests |
+| `pbs node network update` | — | ✓ |  |
+| `pbs node reboot` | — | · |  |
 | `pbs node report` | ◑ | — |  |
 | `pbs node rrd` | ◑ | — |  |
 | `pbs node services ls` | ◑ | — |  |
-| `pbs node services reload` | — | — | deferred — reloads a PBS system service — disruptive to the server; covered by unit tests |
-| `pbs node services restart` | — | — | deferred — restarts a PBS system service — disruptive to the server; covered by unit tests |
+| `pbs node services reload` | — | ✓ |  |
+| `pbs node services restart` | — | ✓ |  |
 | `pbs node services show` | ◑ | — |  |
-| `pbs node services start` | — | — | deferred — starts a PBS system service — disruptive to the server; covered by unit tests |
+| `pbs node services start` | — | ✓ |  |
 | `pbs node services state` | ◑ | — |  |
-| `pbs node services stop` | — | — | deferred — stops a PBS system service — disruptive to the server; covered by unit tests |
-| `pbs node shutdown` | — | — | n/a — shuts down the real host; covered by unit tests |
+| `pbs node services stop` | — | ✓ |  |
+| `pbs node shutdown` | — | · |  |
 | `pbs node status` | ◑ | — |  |
-| `pbs node subscription delete` | — | — | deferred — removes the subscription key; covered by unit tests |
-| `pbs node subscription set` | — | — | deferred — registers a subscription key with the vendor; covered by unit tests |
+| `pbs node subscription delete` | — | ✓ |  |
+| `pbs node subscription set` | — | · |  |
 | `pbs node subscription show` | ◑ | — |  |
-| `pbs node subscription update` | — | — | deferred — re-checks the subscription with the vendor; covered by unit tests |
+| `pbs node subscription update` | — | ✓ |  |
 | `pbs node syslog` | ◑ | — |  |
-| `pbs node tasks delete` | — | — | deferred — removes a task-log entry; covered by unit tests |
+| `pbs node tasks delete` | — | ✓ |  |
 | `pbs node tasks log` | ◑ | — |  |
 | `pbs node tasks ls` | ◑ | — |  |
 | `pbs node tasks show` | ◑ | — |  |
 | `pbs node time show` | ◑ | — |  |
-| `pbs node time update` | — | — | deferred — modifies the host timezone; covered by unit tests |
-| `pbs notification endpoint gotify add` | — | — | deferred — creates a gotify notification endpoint; covered by unit tests |
-| `pbs notification endpoint gotify delete` | — | — | deferred — removes a gotify notification endpoint; covered by unit tests |
+| `pbs node time update` | — | ✓ |  |
+| `pbs notification endpoint gotify add` | — | ✓ |  |
+| `pbs notification endpoint gotify delete` | — | ✓ |  |
 | `pbs notification endpoint gotify ls` | ◑ | — |  |
 | `pbs notification endpoint gotify show` | ◑ | — |  |
-| `pbs notification endpoint gotify update` | — | — | deferred — modifies a gotify notification endpoint; covered by unit tests |
-| `pbs notification endpoint sendmail add` | — | — | deferred — creates a sendmail notification endpoint; covered by unit tests |
-| `pbs notification endpoint sendmail delete` | — | — | deferred — removes a sendmail notification endpoint; covered by unit tests |
+| `pbs notification endpoint gotify update` | — | ✓ |  |
+| `pbs notification endpoint sendmail add` | — | ✓ |  |
+| `pbs notification endpoint sendmail delete` | — | ✓ |  |
 | `pbs notification endpoint sendmail ls` | ◑ | — |  |
 | `pbs notification endpoint sendmail show` | ◑ | — |  |
-| `pbs notification endpoint sendmail update` | — | — | deferred — modifies a sendmail notification endpoint; covered by unit tests |
-| `pbs notification endpoint smtp add` | — | — | deferred — creates an smtp notification endpoint; covered by unit tests |
-| `pbs notification endpoint smtp delete` | — | — | deferred — removes an smtp notification endpoint; covered by unit tests |
+| `pbs notification endpoint sendmail update` | — | ✓ |  |
+| `pbs notification endpoint smtp add` | — | ✓ |  |
+| `pbs notification endpoint smtp delete` | — | ✓ |  |
 | `pbs notification endpoint smtp ls` | ◑ | — |  |
 | `pbs notification endpoint smtp show` | ◑ | — |  |
-| `pbs notification endpoint smtp update` | — | — | deferred — modifies an smtp notification endpoint; covered by unit tests |
-| `pbs notification endpoint webhook add` | — | — | deferred — creates a webhook notification endpoint; covered by unit tests |
-| `pbs notification endpoint webhook delete` | — | — | deferred — removes a webhook notification endpoint; covered by unit tests |
+| `pbs notification endpoint smtp update` | — | ✓ |  |
+| `pbs notification endpoint webhook add` | — | ✓ |  |
+| `pbs notification endpoint webhook delete` | — | ✓ |  |
 | `pbs notification endpoint webhook ls` | ◑ | — |  |
 | `pbs notification endpoint webhook show` | ◑ | — |  |
-| `pbs notification endpoint webhook update` | — | — | deferred — modifies a webhook notification endpoint; covered by unit tests |
-| `pbs notification matcher add` | — | — | deferred — creates a notification matcher; covered by unit tests |
-| `pbs notification matcher delete` | — | — | deferred — removes a notification matcher; covered by unit tests |
+| `pbs notification endpoint webhook update` | — | ✓ |  |
+| `pbs notification matcher add` | — | ✓ |  |
+| `pbs notification matcher delete` | — | ✓ |  |
 | `pbs notification matcher field-values ls` | ◑ | — |  |
 | `pbs notification matcher fields ls` | ◑ | — |  |
 | `pbs notification matcher ls` | ◑ | — |  |
 | `pbs notification matcher show` | ◑ | — |  |
-| `pbs notification matcher update` | — | — | deferred — modifies a notification matcher; covered by unit tests |
+| `pbs notification matcher update` | — | ✓ |  |
 | `pbs notification target ls` | ◑ | — |  |
-| `pbs notification target test` | — | — | n/a — sends a real notification through the live target — out of scope for the automated sweep; covered by unit tests |
+| `pbs notification target test` | — | ✓ |  |
 | `pbs permission ls` | ◑ | — |  |
-| `pbs prune job add` | — | — | deferred — creates a prune job; covered by unit tests |
-| `pbs prune job delete` | — | — | deferred — removes a prune job; covered by unit tests |
+| `pbs prune job add` | — | ✓ |  |
+| `pbs prune job delete` | — | ✓ |  |
 | `pbs prune job ls` | ◑ | — |  |
-| `pbs prune job run` | — | — | deferred — runs a configured prune job (deletes data); covered by unit tests |
+| `pbs prune job run` | — | ✓ |  |
 | `pbs prune job show` | ◑ | — |  |
-| `pbs prune job update` | — | — | deferred — modifies a prune job; covered by unit tests |
-| `pbs prune run` | — | — | deferred — prunes snapshots by retention policy (deletes data); covered by unit tests |
+| `pbs prune job update` | — | ✓ |  |
+| `pbs prune run` | — | ✓ |  |
 | `pbs prune simulate` | ◑ | — |  |
-| `pbs realm ad add` | — | — | deferred — adds an AD authentication realm; covered by unit tests |
-| `pbs realm ad delete` | — | — | deferred — removes an AD realm; covered by unit tests |
+| `pbs realm ad add` | — | ✓ |  |
+| `pbs realm ad delete` | — | ✓ |  |
 | `pbs realm ad ls` | ◑ | — |  |
 | `pbs realm ad show` | ◑ | — |  |
-| `pbs realm ad update` | — | — | deferred — modifies an AD realm; covered by unit tests |
-| `pbs realm ldap add` | — | — | deferred — adds an LDAP authentication realm; covered by unit tests |
-| `pbs realm ldap delete` | — | — | deferred — removes an LDAP realm; covered by unit tests |
+| `pbs realm ad update` | — | ✓ |  |
+| `pbs realm ldap add` | — | ✓ |  |
+| `pbs realm ldap delete` | — | ✓ |  |
 | `pbs realm ldap ls` | ◑ | — |  |
 | `pbs realm ldap show` | ◑ | — |  |
-| `pbs realm ldap update` | — | — | deferred — modifies an LDAP realm; covered by unit tests |
+| `pbs realm ldap update` | — | ✓ |  |
 | `pbs realm ls` | ◑ | — |  |
-| `pbs realm openid add` | — | — | deferred — adds an OpenID authentication realm; covered by unit tests |
-| `pbs realm openid delete` | — | — | deferred — removes an OpenID realm; covered by unit tests |
+| `pbs realm openid add` | — | ✓ |  |
+| `pbs realm openid delete` | — | ✓ |  |
 | `pbs realm openid ls` | ◑ | — |  |
 | `pbs realm openid show` | ◑ | — |  |
-| `pbs realm openid update` | — | — | deferred — modifies an OpenID realm; covered by unit tests |
+| `pbs realm openid update` | — | ✓ |  |
 | `pbs realm pam show` | ◑ | — |  |
 | `pbs realm pam update` | — | — | deferred — modifies the built-in PAM realm; covered by unit tests |
 | `pbs realm pbs show` | ◑ | — |  |
 | `pbs realm pbs update` | — | — | deferred — modifies the built-in PBS realm; covered by unit tests |
-| `pbs realm sync` | — | — | deferred — runs a realm sync task that can create or update users; covered by unit tests |
-| `pbs remote add` | — | — | deferred — adds a remote PBS connection (stores credentials); covered by unit tests |
-| `pbs remote delete` | — | — | deferred — removes a remote PBS connection; covered by unit tests |
+| `pbs realm sync` | — | ✓ |  |
+| `pbs remote add` | — | ✓ |  |
+| `pbs remote delete` | — | ✓ |  |
 | `pbs remote ls` | ◑ | — |  |
 | `pbs remote scan groups` | ◑ | — |  |
 | `pbs remote scan ls` | ◑ | — |  |
 | `pbs remote scan namespaces` | ◑ | — |  |
 | `pbs remote show` | ◑ | — |  |
-| `pbs remote update` | — | — | deferred — modifies a remote PBS connection; covered by unit tests |
+| `pbs remote update` | — | ✓ |  |
 | `pbs role ls` | ◑ | — |  |
-| `pbs snapshot delete` | — | — | deferred — deletes a backup snapshot; covered by unit tests |
+| `pbs snapshot delete` | — | ✓ |  |
 | `pbs snapshot files` | ◑ | — |  |
 | `pbs snapshot ls` | ◑ | — |  |
 | `pbs snapshot notes` | ◑ | — |  |
-| `pbs snapshot protect` | — | — | deferred — sets the protected flag on a snapshot; covered by unit tests |
+| `pbs snapshot protect` | — | ✓ |  |
 | `pbs snapshot show` | ◑ | — |  |
-| `pbs snapshot unprotect` | — | — | deferred — clears the protected flag on a snapshot; covered by unit tests |
+| `pbs snapshot unprotect` | — | ✓ |  |
 | `pbs status datastore-usage` | ◑ | — |  |
-| `pbs sync job add` | — | — | deferred — creates a sync job; covered by unit tests |
-| `pbs sync job delete` | — | — | deferred — removes a sync job; covered by unit tests |
+| `pbs sync job add` | — | ✓ |  |
+| `pbs sync job delete` | — | ✓ |  |
 | `pbs sync job ls` | ◑ | — |  |
-| `pbs sync job run` | — | — | deferred — runs a configured sync job (transfers data); covered by unit tests |
+| `pbs sync job run` | — | ✓ |  |
 | `pbs sync job show` | ◑ | — |  |
-| `pbs sync job update` | — | — | deferred — modifies a sync job; covered by unit tests |
+| `pbs sync job update` | — | ✓ |  |
 | `pbs sync ls` | ◑ | — |  |
-| `pbs sync pull` | — | — | deferred — transfers backup data into a local datastore; covered by unit tests |
-| `pbs sync push` | — | — | deferred — transfers backup data to a remote; covered by unit tests |
-| `pbs tape backup` | — | — | deferred — runs a tape backup, writing datastore contents to tape; covered by unit tests |
-| `pbs tape changer add` | — | — | deferred — adds a tape changer definition; covered by unit tests |
-| `pbs tape changer delete` | — | — | deferred — removes a tape changer definition; covered by unit tests |
+| `pbs sync pull` | — | ✓ |  |
+| `pbs sync push` | — | ✓ |  |
+| `pbs tape backup` | — | · |  |
+| `pbs tape changer add` | — | · |  |
+| `pbs tape changer delete` | — | · |  |
 | `pbs tape changer ls` | ◑ | — |  |
 | `pbs tape changer scan` | ◑ | — |  |
 | `pbs tape changer show` | ◑ | — |  |
 | `pbs tape changer status` | ◑ | — |  |
-| `pbs tape changer transfer` | — | — | deferred — moves tape library hardware (transfers media between slots); covered by unit tests |
-| `pbs tape changer update` | — | — | deferred — modifies a tape changer definition; covered by unit tests |
-| `pbs tape drive add` | — | — | deferred — adds a tape drive definition; covered by unit tests |
-| `pbs tape drive barcode-label` | — | — | n/a — labels every unlabelled tape in the changer, overwriting media headers — not automatable; covered by unit tests |
+| `pbs tape changer transfer` | — | · |  |
+| `pbs tape changer update` | — | · |  |
+| `pbs tape drive add` | — | · |  |
+| `pbs tape drive barcode-label` | — | · |  |
 | `pbs tape drive cartridge-memory` | ◑ | — |  |
-| `pbs tape drive catalog` | — | — | deferred — reads the whole loaded tape to rebuild its catalog (long, drive-locking); covered by unit tests |
-| `pbs tape drive clean` | — | — | deferred — runs a drive cleaning cycle with a cleaning cartridge; covered by unit tests |
-| `pbs tape drive delete` | — | — | deferred — removes a tape drive definition; covered by unit tests |
-| `pbs tape drive eject` | — | — | deferred — ejects the loaded tape from the drive; covered by unit tests |
-| `pbs tape drive export` | — | — | deferred — moves tape library hardware (exports media to the IE slot); covered by unit tests |
-| `pbs tape drive format` | — | — | n/a — formats (erases) the loaded tape, destroying media contents — not automatable; covered by unit tests |
-| `pbs tape drive inventory` | — | — | deferred — moves tape library hardware (loads each tape to read labels); covered by unit tests |
-| `pbs tape drive label` | — | — | n/a — writes a new label to the loaded tape, destroying its contents — not automatable; covered by unit tests |
-| `pbs tape drive load-media` | — | — | deferred — moves tape library hardware (loads a tape into the drive); covered by unit tests |
-| `pbs tape drive load-slot` | — | — | deferred — moves tape library hardware (loads from a slot); covered by unit tests |
+| `pbs tape drive catalog` | — | · |  |
+| `pbs tape drive clean` | — | · |  |
+| `pbs tape drive delete` | — | · |  |
+| `pbs tape drive eject` | — | · |  |
+| `pbs tape drive export` | — | · |  |
+| `pbs tape drive format` | — | · |  |
+| `pbs tape drive inventory` | — | · |  |
+| `pbs tape drive label` | — | · |  |
+| `pbs tape drive load-media` | — | · |  |
+| `pbs tape drive load-slot` | — | · |  |
 | `pbs tape drive ls` | ◑ | — |  |
 | `pbs tape drive read-label` | ◑ | — |  |
-| `pbs tape drive restore-key` | — | — | n/a — prompts for the encryption-key password interactively; covered by unit tests |
-| `pbs tape drive rewind` | — | — | deferred — rewinds the loaded tape; covered by unit tests |
+| `pbs tape drive restore-key` | — | · |  |
+| `pbs tape drive rewind` | — | · |  |
 | `pbs tape drive scan` | ◑ | — |  |
 | `pbs tape drive show` | ◑ | — |  |
 | `pbs tape drive status` | ◑ | — |  |
-| `pbs tape drive unload` | — | — | deferred — moves tape library hardware (unloads the drive); covered by unit tests |
-| `pbs tape drive update` | — | — | deferred — modifies a tape drive definition; covered by unit tests |
-| `pbs tape drive update-inventory` | — | — | deferred — moves tape library hardware (re-reads every tape label); covered by unit tests |
+| `pbs tape drive unload` | — | · |  |
+| `pbs tape drive update` | — | · |  |
+| `pbs tape drive update-inventory` | — | · |  |
 | `pbs tape drive volume-statistics` | ◑ | — |  |
-| `pbs tape job add` | — | — | deferred — creates a tape backup job; covered by unit tests |
-| `pbs tape job delete` | — | — | deferred — removes a tape backup job; covered by unit tests |
+| `pbs tape job add` | — | · |  |
+| `pbs tape job delete` | — | · |  |
 | `pbs tape job ls` | ◑ | — |  |
-| `pbs tape job run` | — | — | deferred — runs a tape backup job, writing to tape; covered by unit tests |
+| `pbs tape job run` | — | · |  |
 | `pbs tape job show` | ◑ | — |  |
 | `pbs tape job status` | ◑ | — |  |
-| `pbs tape job update` | — | — | deferred — modifies a tape backup job; covered by unit tests |
-| `pbs tape key add` | — | — | deferred — creates a tape encryption key; covered by unit tests |
-| `pbs tape key delete` | — | — | deferred — removes a tape encryption key; covered by unit tests |
+| `pbs tape job update` | — | · |  |
+| `pbs tape key add` | — | ✓ |  |
+| `pbs tape key delete` | — | ✓ |  |
 | `pbs tape key ls` | ◑ | — |  |
 | `pbs tape key show` | ◑ | — |  |
-| `pbs tape key update` | — | — | deferred — modifies a tape encryption key; covered by unit tests |
+| `pbs tape key update` | — | ✓ |  |
 | `pbs tape media content` | ◑ | — |  |
-| `pbs tape media destroy` | — | — | n/a — destroys all data on a tape medium — not automatable; covered by unit tests |
+| `pbs tape media destroy` | — | · |  |
 | `pbs tape media ls` | ◑ | — |  |
-| `pbs tape media move` | — | — | deferred — moves tape library hardware (relocates a tape); covered by unit tests |
-| `pbs tape media set-status` | — | — | deferred — changes a tape medium's status flag; covered by unit tests |
+| `pbs tape media move` | — | · |  |
+| `pbs tape media set-status` | — | · |  |
 | `pbs tape media sets` | ◑ | — |  |
-| `pbs tape pool add` | — | — | deferred — creates a media pool; covered by unit tests |
-| `pbs tape pool delete` | — | — | deferred — removes a media pool; covered by unit tests |
+| `pbs tape pool add` | — | ✓ |  |
+| `pbs tape pool delete` | — | ✓ |  |
 | `pbs tape pool ls` | ◑ | — |  |
 | `pbs tape pool show` | ◑ | — |  |
-| `pbs tape pool update` | — | — | deferred — modifies a media pool; covered by unit tests |
-| `pbs tape restore` | — | — | deferred — restores from tape into a datastore; covered by unit tests |
-| `pbs traffic add` | — | — | deferred — creates a traffic-control rule; covered by unit tests |
+| `pbs tape pool update` | — | ✓ |  |
+| `pbs tape restore` | — | · |  |
+| `pbs traffic add` | — | ✓ |  |
 | `pbs traffic current` | ◑ | — |  |
-| `pbs traffic delete` | — | — | deferred — removes a traffic-control rule; covered by unit tests |
+| `pbs traffic delete` | — | ✓ |  |
 | `pbs traffic ls` | ◑ | — |  |
 | `pbs traffic show` | ◑ | — |  |
-| `pbs traffic update` | — | — | deferred — modifies a traffic-control rule; covered by unit tests |
-| `pbs user add` | — | — | deferred — creates a user; covered by unit tests |
-| `pbs user delete` | — | — | deferred — removes a user; covered by unit tests |
+| `pbs traffic update` | — | ✓ |  |
+| `pbs user add` | — | ✓ |  |
+| `pbs user delete` | — | ✓ |  |
 | `pbs user ls` | ◑ | — |  |
-| `pbs user passwd` | — | — | n/a — prompts for the new password interactively; covered by unit tests |
+| `pbs user passwd` | — | · |  |
 | `pbs user show` | ◑ | — |  |
-| `pbs user token add` | — | — | n/a — creates a credential and prints a once-only secret — out of scope for the automated sweep; covered by unit tests |
-| `pbs user token delete` | — | — | deferred — removes an API token; covered by unit tests |
+| `pbs user token add` | — | ✓ |  |
+| `pbs user token delete` | — | ✓ |  |
 | `pbs user token ls` | ◑ | — |  |
 | `pbs user token show` | ◑ | — |  |
-| `pbs user token update` | — | — | deferred — modifies an API token; covered by unit tests |
-| `pbs user unlock-tfa` | — | — | deferred — resets a user's second factors; covered by unit tests |
-| `pbs user update` | — | — | deferred — modifies a user; covered by unit tests |
-| `pbs verify job add` | — | — | deferred — creates a verify job; covered by unit tests |
-| `pbs verify job delete` | — | — | deferred — removes a verify job; covered by unit tests |
+| `pbs user token update` | — | ✓ |  |
+| `pbs user unlock-tfa` | — | ✓ |  |
+| `pbs user update` | — | ✓ |  |
+| `pbs verify job add` | — | ✓ |  |
+| `pbs verify job delete` | — | ✓ |  |
 | `pbs verify job ls` | ◑ | — |  |
-| `pbs verify job run` | — | — | deferred — runs a configured verify job (long, IO-heavy); covered by unit tests |
+| `pbs verify job run` | — | ✓ |  |
 | `pbs verify job show` | ◑ | — |  |
-| `pbs verify job update` | — | — | deferred — modifies a verify job; covered by unit tests |
-| `pbs verify run` | — | — | deferred — runs a datastore verification task (long, IO-heavy); covered by unit tests |
+| `pbs verify job update` | — | ✓ |  |
+| `pbs verify run` | — | ✓ |  |
 
 ## `pdm`
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
 | `pdm acl ls` | ◑ | — |  |
-| `pdm acl update` | — | — | deferred — modifies the access control list; covered by unit tests |
-| `pdm auto-install installation delete` | — | — | deferred — removes an automated installation record; covered by unit tests |
+| `pdm acl update` | — | ✓ |  |
+| `pdm auto-install installation delete` | — | · |  |
 | `pdm auto-install installation ls` | ◑ | — |  |
-| `pdm auto-install prepared add` | — | — | deferred — creates a prepared auto-installer answer configuration; covered by unit tests |
-| `pdm auto-install prepared delete` | — | — | deferred — removes a prepared auto-installer answer configuration; covered by unit tests |
+| `pdm auto-install prepared add` | — | ✓ |  |
+| `pdm auto-install prepared delete` | — | ✓ |  |
 | `pdm auto-install prepared ls` | ◑ | — |  |
 | `pdm auto-install prepared show` | ◑ | — |  |
-| `pdm auto-install prepared update` | — | — | deferred — modifies a prepared auto-installer answer configuration; covered by unit tests |
-| `pdm auto-install token add` | — | — | deferred — creates an automated-installation authentication token; covered by unit tests |
-| `pdm auto-install token delete` | — | — | deferred — removes an automated-installation authentication token; covered by unit tests |
+| `pdm auto-install prepared update` | — | ✓ |  |
+| `pdm auto-install token add` | — | ✓ |  |
+| `pdm auto-install token delete` | — | ✓ |  |
 | `pdm auto-install token ls` | ◑ | — |  |
-| `pdm auto-install token update` | — | — | deferred — modifies an automated-installation authentication token, and --regenerate mints a new secret; covered by unit tests |
+| `pdm auto-install token update` | — | ✓ |  |
 | `pdm ceph flags` | ◑ | — |  |
 | `pdm ceph fs` | ◑ | — |  |
 | `pdm ceph ls` | ◑ | — |  |
@@ -469,124 +483,124 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pdm ceph pools` | ◑ | — |  |
 | `pdm ceph status` | ◑ | — |  |
 | `pdm ceph summary` | ◑ | — |  |
-| `pdm config acme account add` | — | — | deferred — registers an account with a live certificate authority; covered by unit tests |
-| `pdm config acme account delete` | — | — | deferred — deactivates the account at the certificate authority; covered by unit tests |
+| `pdm config acme account add` | — | · |  |
+| `pdm config acme account delete` | — | · |  |
 | `pdm config acme account ls` | ◑ | — |  |
 | `pdm config acme account show` | ◑ | — |  |
-| `pdm config acme account update` | — | — | deferred — updates the registration at the certificate authority; covered by unit tests |
+| `pdm config acme account update` | — | · |  |
 | `pdm config acme challenge-schema ls` | ◑ | — |  |
 | `pdm config acme directories ls` | ◑ | — |  |
-| `pdm config acme plugin add` | — | — | deferred — creates an ACME challenge plugin (stores API credentials); covered by unit tests |
-| `pdm config acme plugin delete` | — | — | deferred — removes an ACME challenge plugin; covered by unit tests |
+| `pdm config acme plugin add` | — | ✓ |  |
+| `pdm config acme plugin delete` | — | ✓ |  |
 | `pdm config acme plugin ls` | ◑ | — |  |
 | `pdm config acme plugin show` | ◑ | — |  |
-| `pdm config acme plugin update` | — | — | deferred — modifies an ACME challenge plugin; covered by unit tests |
+| `pdm config acme plugin update` | — | ✓ |  |
 | `pdm config acme tos show` | ◑ | — |  |
 | `pdm config certificate show` | ◑ | — |  |
-| `pdm config certificate update` | — | — | deferred — modifies the certificate/ACME-domain configuration; covered by unit tests |
+| `pdm config certificate update` | — | ✓ |  |
 | `pdm config notes show` | ◑ | — |  |
-| `pdm config notes update` | — | — | deferred — modifies the dashboard welcome notes; covered by unit tests |
-| `pdm config view add` | — | — | deferred — creates a saved resource view; covered by unit tests |
-| `pdm config view delete` | — | — | deferred — removes a saved resource view; covered by unit tests |
+| `pdm config notes update` | — | ✓ |  |
+| `pdm config view add` | — | ✓ |  |
+| `pdm config view delete` | — | ✓ |  |
 | `pdm config view ls` | ◑ | — |  |
 | `pdm config view show` | ◑ | — |  |
-| `pdm config view update` | — | — | deferred — modifies a saved resource view; covered by unit tests |
+| `pdm config view update` | — | ✓ |  |
 | `pdm config webauthn show` | ◑ | — |  |
-| `pdm config webauthn update` | — | — | deferred — modifies the WebAuthn relying-party configuration; covered by unit tests |
+| `pdm config webauthn update` | — | ✓ |  |
 | `pdm node apt changelog` | ◑ | — |  |
 | `pdm node apt repositories` | ◑ | — |  |
-| `pdm node apt repository add` | — | — | deferred — adds a package repository to the host; covered by unit tests |
-| `pdm node apt repository change` | — | — | deferred — enables or disables a package repository on the host; covered by unit tests |
-| `pdm node apt update-database` | — | — | deferred — refreshes the package index on the host; covered by unit tests |
+| `pdm node apt repository add` | — | ✓ |  |
+| `pdm node apt repository change` | — | ✓ |  |
+| `pdm node apt update-database` | — | ✓ |  |
 | `pdm node apt updates` | ◑ | — |  |
 | `pdm node apt versions` | ◑ | — |  |
-| `pdm node certificate acme order` | — | — | deferred — orders a real certificate from the CA and replaces the server cert; covered by unit tests |
-| `pdm node certificate acme renew` | — | — | deferred — renews the certificate at the CA and replaces the server cert; covered by unit tests |
-| `pdm node certificate delete-custom` | — | — | deferred — removes the custom TLS certificate; covered by unit tests |
+| `pdm node certificate acme order` | — | · |  |
+| `pdm node certificate acme renew` | — | · |  |
+| `pdm node certificate delete-custom` | — | · |  |
 | `pdm node certificate info` | ◑ | — |  |
-| `pdm node certificate upload` | — | — | deferred — replaces the server's TLS certificate; covered by unit tests |
+| `pdm node certificate upload` | — | · |  |
 | `pdm node config show` | ◑ | — |  |
-| `pdm node config update` | — | — | deferred — modifies host configuration; covered by unit tests |
+| `pdm node config update` | — | ✓ |  |
 | `pdm node dns show` | ◑ | — |  |
-| `pdm node dns update` | — | — | deferred — modifies host DNS configuration; covered by unit tests |
+| `pdm node dns update` | — | ✓ |  |
 | `pdm node journal` | ◑ | — |  |
 | `pdm node ls` | ◑ | — |  |
-| `pdm node network apply` | — | — | deferred — applies staged host network changes; covered by unit tests |
-| `pdm node network create` | — | — | deferred — changes host network configuration; covered by unit tests |
-| `pdm node network delete` | — | — | deferred — changes host network configuration; covered by unit tests |
+| `pdm node network apply` | — | · |  |
+| `pdm node network create` | — | ✓ |  |
+| `pdm node network delete` | — | ✓ |  |
 | `pdm node network ls` | ◑ | — |  |
-| `pdm node network revert` | — | — | deferred — reverts staged host network changes; covered by unit tests |
+| `pdm node network revert` | — | ✓ |  |
 | `pdm node network show` | ◑ | — |  |
-| `pdm node network update` | — | — | deferred — changes host network configuration; covered by unit tests |
-| `pdm node reboot` | — | — | n/a — reboots the real host; covered by unit tests |
+| `pdm node network update` | — | ✓ |  |
+| `pdm node reboot` | — | · |  |
 | `pdm node report` | ◑ | — |  |
 | `pdm node rrddata` | ◑ | — |  |
 | `pdm node sdn vnet mac-vrf` | ◑ | — |  |
 | `pdm node sdn zone ip-vrf` | ◑ | — |  |
-| `pdm node shutdown` | — | — | n/a — shuts down the real host; covered by unit tests |
+| `pdm node shutdown` | — | · |  |
 | `pdm node status` | ◑ | — |  |
 | `pdm node subscription show` | ◑ | — |  |
-| `pdm node subscription update` | — | — | deferred — re-checks the subscription with the vendor; covered by unit tests |
+| `pdm node subscription update` | — | ✓ |  |
 | `pdm node syslog` | ◑ | — |  |
 | `pdm node task log` | ◑ | — |  |
 | `pdm node task ls` | ◑ | — |  |
 | `pdm node task status` | ◑ | — |  |
-| `pdm node task stop` | — | — | deferred — cancels a running background task; covered by unit tests |
+| `pdm node task stop` | — | ✓ |  |
 | `pdm node time show` | ◑ | — |  |
-| `pdm node time update` | — | — | deferred — modifies the host timezone; covered by unit tests |
+| `pdm node time update` | — | ✓ |  |
 | `pdm pbs datastore ls` | ◑ | — |  |
 | `pdm pbs datastore namespaces` | ◑ | — |  |
 | `pdm pbs datastore rrddata` | ◑ | — |  |
 | `pdm pbs datastore snapshots` | ◑ | — |  |
 | `pdm pbs node apt changelog` | ◑ | — |  |
 | `pdm pbs node apt repositories` | ◑ | — |  |
-| `pdm pbs node apt update-database` | — | — | deferred — refreshes the package index on a managed PBS remote's node; covered by unit tests |
+| `pdm pbs node apt update-database` | — | · |  |
 | `pdm pbs node apt updates` | ◑ | — |  |
 | `pdm pbs node subscription` | ◑ | — |  |
-| `pdm pbs probe-tls` | — | — | deferred — re-probes and stores a PBS host's TLS fingerprint; covered by unit tests |
-| `pdm pbs realms` | — | — | deferred — reads the realms of a PBS host the PDM dials by hostname before it is registered as a remote; covered by unit tests |
+| `pdm pbs probe-tls` | — | · |  |
+| `pdm pbs realms` | — | · |  |
 | `pdm pbs remote ls` | ◑ | — |  |
 | `pdm pbs rrddata` | ◑ | — |  |
-| `pdm pbs scan` | — | — | deferred — scans a PBS host's connection info before adding it as a remote; covered by unit tests |
+| `pdm pbs scan` | — | · |  |
 | `pdm pbs status` | ◑ | — |  |
 | `pdm pbs task log` | ◑ | — |  |
 | `pdm pbs task ls` | ◑ | — |  |
 | `pdm pbs task status` | ◑ | — |  |
-| `pdm pbs task stop` | — | — | deferred — cancels a running background task on a managed PBS remote; covered by unit tests |
+| `pdm pbs task stop` | — | · |  |
 | `pdm permission ls` | ◑ | — |  |
 | `pdm pve cluster next-id` | ◑ | — |  |
 | `pdm pve cluster resources` | ◑ | — |  |
 | `pdm pve cluster status` | ◑ | — |  |
 | `pdm pve firewall options show` | ◑ | — |  |
-| `pdm pve firewall options update` | — | — | deferred — modifies a PVE remote's cluster firewall options; covered by unit tests |
+| `pdm pve firewall options update` | — | · |  |
 | `pdm pve firewall rules` | ◑ | — |  |
 | `pdm pve firewall show` | ◑ | — |  |
 | `pdm pve firewall status` | ◑ | — |  |
 | `pdm pve lxc config` | ◑ | — |  |
 | `pdm pve lxc firewall options show` | ◑ | — |  |
-| `pdm pve lxc firewall options update` | — | — | deferred — modifies a container's firewall options on a managed PVE remote; covered by unit tests |
+| `pdm pve lxc firewall options update` | — | · |  |
 | `pdm pve lxc firewall rules` | ◑ | — |  |
 | `pdm pve lxc ls` | ◑ | — |  |
-| `pdm pve lxc migrate` | — | — | deferred — migrates an LXC container between nodes on a managed PVE remote; covered by unit tests |
+| `pdm pve lxc migrate` | — | · |  |
 | `pdm pve lxc pending` | ◑ | — |  |
-| `pdm pve lxc remote-migrate` | — | — | deferred — migrates an LXC container to a different remote cluster; covered by unit tests |
+| `pdm pve lxc remote-migrate` | — | · |  |
 | `pdm pve lxc rrddata` | ◑ | — |  |
-| `pdm pve lxc shutdown` | — | — | deferred — shuts down an LXC container on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc snapshot add` | — | — | deferred — creates an LXC container snapshot on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc snapshot delete` | — | — | deferred — deletes an LXC container snapshot on a managed PVE remote; covered by unit tests |
+| `pdm pve lxc shutdown` | — | · |  |
+| `pdm pve lxc snapshot add` | — | · |  |
+| `pdm pve lxc snapshot delete` | — | · |  |
 | `pdm pve lxc snapshot ls` | ◑ | — |  |
-| `pdm pve lxc snapshot rollback` | — | — | deferred — rolls back an LXC container snapshot on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc snapshot update` | — | — | deferred — updates an LXC container snapshot's description on a managed PVE remote; covered by unit tests |
-| `pdm pve lxc start` | — | — | deferred — starts an LXC container on a managed PVE remote; covered by unit tests |
+| `pdm pve lxc snapshot rollback` | — | · |  |
+| `pdm pve lxc snapshot update` | — | · |  |
+| `pdm pve lxc start` | — | · |  |
 | `pdm pve lxc status` | ◑ | — |  |
-| `pdm pve lxc stop` | — | — | deferred — stops an LXC container on a managed PVE remote; covered by unit tests |
+| `pdm pve lxc stop` | — | · |  |
 | `pdm pve node apt changelog` | ◑ | — |  |
 | `pdm pve node apt repositories` | ◑ | — |  |
-| `pdm pve node apt update-database` | — | — | deferred — refreshes the package index on a managed PVE remote's node; covered by unit tests |
+| `pdm pve node apt update-database` | — | · |  |
 | `pdm pve node apt updates` | ◑ | — |  |
 | `pdm pve node config` | ◑ | — |  |
 | `pdm pve node firewall options show` | ◑ | — |  |
-| `pdm pve node firewall options update` | — | — | deferred — modifies a PVE remote node's firewall options; covered by unit tests |
+| `pdm pve node firewall options update` | — | · |  |
 | `pdm pve node firewall rules` | ◑ | — |  |
 | `pdm pve node firewall status` | ◑ | — |  |
 | `pdm pve node ls` | ◑ | — |  |
@@ -600,25 +614,25 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pdm pve probe-tls` | — | — | deferred — re-probes and stores a PVE host's TLS fingerprint; covered by unit tests |
 | `pdm pve qemu config` | ◑ | — |  |
 | `pdm pve qemu firewall options show` | ◑ | — |  |
-| `pdm pve qemu firewall options update` | — | — | deferred — modifies a VM's firewall options on a managed PVE remote; covered by unit tests |
+| `pdm pve qemu firewall options update` | — | · |  |
 | `pdm pve qemu firewall rules` | ◑ | — |  |
 | `pdm pve qemu ls` | ◑ | — |  |
-| `pdm pve qemu migrate` | — | — | deferred — migrates a QEMU VM between nodes on a managed PVE remote; covered by unit tests |
+| `pdm pve qemu migrate` | — | · |  |
 | `pdm pve qemu migrate-preconditions` | ◑ | — |  |
 | `pdm pve qemu pending` | ◑ | — |  |
-| `pdm pve qemu remote-migrate` | — | — | deferred — migrates a QEMU VM to a different remote cluster; covered by unit tests |
-| `pdm pve qemu resume` | — | — | deferred — resumes a QEMU VM on a managed PVE remote; covered by unit tests |
+| `pdm pve qemu remote-migrate` | — | · |  |
+| `pdm pve qemu resume` | — | · |  |
 | `pdm pve qemu rrddata` | ◑ | — |  |
-| `pdm pve qemu shutdown` | — | — | deferred — shuts down a QEMU VM on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu snapshot add` | — | — | deferred — creates a QEMU VM snapshot on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu snapshot delete` | — | — | deferred — deletes a QEMU VM snapshot on a managed PVE remote; covered by unit tests |
+| `pdm pve qemu shutdown` | — | · |  |
+| `pdm pve qemu snapshot add` | — | · |  |
+| `pdm pve qemu snapshot delete` | — | · |  |
 | `pdm pve qemu snapshot ls` | ◑ | — |  |
-| `pdm pve qemu snapshot rollback` | — | — | deferred — rolls back a QEMU VM snapshot on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu snapshot update` | — | — | deferred — updates a QEMU VM snapshot's description on a managed PVE remote; covered by unit tests |
-| `pdm pve qemu start` | — | — | deferred — starts a QEMU VM on a managed PVE remote; covered by unit tests |
+| `pdm pve qemu snapshot rollback` | — | · |  |
+| `pdm pve qemu snapshot update` | — | · |  |
+| `pdm pve qemu start` | — | · |  |
 | `pdm pve qemu status` | ◑ | — |  |
-| `pdm pve qemu stop` | — | — | deferred — stops a QEMU VM on a managed PVE remote; covered by unit tests |
-| `pdm pve realms` | — | — | deferred — reads the realms of a PVE host the PDM dials by hostname before it is registered as a remote; covered by unit tests |
+| `pdm pve qemu stop` | — | · |  |
+| `pdm pve realms` | — | · |  |
 | `pdm pve remote ls` | ◑ | — |  |
 | `pdm pve scan` | — | — | deferred — scans a PVE host's connection info before adding it as a remote; covered by unit tests |
 | `pdm pve storage ls` | ◑ | — |  |
@@ -627,85 +641,85 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pdm pve task log` | ◑ | — |  |
 | `pdm pve task ls` | ◑ | — |  |
 | `pdm pve task status` | ◑ | — |  |
-| `pdm pve task stop` | — | — | deferred — cancels a running background task on a managed PVE remote; covered by unit tests |
+| `pdm pve task stop` | — | · |  |
 | `pdm pve updates` | ◑ | — |  |
-| `pdm realm ad add` | — | — | deferred — adds an AD authentication realm; covered by unit tests |
-| `pdm realm ad delete` | — | — | deferred — removes an AD realm; covered by unit tests |
+| `pdm realm ad add` | — | ✓ |  |
+| `pdm realm ad delete` | — | ✓ |  |
 | `pdm realm ad ls` | ◑ | — |  |
 | `pdm realm ad show` | ◑ | — |  |
-| `pdm realm ad update` | — | — | deferred — modifies an AD realm; covered by unit tests |
-| `pdm realm ldap add` | — | — | deferred — adds an LDAP authentication realm; covered by unit tests |
-| `pdm realm ldap delete` | — | — | deferred — removes an LDAP realm; covered by unit tests |
+| `pdm realm ad update` | — | ✓ |  |
+| `pdm realm ldap add` | — | ✓ |  |
+| `pdm realm ldap delete` | — | ✓ |  |
 | `pdm realm ldap ls` | ◑ | — |  |
 | `pdm realm ldap show` | ◑ | — |  |
-| `pdm realm ldap update` | — | — | deferred — modifies an LDAP realm; covered by unit tests |
+| `pdm realm ldap update` | — | ✓ |  |
 | `pdm realm ls` | ◑ | — |  |
-| `pdm realm openid add` | — | — | deferred — adds an OpenID authentication realm; covered by unit tests |
-| `pdm realm openid delete` | — | — | deferred — removes an OpenID realm; covered by unit tests |
+| `pdm realm openid add` | — | ✓ |  |
+| `pdm realm openid delete` | — | ✓ |  |
 | `pdm realm openid ls` | ◑ | — |  |
 | `pdm realm openid show` | ◑ | — |  |
-| `pdm realm openid update` | — | — | deferred — modifies an OpenID realm; covered by unit tests |
+| `pdm realm openid update` | — | ✓ |  |
 | `pdm realm pam show` | ◑ | — |  |
 | `pdm realm pam update` | — | — | deferred — modifies the built-in PAM realm; covered by unit tests |
 | `pdm realm pdm show` | ◑ | — |  |
 | `pdm realm pdm update` | — | — | deferred — modifies the built-in PDM realm; covered by unit tests |
-| `pdm realm sync` | — | — | deferred — runs a realm sync task that can create or update users; covered by unit tests |
-| `pdm remote add` | — | — | deferred — registers a managed remote (stores credentials); covered by unit tests |
-| `pdm remote delete` | — | — | deferred — removes a managed remote; covered by unit tests |
+| `pdm realm sync` | — | ✓ |  |
+| `pdm remote add` | — | ✓ |  |
+| `pdm remote delete` | — | ✓ | error-contract checked |
 | `pdm remote ls` | ◑ | — |  |
 | `pdm remote metric-collection status` | ◑ | — |  |
-| `pdm remote metric-collection trigger` | — | — | deferred — triggers a metric-collection run against a remote; covered by unit tests |
-| `pdm remote probe-certificate` | — | — | deferred — re-probes and stores a remote's TLS fingerprint; covered by unit tests |
+| `pdm remote metric-collection trigger` | — | ✓ |  |
+| `pdm remote probe-certificate` | — | ✓ |  |
 | `pdm remote rrddata` | ◑ | — |  |
 | `pdm remote show` | ◑ | — |  |
 | `pdm remote task ls` | ◑ | — |  |
-| `pdm remote task refresh` | — | — | deferred — forces a task-cache refresh against every managed remote; covered by unit tests |
+| `pdm remote task refresh` | — | ✓ |  |
 | `pdm remote task statistics` | ◑ | — |  |
-| `pdm remote update` | — | — | deferred — modifies a managed remote; covered by unit tests |
-| `pdm remote updates refresh` | — | — | deferred — refreshes the available-package summary for every managed remote; covered by unit tests |
+| `pdm remote update` | — | ✓ |  |
+| `pdm remote updates refresh` | — | ✓ |  |
 | `pdm remote updates summary` | ◑ | — |  |
 | `pdm remote version` | ◑ | — |  |
-| `pdm resource location-info` | — | — | deferred — refreshes the location-info cache for a view; covered by unit tests |
+| `pdm resource location-info` | — | · |  |
 | `pdm resource ls` | ◑ | — |  |
 | `pdm resource status` | ◑ | — |  |
 | `pdm resource subscription` | ◑ | — |  |
 | `pdm resource top-entities` | ◑ | — |  |
 | `pdm role ls` | ◑ | — |  |
 | `pdm sdn controller ls` | ◑ | — |  |
-| `pdm sdn vnet add` | — | — | deferred — creates a VNet on several managed remotes at once; covered by unit tests |
+| `pdm sdn vnet add` | — | · |  |
 | `pdm sdn vnet ls` | ◑ | — |  |
-| `pdm sdn zone add` | — | — | deferred — creates an SDN zone on several managed remotes at once; covered by unit tests |
+| `pdm sdn zone add` | — | · |  |
 | `pdm sdn zone ls` | ◑ | — |  |
-| `pdm subscription adopt-all` | — | — | deferred — adopts every foreign live subscription into the pool; covered by unit tests |
-| `pdm subscription adopt-key` | — | — | deferred — adopts a live subscription on a remote node into the pool; covered by unit tests |
-| `pdm subscription apply-pending` | — | — | deferred — applies every pending pool change to its remote node; covered by unit tests |
-| `pdm subscription auto-assign` | — | — | deferred — computes a proposed key-to-node assignment plan; covered by unit tests |
-| `pdm subscription bulk-assign` | — | — | deferred — applies a proposal returned by auto-assign; covered by unit tests |
-| `pdm subscription check` | — | — | deferred — triggers a fresh subscription check on a remote node; covered by unit tests |
-| `pdm subscription clear-pending` | — | — | deferred — drops every queued pending subscription change; covered by unit tests |
-| `pdm subscription key add` | — | — | deferred — adds subscription keys to the pool; covered by unit tests |
-| `pdm subscription key assign` | — | — | deferred — binds a pool key to a remote node; covered by unit tests |
-| `pdm subscription key delete` | — | — | deferred — removes a subscription key from the pool; covered by unit tests |
+| `pdm subscription adopt-all` | — | · |  |
+| `pdm subscription adopt-key` | — | · |  |
+| `pdm subscription apply-pending` | — | · |  |
+| `pdm subscription auto-assign` | — | ✓ |  |
+| `pdm subscription bulk-assign` | — | · |  |
+| `pdm subscription check` | — | · |  |
+| `pdm subscription clear-pending` | — | ✓ |  |
+| `pdm subscription key add` | — | ✓ |  |
+| `pdm subscription key assign` | — | ✓ |  |
+| `pdm subscription key delete` | — | ✓ |  |
 | `pdm subscription key ls` | ◑ | — |  |
 | `pdm subscription key show` | ◑ | — |  |
-| `pdm subscription key unassign` | — | — | deferred — drops the remote-node binding for a pool key; covered by unit tests |
+| `pdm subscription key unassign` | — | ✓ |  |
 | `pdm subscription node-status` | ◑ | — |  |
-| `pdm subscription queue-clear` | — | — | deferred — queues a subscription clear on a remote node; covered by unit tests |
-| `pdm subscription revert-pending-clear` | — | — | deferred — drops a queued clear on a remote node; covered by unit tests |
-| `pdm tfa delete` | — | — | deferred — removes a user's TFA entry; covered by unit tests |
+| `pdm subscription queue-clear` | — | ✓ |  |
+| `pdm subscription revert-pending-clear` | — | ✓ |  |
+| `pdm tfa delete` | — | · |  |
 | `pdm tfa ls` | ◑ | — |  |
 | `pdm tfa show` | ◑ | — |  |
-| `pdm tfa update` | — | — | deferred — modifies a user's TFA entry description; covered by unit tests |
-| `pdm token add` | — | — | n/a — creates an API token and prints a once-only secret — out of scope for the automated sweep; covered by unit tests |
-| `pdm token delete` | — | — | deferred — removes an API token; covered by unit tests |
+| `pdm tfa update` | — | · |  |
+| `pdm token add` | — | ✓ |  |
+| `pdm token delete` | — | ✓ |  |
 | `pdm token ls` | ◑ | — |  |
 | `pdm token show` | ◑ | — |  |
-| `pdm token update` | — | — | deferred — modifies an API token; covered by unit tests |
-| `pdm user add` | — | — | deferred — creates a user; covered by unit tests |
-| `pdm user delete` | — | — | deferred — removes a user; covered by unit tests |
+| `pdm token update` | — | ✓ |  |
+| `pdm user add` | — | ✓ |  |
+| `pdm user delete` | — | ✓ |  |
 | `pdm user ls` | ◑ | — |  |
 | `pdm user show` | ◑ | — |  |
-| `pdm user update` | — | — | deferred — modifies a user; covered by unit tests |
+| `pdm user update` | — | ✓ |  |
 
 ## `pve`
 
@@ -734,8 +748,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve access role set` | — | ✓ |  |
 | `pve access tfa create` | — | ✓ |  |
 | `pve access tfa delete` | — | ✓ |  |
-| `pve access tfa get` | ◑ | — |  |
-| `pve access tfa get-entry` | ◑ | — |  |
+| `pve access tfa get` | ◑ | ✓ |  |
+| `pve access tfa get-entry` | ◑ | ✓ |  |
 | `pve access tfa list` | ✓ | — |  |
 | `pve access tfa set` | — | ✓ |  |
 | `pve access tfa types` | ✓ | — |  |
@@ -765,7 +779,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster backup create` | — | ✓ |  |
 | `pve cluster backup delete` | — | ✓ |  |
 | `pve cluster backup get` | — | ✓ |  |
-| `pve cluster backup included-volumes` | ◑ | — |  |
+| `pve cluster backup included-volumes` | ◑ | ✓ |  |
 | `pve cluster backup list` | ✓ | ✓ |  |
 | `pve cluster backup set` | — | ✓ |  |
 | `pve cluster backup-info not-backed-up` | ◑ | — |  |
@@ -809,7 +823,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster firewall ipset add` | — | ✓ |  |
 | `pve cluster firewall ipset create` | — | ✓ |  |
 | `pve cluster firewall ipset delete` | — | ✓ |  |
-| `pve cluster firewall ipset get` | ◑ | — |  |
+| `pve cluster firewall ipset get` | ◑ | ✓ |  |
 | `pve cluster firewall ipset list` | ✓ | ✓ |  |
 | `pve cluster firewall ipset remove` | — | ✓ |  |
 | `pve cluster firewall ipset update` | — | ✓ |  |
@@ -909,7 +923,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster qemu cpu-flags` | ✓ | — |  |
 | `pve cluster replication create` | — | · |  |
 | `pve cluster replication delete` | — | · |  |
-| `pve cluster replication get` | ◑ | — |  |
+| `pve cluster replication get` | ◑ | · |  |
 | `pve cluster replication list` | ✓ | ✓ |  |
 | `pve cluster replication set` | — | · |  |
 | `pve cluster resources` | ✓ | — |  |
@@ -917,45 +931,45 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster tasks` | ✓ | — |  |
 | `pve lxc clone` | — | ✓ |  |
 | `pve lxc config describe` | ✓ | — |  |
-| `pve lxc config get` | ◑ | — |  |
-| `pve lxc config pending` | ◑ | — |  |
+| `pve lxc config get` | ◑ | ✓ |  |
+| `pve lxc config pending` | ◑ | ✓ |  |
 | `pve lxc config set` | — | ✓ |  |
 | `pve lxc console` | ◑ | ✓ |  |
 | `pve lxc create` | — | ✓ |  |
 | `pve lxc delete` | — | ✓ |  |
 | `pve lxc disk move` | — | ✓ |  |
 | `pve lxc disk resize` | — | ✓ |  |
-| `pve lxc feature` | ◑ | — |  |
+| `pve lxc feature` | ◑ | ✓ |  |
 | `pve lxc firewall alias create` | — | ✓ |  |
 | `pve lxc firewall alias delete` | — | ✓ |  |
-| `pve lxc firewall alias get` | — | — | deferred — reads a single firewall alias by name — needs a pre-existing alias; not wired into the mutate phase; covered by unit tests |
+| `pve lxc firewall alias get` | — | ✓ |  |
 | `pve lxc firewall alias list` | — | ✓ |  |
 | `pve lxc firewall alias update` | — | ✓ |  |
 | `pve lxc firewall ipset add` | — | ✓ |  |
 | `pve lxc firewall ipset create` | — | ✓ |  |
 | `pve lxc firewall ipset delete` | — | ✓ |  |
-| `pve lxc firewall ipset get-member` | — | — | deferred — reads a single CIDR entry of an IP set — needs a pre-existing member; not wired into the mutate phase; covered by unit tests |
+| `pve lxc firewall ipset get-member` | — | ✓ |  |
 | `pve lxc firewall ipset list` | — | ✓ |  |
 | `pve lxc firewall ipset remove` | — | ✓ |  |
 | `pve lxc firewall ipset update-member` | — | ✓ |  |
-| `pve lxc firewall log` | ◑ | — |  |
+| `pve lxc firewall log` | ◑ | ✓ |  |
 | `pve lxc firewall options describe` | ✓ | — |  |
 | `pve lxc firewall options get` | ◑ | ✓ |  |
 | `pve lxc firewall options set` | — | ✓ |  |
-| `pve lxc firewall refs` | ◑ | — |  |
+| `pve lxc firewall refs` | ◑ | ✓ |  |
 | `pve lxc firewall rules create` | — | ✓ |  |
 | `pve lxc firewall rules delete` | — | ✓ |  |
 | `pve lxc firewall rules get` | — | ✓ |  |
 | `pve lxc firewall rules list` | ◑ | ✓ |  |
 | `pve lxc firewall rules update` | — | ✓ |  |
-| `pve lxc hookscript get` | ◑ | — |  |
+| `pve lxc hookscript get` | ◑ | ✓ |  |
 | `pve lxc hookscript set` | — | — | deferred — PVE restricts the hookscript config key to the root user and the suites run on an API token; the volume must also already exist on a snippets storage; covered by unit tests |
 | `pve lxc hookscript unset` | — | — | deferred — PVE restricts the hookscript config key to the root user, including its deletion, and the suites run on an API token; covered by unit tests |
 | `pve lxc interfaces` | ◑ | ✓ |  |
 | `pve lxc list` | ✓ | — |  |
-| `pve lxc metrics` | ◑ | — |  |
+| `pve lxc metrics` | ◑ | ✓ |  |
 | `pve lxc migrate` | — | ✓ |  |
-| `pve lxc migrate check` | ◑ | — |  |
+| `pve lxc migrate check` | ◑ | ✓ |  |
 | `pve lxc permissions effective` | ◑ | — |  |
 | `pve lxc permissions grant` | — | — | deferred — grants ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve lxc permissions list` | ◑ | — |  |
@@ -963,23 +977,23 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve lxc reboot` | — | ✓ |  |
 | `pve lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
 | `pve lxc resume` | — | ✓ |  |
-| `pve lxc rrd` | ◑ | — |  |
-| `pve lxc security caps add` | — | — | deferred — grants a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
+| `pve lxc rrd` | ◑ | ✓ |  |
+| `pve lxc security caps add` | — | ✓ |  |
 | `pve lxc security caps describe` | ✓ | — |  |
-| `pve lxc security caps remove` | — | — | deferred — revokes a capability by editing /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
-| `pve lxc security caps reset` | — | — | deferred — clears the capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
-| `pve lxc security caps set` | — | — | deferred — rewrites the container capability whitelist in /etc/pve/lxc/<vmid>.conf over root ssh, so it cannot be driven head-less by the read-only sweep; not wired into the mutate phase; covered by unit tests |
-| `pve lxc security caps show` | ◑ | — |  |
-| `pve lxc security features set` | — | — | deferred — mutates the container features= flags via the config API; not wired into the mutate phase; covered by unit tests |
-| `pve lxc security features show` | ◑ | — |  |
+| `pve lxc security caps remove` | — | ✓ |  |
+| `pve lxc security caps reset` | — | ✓ |  |
+| `pve lxc security caps set` | — | ✓ |  |
+| `pve lxc security caps show` | ◑ | ✓ |  |
+| `pve lxc security features set` | — | ✓ |  |
+| `pve lxc security features show` | ◑ | ✓ |  |
 | `pve lxc security list` | ◑ | — |  |
-| `pve lxc security show` | ◑ | — |  |
+| `pve lxc security show` | ◑ | ✓ |  |
 | `pve lxc shutdown` | — | ✓ |  |
 | `pve lxc snapshot create` | — | ✓ |  |
 | `pve lxc snapshot delete` | — | ✓ |  |
 | `pve lxc snapshot list` | ◑ | ✓ |  |
 | `pve lxc snapshot rollback` | — | ✓ |  |
-| `pve lxc snapshot show` | ◑ | — |  |
+| `pve lxc snapshot show` | ◑ | ✓ |  |
 | `pve lxc snapshot update` | — | ✓ |  |
 | `pve lxc start` | — | ✓ |  |
 | `pve lxc status` | ◑ | ✓ |  |
@@ -1070,7 +1084,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node disks smart` | ◑ | — |  |
 | `pve node disks wipe` | — | — | deferred — BLOCKED: /nodes/{node}/disks/wipedisk is root@pam-only and rejects the API token ('user != root@pam'), like storage volume copy and cluster acme account; not invokable by the suite |
 | `pve node dns get` | ◑ | ✓ |  |
-| `pve node dns set` | — | ✓ | live via mutate phase |
+| `pve node dns set` | — | ✓ |  |
 | `pve node exec` | — | ✓ |  |
 | `pve node execute` | — | — | n/a — runs arbitrary commands on the real host via the PVE API — security-sensitive; out of scope for automated e2e regardless of guarding |
 | `pve node firewall log` | ◑ | — |  |
@@ -1188,13 +1202,13 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve qemu feature` | ◑ | — |  |
 | `pve qemu firewall alias create` | — | ✓ |  |
 | `pve qemu firewall alias delete` | — | ✓ |  |
-| `pve qemu firewall alias get` | — | — | deferred — reads a single firewall alias by name — needs a pre-existing alias; not wired into the mutate phase; covered by unit tests |
+| `pve qemu firewall alias get` | — | ✓ |  |
 | `pve qemu firewall alias list` | — | ✓ |  |
 | `pve qemu firewall alias update` | — | ✓ |  |
 | `pve qemu firewall ipset add` | — | ✓ |  |
 | `pve qemu firewall ipset create` | — | ✓ |  |
 | `pve qemu firewall ipset delete` | — | ✓ |  |
-| `pve qemu firewall ipset get-member` | — | — | deferred — reads a single CIDR entry of an IP set — needs a pre-existing member; not wired into the mutate phase; covered by unit tests |
+| `pve qemu firewall ipset get-member` | — | ✓ |  |
 | `pve qemu firewall ipset list` | — | ✓ |  |
 | `pve qemu firewall ipset remove` | — | ✓ |  |
 | `pve qemu firewall ipset update-member` | — | ✓ |  |
@@ -1222,37 +1236,37 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve qemu permissions grant` | — | — | deferred — grants ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
 | `pve qemu permissions list` | ◑ | — |  |
 | `pve qemu permissions revoke` | — | — | deferred — revokes ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve qemu reboot` | — | ✓ | live via mutate phase |
+| `pve qemu reboot` | — | · |  |
 | `pve qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live clusters with shared or compatible storage; no rollback without manual intervention; not exercised live |
 | `pve qemu reset` | — | ✓ |  |
 | `pve qemu resume` | — | ✓ |  |
 | `pve qemu rrd` | ◑ | — |  |
-| `pve qemu security agent set` | — | — | deferred — sets the guest-agent config option (agent=); not wired into the mutate phase; covered by unit tests |
+| `pve qemu security agent set` | — | ✓ |  |
 | `pve qemu security agent show` | ◑ | — |  |
-| `pve qemu security confidential clear` | — | — | deferred — removes the confidential-computing configuration; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security confidential set` | — | — | deferred — configures AMD SEV / Intel TDX memory encryption, which needs matching host CPU/firmware support; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security confidential clear` | — | ✓ |  |
+| `pve qemu security confidential set` | — | ✓ |  |
 | `pve qemu security confidential show` | ◑ | — |  |
 | `pve qemu security cpu-flags describe` | ✓ | — |  |
-| `pve qemu security cpu-flags set` | — | — | deferred — edits the VM's security-relevant CPU flags; not wired into the mutate phase; covered by unit tests |
+| `pve qemu security cpu-flags set` | — | ✓ |  |
 | `pve qemu security cpu-flags show` | ◑ | — |  |
 | `pve qemu security list` | ◑ | — |  |
-| `pve qemu security nic firewall` | — | — | deferred — toggles per-NIC firewall coverage; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security nic show` | ◑ | — |  |
-| `pve qemu security protection disable` | — | — | deferred — clears the VM protection flag; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security protection enable` | — | — | deferred — sets the VM protection flag; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security secureboot enable` | — | — | deferred — switches firmware to OVMF and allocates an EFI vars disk; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security secureboot show` | ◑ | — |  |
-| `pve qemu security show` | ◑ | — |  |
-| `pve qemu security tpm add` | — | — | deferred — allocates a TPM state disk; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security tpm remove` | — | — | deferred — destroys the TPM state device and every key sealed in it; not wired into the mutate phase; covered by unit tests |
-| `pve qemu security tpm show` | ◑ | — |  |
+| `pve qemu security nic firewall` | — | ✓ |  |
+| `pve qemu security nic show` | ◑ | ✓ |  |
+| `pve qemu security protection disable` | — | ✓ |  |
+| `pve qemu security protection enable` | — | ✓ |  |
+| `pve qemu security secureboot enable` | — | ✓ |  |
+| `pve qemu security secureboot show` | ◑ | ✓ |  |
+| `pve qemu security show` | ◑ | ✓ |  |
+| `pve qemu security tpm add` | — | ✓ |  |
+| `pve qemu security tpm remove` | — | ✓ |  |
+| `pve qemu security tpm show` | ◑ | ✓ |  |
 | `pve qemu sendkey` | — | ✓ |  |
 | `pve qemu shutdown` | — | ✓ |  |
 | `pve qemu snapshot create` | — | ✓ | error-contract checked |
 | `pve qemu snapshot delete` | — | ✓ |  |
 | `pve qemu snapshot list` | ◑ | ✓ |  |
 | `pve qemu snapshot rollback` | — | ✓ |  |
-| `pve qemu snapshot show` | ◑ | — |  |
+| `pve qemu snapshot show` | ◑ | ✓ |  |
 | `pve qemu snapshot update` | — | ✓ |  |
 | `pve qemu ssh` | — | — | n/a — opens an interactive SSH tunnel into a guest — not automatable head-less, same class as `node shell`/`node console`; covered by unit tests |
 | `pve qemu start` | — | ✓ |  |
@@ -1392,13 +1406,13 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `rsync` | — | — | deferred — transfers files to/from a live node over SSH, so it cannot be driven head-less by the read-only sweep; shares the `pmx node rsync` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
+| `rsync` | — | ✓ |  |
 
 ## `ssh`
 
 | Leaf | e2e | mutate | Notes |
 |------|-----|--------|-------|
-| `ssh` | — | — | deferred — opens a live SSH session on the resolved node, so it cannot be driven head-less by the read-only sweep; shares the `pmx node ssh` code path (SSH-gated live coverage there) but this top-level alias is not yet wired into the mutate phase; covered by unit tests |
+| `ssh` | — | ✓ |  |
 
 ## `version`
 
@@ -1429,9 +1443,12 @@ make test-lifecycle            # the destructive verb matrix only, against `lab`
 scripts/e2e --mutate --vm-only # sweep + VM verb matrix (skip the container)
 scripts/lifecycle --vm-only    # VM verb matrix only
 scripts/lifecycle --ct-only    # container verb matrix only
+
+make test-pbs-lifecycle        # the PBS verb matrix, against `pbs-e2e`
+make test-pdm-lifecycle        # the PDM verb matrix, against `pdm-e2e`
 ```
 
-Both suites skip gracefully (exit 0) when no context is configured; pass
-`--strict` to fail instead. The mutate phase prints a per-guest coverage table
-listing every verb it drove and its result.
+Every suite skips gracefully (exit 0) when no context is configured; pass
+`--strict` to fail instead. Each mutate phase prints a coverage table listing
+every verb it drove and its result.
 

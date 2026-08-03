@@ -1170,7 +1170,7 @@ wired in, and `make stack-down` destroys the guests again. See
 `scripts/lifecycle` (`make test-lifecycle`) is the destructive counterpart, and
 `scripts/e2e --mutate` runs the read-only sweep and then this mutate phase in
 one invocation. It provisions an isolated `pmxcli` SDN (zone, vnet, and a
-10.241.0.0/24 subnet off the host management network) and a `pmx-cli` resource
+172.30.0.0/24 subnet off the host management network) and a `pmx-cli` resource
 pool, then drives a throwaway QEMU VM and an LXC container through **every**
 mutating sub-command — the full power-state matrix
 (`start`/`stop`/`shutdown`/`reboot`/`reset`/`suspend`/`resume`) plus
@@ -1189,11 +1189,43 @@ verbs relocate to a scratch `dir` storage the run provisions on the test node
 (`pmx-cli-move`, removed at teardown along with its directory), so they need no
 second cluster storage and can never move a volume into somebody else's pool.
 Set `PMX_E2E_ROOTDIR_STORAGE`,
-`PMX_E2E_TMPL_STORAGE`, or `PMX_E2E_BACKUP_STORAGE` to pin any of them. Two
-verbs are environment-bound and recorded
-as SKIP with their reason rather than run as failures: qemu `reboot` (a diskless
-VM has no guest OS to ACPI-reboot — the verb is proven on the Alpine container)
-and lxc `suspend`/`resume` (need working CRIU support on the host).
+`PMX_E2E_TMPL_STORAGE`, or `PMX_E2E_BACKUP_STORAGE` to pin any of them.
+
+Verbs whose precondition the target lab cannot satisfy are recorded as SKIP
+with the reason that blocked them, never as failures — so a skip always names
+what to change rather than reading as a pass. What each one needs:
+
+- qemu `reboot`
+
+  a diskless VM has no guest OS to ACPI-reboot; the verb is proven on the
+  Alpine container instead.
+
+- lxc `suspend` / `resume`
+
+  working CRIU support on the host.
+
+- qemu `migrate`, lxc `migrate`, `replication`, HA `relocate`
+
+  a second cluster node to accept the guest. A single-node lab cannot cover
+  them; scale the lab to two nodes to unlock them.
+
+- `node disks` create/delete/init-gpt
+
+  one spare disk on the test node that nothing else uses. The run refuses to
+  touch a disk the API reports as in service, and a host-side wipefs/holders/
+  zpool probe has to agree it is pristine before a byte is written. Set
+  `PMX_E2E_SPARE_SERIAL` to pin one disk by serial on a host with several idle
+  ones; unset, any unused disk is taken. Attach a small (16G is plenty)
+  scratch disk to the node to cover these.
+
+- qemu `agent` exec / exec-status / file-read / file-write / set-user-password
+
+  a guest with `qemu-guest-agent` running. The run bakes its own agent image
+  on the node with `virt-customize` from a Debian cloud image it downloads and
+  caches once, so the only host prerequisite is `libguestfs-tools` and
+  `qemu-utils`. Set `PMX_E2E_NO_IMAGE_FETCH` to forbid the download, in which
+  case a pre-staged image under `/var/lib/vz/template/iso` is used if present
+  and the verbs skip otherwise.
 
 ```bash
 make test-e2e-mutate                       # read-only sweep + the destructive verb matrix
@@ -1203,6 +1235,41 @@ scripts/e2e --mutate --vm-only             # sweep + VM verb matrix (skip the co
 scripts/lifecycle --vm-only                # VM verb matrix only
 scripts/lifecycle --ct-only                # container verb matrix only
 ```
+
+`scripts/pbs-lifecycle` and `scripts/pdm-lifecycle` are the same idea for the
+other two products, against the stack servers `make stack-up` provisions.
+
+The PBS suite creates a scratch datastore of its own under `/var/lib` and drives
+everything against that: the datastore verbs, gc/prune/verify both ad-hoc and as
+scheduled jobs, a self-referential remote and both sync directions, users,
+tokens, ACLs, realms, notification endpoints, metric servers, the ACME challenge
+plugin, the whole tape *configuration* surface, and the host verbs that cannot
+take the appliance off the network. Two things it stages for itself: a ~1KB host
+backup pushed with `proxmox-backup-client` over root SSH (nothing else can
+create a snapshot, and `snapshot delete`/`group delete` need one), and a
+throwaway LDAP responder bound to the appliance's loopback — PBS *connects* to
+the directory when an LDAP or AD realm is created, so those verbs cannot be
+pointed at a dead address. Both are removed when the block ends.
+
+The PDM suite drives the verbs that act on the manager itself: users, tokens,
+ACLs, realms, dashboard views, WebAuthn and certificate configuration, the ACME
+plugin, remotes, the subscription key pool and its pending-change queue,
+automated-installation answers and tokens, and the same class of host verbs. It
+deliberately writes nothing *through* a managed remote — no guest on a
+registered cluster is started, snapshotted, or migrated, and no subscription key
+is applied to a remote's node — so those verbs are recorded as skips naming what
+they would have done. The same CLI paths are driven directly by the PVE suite
+against guests it owns.
+
+```bash
+make test-pbs-lifecycle                    # against `pbs-e2e`
+make test-pdm-lifecycle                    # against `pdm-e2e`
+make test-pbs-lifecycle PBS_CONTEXT=lab-pbs
+```
+
+Both need passwordless root SSH to their appliance for the fixtures above;
+without it the dependent verbs are recorded as skips saying so, and the rest of
+the suite still runs.
 
 See [`docs/test-coverage-matrix.md`](docs/test-coverage-matrix.md) for a
 per-leaf-command map of e2e and mutate-phase coverage.
