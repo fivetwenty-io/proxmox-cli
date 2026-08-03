@@ -195,8 +195,11 @@ func newMigrateallCmd() *cobra.Command {
 		Use:   "migrateall",
 		Short: "Migrate all guests off the node",
 		Long: "Migrate every guest on the resolved node to --target-node, or only those " +
-			"listed in --vmids. Requires --yes because it affects all guests by default.",
-		Example: `  pmx pve node migrateall --target-node pve2 --yes`,
+			"listed in --vmids. Requires --yes because it affects all guests by default.\n\n" +
+			"Proxmox VE also insists on a concurrency limit for this endpoint: pass " +
+			"--max-workers, or set max_workers in datacenter.cfg, or the request is " +
+			"rejected before any guest moves.",
+		Example: `  pmx pve node migrateall --target-node pve2 --max-workers 1 --yes`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
@@ -227,7 +230,8 @@ func newMigrateallCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&vmids, "vmids", "", "comma-separated VMIDs to act on (default: all guests)")
 	f.StringVar(&targetNode, "target-node", "", "node to migrate guests to (required)")
-	f.Int64Var(&maxWorkers, "max-workers", 0, "maximum number of concurrent tasks")
+	f.Int64Var(&maxWorkers, "max-workers", 0,
+		"maximum number of concurrent tasks (required unless datacenter.cfg sets max_workers)")
 	f.BoolVar(&withLocalDisks, "with-local-disks", false, "migrate local disks as well")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the action without prompting")
 	cli.MustMarkRequired(cmd, "target-node")

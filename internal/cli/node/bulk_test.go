@@ -155,6 +155,38 @@ func TestNodeMigrateall_ForwardsFields(t *testing.T) {
 	require.Contains(t, buf.String(), "Migrate-all started")
 }
 
+// TestNodeMigrateall_ForwardsMaxWorkers verifies --max-workers reaches the API.
+// Proxmox VE rejects the whole request when neither this nor datacenter.cfg's
+// max_workers is set, so dropping the flag would make the command unusable on a
+// default cluster.
+func TestNodeMigrateall_ForwardsMaxWorkers(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/migrateall", &rec, nil)
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "migrateall",
+		"--target-node", "pve2", "--max-workers", "1", "--yes"))
+
+	require.NoError(t, root.Execute())
+	form, err := url.ParseQuery(rec.body)
+	require.NoError(t, err)
+	require.Equal(t, "1", form.Get("max-workers"))
+}
+
+// TestNodeMigrateall_HelpNamesTheWorkerRequirement guards the note that tells an
+// operator why an otherwise complete command line is refused by the server.
+func TestNodeMigrateall_HelpNamesTheWorkerRequirement(t *testing.T) {
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	addNodeGroup(root)
+
+	cmd, _, err := root.Find([]string{"node", "migrateall"})
+	require.NoError(t, err)
+	require.Contains(t, cmd.Long, "max_workers in datacenter.cfg")
+	require.Contains(t, cmd.Flags().Lookup("max-workers").Usage, "required unless")
+}
+
 // TestNodeMigrateall_RequiresYes verifies migrateall refuses to act without
 // --yes even when the required --target-node is supplied.
 func TestNodeMigrateall_RequiresYes(t *testing.T) {
