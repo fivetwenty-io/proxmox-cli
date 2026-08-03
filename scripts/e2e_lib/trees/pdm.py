@@ -80,7 +80,7 @@ def _pick(rows: list, *keys: str) -> str | None:
 
 
 def _tail(res: CmdResult) -> str:
-    return (res.stderr.strip() or res.stdout.strip())[:80]
+    return res.reason("command failed", limit=80)
 
 
 def run(ctx: Ctx) -> None:
@@ -118,7 +118,7 @@ def _gate(ctx: Ctx) -> tuple[bool, str]:
         return False, f"context {ctx.env.context!r} is not a product: pdm context"
     ver = ctx.run("version")
     if ver.rc != 0:
-        return False, f"PDM server unreachable: {(ver.stderr.strip() or ver.stdout.strip())[:80]}"
+        return False, f"PDM server unreachable: {ver.reason('no error text', limit=80)}"
     return True, ""
 
 

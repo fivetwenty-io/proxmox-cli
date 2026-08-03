@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .model import Deferred, Result, Status
+from .text import reason_of
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,15 @@ class CmdResult:
 
     def json(self) -> Any:
         return json.loads(self.stdout)
+
+    def reason(self, fallback: str = "", limit: int = 160) -> str:
+        """One-line failure text with CLI warning banners stripped.
+
+        Reading `.stderr` directly and truncating it yields the `--insecure` TLS
+        banner and nothing else, which turns every skip and failure detail into
+        noise; see e2e_lib.text.
+        """
+        return reason_of(self.stderr, self.stdout, self.rc, fallback, limit)
 
 
 class Ctx:
@@ -114,7 +124,7 @@ class Ctx:
                     self.skip(name, reason)
                     return res
             status = Status.FAIL
-            detail = (res.stderr.strip() or res.stdout.strip() or "non-zero exit")[:200]
+            detail = res.reason("non-zero exit", limit=200)
         elif fmt == "json" and res.stdout.strip():
             try:
                 res.json()
@@ -144,7 +154,7 @@ class Ctx:
         for fmt in ("table", "plain", "json", "yaml"):
             res = self.run(*args, node=node, fmt=fmt)
             if res.rc != 0:
-                bad = f"{fmt}: exit {res.rc}: {(res.stderr.strip() or res.stdout.strip())[:120]}"
+                bad = f"{fmt}: exit {res.rc}: {res.reason(limit=120)}"
                 break
             if not res.stdout.strip():
                 bad = f"{fmt}: empty output"
@@ -175,7 +185,7 @@ class Ctx:
         res = self.run(*args, node=node, fmt="", with_context=with_context)
         dur = time.monotonic() - start
         cmd = self.pretty(res.argv)
-        msg = res.stderr.strip() or res.stdout.strip()
+        msg = res.reason("")
         if res.rc == 0:
             status, detail = Status.FAIL, "expected non-zero exit, got 0"
         elif not msg:

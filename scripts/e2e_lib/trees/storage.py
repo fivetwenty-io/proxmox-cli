@@ -9,6 +9,30 @@ NAME = "storage"
 DESCRIPTION = "Manage cluster storage configuration"
 
 
+def _probe_reason(probe: CmdResult | None) -> str:
+    """Short reason from a failed probe, empty when there was nothing to probe."""
+    if probe is None:
+        return "no storage to probe"
+    return probe.reason("probe failed", limit=80)
+
+
+def _first_supported(ctx: Ctx, candidates: list[str], argv):
+    """Return the first storage id for which argv(candidate) succeeds.
+
+    Several per-storage reads are plugin-dependent — ZFS implements no
+    `identity`, a freshly added storage has no RRD database yet — so probing
+    only the first configured storage turns a supported verb into a permanent
+    skip on any lab whose first storage happens not to support it. Probe each
+    in turn and report the last failure when none of them work.
+    """
+    last: CmdResult | None = None
+    for cand in candidates:
+        last = ctx.run(*argv(cand), node=ctx.node)
+        if last.rc == 0:
+            return cand, last
+    return None, last
+
+
 def run(ctx: Ctx) -> None:
     def is_list(res: CmdResult) -> str | None:
         return None if isinstance(res.json(), list) else "expected a JSON array"
@@ -24,13 +48,20 @@ def run(ctx: Ctx) -> None:
     # ours (Isolation.STORAGE_TOKEN) and fall back to the first row only when
     # the cluster has none — a dedicated lab, where every storage is ours.
     sid = None
+    candidates: list[str] = []
     if lst.rc == 0:
         try:
             rows = lst.json()
             ours = [s for s in rows
                     if isinstance(s, dict)
                     and Isolation.STORAGE_TOKEN in str(s.get("storage", ""))]
-            sid = ctx.first(ours or rows, "storage")
+            pool = ours or rows
+            sid = ctx.first(pool, "storage")
+            # Ordered fallbacks for the plugin-dependent reads below: `identity`
+            # and `rrd` are not implemented by every backend, so a lab whose
+            # first storage happens to be one of those would never exercise them.
+            candidates = [str(s.get("storage")) for s in pool
+                          if isinstance(s, dict) and s.get("storage")]
         except ValueError:
             sid = None
 
@@ -82,12 +113,14 @@ def run(ctx: Ctx) -> None:
             # identity: backend identity (path/export/URL). Not every storage
             # plugin implements get_identity (e.g. ZFS), so skip gracefully when
             # the backend reports it as unsupported.
-            id_probe = ctx.run("pve", "storage", "identity", str(sid), node=ctx.node)
-            if id_probe.rc == 0:
-                ctx.check("identity", "pve", "storage", "identity", str(sid), node=ctx.node)
+            id_sid, id_probe = _first_supported(
+                ctx, candidates or [str(sid)],
+                lambda cand: ("pve", "storage", "identity", cand))
+            if id_sid is not None:
+                ctx.check("identity", "pve", "storage", "identity", id_sid, node=ctx.node)
             else:
-                ctx.skip("identity", "storage plugin does not implement identity: "
-                         f"{(id_probe.stderr.strip() or id_probe.stdout.strip())[:80]}")
+                ctx.skip("identity", "no storage plugin on this target implements identity: "
+                         f"{_probe_reason(id_probe)}")
             # rrddata: timeseries for storage metrics; zero-row result is valid.
             ctx.check("rrddata", "pve", "storage", "rrddata", str(sid),
                       "--timeframe", "hour", node=ctx.node, validate=is_list)
@@ -101,15 +134,17 @@ def run(ctx: Ctx) -> None:
                     return "rrd response missing 'filename' key"
                 return None
 
-            rrd_probe = ctx.run("pve", "storage", "rrd", str(sid),
-                                "--ds", "used", "--timeframe", "hour", node=ctx.node)
-            if rrd_probe.rc == 0:
-                ctx.check("rrd", "pve", "storage", "rrd", str(sid),
+            rrd_sid, rrd_probe = _first_supported(
+                ctx, candidates or [str(sid)],
+                lambda cand: ("pve", "storage", "rrd", cand, "--ds", "used",
+                              "--timeframe", "hour"))
+            if rrd_sid is not None:
+                ctx.check("rrd", "pve", "storage", "rrd", rrd_sid,
                           "--ds", "used", "--timeframe", "hour",
                           node=ctx.node, validate=has_filename)
             else:
-                ctx.skip("rrd", "no RRD data recorded for this storage: "
-                         f"{(rrd_probe.stderr.strip() or rrd_probe.stdout.strip())[:80]}")
+                ctx.skip("rrd", "no storage on this target has RRD data recorded: "
+                         f"{_probe_reason(rrd_probe)}")
         else:
             ctx.skip("content", "no node discovered")
             ctx.skip("status", "no node discovered")
