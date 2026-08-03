@@ -303,6 +303,40 @@ func newAutoInstallPreparedShowCmd() *cobra.Command {
 	return cmd
 }
 
+// jsonObjectFlags are the prepared-answer fields the PDM schema types as nested
+// objects. They are the ones a form-encoded request cannot carry.
+var jsonObjectFlags = []string{
+	"filesystem", "disk-filter", "netdev-filter", "target-filter", "template-counters",
+}
+
+// preparedAnswerErr explains the server's refusal to parse a nested object.
+//
+// The prepared-answer endpoints type several fields as nested JSON objects, but
+// requests go out form-encoded, and Proxmox's form parser rejects any value that
+// is not a flat scalar with "unable to parse complex (sub) objects". Since
+// --filesystem is required by `prepared add`, that whole verb is unreachable
+// until the client can send a JSON request body. The raw message names only the
+// offending parameter, which reads like bad input rather than a transport limit.
+func preparedAnswerErr(action string, err error) error {
+	if strings.Contains(err.Error(), "complex (sub) objects") {
+		return fmt.Errorf("%s: %s are nested JSON objects, and Proxmox Datacenter "+
+			"Manager's form-encoded API cannot accept one — the request has to carry a "+
+			"JSON body, which this client does not yet send. There is no flag value that "+
+			"works around it: %w",
+			action, strings.Join(quoteFlags(jsonObjectFlags), ", "), err)
+	}
+	return fmt.Errorf("%s: %w", action, err)
+}
+
+// quoteFlags renders flag names as --name for an error message.
+func quoteFlags(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, "--"+n)
+	}
+	return out
+}
+
 // autoInstallPreparedFlags collects the prepared-answer attribute flags
 // shared by `prepared add` and `prepared update`. Every field maps onto the
 // CreatePreparedParams / UpdatePreparedParams field of the same name.
@@ -659,7 +693,7 @@ func newAutoInstallPreparedAddCmd() *cobra.Command {
 
 			resp, err := deps.PDM.AutoInstall.CreatePrepared(cmd.Context(), params)
 			if err != nil {
-				return fmt.Errorf("add prepared answer %q: %w", id, err)
+				return preparedAnswerErr(fmt.Sprintf("add prepared answer %q", id), err)
 			}
 
 			fields, err := flattenToMap(resp)
@@ -722,7 +756,7 @@ func newAutoInstallPreparedUpdateCmd() *cobra.Command {
 
 			resp, err := deps.PDM.AutoInstall.UpdatePrepared(cmd.Context(), id, params)
 			if err != nil {
-				return fmt.Errorf("update prepared answer %q: %w", id, err)
+				return preparedAnswerErr(fmt.Sprintf("update prepared answer %q", id), err)
 			}
 
 			fields, err := flattenToMap(resp)
