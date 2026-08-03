@@ -1439,6 +1439,10 @@ def teardown(r: Runner) -> None:
 
 
 def run(context: str, binary: str | None, build: bool, strict: bool) -> int:
+    # Line-buffer stdout: redirected to a file or a CI log it is otherwise
+    # block-buffered, so a run that stalls on a slow step appears to be stuck
+    # several steps earlier — whichever one last filled a 4K block.
+    sys.stdout.reconfigure(line_buffering=True)
     bin_path = find_binary(binary, build=build)
     ok, why = target_configured(bin_path, context)
     if not ok:

@@ -90,12 +90,23 @@ def target_configured(binary: str, target: str) -> tuple[bool, str]:
 
 
 def discover_node(binary: str, target: str) -> str:
+    """The node a suite drives when none was named: the first online one by name.
+
+    The API does not promise an order, and taking whatever it lists first made
+    the destructive suite pick a different node between runs — which is how the
+    same code passed against one node and failed against the other. Sorting by
+    name makes a run reproducible, and preferring an online node keeps a downed
+    one from being chosen just because it sorts early.
+    """
     rc, data, _ = _probe_json(binary, target, "pve", "node", "list")
-    if rc == 0 and isinstance(data, list) and data:
-        first = data[0]
-        if isinstance(first, dict):
-            return str(first.get("node") or "")
-    return ""
+    if rc != 0 or not isinstance(data, list):
+        return ""
+    names = sorted(str(n.get("node") or "") for n in data
+                   if isinstance(n, dict) and n.get("node"))
+    online = sorted(str(n.get("node") or "") for n in data
+                    if isinstance(n, dict) and n.get("node")
+                    and str(n.get("status", "online")) == "online")
+    return (online or names or [""])[0]
 
 
 # --- parallel execution -----------------------------------------------------
