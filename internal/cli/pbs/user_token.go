@@ -14,6 +14,16 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
+// isEmptyDataOK reports whether err is the API layer's "the server answered 200
+// with no payload" complaint. Proxmox Backup Server answers a token update with
+// `{"data": null}` unless the secret was regenerated, and a built-in realm
+// update the same way — which the generated bindings treat as failures even
+// though the write succeeded. Only endpoints whose empty response is documented
+// behaviour may consult this.
+func isEmptyDataOK(err error) bool {
+	return cli.IsEmptyDataResponse(err)
+}
+
 // newUserTokenCmd builds `pmx pbs user token` and its sub-commands: manage
 // the API tokens belonging to a user (GET/POST/PUT/DELETE
 // /access/users/{userid}/token...).
@@ -244,7 +254,7 @@ func newUserTokenUpdateCmd() *cobra.Command {
 			}
 
 			resp, err := deps.PBS.Access.UpdateUsersToken(cmd.Context(), userid, tokenName, params)
-			if err != nil {
+			if err != nil && !isEmptyDataOK(err) {
 				return fmt.Errorf("update token %q for user %q: %w", tokenName, userid, err)
 			}
 

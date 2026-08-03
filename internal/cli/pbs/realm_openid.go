@@ -352,8 +352,10 @@ func newRealmOpenidUpdateCmd() *cobra.Command {
 			params := &pbsconfig.UpdateAccessOpenidParams{}
 			of.applyUpdate(cmd, params)
 
+			// A successful realm update answers `{"data": null}`, which the
+			// generated binding reports as an error; the write did happen.
 			_, err := deps.PBS.Config.UpdateAccessOpenid(cmd.Context(), realm, params)
-			if err != nil {
+			if err != nil && !cli.IsEmptyDataResponse(err) {
 				return fmt.Errorf("update OpenID realm %q: %w", realm, err)
 			}
 

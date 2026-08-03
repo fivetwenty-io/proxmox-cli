@@ -373,8 +373,10 @@ func newRealmAdUpdateCmd() *cobra.Command {
 			params := &pbsconfig.UpdateAccessAdParams{}
 			af.applyUpdate(cmd, params)
 
+			// A successful realm update answers `{"data": null}`, which the
+			// generated binding reports as an error; the write did happen.
 			_, err := deps.PBS.Config.UpdateAccessAd(cmd.Context(), realm, params)
-			if err != nil {
+			if err != nil && !cli.IsEmptyDataResponse(err) {
 				return fmt.Errorf("update AD realm %q: %w", realm, err)
 			}
 

@@ -2,6 +2,7 @@ package pbs
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -277,6 +278,35 @@ func TestUserTokenUpdate_SurfacesAPIError(t *testing.T) {
 	err := run(deps, &buf, newUserCmd(), "user", "token", "update", testUserid, testTokenName, "--comment", "x")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "update token")
+}
+
+// A real PBS answers a non-regenerating token update with `{"data": null}`. The
+// generated binding reports that as an error, but the update did happen — so
+// the command must report success, not a spurious failure.
+func TestUserTokenUpdate_TreatsNullDataAsSuccess(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("PUT "+userTokenPath()+"/"+testTokenName,
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":null}`))
+		})
+
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newUserCmd(), "user", "token", "update", testUserid,
+		testTokenName, "--comment", "updated")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "updated.")
+}
+
+// The tolerance is scoped to an empty payload: a genuine API failure still has
+// to surface, or every broken update would read as a success.
+func TestUserTokenUpdate_EmptyDataToleranceIsNarrow(t *testing.T) {
+	require.True(t, isEmptyDataOK(fmt.Errorf(
+		"access.UpdateUsersToken: empty data in response (code=200)")))
+	require.False(t, isEmptyDataOK(fmt.Errorf("permission check failed")))
+	require.False(t, isEmptyDataOK(nil))
 }
 
 // --- user token delete ---------------------------------------------------------------
