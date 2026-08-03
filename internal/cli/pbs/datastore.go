@@ -20,6 +20,31 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
+// legacyPruneFlags are the per-datastore retention settings Proxmox Backup
+// Server dropped when it moved retention onto standalone prune jobs. The flags
+// stay bound because a server old enough to still honour them is a supported
+// target, but a current server rejects them outright — so the rejection is
+// translated into the command that replaced them rather than surfaced raw.
+var legacyPruneFlags = []string{
+	"prune-schedule", "keep-last", "keep-hourly", "keep-daily",
+	"keep-weekly", "keep-monthly", "keep-yearly",
+}
+
+// legacyPruneNote is appended to the help of every flag in legacyPruneFlags.
+const legacyPruneNote = " (removed in newer PBS releases; use `pmx pbs prune job add` instead)"
+
+// datastorePruneErr rewrites the server's terse rejection of a retired
+// retention parameter into the command that superseded it. Any other failure is
+// passed through with the operation context alone.
+func datastorePruneErr(action string, err error) error {
+	if strings.Contains(err.Error(), "replaced by prune jobs") {
+		return fmt.Errorf("%s: per-datastore prune settings were removed from Proxmox Backup "+
+			"Server and replaced by prune jobs; create one with `pmx pbs prune job add <id> "+
+			"--store <name> --schedule <schedule> --keep-last <n>` instead: %w", action, err)
+	}
+	return fmt.Errorf("%s: %w", action, err)
+}
+
 // validRrdTimeframes are the RRD time-frame enum values accepted by
 // GET /admin/datastore/{store}/rrd, per the PBS API schema.
 var validRrdTimeframes = []string{"hour", "day", "week", "month", "year", "decade"}
@@ -203,6 +228,11 @@ func (df *datastoreFlags) registerCommon(cmd *cobra.Command) {
 	f.StringVar(&df.pruneSchedule, "prune-schedule", "", "run the prune job at this schedule")
 	f.StringVar(&df.tuning, "tuning", "", "datastore tuning options")
 	f.BoolVar(&df.verifyNew, "verify-new", false, "verify all new backups right after completion")
+	for _, name := range legacyPruneFlags {
+		if flag := f.Lookup(name); flag != nil {
+			flag.Usage += legacyPruneNote
+		}
+	}
 }
 
 // registerCreate binds every flag CreateDatastoreParams accepts, including
@@ -389,7 +419,7 @@ func newDatastoreCreateCmd() *cobra.Command {
 			df.applyCreate(cmd, params)
 
 			if err := deps.PBS.Config.CreateDatastore(cmd.Context(), params); err != nil {
-				return fmt.Errorf("create datastore %q: %w", name, err)
+				return datastorePruneErr(fmt.Sprintf("create datastore %q", name), err)
 			}
 
 			res := output.Result{Message: fmt.Sprintf("Datastore %q created.", name)}
@@ -406,10 +436,13 @@ func newDatastoreCreateCmd() *cobra.Command {
 func newDatastoreUpdateCmd() *cobra.Command {
 	var df datastoreFlags
 	cmd := &cobra.Command{
-		Use:     "update <name>",
-		Short:   "Update a datastore configuration",
-		Long:    "Update settings on an existing Proxmox Backup Server datastore configuration.",
-		Example: "  pmx pbs datastore update tank --prune-schedule daily",
+		Use:   "update <name>",
+		Short: "Update a datastore configuration",
+		Long: "Update settings on an existing Proxmox Backup Server datastore configuration.\n\n" +
+			"Retention no longer lives on the datastore: newer Proxmox Backup Server releases " +
+			"reject --prune-schedule and the --keep-* flags outright, having replaced them with " +
+			"standalone prune jobs. Set retention with `pmx pbs prune job add` instead.",
+		Example: "  pmx pbs datastore update tank --gc-schedule daily",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -423,7 +456,7 @@ func newDatastoreUpdateCmd() *cobra.Command {
 			df.applyUpdate(cmd, params)
 
 			if err := deps.PBS.Config.UpdateDatastore(cmd.Context(), name, params); err != nil {
-				return fmt.Errorf("update datastore %q: %w", name, err)
+				return datastorePruneErr(fmt.Sprintf("update datastore %q", name), err)
 			}
 
 			res := output.Result{Message: fmt.Sprintf("Datastore %q updated.", name)}

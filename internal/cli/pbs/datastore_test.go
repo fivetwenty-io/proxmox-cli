@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -260,6 +261,74 @@ func TestDatastoreUpdate_ServerError(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatTable, false)
 	err := run(deps, &buf, newDatastoreUpdateCmd(), "update", "store1", "--comment", "x")
 	require.Error(t, err)
+}
+
+// A current PBS rejects the retired per-datastore retention parameters with a
+// terse message that names neither what replaced them nor how to set retention
+// now. Both create and update translate it into the prune-job command.
+func TestDatastore_RetiredPruneSettingsHint(t *testing.T) {
+	const retired = "parameter verification failed - 'keep-last': " +
+		"datastore prune settings have been replaced by prune jobs"
+
+	t.Run("create", func(t *testing.T) {
+		f, pc := newFakeClient(t)
+		f.HandleFunc("POST "+pathConfigDatastore, func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteError(w, http.StatusBadRequest, retired)
+		})
+
+		var buf bytes.Buffer
+		deps := depsFor(t, pc, output.FormatTable, false)
+		err := run(deps, &buf, newDatastoreCreateCmd(), "create", "store1",
+			"--path", "/mnt/store1", "--keep-last", "1")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "pmx pbs prune job add")
+		require.Contains(t, err.Error(), "replaced by prune jobs")
+	})
+
+	t.Run("update", func(t *testing.T) {
+		f, pc := newFakeClient(t)
+		f.HandleFunc("PUT "+fmt.Sprintf(pathConfigDatastoreFmt, "store1"),
+			func(w http.ResponseWriter, _ *http.Request) {
+				testhelper.WriteError(w, http.StatusBadRequest, retired)
+			})
+
+		var buf bytes.Buffer
+		deps := depsFor(t, pc, output.FormatTable, false)
+		err := run(deps, &buf, newDatastoreUpdateCmd(), "update", "store1", "--keep-last", "1")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "pmx pbs prune job add")
+	})
+}
+
+// Any other failure keeps its plain wrapping — the hint must not leak onto
+// errors that have nothing to do with retention.
+func TestDatastore_OtherErrorsCarryNoPruneHint(t *testing.T) {
+	f, pc := newFakeClient(t)
+	f.HandleFunc("PUT "+fmt.Sprintf(pathConfigDatastoreFmt, "store1"),
+		func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+		})
+
+	var buf bytes.Buffer
+	deps := depsFor(t, pc, output.FormatTable, false)
+	err := run(deps, &buf, newDatastoreUpdateCmd(), "update", "store1", "--comment", "x")
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "prune job add")
+	require.Contains(t, err.Error(), `update datastore "store1"`)
+}
+
+// The retired flags stay bound (older servers still honour them) but their help
+// has to say so, or the only signal is a server-side rejection.
+func TestDatastore_RetiredPruneFlagsCarryHelpNote(t *testing.T) {
+	for _, newCmd := range []func() *cobra.Command{newDatastoreCreateCmd, newDatastoreUpdateCmd} {
+		cmd := newCmd()
+		for _, name := range legacyPruneFlags {
+			flag := cmd.Flags().Lookup(name)
+			require.NotNil(t, flag, "%s: flag %s is not bound", cmd.Name(), name)
+			require.Contains(t, flag.Usage, "pmx pbs prune job add",
+				"%s: flag %s has no replacement note", cmd.Name(), name)
+		}
+	}
 }
 
 // --- delete -----------------------------------------------------------------
