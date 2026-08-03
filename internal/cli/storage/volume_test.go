@@ -266,9 +266,54 @@ func TestVolumeAlloc_PostsParams(t *testing.T) {
 	require.Equal(t, http.MethodPost, rec.method)
 	require.Equal(t, allocContentPath, rec.path)
 	require.Equal(t, "200", rec.form.Get("vmid"))
-	require.Equal(t, "local:vm-200-disk-0", rec.form.Get("filename"))
+	// The storage addresses the endpoint; the body carries the bare name. Sending
+	// the whole volume id makes PVE reject it or bake the prefix into the file
+	// name (volid "local:200/local:vm-200-disk-0").
+	require.Equal(t, "vm-200-disk-0", rec.form.Get("filename"))
 	require.Equal(t, "4G", rec.form.Get("size"))
 	require.Contains(t, out, "local:vm-200-disk-0")
+}
+
+// TestVolumeAlloc_StripsStoragePrefixWithPath verifies a name that itself contains
+// a path separator keeps the path but loses only the storage prefix.
+func TestVolumeAlloc_StripsStoragePrefixWithPath(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordJSON(f, "POST "+allocContentPath, &rec, "local:200/vm-200-disk-0.raw")
+
+	_, err := run(t, f, "--node", "pve1", "volume", "alloc",
+		"--vmid", "200",
+		"--filename", "local:200/vm-200-disk-0.raw",
+		"--size", "1G",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "200/vm-200-disk-0.raw", rec.form.Get("filename"))
+}
+
+// TestVolumeAlloc_RejectsBareName verifies a filename without the <storage>: prefix
+// is rejected up front rather than posted to an unaddressable storage.
+func TestVolumeAlloc_RejectsBareName(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	_, err := run(t, f, "--node", "pve1", "volume", "alloc",
+		"--vmid", "200",
+		"--filename", "vm-200-disk-0.raw",
+		"--size", "1G",
+	)
+	require.ErrorContains(t, err, "<storage>:<name> form")
+}
+
+// TestVolumeAlloc_RejectsEmptyName verifies a filename that is only a storage
+// prefix is rejected instead of posting an empty name.
+func TestVolumeAlloc_RejectsEmptyName(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	_, err := run(t, f, "--node", "pve1", "volume", "alloc",
+		"--vmid", "200",
+		"--filename", "local:",
+		"--size", "1G",
+	)
+	require.ErrorContains(t, err, "<storage>:<name> form")
 }
 
 // TestVolumeAlloc_ForwardsFormat verifies --format is forwarded when set.

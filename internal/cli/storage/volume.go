@@ -38,11 +38,19 @@ func newVolumeCmd() *cobra.Command {
 // (the portion before the first colon), or an error if the volume ID is not in
 // the expected "<storage>:<path>" form.
 func storageOfVolume(volume string) (string, error) {
-	storage, _, ok := strings.Cut(volume, ":")
-	if !ok || storage == "" {
-		return "", fmt.Errorf("invalid volume ID %q: expected <storage>:<path>", volume)
+	storage, _, err := splitVolume(volume)
+	return storage, err
+}
+
+// splitVolume splits a <storage>:<name> volume identifier into its storage id
+// and its name. The API addresses the storage in the request path and expects
+// the name alone in the body, so callers that build a request need both halves.
+func splitVolume(volume string) (storage, name string, err error) {
+	storage, name, ok := strings.Cut(volume, ":")
+	if !ok || storage == "" || name == "" {
+		return "", "", fmt.Errorf("invalid volume ID %q: expected <storage>:<path>", volume)
 	}
-	return storage, nil
+	return storage, name, nil
 }
 
 // newVolumeGetCmd builds `pmx pve storage volume get <volume>`.
@@ -219,24 +227,33 @@ func newVolumeAllocCmd() *cobra.Command {
 			"Requires --vmid (owner VM/CT id), --filename (volume name), " +
 			"and --size (e.g. 4G, 1024M, 2048). " +
 			"--format selects the image format (raw, qcow2, vmdk) when the " +
-			"storage plugin supports multiple formats.",
-		Example: `  pmx pve storage volume alloc --vmid 200 --filename local-lvm:vm-200-disk-1 --size 8G`,
-		Args:    cobra.NoArgs,
+			"storage plugin supports multiple formats. " +
+			"The name must satisfy the target plugin's naming rules: block-backed " +
+			"storages (LVM, ZFS, Ceph) want a bare vm-<vmid>-disk-<n>, while " +
+			"file-backed storages (dir, NFS) additionally require a format " +
+			"extension such as .raw or .qcow2.",
+		Example: `  pmx pve storage volume alloc --vmid 200 --filename local-lvm:vm-200-disk-1 --size 8G
+  pmx pve storage volume alloc --vmid 200 --filename local:vm-200-disk-1.raw --size 8G`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if deps.Node == "" {
 				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
-			// Extract <storage> from the filename prefix (e.g. "local-lvm:vm-100-disk-0").
-			storage, err := storageOfVolume(filename)
+			// Split "local-lvm:vm-100-disk-0" into the storage that addresses the
+			// endpoint and the bare name the API allocates. Passing the whole
+			// volume id as the filename makes PVE either reject it ("unable to
+			// parse volume filename") or create a file with the storage prefix
+			// baked into its name.
+			storage, name, err := splitVolume(filename)
 			if err != nil {
 				return fmt.Errorf("--filename must be in <storage>:<name> form: %w", err)
 			}
 
 			fl := cmd.Flags()
 			params := &nodes.CreateStorageContentParams{
-				Filename: filename,
+				Filename: name,
 				Size:     size,
 				Vmid:     vmid,
 			}
