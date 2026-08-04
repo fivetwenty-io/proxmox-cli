@@ -111,7 +111,8 @@ func indentList(names []string) string {
 			item += ","
 		}
 		if len(line) > 2 && len(line)+1+len(item) > width {
-			b.WriteString(line + "\n")
+			b.WriteString(line)
+			b.WriteByte('\n')
 			line = "  "
 		}
 		if len(line) > 2 {
