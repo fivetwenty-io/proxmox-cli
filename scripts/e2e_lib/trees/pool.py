@@ -56,18 +56,20 @@ def run(ctx: Ctx) -> None:
     ctx.defer("set", "modifies pool members/comment", f"pmx pve pool set {Isolation.POOL} ...")
     ctx.defer("delete", "deletes a resource pool — covered live by `e2e --mutate`",
               f"pmx pve pool delete {Isolation.POOL}", isolation=True, live_covered=True)
-    # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
-    # mutate phase. `permissions list`/`effective` above are read-only and
-    # exercised live.
+    # `permissions grant`/`revoke` write ACLs, so the read-only sweep defers
+    # them; the mutate phase drives the grant → list → effective → revoke round
+    # on the isolated pool against its own throwaway principal.
     ctx.defer(
         "permissions grant",
-        "grants ACL roles on the pool's singular /pool/{poolid} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "grants ACL roles on the pool's singular /pool/{poolid} path — covered "
+        "live by `e2e --mutate`",
         "pmx pve pool permissions grant <poolid> --roles PVEPoolAdmin --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "permissions revoke",
-        "revokes ACL roles on the pool's singular /pool/{poolid} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "revokes ACL roles on the pool's singular /pool/{poolid} path — covered "
+        "live by `e2e --mutate`",
         "pmx pve pool permissions revoke <poolid> --roles PVEPoolAdmin --users alice@pve",
+        isolation=True, live_covered=True,
     )

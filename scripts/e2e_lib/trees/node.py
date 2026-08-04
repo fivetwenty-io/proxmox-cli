@@ -508,20 +508,22 @@ def run(ctx: Ctx) -> None:
     ctx.defer("task stop", "aborts a running task — covered live by `e2e --mutate`",
               "pmx pve node task stop <node> <upid>", live_covered=True)
 
-    # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
-    # mutate phase. `permissions list`/`effective` above are read-only and
-    # exercised live.
+    # `permissions grant`/`revoke` write ACLs, so the read-only sweep defers
+    # them; the mutate phase drives the grant → list → effective → revoke round
+    # on the node against its own throwaway principal.
     ctx.defer(
         "permissions grant",
-        "grants ACL roles on the node's /nodes/{node} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "grants ACL roles on the node's /nodes/{node} path — covered live by "
+        "`e2e --mutate`",
         "pmx pve node permissions grant <node> --roles PVEAuditor --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "permissions revoke",
-        "revokes ACL roles on the node's /nodes/{node} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "revokes ACL roles on the node's /nodes/{node} path — covered live by "
+        "`e2e --mutate`",
         "pmx pve node permissions revoke <node> --roles PVEAuditor --users alice@pve",
+        isolation=True, live_covered=True,
     )
 
     # The mutate phase appends a disabled host firewall rule tagged with the

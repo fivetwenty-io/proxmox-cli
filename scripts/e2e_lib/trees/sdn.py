@@ -324,31 +324,35 @@ def run(ctx: Ctx) -> None:
               f"pmx pve sdn vnet firewall options set {Isolation.SDN_VNET} --policy-forward ACCEPT",
               isolation=True, live_covered=True)
 
-    # `zone`/`vnet permissions grant`/`revoke` mutate cluster-wide ACLs (not
-    # scoped to the isolated pmxcli zone/vnet's own SDN config), so neither is
-    # wired into the mutate phase. The `list`/`effective` reads above are
-    # exercised live.
+    # `zone`/`vnet permissions grant`/`revoke` write ACLs, so the read-only
+    # sweep defers them; the mutate phase drives the grant → list → effective →
+    # revoke round on the isolated pmxcli zone and vnet against its own
+    # throwaway principal.
     ctx.defer(
         "zone permissions grant",
-        "grants ACL roles on the zone's /sdn/zones/{zone} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "grants ACL roles on the zone's /sdn/zones/{zone} path — covered live "
+        "by `e2e --mutate`",
         "pmx pve sdn zone permissions grant <zone> --roles PVEAuditor --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "zone permissions revoke",
-        "revokes ACL roles on the zone's /sdn/zones/{zone} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "revokes ACL roles on the zone's /sdn/zones/{zone} path — covered live "
+        "by `e2e --mutate`",
         "pmx pve sdn zone permissions revoke <zone> --roles PVEAuditor --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "vnet permissions grant",
-        "grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; "
-        "mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path "
+        "— covered live by `e2e --mutate`",
         "pmx pve sdn vnet permissions grant <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "vnet permissions revoke",
-        "revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; "
-        "mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path "
+        "— covered live by `e2e --mutate`",
         "pmx pve sdn vnet permissions revoke <vnet> --zone <zone> --roles PVEAuditor --users alice@pve",
+        isolation=True, live_covered=True,
     )

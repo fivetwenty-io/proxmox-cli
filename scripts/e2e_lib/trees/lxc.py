@@ -362,21 +362,22 @@ def run(ctx: Ctx) -> None:
         "covered by unit tests",
         "pmx pve lxc security caps show <ctid> --effective",
     )
-    # `permissions grant`/`revoke` mutate cluster-wide ACLs (not scoped to the
-    # isolated container's own resources), so they are not wired into the
-    # mutate phase; `permissions list`/`effective` above are read-only and
-    # exercised live.
+    # `permissions grant`/`revoke` write ACLs, so the read-only sweep defers
+    # them; the mutate phase drives the grant → list → effective → revoke round
+    # on the isolated container against its own throwaway principal.
     ctx.defer(
         "permissions grant",
-        "grants ACL roles on the container's /vms/{vmid} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "grants ACL roles on the container's /vms/{vmid} path — covered live "
+        "by `e2e --mutate`",
         "pmx pve lxc permissions grant <ctid> --roles PVEVMAdmin --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "permissions revoke",
-        "revokes ACL roles on the container's /vms/{vmid} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "revokes ACL roles on the container's /vms/{vmid} path — covered live "
+        "by `e2e --mutate`",
         "pmx pve lxc permissions revoke <ctid> --roles PVEVMAdmin --users alice@pve",
+        isolation=True, live_covered=True,
     )
     # `firewall alias get` / `firewall ipset get-member` read a single
     # pre-existing entry by name. A fresh lab has none by default, and the

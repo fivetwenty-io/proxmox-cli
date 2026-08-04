@@ -92,14 +92,14 @@ swept clean before the next provisions.
 | `lab` | 26 | 4 | 1 | 0 | 0 | 20 | 1 | 0 |
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 270 | 0 | 122 | 104 | 42 | 2 | 0 | 0 |
-| `pdm` | 260 | 0 | 145 | 59 | 52 | 4 | 0 | 0 |
-| `pve` | 676 | 80 | 181 | 410 | 1 | 75 | 7 | 0 |
+| `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
+| `pve` | 676 | 80 | 181 | 438 | 1 | 61 | 7 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1261** | **101** | **452** | **581** | **95** | **101** | **9** | **0** |
+| **Total** | **1261** | **101** | **452** | **609** | **97** | **85** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1151** are exercised by at least one live suite, **101** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1167** are exercised by at least one live suite, **85** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -611,7 +611,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pdm pve node status` | ◑ | — |  |
 | `pdm pve node subscription` | ◑ | — |  |
 | `pdm pve options` | ◑ | — |  |
-| `pdm pve probe-tls` | — | — | deferred — re-probes and stores a PVE host's TLS fingerprint; covered by unit tests |
+| `pdm pve probe-tls` | — | · |  |
 | `pdm pve qemu config` | ◑ | — |  |
 | `pdm pve qemu firewall options show` | ◑ | — |  |
 | `pdm pve qemu firewall options update` | — | · |  |
@@ -634,7 +634,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pdm pve qemu stop` | — | · |  |
 | `pdm pve realms` | — | · |  |
 | `pdm pve remote ls` | ◑ | — |  |
-| `pdm pve scan` | — | — | deferred — scans a PVE host's connection info before adding it as a remote; covered by unit tests |
+| `pdm pve scan` | — | · |  |
 | `pdm pve storage ls` | ◑ | — |  |
 | `pdm pve storage rrddata` | ◑ | — |  |
 | `pdm pve storage status` | ◑ | — |  |
@@ -970,10 +970,10 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve lxc metrics` | ◑ | ✓ |  |
 | `pve lxc migrate` | — | ✓ |  |
 | `pve lxc migrate check` | ◑ | ✓ |  |
-| `pve lxc permissions effective` | ◑ | — |  |
-| `pve lxc permissions grant` | — | — | deferred — grants ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve lxc permissions list` | ◑ | — |  |
-| `pve lxc permissions revoke` | — | — | deferred — revokes ACL roles on the container's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve lxc permissions effective` | ◑ | ✓ |  |
+| `pve lxc permissions grant` | — | ✓ |  |
+| `pve lxc permissions list` | ◑ | ✓ |  |
+| `pve lxc permissions revoke` | — | ✓ |  |
 | `pve lxc reboot` | — | ✓ |  |
 | `pve lxc remote-migrate` | — | — | deferred — migrates a container to a different Proxmox VE cluster — requires two live clusters; no rollback without manual intervention; not exercised live |
 | `pve lxc resume` | — | ✓ |  |
@@ -1114,10 +1114,10 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve node network set` | — | ✓ |  |
 | `pve node oci pull` | — | ✓ |  |
 | `pve node oci tags` | — | ✓ |  |
-| `pve node permissions effective` | ◑ | — |  |
-| `pve node permissions grant` | — | — | deferred — grants ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve node permissions list` | ◑ | — |  |
-| `pve node permissions revoke` | — | — | deferred — revokes ACL roles on the node's /nodes/{node} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve node permissions effective` | ◑ | ✓ |  |
+| `pve node permissions grant` | — | ✓ |  |
+| `pve node permissions list` | ◑ | ✓ |  |
+| `pve node permissions revoke` | — | ✓ |  |
 | `pve node query-url-metadata` | — | ✓ |  |
 | `pve node reboot` | — | — | n/a — reboots the real host — would take the shared lab node offline; not automatable |
 | `pve node replication get` | ◑ | ✓ |  |
@@ -1172,10 +1172,10 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve pool delete` | — | ✓ |  |
 | `pve pool get` | ◑ | — |  |
 | `pve pool list` | ✓ | — |  |
-| `pve pool permissions effective` | ◑ | — |  |
-| `pve pool permissions grant` | — | — | deferred — grants ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve pool permissions list` | ◑ | — |  |
-| `pve pool permissions revoke` | — | — | deferred — revokes ACL roles on the pool's singular /pool/{poolid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve pool permissions effective` | ◑ | ✓ |  |
+| `pve pool permissions grant` | — | ✓ |  |
+| `pve pool permissions list` | ◑ | ✓ |  |
+| `pve pool permissions revoke` | — | ✓ |  |
 | `pve pool set` | — | ✓ |  |
 | `pve qemu agent` | — | ✓ |  |
 | `pve qemu agent exec` | — | ✓ |  |
@@ -1232,10 +1232,10 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve qemu migrate capabilities` | ✓ | — |  |
 | `pve qemu migrate check` | ◑ | — |  |
 | `pve qemu monitor` | — | ✓ |  |
-| `pve qemu permissions effective` | ◑ | — |  |
-| `pve qemu permissions grant` | — | — | deferred — grants ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve qemu permissions list` | ◑ | — |  |
-| `pve qemu permissions revoke` | — | — | deferred — revokes ACL roles on the VM's /vms/{vmid} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve qemu permissions effective` | ◑ | ✓ |  |
+| `pve qemu permissions grant` | — | ✓ |  |
+| `pve qemu permissions list` | ◑ | ✓ |  |
+| `pve qemu permissions revoke` | — | ✓ |  |
 | `pve qemu reboot` | — | · |  |
 | `pve qemu remote-migrate` | — | — | deferred — migrates a VM to a different Proxmox VE cluster — requires two live clusters with shared or compatible storage; no rollback without manual intervention; not exercised live |
 | `pve qemu reset` | — | ✓ |  |
@@ -1350,19 +1350,19 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve sdn vnet ips delete` | — | ✓ |  |
 | `pve sdn vnet ips set` | — | ✓ |  |
 | `pve sdn vnet list` | ✓ | — |  |
-| `pve sdn vnet permissions effective` | ◑ | — |  |
-| `pve sdn vnet permissions grant` | — | — | deferred — grants ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve sdn vnet permissions list` | ◑ | — |  |
-| `pve sdn vnet permissions revoke` | — | — | deferred — revokes ACL roles on the vnet's derived /sdn/zones/{zone}/{vnet} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve sdn vnet permissions effective` | ◑ | ✓ |  |
+| `pve sdn vnet permissions grant` | — | ✓ |  |
+| `pve sdn vnet permissions list` | ◑ | ✓ |  |
+| `pve sdn vnet permissions revoke` | — | ✓ |  |
 | `pve sdn vnet set` | — | ✓ |  |
 | `pve sdn vnet show` | ◑ | — |  |
 | `pve sdn zone create` | — | ✓ |  |
 | `pve sdn zone delete` | — | ✓ |  |
 | `pve sdn zone list` | ✓ | — |  |
-| `pve sdn zone permissions effective` | ◑ | — |  |
-| `pve sdn zone permissions grant` | — | — | deferred — grants ACL roles on the zone's /sdn/zones/{zone} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve sdn zone permissions list` | ◑ | — |  |
-| `pve sdn zone permissions revoke` | — | — | deferred — revokes ACL roles on the zone's /sdn/zones/{zone} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve sdn zone permissions effective` | ◑ | ✓ |  |
+| `pve sdn zone permissions grant` | — | ✓ |  |
+| `pve sdn zone permissions list` | ◑ | ✓ |  |
+| `pve sdn zone permissions revoke` | — | ✓ |  |
 | `pve sdn zone set` | — | ✓ |  |
 | `pve sdn zone show` | ◑ | — |  |
 | `pve storage aplinfo download` | — | — | deferred — downloads a real appliance template tarball to a storage — bandwidth/storage-consuming; not exercised live; covered by unit tests |
@@ -1380,10 +1380,10 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve storage list` | ✓ | — |  |
 | `pve storage node-list` | ◑ | — |  |
 | `pve storage oci-pull` | — | — | deferred — pulls a real OCI image from a registry into a storage — needs registry egress and consumes storage; not exercised live from this tree; covered by unit tests |
-| `pve storage permissions effective` | ◑ | — |  |
-| `pve storage permissions grant` | — | — | deferred — grants ACL roles on the storage's /storage/{storage} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
-| `pve storage permissions list` | ◑ | — |  |
-| `pve storage permissions revoke` | — | — | deferred — revokes ACL roles on the storage's /storage/{storage} path; mutates cluster-wide ACLs, not wired into the mutate phase; covered by unit tests |
+| `pve storage permissions effective` | ◑ | ✓ |  |
+| `pve storage permissions grant` | — | ✓ |  |
+| `pve storage permissions list` | ◑ | ✓ |  |
+| `pve storage permissions revoke` | — | ✓ |  |
 | `pve storage prune` | ◑ | ✓ |  |
 | `pve storage rrd` | ◑ | — |  |
 | `pve storage rrddata` | ◑ | — |  |

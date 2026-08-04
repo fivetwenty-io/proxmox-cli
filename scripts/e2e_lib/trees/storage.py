@@ -335,18 +335,20 @@ def run(ctx: Ctx) -> None:
         "pmx pve storage oci-pull local --node <node> --reference docker.io/library/alpine:latest",
         isolation=False, live_covered=False,
     )
-    # `permissions grant`/`revoke` mutate cluster-wide ACLs; not wired into the
-    # mutate phase. `permissions list`/`effective` above are read-only and
-    # exercised live.
+    # `permissions grant`/`revoke` write ACLs, so the read-only sweep defers
+    # them; the mutate phase drives the grant → list → effective → revoke round
+    # on its own throwaway storage against its own throwaway principal.
     ctx.defer(
         "permissions grant",
-        "grants ACL roles on the storage's /storage/{storage} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "grants ACL roles on the storage's /storage/{storage} path — covered "
+        "live by `e2e --mutate`",
         "pmx pve storage permissions grant local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "permissions revoke",
-        "revokes ACL roles on the storage's /storage/{storage} path; mutates "
-        "cluster-wide ACLs, not wired into the mutate phase; covered by unit tests",
+        "revokes ACL roles on the storage's /storage/{storage} path — covered "
+        "live by `e2e --mutate`",
         "pmx pve storage permissions revoke local-lvm --roles PVEDatastoreAdmin --users alice@pve",
+        isolation=True, live_covered=True,
     )

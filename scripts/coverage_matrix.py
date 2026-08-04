@@ -295,7 +295,12 @@ def parse_mutate(leaves, map_leaf):
         # binding has to be scoped to the loop body: `verb` is reused by a dozen
         # unrelated loops in the same file, so a file-wide map would credit every
         # loop's verbs to every other loop's calls.
-        Recorder(record, consts, product, cs, step_fns).visit(tree)
+        # Helpers that record on behalf of a caller (`permissions_roundtrip`)
+        # name the tree and the command prefix through parameters, so their
+        # bodies say nothing on their own. Binding each call site's literal
+        # arguments is what attributes those verbs to a leaf.
+        funcs = {s.name: s for s in tree.body if isinstance(s, ast.FunctionDef)}
+        Recorder(record, consts, product, cs, step_fns, funcs).visit(tree)
     return mut
 
 
@@ -304,15 +309,19 @@ class Recorder(ast.NodeVisitor):
 
     Loop variables bound to literal sequences are tracked as a scope stack, so a
     call inside `for v in (...)` is recorded once per value of v and calls
-    outside it are unaffected.
+    outside it are unaffected. A call to a helper defined in the same module
+    binds its literal arguments the same way and walks the body, so a verb the
+    helper records for its caller lands on the caller's leaf.
     """
 
-    def __init__(self, record, consts, product, cs, step_fns):
+    def __init__(self, record, consts, product, cs, step_fns, funcs=None):
         self._record = record
         self._consts = consts
         self._product = product
         self._cs = cs
         self._step_fns = step_fns
+        self._funcs = funcs or {}
+        self._inlining: set[str] = set()
         self._scopes: list[dict[str, list[str]]] = []
 
     def _lookup(self, name: str) -> list[str]:
@@ -324,6 +333,9 @@ class Recorder(ast.NodeVisitor):
     def _literal_strings(self, node):
         """Resolve node to a list of string literals, or None."""
         if isinstance(node, ast.Name):
+            bound = self._lookup(node.id)
+            if bound:
+                return bound
             node = self._consts.get(node.id)
             if node is None:
                 return None
@@ -380,6 +392,66 @@ class Recorder(ast.NodeVisitor):
             return self._lookup(node.id)
         return []
 
+    def _one(self, node):
+        """The single string a node resolves to, else None."""
+        lit = self._cs(node)
+        if lit is not None:
+            return lit
+        if isinstance(node, ast.Name):
+            bound = self._lookup(node.id)
+            if len(bound) == 1:
+                return bound[0]
+        return None
+
+    def _argv(self, args) -> list[str]:
+        """The command tokens of a step call, splicing in `*prefix` arguments.
+
+        A helper that takes the namespace prefix as a parameter spreads it into
+        the call (`r.step(tree, verb, label, *argv, "grant", ...)`); without
+        expanding the star the tokens start at "grant" and match no leaf.
+        """
+        out: list[str] = []
+        for x in args:
+            if isinstance(x, ast.Starred):
+                out.extend(self._literal_strings(x.value) or [])
+                continue
+            lit = self._cs(x)
+            if lit is not None:
+                out.append(lit)
+        return out
+
+    def _inline(self, n):
+        """Walk a same-module helper's body with its literal arguments bound."""
+        if not (isinstance(n.func, ast.Name) and n.func.id in self._funcs):
+            return
+        if n.func.id in self._inlining:  # recursion guard
+            return
+        fn = self._funcs[n.func.id]
+        params = [a.arg for a in fn.args.args]
+        scope: dict[str, list[str]] = {}
+        for param, arg in zip(params, n.args):
+            lit = self._cs(arg)
+            if lit is not None:
+                scope[param] = [lit]
+                continue
+            seq = self._literal_strings(arg)
+            if seq:
+                scope[param] = seq
+        for kw in n.keywords:
+            if kw.arg is None:
+                continue
+            lit = self._cs(kw.value)
+            if lit is not None:
+                scope[kw.arg] = [lit]
+        if not scope:
+            return
+        self._inlining.add(n.func.id)
+        self._scopes.append(scope)
+        for stmt in fn.body:
+            self.visit(stmt)
+        self._scopes.pop()
+        self._inlining.discard(n.func.id)
+
     def visit_Call(self, n):
         guest = None
         verbs: list[str] = []
@@ -387,21 +459,22 @@ class Recorder(ast.NodeVisitor):
         status = "PASS"
         if isinstance(n.func, ast.Name) and n.func.id == "Step":
             a = n.args
-            guest = self._cs(a[0]) if a else None
+            guest = self._one(a[0]) if a else None
             if len(a) > 1:
                 verbs = self._verbs(a[1])
             if len(a) > 2 and isinstance(a[2], ast.Name):
                 status = a[2].id
         elif isinstance(n.func, ast.Attribute) and n.func.attr in self._step_fns:
             a = n.args
-            guest = self._cs(a[0]) if a else None
+            guest = self._one(a[0]) if a else None
             if len(a) > 1:
                 verbs = self._verbs(a[1])
-            argv = [self._cs(x) for x in a[3:] if self._cs(x) is not None]
+            argv = self._argv(a[3:])
             if n.func.attr == "cover_skip":
                 status = "SKIP"
         for verb in verbs:
             self._record(guest, verb, argv, status, self._product)
+        self._inline(n)
         self.generic_visit(n)
 
 # --------------------------------------------------------------------------- #
