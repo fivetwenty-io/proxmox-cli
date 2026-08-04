@@ -73,6 +73,21 @@ func TestStorageNodeScoped_AutoResolvesNode(t *testing.T) {
 	}
 }
 
+// TestStorageStatus_EmptyNodeFlagAutoResolves verifies `--node ""` behaves as
+// if the flag were absent: the node is still resolved from the cluster instead
+// of issuing a request against /nodes//storage/.
+func TestStorageStatus_EmptyNodeFlagAutoResolves(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	storageOnNodes(f, testStorage, "pve2")
+	var rec recordedRequest
+	recordJSON(f, "GET /api2/json/nodes/pve2/storage/local/status", &rec,
+		map[string]any{"type": "dir", "content": "iso"})
+
+	_, err := run(t, f, "--node", "", "status", testStorage)
+	require.NoError(t, err)
+	require.Equal(t, "/api2/json/nodes/pve2/storage/local/status", rec.path)
+}
+
 // TestStorageStatus_ServerError verifies API errors are surfaced.
 func TestStorageStatus_ServerError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

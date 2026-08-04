@@ -99,13 +99,15 @@ func splitToken(t *testing.T, token string) (string, string) {
 }
 
 // storageOnNodes registers a cluster/resources handler reporting the storage
-// as available on the given nodes, for tests of storage→node auto-resolution.
+// as a shared storage available on the given nodes, for tests of
+// storage→node auto-resolution (a non-shared storage on several nodes would
+// be ambiguous and refuse to resolve).
 func storageOnNodes(f *testhelper.FakePVE, storage string, nodeNames ...string) {
 	entries := make([]map[string]any, 0, len(nodeNames))
 	for _, n := range nodeNames {
 		entries = append(entries, map[string]any{
 			"type": "storage", "storage": storage, "node": n,
-			"status": "available", "id": "storage/" + n + "/" + storage,
+			"status": "available", "shared": 1, "id": "storage/" + n + "/" + storage,
 		})
 	}
 	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {

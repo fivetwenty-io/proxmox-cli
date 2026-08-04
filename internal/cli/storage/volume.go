@@ -109,7 +109,8 @@ func newVolumeSetCmd() *cobra.Command {
 		Short: "Update a volume's notes or protection flag",
 		Long: "Set the notes attached to a volume, or toggle its protection flag. " +
 			"Protection currently applies to backups only and prevents them from being pruned. " +
-			"Pass --notes \"\" to clear existing notes.",
+			"Pass --notes \"\" to clear existing notes. The update runs on a node carrying the " +
+			"volume's storage, resolved from the cluster unless --node is passed explicitly.",
 		Example: `  pmx pve storage volume set local:backup/vzdump-qemu-100-2026_01_01.vma.zst --protected
   pmx pve storage volume set local:backup/vzdump-qemu-100-2026_01_01.vma.zst --notes "monthly archive"`,
 		Args: cobra.ExactArgs(1),
@@ -162,7 +163,8 @@ func newVolumeDeleteCmd() *cobra.Command {
 		Long: "Permanently remove a volume from its storage. " +
 			"The volume identifier must be in <storage>:<path> form, " +
 			"e.g. local:backup/vzdump-qemu-100-2026_01_01.vma.zst. " +
-			"Pass --yes to confirm the deletion.",
+			"Pass --yes to confirm the deletion. The deletion runs on a node carrying the " +
+			"volume's storage, resolved from the cluster unless --node is passed explicitly.",
 		Example: `  pmx pve storage volume delete local:backup/vzdump-qemu-100-2026_01_01.vma.zst --yes
   pmx pve storage volume delete local:snippets/hook.pl --yes`,
 		Args: cobra.ExactArgs(1),
@@ -234,7 +236,9 @@ func newVolumeAllocCmd() *cobra.Command {
 			"The name must satisfy the target plugin's naming rules: block-backed " +
 			"storages (LVM, ZFS, Ceph) want a bare vm-<vmid>-disk-<n>, while " +
 			"file-backed storages (dir, NFS) additionally require a format " +
-			"extension such as .raw or .qcow2.",
+			"extension such as .raw or .qcow2. The image is created on a node " +
+			"carrying the storage, resolved from the cluster unless --node is " +
+			"passed explicitly.",
 		Example: `  pmx pve storage volume alloc --vmid 200 --filename local-lvm:vm-200-disk-1 --size 8G
   pmx pve storage volume alloc --vmid 200 --filename local:vm-200-disk-1.raw --size 8G`,
 		Args: cobra.NoArgs,
@@ -311,7 +315,8 @@ func newVolumeCopyCmd() *cobra.Command {
 		Short: "Copy a volume to another volume",
 		Long: "Copy a volume to a new target volume, optionally on a different node. " +
 			"The copy runs as an asynchronous task; the command blocks until it finishes " +
-			"unless --async is set.",
+			"unless --async is set. The source node is a node carrying the source volume's " +
+			"storage, resolved from the cluster unless --node is passed explicitly.",
 		Example: `  pmx pve storage volume copy local:backup/vzdump-qemu-100-2026_01_01.vma.zst \
   --target-volume local-lvm:backup/copy.vma.zst`,
 		Args: cobra.ExactArgs(1),

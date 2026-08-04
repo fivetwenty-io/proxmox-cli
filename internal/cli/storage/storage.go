@@ -40,15 +40,18 @@ func Group(_ *cli.Deps) *cobra.Command {
 			"  rrd, rrddata                  historical usage graphs\n\n" +
 			"The cluster-scoped verbs (list, get, create, set, delete) take a storage ID and " +
 			"need no node. The ones that work through a specific node's view of the storage " +
-			"(content, status, identity, node-list, upload, download-url, prune) also need " +
-			"--node, PMX_NODE, or the active context's default node.\n\n" +
+			"(content, volume, status, identity, prune, file-restore, import-metadata, rrd, " +
+			"rrddata) resolve a node carrying the storage from the cluster unless --node is " +
+			"passed explicitly. Verbs that choose where work happens (node-list, upload, " +
+			"download-url, aplinfo, oci-pull) still need --node, PMX_NODE, or the active " +
+			"context's default node.\n\n" +
 			"Storage type decides which create and set flags apply: --vgname for lvm, " +
 			"--server and --export for nfs, and so on across dir, cifs, lvmthin, zfspool, " +
 			"rbd, pbs, and the rest.",
 		Example: `  pmx pve storage list
   pmx pve storage get local-lvm
   pmx pve storage create --storage backup01 --type nfs --server 10.0.0.5 --export /export/backup
-  pmx pve storage content local-lvm --node pve1`,
+  pmx pve storage content local-lvm`,
 	}
 	cmd.AddCommand(
 		newListCmd(),
