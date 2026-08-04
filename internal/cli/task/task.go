@@ -261,7 +261,8 @@ func newLogCmd() *cobra.Command {
 		Use:   "log <upid>",
 		Short: "Read the log of a task",
 		Long: "Read a task's log lines from the node the task ran on. The node is resolved " +
-			"automatically from the UPID, so --node is not required. --limit and --start page " +
+			"automatically from the UPID, so --node is not required (an explicit --node must " +
+			"match the UPID's node). --limit and --start page " +
 			"through the log; --download instead fetches the full log file and cannot be " +
 			"combined with --limit or --start.",
 		Example: `  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
@@ -271,11 +272,10 @@ func newLogCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 
 			upid := args[0]
-			parsed, err := tasks.ParseUPID(upid)
+			node, err := cli.NodeFromUPID(deps, upid)
 			if err != nil {
-				return fmt.Errorf("parse upid %q: %w", upid, err)
+				return err
 			}
-			node := parsed.Node
 			if download && (cmd.Flags().Changed("limit") || cmd.Flags().Changed("start")) {
 				return fmt.Errorf("--download cannot be combined with --limit or --start")
 			}
@@ -348,7 +348,8 @@ func newStopCmd() *cobra.Command {
 		Use:   "stop <upid>",
 		Short: "Stop a running task",
 		Long: "Request that a running task be stopped, on the node the task is running on. " +
-			"The node is resolved automatically from the UPID, so --node is not required. " +
+			"The node is resolved automatically from the UPID, so --node is not required " +
+			"(an explicit --node must match the UPID's node). " +
 			"Returns as soon as the stop request is accepted; it does not wait for the task " +
 			"to actually finish exiting.",
 		Example: `  pmx pve task stop UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:`,
@@ -357,11 +358,10 @@ func newStopCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 
 			upid := args[0]
-			parsed, err := tasks.ParseUPID(upid)
+			node, err := cli.NodeFromUPID(deps, upid)
 			if err != nil {
-				return fmt.Errorf("parse upid %q: %w", upid, err)
+				return err
 			}
-			node := parsed.Node
 
 			if err := deps.API.Nodes.DeleteTasks(cmd.Context(), node, upid); err != nil {
 				return err

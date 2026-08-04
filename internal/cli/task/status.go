@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -25,22 +24,23 @@ func newStatusCmd() *cobra.Command {
 		Short: "Get the current status of a task",
 		Long: `Read the current status of a Proxmox VE task identified by its UPID.
 
-The node is resolved automatically from the UPID, so --node is not required.
-This command performs a single, non-blocking read and does not poll.`,
+The node is resolved automatically from the UPID, so --node is not required;
+an explicit --node must match the UPID's node. This command performs a
+single, non-blocking read and does not poll.`,
 		Example: `  pmx pve task status UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
 			upid := args[0]
-			parsed, err := tasks.ParseUPID(upid)
+			node, err := cli.NodeFromUPID(deps, upid)
 			if err != nil {
-				return fmt.Errorf("parse upid %q: %w", upid, err)
+				return err
 			}
 
-			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), parsed.Node, upid)
+			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), node, upid)
 			if err != nil {
-				return fmt.Errorf("get task status %q on node %q: %w", upid, parsed.Node, err)
+				return fmt.Errorf("get task status %q on node %q: %w", upid, node, err)
 			}
 
 			single := buildStatusSingle(resp)

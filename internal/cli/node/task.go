@@ -221,20 +221,21 @@ func newTaskStatusCmd() *cobra.Command {
 		Use:   "status <upid>",
 		Short: "Show the runtime status of a task by UPID",
 		Long: "Query the current status of a single task by its UPID. The node is parsed " +
-			"from the UPID, so --node is not required. Reports whether the task is still " +
+			"from the UPID, so --node is not required (an explicit --node must match the " +
+			"UPID's node). Reports whether the task is still " +
 			"running and, when finished, the exit status.",
 		Example: `  pmx pve node task status UPID:pve1:00001234:...`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			upid := args[0]
-			parsed, err := tasks.ParseUPID(upid)
+			node, err := cli.NodeFromUPID(deps, upid)
 			if err != nil {
-				return fmt.Errorf("parse upid %q: %w", upid, err)
+				return err
 			}
-			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), parsed.Node, upid)
+			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), node, upid)
 			if err != nil {
-				return fmt.Errorf("get status of task %q on node %q: %w", upid, parsed.Node, err)
+				return fmt.Errorf("get status of task %q on node %q: %w", upid, node, err)
 			}
 			single := map[string]string{
 				"STATUS": resp.Status,

@@ -85,7 +85,8 @@ func TestNodeTaskStatus_Running(t *testing.T) {
 }
 
 // TestNodeTaskStatus_NodeFromUPID verifies the node is parsed from the UPID:
-// no --node is passed, and an ambient node cannot misroute the request.
+// no --node is passed, and the ambient default node (pve9 here, via PMX_NODE)
+// cannot misroute the request away from the UPID's pve1.
 func TestNodeTaskStatus_NodeFromUPID(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	upid := "UPID:pve1:1:2:3:qmstart:100:root@pam:"
@@ -96,11 +97,27 @@ func TestNodeTaskStatus_NodeFromUPID(t *testing.T) {
 		"pid": 12345,
 	})
 
-	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root, _, prefix := newNodeRootAmbient(t, f, output.FormatTable, exec.Fake(), "pve9")
 	root.SetArgs(append(prefix, "node", "task", "status", upid))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "GET", rec.method)
+	require.Equal(t, "/api2/json/nodes/pve1/tasks/"+upid+"/status", rec.path)
+}
+
+// TestNodeTaskStatus_ExplicitNodeConflict verifies an explicit --node that
+// disagrees with the UPID's node field is rejected instead of silently losing
+// to either side.
+func TestNodeTaskStatus_ExplicitNodeConflict(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:1:2:3:qmstart:100:root@pam:"
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve9", "node", "task", "status", upid))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `--node "pve9" conflicts with node "pve1" from the UPID`)
 }
 
 func TestNodeTaskStatus_InvalidUPID(t *testing.T) {

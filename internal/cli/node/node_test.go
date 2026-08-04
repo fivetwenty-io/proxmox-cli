@@ -70,8 +70,18 @@ func newNodeRoot(t *testing.T, f *testhelper.FakePVE, format output.Format, runn
 	*cobra.Command, *bytes.Buffer, []string,
 ) {
 	t.Helper()
+	return newNodeRootAmbient(t, f, format, runner, "")
+}
+
+// newNodeRootAmbient is newNodeRoot with an ambient default node injected via
+// PMX_NODE — Deps.Node is set but Deps.NodeExplicit is not, exactly the state
+// the auto-resolution paths must refuse to trust.
+func newNodeRootAmbient(t *testing.T, f *testhelper.FakePVE, format output.Format, runner exec.Runner, ambientNode string) (
+	*cobra.Command, *bytes.Buffer, []string,
+) {
+	t.Helper()
 	t.Setenv("PMX_CONTEXT", "")
-	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_NODE", ambientNode)
 	t.Setenv("PMX_OUTPUT", "")
 
 	cfgPath := writeFakeConfig(t, f)

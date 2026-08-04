@@ -344,6 +344,41 @@ func TestStop_InvalidUPID(t *testing.T) {
 	require.Contains(t, err.Error(), "parse upid")
 }
 
+// TestStop_ExplicitNodeConflict verifies an explicit --node disagreeing with
+// the UPID's node field is an error, not a silent pick of either side.
+func TestStop_ExplicitNodeConflict(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	_, err := runTask(t, f, "", "table", "stop", testUPID, "--node", "pve9")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `--node "pve9" conflicts with node "pve1" from the UPID`)
+}
+
+// TestStop_ExplicitMatchingNode verifies an explicit --node naming the UPID's
+// own node is accepted.
+func TestStop_ExplicitMatchingNode(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotPath string
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/tasks/"+testUPID, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, nil)
+	})
+
+	_, err := runTask(t, f, "", "table", "stop", testUPID, "--node", "pve1")
+	require.NoError(t, err)
+	require.Contains(t, gotPath, "/nodes/pve1/")
+}
+
+// TestStop_EmptyUPIDNodeField verifies a UPID whose node field is empty (it
+// still splits into the right number of fields) is rejected instead of
+// producing a request against /nodes//tasks/.
+func TestStop_EmptyUPIDNodeField(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	_, err := runTask(t, f, "pve1", "table", "stop", "UPID::00001234:0005678A:6660A1B2:vzdump:100:root@pam:")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty node field")
+}
+
 // TestWait_Success verifies that `task wait` polls the status endpoint (node
 // parsed from the UPID) and renders the terminal status.
 func TestWait_Success(t *testing.T) {
