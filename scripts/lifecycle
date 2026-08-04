@@ -40,6 +40,10 @@ def main() -> None:
     parser.add_argument("--context", "-c", default=os.environ.get("PMX_E2E_CONTEXT", "lab-pmx"),
                         help="configured context name (default: lab-pmx, the lab dedicated to\n"
                              "testing this project, or $PMX_E2E_CONTEXT)")
+    parser.add_argument("--pbs-context", default=os.environ.get("PMX_E2E_PBS_CONTEXT", ""),
+                        help="configured `product: pbs` context whose appliance backs the\n"
+                             "file-restore fixture (default: pbs-e2e, or $PMX_E2E_PBS_CONTEXT;\n"
+                             "unreachable = the file-restore verbs record skips)")
     parser.add_argument("--binary", help="path to the pmx binary (default: ./dist/pmx)")
     parser.add_argument("--no-build", action="store_true",
                         help="do not auto-build the binary if ./dist/pmx is missing")
@@ -59,6 +63,7 @@ def main() -> None:
         strict=args.strict,
         skip_ct=args.vm_only,
         skip_vm=args.ct_only,
+        pbs_context=args.pbs_context,
     )
     sys.exit(rc)
 

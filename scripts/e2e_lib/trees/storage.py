@@ -292,20 +292,24 @@ def run(ctx: Ctx) -> None:
         "pmx pve storage volume copy local:backup/... --target-volume <storage>:<vol>",
         isolation=True, live_covered=False,
     )
-    # file-restore browses files inside a backup snapshot, but the backing
-    # endpoints support Proxmox Backup Server snapshots only; the lab has no PBS
-    # storage, so these are not exercised live.
+    # file-restore browses files inside a backup snapshot, and the backing
+    # endpoints support Proxmox Backup Server snapshots only. The sweep reads
+    # no backup it did not make, so both are deferred here; the mutate phase
+    # stages a scratch PBS datastore, backs its throwaway container up into it,
+    # and browses that.
     ctx.defer(
         "file-restore list",
-        "browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
+        "browses files inside a PBS snapshot — covered live by `e2e --mutate`, "
+        "against a snapshot it takes of its own container",
         "pmx pve storage file-restore list <pbs> --volume <snapshot>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     ctx.defer(
         "file-restore download",
-        "extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests",
+        "extracts a file from a PBS snapshot — covered live by `e2e --mutate`, "
+        "against a snapshot it takes of its own container",
         "pmx pve storage file-restore download <pbs> --volume <snapshot> --filepath </etc/hostname>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     # import-metadata inspects a foreign guest archive (OVA/ESXi). The API cannot
     # upload such an archive (the upload endpoint accepts only iso/vztmpl), so the

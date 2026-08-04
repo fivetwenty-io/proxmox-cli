@@ -34,15 +34,19 @@ from __future__ import annotations
 
 import json
 import base64
+import contextlib
 import hashlib
 import hmac
 import os
 import shutil
 import struct
+import ssl
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 
 from .model import Isolation
@@ -295,9 +299,9 @@ class Runner:
 VOLUME_NOTE = "pmx-cli-e2e marker"
 
 
-def _backup_volid(r: Runner, vmid: str) -> str:
-    """Return the volid of a backup archive for vmid on BACKUP_STORAGE, or ""."""
-    res = r.pmx("pve", "storage", "content", BACKUP_STORAGE, "--content", "backup",
+def _backup_volid(r: Runner, vmid: str, storage: str = "") -> str:
+    """Return the volid of a backup archive for vmid on `storage`, or ""."""
+    res = r.pmx("pve", "storage", "content", storage or BACKUP_STORAGE, "--content", "backup",
                 "--vmid", vmid, json_out=True)
     if res.rc != 0:
         return ""
@@ -1434,6 +1438,340 @@ def qemu_template_lifecycle(r: Runner) -> None:
                        "--purge", "--destroy-unreferenced-disks")
 
 
+# --- PBS-backed file-restore fixture ---------------------------------------
+# `storage file-restore list`/`download` read files out of a backup snapshot,
+# and the endpoints behind them speak to Proxmox Backup Server snapshots only —
+# a vzdump archive on a directory storage cannot be browsed. The fixture
+# therefore stands up the whole PBS path for one container backup: a scratch
+# datastore on the PBS appliance, a token scoped to that datastore and nothing
+# else, a pbs-type storage on the PVE cluster pinned to the appliance's
+# certificate, and a vzdump of the throwaway container into it. All of it is
+# removed in the finally block. Where no PBS context is configured, or the
+# appliance is unreachable, both verbs are recorded as skips.
+#
+# A container is what gets backed up on purpose: its archive is a pxar of the
+# rootfs, so the listing walks a real filesystem and the download returns a real
+# file. A VM archive holds raw block images instead, whose contents the restore
+# tooling can only reach through a helper appliance image.
+RESTORE_STORAGE = Isolation.NAME_PREFIX + "pbs"
+RESTORE_DATASTORE = Isolation.NAME_PREFIX + "restore"
+RESTORE_DATASTORE_PATH = "/var/lib/" + Isolation.NAME_PREFIX + "restore"
+RESTORE_TOKEN = "pmxcli-restore"
+RESTORE_ROLE = "DatastoreAdmin"
+RESTORE_ACL_PATH = "/datastore/" + RESTORE_DATASTORE
+
+# The PBS context whose appliance backs the fixture, set once by run().
+_pbs_context = ""
+_restore_authid = ""
+
+
+def _pbs(r: Runner, *args: str, json_out: bool = False) -> Cmd:
+    """Run a fixture command against the PBS appliance's own context."""
+    return r.pmx_raw("--context", _pbs_context, *args, json_out=json_out)
+
+
+def _pbs_json(res: Cmd) -> object:
+    """The parsed body of a PBS fixture command, unwrapped, or None."""
+    if res.rc != 0:
+        return None
+    try:
+        data = res.json()
+    except ValueError:
+        return None
+    return data.get("data", data) if isinstance(data, dict) else data
+
+
+def _restore_fingerprint(r: Runner) -> str:
+    """SHA-256 fingerprint of the PBS API certificate, or "".
+
+    A PBS appliance serves a self-signed certificate, so the PVE storage has to
+    pin it explicitly; without the pin the storage reports only a connect error.
+    """
+    rows = _pbs_json(_pbs(r, "pbs", "node", "certificates", "info", json_out=True))
+    rows = rows if isinstance(rows, list) else []
+    for want_proxy in (True, False):
+        for c in rows:
+            if not isinstance(c, dict) or not c.get("fingerprint"):
+                continue
+            if want_proxy and c.get("filename") != "proxy.pem":
+                continue
+            return str(c["fingerprint"])
+    return ""
+
+
+def _wait_restore_visible(r: Runner, host: str, authid: str, secret: str,
+                          timeout: float = 45.0) -> bool:
+    """Block until the scratch datastore is listed for `authid` on the appliance.
+
+    PBS answers from a cached view of datastore.cfg and acl.cfg, refreshed when
+    either file's mtime changes — and that mtime has one-second resolution. So
+    for a short window after the datastore is created and the token is granted,
+    the datastore-list endpoint still answers from the state before both, and a
+    PVE storage declared in that window is rejected with `Cannot find datastore
+    ..., check permissions and existence!` — naming neither of the two things
+    that are in fact fine.
+    """
+    url = f"https://{host}:8007/api2/json/admin/datastore"
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"PBSAPIToken={authid}:{secret}"})
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                body = json.loads(resp.read().decode())
+            stores = body.get("data", []) if isinstance(body, dict) else []
+            if any(isinstance(s, dict) and s.get("store") == RESTORE_DATASTORE
+                   for s in stores):
+                return True
+        except urllib.error.HTTPError as exc:
+            # 401/403 is the same cache lagging behind the grant; anything else
+            # is not a visibility problem — let the storage create report it.
+            if exc.code not in (401, 403):
+                return True
+        except (urllib.error.URLError, OSError, ssl.SSLError, ValueError):
+            return True
+        time.sleep(1)
+    return False
+
+
+def _restore_fixture_up(r: Runner, ctid: str) -> str:
+    """Build the PBS-backed storage and back the container up into it.
+
+    Returns the backup's volid, or "" when the fixture could not be built (the
+    caller then records the file-restore verbs as skips).
+    """
+    global _restore_authid
+
+    if not _pbs_context:
+        return ""
+    show = _pbs_json(_pbs(r, "context", "show", _pbs_context, json_out=True))
+    host = str(show.get("host", "") or "") if isinstance(show, dict) else ""
+    user = str(show.get("username", "") or "") if isinstance(show, dict) else ""
+    if not host or not user:
+        print(DIM(f"  PBS context {_pbs_context!r} is not configured"))
+        return ""
+    if _pbs(r, "pbs", "datastore", "list", json_out=True).rc != 0:
+        print(DIM(f"  PBS appliance {host} is not reachable"))
+        return ""
+    fingerprint = _restore_fingerprint(r)
+    if not fingerprint:
+        print(DIM("  could not read the PBS certificate fingerprint to pin"))
+        return ""
+
+    # A crashed prior run may have left either behind; removing first keeps the
+    # fixture idempotent without treating the leftover as a failure.
+    _pbs(r, "pbs", "user", "token", "delete", user, RESTORE_TOKEN, "-y")
+    _pbs(r, "pbs", "datastore", "delete", RESTORE_DATASTORE, "--destroy-data", "-y")
+    if _pbs(r, "pbs", "datastore", "create", RESTORE_DATASTORE,
+            "--path", RESTORE_DATASTORE_PATH,
+            "--comment", "pmx-cli e2e file-restore datastore").rc != 0:
+        print(DIM(f"  could not create the scratch datastore {RESTORE_DATASTORE}"))
+        return ""
+    tok = _pbs_json(_pbs(r, "pbs", "user", "token", "add", user, RESTORE_TOKEN,
+                         "--comment", "pmx-cli e2e file-restore", json_out=True))
+    authid = str(tok.get("tokenid", "") or "") if isinstance(tok, dict) else ""
+    secret = str(tok.get("value", "") or "") if isinstance(tok, dict) else ""
+    if not authid or not secret:
+        print(DIM("  could not mint a datastore-scoped token"))
+        return ""
+    _restore_authid = authid
+    if _pbs(r, "pbs", "acl", "update", "--path", RESTORE_ACL_PATH,
+            "--role", RESTORE_ROLE, "--auth-id", authid).rc != 0:
+        print(DIM(f"  could not grant {RESTORE_ROLE} on {RESTORE_ACL_PATH}"))
+        return ""
+    if not _wait_restore_visible(r, host, authid, secret):
+        print(DIM(f"  {RESTORE_DATASTORE} never became visible to {authid}"))
+        return ""
+
+    nodes = ",".join(_node_names(r)) or r.node
+    decl = r.pmx("pve", "storage", "create", "--storage", RESTORE_STORAGE, "--type", "pbs",
+                 "--server", host, "--datastore", RESTORE_DATASTORE,
+                 "--username", authid, "--password", secret,
+                 "--fingerprint", fingerprint, "--content", "backup",
+                 "--nodes", nodes, node=False)
+    if decl.rc != 0:
+        print(DIM(f"  could not declare {RESTORE_STORAGE}: "
+                  f"{_one_line(decl.reason, 'create failed')}"))
+        return ""
+    print(f"  {GREEN('✓')} {RESTORE_STORAGE} → {host}:{RESTORE_DATASTORE}")
+    dump = r.pmx("pve", "node", "vzdump", "--vmid", ctid,
+                 "--storage", RESTORE_STORAGE, "--mode", "snapshot")
+    if dump.rc != 0:
+        print(DIM(f"  could not back CT {ctid} up to {RESTORE_STORAGE}: "
+                  f"{_one_line(dump.reason, 'vzdump failed')}"))
+        return ""
+    volid = _backup_volid(r, ctid, RESTORE_STORAGE)
+    if not volid:
+        print(DIM("  the backup left no volid to browse"))
+    return volid
+
+
+def _restore_fixture_down(r: Runner) -> None:
+    """Remove the PBS-backed storage, the scratch datastore, and the token."""
+    global _restore_authid
+
+    if not _pbs_context:
+        return
+    r.undo(f"delete {RESTORE_STORAGE}", "pve", "storage", "delete", RESTORE_STORAGE, "--yes",
+           node=False)
+    if _restore_authid:
+        _pbs(r, "pbs", "acl", "update", "--path", RESTORE_ACL_PATH,
+             "--role", RESTORE_ROLE, "--auth-id", _restore_authid, "--delete")
+        user = _restore_authid.split("!", 1)[0]
+        _pbs(r, "pbs", "user", "token", "delete", user, RESTORE_TOKEN, "-y")
+        _restore_authid = ""
+    # --destroy-data: the datastore holds nothing but this run's own backup.
+    _pbs(r, "pbs", "datastore", "delete", RESTORE_DATASTORE, "--destroy-data", "-y")
+
+
+def _restore_entries(res: Cmd) -> list[dict]:
+    """The directory entries of a file-restore listing."""
+    if res.rc != 0:
+        return []
+    try:
+        data = res.json()
+    except ValueError:
+        return []
+    rows = data if isinstance(data, list) else (
+        data.get("rows", data.get("data", [])) if isinstance(data, dict) else [])
+    return [e for e in rows if isinstance(e, dict) and e.get("filepath")]
+
+
+def _restore_find_file(r: Runner, volid: str, entries: list[dict],
+                       depth: int = 5) -> str:
+    """Walk the archive from `entries` down to a non-empty regular file.
+
+    The top of a container archive is the pxar itself, not the rootfs, and how
+    many levels sit above /etc is the restore tooling's business — so descend
+    rather than assume a path. Directories named like the ones a distribution
+    always has are tried first, which keeps the walk to a couple of listings.
+    """
+    preferred = ("etc", "root.pxar", "usr", "var")
+    for _ in range(depth):
+        files = [e for e in entries
+                 if str(e.get("type", "")) == "f" and int(e.get("size", 0) or 0) > 0]
+        if files:
+            return str(files[0]["filepath"])
+        dirs = [e for e in entries if str(e.get("type", "")) == "d"]
+        if not dirs:
+            return ""
+        nxt = next((d for d in dirs if str(d.get("text", "")).strip("/") in preferred), dirs[0])
+        entries = _restore_entries(
+            r.pmx("pve", "storage", "file-restore", "list", RESTORE_STORAGE,
+                  "--volume", volid, "--filepath", str(nxt["filepath"]), json_out=True))
+    return ""
+
+
+def storage_file_restore_lifecycle(r: Runner, ctid: str) -> None:
+    """Browse and extract a file from a real PBS snapshot of the throwaway CT."""
+    print(BOLD("storage: file-restore list / download (PBS-backed snapshot)"))
+    volid = ""
+    try:
+        volid = _restore_fixture_up(r, ctid)
+        if not volid:
+            r.cover_skip("storage", "file-restore list", "file-restore list",
+                         "no reachable PBS appliance to back a browsable snapshot")
+            return
+        listed = r.step("storage", "file-restore list", f"file-restore list {volid} /",
+                        "pve", "storage", "file-restore", "list", RESTORE_STORAGE,
+                        "--volume", volid, "--filepath", "/", json_out=True)
+        entries = _restore_entries(listed)
+        if not entries:
+            raise LifecycleError("file-restore list returned no entries for the archive root")
+        target = _restore_find_file(r, volid, entries)
+        if not target:
+            r.cover_skip("storage", "file-restore download", "file-restore download",
+                         "found no regular file to extract in the archive")
+            return
+        fd, path = tempfile.mkstemp(prefix="pmx-cli-restore-")
+        os.close(fd)
+        try:
+            r.step("storage", "file-restore download", f"file-restore download {target}",
+                   "pve", "storage", "file-restore", "download", RESTORE_STORAGE,
+                   "--volume", volid, "--filepath", target, "--output-file", path)
+            # The bytes on disk are the point of the verb: the endpoint answers
+            # with the file itself, not with the API's JSON envelope, so an empty
+            # file means the response was swallowed somewhere.
+            size = os.path.getsize(path)
+            if size <= 0:
+                raise LifecycleError(f"file-restore download {target}: wrote an empty file")
+            print(f"  {GREEN('✓')} downloaded {size} bytes of {target}")
+        finally:
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+    finally:
+        _restore_fixture_down(r)
+
+
+def _wait_lxc_template(r: Runner, ctid: str, timeout: float = 30.0) -> bool:
+    """Block until the container reports itself a template.
+
+    A container wears the marker in its status, not its config: unlike a VM,
+    whose config gains `template: 1`, the LXC config endpoint returns the same
+    keys it did before the conversion. The status view is served from pvestatd's
+    picture of the node, so it carries the new marker a beat after the
+    conversion task returns.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        res = r.pmx("pve", "lxc", "status", ctid, json_out=True)
+        if res.rc == 0:
+            try:
+                data = res.json()
+            except ValueError:
+                data = None
+            if isinstance(data, dict):
+                data = data.get("data", data)
+            if isinstance(data, dict) and str(data.get("template", "") or "") in ("1", "true", "True"):
+                return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(2)
+
+
+def lxc_template_lifecycle(r: Runner, ostemplate: str) -> None:
+    """Convert a dedicated throwaway container into a template, then destroy it.
+
+    The container twin of `qemu_template_lifecycle`, and deferred for the same
+    reason: `lxc to-template` permanently converts the rootfs to a base volume,
+    so it cannot run against the container ct_lifecycle drives through the rest
+    of the verb matrix. A second, single-purpose container is created under the
+    isolation contract, templated, verified via `config get` (template=1), and
+    deleted, so no template is left behind.
+    """
+    print(BOLD("lxc: template conversion (dedicated throwaway container)"))
+    ctid = _next_id(r)
+    host = Isolation.NAME_PREFIX + "tmpl"
+    print(DIM(f"  ctid={ctid}"))
+    created = False
+    try:
+        r.step("lxc", "create", f"create template CT {ctid}",
+               "pve", "lxc", "create", ctid, "--ostemplate", ostemplate,
+               "--hostname", host, "--storage", ROOTDIR_STORAGE,
+               "--rootfs", f"{ROOTDIR_STORAGE}:1", "--memory", "256", "--cores", "1",
+               "--swap", "0", "--unprivileged",
+               "--net0", f"name=eth0,bridge={Isolation.SDN_VNET}",
+               "--pool", Isolation.POOL, "--tags", Isolation.TAG)
+        created = True
+        # The container is never started: conversion requires it stopped, and a
+        # freshly created one already is.
+        r.step("lxc", "to-template", f"to-template CT {ctid}",
+               "pve", "lxc", "to-template", ctid)
+        if _wait_lxc_template(r, ctid):
+            print(f"  {GREEN('✓')} template verified (template=1)")
+            r.cov.append(Step("lxc", "to-template verify", PASS))
+        else:
+            r.cover_skip("lxc", "to-template verify", "to-template verify",
+                         "status never reported template=1")
+    finally:
+        if created:
+            r.del_step("lxc", "template delete", f"delete template CT {ctid}",
+                       "pve", "lxc", "delete", ctid, "--yes", "--force", "--purge")
+
+
 def ct_lifecycle(r: Runner, ostemplate: str) -> None:
     """Drive an Alpine throwaway container through every mutating lxc verb."""
     print(BOLD("lxc: full container verb matrix"))
@@ -1660,6 +1998,9 @@ def ct_lifecycle(r: Runner, ostemplate: str) -> None:
                "--dry-run", json_out=True)
         r.del_step("storage", "prune", f"prune backups of CT {ctid}",
                    "pve", "storage", "prune", BACKUP_STORAGE, "--vmid", ctid, "--keep-last", "0", "--yes")
+        # Browsing a snapshot needs one that PBS holds, so the fixture backs this
+        # same container up a second time — to its own scratch datastore.
+        storage_file_restore_lifecycle(r, ctid)
         # HA: manage this isolated CT (sid ct:<id>), then release it. Skipped if
         # the lab is not a quorate cluster.
         ha_resource_lifecycle(r, "lxc", f"ct:{ctid}")
@@ -2416,6 +2757,31 @@ def _wait_guest_node(r: Runner, vmid: str, want: str, timeout: float = 180.0) ->
     return False
 
 
+def _wait_unlocked(r: Runner, guest: str, vmid: str, timeout: float = 120.0) -> bool:
+    """Block until `vmid` carries no config lock, or the wait runs out.
+
+    PVE records a lock on the guest for the duration of a task that rewrites its
+    config (`migrate`, `backup`, `snapshot`), and refuses every other write —
+    including delete — while it is held. The lock outlives the visible effect of
+    the task by a moment, so waiting on the effect alone is not enough.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        res = r.pmx("pve", guest, "status", vmid, json_out=True)
+        if res.rc != 0:
+            return False
+        try:
+            data = res.json()
+        except ValueError:
+            return False
+        if isinstance(data, dict):
+            data = data.get("data", data)
+        if not (isinstance(data, dict) and str(data.get("lock", "") or "")):
+            return True
+        time.sleep(3)
+    return False
+
+
 def _ha_service(r: Runner, sid: str) -> tuple[str, str]:
     """The (state, node) the HA manager currently records for `sid`."""
     res = r.pmx("pve", "cluster", "ha", "status", "current", json_out=True, node=False)
@@ -2503,8 +2869,15 @@ def _ha_move_lifecycle(r: Runner, guest: str, sid: str) -> None:
         guest, "ha resource relocate", f"ha resource relocate {sid} -> {r.node}",
         "pve", "cluster", "ha", "resource", "relocate", sid, "--target-node", r.node,
         skip_markers=markers, skip_reason="HA manager rejected the relocation target")
-    if back and not _wait_guest_node(r, vmid, r.node):
-        raise LifecycleError(f"ha resource relocate {sid}: guest never returned to {r.node}")
+    if back:
+        if not _wait_guest_node(r, vmid, r.node):
+            raise LifecycleError(f"ha resource relocate {sid}: guest never returned to {r.node}")
+        if not _wait_ha_settled(r, sid, r.node):
+            raise LifecycleError(f"ha resource relocate {sid}: manager never settled it on {r.node}")
+    # The guest arriving is not the move being over: the migration task holds a
+    # config lock for a moment after the last disk lands, and the caller's next
+    # act is usually to delete the guest — which fails outright on a locked one.
+    _wait_unlocked(r, guest, vmid)
 
 
 def _ha_config_lifecycle(r: Runner, guest: str, sid: str) -> None:
@@ -5257,11 +5630,16 @@ def storage_transfer_lifecycle(r: Runner) -> None:
 
 
 def run(context: str, binary: str | None, build: bool, strict: bool,
-        skip_ct: bool, skip_vm: bool) -> int:
+        skip_ct: bool, skip_vm: bool, pbs_context: str = "") -> int:
     # Line-buffer stdout: redirected to a file or a CI log it is otherwise
     # block-buffered, so a run that stalls on a slow step appears to be stuck
     # several steps earlier — whichever one last filled a 4K block.
     sys.stdout.reconfigure(line_buffering=True)
+    # The PBS appliance that backs the file-restore fixture. It is a separate
+    # target from the cluster under test, so it is named separately; an
+    # unconfigured or unreachable one costs two recorded skips, not a failure.
+    global _pbs_context
+    _pbs_context = pbs_context or os.environ.get("PMX_E2E_PBS_CONTEXT", "pbs-e2e")
     bin_path = find_binary(binary, build=build)
     ok, why = target_configured(bin_path, context)
     if not ok:
@@ -5364,6 +5742,8 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
         if not skip_ct:
             ostemplate = _ensure_template(r)
             ct_lifecycle(r, ostemplate)
+            print()
+            lxc_template_lifecycle(r, ostemplate)
             print()
 
         node_ops(r)

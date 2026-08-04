@@ -310,10 +310,10 @@ def run(ctx: Ctx) -> None:
     ctx.defer(
         "to-template",
         "converts the discovered container into a template — irreversible for that "
-        "instance and only sensible as the terminal step of a dedicated throwaway "
-        "guest lifecycle; not exercised against a live container; covered by unit tests",
+        "instance, so the sweep never runs it; covered live by `e2e --mutate`, which "
+        "templates a dedicated throwaway container and deletes it",
         "pmx pve lxc to-template <ctid> --node <node>",
-        isolation=True, live_covered=False,
+        isolation=True, live_covered=True,
     )
     # `security` mutations have no read-only form and are not wired into the
     # mutate phase: the caps verbs rewrite /etc/pve/lxc/<vmid>.conf on the node

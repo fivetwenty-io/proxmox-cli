@@ -93,13 +93,13 @@ swept clean before the next provisions.
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 270 | 0 | 122 | 104 | 42 | 2 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
-| `pve` | 676 | 80 | 181 | 438 | 1 | 61 | 7 | 0 |
+| `pve` | 676 | 80 | 181 | 441 | 1 | 58 | 7 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1261** | **101** | **452** | **609** | **97** | **85** | **9** | **0** |
+| **Total** | **1261** | **101** | **452** | **612** | **97** | **82** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1167** are exercised by at least one live suite, **85** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1261** leaves, **1170** are exercised by at least one live suite, **82** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -1001,7 +1001,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve lxc suspend` | — | ✓ |  |
 | `pve lxc template download` | — | ✓ |  |
 | `pve lxc template list` | ✓ | — |  |
-| `pve lxc to-template` | — | — | deferred — converts the discovered container into a template — irreversible for that instance and only sensible as the terminal step of a dedicated throwaway guest lifecycle; not exercised against a live container; covered by unit tests |
+| `pve lxc to-template` | — | ✓ |  |
 | `pve node apt changelog` | ◑ | — |  |
 | `pve node apt list` | ◑ | — |  |
 | `pve node apt repositories add` | — | — | deferred — adds a standard APT repository to the node's sources; not exercised live |
@@ -1372,8 +1372,8 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve storage delete` | — | ✓ |  |
 | `pve storage describe` | ✓ | — |  |
 | `pve storage download-url` | — | ✓ |  |
-| `pve storage file-restore download` | — | — | deferred — extracts a file from a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
-| `pve storage file-restore list` | — | — | deferred — browses files inside a PBS snapshot — lab has no Proxmox Backup Server storage; not exercised live; covered by unit tests |
+| `pve storage file-restore download` | — | ✓ |  |
+| `pve storage file-restore list` | — | ✓ |  |
 | `pve storage get` | ◑ | ✓ |  |
 | `pve storage identity` | ◑ | — |  |
 | `pve storage import-metadata` | — | ✓ |  |

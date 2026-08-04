@@ -1231,6 +1231,20 @@ what to change rather than reading as a pass. What each one needs:
   plugin refuses to reload without it) — the default instance should be disabled,
   as PVE's own SDN setup requires.
 
+- `storage file-restore list` / `download`
+
+  a Proxmox Backup Server: only PBS snapshots can be browsed, and a vzdump
+  archive on a directory storage cannot. The run stages its own — a scratch
+  datastore on the appliance, a token scoped to that datastore alone, a
+  fingerprint-pinned `pbs` storage on the cluster, and a second backup of the
+  throwaway container into it — and removes all of it at teardown. It backs up
+  the container on purpose: that archive is a pxar of the rootfs, so the listing
+  walks a real filesystem, where a VM archive holds raw block images the restore
+  tooling can only open through a helper image. The run walks the archive down
+  to a real file and downloads it, checking the bytes actually land. Point it at
+  an appliance with `--pbs-context` or `$PMX_E2E_PBS_CONTEXT` (default
+  `pbs-e2e`); without one the verbs record skips.
+
 - `node disks` create/delete/init-gpt
 
   one spare disk on the test node that nothing else uses. The run refuses to

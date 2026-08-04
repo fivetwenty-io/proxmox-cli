@@ -148,6 +148,7 @@ def main() -> None:
             strict=args.strict,
             skip_ct=args.vm_only,
             skip_vm=args.ct_only,
+            pbs_context=args.pbs_context,
         )
         rc = rc or mrc
 
