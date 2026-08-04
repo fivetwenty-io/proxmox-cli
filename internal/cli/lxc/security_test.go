@@ -125,6 +125,35 @@ func TestSecurityList_TableSortsPrivilegedFirst(t *testing.T) {
 	require.NotContains(t, out, "200")
 }
 
+// TestSecurityList_AmbientNodeDoesNotNarrow verifies that a default node from
+// the context or PMX_NODE leaves the audit cluster-wide; only an explicit
+// --node narrows it.
+func TestSecurityList_AmbientNodeDoesNotNarrow(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "lxc", "vmid": 101, "name": "a", "node": "pve1"},
+			map[string]any{"type": "lxc", "vmid": 102, "name": "b", "node": "pve2"},
+		})
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/lxc/101/config", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"unprivileged": 1, "digest": "x"})
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve2/lxc/102/config", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"unprivileged": 1, "digest": "x"})
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "security", "list")
+	require.NoError(t, run())
+
+	out := buf.String()
+	require.Contains(t, out, "101")
+	require.Contains(t, out, "102", "ambient node must not narrow the audit")
+}
+
 // indexOf is a tiny helper for ordering assertions.
 func indexOf(s, sub string) int {
 	return bytes.Index([]byte(s), []byte(sub))

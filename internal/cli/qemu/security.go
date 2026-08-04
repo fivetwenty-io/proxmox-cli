@@ -714,7 +714,9 @@ func newSecurityListCmd() *cobra.Command {
 					if r.Type != cli.GuestQemu {
 						continue
 					}
-					if deps.Node != "" && r.Node != deps.Node {
+					// Only an explicit --node narrows the audit; an ambient
+					// default node must not silently shrink a cluster-wide scan.
+					if deps.NodeExplicit && r.Node != deps.Node {
 						continue
 					}
 					targets = append(targets, r)

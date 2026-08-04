@@ -185,6 +185,34 @@ func TestSecurityList_NodeFilter(t *testing.T) {
 	require.Equal(t, "100", rows[0].VMID)
 }
 
+// TestSecurityList_AmbientNodeDoesNotNarrow verifies that a default node from
+// the context or PMX_NODE leaves the audit cluster-wide; only an explicit
+// --node narrows it.
+func TestSecurityList_AmbientNodeDoesNotNarrow(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "qemu", "vmid": 100, "name": "a", "node": "pve1"},
+			map[string]any{"type": "qemu", "vmid": 101, "name": "b", "node": "pve2"},
+		})
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{})
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve2/qemu/101/config", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{})
+	})
+
+	deps := depsFor(t, ac, output.FormatJSON, "pve1", false)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "security", "list"))
+
+	var rows []securityListRow
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &rows))
+	require.Len(t, rows, 2, "ambient node must not narrow the audit")
+}
+
 // TestSecurityList_TolerateOneVMConfigReadFailure is a regression for A2: one
 // VM's config read failing (e.g. missing VM.Audit, transient error) must not
 // abort the whole cluster-wide audit. The failing VM's row is degraded with
