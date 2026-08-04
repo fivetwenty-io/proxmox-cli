@@ -256,6 +256,22 @@ func TestLog_Success(t *testing.T) {
 	require.Contains(t, out, "backup finished")
 }
 
+// TestLog_AmbientNodeIgnored verifies that `task log` routes by the UPID's
+// node even when a different default-node is configured.
+func TestLog_AmbientNodeIgnored(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+testUPID+"/log", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, []map[string]any{{"n": 1, "t": "line"}})
+	})
+
+	_, err := runTask(t, f, "pve9", "table", "log", testUPID)
+	require.NoError(t, err)
+	require.Contains(t, gotPath, "/nodes/pve1/")
+}
+
 // TestLog_ServerError verifies that an upstream error is surfaced.
 func TestLog_ServerError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
@@ -287,12 +303,45 @@ func TestStop_Success(t *testing.T) {
 	require.Contains(t, out, "stopped")
 }
 
-// TestStop_NoNode verifies that `task stop` errors when no node is resolved.
-func TestStop_NoNode(t *testing.T) {
+// TestStop_NoNodeConfigured verifies that `task stop` needs no configured node:
+// the node is parsed from the UPID.
+func TestStop_NoNodeConfigured(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
+
+	var gotPath string
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/tasks/"+testUPID, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, nil)
+	})
+
 	_, err := runTask(t, f, "", "table", "stop", testUPID)
+	require.NoError(t, err)
+	require.Contains(t, gotPath, "/nodes/pve1/")
+}
+
+// TestStop_AmbientNodeIgnored verifies that a default-node differing from the
+// UPID's node does not misroute the stop request.
+func TestStop_AmbientNodeIgnored(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	var gotPath string
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/tasks/"+testUPID, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, nil)
+	})
+
+	_, err := runTask(t, f, "pve9", "table", "stop", testUPID)
+	require.NoError(t, err)
+	require.Contains(t, gotPath, "/nodes/pve1/")
+}
+
+// TestStop_InvalidUPID verifies that a malformed UPID is rejected before any
+// API call.
+func TestStop_InvalidUPID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	_, err := runTask(t, f, "pve1", "table", "stop", "not-a-upid")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "node")
+	require.Contains(t, err.Error(), "parse upid")
 }
 
 // TestWait_Success verifies that `task wait` polls the status endpoint (node

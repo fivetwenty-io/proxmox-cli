@@ -27,10 +27,10 @@ func Group(_ *cli.Deps) *cobra.Command {
 cluster, check a task's status, read its log, wait for it to finish, or stop
 a running task. Requires a configured Proxmox VE API connection.
 
-Tasks are identified by their UPID, which encodes the node they ran on; 'task
-status' and 'task wait' resolve the node from the UPID and need no --node
-flag. 'task list', 'task log', and 'task stop' operate on a single node,
-selected via --node, PMX_NODE, or the active context's default node.`,
+Tasks are identified by their UPID, which encodes the node they ran on;
+'task status', 'task log', 'task wait', and 'task stop' resolve the node
+from the UPID and need no --node flag. Only 'task list' operates on a single
+node, selected via --node, PMX_NODE, or the active context's default node.`,
 		Example: `  pmx pve task list --node pve1
   pmx pve task status UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
   pmx pve task wait UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
@@ -260,22 +260,22 @@ func newLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log <upid>",
 		Short: "Read the log of a task",
-		Long: "Read a task's log lines from the node the task ran on, selected via --node, " +
-			"PMX_NODE, or the active context's default node. --limit and --start page " +
+		Long: "Read a task's log lines from the node the task ran on. The node is resolved " +
+			"automatically from the UPID, so --node is not required. --limit and --start page " +
 			"through the log; --download instead fetches the full log file and cannot be " +
 			"combined with --limit or --start.",
-		Example: `  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --node pve1
-  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --node pve1 --limit 50 --start 100`,
+		Example: `  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:
+  pmx pve task log UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --limit 50 --start 100`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
-			node, err := requireNode(deps.Node)
-			if err != nil {
-				return err
-			}
-
 			upid := args[0]
+			parsed, err := tasks.ParseUPID(upid)
+			if err != nil {
+				return fmt.Errorf("parse upid %q: %w", upid, err)
+			}
+			node := parsed.Node
 			if download && (cmd.Flags().Changed("limit") || cmd.Flags().Changed("start")) {
 				return fmt.Errorf("--download cannot be combined with --limit or --start")
 			}
@@ -347,20 +347,22 @@ func newStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop <upid>",
 		Short: "Stop a running task",
-		Long: "Request that a running task be stopped, on the node selected via --node, " +
-			"PMX_NODE, or the active context's default node. Returns as soon as the stop " +
-			"request is accepted; it does not wait for the task to actually finish exiting.",
-		Example: `  pmx pve task stop UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam: --node pve1`,
+		Long: "Request that a running task be stopped, on the node the task is running on. " +
+			"The node is resolved automatically from the UPID, so --node is not required. " +
+			"Returns as soon as the stop request is accepted; it does not wait for the task " +
+			"to actually finish exiting.",
+		Example: `  pmx pve task stop UPID:pve1:00001234:0005678A:6660A1B2:vzdump:100:root@pam:`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 
-			node, err := requireNode(deps.Node)
-			if err != nil {
-				return err
-			}
-
 			upid := args[0]
+			parsed, err := tasks.ParseUPID(upid)
+			if err != nil {
+				return fmt.Errorf("parse upid %q: %w", upid, err)
+			}
+			node := parsed.Node
+
 			if err := deps.API.Nodes.DeleteTasks(cmd.Context(), node, upid); err != nil {
 				return err
 			}

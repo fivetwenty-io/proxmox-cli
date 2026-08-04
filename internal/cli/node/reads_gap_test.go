@@ -84,14 +84,33 @@ func TestNodeTaskStatus_Running(t *testing.T) {
 	require.Contains(t, buf.String(), "running")
 }
 
-func TestNodeTaskStatus_RequiresNode(t *testing.T) {
+// TestNodeTaskStatus_NodeFromUPID verifies the node is parsed from the UPID:
+// no --node is passed, and an ambient node cannot misroute the request.
+func TestNodeTaskStatus_NodeFromUPID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	upid := "UPID:pve1:1:2:3:qmstart:100:root@pam:"
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/tasks/"+upid+"/status", &rec, map[string]any{
+		"upid": upid, "status": "stopped", "exitstatus": "OK",
+		"id": "100", "type": "qmstart", "user": "root@pam", "node": "pve1",
+		"pid": 12345,
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "task", "status", upid))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "GET", rec.method)
+}
+
+func TestNodeTaskStatus_InvalidUPID(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
-	root.SetArgs(append(prefix, "node", "task", "status", "UPID:pve1:1:2:3:test:0:root@pam:"))
+	root.SetArgs(append(prefix, "node", "task", "status", "not-a-upid"))
 
 	err := root.Execute()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no node specified")
+	require.Contains(t, err.Error(), "parse upid")
 }
 
 func TestNodeTaskStatus_APIError(t *testing.T) {

@@ -214,25 +214,27 @@ func newTaskStopCmd() *cobra.Command {
 	}
 }
 
-// newTaskStatusCmd builds `pmx pve node task status <upid>`. The node is resolved
-// from deps.Node (--node flag, PMX_NODE env, or configured default).
+// newTaskStatusCmd builds `pmx pve node task status <upid>`. The node is parsed
+// from the UPID, like `node task wait`, so no --node is required.
 func newTaskStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status <upid>",
 		Short: "Show the runtime status of a task by UPID",
-		Long: "Query the current status of a single task on the resolved node by its UPID. " +
-			"Reports whether the task is still running and, when finished, the exit status.",
+		Long: "Query the current status of a single task by its UPID. The node is parsed " +
+			"from the UPID, so --node is not required. Reports whether the task is still " +
+			"running and, when finished, the exit status.",
 		Example: `  pmx pve node task status UPID:pve1:00001234:...`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if err := requireNode(deps); err != nil {
-				return err
-			}
 			upid := args[0]
-			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), deps.Node, upid)
+			parsed, err := tasks.ParseUPID(upid)
 			if err != nil {
-				return fmt.Errorf("get status of task %q on node %q: %w", upid, deps.Node, err)
+				return fmt.Errorf("parse upid %q: %w", upid, err)
+			}
+			resp, err := deps.API.Nodes.ListTasksStatus(cmd.Context(), parsed.Node, upid)
+			if err != nil {
+				return fmt.Errorf("get status of task %q on node %q: %w", upid, parsed.Node, err)
 			}
 			single := map[string]string{
 				"STATUS": resp.Status,
