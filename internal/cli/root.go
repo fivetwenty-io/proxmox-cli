@@ -81,11 +81,13 @@ type Deps struct {
 	// Node is the resolved --node flag value (flag > PMX_NODE > context DefaultNode).
 	Node string
 
-	// NodeExplicit reports whether --node was passed on the command line, as
-	// opposed to Node being an ambient default from PMX_NODE or the context's
-	// DefaultNode. Guest resolution (ResolveGuest) trusts Node as a guest's
-	// location only when this is true; an ambient default only says where
-	// node-scoped commands run, not where any particular guest lives.
+	// NodeExplicit reports whether --node was passed on the command line with a
+	// non-empty value, as opposed to Node being an ambient default from
+	// PMX_NODE or the context's DefaultNode. Guest resolution (ResolveGuest)
+	// trusts Node as a guest's location only when this is true; an ambient
+	// default only says where node-scoped commands run, not where any
+	// particular guest lives. `--node ""` is treated as if the flag were
+	// absent, so it can never bypass the empty-node guards downstream.
 	NodeExplicit bool
 
 	// Cfg is the loaded config. Never nil after PersistentPreRunE.
@@ -519,7 +521,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		Log:          logger,
 		Started:      started,
 		Node:         pf.node,
-		NodeExplicit: cmd.Flags().Changed("node"),
+		NodeExplicit: cmd.Flags().Changed("node") && pf.node != "",
 		Cfg:          cfg,
 		ConfigPath:   pf.config,
 		Runner:       exec.Real(),
