@@ -431,9 +431,11 @@ The active context is resolved in this order:
 Per-context `default-node` and `default-output` fields supply defaults for
 `--node` and `--output`. The full resolution order for both fields is:
 explicit flag > environment variable (`$PMX_NODE` / `$PMX_OUTPUT`) > context default > built-in default (`""` / `table`).
-The node default applies to node-scoped commands; commands that target a
-guest by `<vmid|name>` resolve the guest's actual node from the cluster
-unless `--node` is passed explicitly (see below).
+The node default applies to node-scoped commands; commands whose target's
+location is knowable find it themselves unless `--node` is passed
+explicitly: guest verbs resolve the guest's actual node from the cluster,
+task verbs parse the node from the UPID, replication-job verbs follow the
+job's guest, and storage verbs pick a node carrying the storage (see below).
 
 Each context targets one product. The default, `product: pve`, is a Proxmox VE
 API endpoint (port 8006); `product: pbs` marks the context as a Proxmox Backup
@@ -551,7 +553,10 @@ information is available as a command (with `-o json`/`-o yaml` support) via
 `pmx` organizes the API into logical groups. VM and container commands that
 target a guest by `<vmid|name>` find the guest's node automatically from the
 cluster; passing `--node` explicitly pins it (useful to disambiguate duplicate
-names). Node-scoped listings take their node from `--node`/`$PMX_NODE` or the
+names). The same applies to task verbs (node parsed from the UPID),
+replication-job verbs (node follows the job's guest), and storage verbs (a
+node carrying the storage is picked from the cluster). Node-scoped listings
+take their node from `--node`/`$PMX_NODE` or the
 context's `default-node`; node administration uses the `pmx pve node` subtree. The commands below are shared across every
 persona (see [Personas](#personas)); everything else lives under `pmx pve`
 (Proxmox VE), `pmx pbs` (Proxmox Backup Server, `product: pbs` contexts), or

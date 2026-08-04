@@ -123,6 +123,33 @@ node is resolved from the cluster resource inventory instead. This keeps
 per-guest commands working on multi-node clusters where guests live on nodes
 other than the default.
 
+The same principle covers every command whose target's location is knowable:
+
+- Task verbs taking a UPID (`task status|log|wait|stop`, `node task
+  status|wait`) parse the node from the UPID itself — its first field names
+  the node the task ran on — and never consult the ambient default.
+- `node replication status|log|run <id>` derive the guest VMID from the job
+  id (`<guest>-<jobnum>`) and resolve its node from the cluster, since a
+  replication job's source follows its guest.
+- Storage-scoped verbs (`storage volume get|set|delete|alloc|copy`,
+  `content`, `prune`, `file-restore *`, `status`, `identity`,
+  `rrd`/`rrddata`, `node vzdump extract-config`) resolve a node carrying the
+  storage from the cluster resource inventory: the ambient default node when
+  it carries the storage, otherwise the lexically first carrier, preferring
+  nodes where the storage is currently available. Verbs that choose where
+  work happens (`upload`, `download-url`, `oci pull`, `aplinfo`) stay
+  node-scoped.
+- `qemu security list` and `lxc security list` narrow their cluster-wide
+  audit only under an explicit `--node`; an ambient default never silently
+  shrinks the scan.
+- Inherently node-scoped verbs with a VMID filter (`node vzdump --vmid`,
+  `node startall|stopall|suspendall|migrateall --vmids`) keep their meaning
+  ("guests on this node") but warn on stderr when a listed guest is not
+  resident on the target node, since the server silently skips it.
+
+Whenever a node is auto-resolved somewhere other than the ambient default,
+the choice is noted on stderr (`note: auto-resolved node … `).
+
 ### Context validation
 
 `pmx context validate [<name>] [--all]` runs structural checks against one or
