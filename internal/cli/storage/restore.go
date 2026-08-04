@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -40,6 +41,40 @@ func encodeFilepath(p string) string {
 	return base64.StdEncoding.EncodeToString([]byte(p))
 }
 
+// decodeFilepaths decodes the base64 `filepath` each listing entry carries, so
+// what the listing prints is what --filepath and `download` accept. The API
+// answers in base64 and takes base64, and encoding only one of the two ends
+// leaves the caller holding a value it cannot pass back. An entry whose
+// filepath is not valid base64 is left untouched.
+func decodeFilepaths(raws []json.RawMessage) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(raws))
+	for _, raw := range raws {
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			out = append(out, raw)
+			continue
+		}
+		s, ok := m["filepath"].(string)
+		if !ok || s == "" {
+			out = append(out, raw)
+			continue
+		}
+		dec, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			out = append(out, raw)
+			continue
+		}
+		m["filepath"] = string(dec)
+		next, err := json.Marshal(m)
+		if err != nil {
+			out = append(out, raw)
+			continue
+		}
+		out = append(out, next)
+	}
+	return out
+}
+
 // newFileRestoreListCmd builds `pmx pve storage file-restore list <storage>`.
 func newFileRestoreListCmd() *cobra.Command {
 	var (
@@ -53,7 +88,8 @@ func newFileRestoreListCmd() *cobra.Command {
 			"Two things are required: a node, via --node or PMX_NODE or the active context's " +
 			"default, and the backup to browse, via --volume.\n\n" +
 			"--filepath picks the directory within the backup, and defaults to the archive " +
-			"root.\n\n" +
+			"root. The filepath each entry reports can be passed straight back to " +
+			"--filepath, or to `file-restore download`.\n\n" +
 			"Only Proxmox Backup Server snapshots are supported so far.",
 		Example: `  pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z
   pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc`,
@@ -79,7 +115,7 @@ func newFileRestoreListCmd() *cobra.Command {
 			if resp != nil {
 				raws = *resp
 			}
-			return deps.Out.Render(cmd.OutOrStdout(), rawObjectListResult(raws), deps.Format)
+			return deps.Out.Render(cmd.OutOrStdout(), rawObjectListResult(decodeFilepaths(raws)), deps.Format)
 		},
 	}
 	fl := cmd.Flags()
@@ -113,23 +149,23 @@ func newFileRestoreDownloadCmd() *cobra.Command {
 			storage := args[0]
 			fl := cmd.Flags()
 
-			params := &nodes.ListStorageFileRestoreDownloadParams{
-				Volume:   volume,
-				Filepath: encodeFilepath(filepath),
+			// The response is the restored file's own bytes, so it is fetched
+			// through the client's undecoded path: the typed call parses every
+			// body as the API's JSON envelope, which a file never is.
+			params := map[string]any{
+				"volume":   volume,
+				"filepath": encodeFilepath(filepath),
 			}
 			if fl.Changed("tar") {
-				params.Tar = &tar
+				params["tar"] = tar
 			}
 
-			resp, err := deps.API.Nodes.ListStorageFileRestoreDownload(cmd.Context(), deps.Node, storage, params)
+			path := fmt.Sprintf("/nodes/%s/storage/%s/file-restore/download",
+				url.PathEscape(deps.Node), url.PathEscape(storage))
+			data, err := deps.API.Raw.GetBytesCtx(cmd.Context(), path, params)
 			if err != nil {
 				return fmt.Errorf("download %q from %q on storage %q (node %q): %w",
 					filepath, volume, storage, deps.Node, err)
-			}
-
-			var data []byte
-			if resp != nil {
-				data = []byte(*resp)
 			}
 			if outputFile != "" {
 				if err := os.WriteFile(outputFile, data, 0o600); err != nil {

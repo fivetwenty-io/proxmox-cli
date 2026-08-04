@@ -60,6 +60,44 @@ func TestFileRestoreList_EncodesNonRootFilepath(t *testing.T) {
 	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("/etc")), q.Get("filepath"))
 }
 
+// TestFileRestoreList_DecodesReturnedFilepaths verifies the base64 filepath the
+// API returns is decoded before it is rendered, so a listed entry can be passed
+// straight back to --filepath or to `download` without the caller decoding it.
+func TestFileRestoreList_DecodesReturnedFilepaths(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var method string
+	var q url.Values
+	recordQuery(f, "GET /api2/json/nodes/pve1/storage/pbs/file-restore/list", &method, &q, []map[string]any{
+		{"filepath": base64.StdEncoding.EncodeToString([]byte("/root.pxar.didx")),
+			"type": "d", "leaf": 0, "text": "root.pxar.didx"},
+		{"filepath": base64.StdEncoding.EncodeToString([]byte("root.pxar.didx/etc/hostname")),
+			"type": "f", "leaf": 1, "text": "hostname", "size": 12},
+	})
+
+	out, err := run(t, f, "--node", "pve1", "-o", "json", "file-restore", "list", "pbs",
+		"--volume", "backup/ct/100/2026-01-01T00:00:00Z")
+	require.NoError(t, err)
+	require.Contains(t, out, "/root.pxar.didx")
+	require.Contains(t, out, "root.pxar.didx/etc/hostname")
+	require.NotContains(t, out, base64.StdEncoding.EncodeToString([]byte("/root.pxar.didx")))
+}
+
+// TestFileRestoreList_KeepsUndecodableFilepath verifies an entry whose filepath
+// is not base64 is rendered unchanged rather than dropped or mangled.
+func TestFileRestoreList_KeepsUndecodableFilepath(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var method string
+	var q url.Values
+	recordQuery(f, "GET /api2/json/nodes/pve1/storage/pbs/file-restore/list", &method, &q, []map[string]any{
+		{"filepath": "/not base64 at all", "type": "f", "leaf": 1},
+	})
+
+	out, err := run(t, f, "--node", "pve1", "-o", "json", "file-restore", "list", "pbs",
+		"--volume", "snap")
+	require.NoError(t, err)
+	require.Contains(t, out, "/not base64 at all")
+}
+
 // TestFileRestore_RequiredFlags verifies that file-restore sub-commands fail when
 // a required flag is omitted.
 func TestFileRestore_RequiredFlags(t *testing.T) {
@@ -118,10 +156,14 @@ func TestFileRestore_RequiresNode(t *testing.T) {
 func TestFileRestoreDownload_WritesToOutputFile(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var q url.Values
+	// The endpoint answers with the restored file's own bytes, not the API's
+	// JSON envelope, so the fake serves them raw.
+	body := []byte("file-contents\n")
 	f.HandleFunc("GET /api2/json/nodes/pve1/storage/pbs/file-restore/download",
 		func(w http.ResponseWriter, r *http.Request) {
 			q = r.URL.Query()
-			testhelper.WriteData(w, "file-contents")
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(body)
 		})
 
 	dir := t.TempDir()
@@ -130,11 +172,35 @@ func TestFileRestoreDownload_WritesToOutputFile(t *testing.T) {
 		"--volume", "snap", "--filepath", "/etc/hostname", "--output-file", dst)
 	require.NoError(t, err)
 	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("/etc/hostname")), q.Get("filepath"))
+	require.Equal(t, "snap", q.Get("volume"))
 	require.Contains(t, out, "Wrote")
 
 	data, readErr := os.ReadFile(dst)
 	require.NoError(t, readErr)
-	require.NotEmpty(t, data)
+	require.Equal(t, body, data)
+}
+
+// TestFileRestoreDownload_WritesBinaryVerbatim verifies a payload that is not
+// valid JSON — every real download — reaches the disk byte for byte, rather
+// than failing the decode the rest of the API's responses go through.
+func TestFileRestoreDownload_WritesBinaryVerbatim(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	body := []byte{0x50, 0x4b, 0x03, 0x04, 0x00, 0xff, 0xfe, 0x7f, 0x00, 0x01}
+	f.HandleFunc("GET /api2/json/nodes/pve1/storage/pbs/file-restore/download",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(body)
+		})
+
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "out.zip")
+	_, err := run(t, f, "--node", "pve1", "file-restore", "download", "pbs",
+		"--volume", "snap", "--filepath", "/etc", "--output-file", dst)
+	require.NoError(t, err)
+
+	data, readErr := os.ReadFile(dst)
+	require.NoError(t, readErr)
+	require.Equal(t, body, data)
 }
 
 // TestFileRestoreDownload_TarForwarded verifies --tar is forwarded only when set.
@@ -144,7 +210,8 @@ func TestFileRestoreDownload_TarForwarded(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/storage/pbs/file-restore/download",
 		func(w http.ResponseWriter, r *http.Request) {
 			q = r.URL.Query()
-			testhelper.WriteData(w, "x")
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write([]byte("x"))
 		})
 
 	dir := t.TempDir()
