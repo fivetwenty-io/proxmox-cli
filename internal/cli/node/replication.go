@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -13,11 +14,34 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
+// resolveReplicationNode resolves the node a replication job runs on. The job's
+// source node is wherever its guest currently lives (replication follows guest
+// migration), so an ambient default node cannot be trusted: unless --node was
+// passed explicitly, the guest VMID embedded in the job id ('<GUEST>-<JOBNUM>')
+// is resolved through the cluster resource inventory, with a stderr note naming
+// the chosen node.
+func resolveReplicationNode(cmd *cobra.Command, deps *cli.Deps, jobID string) (string, error) {
+	if deps.NodeExplicit {
+		return deps.Node, nil
+	}
+	idx := strings.LastIndex(jobID, "-")
+	if idx <= 0 {
+		return "", fmt.Errorf("cannot derive a guest from replication job id %q (expected <guest>-<jobnum>); pass --node", jobID)
+	}
+	vmid := jobID[:idx]
+	_, node, err := cli.ResolveGuest(cmd.Context(), deps, vmid, cli.GuestAny)
+	if err != nil {
+		return "", fmt.Errorf("resolve node for replication job %q: %w", jobID, err)
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "note: auto-resolved node %q for replication job %s\n", node, jobID)
+	return node, nil
+}
+
 // renderReplicationTask renders the asynchronous worker started by an on-demand
 // replication run. schedule_now returns a worker UPID; honour --async and
 // otherwise block on the task, tolerating a non-UPID or empty body by falling
 // back to a plain success message.
-func renderReplicationTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, doneMsg string) error {
+func renderReplicationTask(cmd *cobra.Command, deps *cli.Deps, node string, raw json.RawMessage, doneMsg string) error {
 	upid, err := apiclient.UPIDFromRaw(raw)
 	if err != nil {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
@@ -31,7 +55,7 @@ func renderReplicationTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessa
 			}, deps.Format)
 	}
 	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, nil); err != nil {
-		return fmt.Errorf("replication run on node %q: %w", deps.Node, err)
+		return fmt.Errorf("replication run on node %q: %w", node, err)
 	}
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
 }
@@ -61,7 +85,7 @@ func newReplicationGetCmd() *cobra.Command {
 		Long: "Show the full configuration of a single storage-replication job, including its target, " +
 			"schedule, rate limit, remove-job setting, and comment. Job configuration is cluster-wide; " +
 			"this is equivalent to `pmx pve cluster replication get`.",
-		Example: `  pmx pve node replication get local-100-0`,
+		Example: `  pmx pve node replication get 100-0`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
@@ -106,19 +130,22 @@ func newReplicationListCmd() *cobra.Command {
 
 func newReplicationStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "status <id>",
-		Short:   "Show the runtime status of a replication job",
-		Long:    "Show the current runtime status of a single replication job on the resolved node, including last and next sync, duration, fail count, and any error.",
-		Example: `  pmx pve node replication status local-100-0`,
+		Use:   "status <id>",
+		Short: "Show the runtime status of a replication job",
+		Long: "Show the current runtime status of a single replication job, including last and next " +
+			"sync, duration, fail count, and any error. The job's source node is resolved from the " +
+			"guest embedded in the job id unless --node is passed explicitly.",
+		Example: `  pmx pve node replication status 100-0`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if err := requireNode(deps); err != nil {
+			node, err := resolveReplicationNode(cmd, deps, args[0])
+			if err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.ListReplicationStatus(cmd.Context(), deps.Node, args[0])
+			resp, err := deps.API.Nodes.ListReplicationStatus(cmd.Context(), node, args[0])
 			if err != nil {
-				return fmt.Errorf("get replication status for job %q on node %q: %w", args[0], deps.Node, err)
+				return fmt.Errorf("get replication status for job %q on node %q: %w", args[0], node, err)
 			}
 			return renderObject(cmd, deps, resp)
 		},
@@ -131,14 +158,17 @@ func newReplicationLogCmd() *cobra.Command {
 		start int64
 	)
 	cmd := &cobra.Command{
-		Use:     "log <id>",
-		Short:   "Show the log of a replication job",
-		Long:    "Show the log lines recorded for a single replication job on the resolved node. Use --limit and --start to page through the log.",
-		Example: `  pmx pve node replication log local-100-0 --limit 50`,
+		Use:   "log <id>",
+		Short: "Show the log of a replication job",
+		Long: "Show the log lines recorded for a single replication job. The job's source node is " +
+			"resolved from the guest embedded in the job id unless --node is passed explicitly. " +
+			"Use --limit and --start to page through the log.",
+		Example: `  pmx pve node replication log 100-0 --limit 50`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if err := requireNode(deps); err != nil {
+			node, err := resolveReplicationNode(cmd, deps, args[0])
+			if err != nil {
 				return err
 			}
 			fl := cmd.Flags()
@@ -149,9 +179,9 @@ func newReplicationLogCmd() *cobra.Command {
 			if fl.Changed("start") {
 				params.Start = &start
 			}
-			resp, err := deps.API.Nodes.ListReplicationLog(cmd.Context(), deps.Node, args[0], params)
+			resp, err := deps.API.Nodes.ListReplicationLog(cmd.Context(), node, args[0], params)
 			if err != nil {
-				return fmt.Errorf("get replication log for job %q on node %q: %w", args[0], deps.Node, err)
+				return fmt.Errorf("get replication log for job %q on node %q: %w", args[0], node, err)
 			}
 			return renderScan(cmd, deps, derefRaws(resp), resp)
 		},
@@ -167,24 +197,27 @@ func newReplicationRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run <id>",
 		Short: "Trigger an immediate run of a replication job",
-		Long: "Schedule a single replication job to run immediately on the resolved node instead of waiting " +
-			"for its next scheduled sync. The job must already be defined; this only triggers an early run.",
-		Example: `  pmx pve node replication run local-100-0 --yes`,
+		Long: "Schedule a single replication job to run immediately instead of waiting for its next " +
+			"scheduled sync. The job's source node is resolved from the guest embedded in the job id " +
+			"unless --node is passed explicitly. The job must already be defined; this only triggers " +
+			"an early run.",
+		Example: `  pmx pve node replication run 100-0 --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if err := requireNode(deps); err != nil {
-				return err
-			}
-			if err := requireSystemYes(deps.Node, yes, "trigger an immediate replication run"); err != nil {
-				return err
-			}
-			resp, err := deps.API.Nodes.CreateReplicationScheduleNow(cmd.Context(), deps.Node, args[0])
+			node, err := resolveReplicationNode(cmd, deps, args[0])
 			if err != nil {
-				return fmt.Errorf("trigger replication run for job %q on node %q: %w", args[0], deps.Node, err)
+				return err
 			}
-			return renderReplicationTask(cmd, deps, rawOrNil(resp),
-				fmt.Sprintf("Replication job %q scheduled to run now on node %q.", args[0], deps.Node))
+			if err := requireSystemYes(node, yes, "trigger an immediate replication run"); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.CreateReplicationScheduleNow(cmd.Context(), node, args[0])
+			if err != nil {
+				return fmt.Errorf("trigger replication run for job %q on node %q: %w", args[0], node, err)
+			}
+			return renderReplicationTask(cmd, deps, node, rawOrNil(resp),
+				fmt.Sprintf("Replication job %q scheduled to run now on node %q.", args[0], node))
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "confirm triggering an immediate replication run")

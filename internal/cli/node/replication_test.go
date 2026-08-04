@@ -179,6 +179,64 @@ func TestNodeReplication_RunNonUPIDFallback(t *testing.T) {
 	require.Contains(t, buf.String(), "scheduled to run now")
 }
 
+// ---- ambient node resolution ------------------------------------------------
+
+// clusterPlacesGuest registers a cluster/resources handler placing the guest
+// VMID on node, so job-node auto-resolution has something to find.
+func clusterPlacesGuest(f *testhelper.FakePVE, vmid int, guestType, node string) {
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": guestType, "vmid": vmid, "node": node, "id": guestType + "/100"},
+		})
+	})
+}
+
+// TestNodeReplication_StatusResolvesNodeFromCluster verifies that without an
+// explicit --node the job's node comes from the guest's cluster placement.
+func TestNodeReplication_StatusResolvesNodeFromCluster(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	clusterPlacesGuest(f, 100, "qemu", "pve2")
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve2/replication/100-0/status", &rec, map[string]any{
+		"id": "100-0", "guest": 100, "fail_count": 0,
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "replication", "status", "100-0"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "/api2/json/nodes/pve2/replication/100-0/status", rec.path)
+	require.Contains(t, buf.String(), `auto-resolved node "pve2" for replication job 100-0`)
+}
+
+// TestNodeReplication_LogResolvesLXCGuest verifies resolution also matches
+// container guests (the job id does not say which kind the guest is).
+func TestNodeReplication_LogResolvesLXCGuest(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	clusterPlacesGuest(f, 100, "lxc", "pve3")
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve3/replication/100-0/log", &rec, []any{})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "replication", "log", "100-0"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "/api2/json/nodes/pve3/replication/100-0/log", rec.path)
+}
+
+// TestNodeReplication_RunUnparseableJobID verifies a job id without a
+// <guest>-<jobnum> shape errors before any API call when no --node is given.
+func TestNodeReplication_RunUnparseableJobID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "replication", "run", "bogus", "--yes"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot derive a guest")
+}
+
 // ---- node scoping + command tree -------------------------------------------
 
 func TestNodeReplication_RequiresNode(t *testing.T) {

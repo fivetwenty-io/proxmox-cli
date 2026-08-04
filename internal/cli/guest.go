@@ -12,10 +12,22 @@ import (
 
 // Guest type identifiers. These match the "type" field of a cluster/resources
 // entry, so they double as the filter applied when resolving a target.
+// GuestAny matches either kind; VMIDs are unique cluster-wide, so a numeric
+// target stays unambiguous without a type filter.
 const (
 	GuestQemu = "qemu"
 	GuestLXC  = "lxc"
+	GuestAny  = ""
 )
+
+// guestLabel names the guest kind in error messages ("qemu guest", or just
+// "guest" for GuestAny).
+func guestLabel(guestType string) string {
+	if guestType == GuestAny {
+		return "guest"
+	}
+	return guestType + " guest"
+}
 
 // guestResource is the minimal decoded shape of one cluster/resources entry
 // needed to resolve a guest target to its VMID and the node it runs on.
@@ -41,7 +53,7 @@ func (g guestResource) vmidString() string {
 
 // ResolveGuest maps a <vmid|name> target to a numeric VMID and the node the
 // guest actually runs on. guestType is GuestQemu or GuestLXC and restricts
-// matches to that kind of guest.
+// matches to that kind of guest; GuestAny matches either kind.
 //
 // An ambient default node (PMX_NODE or the context default-node) describes
 // where node-scoped commands run by default — not where an arbitrary guest
@@ -78,7 +90,7 @@ func resolveGuestOn(ctx context.Context, deps *Deps, target, guestType, pinnedNo
 	typeVM := "vm"
 	resp, err := deps.API.Cluster.ListResources(ctx, &pvecluster.ListResourcesParams{Type: &typeVM})
 	if err != nil {
-		return "", "", fmt.Errorf("list cluster resources to resolve %s guest %q: %w", guestType, target, err)
+		return "", "", fmt.Errorf("list cluster resources to resolve %s %q: %w", guestLabel(guestType), target, err)
 	}
 
 	var matches []guestResource
@@ -88,7 +100,7 @@ func resolveGuestOn(ctx context.Context, deps *Deps, target, guestType, pinnedNo
 			if err := json.Unmarshal(raw, &g); err != nil {
 				return "", "", fmt.Errorf("decode cluster resource entry: %w", err)
 			}
-			if g.Type != guestType {
+			if guestType != GuestAny && g.Type != guestType {
 				continue
 			}
 			if pinnedNode != "" && g.Node != pinnedNode {
@@ -106,7 +118,7 @@ func resolveGuestOn(ctx context.Context, deps *Deps, target, guestType, pinnedNo
 
 	switch len(matches) {
 	case 0:
-		return "", "", fmt.Errorf("%s guest %q not found", guestType, target)
+		return "", "", fmt.Errorf("%s %q not found", guestLabel(guestType), target)
 	case 1:
 		return matches[0].vmidString(), matches[0].Node, nil
 	default:
@@ -119,8 +131,8 @@ func resolveGuestOn(ctx context.Context, deps *Deps, target, guestType, pinnedNo
 			hint = "pass --node to disambiguate"
 		}
 		return "", "", fmt.Errorf(
-			"%s guest %q is ambiguous: found on nodes %s; %s",
-			guestType, target, strings.Join(nodes, ", "), hint)
+			"%s %q is ambiguous: found on nodes %s; %s",
+			guestLabel(guestType), target, strings.Join(nodes, ", "), hint)
 	}
 }
 
