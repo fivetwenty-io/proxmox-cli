@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -36,11 +37,13 @@ func warnNonResidentGuests(cmd *cobra.Command, deps *cli.Deps, node, vmids strin
 		residentOn[fmt.Sprintf("%d", *g.VMID)] = g.Node
 	}
 
-	for id := range strings.SplitSeq(vmids, ",") {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
+	// The server-side vmid list splits on commas, semicolons, and whitespace
+	// (PVE::Tools::split_list), so mirror that here or a space-separated list
+	// would warn about a guest that does not exist.
+	ids := strings.FieldsFunc(vmids, func(r rune) bool {
+		return r == ',' || r == ';' || unicode.IsSpace(r)
+	})
+	for _, id := range ids {
 		switch on, known := residentOn[id]; {
 		case !known:
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
