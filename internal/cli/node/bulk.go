@@ -64,6 +64,7 @@ func newStartallCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if fl.Changed("vmids") {
 				params.Vms = &vmids
+				warnNonResidentGuests(cmd, deps, deps.Node, vmids)
 			}
 			if fl.Changed("force") {
 				params.Force = &force
@@ -114,6 +115,7 @@ func newStopallCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if fl.Changed("vmids") {
 				params.Vms = &vmids
+				warnNonResidentGuests(cmd, deps, deps.Node, vmids)
 			}
 			if fl.Changed("force-stop") {
 				params.ForceStop = &forceStop
@@ -165,6 +167,7 @@ func newSuspendallCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if fl.Changed("vmids") {
 				params.Vms = &vmids
+				warnNonResidentGuests(cmd, deps, deps.Node, vmids)
 			}
 			if fl.Changed("max-workers") {
 				params.MaxWorkers = &maxWorkers
@@ -213,6 +216,7 @@ func newMigrateallCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if fl.Changed("vmids") {
 				params.Vms = &vmids
+				warnNonResidentGuests(cmd, deps, deps.Node, vmids)
 			}
 			if fl.Changed("max-workers") {
 				params.MaxWorkers = &maxWorkers

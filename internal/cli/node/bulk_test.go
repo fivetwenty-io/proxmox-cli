@@ -54,6 +54,29 @@ func TestNodeStartall_RequiresYes(t *testing.T) {
 	require.False(t, called, "startall must not POST without --yes")
 }
 
+// TestNodeStartall_WarnsOnNonResidentVmids verifies --vmids entries that are
+// not on the target node (or unknown to the cluster) produce stderr warnings
+// while the bulk action still runs.
+func TestNodeStartall_WarnsOnNonResidentVmids(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "lxc", "vmid": 100, "node": "pve3", "id": "lxc/100"},
+		})
+	})
+	var rec recordedRequest
+	recordOn(f, "POST /api2/json/nodes/pve1/startall", &rec, nil)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "startall", "--vmids", "100,999", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method, "the bulk action must still be submitted")
+	out := buf.String()
+	require.Contains(t, out, `warning: guest 100 is on node "pve3", not "pve1"`)
+	require.Contains(t, out, "warning: guest 999 not found in the cluster")
+}
+
 // TestNodeStartall_RequiresNode verifies startall fails clearly with no node.
 func TestNodeStartall_RequiresNode(t *testing.T) {
 	f := testhelper.NewFakePVE(t)

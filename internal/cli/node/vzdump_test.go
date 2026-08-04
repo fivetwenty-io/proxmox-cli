@@ -60,6 +60,32 @@ func TestNodeVzdump_AsyncReturnsUPID(t *testing.T) {
 	require.Contains(t, buf.String(), upid)
 }
 
+// TestNodeVzdump_WarnsOnNonResidentVmid verifies a --vmid naming a guest on a
+// different node produces a stderr warning while the backup is still submitted:
+// vzdump only covers guests on the node it runs on.
+func TestNodeVzdump_WarnsOnNonResidentVmid(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "qemu", "vmid": 100, "node": "pve2", "id": "qemu/100"},
+			map[string]any{"type": "qemu", "vmid": 101, "node": "pve1", "id": "qemu/101"},
+		})
+	})
+	upid := "UPID:pve1:00000001:00000002:AABBCCDD:vzdump:100:root@pam:"
+	f.HandleFunc("POST /api2/json/nodes/pve1/vzdump", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, upid)
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--async", "--node", "pve1", "node", "vzdump",
+		"--vmid", "100,101", "--storage", "local"))
+
+	require.NoError(t, root.Execute())
+	out := buf.String()
+	require.Contains(t, out, `warning: guest 100 is on node "pve2", not "pve1"`)
+	require.NotContains(t, out, "warning: guest 101")
+}
+
 // TestNodeVzdump_RequiresNode verifies the command fails clearly when no node is
 // resolvable.
 func TestNodeVzdump_RequiresNode(t *testing.T) {

@@ -92,6 +92,7 @@ func newVzdumpCmd() *cobra.Command {
 			fl := cmd.Flags()
 			if fl.Changed("vmid") {
 				params.Vmid = &vmid
+				warnNonResidentGuests(cmd, deps, deps.Node, vmid)
 			}
 			if fl.Changed("storage") {
 				params.Storage = &storage
