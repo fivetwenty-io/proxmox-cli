@@ -127,18 +127,23 @@ The same principle covers every command whose target's location is knowable:
 
 - Task verbs taking a UPID (`task status|log|wait|stop`, `node task
   status|wait`) parse the node from the UPID itself — its first field names
-  the node the task ran on — and never consult the ambient default.
+  the node the task ran on — and never consult the ambient default. An
+  explicit `--node` naming a different node than the UPID is rejected as a
+  conflict rather than silently ignored.
 - `node replication status|log|run <id>` derive the guest VMID from the job
   id (`<guest>-<jobnum>`) and resolve its node from the cluster, since a
   replication job's source follows its guest.
 - Storage-scoped verbs (`storage volume get|set|delete|alloc|copy`,
-  `content`, `prune`, `file-restore *`, `status`, `identity`,
-  `rrd`/`rrddata`, `node vzdump extract-config`) resolve a node carrying the
-  storage from the cluster resource inventory: the ambient default node when
-  it carries the storage, otherwise the lexically first carrier, preferring
-  nodes where the storage is currently available. Verbs that choose where
-  work happens (`upload`, `download-url`, `oci pull`, `aplinfo`) stay
-  node-scoped.
+  `content`, `prune`, `file-restore *`, `import-metadata`, `status`,
+  `identity`, `rrd`/`rrddata`, `node vzdump extract-config`) resolve a node carrying the
+  storage from the cluster resource inventory: the ambient default node
+  whenever it carries the storage, else a sole carrier, else — for a shared
+  storage, where every carrier serves the same contents — the lexically
+  first carrier, preferring nodes where the storage is currently available.
+  A non-shared storage on several nodes (think `local`) is never guessed at:
+  each node's copy has distinct contents, so the command errors and asks for
+  `--node`. Verbs that choose where work happens (`upload`, `download-url`,
+  `oci pull`, `aplinfo`) stay node-scoped.
 - `qemu security list` and `lxc security list` narrow their cluster-wide
   audit only under an explicit `--node`; an ambient default never silently
   shrinks the scan.
