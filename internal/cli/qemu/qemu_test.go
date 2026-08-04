@@ -70,15 +70,18 @@ func newFakeClient(t *testing.T) (*testhelper.FakePVE, *apiclient.APIClient) {
 	return f, ac
 }
 
-// depsFor builds a Deps with the given client, format, and node.
+// depsFor builds a Deps with the given client, format, and node. A non-empty
+// node is treated as an explicit --node (NodeExplicit), matching the exact
+// node paths these tests assert; tests exercising ambient default-node
+// resolution clear NodeExplicit themselves.
 func depsFor(t *testing.T, ac *apiclient.APIClient, format output.Format, node string, async bool) *cli.Deps {
 	t.Helper()
-	return &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, Async: async}
+	return &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, NodeExplicit: node != "", Async: async}
 }
 
 // handleClusterResources registers a cluster/resources inventory placing one
-// qemu VM on the given node, so migration source resolution (which does not
-// trust the ambient deps.Node default as the VM's location) can find the guest.
+// qemu VM on the given node, so guest resolution (which does not trust the
+// ambient deps.Node default as the VM's location) can find the guest.
 func handleClusterResources(f *testhelper.FakePVE, vmid int, node string) {
 	f.HandleJSON("GET /api2/json/cluster/resources", []any{
 		map[string]any{"type": "qemu", "vmid": vmid, "node": node},
@@ -300,6 +303,30 @@ func TestQemuConfigGet_ServerError(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.Error(t, run(deps, &buf, "config", "get", "100"))
+}
+
+// TestQemuConfigGet_AmbientNodeAutoResolves is a regression guard for the
+// wrong-node failure this semantics change fixes: with a context default-node
+// of pve1 (ambient, not an explicit --node) and VM 100 actually on pve2,
+// `config get 100` must consult the cluster inventory and hit pve2 instead of
+// failing with "Configuration file ... does not exist" on pve1.
+func TestQemuConfigGet_AmbientNodeAutoResolves(t *testing.T) {
+	f, ac := newFakeClient(t)
+	handleClusterResources(f, 100, "pve2")
+
+	var gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve2/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{"cores": 2, "name": "web"})
+	})
+
+	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "get", "100"))
+	require.Equal(t, "/api2/json/nodes/pve2/qemu/100/config", gotPath)
+	require.Contains(t, buf.String(), "web")
 }
 
 // TestQemuConfigGet_DynamicKeysPreserved is a regression guard for the raw

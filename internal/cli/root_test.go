@@ -800,6 +800,66 @@ func TestContextDefaultsResolution(t *testing.T) {
 	})
 }
 
+// TestNodeExplicitDetection pins how deps.NodeExplicit is wired: true only
+// when --node is passed on the command line, false when the node arrives
+// ambiently via $PMX_NODE (guest resolution must not trust an ambient node as
+// a guest's location, so the distinction is load-bearing).
+func TestNodeExplicitDetection(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "c.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{}))
+
+	newProbe := func(node *string, explicit *bool) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true"},
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				deps := cli.GetDeps(cmd)
+				*node = deps.Node
+				*explicit = deps.NodeExplicit
+				return nil
+			},
+		}
+	}
+
+	t.Run("--node on the command line is explicit", func(t *testing.T) {
+		t.Setenv("PMX_NODE", "")
+		root, cleanup := cli.NewRootCmd("pmx")
+		defer cleanup()
+		root.SetContext(context.Background())
+
+		var node string
+		var explicit bool
+		root.AddCommand(newProbe(&node, &explicit))
+
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetErr(&buf)
+		root.SetArgs([]string{"--config", cfgPath, "--node", "pve9", "probe"})
+		require.NoError(t, root.Execute())
+		require.Equal(t, "pve9", node)
+		require.True(t, explicit, "--node on the command line must set NodeExplicit")
+	})
+
+	t.Run("PMX_NODE is ambient, not explicit", func(t *testing.T) {
+		t.Setenv("PMX_NODE", "pve9")
+		root, cleanup := cli.NewRootCmd("pmx")
+		defer cleanup()
+		root.SetContext(context.Background())
+
+		var node string
+		var explicit bool
+		root.AddCommand(newProbe(&node, &explicit))
+
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetErr(&buf)
+		root.SetArgs([]string{"--config", cfgPath, "probe"})
+		require.NoError(t, root.Execute())
+		require.Equal(t, "pve9", node)
+		require.False(t, explicit, "$PMX_NODE must not set NodeExplicit")
+	})
+}
+
 // TestOutputPrecedence_FourTiers pins the full 4-tier resolution order for
 // --output: explicit flag > $PMX_OUTPUT > context default-output > built-in default.
 //

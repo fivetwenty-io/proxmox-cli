@@ -163,6 +163,7 @@ func TestQemuMigrate_ResolvesSourceNodeFromCluster(t *testing.T) {
 	})
 
 	deps := depsFor(t, ac, output.FormatTable, "pve1", true)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
 
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2"))
@@ -183,6 +184,7 @@ func TestQemuMigrate_AutoResolveNotePrinted(t *testing.T) {
 	handleTaskStatus(f, validUPID)
 
 	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
 
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "migrate", "100", "--target-node", "pve2"))
@@ -190,13 +192,11 @@ func TestQemuMigrate_AutoResolveNotePrinted(t *testing.T) {
 }
 
 // TestResolveGuestSource_ExplicitNodeSuppressesNote verifies that when --node
-// was passed explicitly (pinning the source, no cluster lookup), the
-// auto-resolve note is suppressed, since nothing was actually auto-resolved.
-// The qemu package's Group() command tree does not register a --node flag
-// (it is a persistent flag owned by the real root command), so this drives
-// resolveGuestSource directly against a minimal cobra.Command carrying a
-// "node" flag marked Changed, mirroring how root.go wires deps.Node/--node in
-// production.
+// was passed explicitly (deps.NodeExplicit, pinning the source with no
+// cluster lookup), the auto-resolve note is suppressed, since nothing was
+// actually auto-resolved. This drives resolveGuestSource directly against a
+// minimal cobra.Command; explicitness is carried by deps.NodeExplicit, which
+// root.go sets from --node in production and depsFor sets here.
 func TestResolveGuestSource_ExplicitNodeSuppressesNote(t *testing.T) {
 	f, ac := newFakeClient(t)
 	hit := false
@@ -210,9 +210,6 @@ func TestResolveGuestSource_ExplicitNodeSuppressesNote(t *testing.T) {
 	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetErr(&buf)
-	var nodeFlag string
-	cmd.Flags().StringVar(&nodeFlag, "node", "", "")
-	require.NoError(t, cmd.Flags().Set("node", "pve1"))
 
 	vmid, node, err := resolveGuestSource(cmd, deps, "100")
 	require.NoError(t, err)

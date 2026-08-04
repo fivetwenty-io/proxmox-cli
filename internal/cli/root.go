@@ -81,6 +81,13 @@ type Deps struct {
 	// Node is the resolved --node flag value (flag > PMX_NODE > context DefaultNode).
 	Node string
 
+	// NodeExplicit reports whether --node was passed on the command line, as
+	// opposed to Node being an ambient default from PMX_NODE or the context's
+	// DefaultNode. Guest resolution (ResolveGuest) trusts Node as a guest's
+	// location only when this is true; an ambient default only says where
+	// node-scoped commands run, not where any particular guest lives.
+	NodeExplicit bool
+
 	// Cfg is the loaded config. Never nil after PersistentPreRunE.
 	Cfg *config.Config
 
@@ -329,7 +336,7 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 
 	root.PersistentFlags().StringVar(&pf.node, "node",
 		os.Getenv("PMX_NODE"),
-		"Proxmox node name ($PMX_NODE)")
+		"Proxmox node name ($PMX_NODE); guest commands pin a guest to this node only when the flag is passed explicitly")
 
 	root.PersistentFlags().StringVarP(&pf.output, "output", "o",
 		resolveOutputDefault(),
@@ -506,16 +513,17 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	renderer := output.New()
 
 	deps := &Deps{
-		Out:        renderer,
-		Format:     format,
-		Async:      pf.async,
-		Log:        logger,
-		Started:    started,
-		Node:       pf.node,
-		Cfg:        cfg,
-		ConfigPath: pf.config,
-		Runner:     exec.Real(),
-		Insecure:   pf.insecure,
+		Out:          renderer,
+		Format:       format,
+		Async:        pf.async,
+		Log:          logger,
+		Started:      started,
+		Node:         pf.node,
+		NodeExplicit: cmd.Flags().Changed("node"),
+		Cfg:          cfg,
+		ConfigPath:   pf.config,
+		Runner:       exec.Real(),
+		Insecure:     pf.insecure,
 	}
 
 	// Stash deps NOW, before any client construction can fail: Execute's

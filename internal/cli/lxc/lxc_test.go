@@ -34,12 +34,15 @@ func newTestCmd(t *testing.T, deps *cli.Deps, buf *bytes.Buffer, args ...string)
 	return cmd.Execute
 }
 
-// newDeps returns a Deps wired to the fake server with a real renderer.
+// newDeps returns a Deps wired to the fake server with a real renderer. A
+// non-empty node is treated as an explicit --node (NodeExplicit), matching the
+// exact node paths these tests assert; tests exercising ambient default-node
+// resolution clear NodeExplicit themselves.
 func newDeps(t *testing.T, f *testhelper.FakePVE, format output.Format, node string, async bool) *cli.Deps {
 	t.Helper()
 	ac, err := apiclient.NewAPIClient(fakeOptions(t, f))
 	require.NoError(t, err)
-	return &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, Async: async}
+	return &cli.Deps{API: ac, Out: output.New(), Format: format, Node: node, NodeExplicit: node != "", Async: async}
 }
 
 // fakeOptions returns pve.Options that correctly target the fake server. The
@@ -288,6 +291,31 @@ func TestConfigGet_Table(t *testing.T) {
 	require.Contains(t, out, "cores")
 	require.Contains(t, out, "ostype")
 	require.Contains(t, out, "debian")
+}
+
+// TestConfigGet_AmbientNodeAutoResolves is a regression guard for the
+// wrong-node failure this semantics change fixes: with a context default-node
+// of pve1 (ambient, not an explicit --node) and container 101 actually on
+// pve2, `config get 101` must consult the cluster inventory and hit pve2
+// instead of failing on pve1.
+func TestConfigGet_AmbientNodeAutoResolves(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	handleClusterResources(f, 101, "pve2")
+
+	var gotPath string
+	f.HandleFunc("GET /api2/json/nodes/pve2/lxc/101/config", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		testhelper.WriteData(w, map[string]any{"hostname": "web", "cores": 2})
+	})
+
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
+
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "config", "get", "101")
+	require.NoError(t, run())
+	require.Equal(t, "/api2/json/nodes/pve2/lxc/101/config", gotPath)
+	require.Contains(t, buf.String(), "web")
 }
 
 func TestConfigGet_Snapshot(t *testing.T) {

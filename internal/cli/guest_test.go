@@ -55,13 +55,31 @@ func guestResources(f *testhelper.FakePVE, entries []map[string]any) *bool {
 func TestResolveGuest_NumericFastPath(t *testing.T) {
 	f, ac := newGuestFakeClient(t)
 	hit := guestResources(f, nil)
-	deps := &cli.Deps{API: ac, Node: "pve1"}
+	deps := &cli.Deps{API: ac, Node: "pve1", NodeExplicit: true}
 
 	vmid, node, err := cli.ResolveGuest(context.Background(), deps, "100", cli.GuestQemu)
 	require.NoError(t, err)
 	require.Equal(t, "100", vmid)
 	require.Equal(t, "pve1", node)
-	require.False(t, *hit, "numeric target with a known node must not query cluster resources")
+	require.False(t, *hit, "numeric target with an explicit --node must not query cluster resources")
+}
+
+// TestResolveGuest_AmbientNodeConsultsCluster verifies an ambient default node
+// (PMX_NODE or the context default-node, NodeExplicit false) is not trusted as
+// the guest's location: deps.Node says pve1 but the cluster inventory places
+// VM 100 on pve2, and pve2 must win.
+func TestResolveGuest_AmbientNodeConsultsCluster(t *testing.T) {
+	f, ac := newGuestFakeClient(t)
+	hit := guestResources(f, []map[string]any{
+		{"type": "qemu", "vmid": 100, "name": "web", "node": "pve2"},
+	})
+	deps := &cli.Deps{API: ac, Node: "pve1"}
+
+	vmid, node, err := cli.ResolveGuest(context.Background(), deps, "100", cli.GuestQemu)
+	require.NoError(t, err)
+	require.Equal(t, "100", vmid)
+	require.Equal(t, "pve2", node)
+	require.True(t, *hit, "ambient default node must not suppress the cluster lookup")
 }
 
 func TestResolveGuest_NameResolvesVMIDAndNode(t *testing.T) {
@@ -91,7 +109,25 @@ func TestResolveGuest_NumericWithoutNodeResolvesNode(t *testing.T) {
 	require.Equal(t, "pve3", node)
 }
 
-func TestResolveGuest_NameFiltersByNode(t *testing.T) {
+func TestResolveGuest_NameFiltersByExplicitNode(t *testing.T) {
+	f, ac := newGuestFakeClient(t)
+	guestResources(f, []map[string]any{
+		{"type": "qemu", "vmid": 100, "name": "dup", "node": "pve1"},
+		{"type": "qemu", "vmid": 101, "name": "dup", "node": "pve2"},
+	})
+	deps := &cli.Deps{API: ac, Node: "pve2", NodeExplicit: true}
+
+	vmid, node, err := cli.ResolveGuest(context.Background(), deps, "dup", cli.GuestQemu)
+	require.NoError(t, err)
+	require.Equal(t, "101", vmid)
+	require.Equal(t, "pve2", node)
+}
+
+// TestResolveGuest_AmbientNodeDoesNotFilterNames verifies an ambient default
+// node does not silently disambiguate a duplicate name: only an explicit
+// --node may narrow matches, so an ambient pve2 still yields the ambiguity
+// error naming both nodes.
+func TestResolveGuest_AmbientNodeDoesNotFilterNames(t *testing.T) {
 	f, ac := newGuestFakeClient(t)
 	guestResources(f, []map[string]any{
 		{"type": "qemu", "vmid": 100, "name": "dup", "node": "pve1"},
@@ -99,10 +135,10 @@ func TestResolveGuest_NameFiltersByNode(t *testing.T) {
 	})
 	deps := &cli.Deps{API: ac, Node: "pve2"}
 
-	vmid, node, err := cli.ResolveGuest(context.Background(), deps, "dup", cli.GuestQemu)
-	require.NoError(t, err)
-	require.Equal(t, "101", vmid)
-	require.Equal(t, "pve2", node)
+	_, _, err := cli.ResolveGuest(context.Background(), deps, "dup", cli.GuestQemu)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "ambiguous")
+	require.ErrorContains(t, err, "pass --node or the VMID to disambiguate")
 }
 
 func TestResolveGuest_NotFound(t *testing.T) {
@@ -146,40 +182,10 @@ func TestResolveGuest_DuplicateNameAcrossNodes(t *testing.T) {
 	require.ErrorContains(t, err, "pve2")
 }
 
-// TestResolveGuestSource_IgnoresAmbientDefaultNode verifies migration source
-// resolution consults the cluster even when a default node is configured: the
-// ambient deps.Node says pve1 but the VM runs on pve2, and pve2 must win.
-func TestResolveGuestSource_IgnoresAmbientDefaultNode(t *testing.T) {
-	f, ac := newGuestFakeClient(t)
-	guestResources(f, []map[string]any{
-		{"type": "qemu", "vmid": 100, "name": "web", "node": "pve2"},
-	})
-	deps := &cli.Deps{API: ac, Node: "pve1"}
-
-	vmid, node, err := cli.ResolveGuestSource(context.Background(), deps, "100", cli.GuestQemu, false)
-	require.NoError(t, err)
-	require.Equal(t, "100", vmid)
-	require.Equal(t, "pve2", node)
-}
-
-// TestResolveGuestSource_ExplicitNodePinsSource verifies an explicit --node
-// keeps today's behavior: the pinned node is used as-is with no cluster lookup.
-func TestResolveGuestSource_ExplicitNodePinsSource(t *testing.T) {
-	f, ac := newGuestFakeClient(t)
-	hit := guestResources(f, nil)
-	deps := &cli.Deps{API: ac, Node: "pve1"}
-
-	vmid, node, err := cli.ResolveGuestSource(context.Background(), deps, "100", cli.GuestQemu, true)
-	require.NoError(t, err)
-	require.Equal(t, "100", vmid)
-	require.Equal(t, "pve1", node)
-	require.False(t, *hit, "explicit --node must not query cluster resources")
-}
-
-// TestResolveGuestSource_DuplicateVMIDAmbiguous guards the shouldn't-happen
-// case of one VMID appearing on two nodes: resolution must refuse and ask for
-// an explicit --node rather than pick one arbitrarily.
-func TestResolveGuestSource_DuplicateVMIDAmbiguous(t *testing.T) {
+// TestResolveGuest_DuplicateVMIDAmbiguous guards the shouldn't-happen case of
+// one VMID appearing on two nodes: resolution must refuse and ask for an
+// explicit --node rather than pick one arbitrarily.
+func TestResolveGuest_DuplicateVMIDAmbiguous(t *testing.T) {
 	f, ac := newGuestFakeClient(t)
 	guestResources(f, []map[string]any{
 		{"type": "qemu", "vmid": 100, "name": "a", "node": "pve1"},
@@ -187,7 +193,7 @@ func TestResolveGuestSource_DuplicateVMIDAmbiguous(t *testing.T) {
 	})
 	deps := &cli.Deps{API: ac}
 
-	_, _, err := cli.ResolveGuestSource(context.Background(), deps, "100", cli.GuestQemu, false)
+	_, _, err := cli.ResolveGuest(context.Background(), deps, "100", cli.GuestQemu)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "ambiguous")
 	require.ErrorContains(t, err, "pass --node to disambiguate")

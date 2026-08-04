@@ -113,6 +113,16 @@ that context. The resolution order for both fields is:
 A value at a higher tier always wins. In particular, `$PMX_NODE` and
 `$PMX_OUTPUT` outrank per-context defaults.
 
+The node default describes where node-scoped commands (`qemu list`,
+`node …`, capability queries) run — not where any particular guest lives.
+Commands that target a guest (`qemu config get <vmid|name>`, `lxc start …`,
+and the rest of the per-guest verbs) therefore trust the node only when
+`--node` was passed explicitly on the command line; an ambient value from
+`$PMX_NODE` or `default-node` does not pin the guest, and the guest's actual
+node is resolved from the cluster resource inventory instead. This keeps
+per-guest commands working on multi-node clusters where guests live on nodes
+other than the default.
+
 ### Context validation
 
 `pmx context validate [<name>] [--all]` runs structural checks against one or

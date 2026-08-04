@@ -226,6 +226,7 @@ func TestMigrate_AutoResolveNotePrinted(t *testing.T) {
 		})
 
 	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	deps.NodeExplicit = false // ambient default node, not an explicit --node
 	var buf bytes.Buffer
 	run := newTestCmd(t, deps, &buf, "migrate", "101", "--target-node", "pve2")
 	require.NoError(t, run())
@@ -233,13 +234,11 @@ func TestMigrate_AutoResolveNotePrinted(t *testing.T) {
 }
 
 // TestResolveGuestSource_ExplicitNodeSuppressesNote verifies that when --node
-// was passed explicitly (pinning the source, no cluster lookup), the
-// auto-resolve note is suppressed, since nothing was actually auto-resolved.
-// The lxc package's Group() command tree does not register a --node flag (it
-// is a persistent flag owned by the real root command), so this drives
-// resolveGuestSource directly against a minimal cobra.Command carrying a
-// "node" flag marked Changed, mirroring how root.go wires deps.Node/--node in
-// production.
+// was passed explicitly (deps.NodeExplicit, pinning the source with no
+// cluster lookup), the auto-resolve note is suppressed, since nothing was
+// actually auto-resolved. This drives resolveGuestSource directly against a
+// minimal cobra.Command; explicitness is carried by deps.NodeExplicit, which
+// root.go sets from --node in production and newDeps sets here.
 func TestResolveGuestSource_ExplicitNodeSuppressesNote(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	hit := false
@@ -253,9 +252,6 @@ func TestResolveGuestSource_ExplicitNodeSuppressesNote(t *testing.T) {
 	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetErr(&buf)
-	var nodeFlag string
-	cmd.Flags().StringVar(&nodeFlag, "node", "", "")
-	require.NoError(t, cmd.Flags().Set("node", "pve1"))
 
 	vmid, node, err := resolveGuestSource(cmd, deps, "101")
 	require.NoError(t, err)

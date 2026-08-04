@@ -39,47 +39,38 @@ func (g guestResource) vmidString() string {
 	return ""
 }
 
-// ResolveGuest maps a <vmid|name> target to a numeric VMID and the node it runs
-// on. guestType is GuestQemu or GuestLXC and restricts matches to that kind of
-// guest.
+// ResolveGuest maps a <vmid|name> target to a numeric VMID and the node the
+// guest actually runs on. guestType is GuestQemu or GuestLXC and restricts
+// matches to that kind of guest.
 //
-// When the target is numeric and a node is already known (deps.Node != ""), it
-// is returned as-is without any API call, preserving the latency and behavior of
-// explicit-node invocations. Otherwise the cluster resource inventory is queried
-// to resolve the VMID and/or node:
+// An ambient default node (PMX_NODE or the context default-node) describes
+// where node-scoped commands run by default — not where an arbitrary guest
+// lives — so deps.Node is trusted as the guest's location only when
+// deps.NodeExplicit reports that --node was passed on the command line. In
+// that case a numeric target returns the pinned node without any API call,
+// and a name target is matched against that node only (which disambiguates
+// duplicate names across nodes). Otherwise the cluster resource inventory is
+// queried regardless of any default:
 //
 //   - a numeric target matches the entry with that VMID;
 //   - a name target matches the entry whose name is exactly that string.
 //
-// When deps.Node is set, matches are restricted to that node, which disambiguates
-// duplicate names across nodes. A target that matches no guest, or an unqualified
-// name that matches guests on more than one node, is an error.
+// A target that matches no guest, or one that matches guests on more than one
+// node, is an error asking for an explicit --node.
 func ResolveGuest(ctx context.Context, deps *Deps, target, guestType string) (vmid, node string, err error) {
-	return resolveGuestOn(ctx, deps, target, guestType, deps.Node)
-}
-
-// ResolveGuestSource maps a <vmid|name> migration source to a numeric VMID and
-// the node the guest actually runs on. Migration must be submitted on the
-// guest's current node, and an ambient default node (PMX_NODE or the context
-// default-node) describes where commands run by default — not where an
-// arbitrary guest lives — so deps.Node is trusted as the source only when
-// nodeExplicit reports that --node was passed on the command line. Otherwise
-// the cluster inventory is consulted regardless of any default; a guest that
-// resolves to more than one node is an error asking for an explicit --node.
-func ResolveGuestSource(ctx context.Context, deps *Deps, target, guestType string, nodeExplicit bool) (vmid, node string, err error) {
-	if nodeExplicit {
+	if deps.NodeExplicit {
 		return resolveGuestOn(ctx, deps, target, guestType, deps.Node)
 	}
 	return resolveGuestOn(ctx, deps, target, guestType, "")
 }
 
 // resolveGuestOn implements guest resolution with pinnedNode as the known/
-// filter node (see ResolveGuest for semantics; ResolveGuestSource passes ""
-// to force a cluster lookup even when a default node is configured).
+// filter node (see ResolveGuest for semantics; an empty pinnedNode forces a
+// cluster lookup even when a default node is configured).
 func resolveGuestOn(ctx context.Context, deps *Deps, target, guestType, pinnedNode string) (vmid, node string, err error) {
 	numeric := isNumericVMID(target)
 
-	// Fast path: numeric VMID with a node already known needs no API call.
+	// Fast path: numeric VMID with an explicitly pinned node needs no API call.
 	if numeric && pinnedNode != "" {
 		return target, pinnedNode, nil
 	}

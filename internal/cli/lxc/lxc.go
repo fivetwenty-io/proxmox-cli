@@ -89,24 +89,21 @@ func resolveNode(deps *cli.Deps) (string, error) {
 }
 
 // resolveGuest maps a <vmid|name> target to a numeric VMID and the node the
-// container runs on, auto-resolving the node from the cluster when it is not
-// already known. See cli.ResolveGuest for the full lookup semantics.
+// container actually runs on, consulting the cluster inventory unless --node
+// was passed explicitly. An ambient default node (PMX_NODE or the context
+// default-node) is not trusted as the container's location. See
+// cli.ResolveGuest for the full lookup semantics.
 func resolveGuest(ctx context.Context, deps *cli.Deps, target string) (vmid, node string, err error) {
 	return cli.ResolveGuest(ctx, deps, target, cli.GuestLXC)
 }
 
-// resolveGuestSource maps a migration source <vmid|name> to its VMID and the
-// node the container actually runs on. Unlike resolveGuest, an ambient default
-// node (PMX_NODE or the context default-node) is not trusted as the container's
-// location; the cluster inventory is consulted unless --node was passed
-// explicitly. When the node was auto-resolved (not pinned by an explicit
-// --node), a note is printed to stderr naming the resolved node, so the
-// operator can see where the migration is about to run. See
-// cli.ResolveGuestSource for the full semantics.
+// resolveGuestSource resolves a migration source <vmid|name> with the same
+// semantics as resolveGuest, and additionally prints a note to stderr naming
+// the resolved node when it was auto-resolved (not pinned by an explicit
+// --node), so the operator can see where the migration is about to run.
 func resolveGuestSource(cmd *cobra.Command, deps *cli.Deps, target string) (vmid, node string, err error) {
-	nodeExplicit := cmd.Flags().Changed("node")
-	vmid, node, err = cli.ResolveGuestSource(cmd.Context(), deps, target, cli.GuestLXC, nodeExplicit)
-	if err == nil && !nodeExplicit {
+	vmid, node, err = cli.ResolveGuest(cmd.Context(), deps, target, cli.GuestLXC)
+	if err == nil && !deps.NodeExplicit {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "note: auto-resolved source node %q for container %s\n", node, vmid)
 	}
 	return vmid, node, err
