@@ -79,20 +79,31 @@ func TestStorageRrddata_OmitsCfWhenUnset(t *testing.T) {
 
 // TestStorageMetrics_RequiresNode verifies that rrddata and rrd both fail without
 // a node.
-func TestStorageMetrics_RequiresNode(t *testing.T) {
+func TestStorageMetrics_AutoResolvesNode(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
+		name    string
+		args    []string
+		pattern string
 	}{
-		{name: "rrddata", args: []string{"rrddata", testStorage}},
-		{name: "rrd", args: []string{"rrd", testStorage, "--ds", "used"}},
+		{name: "rrddata", args: []string{"rrddata", testStorage},
+			pattern: "GET /api2/json/nodes/pve2/storage/local/rrddata"},
+		{name: "rrd", args: []string{"rrd", testStorage, "--ds", "used"},
+			pattern: "GET /api2/json/nodes/pve2/storage/local/rrd"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
+			storageOnNodes(f, testStorage, "pve2")
+			var rec recordedRequest
+			payload := any([]map[string]any{})
+			if tc.name == "rrd" {
+				payload = map[string]any{"filename": "graph.png"}
+			}
+			recordJSON(f, tc.pattern, &rec, payload)
+
 			_, err := run(t, f, tc.args...)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node specified")
+			require.NoError(t, err)
+			require.NotEmpty(t, rec.method, "request must hit the resolved node")
 		})
 	}
 }

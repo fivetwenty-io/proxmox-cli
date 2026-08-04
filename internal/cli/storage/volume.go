@@ -60,25 +60,26 @@ func newVolumeGetCmd() *cobra.Command {
 		Short: "Show a single volume's attributes",
 		Long: "Show a single volume's attributes (size, format, used space, and similar) by " +
 			"its full volume identifier in the <storage>:<path> form. The storage is derived " +
-			"from the identifier's prefix; the node is taken from --node, PMX_NODE, or the " +
-			"active context's default node and is required.",
-		Example: `  pmx pve storage volume get local:iso/debian-12.iso --node pve1
+			"from the identifier's prefix, and a node carrying that storage is resolved from " +
+			"the cluster unless --node is passed explicitly.",
+		Example: `  pmx pve storage volume get local:iso/debian-12.iso
   pmx pve storage volume get local:backup/vzdump-qemu-100-2026_01_01.vma.zst --node pve1`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			volume := args[0]
 			storage, err := storageOfVolume(volume)
 			if err != nil {
 				return err
 			}
-
-			resp, err := deps.API.Nodes.GetStorageContent(cmd.Context(), deps.Node, storage, volume)
+			node, err := resolveStorageNode(cmd, deps, storage)
 			if err != nil {
-				return fmt.Errorf("get volume %q on node %q: %w", volume, deps.Node, err)
+				return err
+			}
+
+			resp, err := deps.API.Nodes.GetStorageContent(cmd.Context(), node, storage, volume)
+			if err != nil {
+				return fmt.Errorf("get volume %q on node %q: %w", volume, node, err)
 			}
 
 			fields := map[string]any{}
@@ -114,9 +115,6 @@ func newVolumeSetCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			volume := args[0]
 			storage, err := storageOfVolume(volume)
 			if err != nil {
@@ -135,8 +133,12 @@ func newVolumeSetCmd() *cobra.Command {
 				params.Protected = &protected
 			}
 
-			if err := deps.API.Nodes.UpdateStorageContent(cmd.Context(), deps.Node, storage, volume, params); err != nil {
-				return fmt.Errorf("update volume %q on node %q: %w", volume, deps.Node, err)
+			node, err := resolveStorageNode(cmd, deps, storage)
+			if err != nil {
+				return err
+			}
+			if err := deps.API.Nodes.UpdateStorageContent(cmd.Context(), node, storage, volume, params); err != nil {
+				return fmt.Errorf("update volume %q on node %q: %w", volume, node, err)
 			}
 			res := output.Result{Message: fmt.Sprintf("Volume %q updated.", volume)}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
@@ -166,14 +168,15 @@ func newVolumeDeleteCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			volume := args[0]
 			if !yes {
 				return fmt.Errorf("refusing to delete volume %q without --yes", volume)
 			}
 			storage, err := storageOfVolume(volume)
+			if err != nil {
+				return err
+			}
+			node, err := resolveStorageNode(cmd, deps, storage)
 			if err != nil {
 				return err
 			}
@@ -184,9 +187,9 @@ func newVolumeDeleteCmd() *cobra.Command {
 				params.Delay = &delay
 			}
 
-			resp, err := deps.API.Nodes.DeleteStorageContent(cmd.Context(), deps.Node, storage, volume, params)
+			resp, err := deps.API.Nodes.DeleteStorageContent(cmd.Context(), node, storage, volume, params)
 			if err != nil {
-				return fmt.Errorf("delete volume %q on node %q: %w", volume, deps.Node, err)
+				return fmt.Errorf("delete volume %q on node %q: %w", volume, node, err)
 			}
 
 			// The API may return a UPID for asynchronous deletion, or null for
@@ -237,9 +240,6 @@ func newVolumeAllocCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 
 			// Split "local-lvm:vm-100-disk-0" into the storage that addresses the
 			// endpoint and the bare name the API allocates. Passing the whole
@@ -249,6 +249,10 @@ func newVolumeAllocCmd() *cobra.Command {
 			storage, name, err := splitVolume(filename)
 			if err != nil {
 				return fmt.Errorf("--filename must be in <storage>:<name> form: %w", err)
+			}
+			node, err := resolveStorageNode(cmd, deps, storage)
+			if err != nil {
+				return err
 			}
 
 			fl := cmd.Flags()
@@ -261,9 +265,9 @@ func newVolumeAllocCmd() *cobra.Command {
 				params.Format = &format
 			}
 
-			resp, err := deps.API.Nodes.CreateStorageContent(cmd.Context(), deps.Node, storage, params)
+			resp, err := deps.API.Nodes.CreateStorageContent(cmd.Context(), node, storage, params)
 			if err != nil {
-				return fmt.Errorf("alloc volume %q on node %q: %w", filename, deps.Node, err)
+				return fmt.Errorf("alloc volume %q on node %q: %w", filename, node, err)
 			}
 
 			// The API returns the new volume ID as a raw JSON string.
@@ -313,11 +317,12 @@ func newVolumeCopyCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			volume := args[0]
 			storage, err := storageOfVolume(volume)
+			if err != nil {
+				return err
+			}
+			node, err := resolveStorageNode(cmd, deps, storage)
 			if err != nil {
 				return err
 			}
@@ -328,12 +333,12 @@ func newVolumeCopyCmd() *cobra.Command {
 				params.TargetNode = &targetNode
 			}
 
-			resp, err := deps.API.Nodes.CreateStorageContent2(cmd.Context(), deps.Node, storage, volume, params)
+			resp, err := deps.API.Nodes.CreateStorageContent2(cmd.Context(), node, storage, volume, params)
 			if err != nil {
-				return fmt.Errorf("copy volume %q to %q on node %q: %w", volume, target, deps.Node, err)
+				return fmt.Errorf("copy volume %q to %q on node %q: %w", volume, target, node, err)
 			}
 
-			doneMsg := fmt.Sprintf("Copied volume %q to %q on node %q.", volume, target, deps.Node)
+			doneMsg := fmt.Sprintf("Copied volume %q to %q on node %q.", volume, target, node)
 			var raw json.RawMessage
 			if resp != nil {
 				raw = json.RawMessage(*resp)

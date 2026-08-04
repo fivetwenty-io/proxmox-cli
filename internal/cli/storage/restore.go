@@ -85,30 +85,31 @@ func newFileRestoreListCmd() *cobra.Command {
 		Use:   "list <storage>",
 		Short: "List directory entries inside a backup snapshot",
 		Long: "List the directory entries inside a backup snapshot at a given path.\n\n" +
-			"Two things are required: a node, via --node or PMX_NODE or the active context's " +
-			"default, and the backup to browse, via --volume.\n\n" +
+			"The backup to browse is required, via --volume. A node carrying the storage is " +
+			"resolved from the cluster unless --node is passed explicitly.\n\n" +
 			"--filepath picks the directory within the backup, and defaults to the archive " +
 			"root. The filepath each entry reports can be passed straight back to " +
 			"--filepath, or to `file-restore download`.\n\n" +
 			"Only Proxmox Backup Server snapshots are supported so far.",
-		Example: `  pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z
-  pmx pve storage file-restore list pbs --node pve1 --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc`,
+		Example: `  pmx pve storage file-restore list pbs --volume pbs:backup/vm/100/2026-01-01T00:00:00Z
+  pmx pve storage file-restore list pbs --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			storage := args[0]
+			node, err := resolveStorageNode(cmd, deps, storage)
+			if err != nil {
+				return err
+			}
 
 			params := &nodes.ListStorageFileRestoreListParams{
 				Volume:   volume,
 				Filepath: encodeFilepath(filepath),
 			}
-			resp, err := deps.API.Nodes.ListStorageFileRestoreList(cmd.Context(), deps.Node, storage, params)
+			resp, err := deps.API.Nodes.ListStorageFileRestoreList(cmd.Context(), node, storage, params)
 			if err != nil {
 				return fmt.Errorf("list files in %q on storage %q (node %q): %w",
-					volume, storage, deps.Node, err)
+					volume, storage, node, err)
 			}
 
 			var raws []json.RawMessage
@@ -137,16 +138,19 @@ func newFileRestoreDownloadCmd() *cobra.Command {
 		Use:   "download <storage>",
 		Short: "Download a single file or directory from a backup snapshot",
 		Long: "Download a file (or, with --tar, a directory) from inside a backup snapshot. " +
-			"The raw bytes are written to --output-file, or to standard output when it is omitted.",
-		Example: `  pmx pve storage file-restore download pbs --node pve1 \
+			"A node carrying the storage is resolved from the cluster unless --node is passed " +
+			"explicitly. The raw bytes are written to --output-file, or to standard output " +
+			"when it is omitted.",
+		Example: `  pmx pve storage file-restore download pbs \
   --volume pbs:backup/vm/100/2026-01-01T00:00:00Z --filepath /etc/hosts --output-file hosts`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			storage := args[0]
+			node, err := resolveStorageNode(cmd, deps, storage)
+			if err != nil {
+				return err
+			}
 			fl := cmd.Flags()
 
 			// The response is the restored file's own bytes, so it is fetched
@@ -161,11 +165,11 @@ func newFileRestoreDownloadCmd() *cobra.Command {
 			}
 
 			path := fmt.Sprintf("/nodes/%s/storage/%s/file-restore/download",
-				url.PathEscape(deps.Node), url.PathEscape(storage))
+				url.PathEscape(node), url.PathEscape(storage))
 			data, err := deps.API.Raw.GetBytesCtx(cmd.Context(), path, params)
 			if err != nil {
 				return fmt.Errorf("download %q from %q on storage %q (node %q): %w",
-					filepath, volume, storage, deps.Node, err)
+					filepath, volume, storage, node, err)
 			}
 			if outputFile != "" {
 				if err := os.WriteFile(outputFile, data, 0o600); err != nil {
@@ -197,23 +201,25 @@ func newImportMetadataCmd() *cobra.Command {
 		Use:   "import-metadata <storage>",
 		Short: "Show the import parameters detected for a guest archive",
 		Long: "Inspect the guest-creation parameters Proxmox VE detects for a foreign guest " +
-			"archive, such as an OVA or an ESXi import, without importing it. Requires a node " +
-			"via --node, PMX_NODE, or the active context's default, and the archive to " +
-			"inspect via --volume. The detected settings are rendered as a single object.",
-		Example: `  pmx pve storage import-metadata esxi-store --node pve1 --volume esxi-store:import/vm.ova`,
+			"archive, such as an OVA or an ESXi import, without importing it. Requires the " +
+			"archive to inspect via --volume; a node carrying the storage is resolved from " +
+			"the cluster unless --node is passed explicitly. The detected settings are " +
+			"rendered as a single object.",
+		Example: `  pmx pve storage import-metadata esxi-store --volume esxi-store:import/vm.ova`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			storage := args[0]
+			node, err := resolveStorageNode(cmd, deps, storage)
+			if err != nil {
+				return err
+			}
 
-			resp, err := deps.API.Nodes.ListStorageImportMetadata(cmd.Context(), deps.Node, storage,
+			resp, err := deps.API.Nodes.ListStorageImportMetadata(cmd.Context(), node, storage,
 				&nodes.ListStorageImportMetadataParams{Volume: volume})
 			if err != nil {
 				return fmt.Errorf("read import metadata for %q on storage %q (node %q): %w",
-					volume, storage, deps.Node, err)
+					volume, storage, node, err)
 			}
 
 			fields := map[string]any{}

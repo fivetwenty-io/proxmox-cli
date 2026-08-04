@@ -98,6 +98,21 @@ func splitToken(t *testing.T, token string) (string, string) {
 	return token[:i], token[i+1:]
 }
 
+// storageOnNodes registers a cluster/resources handler reporting the storage
+// as available on the given nodes, for tests of storage→node auto-resolution.
+func storageOnNodes(f *testhelper.FakePVE, storage string, nodeNames ...string) {
+	entries := make([]map[string]any, 0, len(nodeNames))
+	for _, n := range nodeNames {
+		entries = append(entries, map[string]any{
+			"type": "storage", "storage": storage, "node": n,
+			"status": "available", "id": "storage/" + n + "/" + storage,
+		})
+	}
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, entries)
+	})
+}
+
 // recordJSON registers a handler that records the request and replies with the
 // PVE-shaped {"data": payload} envelope.
 func recordJSON(f *testhelper.FakePVE, pattern string, rec *recordedRequest, payload any) {

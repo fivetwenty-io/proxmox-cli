@@ -17,21 +17,22 @@ func newStorageStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <storage>",
 		Short: "Show a storage's used, available, and total space",
-		Long: "Query the live status of a storage on the resolved node. " +
-			"Reports used, available, and total capacity in bytes along with " +
-			"the active and enabled flags.",
-		Example: `  pmx pve storage status local-lvm --node pve1`,
+		Long: "Query the live status of a storage. Reports used, available, and total " +
+			"capacity in bytes along with the active and enabled flags. A node carrying " +
+			"the storage is resolved from the cluster unless --node is passed explicitly.",
+		Example: `  pmx pve storage status local-lvm`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			storage := args[0]
-
-			resp, err := deps.API.Nodes.ListStorageStatus(cmd.Context(), deps.Node, storage)
+			node, err := resolveStorageNode(cmd, deps, storage)
 			if err != nil {
-				return fmt.Errorf("get storage status %q on node %q: %w", storage, deps.Node, err)
+				return err
+			}
+
+			resp, err := deps.API.Nodes.ListStorageStatus(cmd.Context(), node, storage)
+			if err != nil {
+				return fmt.Errorf("get storage status %q on node %q: %w", storage, node, err)
 			}
 
 			// Build a flat string map for table/yaml/text rendering.
@@ -73,21 +74,23 @@ func newStorageIdentityCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "identity <storage>",
 		Short: "Show a storage's backend identity descriptor",
-		Long: "Return the backend-plugin identity for a storage on the resolved node. " +
-			"The exact format depends on the storage type (e.g. an RBD pool name or " +
-			"a filesystem path).",
-		Example: `  pmx pve storage identity local-lvm --node pve1`,
+		Long: "Return the backend-plugin identity for a storage. The exact format depends " +
+			"on the storage type (e.g. an RBD pool name or a filesystem path). A node " +
+			"carrying the storage is resolved from the cluster unless --node is passed " +
+			"explicitly.",
+		Example: `  pmx pve storage identity local-lvm`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			storage := args[0]
-
-			resp, err := deps.API.Nodes.ListStorageIdentity(cmd.Context(), deps.Node, storage)
+			node, err := resolveStorageNode(cmd, deps, storage)
 			if err != nil {
-				return fmt.Errorf("get storage identity %q on node %q: %w", storage, deps.Node, err)
+				return err
+			}
+
+			resp, err := deps.API.Nodes.ListStorageIdentity(cmd.Context(), node, storage)
+			if err != nil {
+				return fmt.Errorf("get storage identity %q on node %q: %w", storage, node, err)
 			}
 
 			single := map[string]string{

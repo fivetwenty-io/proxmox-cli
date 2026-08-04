@@ -134,21 +134,15 @@ func TestFileRestore_RequiredFlags(t *testing.T) {
 
 // TestFileRestore_RequiresNode verifies that node-scoped restore commands fail
 // clearly without a resolved node.
-func TestFileRestore_RequiresNode(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{name: "list without node", args: []string{"file-restore", "list", "pbs", "--volume", "snap"}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			f := testhelper.NewFakePVE(t)
-			_, err := run(t, f, tc.args...)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node specified")
-		})
-	}
+func TestFileRestore_AutoResolvesNode(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	storageOnNodes(f, "pbs", "pve2")
+	var rec recordedRequest
+	recordJSON(f, "GET /api2/json/nodes/pve2/storage/pbs/file-restore/list", &rec, []any{})
+
+	_, err := run(t, f, "file-restore", "list", "pbs", "--volume", "snap")
+	require.NoError(t, err)
+	require.NotEmpty(t, rec.method, "request must hit the resolved node")
 }
 
 // TestFileRestoreDownload_WritesToOutputFile verifies the download command

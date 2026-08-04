@@ -47,15 +47,21 @@ func TestVolumeGet_InvalidVolumeID(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid volume ID")
 }
 
-// TestVolume_RequiresNode verifies that node-scoped volume sub-commands fail
-// clearly without a resolved node.
-func TestVolume_RequiresNode(t *testing.T) {
+// TestVolume_AutoResolvesNode verifies that without --node the volume verbs
+// address a node carrying the volume's storage, found via cluster/resources.
+func TestVolume_AutoResolvesNode(t *testing.T) {
+	const resolvedContentPath = "/api2/json/nodes/pve2/storage/local/content/" + testVolume
 	tests := []struct {
-		name string
-		args []string
+		name    string
+		args    []string
+		pattern string
+		payload any
 	}{
-		{name: "get", args: []string{"volume", "get", testVolume}},
-		{name: "delete", args: []string{"volume", "delete", testVolume, "--yes"}},
+		{name: "get", args: []string{"volume", "get", testVolume},
+			pattern: "GET " + resolvedContentPath,
+			payload: map[string]any{"size": 1048576, "format": "vma.zst"}},
+		{name: "delete", args: []string{"volume", "delete", testVolume, "--yes"},
+			pattern: "DELETE " + resolvedContentPath},
 		{
 			name: "alloc",
 			args: []string{"volume", "alloc",
@@ -63,16 +69,32 @@ func TestVolume_RequiresNode(t *testing.T) {
 				"--filename", "local:vm-100-disk-0",
 				"--size", "4G",
 			},
+			pattern: "POST /api2/json/nodes/pve2/storage/local/content",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
-			_, err := run(t, f, tc.args...)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node specified")
+			storageOnNodes(f, "local", "pve2")
+			var rec recordedRequest
+			recordJSON(f, tc.pattern, &rec, tc.payload)
+
+			out, err := run(t, f, tc.args...)
+			require.NoError(t, err)
+			require.NotEmpty(t, rec.method, "request must hit the resolved node")
+			require.Contains(t, out, `auto-resolved node "pve2" for storage local`)
 		})
 	}
+}
+
+// TestVolume_UnknownStorage verifies a storage no node carries errors without
+// guessing a node.
+func TestVolume_UnknownStorage(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	storageOnNodes(f, "elsewhere", "pve2")
+	_, err := run(t, f, "volume", "get", testVolume)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `storage "local" not found on any node`)
 }
 
 // TestVolumeSet_ForwardsNotesAndProtected verifies set forwards both attributes

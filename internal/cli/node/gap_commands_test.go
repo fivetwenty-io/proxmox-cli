@@ -141,10 +141,6 @@ func TestNodeGapCommands_RequiresNode(t *testing.T) {
 			args: []string{"node", "vzdump", "defaults"},
 		},
 		{
-			name: "vzdump extract-config",
-			args: []string{"node", "vzdump", "extract-config", "--volume", "local:backup/foo.vma"},
-		},
-		{
 			name: "capabilities qemu cpu-flags",
 			args: []string{"node", "capabilities", "qemu", "cpu-flags"},
 		},
@@ -573,6 +569,27 @@ func TestNodeVzdumpExtractConfig_Success(t *testing.T) {
 	require.Equal(t, "/api2/json/nodes/pve1/vzdump/extractconfig", rec.path)
 	require.Contains(t, rec.query, "volume=")
 	_ = buf.String() // output rendered
+}
+
+// TestNodeVzdumpExtractConfig_AutoResolvesNode verifies that without --node
+// the volume's storage is located via cluster/resources.
+func TestNodeVzdumpExtractConfig_AutoResolvesNode(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "storage", "storage": "local", "node": "pve2",
+				"status": "available", "id": "storage/pve2/local"},
+		})
+	})
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve2/vzdump/extractconfig", &rec, "cores: 2\n")
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "vzdump", "extract-config",
+		"--volume", "local:backup/vzdump-qemu-100.vma.lzo"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "/api2/json/nodes/pve2/vzdump/extractconfig", rec.path)
 }
 
 func TestNodeVzdumpExtractConfig_RequiresVolume(t *testing.T) {

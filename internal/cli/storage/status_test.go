@@ -45,20 +45,30 @@ func TestStorageStatus_RendersFields(t *testing.T) {
 
 // TestStorageNodeScoped_RequiresNode verifies that node-scoped storage commands
 // fail clearly when no node is set.
-func TestStorageNodeScoped_RequiresNode(t *testing.T) {
+func TestStorageNodeScoped_AutoResolvesNode(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
+		name    string
+		args    []string
+		pattern string
+		payload map[string]any
 	}{
-		{name: "status", args: []string{"status", testStorage}},
-		{name: "identity", args: []string{"identity", testStorage}},
+		{name: "status", args: []string{"status", testStorage},
+			pattern: "GET /api2/json/nodes/pve2/storage/local/status",
+			payload: map[string]any{"type": "dir", "content": "iso"}},
+		{name: "identity", args: []string{"identity", testStorage},
+			pattern: "GET /api2/json/nodes/pve2/storage/local/identity",
+			payload: map[string]any{"id": "/var/lib/vz", "type": "dir"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := testhelper.NewFakePVE(t)
+			storageOnNodes(f, testStorage, "pve2")
+			var rec recordedRequest
+			recordJSON(f, tc.pattern, &rec, tc.payload)
+
 			_, err := run(t, f, tc.args...)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node specified")
+			require.NoError(t, err)
+			require.NotEmpty(t, rec.method, "request must hit the resolved node")
 		})
 	}
 }

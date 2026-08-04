@@ -86,17 +86,15 @@ func newPruneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "prune <storage>",
 		Short: "Prune backup archives on a storage by retention policy",
-		Long: "Remove backup archives on the resolved node's storage that fall outside the " +
-			"retention window described by the --keep-* options. Use --dry-run to preview the " +
+		Long: "Remove backup archives on a storage that fall outside the retention window " +
+			"described by the --keep-* options. A node carrying the storage is resolved from " +
+			"the cluster unless --node is passed explicitly. Use --dry-run to preview the " +
 			"prune decisions without deleting anything, and --vmid/--type to limit the scope.",
 		Example: `  pmx pve storage prune local --keep-last 5 --keep-daily 7 --dry-run
   pmx pve storage prune local --keep-last 5 --keep-daily 7 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
-			if deps.Node == "" {
-				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
-			}
 			storage := args[0]
 			fl := cmd.Flags()
 
@@ -106,6 +104,10 @@ func newPruneCmd() *cobra.Command {
 			}
 
 			if dryRun {
+				node, err := resolveStorageNode(cmd, deps, storage)
+				if err != nil {
+					return err
+				}
 				params := &nodes.ListStoragePrunebackupsParams{PruneBackups: &prune}
 				if fl.Changed("vmid") {
 					params.Vmid = &vmid
@@ -113,15 +115,19 @@ func newPruneCmd() *cobra.Command {
 				if fl.Changed("type") {
 					params.Type = &typ
 				}
-				resp, err := deps.API.Nodes.ListStoragePrunebackups(cmd.Context(), deps.Node, storage, params)
+				resp, err := deps.API.Nodes.ListStoragePrunebackups(cmd.Context(), node, storage, params)
 				if err != nil {
-					return fmt.Errorf("preview prune of storage %q on node %q: %w", storage, deps.Node, err)
+					return fmt.Errorf("preview prune of storage %q on node %q: %w", storage, node, err)
 				}
 				return renderPrune(cmd, deps, rawListToEntries(resp))
 			}
 
 			if !yes {
 				return fmt.Errorf("refusing to prune storage %q without --yes (use --dry-run to preview)", storage)
+			}
+			node, err := resolveStorageNode(cmd, deps, storage)
+			if err != nil {
+				return err
 			}
 
 			params := &nodes.DeleteStoragePrunebackupsParams{PruneBackups: &prune}
@@ -131,9 +137,9 @@ func newPruneCmd() *cobra.Command {
 			if fl.Changed("type") {
 				params.Type = &typ
 			}
-			resp, err := deps.API.Nodes.DeleteStoragePrunebackups(cmd.Context(), deps.Node, storage, params)
+			resp, err := deps.API.Nodes.DeleteStoragePrunebackups(cmd.Context(), node, storage, params)
 			if err != nil {
-				return fmt.Errorf("prune storage %q on node %q: %w", storage, deps.Node, err)
+				return fmt.Errorf("prune storage %q on node %q: %w", storage, node, err)
 			}
 			return renderPrune(cmd, deps, rawMessageToEntries(resp))
 		},

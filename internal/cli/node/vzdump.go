@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +13,23 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
+
+// resolveVolumeNode resolves the node used to read a <storage>:<path> volume:
+// deps.Node when --node was passed explicitly, otherwise a node carrying the
+// volume's storage according to the cluster resource inventory (see
+// cli.ResolveStorageNode), with the auto-resolved choice noted on stderr.
+func resolveVolumeNode(cmd *cobra.Command, deps *cli.Deps, volume string) (string, error) {
+	storage, _, ok := strings.Cut(volume, ":")
+	if !ok || storage == "" {
+		return "", fmt.Errorf("invalid volume ID %q: expected <storage>:<path>", volume)
+	}
+	node, err := cli.ResolveStorageNode(cmd.Context(), deps, storage)
+	if err != nil {
+		return "", err
+	}
+	cli.NoteResolvedStorageNode(cmd.ErrOrStderr(), deps, storage, node)
+	return node, nil
+}
 
 // newVzdumpCmd builds `pmx pve node vzdump` — an on-demand backup of one or more
 // guests on the resolved node, plus read-only sub-commands for defaults and
@@ -294,18 +312,21 @@ func newVzdumpExtractConfigCmd() *cobra.Command {
 		Use:   "extract-config",
 		Short: "Extract the guest configuration from a backup archive",
 		Long: "Read the guest configuration stored inside a backup archive volume. The " +
-			"--volume flag is required and must be a valid storage volume identifier.",
+			"--volume flag is required and must be a valid storage volume identifier. A node " +
+			"carrying the volume's storage is resolved from the cluster unless --node is " +
+			"passed explicitly.",
 		Example: `  pmx pve node vzdump extract-config --volume local:backup/vzdump-qemu-100-2024_01_01-00_00_00.vma.zst`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
-			if err := requireNode(deps); err != nil {
+			node, err := resolveVolumeNode(cmd, deps, volume)
+			if err != nil {
 				return err
 			}
-			resp, err := deps.API.Nodes.ListVzdumpExtractconfig(cmd.Context(), deps.Node,
+			resp, err := deps.API.Nodes.ListVzdumpExtractconfig(cmd.Context(), node,
 				&nodes.ListVzdumpExtractconfigParams{Volume: volume})
 			if err != nil {
-				return fmt.Errorf("extract config from volume %q on node %q: %w", volume, deps.Node, err)
+				return fmt.Errorf("extract config from volume %q on node %q: %w", volume, node, err)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: string(rawOrNil(resp)), Raw: resp}, deps.Format)

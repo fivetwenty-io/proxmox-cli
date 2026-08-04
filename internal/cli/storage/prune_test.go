@@ -164,21 +164,15 @@ func TestStoragePrune_NullResult(t *testing.T) {
 }
 
 // TestStoragePrune_RequiresNode verifies prune fails clearly without a node.
-func TestStoragePrune_RequiresNode(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{name: "prune without node", args: []string{"prune", "local", "--keep-last", "1", "--dry-run"}},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			f := testhelper.NewFakePVE(t)
-			_, err := run(t, f, tc.args...)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "no node specified")
-		})
-	}
+func TestStoragePrune_AutoResolvesNode(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	storageOnNodes(f, "local", "pve2")
+	var rec recordedRequest
+	recordJSON(f, "GET /api2/json/nodes/pve2/storage/local/prunebackups", &rec, []any{})
+
+	_, err := run(t, f, "prune", "local", "--keep-last", "1", "--dry-run")
+	require.NoError(t, err)
+	require.NotEmpty(t, rec.method, "request must hit the resolved node")
 }
 
 // TestStoragePrune_InTree verifies the prune command is registered on the storage
