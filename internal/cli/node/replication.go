@@ -31,9 +31,13 @@ func resolveReplicationNode(cmd *cobra.Command, deps *cli.Deps, jobID string) (s
 	vmid := jobID[:idx]
 	_, node, err := cli.ResolveGuest(cmd.Context(), deps, vmid, cli.GuestAny)
 	if err != nil {
-		return "", fmt.Errorf("resolve node for replication job %q: %w", jobID, err)
+		// A job can outlive its guest (it lingers until the removal
+		// replication runs), so a failed lookup still has an escape hatch.
+		return "", fmt.Errorf("resolve node for replication job %q: %w (pass --node to name the source node directly)", jobID, err)
 	}
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "note: auto-resolved node %q for replication job %s\n", node, jobID)
+	if node != deps.Node {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "note: auto-resolved node %q for replication job %s\n", node, jobID)
+	}
 	return node, nil
 }
 

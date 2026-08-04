@@ -192,7 +192,9 @@ func clusterPlacesGuest(f *testhelper.FakePVE, vmid int, guestType, node string)
 }
 
 // TestNodeReplication_StatusResolvesNodeFromCluster verifies that without an
-// explicit --node the job's node comes from the guest's cluster placement.
+// explicit --node the job's node comes from the guest's cluster placement,
+// even when an ambient default node (pve9 here, via PMX_NODE) points
+// elsewhere.
 func TestNodeReplication_StatusResolvesNodeFromCluster(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	clusterPlacesGuest(f, 100, "qemu", "pve2")
@@ -201,12 +203,49 @@ func TestNodeReplication_StatusResolvesNodeFromCluster(t *testing.T) {
 		"id": "100-0", "guest": 100, "fail_count": 0,
 	})
 
-	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root, buf, prefix := newNodeRootAmbient(t, f, output.FormatTable, exec.Fake(), "pve9")
 	root.SetArgs(append(prefix, "node", "replication", "status", "100-0"))
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "/api2/json/nodes/pve2/replication/100-0/status", rec.path)
 	require.Contains(t, buf.String(), `auto-resolved node "pve2" for replication job 100-0`)
+}
+
+// TestNodeReplication_ExplicitNodeSkipsCluster verifies --node pins the source
+// node without consulting the cluster inventory (no cluster/resources handler
+// is registered, so any lookup would fail the command).
+func TestNodeReplication_ExplicitNodeSkipsCluster(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve7/replication/100-0/status", &rec, map[string]any{
+		"id": "100-0", "guest": 100, "fail_count": 0,
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve7", "node", "replication", "status", "100-0"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "/api2/json/nodes/pve7/replication/100-0/status", rec.path)
+	require.NotContains(t, buf.String(), "auto-resolved")
+}
+
+// TestNodeReplication_NoteSuppressedOnAmbientMatch verifies no stderr note is
+// emitted when the resolved node is the ambient default anyway — the note
+// exists to flag surprises, and running where the default points is none.
+func TestNodeReplication_NoteSuppressedOnAmbientMatch(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	clusterPlacesGuest(f, 100, "qemu", "pve2")
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve2/replication/100-0/status", &rec, map[string]any{
+		"id": "100-0", "guest": 100, "fail_count": 0,
+	})
+
+	root, buf, prefix := newNodeRootAmbient(t, f, output.FormatTable, exec.Fake(), "pve2")
+	root.SetArgs(append(prefix, "node", "replication", "status", "100-0"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "/api2/json/nodes/pve2/replication/100-0/status", rec.path)
+	require.NotContains(t, buf.String(), "auto-resolved")
 }
 
 // TestNodeReplication_LogResolvesLXCGuest verifies resolution also matches
