@@ -1,6 +1,6 @@
 module github.com/fivetwenty-io/proxmox-cli
 
-go 1.26.4
+go 1.26.6
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.6
