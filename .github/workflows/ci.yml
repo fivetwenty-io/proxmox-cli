@@ -5,20 +5,33 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# A superseded push to the same PR/branch has nothing left to prove, and the
+# single self-hosted runner serializes jobs — cancel the stale run instead of
+# queueing behind it. Tag pushes never share a group here (release.yml owns
+# those), so nothing release-critical can be cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
+# Actions are pinned to commit SHAs rather than tags: on a self-hosted runner
+# a retagged or compromised action executes inside the home network, so the
+# tag's mutability is the attack surface. Dependabot keeps the pins current.
 jobs:
   check:
     name: check
     runs-on: self-hosted
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.6"
           check-latest: true
@@ -32,7 +45,7 @@ jobs:
         run: go vet ./...
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
 
@@ -67,3 +80,38 @@ jobs:
       # silently makes it stale. Regenerating here catches that at review time.
       - name: Coverage matrix up to date
         run: make check-coverage-matrix
+
+  security:
+    name: security
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+          check-latest: true
+          cache: true
+
+      # Reachability-aware CVE scan of the module graph against the Go vuln
+      # database; unlike trivy below it only fails on vulnerabilities in code
+      # paths this binary actually calls.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          govulncheck ./...
+
+      # Dependency CVEs (go.mod/go.sum), committed secrets, and workflow
+      # misconfigurations. Fails the build on anything it finds — triage by
+      # fixing or by a reviewed .trivyignore entry, never by loosening this.
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          exit-code: "1"
+          ignore-unfixed: true

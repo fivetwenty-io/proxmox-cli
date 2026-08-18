@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Go module dependencies. github.com/fivetwenty-io/proxmox-apiclient-go is
+  # private: Dependabot can only resolve it once the org grants it access
+  # (Settings -> Code security -> Dependabot -> private repositories). Until
+  # then gomod update runs fail to build the module graph and skip.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: deps
+    groups:
+      go-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - github.com/fivetwenty-io/*
+
+  # Keep the commit-SHA pins on workflow actions current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
