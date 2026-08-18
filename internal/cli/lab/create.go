@@ -1597,6 +1597,7 @@ func createVM(
 			Balloon:  new(int64(compute.Memory.MinGB * 1024)),
 			Agent:    new("enabled=1"),
 			Ostype:   new("l26"),
+			Tablet:   new(false),
 			Efidisk0: new(fmt.Sprintf("%s:1,efitype=4m,pre-enrolled-keys=1", stID)),
 			Scsi: map[int]string{
 				0: fmt.Sprintf("%s:%d%s", stID, storage.OSDiskGB, createDiskOptions(storage)),
@@ -1660,6 +1661,7 @@ func createVM(
 		Numa:    new(compute.NUMA),
 		Memory:  new(strconv.Itoa(compute.Memory.MaxGB * 1024)),
 		Balloon: new(int64(compute.Memory.MinGB * 1024)),
+		Tablet:  new(false),
 	}
 	if compute.CPUType != "" {
 		updateParams.Cpu = new(compute.CPUType)
@@ -1716,6 +1718,7 @@ func createQdeviceVM(
 			Balloon: new(int64(qdeviceMemoryGB * 1024)),
 			Agent:   new("enabled=1"),
 			Ostype:  new("l26"),
+			Tablet:  new(false),
 			Scsi: map[int]string{
 				0: fmt.Sprintf("%s:%d", stID, qdeviceDiskGB),
 			},
@@ -1764,6 +1767,7 @@ func createQdeviceVM(
 		Cores:   new(int64(qdeviceVCPU)),
 		Memory:  new(memKiB),
 		Balloon: new(int64(qdeviceMemoryGB * 1024)),
+		Tablet:  new(false),
 		Net:     netMap,
 	}
 	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {

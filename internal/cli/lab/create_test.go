@@ -377,6 +377,20 @@ func TestCreateHappyPath_OrderedCalls(t *testing.T) {
 		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "storage-list", "qemu-list", "nextid",
 		"zone-create", "vnet-create", "subnet-create", "storage-create", "pool-create", "qemu-create",
 	}, order)
+
+	// The VM create must disable the USB tablet pointer device (Lab Host VM
+	// Spec: headless server guests carry tablet: 0). PVE defaults tablet to
+	// enabled when the parameter is omitted, so the request body has to say
+	// so explicitly — absence is a regression, not a neutral default.
+	var qemuCreateBody map[string]any
+	for _, r := range recs {
+		if r.method == http.MethodPost && r.path == "/api2/json/nodes/node1/qemu" {
+			qemuCreateBody = r.body
+		}
+	}
+	require.NotNil(t, qemuCreateBody, "qemu create request not recorded")
+	assert.Contains(t, []any{false, "0", float64(0)}, qemuCreateBody["tablet"],
+		"qemu create must explicitly disable the USB tablet pointer")
 }
 
 // TestCreatePoolMembers_RealPVE500NotFoundShape_ReturnsEmptyNoError covers
