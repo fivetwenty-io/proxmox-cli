@@ -43,6 +43,9 @@ jobs:
       # the signal-relay and log-writer paths, and the repo already ships a
       # make target for it that CI never invoked.
       - name: Unit tests (race detector)
+        env:
+          # The self-hosted runner's Go defaults cgo off; -race requires it.
+          CGO_ENABLED: "1"
         run: go test -race ./...
 
       # This job runs on Linux, so every //go:build darwin file — notably
