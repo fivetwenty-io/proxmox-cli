@@ -9,8 +9,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.7 h1:zbFlGlXEAKlwXpmvle3d8Oe3YnkKIK4xSRTd3
 github.com/cpuguy83/go-md2man/v2 v2.0.7/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/fatih/color v1.19.0 h1:Zp3PiM21/9Ld6FzSKyL5c/BULoe/ONr9KlbYVOfG8+w=
 github.com/fatih/color v1.19.0/go.mod h1:zNk67I0ZUT1bEGsSGyCZYZNrHuTkJJB+r6Q9VuMi0LE=
-github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.8.4 h1:sOGdqyDkeLI1r8r6+u1BtbGPb4ohyB9vOncTlaHI/jA=
-github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.8.4/go.mod h1:uzB6mREoXPZDfC9XqLuS0CCQDAkN3SK5eIVHe5rdnd4=
+github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.8.5 h1:RGPlr65rdNKYAxjDE8K9aALPlBXObKQrAKuDI2aLcYw=
+github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.8.5/go.mod h1:2kZjwx3C47dzqTab4F/a8D22ARDCmikmjS7I2DWrWEc=
 github.com/goccy/go-json v0.10.6 h1:p8HrPJzOakx/mn/bQtjgNjdTcN+/S6FcG2CTtQOrHVU=
 github.com/goccy/go-json v0.10.6/go.mod h1:oq7eo15ShAhp70Anwd5lgX2pLfOS3QCiwU/PULtXL6M=
 github.com/goccy/go-yaml v1.19.2 h1:PmFC1S6h8ljIz6gMRBopkjP1TVT7xuwrButHID66PoM=
