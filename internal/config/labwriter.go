@@ -87,6 +87,7 @@ func LabFileTemplate(lab *Lab) []byte {
 	appendLabZoneBlock(&b, lab.Network)
 	fmt.Fprintf(&b, "  vxlan_tag: %d\n", lab.Network.VxlanTag)
 	fmt.Fprintf(&b, "  cidr: %s\n", yamlQuote(lab.Network.CIDR))
+	appendLabIPv6Block(&b, lab.Network)
 	fmt.Fprint(&b, "  mgmt:\n")
 	fmt.Fprintf(&b, "    subnet: %s\n", yamlQuote(lab.Network.Mgmt.Subnet))
 	fmt.Fprintf(&b, "    host_ip: %s\n", yamlQuote(lab.Network.Mgmt.HostIP))
@@ -191,6 +192,27 @@ func appendLabZoneBlock(b *strings.Builder, net LabNetwork) {
 	}
 }
 
+// appendLabIPv6Block documents network.ipv6 and network.cidr6 with a short
+// comment, unconditionally, then renders each key only when set — the same
+// comment-always/key-only-when-set convention appendLabZoneBlock uses, so a
+// lab that leaves both at their defaults (IPv6 on, ULA auto-derived)
+// round-trips through ResolveLabs at its true zero value.
+func appendLabIPv6Block(b *strings.Builder, net LabNetwork) {
+	fmt.Fprint(b, "  # ipv6: labs are dual-stack by default — every addressed vnet gets\n")
+	fmt.Fprint(b, "  # an IPv6 subnet alongside its IPv4 one, and nodes/QDevice get\n")
+	fmt.Fprint(b, "  # management IPv6 addresses. Set to false to keep this lab\n")
+	fmt.Fprint(b, "  # IPv4-only.\n")
+	fmt.Fprint(b, "  # cidr6: the lab's IPv6 block (/48 or wider). Omitted means a\n")
+	fmt.Fprint(b, "  # stable RFC 4193 ULA /48 derived from cidr above, unique per lab\n")
+	fmt.Fprint(b, "  # with zero config.\n")
+	if net.IPv6 != nil {
+		fmt.Fprintf(b, "  ipv6: %t\n", *net.IPv6)
+	}
+	if net.CIDR6 != "" {
+		fmt.Fprintf(b, "  cidr6: %s\n", yamlQuote(net.CIDR6))
+	}
+}
+
 // appendLabVnetsBlock documents network.vnets with a short comment,
 // unconditionally, then renders the list only when non-empty. Rendering
 // nothing but the comment for an empty/nil vnets keeps the field's
@@ -202,7 +224,9 @@ func appendLabVnetsBlock(b *strings.Builder, vnets []LabVnet) {
 	fmt.Fprint(b, "  # vnets: additional outer SDN vnets beyond the primary vnet_id/cidr\n")
 	fmt.Fprint(b, "  # pair, e.g. separate storage and workload L2 domains for a\n")
 	fmt.Fprint(b, "  # multi-bond nested topology. Omitted entirely means today's\n")
-	fmt.Fprint(b, "  # single-vnet shape.\n")
+	fmt.Fprint(b, "  # single-vnet shape. An addressed entry also gets an auto-carved\n")
+	fmt.Fprint(b, "  # IPv6 /64 (unless ipv6: false); set cidr6 on an entry (/112 or\n")
+	fmt.Fprint(b, "  # wider) to override its IPv6 subnet.\n")
 	if len(vnets) == 0 {
 		return
 	}
@@ -215,6 +239,9 @@ func appendLabVnetsBlock(b *strings.Builder, vnets []LabVnet) {
 		fmt.Fprintf(b, "      tag: %d\n", v.Tag)
 		if v.CIDR != "" {
 			fmt.Fprintf(b, "      cidr: %s\n", yamlQuote(v.CIDR))
+		}
+		if v.CIDR6 != "" {
+			fmt.Fprintf(b, "      cidr6: %s\n", yamlQuote(v.CIDR6))
 		}
 		if v.Gateway != "" {
 			fmt.Fprintf(b, "      gateway: %s\n", yamlQuote(v.Gateway))

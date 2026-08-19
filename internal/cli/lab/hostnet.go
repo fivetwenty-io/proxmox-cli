@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,9 +25,10 @@ import (
 func newHostnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hostnet",
-		Short: "Manage a lab's nested-node host network bonds and bridges",
-		Long: "Reconcile the guest-OS bonds and bridges (network.nested_network.bonds) inside " +
-			"each of a lab's nested PVE nodes against its config.\n\n" +
+		Short: "Manage a lab's nested-node host network interfaces",
+		Long: "Reconcile the guest-OS network interfaces inside each of a lab's nested PVE nodes " +
+			"against its config: the bonds and bridges declared in network.nested_network.bonds, " +
+			"and — unless `network.ipv6: false` — each node's management IPv6 address on vmbr0.\n\n" +
 			"Distinct from `pmx lab net` (the outer host's own SDN vnet) and `pmx lab " +
 			"sdn`/`pmx lab sdn vlan` (the nested cluster's own SDN zones): this manages the " +
 			"plain Linux bond and bridge interfaces those SDN zones are layered on top of.\n\n" +
@@ -42,24 +45,31 @@ func newHostnetApplyCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "apply <name>",
-		Short: "Reconcile a lab's nested-node bonds and bridges against its config",
+		Short: "Reconcile a lab's nested-node host network against its config",
 		Long: "For each of the lab's nested node indices (0..topology.nodes-1):\n\n" +
 			"  1. list the node's live and staged host network interfaces\n" +
 			"  2. diff every configured network.nested_network.bonds[] entry's\n" +
 			"     bond and bridge against them\n" +
 			"  3. issue CreateNetwork/UpdateNetwork2 calls for anything missing\n" +
 			"     or drifted\n" +
-			"  4. call UpdateNetwork once — the staged-changes reload — when\n" +
+			"  4. unless `network.ipv6: false`, ensure vmbr0 carries the node's\n" +
+			"     management IPv6 address and gateway from the lab's IPv6 plan\n" +
+			"     (network.cidr6 when set, else a stable ULA block derived from\n" +
+			"     network.cidr), carrying its IPv4 addressing and ports forward\n" +
+			"  5. call UpdateNetwork once — the staged-changes reload — when\n" +
 			"     anything changed for that node\n\n" +
 			"Idempotent and safe to rerun. This is the only path for a node whose bonds were " +
 			"never rendered at OS-install time, such as an already-installed node picking up a " +
-			"newly-added network.nested_network config without a reinstall.\n\n" +
+			"newly-added network.nested_network config without a reinstall — and likewise the " +
+			"path for adding IPv6 to nodes installed before the lab's IPv6 plan existed. A node " +
+			"that does not report a vmbr0 yet is skipped with a notice; rerun once it exists.\n\n" +
 			"Requires the lab's own `lab-<name>` context (registered by `pmx lab context sync`) " +
 			"to be the currently active context (--context/-c). This command talks to the " +
 			"nested cluster's own API, never the outer host's, and refuses to run against any " +
 			"other context so it can never stage a bond or bridge on the wrong cluster by " +
 			"mistake.\n\n" +
-			"A lab with no network.nested_network.bonds configured is a no-op with a notice.",
+			"A lab with no network.nested_network.bonds and `network.ipv6: false` is a no-op " +
+			"with a notice.",
 		Example: `  pmx -c lab-pve-cpi lab hostnet apply pve-cpi
   pmx -c lab-pve-cpi lab hostnet apply pve-cpi --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -68,7 +78,7 @@ func newHostnetApplyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false,
-		"preview the bond/bridge reconciliation without issuing any API call")
+		"preview the bond/bridge/IPv6 reconciliation without issuing any API call")
 	return cmd
 }
 
@@ -111,9 +121,11 @@ func runHostnetApply(cmd *cobra.Command, name string, dryRun bool) error {
 	}
 
 	nn := lab.Network.NestedNetwork
-	if len(nn.Bonds) == 0 {
+	ipv6Enabled := lab.Network.EffectiveIPv6()
+	if len(nn.Bonds) == 0 && !ipv6Enabled {
 		res := output.Result{Message: fmt.Sprintf(
-			"lab %q has no network.nested_network.bonds configured; nothing to do.", name)}
+			"lab %q has no network.nested_network.bonds configured and network.ipv6 is disabled; nothing to do.",
+			name)}
 		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 	}
 
@@ -124,19 +136,31 @@ func runHostnetApply(cmd *cobra.Command, name string, dryRun bool) error {
 	// runClusterInit's identical convention for their own ssh-transported
 	// previews): it lists every step this run would take, without probing
 	// live remote state (nor enumerating live NICs over ssh) to decide
-	// create-vs-update.
+	// create-vs-update. The wanted IPv6 values are pure config derivation
+	// (hostnetNodeV6Want), so the preview shows the real addresses.
 	if dryRun {
 		var rows [][]string
 		for idx := range numNodes {
 			nodeName := hostnetNodeName(lab.Name, idx)
-			rows = append(rows, []string{nodeName,
-				fmt.Sprintf("ensure NIC naming (nic0-nic%d)", hostnetRequiredNICCount-1), "would run"})
-			for _, b := range nn.Bonds {
+			if len(nn.Bonds) > 0 {
 				rows = append(rows, []string{nodeName,
-					fmt.Sprintf("ensure bond %q (mode %s, nics %s)", b.Name, b.Mode, strings.Join(b.NICs, ",")),
-					"would run"})
+					fmt.Sprintf("ensure NIC naming (nic0-nic%d)", hostnetRequiredNICCount-1), "would run"})
+				for _, b := range nn.Bonds {
+					rows = append(rows, []string{nodeName,
+						fmt.Sprintf("ensure bond %q (mode %s, nics %s)", b.Name, b.Mode, strings.Join(b.NICs, ",")),
+						"would run"})
+					rows = append(rows, []string{nodeName,
+						fmt.Sprintf("ensure bridge %q (port %s, vlan_aware=%v)", b.Bridge, b.Name, b.VlanAware),
+						"would run"})
+				}
+			}
+			if ipv6Enabled {
+				want, werr := hostnetNodeV6Want(lab.Network, idx)
+				if werr != nil {
+					return fmt.Errorf("lab %q: resolve node %d IPv6 addressing: %w", name, idx, werr)
+				}
 				rows = append(rows, []string{nodeName,
-					fmt.Sprintf("ensure bridge %q (port %s, vlan_aware=%v)", b.Bridge, b.Name, b.VlanAware),
+					fmt.Sprintf("ensure IPv6 on %s (%s, gateway %s)", hostnetMgmtBridge, want.Cidr6, want.Gateway6),
 					"would run"})
 			}
 			rows = append(rows, []string{nodeName, "apply staged network changes", "would run (if anything changed)"})
@@ -150,31 +174,40 @@ func runHostnetApply(cmd *cobra.Command, name string, dryRun bool) error {
 	for idx := range numNodes {
 		nodeName := hostnetNodeName(lab.Name, idx)
 
-		nodeIP, err := labNodeMgmtIP(lab.Network, idx)
+		v6Want, err := hostnetNodeV6Want(lab.Network, idx)
 		if err != nil {
-			return fmt.Errorf("lab %q: resolve node %d mgmt IP: %w", name, idx, err)
+			return fmt.Errorf("lab %q: resolve node %d IPv6 addressing: %w", name, idx, err)
 		}
 
 		// NIC-naming ensure phase (hostnetEnsureNICNaming): must run BEFORE
 		// any bond/bridge work — a bond referencing nic0-nic5 cannot be
 		// created against a node whose physical NICs are still named
-		// ens18-ens23. A node this phase leaves reboot-pending is skipped
-		// for the rest of THIS run (its bond/bridge phase never runs), but
-		// every other node in the lab is still processed — see this
+		// ens18-ens23. Only meaningful for a bonded lab, so an IPv6-only
+		// apply (no bonds configured) skips it — and its ssh transport —
+		// entirely. A node this phase leaves reboot-pending is skipped for
+		// the rest of THIS run (its bond/bridge and IPv6 phases never run),
+		// but every other node in the lab is still processed — see this
 		// function's final anyRebootPending check for why the overall run
 		// still exits nonzero.
-		namingRow, outcome, err := hostnetEnsureNICNaming(deps, name, nodeName, idx, nodeIP)
-		if err != nil {
-			return err
-		}
-		allRows = append(allRows, namingRow)
+		if len(nn.Bonds) > 0 {
+			nodeIP, err := labNodeMgmtIP(lab.Network, idx)
+			if err != nil {
+				return fmt.Errorf("lab %q: resolve node %d mgmt IP: %w", name, idx, err)
+			}
 
-		if outcome == hostnetNICNamingRebootPending {
-			anyRebootPending = true
-			continue
+			namingRow, outcome, err := hostnetEnsureNICNaming(deps, name, nodeName, idx, nodeIP)
+			if err != nil {
+				return err
+			}
+			allRows = append(allRows, namingRow)
+
+			if outcome == hostnetNICNamingRebootPending {
+				anyRebootPending = true
+				continue
+			}
 		}
 
-		rows, err := hostnetEnsureNode(ctx, deps.API, name, nodeName, nn)
+		rows, err := hostnetEnsureNode(ctx, deps.API, name, nodeName, nn, v6Want)
 		if err != nil {
 			return err
 		}
@@ -807,6 +840,10 @@ type hostnetIfaceState struct {
 	Address         string `json:"address"`
 	Netmask         string `json:"netmask"`
 	Gateway         string `json:"gateway"`
+	Cidr6           string `json:"cidr6"`
+	Address6        string `json:"address6"`
+	Netmask6        string `json:"netmask6"`
+	Gateway6        string `json:"gateway6"`
 }
 
 // hostnetDecodeInterfaces decodes every entry of list into a hostnetIfaceState,
@@ -854,12 +891,100 @@ func hostnetFieldsEqual(a, b string) bool {
 	return true
 }
 
+// hostnetMgmtBridge is the nested node's management bridge: every PVE
+// install writes its management addressing onto vmbr0, and the multi-node
+// answer-template convention keeps that name even for bonded topologies
+// (the mgmt bond's bridge is always vmbr0).
+const hostnetMgmtBridge = "vmbr0"
+
+// hostnetV6Want is the IPv6 addressing hostnetEnsureNodeIPv6 stages onto a
+// node's management bridge: the node's mgmt address in interface-CIDR form
+// (labV6InterfacePrefixBits wide) plus the mgmt gateway.
+type hostnetV6Want struct {
+	Addr6    string
+	Cidr6    string
+	Gateway6 string
+}
+
+// hostnetNodeV6Want resolves node idx's wanted IPv6 addressing from the
+// lab's address plan (ipv6.go), or nil when the lab opted out of IPv6
+// (network.ipv6: false) — the caller then skips the phase entirely.
+func hostnetNodeV6Want(n config.LabNetwork, idx int) (*hostnetV6Want, error) {
+	if !n.EffectiveIPv6() {
+		return nil, nil
+	}
+	addr6, err := labNodeMgmtIP6(n, idx)
+	if err != nil {
+		return nil, err
+	}
+	gw6, err := labMgmtGateway6(n)
+	if err != nil {
+		return nil, err
+	}
+	return &hostnetV6Want{
+		Addr6:    addr6,
+		Cidr6:    fmt.Sprintf("%s/%d", addr6, labV6InterfacePrefixBits),
+		Gateway6: gw6,
+	}, nil
+}
+
+// hostnetEnsureNodeIPv6 stages want's IPv6 addressing onto nodeName's
+// management bridge (hostnetMgmtBridge) when it has drifted, carrying every
+// existing field — IPv4 addressing, bridge_ports, vlan-awareness, autostart
+// — forward unchanged (hostnetPreserveUntouchedBridgeFields, plus an
+// explicit bridge_ports carry, since that field is not part of the preserve
+// helper's contract). Pure staging: the caller owns the single
+// staged-changes reload, so this composes with the bond/bridge phase into
+// one apply. A node whose interface list has no vmbr0 at all (e.g. a bond
+// retrofit creating it in this same staged batch) gets a visible skip row
+// rather than an error or a blind PUT — the next apply run converges it.
+func hostnetEnsureNodeIPv6(ctx context.Context, api *apiclient.APIClient, nodeName string, want hostnetV6Want, existing map[string]hostnetIfaceState) (bool, []string, error) {
+	stepLabel := fmt.Sprintf("IPv6 on %s (%s, gateway %s)", hostnetMgmtBridge, want.Cidr6, want.Gateway6)
+
+	cur, found := existing[hostnetMgmtBridge]
+	if !found {
+		return false, []string{nodeName, stepLabel,
+			fmt.Sprintf("skip (%s not in the node's interface list yet; re-run once it exists)", hostnetMgmtBridge)}, nil
+	}
+	if cur.Type != "bridge" {
+		return false, nil, fmt.Errorf(
+			"node %q: interface %q exists as type %q, not bridge; refusing to address it",
+			nodeName, hostnetMgmtBridge, cur.Type)
+	}
+
+	// Either spelling of the wanted state counts as converged: the cidr6
+	// form this function itself writes, or the equivalent address6+netmask6
+	// pair an installer or operator may have written by hand.
+	prefixBits := strconv.Itoa(labV6InterfacePrefixBits)
+	addrMatches := cur.Cidr6 == want.Cidr6 || (cur.Address6 == want.Addr6 && cur.Netmask6 == prefixBits)
+	if addrMatches && cur.Gateway6 == want.Gateway6 {
+		return false, []string{nodeName, stepLabel, "already matches"}, nil
+	}
+
+	params := &nodes.UpdateNetwork2Params{
+		Type:     "bridge",
+		Cidr6:    new(want.Cidr6),
+		Gateway6: new(want.Gateway6),
+	}
+	if cur.BridgePorts != "" {
+		params.BridgePorts = new(cur.BridgePorts)
+	}
+	hostnetPreserveUntouchedBridgeFields(cur, params)
+
+	if err := api.Nodes.UpdateNetwork2(ctx, nodeName, hostnetMgmtBridge, params); err != nil {
+		return false, nil, fmt.Errorf("node %q: update %s IPv6 addressing: %w", nodeName, hostnetMgmtBridge, err)
+	}
+	return true, []string{nodeName, stepLabel, "updated"}, nil
+}
+
 // hostnetEnsureNode reconciles every bond+bridge pair of nn.Bonds against
-// node nodeName's live/staged interface list, then issues one UpdateNetwork
-// (the staged-changes reload) call for that node iff anything changed.
-// Returns one STEP/STATUS row (NODE-prefixed) per bond, per bridge, and a
-// final "apply staged network changes" row.
-func hostnetEnsureNode(ctx context.Context, api *apiclient.APIClient, name, nodeName string, nn config.LabNestedNetwork) ([][]string, error) {
+// node nodeName's live/staged interface list, stages v6's IPv6 addressing
+// onto the management bridge when v6 is non-nil (hostnetEnsureNodeIPv6),
+// then issues one UpdateNetwork (the staged-changes reload) call for that
+// node iff anything changed. Returns one STEP/STATUS row (NODE-prefixed)
+// per bond, per bridge, and phase, and a final "apply staged network
+// changes" row.
+func hostnetEnsureNode(ctx context.Context, api *apiclient.APIClient, name, nodeName string, nn config.LabNestedNetwork, v6 *hostnetV6Want) ([][]string, error) {
 	list, err := api.Nodes.ListNetwork(ctx, nodeName, nil)
 	if err != nil {
 		return nil, fmt.Errorf("lab %q: list network interfaces on node %q: %w", name, nodeName, err)
@@ -906,6 +1031,15 @@ func hostnetEnsureNode(ctx context.Context, api *apiclient.APIClient, name, node
 		}
 		rows = append(rows, bridgeRow)
 		changed = changed || bridgeChanged
+	}
+
+	if v6 != nil {
+		v6Changed, v6Row, err := hostnetEnsureNodeIPv6(ctx, api, nodeName, *v6, existing)
+		if err != nil {
+			return nil, fmt.Errorf("lab %q: %w", name, err)
+		}
+		rows = append(rows, v6Row)
+		changed = changed || v6Changed
 	}
 
 	applyStatus := "skip (no pending changes)"
@@ -1082,15 +1216,23 @@ func hostnetRestageBridgeIfSlaveConflict(ctx context.Context, api *apiclient.API
 // "no address"/"not vlan-aware" onto an interface that may simply have
 // never had that property touched by this package before (e.g. a
 // deliberately address-less VLAN-trunk bridge).
+//
+// Addressing is ALWAYS carried in cidr/cidr6 form, never as the
+// address+netmask / address6+netmask6 pairs, and never both: PVE's
+// update_network runs $map_cidr_to_address_netmask before anything else
+// and hard-rejects a body carrying both spellings of the same family
+// ("address conflicts with cidr"). The list endpoint reports all three
+// fields at once (Interfaces.pm derives the missing ones on every read),
+// so echoing a listing back verbatim always trips that check — and its
+// netmask comes back as a prefix-length string, which the netmask param's
+// own ipv4mask (dotted-quad) format then rejects on top. cidr alone is
+// sufficient: the update handler expands it to address+netmask itself
+// before recomputing the stanza's families/method.
 func hostnetPreserveUntouchedBridgeFields(cur hostnetIfaceState, params *nodes.UpdateNetwork2Params) {
-	if params.Cidr == nil && cur.Cidr != "" {
-		params.Cidr = new(cur.Cidr)
-	}
-	if params.Address == nil && cur.Address != "" {
-		params.Address = new(cur.Address)
-	}
-	if params.Netmask == nil && cur.Netmask != "" {
-		params.Netmask = new(cur.Netmask)
+	if params.Cidr == nil {
+		if c := hostnetCIDRForm(cur.Cidr, cur.Address, cur.Netmask); c != "" {
+			params.Cidr = new(c)
+		}
 	}
 	if params.Gateway == nil && cur.Gateway != "" {
 		params.Gateway = new(cur.Gateway)
@@ -1101,6 +1243,53 @@ func hostnetPreserveUntouchedBridgeFields(cur hostnetIfaceState, params *nodes.U
 	if params.BridgeVlanAware == nil && cur.BridgeVlanAware != 0 {
 		params.BridgeVlanAware = new(true)
 	}
+
+	// IPv6 addressing is carried forward under the exact same rule as the
+	// IPv4 fields above: whatever inet6 config the interface already has
+	// (staged by hostnetEnsureNodeIPv6 on an earlier run, or hand-written)
+	// must survive a PUT issued for an unrelated reason — as cidr6 only,
+	// per the conflict rule above. netmask6 is always a prefix-length
+	// string on the wire, so the address6+netmask6 fallback join needs no
+	// dotted-quad handling.
+	if params.Cidr6 == nil {
+		if c := hostnetCIDRForm(cur.Cidr6, cur.Address6, cur.Netmask6); c != "" {
+			params.Cidr6 = new(c)
+		}
+	}
+	if params.Gateway6 == nil && cur.Gateway6 != "" {
+		params.Gateway6 = new(cur.Gateway6)
+	}
+}
+
+// hostnetCIDRForm collapses one address family's listed state into the
+// single cidr-form spelling hostnetPreserveUntouchedBridgeFields is allowed
+// to send: the listed cidr when present (the normal case — PVE derives it on
+// every read), else address joined with netmask when netmask is already a
+// prefix length or a convertible dotted quad. Returns "" when the family has
+// no address at all, or no usable prefix to join with — the caller then
+// omits the field entirely rather than asserting a half-formed value.
+func hostnetCIDRForm(cidr, address, netmask string) string {
+	if cidr != "" {
+		return cidr
+	}
+	if address == "" {
+		return ""
+	}
+	if strings.Contains(address, "/") {
+		return address
+	}
+	if netmask == "" {
+		return ""
+	}
+	if _, err := strconv.Atoi(netmask); err == nil {
+		return address + "/" + netmask
+	}
+	if ip := net.ParseIP(netmask).To4(); ip != nil {
+		if ones, bits := net.IPMask(ip).Size(); bits == 32 {
+			return fmt.Sprintf("%s/%d", address, ones)
+		}
+	}
+	return ""
 }
 
 // hostnetEnsureBond ensures bond b.Name exists as a "bond" interface on

@@ -45,6 +45,10 @@ func newNetCmd() *cobra.Command {
 		Short: "Manage a lab's SDN network",
 		Long: "Reconcile a lab's SDN zone, every configured vnet — the primary vnet plus any " +
 			"network.vnets entries — and their subnets against its config.\n\n" +
+			"Labs are dual-stack by default: alongside each IPv4 subnet, every addressed vnet " +
+			"gets an IPv6 subnet from the lab's IPv6 block — network.cidr6 when set, else a " +
+			"stable RFC 4193 ULA /48 derived from network.cidr. Set `network.ipv6: false` to " +
+			"opt a lab out (existing IPv6 subnets are left alone, never deleted).\n\n" +
 			"The resulting pending changeset is previewed, then applied.",
 	}
 	cmd.AddCommand(newNetApplyCmd())
@@ -80,6 +84,11 @@ func newNetApplyCmd() *cobra.Command {
 		Long: "Idempotently ensure the named lab's SDN zone, vnet, and subnet match its " +
 			"config, then always preview the pending SDN changeset with `ListSdnDryRun` before " +
 			"committing.\n\n" +
+			"Unless `network.ipv6: false`, each addressed vnet's IPv6 subnet is ensured too: " +
+			"the primary vnet carries the lab's whole IPv6 block gatewayed at the management " +
+			"::1, and each network.vnets entry gets its own /64 (or its cidr6 override). " +
+			"Disabling IPv6 later only stops creating — nothing already on the host is " +
+			"deleted.\n\n" +
 			"--dry-run stops after that preview, without ensuring any resource or calling " +
 			"apply.\n\n" +
 			"Without --dry-run, an empty pending changeset is reported and skipped; a " +
@@ -395,11 +404,18 @@ func sdnZoneAllowsVnetTag(zoneType string) bool {
 // vnetID is a caller/config error, not silently skipped, since every vnet a
 // lab declares — primary or extra — must have an id.
 //
+// cidr6/gateway6 are the vnet's IPv6 subnet and its gateway, ensured after
+// the IPv4 one through the same ensureLabSdnSubnetOn body; an empty cidr6
+// skips the IPv6 sub-step — either the lab opted out (network.ipv6: false)
+// or this vnet has no subnets at all. The caller (ensureLabSdnVnets, or
+// create's plan builder) resolves both values via the lab's IPv6 address
+// plan (ipv6.go); this function never derives anything itself.
+//
 // This is the vnet-agnostic body shared by every vnet a lab's network
 // declares: ensureLabSdnVnets calls it once for the primary VnetID/CIDR pair
 // and once per Network.Vnets[] entry, so there is exactly one code path that
 // can create or update an outer vnet+subnet pair.
-func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneName, vnetID, alias string, tag int, cidr, gateway string, tagAllowed bool) error {
+func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneName, vnetID, alias string, tag int, cidr, gateway, cidr6, gateway6 string, tagAllowed bool) error {
 	if vnetID == "" {
 		return fmt.Errorf("vnet id is empty; cannot ensure an SDN vnet")
 	}
@@ -453,7 +469,55 @@ func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneN
 	if cidr == "" {
 		return nil
 	}
-	return ensureLabSdnSubnetOn(ctx, api, vnetID, cidr, gateway)
+	if err := ensureLabSdnSubnetOn(ctx, api, vnetID, cidr, gateway); err != nil {
+		return err
+	}
+
+	if cidr6 == "" {
+		return nil
+	}
+	return ensureLabSdnSubnetOn(ctx, api, vnetID, cidr6, gateway6)
+}
+
+// labVnetV6Subnet resolves the IPv6 subnet+gateway pair for network.vnets[i]
+// from the lab's IPv6 address plan: ("", "") when the lab opted out of IPv6
+// or the vnet has no IPv4 subnet (labVnetCIDR6's pure-L2 rule), else the
+// entry's effective cidr6 (override or carved /64) gatewayed at its ::1.
+func labVnetV6Subnet(n config.LabNetwork, i int) (cidr6, gateway6 string, err error) {
+	if !n.EffectiveIPv6() {
+		return "", "", nil
+	}
+	cidr6, err = labVnetCIDR6(n, i)
+	if err != nil || cidr6 == "" {
+		return "", "", err
+	}
+	gateway6, err = labV6Gateway(cidr6)
+	if err != nil {
+		return "", "", err
+	}
+	return cidr6, gateway6, nil
+}
+
+// labPrimaryV6Subnet resolves the primary vnet's IPv6 subnet+gateway pair:
+// the lab's whole IPv6 block (network.cidr6 or the derived ULA /48),
+// gatewayed at the management /64's ::1 — mirroring the IPv4 shape, where
+// the primary vnet's subnet is the whole network.cidr gatewayed at
+// network.mgmt.gateway. Returns ("", "") when the lab opted out of IPv6 or
+// has no IPv4 subnet on the primary vnet (empty network.cidr): IPv6 subnets
+// are only ever provisioned alongside an IPv4 one.
+func labPrimaryV6Subnet(n config.LabNetwork) (cidr6, gateway6 string, err error) {
+	if !n.EffectiveIPv6() || n.CIDR == "" {
+		return "", "", nil
+	}
+	block, err := labULAPrefix(n)
+	if err != nil {
+		return "", "", err
+	}
+	gateway6, err = labMgmtGateway6(n)
+	if err != nil {
+		return "", "", err
+	}
+	return block.String(), gateway6, nil
 }
 
 // ensureLabSdnSubnetOn ensures cidr exists as a subnet on vnetID with the
@@ -519,7 +583,12 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 	zoneName := labZoneName(n)
 	tagAllowed := sdnZoneAllowsVnetTag(zoneType)
 
-	if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, n.VnetID, n.VnetAlias, n.VxlanTag, n.CIDR, n.Mgmt.Gateway, tagAllowed); err != nil {
+	primaryCIDR6, primaryGw6, err := labPrimaryV6Subnet(n)
+	if err != nil {
+		return err
+	}
+	if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, n.VnetID, n.VnetAlias, n.VxlanTag,
+		n.CIDR, n.Mgmt.Gateway, primaryCIDR6, primaryGw6, tagAllowed); err != nil {
 		return err
 	}
 
@@ -527,7 +596,12 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 		if v.ID == "" {
 			return fmt.Errorf("network.vnets[%d] has an empty id; cannot ensure an SDN vnet", i)
 		}
-		if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, tagAllowed); err != nil {
+		cidr6, gw6, err := labVnetV6Subnet(n, i)
+		if err != nil {
+			return err
+		}
+		if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, v.ID, v.Alias, v.Tag,
+			v.CIDR, v.Gateway, cidr6, gw6, tagAllowed); err != nil {
 			return err
 		}
 	}

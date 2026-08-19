@@ -168,7 +168,10 @@ func newCreateCmd() *cobra.Command {
 			"already in place:\n\n" +
 			"  1. the lab's config-resolved SDN zone (zone \"labs\", type\n" +
 			"     \"simple\" by default — decision D4)\n" +
-			"  2. the lab's own vnet and subnet\n" +
+			"  2. the lab's own vnet and its subnets — IPv4, and (unless\n" +
+			"     `network.ipv6: false`) an IPv6 subnet from the lab's IPv6\n" +
+			"     block: network.cidr6 when set, else a stable ULA /48 derived\n" +
+			"     from network.cidr, so labs are dual-stack by default\n" +
 			"  3. its derived lab storage (tank-lab-wayne, for lab wayne)\n" +
 			"  4. its resource pool\n" +
 			"  5. one VM per configured topology.nodes index, plus a QDevice VM\n" +
@@ -1154,6 +1157,33 @@ func buildCreatePlan(
 		},
 	})
 
+	// 3a. IPv6 subnet on the primary vnet (default on; network.ipv6: false
+	// opts out): the lab's whole IPv6 block (network.cidr6 or the derived
+	// ULA /48 — labPrimaryV6Subnet, net.go), gatewayed at the management
+	// /64's ::1, mirroring step 3's IPv4 shape (whole network.cidr, mgmt
+	// gateway). Ensured via net.go's ensureLabSdnSubnetOn — the same body
+	// `pmx lab net apply` reconciles the same subnet through — and probed
+	// for existence with the same findSdnSubnet helper against the subnet
+	// list step 3 already fetched, so the two verbs always agree.
+	primaryCIDR6, primaryGw6, err := labPrimaryV6Subnet(eff.Network)
+	if err != nil {
+		return nil, err
+	}
+	if primaryCIDR6 != "" {
+		_, subnet6Exists, serr := findSdnSubnet(*subnets, primaryCIDR6)
+		if serr != nil {
+			return nil, fmt.Errorf("decode subnet list for vnet %q: %w", eff.Network.VnetID, serr)
+		}
+		plan.steps = append(plan.steps, createStep{
+			desc:       fmt.Sprintf("sdn subnet %q (ipv6) on vnet %q", primaryCIDR6, eff.Network.VnetID),
+			skip:       subnet6Exists,
+			skipReason: "already exists",
+			apply: func(ctx context.Context) error {
+				return ensureLabSdnSubnetOn(ctx, ac, eff.Network.VnetID, primaryCIDR6, primaryGw6)
+			},
+		})
+	}
+
 	// 3b. Additional outer SDN vnets/subnets (network.vnets[], multi-AZ
 	// topology plan §1/§2): one step per entry, ensured via net.go's
 	// vnet-agnostic ensureLabSdnVnetSubnet — the same helper `pmx lab net
@@ -1166,12 +1196,22 @@ func buildCreatePlan(
 	// primary vnet's existence check (above) is reused here rather than
 	// re-listing per entry; only the subnet lookup needs its own call, one
 	// per vnet that declares a CIDR.
-	for _, v := range eff.Network.Vnets {
+	for i, v := range eff.Network.Vnets {
 		_, extraVnetExists, verr := findSdnVnet(*vnets, v.ID)
 		if verr != nil {
 			return nil, fmt.Errorf("decode SDN vnet list: %w", verr)
 		}
+		// The vnet's IPv6 subnet (carved /64 or cidr6 override; "" when the
+		// lab opted out or the vnet is pure L2) rides the same
+		// ensureLabSdnVnetSubnet call and the same existence probing as the
+		// IPv4 one, so the step is only skipped when everything the apply
+		// would ensure — vnet, v4 subnet, AND v6 subnet — already exists.
+		cidr6, gw6, verr := labVnetV6Subnet(eff.Network, i)
+		if verr != nil {
+			return nil, verr
+		}
 		extraSubnetExists := v.CIDR == ""
+		extraSubnet6Exists := cidr6 == ""
 		if v.CIDR != "" {
 			extraSubnets, serr := ac.Cluster.ListSdnVnetsSubnets(ctx, v.ID, &cluster.ListSdnVnetsSubnetsParams{})
 			if serr != nil {
@@ -1181,18 +1221,27 @@ func buildCreatePlan(
 			if serr != nil {
 				return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 			}
+			if cidr6 != "" {
+				_, extraSubnet6Exists, serr = findSdnSubnet(*extraSubnets, cidr6)
+				if serr != nil {
+					return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
+				}
+			}
 		}
 
 		desc := fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", v.ID, zoneName, v.Tag)
-		if v.CIDR != "" {
+		switch {
+		case v.CIDR != "" && cidr6 != "":
+			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q", v.ID, zoneName, v.Tag, v.CIDR, cidr6)
+		case v.CIDR != "":
 			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnet %q", v.ID, zoneName, v.Tag, v.CIDR)
 		}
 		plan.steps = append(plan.steps, createStep{
 			desc:       desc,
-			skip:       extraVnetExists && extraSubnetExists,
+			skip:       extraVnetExists && extraSubnetExists && extraSubnet6Exists,
 			skipReason: "already exists",
 			apply: func(ctx context.Context) error {
-				return ensureLabSdnVnetSubnet(ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, tagAllowed)
+				return ensureLabSdnVnetSubnet(ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, cidr6, gw6, tagAllowed)
 			},
 		})
 	}

@@ -788,11 +788,15 @@ LINK ID 0
 // integration test in this file, plus the capacity-gate storage-status
 // route. existingMembers/existingQemus describe the pool/node-qemu-list
 // members already present (so buildCreatePlan skips creating them).
-func scaleGrowFixture(f *testhelper.FakePVE, lab *config.Lab, existingMembers []map[string]any, existingQemus []map[string]any) {
+func scaleGrowFixture(t *testing.T, f *testhelper.FakePVE, lab *config.Lab, existingMembers []map[string]any, existingQemus []map[string]any) {
+	t.Helper()
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
-		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+		[]any{
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			createPrimaryV6SubnetRow(t, lab.Network),
+		})
 	// A realistic fleet-shaped zfspool storage: nested under the base pool
 	// ("tank/labs/wayne"), not rooted at it (field finding F4: real hosts
 	// register only per-lab storages). This backs the storage-provisioning
@@ -826,7 +830,7 @@ func TestScale_Grow_RemovesStaleQdeviceBeforeJoin_2PlusQTo3(t *testing.T) {
 		map[string]any{"vmid": 9201, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-1"},
 		map[string]any{"vmid": 9299, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-q"},
 	)
-	scaleGrowFixture(f, lab,
+	scaleGrowFixture(t, f, lab,
 		[]map[string]any{
 			{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"},
 			{"id": "qemu/9201", "node": "node1", "type": "qemu", "vmid": 9201, "name": "lab-wayne-1"},
@@ -928,7 +932,7 @@ func TestScale_Grow_ReRunJoinsAlreadyExistingShells(t *testing.T) {
 	)
 	// All three VM shells already exist -> buildCreatePlan must skip
 	// creating any of them (nextid/qemu-create forbidden).
-	scaleGrowFixture(f, lab,
+	scaleGrowFixture(t, f, lab,
 		[]map[string]any{
 			{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"},
 			{"id": "qemu/9201", "node": "node1", "type": "qemu", "vmid": 9201, "name": "lab-wayne-1"},
@@ -1011,7 +1015,7 @@ func TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell(t *testing.T) {
 		map[string]any{"vmid": 9201, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-1"},
 		map[string]any{"vmid": 9299, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-q"},
 	)
-	scaleGrowFixture(f, lab,
+	scaleGrowFixture(t, f, lab,
 		[]map[string]any{
 			{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"},
 			{"id": "qemu/9201", "node": "node1", "type": "qemu", "vmid": 9201, "name": "lab-wayne-1"},
@@ -1039,19 +1043,25 @@ func TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell(t *testing.T) {
 		exec.FakeResponse{},
 		// 3: qdeviceAdd's own cluster-state probe.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
-		// 4-6: package probes (already installed on the shell + both nodes).
+		// 4: qnetd package probe on the shell (already installed).
+		exec.FakeResponse{},
+		// 5-7: IPv6 ensure on the QDevice shell: probe absent, iface
+		// resolve, apply.
+		exec.FakeResponse{Stdout: ""},
+		exec.FakeResponse{Stdout: "2: ens18    inet 10.10.1.15/16 scope global ens18"},
+		exec.FakeResponse{},
+		// 8-9: package probes on both nodes (already installed).
 		exec.FakeResponse{},
 		exec.FakeResponse{},
+		// 10: pvecm qdevice setup.
 		exec.FakeResponse{},
-		// 7: pvecm qdevice setup.
-		exec.FakeResponse{},
-		// 8-10: sdn.
+		// 11-13: sdn.
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{}, exec.FakeResponse{},
-		// 11-16: nfs.
+		// 14-19: nfs.
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
 		exec.FakeResponse{ExitCode: 1}, exec.FakeResponse{},
-		// 17-22: final validation, 2 nodes.
+		// 20-25: final validation, 2 nodes.
 		exec.FakeResponse{Stdout: scaleClusteredNoQdevice2of2},
 		exec.FakeResponse{Stdout: sampleCorosyncCfgtoolAllUp},
 		exec.FakeResponse{Stdout: samplePvesmStatusAllActive},
@@ -1065,8 +1075,8 @@ func TestScale_QdeviceAdd_ReRunWiresAlreadyExistingShell(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "pvecm qdevice setup")
 
-	require.Len(t, fake.Calls, 23)
-	assert.Contains(t, fake.Calls[7].Args, "pvecm qdevice setup 10.10.1.15")
+	require.Len(t, fake.Calls, 26)
+	assert.Contains(t, fake.Calls[10].Args, "pvecm qdevice setup 10.10.1.15")
 }
 
 // --- shrink integration (2 -> 1) --------------------------------------------
@@ -1292,7 +1302,7 @@ func TestScale_DeferredGrow_ExitsZeroDespiteIncompleteFinalValidation(t *testing
 	handleClusterResources(f,
 		map[string]any{"vmid": 9200, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-0"},
 	)
-	scaleGrowFixture(f, lab,
+	scaleGrowFixture(t, f, lab,
 		[]map[string]any{{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"}},
 		[]map[string]any{{"vmid": 9200, "name": "lab-wayne-0"}},
 	)
@@ -1384,7 +1394,7 @@ func TestScale_Grow_RefreshesContextFingerprintAfterClusterInit(t *testing.T) {
 	handleClusterResources(f,
 		map[string]any{"vmid": 9200, "node": "node1", "pool": "lab-wayne", "status": "running", "type": "qemu", "name": "lab-wayne-0"},
 	)
-	scaleGrowFixture(f, lab,
+	scaleGrowFixture(t, f, lab,
 		[]map[string]any{{"id": "qemu/9200", "node": "node1", "type": "qemu", "vmid": 9200, "name": "lab-wayne-0"}},
 		[]map[string]any{{"vmid": 9200, "name": "lab-wayne-0"}},
 	)
@@ -1467,18 +1477,23 @@ func scaleMultiNICLab(nodes int) *config.Lab {
 
 // scaleGrowMultiNICFixture registers the buildCreatePlan resource-discovery
 // routes for a scaleMultiNICLab-shaped grow: the primary vnet ("pvecpi")
-// already exists (so its zone/vnet/subnet steps skip, isolating this test to
-// the grow-specific delta), while both extra network.vnets[] entries
+// already exists with both its subnets (IPv4 and the dual-stack IPv6 block,
+// so its zone/vnet/subnet steps all skip, isolating this test to the
+// grow-specific delta), while both extra network.vnets[] entries
 // ("pvecpist", "pvecpiwk") do NOT exist yet, so buildCreatePlan's own extra-
 // vnet steps actually create them — this is what proves the "and SDN vnet
 // steps" half of P1-T6's acceptance, not just the per-node NIC map half.
 // existingMembers/existingQemus describe the pool/node-qemu-list members
 // already present, so buildCreatePlan skips creating their VM shells.
-func scaleGrowMultiNICFixture(f *testhelper.FakePVE, poolID string, existingMembers, existingQemus []map[string]any) {
+func scaleGrowMultiNICFixture(t *testing.T, f *testhelper.FakePVE, lab *config.Lab, poolID string, existingMembers, existingQemus []map[string]any) {
+	t.Helper()
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "pvecpi"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
-		[]any{map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"}})
+		[]any{
+			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"},
+			createPrimaryV6SubnetRow(t, lab.Network),
+		})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets", []any{})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{
 		"storage": "tank-" + poolID, "type": "zfspool", "pool": "tank/labs/wayne",
@@ -1543,7 +1558,7 @@ func TestScaleGrow_MultiNIC(t *testing.T) {
 		map[string]any{"vmid": 9501, "node": "node1", "pool": poolID, "status": "running", "type": "qemu", "name": "lab-wayne-1"},
 		map[string]any{"vmid": 9599, "node": "node1", "pool": poolID, "status": "running", "type": "qemu", "name": "lab-wayne-q"},
 	)
-	scaleGrowMultiNICFixture(f, poolID,
+	scaleGrowMultiNICFixture(t, f, lab, poolID,
 		[]map[string]any{
 			{"id": "qemu/9500", "node": "node1", "type": "qemu", "vmid": 9500, "name": "lab-wayne-0"},
 			{"id": "qemu/9501", "node": "node1", "type": "qemu", "vmid": 9501, "name": "lab-wayne-1"},
@@ -1634,8 +1649,9 @@ func TestScaleGrow_MultiNIC(t *testing.T) {
 	assert.Contains(t, out, "scale requested")
 	require.Len(t, fake.Calls, 35)
 
-	// --- SDN vnet steps: both extra vnets created, storage vnet's subnet
-	// created, workload vnet's subnet never even attempted (empty CIDR). ---
+	// --- SDN vnet steps: both extra vnets created, storage vnet's subnets
+	// (IPv4 + IPv6) created, workload vnet's subnets never even attempted
+	// (empty CIDR). ---
 	require.Len(t, vnetCreateRec, 2, "both extra network.vnets[] entries (pvecpist, pvecpiwk) must be created")
 	byVnet := make(map[string]createRecordedRequest, len(vnetCreateRec))
 	for _, rec := range vnetCreateRec {
@@ -1645,9 +1661,15 @@ func TestScaleGrow_MultiNIC(t *testing.T) {
 	assert.Equal(t, "5011", byVnet["pvecpist"].body["tag"])
 	assert.Equal(t, "labs", byVnet["pvecpiwk"].body["zone"])
 	assert.Equal(t, "5012", byVnet["pvecpiwk"].body["tag"])
-	require.Len(t, subnetCreateRec, 1, "only the storage vnet (CIDR set) gets a subnet ensure; the workload vnet (no CIDR) never does")
+	require.Len(t, subnetCreateRec, 2,
+		"only the storage vnet (CIDR set) gets subnet ensures — its IPv4 subnet plus the dual-stack carved "+
+			"IPv6 /64; the workload vnet (no CIDR) never gets either")
 	assert.Equal(t, "10.254.32.0/24", subnetCreateRec[0].body["subnet"])
 	assert.Equal(t, "10.254.32.1", subnetCreateRec[0].body["gateway"])
+	stCIDR6, stGw6, err := labVnetV6Subnet(lab.Network, 0)
+	require.NoError(t, err)
+	assert.Equal(t, stCIDR6, subnetCreateRec[1].body["subnet"], "the storage vnet's carved IPv6 /64 rides the same ensure")
+	assert.Equal(t, stGw6, subnetCreateRec[1].body["gateway"])
 
 	// --- Node 2's Net map: net0 (primary) plus all 5 configured
 	// network.host_nics[] entries (net1..net5), each resolved to its target

@@ -199,12 +199,15 @@ func TestHostnetApply_WrongContext_Refuses(t *testing.T) {
 	assert.Empty(t, fake.Calls, "wrong-context refusal must issue zero ssh calls")
 }
 
-// TestHostnetApply_NoBondsConfigured_NoOp covers the zero-value shape: a lab
-// with no network.nested_network.bonds is a no-op with a notice, issuing no
-// API call at all (not even under the correct context).
+// TestHostnetApply_NoBondsConfigured_NoOp covers the nothing-at-all shape:
+// a lab with no network.nested_network.bonds AND network.ipv6: false has no
+// phase left to run, so hostnet apply is a no-op with a notice, issuing no
+// API call at all (not even under the correct context). With IPv6 at its
+// default (enabled), a bond-less lab is NOT a no-op — the IPv6 phase still
+// reconciles vmbr0 (hostnet_ipv6_test.go).
 func TestHostnetApply_NoBondsConfigured_NoOp(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	lab := cleanLab("wayne")
+	lab := hostnetIPv6Off(cleanLab("wayne"))
 
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	fake := exec.Fake()
@@ -320,7 +323,7 @@ func TestHostnetApply_BondPresentBridgeMissing_CreatesBridgeOnly(t *testing.T) {
 // create/update call and no apply call must be issued at all.
 func TestHostnetApply_FullyConverged_NoOp(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	lab := hostnetTestLab("wayne")
+	lab := hostnetIPv6Off(hostnetTestLab("wayne")) // bond/bridge assertions only; IPv6 phase covered in hostnet_ipv6_test.go
 
 	f.HandleJSON("GET /api2/json/nodes/lab-wayne-0/network", []map[string]any{
 		// autostart already 1 on both (az2-converged parity): a pure no-op
@@ -777,7 +780,7 @@ func TestHostnetSortNICs_SkipsUnresolvableDevicePath(t *testing.T) {
 func TestHostnetPreserveUntouchedBridgeFields(t *testing.T) {
 	t.Run("copies every populated field onto a bare params", func(t *testing.T) {
 		cur := hostnetIfaceState{
-			Cidr: "10.254.0.10/24", Address: "10.254.0.10/24", Netmask: "24",
+			Cidr: "10.254.0.10/24", Address: "10.254.0.10", Netmask: "24",
 			Gateway: "10.254.0.1", Autostart: 1, BridgeVlanAware: 1,
 		}
 		params := &nodes.UpdateNetwork2Params{Type: "bridge"}
@@ -785,16 +788,34 @@ func TestHostnetPreserveUntouchedBridgeFields(t *testing.T) {
 
 		require.NotNil(t, params.Cidr)
 		assert.Equal(t, "10.254.0.10/24", *params.Cidr)
-		require.NotNil(t, params.Address)
-		assert.Equal(t, "10.254.0.10/24", *params.Address)
-		require.NotNil(t, params.Netmask)
-		assert.Equal(t, "24", *params.Netmask)
+		assert.Nil(t, params.Address, "addressing must be carried as cidr only — PVE rejects address alongside cidr")
+		assert.Nil(t, params.Netmask, "addressing must be carried as cidr only — PVE rejects netmask alongside cidr")
 		require.NotNil(t, params.Gateway)
 		assert.Equal(t, "10.254.0.1", *params.Gateway)
 		require.NotNil(t, params.Autostart)
 		assert.True(t, *params.Autostart)
 		require.NotNil(t, params.BridgeVlanAware)
 		assert.True(t, *params.BridgeVlanAware)
+	})
+
+	t.Run("joins address+netmask into cidr form when the listing has no cidr", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, netmask, want string
+		}{
+			{"prefix-length netmask", "24", "10.254.0.10/24"},
+			{"dotted-quad netmask", "255.255.255.0", "10.254.0.10/24"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				cur := hostnetIfaceState{Address: "10.254.0.10", Netmask: tc.netmask}
+				params := &nodes.UpdateNetwork2Params{Type: "bridge"}
+				hostnetPreserveUntouchedBridgeFields(cur, params)
+
+				require.NotNil(t, params.Cidr)
+				assert.Equal(t, tc.want, *params.Cidr)
+				assert.Nil(t, params.Address)
+				assert.Nil(t, params.Netmask)
+			})
+		}
 	})
 
 	t.Run("never overwrites a field the caller already set an opinion on", func(t *testing.T) {
@@ -1034,7 +1055,7 @@ func TestHostnetRestageBridgeIfSlaveConflict(t *testing.T) {
 // both).
 func TestHostnetApply_RetrofitCurrentAz1State(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	lab := hostnetMultiBondTestLab("wayne")
+	lab := hostnetIPv6Off(hostnetMultiBondTestLab("wayne")) // bond/bridge assertions only; IPv6 phase covered in hostnet_ipv6_test.go
 
 	var order []string
 	var createRec, vmbr0UpdateRec, applyRec []hostnetRecordedRequest
@@ -1071,7 +1092,10 @@ func TestHostnetApply_RetrofitCurrentAz1State(t *testing.T) {
 	assert.Equal(t, "bond0", vmbr0UpdateRec[1].body["bridge_ports"], "2nd PUT points vmbr0 at bond0 once it has a staged representation")
 	for i, req := range vmbr0UpdateRec {
 		assert.Equal(t, "10.254.0.10/24", req.body["cidr"], "PUT #%d must carry vmbr0's existing cidr forward unchanged", i+1)
-		assert.Equal(t, "10.254.0.10/24", req.body["address"], "PUT #%d must carry vmbr0's existing address forward unchanged", i+1)
+		assert.NotContains(t, req.body, "address",
+			"PUT #%d must carry addressing as cidr only — address alongside cidr is rejected by PVE", i+1)
+		assert.NotContains(t, req.body, "netmask",
+			"PUT #%d must carry addressing as cidr only — netmask alongside cidr is rejected by PVE", i+1)
 		assert.Equal(t, "10.254.0.1", req.body["gateway"], "PUT #%d must carry vmbr0's existing gateway forward unchanged", i+1)
 	}
 
@@ -1158,7 +1182,7 @@ func TestHostnetApply_RetrofitPartiallyConverged(t *testing.T) {
 // scale.
 func TestHostnetApply_RetrofitFullyConverged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	lab := hostnetMultiBondTestLab("wayne")
+	lab := hostnetIPv6Off(hostnetMultiBondTestLab("wayne")) // bond/bridge assertions only; IPv6 phase covered in hostnet_ipv6_test.go
 
 	f.HandleJSON("GET /api2/json/nodes/lab-wayne-0/network", []map[string]any{
 		// autostart already 1 everywhere — az2-converged parity, and the
@@ -1240,7 +1264,7 @@ func TestHostnetApply_RetrofitFreshAz2Shape(t *testing.T) {
 // never-touched empty bridge.
 func TestHostnetApply_RetrofitStagedLeftoverConvergesCorrectly(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	lab := hostnetTestLab("wayne")
+	lab := hostnetIPv6Off(hostnetTestLab("wayne")) // bond/bridge assertions only; IPv6 phase covered in hostnet_ipv6_test.go
 
 	var order []string
 	var createRec, vmbr0UpdateRec, applyRec []hostnetRecordedRequest
@@ -1296,7 +1320,7 @@ func TestHostnetApply_RetrofitStagedLeftoverConvergesCorrectly(t *testing.T) {
 // else has drifted.
 func TestHostnetApply_RetrofitAutostartMissingEverywhere(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	lab := hostnetMultiBondTestLab("wayne")
+	lab := hostnetIPv6Off(hostnetMultiBondTestLab("wayne")) // bond/bridge assertions only; IPv6 phase covered in hostnet_ipv6_test.go
 
 	var order []string
 	var updateRec, applyRec []hostnetRecordedRequest

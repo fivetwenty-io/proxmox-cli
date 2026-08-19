@@ -161,12 +161,22 @@ func TestNetApplyFreshCreatesZoneVnetSubnet(t *testing.T) {
 	assert.Empty(t, vc.body["tag"], "a simple-zone vnet-create must omit tag; PVE rejects it")
 	assert.Equal(t, "lab-wayne", vc.body["alias"])
 
-	require.Len(t, subnetRec, 2, "expected one subnet list + one subnet create")
+	// Dual-stack: the IPv4 ensure (list + create) is followed by the IPv6
+	// ensure (its own list + create) for the lab's derived ULA block.
+	require.Len(t, subnetRec, 4, "expected an IPv4 and an IPv6 subnet list/create pair")
 	sc := subnetRec[1]
 	assert.Equal(t, http.MethodPost, sc.method)
 	assert.Equal(t, "10.10.1.0/24", sc.body["subnet"])
 	assert.Equal(t, "subnet", sc.body["type"])
 	assert.Equal(t, "10.10.1.1", sc.body["gateway"])
+
+	cidr6, gw6, err := labPrimaryV6Subnet(lab.Network)
+	require.NoError(t, err)
+	sc6 := subnetRec[3]
+	assert.Equal(t, http.MethodPost, sc6.method)
+	assert.Equal(t, cidr6, sc6.body["subnet"], "the IPv6 subnet must be the lab's whole derived ULA block")
+	assert.Equal(t, "subnet", sc6.body["type"])
+	assert.Equal(t, gw6, sc6.body["gateway"], "the IPv6 gateway must be the management /64's ::1")
 
 	require.Len(t, dryRunRec, 1)
 	require.Len(t, applyRec, 1)
@@ -183,10 +193,10 @@ func TestNetApplyFreshCreatesZoneVnetSubnet(t *testing.T) {
 }
 
 // TestNetApplyIdempotentSkipsCreatesAndSkipsApplyWhenNoPendingChanges covers
-// a lab whose zone, vnet, and subnet already match its config exactly: no
-// create or update call is issued for any of the three, the preview still
-// runs, and — since the preview reports an empty changeset — UpdateSdn is
-// skipped as a no-op.
+// a lab whose zone, vnet, and subnets (the IPv4 one and its dual-stack IPv6
+// companion) already match its config exactly: no create or update call is
+// issued for any of them, the preview still runs, and — since the preview
+// reports an empty changeset — UpdateSdn is skipped as a no-op.
 func TestNetApplyIdempotentSkipsCreatesAndSkipsApplyWhenNoPendingChanges(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := netTestLab("wayne")
@@ -207,6 +217,7 @@ func TestNetApplyIdempotentSkipsCreatesAndSkipsApplyWhenNoPendingChanges(t *test
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
 		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+		createPrimaryV6SubnetRow(t, lab.Network),
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-create",
 		"POST /api2/json/cluster/sdn/vnets/labwayne/subnets", map[string]any{}, 200)
@@ -226,7 +237,7 @@ func TestNetApplyIdempotentSkipsCreatesAndSkipsApplyWhenNoPendingChanges(t *test
 
 	require.Len(t, zoneRec, 1, "only the list call — no create or update")
 	require.Len(t, vnetRec, 1, "only the list call — no create or update")
-	require.Len(t, subnetRec, 1, "only the list call — no create or update")
+	require.Len(t, subnetRec, 2, "only the IPv4 and IPv6 ensures' list calls — no create or update")
 	require.Len(t, dryRunRec, 1, "preview must still run")
 	require.Empty(t, applyRec, "UpdateSdn must not run when the preview reports no pending changes")
 }
@@ -288,6 +299,7 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
 		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+		createPrimaryV6SubnetRow(t, lab.Network),
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-update",
 		"PUT /api2/json/cluster/sdn/vnets/labwayne/subnets/labwayne-10.10.1.0-24", map[string]any{}, 200)
@@ -376,6 +388,7 @@ func TestNetApplySimpleZoneTagDriftNeverUpdates(t *testing.T) {
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
 		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+		createPrimaryV6SubnetRow(t, lab.Network),
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-update",
 		"PUT /api2/json/cluster/sdn/vnets/labwayne/subnets/labwayne-10.10.1.0-24", map[string]any{}, 200)
@@ -424,12 +437,13 @@ func TestNetApplyPeppiRefusesBeforeAnySdnCall(t *testing.T) {
 
 // TestNetApplyMultiVnetsCreatesExtraVnetsAndSkipsSubnetWhenCIDREmpty covers a
 // lab whose network declares two extra Network.Vnets entries beyond its
-// primary vnet: a storage vnet with a CIDR (gets its own subnet ensured,
+// primary vnet: a storage vnet with a CIDR (gets its own subnets ensured,
 // same as the primary) and a workload vnet with no CIDR (a pure L2
 // passthrough vnet — no subnet call at all). net apply must issue one
-// CreateSdnVnets + one CreateSdnVnetsSubnets for the primary vnet, the same
-// pair for the storage vnet, and exactly one CreateSdnVnets (no subnet call)
-// for the workload vnet. netTestLab's zone is the config default ("simple"),
+// CreateSdnVnets + two CreateSdnVnetsSubnets (the IPv4 subnet and its
+// dual-stack IPv6 companion) for the primary vnet, the same triple for the
+// storage vnet, and exactly one CreateSdnVnets (no subnet call) for the
+// workload vnet. netTestLab's zone is the config default ("simple"),
 // so none of the three vnet-create bodies may carry a "tag" field despite
 // each entry's nonzero configured tag.
 func TestNetApplyMultiVnetsCreatesExtraVnetsAndSkipsSubnetWhenCIDREmpty(t *testing.T) {
@@ -506,12 +520,22 @@ func TestNetApplyMultiVnetsCreatesExtraVnetsAndSkipsSubnetWhenCIDREmpty(t *testi
 	assert.Empty(t, byVnet["vnwk"].body["tag"], "a simple-zone vnet-create must omit tag")
 	assert.Equal(t, "lab-wayne-workload", byVnet["vnwk"].body["alias"])
 
-	require.Len(t, primarySubnetRec, 2, "primary vnet gets one subnet list + one subnet create")
+	// Each subnet-carrying vnet is ensured dual-stack: the IPv4 list/create
+	// pair, then the IPv6 ensure's own list/create pair.
+	require.Len(t, primarySubnetRec, 4, "primary vnet gets an IPv4 and an IPv6 subnet list/create pair")
 	assert.Equal(t, "10.10.1.0/24", primarySubnetRec[1].body["subnet"])
+	primaryCIDR6, primaryGw6, err := labPrimaryV6Subnet(lab.Network)
+	require.NoError(t, err)
+	assert.Equal(t, primaryCIDR6, primarySubnetRec[3].body["subnet"])
+	assert.Equal(t, primaryGw6, primarySubnetRec[3].body["gateway"])
 
-	require.Len(t, storageSubnetRec, 2, "storage vnet gets one subnet list + one subnet create")
+	require.Len(t, storageSubnetRec, 4, "storage vnet gets an IPv4 and an IPv6 subnet list/create pair")
 	assert.Equal(t, "10.10.2.0/24", storageSubnetRec[1].body["subnet"])
 	assert.Equal(t, "10.10.2.1", storageSubnetRec[1].body["gateway"])
+	stCIDR6, stGw6, err := labVnetV6Subnet(lab.Network, 0)
+	require.NoError(t, err)
+	assert.Equal(t, stCIDR6, storageSubnetRec[3].body["subnet"], "the storage vnet's carved IPv6 /64")
+	assert.Equal(t, stGw6, storageSubnetRec[3].body["gateway"])
 
 	require.Len(t, dryRunRec, 1)
 	require.Len(t, applyRec, 1)

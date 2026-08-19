@@ -279,6 +279,10 @@ func newSdnVlanApplyCmd() *cobra.Command {
 			"(network.nested_network.vlan_zone) exists on the bridge it names, then ensure " +
 			"every one of its configured vnets and subnets exists and matches, then commit via " +
 			"`pvesh set /cluster/sdn` iff anything changed.\n\n" +
+			"Unless `network.ipv6: false`, each vnet also gets an IPv6 /64 carved from the lab's " +
+			"IPv6 block (network.cidr6 when set, else a stable ULA /48 derived from " +
+			"network.cidr), gatewayed at its ::1 — dual-stack client VLANs with zero extra " +
+			"config.\n\n" +
 			"Each piece is independently idempotent — probe before create or update, mirroring " +
 			"`pmx lab sdn apply`'s zone-reconciliation pattern.\n\n" +
 			"Runs over ssh against node 0, and must run after the nested cluster's bonds and " +
@@ -332,19 +336,28 @@ func runSdnVlanApply(cmd *cobra.Command, name string, dryRun bool) error {
 			{fmt.Sprintf("ensure sdn zone %q (type %s, bridge %s) on node 0",
 				vz.ZoneName, labInnerVlanZoneType, vz.Bridge), "would run"},
 		}
-		for _, v := range vz.Vnets {
+		for i, v := range vz.Vnets {
 			rows = append(rows, []string{
 				fmt.Sprintf("ensure sdn vnet %q (zone %s, tag %d) on node 0", v.ID, vz.ZoneName, v.Tag), "would run"})
-			if v.CIDR != "" {
+			if v.CIDR == "" {
+				continue
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("ensure sdn subnet %q on vnet %q on node 0", v.CIDR, v.ID), "would run"})
+			if lab.Network.EffectiveIPv6() {
+				cidr6, _, derr := labInnerVnetV6Subnet(lab.Network, i)
+				if derr != nil {
+					return fmt.Errorf("derive IPv6 subnet for inner vnet %q: %w", v.ID, derr)
+				}
 				rows = append(rows, []string{
-					fmt.Sprintf("ensure sdn subnet %q on vnet %q on node 0", v.CIDR, v.ID), "would run"})
+					fmt.Sprintf("ensure sdn subnet %q on vnet %q on node 0", cidr6, v.ID), "would run"})
 			}
 		}
 		rows = append(rows, []string{"commit pending sdn changes on node 0", "would run (if anything changed)"})
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Headers: headers, Rows: rows}, deps.Format)
 	}
 
-	rows, err := sdnEnsureVlanZoneApplied(deps, name, node0IP, vz)
+	rows, err := sdnEnsureVlanZoneApplied(deps, name, node0IP, lab.Network, vz)
 	if err != nil {
 		return err
 	}
@@ -383,13 +396,17 @@ type sdnInnerVlanSubnetState struct {
 }
 
 // sdnEnsureVlanZoneApplied performs `sdn vlan apply`'s actual work — ensure
-// the zone, then every configured vnet and its subnet, then commit iff
+// the zone, then every configured vnet and its subnet(s), then commit iff
 // anything changed — without any cobra/rendering coupling, mirroring
 // sdnEnsureZoneApplied's shape above. vz must be non-nil; callers (only
 // runSdnVlanApply today) must have already handled the nil/no-op case.
+// Unless n.EffectiveIPv6() is off, each vnet also gets its carved IPv6 /64
+// (labInnerVnetCIDR6, gatewayed at ::1) ensured alongside its IPv4 subnet.
 // Returns one STEP/STATUS row per zone/vnet/subnet ensured, plus a final
 // commit row.
-func sdnEnsureVlanZoneApplied(deps *cli.Deps, name, node0IP string, vz *config.LabNestedVlanZone) ([][]string, error) {
+func sdnEnsureVlanZoneApplied(
+	deps *cli.Deps, name, node0IP string, n config.LabNetwork, vz *config.LabNestedVlanZone,
+) ([][]string, error) {
 	var rows [][]string
 	changed := false
 
@@ -400,7 +417,7 @@ func sdnEnsureVlanZoneApplied(deps *cli.Deps, name, node0IP string, vz *config.L
 	rows = append(rows, zoneRow)
 	changed = changed || zoneChanged
 
-	for _, v := range vz.Vnets {
+	for i, v := range vz.Vnets {
 		vnetChanged, vnetRow, verr := sdnEnsureVlanVnet(deps, name, node0IP, vz.ZoneName, v)
 		if verr != nil {
 			return nil, verr
@@ -414,12 +431,26 @@ func sdnEnsureVlanZoneApplied(deps *cli.Deps, name, node0IP string, vz *config.L
 		if v.CIDR == "" {
 			continue
 		}
-		subnetChanged, subnetRow, serr := sdnEnsureVlanSubnet(deps, name, node0IP, v)
+		subnetChanged, subnetRow, serr := sdnEnsureVlanSubnet(deps, name, node0IP, v.ID, v.CIDR, v.Gateway)
 		if serr != nil {
 			return nil, serr
 		}
 		rows = append(rows, subnetRow)
 		changed = changed || subnetChanged
+
+		if !n.EffectiveIPv6() {
+			continue
+		}
+		cidr6, gw6, derr := labInnerVnetV6Subnet(n, i)
+		if derr != nil {
+			return nil, fmt.Errorf("lab %q: derive IPv6 subnet for inner vnet %q: %w", name, v.ID, derr)
+		}
+		subnet6Changed, subnet6Row, s6err := sdnEnsureVlanSubnet(deps, name, node0IP, v.ID, cidr6, gw6)
+		if s6err != nil {
+			return nil, s6err
+		}
+		rows = append(rows, subnet6Row)
+		changed = changed || subnet6Changed
 	}
 
 	commitCmd := "pvesh set /cluster/sdn"
@@ -521,7 +552,7 @@ func sdnEnsureVlanVnet(deps *cli.Deps, name, node0IP, zoneName string, v config.
 	}
 }
 
-// sdnEnsureVlanSubnet ensures v's CIDR exists as a subnet of vnet v.ID,
+// sdnEnsureVlanSubnet ensures cidr exists as a subnet of vnet vnetID,
 // matched by CIDR against the vnet's subnet list — mirroring net.go's
 // findSdnSubnet convention (matched by CIDR, not a guessed subnet
 // identifier, since the lab config only ever states the CIDR) — rather
@@ -529,49 +560,50 @@ func sdnEnsureVlanVnet(deps *cli.Deps, name, node0IP, zoneName string, v config.
 // steps above probe by their own (config-known) IDs. A non-transport-
 // failure error listing subnets is treated as "no subnets yet" (the vnet
 // was just created moments earlier and may not yet have any), falling
-// through to create.
-func sdnEnsureVlanSubnet(deps *cli.Deps, name, node0IP string, v config.LabNestedVlanVnet) (bool, []string, error) {
-	stepLabel := fmt.Sprintf("vlan sdn subnet %q on vnet %q", v.CIDR, v.ID)
+// through to create. Serves both address families: the IPv4 call passes
+// the vnet's configured CIDR/gateway, the IPv6 call its carved /64 and ::1.
+func sdnEnsureVlanSubnet(deps *cli.Deps, name, node0IP, vnetID, cidr, gateway string) (bool, []string, error) {
+	stepLabel := fmt.Sprintf("vlan sdn subnet %q on vnet %q", cidr, vnetID)
 
 	list, lerr := runGuestSSH(deps, node0IP, fmt.Sprintf(
-		"pvesh get /cluster/sdn/vnets/%s/subnets --output-format json", v.ID))
+		"pvesh get /cluster/sdn/vnets/%s/subnets --output-format json", vnetID))
 	if lerr != nil && guestCommandTransportFailed(lerr) {
-		return false, nil, fmt.Errorf("lab %q: list subnets on inner vlan sdn vnet %q on node 0 (%s): %w", name, v.ID, node0IP, lerr)
+		return false, nil, fmt.Errorf("lab %q: list subnets on inner vlan sdn vnet %q on node 0 (%s): %w", name, vnetID, node0IP, lerr)
 	}
 
 	var existing []sdnInnerVlanSubnetState
 	if lerr == nil && list.Stdout != "" {
 		if uerr := json.Unmarshal([]byte(list.Stdout), &existing); uerr != nil {
-			return false, nil, fmt.Errorf("lab %q: decode inner vlan sdn subnets on vnet %q on node 0: %w", name, v.ID, uerr)
+			return false, nil, fmt.Errorf("lab %q: decode inner vlan sdn subnets on vnet %q on node 0: %w", name, vnetID, uerr)
 		}
 	}
 
 	var found *sdnInnerVlanSubnetState
 	for i := range existing {
-		if existing[i].Cidr == v.CIDR {
+		if existing[i].Cidr == cidr {
 			found = &existing[i]
 			break
 		}
 	}
 
 	if found == nil {
-		createCmd := fmt.Sprintf("pvesh create /cluster/sdn/vnets/%s/subnets --subnet %s --type subnet", v.ID, v.CIDR)
-		if v.Gateway != "" {
-			createCmd += fmt.Sprintf(" --gateway %s", v.Gateway)
+		createCmd := fmt.Sprintf("pvesh create /cluster/sdn/vnets/%s/subnets --subnet %s --type subnet", vnetID, cidr)
+		if gateway != "" {
+			createCmd += fmt.Sprintf(" --gateway %s", gateway)
 		}
 		if _, cerr := runGuestSSH(deps, node0IP, createCmd); cerr != nil {
-			return false, nil, fmt.Errorf("lab %q: create subnet %q on inner vlan sdn vnet %q on node 0: %w", name, v.CIDR, v.ID, cerr)
+			return false, nil, fmt.Errorf("lab %q: create subnet %q on inner vlan sdn vnet %q on node 0: %w", name, cidr, vnetID, cerr)
 		}
-		return true, []string{stepLabel, fmt.Sprintf("sdn subnet %q created on node 0", v.CIDR)}, nil
+		return true, []string{stepLabel, fmt.Sprintf("sdn subnet %q created on node 0", cidr)}, nil
 	}
 
-	if v.Gateway == "" || found.Gateway == v.Gateway {
-		return false, []string{stepLabel, fmt.Sprintf("sdn subnet %q already matches on node 0", v.CIDR)}, nil
+	if gateway == "" || found.Gateway == gateway {
+		return false, []string{stepLabel, fmt.Sprintf("sdn subnet %q already matches on node 0", cidr)}, nil
 	}
 
-	updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/vnets/%s/subnets/%s --gateway %s", v.ID, found.Subnet, v.Gateway)
+	updateCmd := fmt.Sprintf("pvesh set /cluster/sdn/vnets/%s/subnets/%s --gateway %s", vnetID, found.Subnet, gateway)
 	if _, uerr := runGuestSSH(deps, node0IP, updateCmd); uerr != nil {
-		return false, nil, fmt.Errorf("lab %q: update subnet %q gateway on inner vlan sdn vnet %q on node 0: %w", name, v.CIDR, v.ID, uerr)
+		return false, nil, fmt.Errorf("lab %q: update subnet %q gateway on inner vlan sdn vnet %q on node 0: %w", name, cidr, vnetID, uerr)
 	}
-	return true, []string{stepLabel, fmt.Sprintf("sdn subnet %q gateway updated on node 0", v.CIDR)}, nil
+	return true, []string{stepLabel, fmt.Sprintf("sdn subnet %q gateway updated on node 0", cidr)}, nil
 }

@@ -97,6 +97,12 @@ func nfsAttachTargets(exportOwnerName string) []nfsAttachTarget {
 // charset/format validation anywhere in the config-load path; falls back to
 // deriving ".1" from the mgmt base (labMgmtOffsetIP, which itself always
 // returns a validated net.IP-derived string) when Gateway is empty.
+//
+// Deliberately IPv4-only even on a dual-stack lab: the gateway host also
+// carries the mgmt IPv6 ::1 (labMgmtGateway6, realized by the SDN subnet's
+// gateway6), but mounts, exports, and their ACLs all stay keyed to the
+// stable IPv4 plan — a second address family in the NFS path would double
+// the export-ACL surface for zero benefit.
 func nfsServerIP(n config.LabNetwork) (string, error) {
 	if n.Mgmt.Gateway != "" {
 		if net.ParseIP(n.Mgmt.Gateway) == nil {

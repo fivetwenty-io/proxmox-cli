@@ -94,10 +94,13 @@ func TestQdeviceAdd_HappyPath_InstallsAndSetsUp(t *testing.T) {
 		exec.FakeResponse{Stdout: samplePvecmStatusQuorate3of3}, // cluster probe on node 0 (clustered, no qdevice yet)
 		exec.FakeResponse{ExitCode: 1},                          // dpkg probe on QDevice VM: not installed
 		exec.FakeResponse{},                                     // apt-get install corosync-qnetd
-		exec.FakeResponse{},                                     // dpkg probe on node 0: already installed
-		exec.FakeResponse{ExitCode: 1},                          // dpkg probe on node 1: not installed
-		exec.FakeResponse{},                                     // apt-get install corosync-qdevice on node 1
-		exec.FakeResponse{},                                     // pvecm qdevice setup on node 0
+		exec.FakeResponse{Stdout: ""},                           // IPv6 probe on QDevice VM: absent
+		exec.FakeResponse{Stdout: "2: ens18    inet 10.10.1.15/16 scope global ens18"}, // iface resolve
+		exec.FakeResponse{},            // IPv6 apply on QDevice VM
+		exec.FakeResponse{},            // dpkg probe on node 0: already installed
+		exec.FakeResponse{ExitCode: 1}, // dpkg probe on node 1: not installed
+		exec.FakeResponse{},            // apt-get install corosync-qdevice on node 1
+		exec.FakeResponse{},            // pvecm qdevice setup on node 0
 	)
 	cli.GetDeps(cmd).Runner = fake
 
@@ -105,18 +108,19 @@ func TestQdeviceAdd_HappyPath_InstallsAndSetsUp(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "QDevice wired up")
 
-	require.Len(t, fake.Calls, 7)
+	require.Len(t, fake.Calls, 10)
 	assert.Contains(t, fake.Calls[0].Args, "pvecm status")
 	assert.Contains(t, fake.Calls[1].Args, "dpkg -s corosync-qnetd")
 	assert.Contains(t, fake.Calls[2].Args, "apt-get update && apt-get install -y corosync-qnetd")
 	assert.Contains(t, fake.Calls[2].Args, "root@10.10.1.15")
-	assert.Contains(t, fake.Calls[3].Args, "dpkg -s corosync-qdevice")
-	assert.Contains(t, fake.Calls[3].Args, "root@10.10.1.10")
-	assert.Contains(t, fake.Calls[4].Args, "dpkg -s corosync-qdevice")
-	assert.Contains(t, fake.Calls[4].Args, "root@10.10.1.11")
-	assert.Contains(t, fake.Calls[5].Args, "apt-get update && apt-get install -y corosync-qdevice")
-	assert.Contains(t, fake.Calls[6].Args, "pvecm qdevice setup 10.10.1.15")
+	assert.Contains(t, fake.Calls[5].Args, "root@10.10.1.15") // IPv6 apply lands on the QDevice VM
+	assert.Contains(t, fake.Calls[6].Args, "dpkg -s corosync-qdevice")
 	assert.Contains(t, fake.Calls[6].Args, "root@10.10.1.10")
+	assert.Contains(t, fake.Calls[7].Args, "dpkg -s corosync-qdevice")
+	assert.Contains(t, fake.Calls[7].Args, "root@10.10.1.11")
+	assert.Contains(t, fake.Calls[8].Args, "apt-get update && apt-get install -y corosync-qdevice")
+	assert.Contains(t, fake.Calls[9].Args, "pvecm qdevice setup 10.10.1.15")
+	assert.Contains(t, fake.Calls[9].Args, "root@10.10.1.10")
 }
 
 func TestQdeviceAdd_SkipsSetupWhenAlreadyRegistered(t *testing.T) {
@@ -128,9 +132,14 @@ func TestQdeviceAdd_SkipsSetupWhenAlreadyRegistered(t *testing.T) {
 	})
 	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newQdeviceCmd())
 
+	addr6, err := labQdeviceMgmtIP6(lab.Network)
+	require.NoError(t, err)
+	gw6, err := labMgmtGateway6(lab.Network)
+	require.NoError(t, err)
 	fake := exec.Fake(
 		exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice}, // cluster probe: already has qdevice
 		exec.FakeResponse{}, // dpkg probe QDevice VM: already installed
+		exec.FakeResponse{Stdout: qdeviceIPv6ConvergedProbe(addr6, gw6)}, // IPv6 probe: fully converged
 		exec.FakeResponse{}, // dpkg probe node 0: already installed
 		exec.FakeResponse{}, // dpkg probe node 1: already installed
 	)
@@ -139,7 +148,7 @@ func TestQdeviceAdd_SkipsSetupWhenAlreadyRegistered(t *testing.T) {
 	out, err := runGuestCmd(t, cmd, "add", "wayne")
 	require.NoError(t, err)
 	assert.Contains(t, out, "skip (already satisfied)")
-	require.Len(t, fake.Calls, 4, "no setup call should run when already registered")
+	require.Len(t, fake.Calls, 5, "no setup call should run when already registered")
 }
 
 func TestQdeviceAdd_PeppiGuardRefusesBeforeAnyCall(t *testing.T) {

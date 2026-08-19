@@ -1021,6 +1021,20 @@ that have drifted (MTU, peers on a `vxlan` zone, node membership). A
 `network.vxlan_tag` is omitted from the vnet call for that zone type and
 applies only to a tag-capable zone such as `vxlan`.
 
+Labs are dual-stack by default. Alongside the IPv4 plan, each lab gets an
+IPv6 block — `network.cidr6` when set (`/48` or wider), else a stable
+RFC 4193 ULA `/48` derived from `network.cidr`, so two labs with different
+IPv4 CIDRs can never collide even with zero IPv6 config. Per-role `/64`s
+are carved from that block at fixed subnet IDs, and host offsets mirror
+the IPv4 plan (gateway `::1`, node *i* at `::a`+*i*, QDevice `::f`).
+`pmx lab create` and `pmx lab net apply` ensure the vnets' IPv6 subnets,
+`pmx lab hostnet apply` puts each nested node's management IPv6 on
+`vmbr0`, `pmx lab qdevice add` addresses the QDevice VM, and
+`pmx lab sdn vlan apply` carves a `/64` per inner client VLAN. Set
+`network.ipv6: false` to keep a lab IPv4-only; turning it off later stops
+further IPv6 provisioning but never deletes what already exists. Cluster
+formation, NFS, and pmx's own ssh transport stay on IPv4 either way.
+
 ```yaml
 labs_dir: labs.d/
 default_user_password: changeme-example   # bootstrap password for new grantees; setting it requires config.yml to be mode 0600

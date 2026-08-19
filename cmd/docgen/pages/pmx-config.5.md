@@ -372,6 +372,31 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   **network.mgmt.host_ip**, **network.mgmt.gateway**, or
   **network.bosh_bloc** falls outside it.
 
+**network.ipv6**
+: Whether the lab is dual-stack. Defaults to **true**: every addressed
+  vnet gets an IPv6 subnet alongside its IPv4 one (**pmx lab create**,
+  **pmx lab net apply**, **pmx lab sdn vlan apply**), and the nested
+  nodes and QDevice VM get management IPv6 addresses (**pmx lab hostnet
+  apply**, **pmx lab qdevice add**). Set to **false** to keep the lab
+  IPv4-only; disabling it later stops further IPv6 provisioning but
+  never deletes anything already created. Cluster formation, NFS, and
+  pmx's own ssh transport stay on IPv4 either way.
+
+**network.cidr6**
+: The lab's IPv6 block, a prefix of **/48** or wider (its first /48 is
+  used). Omitted means a stable RFC 4193 ULA /48 derived from
+  **network.cidr** — the same lab file always derives the same block,
+  and labs with different IPv4 CIDRs can never collide — so most labs
+  never set this. Per-role /64s are carved from the block by fixed
+  subnet IDs: management (gateway **::1**, node *i* at **::a**+*i*, the
+  QDevice at **::f**, mirroring the IPv4 offsets), one per
+  **network.vnets** entry (overridable per entry with its own
+  **cidr6**; an override must be **/112** or wider so the derived **::1**
+  gateway lands inside it), and one per nested client-VLAN vnet. The
+  carving scheme fits at most 16 **network.vnets** entries; validation
+  rejects more while IPv6 is enabled. Rejected when **network.ipv6** is
+  **false**.
+
 **network.mgmt.subnet**
 : Management subnet CIDR: an address-plan reservation within
   **network.cidr** marking which slice is set aside for management-plane

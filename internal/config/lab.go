@@ -78,6 +78,22 @@ type LabNetwork struct {
 	// MTU is the maximum transmission unit for the vnet.
 	MTU int `yaml:"mtu" json:"mtu"`
 
+	// IPv6 selects whether the lab's networking is provisioned dual-stack:
+	// an IPv6 ULA subnet on every vnet that has an IPv4 one, plus static
+	// IPv6 addresses on the nested nodes' management bridges. Nil (the key
+	// absent from the lab file) means ENABLED — callers must read
+	// EffectiveIPv6 rather than this field directly. Write `ipv6: false` to
+	// opt a lab out.
+	IPv6 *bool `yaml:"ipv6,omitempty" json:"ipv6,omitempty"`
+
+	// CIDR6 is the lab's overall IPv6 block, /48 or wider, from which the
+	// per-role /64s (management, bosh bloc, extra vnets) are carved. Empty
+	// means a stable RFC 4193 ULA /48 is derived deterministically from
+	// CIDR (internal/cli/lab's labULAPrefix) — the recommended shape, since
+	// two labs with different IPv4 CIDRs then can never collide. Ignored
+	// when EffectiveIPv6 is false (validation refuses the combination).
+	CIDR6 string `yaml:"cidr6,omitempty" json:"cidr6,omitempty"`
+
 	// ZoneName is the SDN zone this lab's vnet lives in. Empty defaults to
 	// "labs" (EffectiveZoneName) — the deployed outer Simple zone (decision
 	// D4 of the multi-node lab plan) — rather than the platform's historical
@@ -139,6 +155,13 @@ type LabVnet struct {
 
 	// Gateway is the vnet's subnet gateway address, when CIDR is set.
 	Gateway string `yaml:"gateway,omitempty" json:"gateway,omitempty"`
+
+	// CIDR6 is this vnet's IPv6 subnet, overriding the /64 that is
+	// otherwise carved for it from the lab's LabNetwork.CIDR6 (or derived
+	// ULA) block when the lab's EffectiveIPv6 is true. Like CIDR, it only
+	// applies to a vnet that has a subnet at all: a pure L2 passthrough
+	// vnet (empty CIDR) never gets an IPv6 subnet either, override or not.
+	CIDR6 string `yaml:"cidr6,omitempty" json:"cidr6,omitempty"`
 
 	// Purpose is a free-form label, e.g. "storage" or "workload". Never read
 	// by reconciliation; documentation only.
@@ -411,6 +434,18 @@ const (
 	DefaultZoneName = "labs"
 	DefaultZoneType = "simple"
 )
+
+// EffectiveIPv6 reports whether the lab's networking is provisioned
+// dual-stack: n.IPv6 when the operator set it, else true — IPv6 is on by
+// default, and `ipv6: false` is the explicit opt-out. Every reader of the
+// IPv6 policy must go through this accessor rather than the field, matching
+// the package's method-based defaulting convention (EffectiveZoneName etc.).
+func (n LabNetwork) EffectiveIPv6() bool {
+	if n.IPv6 != nil {
+		return *n.IPv6
+	}
+	return true
+}
 
 // EffectiveZoneName returns n.ZoneName, defaulting to DefaultZoneName when
 // unset.

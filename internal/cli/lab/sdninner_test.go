@@ -1,6 +1,7 @@
 package lab
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -258,6 +259,10 @@ func TestSdnVlanApply_CreatesZoneVnetSubnetWhenMissing(t *testing.T) {
 	lab := clientVlanZoneTestLab("wayne", 3)
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	cmd, _ := buildGuestSSHCmd(t, path, newSdnCmd())
+	cidr6, err := labInnerVnetCIDR6(lab.Network, 0)
+	require.NoError(t, err)
+	gw6, err := labV6Gateway(cidr6)
+	require.NoError(t, err)
 	fake := exec.Fake(
 		exec.FakeResponse{ExitCode: 1}, // probe zone: absent
 		exec.FakeResponse{},            // create zone
@@ -265,6 +270,8 @@ func TestSdnVlanApply_CreatesZoneVnetSubnetWhenMissing(t *testing.T) {
 		exec.FakeResponse{},            // create vnet
 		exec.FakeResponse{ExitCode: 1}, // list subnets on vnet: none yet
 		exec.FakeResponse{},            // create subnet
+		exec.FakeResponse{ExitCode: 1}, // list subnets for the IPv6 ensure: still none
+		exec.FakeResponse{},            // create IPv6 subnet
 		exec.FakeResponse{},            // commit
 	)
 	cli.GetDeps(cmd).Runner = fake
@@ -273,11 +280,13 @@ func TestSdnVlanApply_CreatesZoneVnetSubnetWhenMissing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "committed")
 
-	require.Len(t, fake.Calls, 7)
+	require.Len(t, fake.Calls, 9)
 	assert.Contains(t, fake.Calls[1].Args, "pvesh create /cluster/sdn/zones --zone clivlan --type vlan --bridge vmbr2")
 	assert.Contains(t, fake.Calls[3].Args, "pvesh create /cluster/sdn/vnets --vnet cli40 --zone clivlan --tag 40 --alias 'client-vlan40'")
 	assert.Contains(t, fake.Calls[5].Args, "pvesh create /cluster/sdn/vnets/cli40/subnets --subnet 10.61.136.0/24 --type subnet --gateway 10.61.136.1")
-	assert.Contains(t, fake.Calls[6].Args, "pvesh set /cluster/sdn")
+	assert.Contains(t, fake.Calls[7].Args, fmt.Sprintf(
+		"pvesh create /cluster/sdn/vnets/cli40/subnets --subnet %s --type subnet --gateway %s", cidr6, gw6))
+	assert.Contains(t, fake.Calls[8].Args, "pvesh set /cluster/sdn")
 }
 
 // TestSdnVlanApply_UpdatesDriftedVnetAndSubnet covers the drift case: the
@@ -287,12 +296,18 @@ func TestSdnVlanApply_UpdatesDriftedVnetAndSubnet(t *testing.T) {
 	lab := clientVlanZoneTestLab("wayne", 3)
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	cmd, _ := buildGuestSSHCmd(t, path, newSdnCmd())
+	cidr6, err := labInnerVnetCIDR6(lab.Network, 0)
+	require.NoError(t, err)
+	gw6, err := labV6Gateway(cidr6)
+	require.NoError(t, err)
+	v6Row := fmt.Sprintf(`{"subnet":"cli40-v6","cidr":%q,"gateway":%q}`, cidr6, gw6)
 	fake := exec.Fake(
 		exec.FakeResponse{Stdout: `{"bridge":"vmbr2"}`},                                  // probe zone: matches
 		exec.FakeResponse{Stdout: `{"zone":"clivlan","tag":99,"alias":"client-vlan40"}`}, // probe vnet: tag drifted
 		exec.FakeResponse{}, // update vnet
-		exec.FakeResponse{Stdout: `[{"subnet":"cli40-10.61.136.0-24","cidr":"10.61.136.0/24","gateway":"10.61.136.99"}]`}, // list subnets: gateway drifted
+		exec.FakeResponse{Stdout: `[{"subnet":"cli40-10.61.136.0-24","cidr":"10.61.136.0/24","gateway":"10.61.136.99"},` + v6Row + `]`}, // list subnets: v4 gateway drifted
 		exec.FakeResponse{}, // update subnet
+		exec.FakeResponse{Stdout: `[{"subnet":"cli40-10.61.136.0-24","cidr":"10.61.136.0/24","gateway":"10.61.136.1"},` + v6Row + `]`}, // list for the IPv6 ensure: matches
 		exec.FakeResponse{}, // commit
 	)
 	cli.GetDeps(cmd).Runner = fake
@@ -301,16 +316,20 @@ func TestSdnVlanApply_UpdatesDriftedVnetAndSubnet(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "committed")
 
-	require.Len(t, fake.Calls, 6)
+	require.Len(t, fake.Calls, 7)
 	assert.Contains(t, fake.Calls[2].Args, "pvesh set /cluster/sdn/vnets/cli40 --zone clivlan --tag 40 --alias 'client-vlan40'")
 	assert.Contains(t, fake.Calls[4].Args, "pvesh set /cluster/sdn/vnets/cli40/subnets/cli40-10.61.136.0-24 --gateway 10.61.136.1")
 }
 
-// TestSdnVlanApply_FullyConverged_NoOp covers the fully-converged case: zone,
-// vnet, and subnet all already match, so no create/update/commit call runs
-// — only the read-only probe/list calls.
+// TestSdnVlanApply_FullyConverged_NoOp covers the fully-converged case with
+// IPv6 opted out (`network.ipv6: false`): zone, vnet, and subnet all already
+// match, so no create/update/commit call runs — only the read-only
+// probe/list calls, byte-identical to the pre-IPv6 behavior. The dual-stack
+// converged no-op is TestSdnVlanApply_IPv6AlreadyPresent_NoCommit.
 func TestSdnVlanApply_FullyConverged_NoOp(t *testing.T) {
 	lab := clientVlanZoneTestLab("wayne", 3)
+	off := false
+	lab.Network.IPv6 = &off
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
 	cmd, _ := buildGuestSSHCmd(t, path, newSdnCmd())
 	fake := exec.Fake(

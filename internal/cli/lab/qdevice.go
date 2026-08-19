@@ -2,6 +2,8 @@ package lab
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,6 +19,11 @@ const (
 	qdeviceQnetdPackage  = "corosync-qnetd"
 	qdeviceClientPackage = "corosync-qdevice"
 )
+
+// qdeviceIPv6PersistPath is the ifupdown drop-in written on the QDevice VM
+// so its management IPv6 address survives reboots (Debian's default
+// /etc/network/interfaces sources interfaces.d/*).
+const qdeviceIPv6PersistPath = "/etc/network/interfaces.d/lab-ipv6"
 
 // qdeviceStepResult records one step of `pmx lab qdevice add`'s execution
 // for the final STEP/STATUS table, mirroring create.go's createStep render
@@ -53,6 +60,9 @@ func newQdeviceAddCmd() *cobra.Command {
 		Long: "Install corosync-qnetd on the lab's QDevice VM, confirm or install " +
 			"corosync-qdevice on every cluster node, then run `pvecm qdevice setup " +
 			"<qdevice-mgmt-ip>` on node 0.\n\n" +
+			"Unless `network.ipv6: false`, the QDevice VM also gets its management IPv6 address " +
+			"from the lab's IPv6 plan (the mgmt ::f, mirroring its IPv4 .15), live and persisted " +
+			"across reboots. Corosync itself keeps talking over IPv4.\n\n" +
 			"The QDevice VM must already exist and be running; `pmx lab create` provisions it " +
 			"when the lab's topology calls for one. The nested cluster must already be formed " +
 			"(`pmx lab cluster init`/`join`), and the lab's topology must actually call for a " +
@@ -102,6 +112,15 @@ func runQdeviceAdd(cmd *cobra.Command, name string, dryRun bool) error {
 		headers := []string{"STEP", "STATUS"}
 		rows := [][]string{
 			{fmt.Sprintf("install %s on QDevice VM (%s)", qdeviceQnetdPackage, qdeviceIP), "would run"},
+		}
+		if lab.Network.EffectiveIPv6() {
+			addr6, aerr := labQdeviceMgmtIP6(lab.Network)
+			if aerr != nil {
+				return fmt.Errorf("resolve QDevice mgmt IPv6: %w", aerr)
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("ensure IPv6 %s/%d on QDevice VM (%s)", addr6, labV6InterfacePrefixBits, qdeviceIP),
+				"would run"})
 		}
 		for i := range numNodes {
 			nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
@@ -189,6 +208,14 @@ func qdeviceEnsureWired(
 	steps = append(steps, qdeviceStepResult{
 		desc: fmt.Sprintf("install %s on QDevice VM (%s)", qdeviceQnetdPackage, qdeviceIP), skip: alreadyInstalled})
 
+	if lab.Network.EffectiveIPv6() {
+		v6Step, verr := qdeviceEnsureIPv6(deps, lab.Network, name, qdeviceIP)
+		if verr != nil {
+			return nil, verr
+		}
+		steps = append(steps, v6Step)
+	}
+
 	for i := range numNodes {
 		nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
 		if ierr != nil {
@@ -214,6 +241,102 @@ func qdeviceEnsureWired(
 	}
 
 	return steps, nil
+}
+
+// qdeviceIfaceNamePattern is the shape a remote-derived interface name must
+// have before it may be interpolated into a shell command line: a plain
+// Linux interface name, nothing a shell could interpret. The value comes
+// from parsing `ip` output on the guest — root-owned, but a parse gone wrong
+// (or an exotic link kind) must fail loudly here, not run as shell.
+var qdeviceIfaceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+
+// qdeviceIPv6Converged reports whether one combined probe output shows all
+// three convergence markers at once: the live address with its EXACT
+// planned prefix (`ip -6 addr`'s "inet6 <addr>/48" — a stale <addr>/64
+// from an older run must not read as converged, since `ip -6 addr replace`
+// cannot remove it), the DEFAULT route via the mgmt gateway (`ip -6 route
+// show default`'s "default via <gw>"), and the persistence drop-in's
+// "address <addr>/<prefix>" line. Anything less is a half-applied state
+// the apply must repair — matching on the live address alone would read
+// "addr landed, route/persist chain died" as converged forever.
+func qdeviceIPv6Converged(probeOut, addr6, gw6 string) bool {
+	return strings.Contains(probeOut, fmt.Sprintf("inet6 %s/%d", addr6, labV6InterfacePrefixBits)) &&
+		strings.Contains(probeOut, "default via "+gw6) &&
+		strings.Contains(probeOut, fmt.Sprintf("address %s/%d", addr6, labV6InterfacePrefixBits))
+}
+
+// qdeviceEnsureIPv6 ensures the QDevice VM (reached over ssh at its IPv4
+// management address) carries its planned management IPv6 address —
+// labQdeviceMgmtIP6's ::f, addressed with the /48 interface prefix per
+// labV6InterfacePrefixBits — with a v6 default route via the management
+// gateway, both live (ip) and persisted for reboots (an ifupdown drop-in at
+// qdeviceIPv6PersistPath; the lab's Debian QDevice template is ifupdown-
+// managed and sources interfaces.d — on a guest that is not, the live
+// address still lands and the next run re-converges after a reboot). The
+// management interface is resolved from the VM's own IPv4 address rather
+// than assumed, so a template with a different NIC name converges the same
+// way. Idempotent two ways: one probe checks address, route, AND drop-in
+// together and skips only on all three, and the apply itself uses
+// replace-style commands so re-running over a half-applied state repairs it
+// rather than failing on what already exists. The nested PVE nodes get
+// their IPv6 through `pmx lab hostnet apply`'s API-staged vmbr0 path
+// instead; the QDevice VM is a plain Debian guest with no PVE network API,
+// hence ssh.
+func qdeviceEnsureIPv6(
+	deps *cli.Deps, n config.LabNetwork, name, qdeviceIP string,
+) (qdeviceStepResult, error) {
+	addr6, err := labQdeviceMgmtIP6(n)
+	if err != nil {
+		return qdeviceStepResult{}, fmt.Errorf("resolve QDevice mgmt IPv6: %w", err)
+	}
+	gw6, err := labMgmtGateway6(n)
+	if err != nil {
+		return qdeviceStepResult{}, fmt.Errorf("resolve mgmt IPv6 gateway: %w", err)
+	}
+	desc := fmt.Sprintf("ensure IPv6 %s/%d on QDevice VM (%s)", addr6, labV6InterfacePrefixBits, qdeviceIP)
+
+	// One compound probe for all three markers; the trailing `true` pins
+	// exit 0 (`cat` on a missing drop-in exits 1), so a non-nil error here
+	// is a transport-level failure, never "not converged".
+	probeCmd := fmt.Sprintf("ip -6 addr show to %s/128; ip -6 route show default; cat %s 2>/dev/null; true",
+		addr6, qdeviceIPv6PersistPath)
+	probe, perr := runGuestSSH(deps, qdeviceIP, probeCmd)
+	if perr != nil && guestCommandTransportFailed(perr) {
+		return qdeviceStepResult{}, fmt.Errorf("lab %q: probe IPv6 on QDevice VM (%s): %w", name, qdeviceIP, perr)
+	}
+	if perr == nil && qdeviceIPv6Converged(probe.Stdout, addr6, gw6) {
+		return qdeviceStepResult{desc: desc, skip: true}, nil
+	}
+
+	ifaceProbe, ferr := runGuestSSH(deps, qdeviceIP, fmt.Sprintf("ip -o -4 addr show to %s/32", qdeviceIP))
+	if ferr != nil {
+		return qdeviceStepResult{}, fmt.Errorf(
+			"lab %q: resolve QDevice VM management interface (%s): %w", name, qdeviceIP, ferr)
+	}
+	// `ip -o -4 addr show` one-line format: "2: ens18    inet 10.0.1.15/24 ...".
+	fields := strings.Fields(ifaceProbe.Stdout)
+	if len(fields) < 2 {
+		return qdeviceStepResult{}, fmt.Errorf(
+			"lab %q: QDevice VM (%s) reports no interface holding its management IPv4 address; "+
+				"cannot pick an interface for IPv6", name, qdeviceIP)
+	}
+	// Some link kinds print as "eth0@if5"; only the part before '@' is the
+	// interface name.
+	iface, _, _ := strings.Cut(fields[1], "@")
+	if !qdeviceIfaceNamePattern.MatchString(iface) {
+		return qdeviceStepResult{}, fmt.Errorf(
+			"lab %q: QDevice VM (%s) reports management interface name %q, which is not a plain "+
+				"interface name; refusing to use it in a shell command", name, qdeviceIP, fields[1])
+	}
+
+	applyCmd := fmt.Sprintf(
+		"ip -6 addr replace %[1]s/%[2]d dev %[3]s && ip -6 route replace default via %[4]s dev %[3]s && "+
+			"printf '%%s\\n' 'iface %[3]s inet6 static' '\taddress %[1]s/%[2]d' '\tgateway %[4]s' > %[5]s",
+		addr6, labV6InterfacePrefixBits, iface, gw6, qdeviceIPv6PersistPath)
+	if _, aerr := runGuestSSH(deps, qdeviceIP, applyCmd); aerr != nil {
+		return qdeviceStepResult{}, fmt.Errorf("lab %q: add IPv6 to QDevice VM (%s): %w", name, qdeviceIP, aerr)
+	}
+	return qdeviceStepResult{desc: desc}, nil
 }
 
 // ensureGuestPackage probes host for pkg via `dpkg -s`, installing it via

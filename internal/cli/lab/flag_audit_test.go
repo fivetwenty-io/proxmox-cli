@@ -109,8 +109,18 @@ func TestCreateAuditFields_NetworkStorageAndPoolOverrides(t *testing.T) {
 	require.Len(t, vnetRec, 2, "expected one vnet list + one vnet create")
 	assert.Equal(t, "6002", vnetRec[1].body["tag"], "--vxlan-tag must override network.vxlan_tag (5001)")
 
-	require.Len(t, subnetRec, 2, "expected one subnet list + one subnet create")
+	// Four subnet calls: the planning-phase list, the IPv4 create, then the
+	// dual-stack IPv6 ensure's own apply-time list + create.
+	require.Len(t, subnetRec, 4, "expected two subnet lists + an IPv4 and an IPv6 subnet create")
 	assert.Equal(t, "10.10.9.0/24", subnetRec[1].body["subnet"], "--cidr must override network.cidr (10.10.1.0/24)")
+	// The IPv6 subnet must be derived from the OVERRIDDEN CIDR, not the
+	// on-disk one: the lab's ULA block is a hash of network.cidr.
+	overridden := lab.Network
+	overridden.CIDR = "10.10.9.0/24"
+	cidr6, gw6, err := labPrimaryV6Subnet(overridden)
+	require.NoError(t, err)
+	assert.Equal(t, cidr6, subnetRec[3].body["subnet"], "the IPv6 subnet must follow the --cidr override")
+	assert.Equal(t, gw6, subnetRec[3].body["gateway"])
 
 	require.Len(t, poolRec, 2, "expected one pool list + one pool create")
 	assert.Equal(t, "custom-pool-wayne", poolRec[1].body["poolid"], "--pool must override access.pool (lab-wayne)")
@@ -135,7 +145,10 @@ func TestCreateAuditFields_StartInvokesLifecycleStart(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
-		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+		[]any{
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			createPrimaryV6SubnetRow(t, lab.Network),
+		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
 	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
@@ -184,7 +197,10 @@ func TestCreateAuditFields_CloneFromForwardsToCloneAndConfigUpdate(t *testing.T)
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
-		[]any{map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR}})
+		[]any{
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			createPrimaryV6SubnetRow(t, lab.Network),
+		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
 	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
