@@ -1099,6 +1099,18 @@ file under `labs_dir`, so hand-written comments in `config.yml` are never
 lost to a struct-marshal round trip. See `man 5 pmx-config` for the full
 lab schema.
 
+A lab can also be a multi-node nested PVE cluster: `topology.nodes` (1-5),
+`topology.qdevice` (`auto`/`never`), and per-node `topology.node_overrides`
+size individual nodes differently from the rest.
+`pmx lab config add --nodes N --qdevice auto|never` scaffolds the topology
+block; `--osd-disks N --osd-disk-gb G` (also accepted by `pmx lab create`)
+attaches N extra raw disks per node for nested Ceph OSDs, which requires
+`storage.controller: virtio-scsi-single`. Once a multi-node lab's nested
+cluster is formed (`pmx lab cluster init`/`join`), `pmx lab ceph
+install|init|mon|mgr|osd|pool|status <lab>` orchestrates Ceph across it —
+`install` bootstraps packages over guest SSH, since PVE has no REST
+endpoint for that step, and the rest talk to the nested cluster's own API.
+
 ### Command walkthrough
 
 ```bash
@@ -1108,6 +1120,10 @@ lab schema.
 # only committed by `pmx lab net apply` (or `pmx pve sdn apply`).
 pmx lab create wayne --node sm-0
 pmx lab net apply wayne             # always previews the pending SDN changeset first, then commits it
+
+# A multi-node lab with two extra 100 GB raw disks per node for nested
+# Ceph OSDs (requires storage.controller: virtio-scsi-single).
+pmx lab create ceph --node sm-0 --nodes 3 --osd-disks 2 --osd-disk-gb 100
 
 # Inspect it.
 pmx lab status wayne
@@ -1122,8 +1138,11 @@ pmx lab access grant wayne wayne@pve
 pmx lab quota set wayne --refquota-gb 600
 
 # Tear it down. --purge additionally removes the resource pool and storage
-# definition; without it only the VM is stopped and deleted.
+# definition; --purge-dataset further destroys the lab's ZFS dataset
+# (<pool>/labs/<lab>), the one thing --purge alone leaves behind. Without
+# either, only the VM is stopped and deleted.
 pmx lab destroy wayne --yes
+pmx lab destroy ceph --yes --purge --purge-dataset
 ```
 
 Every mutating verb (`create`, `destroy`, `net apply`, `access grant`,

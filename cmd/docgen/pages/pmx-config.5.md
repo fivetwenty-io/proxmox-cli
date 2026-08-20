@@ -497,6 +497,29 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 **storage.ssd**
 : Whether the disk is marked SSD-backed to the guest.
 
+**storage.osd_disks.count**
+: Number of extra whole-raw-device disks (**scsi2**, **scsi3**, ...)
+  attached to every node VM for nested Ceph OSDs, 0 through 8. Requires
+  **storage.controller: virtio-scsi-single** — OSD disks are emitted with
+  **iothread=1**, which PVE rejects on any other SCSI controller. Zero or
+  unset means none, today's shape. Overridable per node with
+  **topology.node_overrides.<n>.osd_disk_count**.
+
+**storage.osd_disks.size_gb**
+: Size in gigabytes of each OSD disk. Required (and must be positive) when
+  **storage.osd_disks.count** is set. Every disk is emitted identically —
+  **discard=on,iothread=1,ssd=1,backup=0,serial=osdN** (N starting at 0) —
+  so the guest sees each at a stable
+  **/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_osdN** path rather than a
+  guessed **/dev/sdX**, and PBS never backs one up. On an already-running
+  VM, **discard** and **ssd** only take effect after a full power-off and
+  power-on — a reboot is not enough — though this never matters for
+  **pmx lab create**, since the VM has not booted yet. OSD disks raise the
+  *default* **storage.refquota_gb** derivation (count × size_gb, added per
+  node) but never augment an explicit **storage.refquota_gb**: the operator
+  who pins one owns the whole number. Overridable per node with
+  **topology.node_overrides.<n>.osd_disk_gb**.
+
 **dns.zone**
 : DNS zone name associated with the lab (for example
   **wayne.lab.example.com**). No **pmx lab config add** flag sets this yet;
@@ -526,6 +549,37 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   **pmx lab access grant** falls back to **--role** if given, else
   **PMXAdmin** (created automatically if it does not already exist); any
   other role named here or via **--role** must already exist on the target.
+
+**topology.nodes**
+: Number of PVE node VMs in the lab's nested cluster, 1 through 5 (node
+  indexes 0 through nodes-1). Zero or unset defaults to 1 — today's
+  single-node shape, unchanged. **pmx lab config add --nodes N** and
+  **pmx lab create --nodes N** both set this.
+
+**topology.qdevice**
+: QDevice tie-breaker policy for the nested cluster: **auto** (the default
+  when empty) adds a QDevice VM only when the effective **topology.nodes**
+  is even; **never** never adds one, regardless of node count. No other
+  value is valid. **pmx lab config add --qdevice auto|never** and
+  **pmx lab create --qdevice auto|never** both set this.
+
+**topology.node_overrides.<n>**
+: Optional per-node sizing overrides, keyed by 0-based node index (0
+  through 4, and must be below the lab's own effective **topology.nodes** —
+  index 3 is invalid for a 2-node lab). A node index absent from this map
+  uses the lab's own Compute/Storage values (which are themselves layered
+  over the sizing profile the effective node count selects — 16 vCPU /
+  32-128 GB memory / 64 GB OS disk / 400 GB data disk for a single-node
+  lab, 8 vCPU / 16-48 GB / 64 GB / 200 GB for a multi-node one). Within a
+  present entry, a zero-valued field falls through the same way — there is
+  no sizing dimension for which zero is a meaningful override. Keys:
+
+  - **vcpu** — vCPU count for this node.
+  - **memory_min_gb** / **memory_max_gb** — guaranteed/ballooned memory
+    for this node.
+  - **os_disk_gb** / **data_disk_gb** — OS/data disk size for this node.
+  - **osd_disk_count** / **osd_disk_gb** — this node's
+    **storage.osd_disks.count**/**size_gb**.
 
 # PERMISSIONS
 
@@ -675,6 +729,58 @@ written with **pmx lab config add <name>** lands under **labs.d/** as
 **<name>.yaml**, merged in alongside **wayne** at load time; a name
 collision between an inline lab and a **labs_dir** file is rejected at
 load time rather than silently resolved.
+
+A third example is a multi-node lab for nested Ceph: three node VMs, no
+QDevice (three is already odd), and two 100 GB raw OSD disks per node on
+top of the OS and data disks.
+
+```yaml
+labs:
+  ceph:
+    mode: nested
+    owner: wayne@pve
+    topology:
+      nodes: 3
+      qdevice: never
+    network:
+      vnet_id: ceph
+      vxlan_tag: 5015
+      cidr: 10.252.0.0/16
+    compute:
+      vcpu: 8
+      memory:
+        min_gb: 24
+        max_gb: 48
+    storage:
+      pool: tank
+      os_disk_gb: 64
+      data_disk_gb: 100
+      refquota_gb: 1150
+      controller: virtio-scsi-single
+      osd_disks:
+        count: 2
+        size_gb: 100
+```
+
+**storage.controller: virtio-scsi-single** is mandatory here —
+**storage.osd_disks.count** above 0 fails validation without it.
+**storage.refquota_gb** is set explicitly to 1150 (roughly 364 GB
+provisioned per node — OS, data, and OSD disks — times 3 nodes, plus EFI
+and slack) rather than left for the *default* derivation — node-count ×
+264 GB, plus every node's OSD disk total — that **pmx lab create** and
+**pmx lab config add** apply automatically when **storage.refquota_gb** is
+omitted; an explicit value like this one is never augmented further by
+OSD disk size.
+
+```bash
+pmx lab config add ceph --vxlan-tag 5015 --cidr 10.252.0.0/16 \
+  --nodes 3 --qdevice never --osd-disks 2 --osd-disk-gb 100 \
+  --vcpu 8 --memory-max-gb 48 --data-disk-gb 100 --refquota-gb 1150
+```
+
+scaffolds this shape in one step: **config add**'s schema default for
+**storage.controller** is already **virtio-scsi-single**, so
+**--osd-disks** needs no separate controller flag.
 
 # SEE ALSO
 
