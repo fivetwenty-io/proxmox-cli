@@ -1499,6 +1499,37 @@ func TestCreateTwoNodesQdeviceNever_Refused(t *testing.T) {
 	assert.ErrorContains(t, err, "mandatory")
 }
 
+// TestCreateNodeOverrideOSDDiskCountWithoutSize_Refused covers the create-time
+// re-validation path for an override-only OSD config: the on-disk lab is
+// valid at load time (topology.node_overrides.0 sets osd_disk_count 5, and
+// the lab-wide storage.osd_disks.size_gb 100 it inherits at load time covers
+// it), but --osd-disks 0 --osd-disk-gb 0 at create time is a legitimate
+// "disable OSD disks lab-wide" combination on its own (ValidateStorage sees
+// count 0/size 0, which passes) that silently zeroes the size the node
+// override's count 5 was relying on. Only a check that resolves the
+// OVERRIDE's own effective OSD config — not just the lab-wide storage block
+// — catches this, so create must refuse it before any plan-building API
+// call, the same way an invalid topology already does.
+func TestCreateNodeOverrideOSDDiskCountWithoutSize_Refused(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
+	lab.Topology.NodeOverrides = map[int]config.LabNodeOverride{0: {OSDDiskCount: 5}}
+
+	f.HandleFunc("GET /api2/json/cluster/sdn/zones", func(_ http.ResponseWriter, _ *http.Request) {
+		t.Fatal("an invalid override-only OSD config must be rejected before any plan-building API call")
+	})
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--osd-disks", "0", "--osd-disk-gb", "0")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "storage is invalid")
+	assert.ErrorContains(t, err, "topology.node_overrides.0")
+	assert.ErrorContains(t, err, "osd_disk_gb")
+}
+
 // --- capacity gate ----------------------------------------------------
 
 // createHandleStorageStatus registers GET /nodes/{node}/storage/{storage}/status

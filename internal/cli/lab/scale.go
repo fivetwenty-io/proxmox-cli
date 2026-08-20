@@ -137,6 +137,9 @@ func runScale(cmd *cobra.Command, name string, nodesFlag int, qdeviceFlag, nodeF
 	if issues := config.ValidateTopology(name, eff.Topology); len(issues) > 0 {
 		return fmt.Errorf("lab %q target topology is invalid:\n  %s", name, strings.Join(issues, "\n  "))
 	}
+	if issues := config.ValidateNodeOverrideStorage(name, eff); len(issues) > 0 {
+		return fmt.Errorf("lab %q target topology is invalid:\n  %s", name, strings.Join(issues, "\n  "))
+	}
 
 	// Discovering the lab's live VM shells needs a deps.API call
 	// (listLiveVMs) regardless of --dry-run, exactly like create.go's own

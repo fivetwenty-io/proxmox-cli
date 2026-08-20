@@ -564,6 +564,9 @@ func validateConfigAddLab(lab *config.Lab) error {
 	if issues := config.ValidateStorage(lab.Name, lab.Storage); len(issues) > 0 {
 		return fmt.Errorf("storage is invalid:\n  %s", strings.Join(issues, "\n  "))
 	}
+	if issues := config.ValidateNodeOverrideStorage(lab.Name, lab); len(issues) > 0 {
+		return fmt.Errorf("storage is invalid:\n  %s", strings.Join(issues, "\n  "))
+	}
 
 	return nil
 }

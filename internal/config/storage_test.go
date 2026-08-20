@@ -61,6 +61,100 @@ func TestValidateStorage_OSDDisks(t *testing.T) {
 	}
 }
 
+// --- ValidateNodeOverrideStorage ---------------------------------------------
+
+// TestValidateNodeOverrideStorage_OverrideOnlyCountWithoutSize_Errors covers
+// an override-only OSD config (no lab-wide storage.osd_disks at all) that
+// sets osd_disk_count but never osd_disk_gb, anywhere: EffectiveNodeSizing
+// would synthesize a LabOSDDisks with SizeGB 0 and ValidateStorage never sees
+// it (s.OSDDisks stays nil at the lab-wide level), so this must be the check
+// that catches it.
+func TestValidateNodeOverrideStorage_OverrideOnlyCountWithoutSize_Errors(t *testing.T) {
+	lab := &config.Lab{
+		Name:    "ceph",
+		Storage: config.LabStorage{Controller: "virtio-scsi-single"},
+		Topology: config.LabTopology{
+			Nodes: 3,
+			NodeOverrides: map[int]config.LabNodeOverride{
+				1: {OSDDiskCount: 2},
+			},
+		},
+	}
+	issues := config.ValidateNodeOverrideStorage("ceph", lab)
+	require.Len(t, issues, 1)
+	require.Contains(t, issues[0], `lab "ceph"`)
+	require.Contains(t, issues[0], "topology.node_overrides.1")
+	require.Contains(t, issues[0], "osd_disk_gb")
+}
+
+// TestValidateNodeOverrideStorage_OverrideWrongController_Errors covers an
+// override-only OSD config set against a lab whose controller is not
+// virtio-scsi-single: the same controller requirement ValidateStorage
+// applies to the lab-wide config must also apply here.
+func TestValidateNodeOverrideStorage_OverrideWrongController_Errors(t *testing.T) {
+	lab := &config.Lab{
+		Name:    "ceph",
+		Storage: config.LabStorage{Controller: "virtio-scsi"},
+		Topology: config.LabTopology{
+			Nodes: 3,
+			NodeOverrides: map[int]config.LabNodeOverride{
+				0: {OSDDiskCount: 2, OSDDiskGB: 100},
+			},
+		},
+	}
+	issues := config.ValidateNodeOverrideStorage("ceph", lab)
+	require.Len(t, issues, 1)
+	require.Contains(t, issues[0], "virtio-scsi-single")
+	require.Contains(t, issues[0], "topology.node_overrides.0")
+}
+
+// TestValidateNodeOverrideStorage_ValidOverride_IsValid covers the
+// legitimate shape: an override-only OSD config against a lab whose
+// controller is virtio-scsi-single, with both count and size set.
+func TestValidateNodeOverrideStorage_ValidOverride_IsValid(t *testing.T) {
+	lab := &config.Lab{
+		Name:    "ceph",
+		Storage: config.LabStorage{Controller: "virtio-scsi-single"},
+		Topology: config.LabTopology{
+			Nodes: 3,
+			NodeOverrides: map[int]config.LabNodeOverride{
+				0: {OSDDiskCount: 2, OSDDiskGB: 100},
+			},
+		},
+	}
+	require.Empty(t, config.ValidateNodeOverrideStorage("ceph", lab))
+}
+
+// TestValidateNodeOverrideStorage_CountAboveMax_Errors covers the [0,
+// MaxOSDDisksPerNode] bound applied to an override's effective count.
+func TestValidateNodeOverrideStorage_CountAboveMax_Errors(t *testing.T) {
+	lab := &config.Lab{
+		Name:    "ceph",
+		Storage: config.LabStorage{Controller: "virtio-scsi-single"},
+		Topology: config.LabTopology{
+			Nodes: 3,
+			NodeOverrides: map[int]config.LabNodeOverride{
+				0: {OSDDiskCount: 9, OSDDiskGB: 100},
+			},
+		},
+	}
+	issues := config.ValidateNodeOverrideStorage("ceph", lab)
+	require.Len(t, issues, 1)
+	require.Contains(t, issues[0], "at most 8")
+}
+
+// TestValidateNodeOverrideStorage_NoOSDOverride_IsValid covers a node
+// override that sets unrelated fields (e.g. VCPU) but no OSD fields: it must
+// not be inspected at all, and a lab with no node overrides must pass too.
+func TestValidateNodeOverrideStorage_NoOSDOverride_IsValid(t *testing.T) {
+	lab := &config.Lab{
+		Name:     "wayne",
+		Topology: config.LabTopology{Nodes: 3, NodeOverrides: map[int]config.LabNodeOverride{0: {VCPU: 4}}},
+	}
+	require.Empty(t, config.ValidateNodeOverrideStorage("wayne", lab))
+	require.Empty(t, config.ValidateNodeOverrideStorage("wayne", &config.Lab{Name: "wayne"}))
+}
+
 // --- EffectiveNodeSizing (OSD disk overrides) -------------------------------
 
 func TestEffectiveNodeSizing_OSDDiskOverrides(t *testing.T) {

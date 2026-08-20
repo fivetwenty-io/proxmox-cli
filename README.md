@@ -1122,8 +1122,14 @@ pmx lab create wayne --node sm-0
 pmx lab net apply wayne             # always previews the pending SDN changeset first, then commits it
 
 # A multi-node lab with two extra 100 GB raw disks per node for nested
-# Ceph OSDs (requires storage.controller: virtio-scsi-single).
-pmx lab create ceph --node sm-0 --nodes 3 --osd-disks 2 --osd-disk-gb 100
+# Ceph OSDs (requires storage.controller: virtio-scsi-single). Persist the
+# topology and OSD shape to the lab's config first — `pmx lab ceph` verbs
+# read it from there, not from create-time flags.
+pmx lab config add ceph --vxlan-tag 5015 --cidr 10.252.0.0/16 \
+  --nodes 3 --qdevice never --osd-disks 2 --osd-disk-gb 100
+pmx lab create ceph --node sm-0
+# --nodes/--osd-disks/--osd-disk-gb also work directly on `pmx lab create`,
+# but only override that one run; they are not written back to config.
 
 # Inspect it.
 pmx lab status wayne
@@ -1139,8 +1145,10 @@ pmx lab quota set wayne --refquota-gb 600
 
 # Tear it down. --purge additionally removes the resource pool and storage
 # definition; --purge-dataset further destroys the lab's ZFS dataset
-# (<pool>/labs/<lab>), the one thing --purge alone leaves behind. Without
-# either, only the VM is stopped and deleted.
+# (<pool>/labs/<lab>), one of the things --purge alone leaves behind. The
+# SDN vnet and subnet definitions survive every combination of these flags
+# too — `pmx lab destroy` never touches them; SDN teardown stays with the
+# host scripts. Without either flag, only the VM is stopped and deleted.
 pmx lab destroy wayne --yes
 pmx lab destroy ceph --yes --purge --purge-dataset
 ```

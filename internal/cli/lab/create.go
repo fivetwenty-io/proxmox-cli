@@ -238,6 +238,9 @@ func newCreateCmd() *cobra.Command {
 			if issues := config.ValidateStorage(name, eff.Storage); len(issues) > 0 {
 				return fmt.Errorf("lab %q storage is invalid:\n  %s", name, strings.Join(issues, "\n  "))
 			}
+			if issues := config.ValidateNodeOverrideStorage(name, eff); len(issues) > 0 {
+				return fmt.Errorf("lab %q storage is invalid:\n  %s", name, strings.Join(issues, "\n  "))
+			}
 
 			// Flag overrides (in particular --pool) can change an identifier
 			// after the initial resolveLabForMutate guard already passed

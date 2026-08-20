@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -844,6 +845,69 @@ func ValidateStorage(name string, s LabStorage) []string {
 	if d.Count == 0 && d.SizeGB > 0 {
 		issues = append(issues, fmt.Sprintf(
 			"lab %q: storage.osd_disks.count is required when osd_disks.size_gb is set", name))
+	}
+	return issues
+}
+
+// ValidateNodeOverrideStorage returns human-readable issues with the
+// EFFECTIVE per-node OSD disk config any topology.node_overrides entry that
+// sets osd_disk_count or osd_disk_gb resolves to once merged with
+// lab.Storage.OSDDisks (the same merge EffectiveNodeSizing performs), or nil.
+//
+// ValidateStorage alone is not enough: it returns nil whenever
+// lab.Storage.OSDDisks is nil, which is exactly the shape an override-only
+// OSD config has (no lab-wide storage.osd_disks block at all, only a
+// per-node osd_disk_count/osd_disk_gb). Without this check, that
+// override-only config reaches EffectiveNodeSizing unvalidated — skipping
+// the virtio-scsi-single controller requirement, the [0, MaxOSDDisksPerNode]
+// count bound, and the size-required-with-count rule — and fails mid-create
+// at the PVE API instead of at config-load time.
+//
+// Only overrides that actually set OSDDiskCount or OSDDiskGB are inspected;
+// an override that leaves both zero contributes no OSD config of its own and
+// is skipped. Controller is lab-wide (not per-node overridable — see
+// EffectiveNodeSizing), so lab.Storage.Controller is checked directly rather
+// than any per-node value.
+func ValidateNodeOverrideStorage(name string, lab *Lab) []string {
+	var issues []string
+	indexes := make([]int, 0, len(lab.Topology.NodeOverrides))
+	for idx := range lab.Topology.NodeOverrides {
+		indexes = append(indexes, idx)
+	}
+	sort.Ints(indexes)
+
+	for _, idx := range indexes {
+		ov := lab.Topology.NodeOverrides[idx]
+		if ov.OSDDiskCount == 0 && ov.OSDDiskGB == 0 {
+			continue
+		}
+
+		eff := LabOSDDisks{}
+		if lab.Storage.OSDDisks != nil {
+			eff = *lab.Storage.OSDDisks
+		}
+		if ov.OSDDiskCount > 0 {
+			eff.Count = ov.OSDDiskCount
+		}
+		if ov.OSDDiskGB > 0 {
+			eff.SizeGB = ov.OSDDiskGB
+		}
+
+		if eff.Count > 0 && lab.Storage.Controller != "virtio-scsi-single" {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: topology.node_overrides.%d: osd_disk_count requires storage.controller "+
+					"\"virtio-scsi-single\" (OSD disks are emitted with iothread=1, which PVE rejects on "+
+					"other SCSI controllers); got %q", name, idx, lab.Storage.Controller))
+		}
+		if eff.Count < 0 || eff.Count > MaxOSDDisksPerNode {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: topology.node_overrides.%d: osd_disk_count %d is invalid: must be 0 through at most %d",
+				name, idx, eff.Count, MaxOSDDisksPerNode))
+		}
+		if eff.Count > 0 && eff.SizeGB <= 0 {
+			issues = append(issues, fmt.Sprintf(
+				"lab %q: topology.node_overrides.%d: osd_disk_count requires osd_disk_gb", name, idx))
+		}
 	}
 	return issues
 }

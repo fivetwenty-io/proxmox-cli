@@ -778,9 +778,12 @@ pmx lab config add ceph --vxlan-tag 5015 --cidr 10.252.0.0/16 \
   --vcpu 8 --memory-max-gb 48 --data-disk-gb 100 --refquota-gb 1150
 ```
 
-scaffolds this shape in one step: **config add**'s schema default for
-**storage.controller** is already **virtio-scsi-single**, so
-**--osd-disks** needs no separate controller flag.
+scaffolds the topology and OSD disk shape above in one step: **config add**'s
+schema default for **storage.controller** is already **virtio-scsi-single**,
+so **--osd-disks** needs no separate controller flag. There is no
+**--memory-min-gb** flag, so **compute.memory.min_gb** still comes out at the
+schema default (32); edit it in the scaffolded file directly for a value
+other than that, such as the 24 shown above.
 
 # SEE ALSO
 

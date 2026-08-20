@@ -166,10 +166,12 @@ func runCephInstall(cmd *cobra.Command, name string, dryRun bool) error {
 	for i := range numNodes {
 		nodeIP, ierr := labNodeMgmtIP(lab.Network, i)
 		if ierr != nil {
+			cephRenderPartial(cmd, deps, rows)
 			return fmt.Errorf("resolve node %d mgmt IP: %w", i, ierr)
 		}
 		alreadyInstalled, ierr := ensureCephInstalled(deps, nodeIP)
 		if ierr != nil {
+			cephRenderPartial(cmd, deps, rows)
 			return fmt.Errorf("lab %q: %w", name, ierr)
 		}
 		status := "installed"
@@ -845,6 +847,15 @@ func runCephPool(cmd *cobra.Command, name string, opts cephPoolOptions, dryRun b
 		return err
 	}
 
+	// An empty --name would still probe cephPoolExists' name matching
+	// (p.PoolName == "" || p.Name == "") and could match an unrelated
+	// pool PVE reports with a blank name field, or otherwise reach
+	// CreateCephPool with an empty pool name; refuse it up front instead,
+	// before any API call at all.
+	if strings.TrimSpace(opts.name) == "" {
+		return fmt.Errorf("lab %q: --name is required and must not be empty", name)
+	}
+
 	node0 := labNodeVMName(lab.Name, 0)
 
 	if dryRun {
@@ -955,10 +966,21 @@ func runCephStatus(cmd *cobra.Command, name string) error {
 		_ = json.Unmarshal(raw, &payload)
 	}
 
+	// An empty JSON object body decodes cleanly (every field stays its zero
+	// value) but is not a genuinely healthy, empty cluster — it means the
+	// nested cluster returned no usable health section at all. Report that
+	// plainly instead of an empty health cell sitting beside all-zero
+	// counts, which reads as a false "everything is fine, nothing exists"
+	// signal.
+	health := st.Health.Status
+	if health == "" {
+		health = "(no status reported)"
+	}
+
 	rows := [][]string{
 		{"lab", name},
 		{"queried node", node0},
-		{"health", st.Health.Status},
+		{"health", health},
 		{"mons", strconv.Itoa(len(st.Monmap.Mons))},
 		{"mgrs", strconv.Itoa(st.mgrCount())},
 		{"osds", fmt.Sprintf("%d up / %d in / %d total",

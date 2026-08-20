@@ -113,6 +113,34 @@ func TestLabCephInstall_TransportFailure_Aborts(t *testing.T) {
 	require.Len(t, fake.Calls, 1)
 }
 
+// TestLabCephInstall_MidLoopFailure_RendersCompletedRowsBeforeErroring covers
+// the MINOR fix: mon/mgr/osd all call cephRenderPartial to render whatever
+// nodes completed before a mid-loop failure (cephRenderPartial's own doc
+// comment: "discarding them leaves the operator an opaque error and no idea
+// how far the run got"), but install used to return a bare error instead,
+// discarding node 0's already-completed row. Node 0 must succeed fully
+// (probe + install) before node 1's probe fails, and the completed node 0
+// row must still reach output even though the command errors.
+func TestLabCephInstall_MidLoopFailure_RendersCompletedRowsBeforeErroring(t *testing.T) {
+	lab := multiNodeTestLab("wayne", 3, "")
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: "absent"}, // 0: probe node 0
+		exec.FakeResponse{},                 // 1: install node 0
+		exec.FakeResponse{Err: errors.New("ssh: connect to host 10.10.1.11 port 22: no route to host")}, // 2: probe node 1
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	out, err := runGuestCmd(t, cmd, "install", "wayne")
+	require.Error(t, err)
+	require.Len(t, fake.Calls, 3)
+	assert.Contains(t, out, "install node 0")
+	assert.Contains(t, out, "installed")
+	assert.NotContains(t, out, "install node 1", "node 1 never completed and must not be rendered as a row")
+}
+
 // --- init / mon / mgr -------------------------------------------------------
 
 // cephTestLab returns a 3+-node lab whose network.cidr (the lab /16) and
@@ -683,6 +711,30 @@ func TestLabCephPool_ExistingPoolSkips(t *testing.T) {
 	assert.Contains(t, out, "already present")
 }
 
+// TestLabCephPool_EmptyName_RefusedBeforeAnyAPICall covers the MINOR fix:
+// cephPoolExists matches on p.PoolName == name || p.Name == name, so an
+// empty --name could match a pool PVE reports with a blank name field, or
+// otherwise reach CreateCephPool with an empty pool name. An empty --name
+// must be refused up front, before the inner API client is even
+// constructed.
+func TestLabCephPool_EmptyName_RefusedBeforeAnyAPICall(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+
+	prev := labInnerAPIClient
+	t.Cleanup(func() { labInnerAPIClient = prev })
+	labInnerAPIClient = func(_ *cobra.Command, _ *cli.Deps, _ string) (*apiclient.APIClient, error) {
+		t.Fatal("an empty --name must be rejected before the inner API client is constructed")
+		return nil, nil
+	}
+
+	_, err := runGuestCmd(t, cmd, "pool", "ceph", "--name", "")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "--name")
+	assert.Empty(t, fake.Calls)
+}
+
 func TestLabCephPool_DryRun_NoAPICalls(t *testing.T) {
 	lab := cephTestLab("ceph", 3)
 	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
@@ -734,4 +786,26 @@ func TestLabCephStatus_RendersHealth(t *testing.T) {
 	assert.Contains(t, out, "mons")
 	assert.Contains(t, out, "pools")
 	assert.Empty(t, fake.Calls, "ceph status is API-only: it must never ssh into a guest")
+}
+
+// TestLabCephStatus_EmptyPayload_ReportsNoStatus covers the MINOR fix: an
+// empty JSON object body (a decodable but unusable payload — no health
+// section at all) used to render the health cell as an empty string
+// alongside every count at zero, indistinguishable from a genuinely healthy,
+// empty cluster. It must instead render a clear "no status reported"
+// placeholder while still exiting 0 and still carrying the raw payload.
+func TestLabCephStatus_EmptyPayload_ReportsNoStatus(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/status", map[string]any{})
+
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "status", "ceph")
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "no status reported")
+	assert.Empty(t, fake.Calls)
 }
