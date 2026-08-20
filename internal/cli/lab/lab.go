@@ -38,11 +38,14 @@ func Group(_ *cli.Deps) *cobra.Command {
 			"  hostnet apply              reconcile nested bonds and bridges\n" +
 			"  sdn apply                  reconcile the inner VXLAN zone\n" +
 			"  nfs attach/status/detach   register the shared NFS exports\n" +
+			"  ceph install/init/...      stand up Ceph inside the nested cluster\n" +
 			"  scale --nodes N            migrate the lab to a new node count\n\n" +
 			"The cluster, qdevice, sdn, and nfs verbs run entirely over ssh into the lab " +
 			"guests' own mgmt IPs, never against the outer Proxmox VE API. `hostnet apply` " +
 			"talks to the nested cluster's own API instead, and `scale` drives all of them, " +
-			"plus outer-API VM creation, in the right order.\n\n" +
+			"plus outer-API VM creation, in the right order. `ceph` is the first family that " +
+			"uses both transports: `install` runs over guest ssh (pveceph install has no REST " +
+			"endpoint), the rest through the nested cluster's own API.\n\n" +
 			"Run `pmx lab <verb> --help` for the details of any one verb.",
 		Example: `  pmx lab create wayne --node sm-0
   pmx lab status wayne
@@ -57,6 +60,7 @@ func Group(_ *cli.Deps) *cobra.Command {
   pmx lab qdevice add wayne
   pmx lab sdn apply wayne
   pmx lab nfs attach wayne
+  pmx lab ceph install wayne
   pmx lab scale wayne --nodes 3`,
 		Annotations: map[string]string{cli.ProductAnnotation: config.ProductPVE},
 	}
@@ -79,6 +83,7 @@ func Group(_ *cli.Deps) *cobra.Command {
 		newNfsCmd(),
 		newScaleCmd(),
 		newHostnetCmd(),
+		newCephCmd(),
 	)
 
 	return cmd
