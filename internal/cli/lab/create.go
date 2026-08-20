@@ -1170,16 +1170,23 @@ func buildCreatePlan(
 		return nil, err
 	}
 	if primaryCIDR6 != "" {
-		_, subnet6Exists, serr := findSdnSubnet(*subnets, primaryCIDR6)
+		existing6, subnet6Exists, serr := findSdnSubnet(*subnets, primaryCIDR6)
 		if serr != nil {
 			return nil, fmt.Errorf("decode subnet list for vnet %q: %w", eff.Network.VnetID, serr)
 		}
+		snat6 := eff.Network.Snat6
+		desc6 := fmt.Sprintf("sdn subnet %q (ipv6) on vnet %q", primaryCIDR6, eff.Network.VnetID)
+		if snat6 {
+			desc6 += " with snat"
+		}
 		plan.steps = append(plan.steps, createStep{
-			desc:       fmt.Sprintf("sdn subnet %q (ipv6) on vnet %q", primaryCIDR6, eff.Network.VnetID),
-			skip:       subnet6Exists,
+			desc: desc6,
+			// A subnet that exists but still lacks the requested snat flag
+			// is not "already ensured": the apply below is what sets it.
+			skip:       subnet6Exists && (!snat6 || existing6.Snat.Bool()),
 			skipReason: "already exists",
 			apply: func(ctx context.Context) error {
-				return ensureLabSdnSubnetOn(ctx, ac, eff.Network.VnetID, primaryCIDR6, primaryGw6)
+				return ensureLabSdnSubnetOn(ctx, ac, eff.Network.VnetID, primaryCIDR6, primaryGw6, snat6)
 			},
 		})
 	}
@@ -1222,15 +1229,21 @@ func buildCreatePlan(
 				return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 			}
 			if cidr6 != "" {
-				_, extraSubnet6Exists, serr = findSdnSubnet(*extraSubnets, cidr6)
+				var existing6 sdnSubnetState
+				existing6, extraSubnet6Exists, serr = findSdnSubnet(*extraSubnets, cidr6)
 				if serr != nil {
 					return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 				}
+				// Same snat-drift rule as the primary vnet's subnet above.
+				extraSubnet6Exists = extraSubnet6Exists && (!eff.Network.Snat6 || existing6.Snat.Bool())
 			}
 		}
 
 		desc := fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", v.ID, zoneName, v.Tag)
 		switch {
+		case v.CIDR != "" && cidr6 != "" && eff.Network.Snat6:
+			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q (snat)",
+				v.ID, zoneName, v.Tag, v.CIDR, cidr6)
 		case v.CIDR != "" && cidr6 != "":
 			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q", v.ID, zoneName, v.Tag, v.CIDR, cidr6)
 		case v.CIDR != "":
@@ -1241,7 +1254,8 @@ func buildCreatePlan(
 			skip:       extraVnetExists && extraSubnetExists && extraSubnet6Exists,
 			skipReason: "already exists",
 			apply: func(ctx context.Context) error {
-				return ensureLabSdnVnetSubnet(ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, cidr6, gw6, tagAllowed)
+				return ensureLabSdnVnetSubnet(
+					ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, cidr6, gw6, tagAllowed, eff.Network.Snat6)
 			},
 		})
 	}

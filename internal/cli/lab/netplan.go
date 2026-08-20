@@ -94,7 +94,9 @@ func labNetworkPlanIssues(n config.LabNetwork) []string {
 // /64 or ANY other effective IPv6 subnet — carved ones included, before or
 // after it in declaration order. Distinct carved /64s cannot collide with
 // each other (one block, distinct subnet IDs), so only overrides need the
-// cross-check.
+// cross-check. network.snat6 is checked against both switches: it
+// contradicts IPv6 being off, and it is inert on any zone type but
+// "simple".
 func labIPv6PlanIssues(n config.LabNetwork) []string {
 	var issues []string
 
@@ -111,7 +113,24 @@ func labIPv6PlanIssues(n config.LabNetwork) []string {
 					i, v.CIDR6))
 			}
 		}
+		if n.Snat6 {
+			issues = append(issues,
+				"network.snat6: true is set but network.ipv6: false disables IPv6; remove one of the two")
+		}
 		return issues
+	}
+
+	// PVE renders a subnet's snat flag as masquerade rules on the outer
+	// node only for a Simple zone (and for an EVPN zone's designated exit
+	// nodes, which labs never provision). On any other zone type — a lab's
+	// "vxlan" alternative included — the flag is accepted by the API and
+	// then silently does nothing, which is exactly the shape validation
+	// exists to refuse.
+	if n.Snat6 && n.EffectiveZoneType() != config.DefaultZoneType {
+		issues = append(issues, fmt.Sprintf(
+			"network.snat6: true is set but network.zone_type is %q; PVE only renders subnet SNAT on a "+
+				"%q zone, so the flag would be silently inert — drop snat6 or move the lab to a %q zone",
+			n.EffectiveZoneType(), config.DefaultZoneType, config.DefaultZoneType))
 	}
 
 	if n.CIDR6 != "" {

@@ -11,6 +11,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/permshared"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -245,6 +246,10 @@ type sdnSubnetState struct {
 	Cidr    string `json:"cidr"`
 	Gateway string `json:"gateway"`
 	Zone    string `json:"zone"`
+	// Snat is the subnet's masquerade flag. PVE reports its boolean flags
+	// in several encodings depending on version and endpoint, hence the
+	// tolerant decoder rather than a plain bool.
+	Snat permshared.PVEBool `json:"snat"`
 }
 
 // findSdnZone decodes each entry of list and returns the one whose Zone
@@ -409,13 +414,16 @@ func sdnZoneAllowsVnetTag(zoneType string) bool {
 // skips the IPv6 sub-step — either the lab opted out (network.ipv6: false)
 // or this vnet has no subnets at all. The caller (ensureLabSdnVnets, or
 // create's plan builder) resolves both values via the lab's IPv6 address
-// plan (ipv6.go); this function never derives anything itself.
+// plan (ipv6.go); this function never derives anything itself. snat6
+// requests masquerade on that IPv6 subnet (network.snat6); the IPv4 subnet
+// is never given the flag, since a lab's IPv4 egress is the outer
+// platform's business, not this command's.
 //
 // This is the vnet-agnostic body shared by every vnet a lab's network
 // declares: ensureLabSdnVnets calls it once for the primary VnetID/CIDR pair
 // and once per Network.Vnets[] entry, so there is exactly one code path that
 // can create or update an outer vnet+subnet pair.
-func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneName, vnetID, alias string, tag int, cidr, gateway, cidr6, gateway6 string, tagAllowed bool) error {
+func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneName, vnetID, alias string, tag int, cidr, gateway, cidr6, gateway6 string, tagAllowed, snat6 bool) error {
 	if vnetID == "" {
 		return fmt.Errorf("vnet id is empty; cannot ensure an SDN vnet")
 	}
@@ -469,14 +477,14 @@ func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneN
 	if cidr == "" {
 		return nil
 	}
-	if err := ensureLabSdnSubnetOn(ctx, api, vnetID, cidr, gateway); err != nil {
+	if err := ensureLabSdnSubnetOn(ctx, api, vnetID, cidr, gateway, false); err != nil {
 		return err
 	}
 
 	if cidr6 == "" {
 		return nil
 	}
-	return ensureLabSdnSubnetOn(ctx, api, vnetID, cidr6, gateway6)
+	return ensureLabSdnSubnetOn(ctx, api, vnetID, cidr6, gateway6, snat6)
 }
 
 // labVnetV6Subnet resolves the IPv6 subnet+gateway pair for network.vnets[i]
@@ -528,7 +536,7 @@ func labPrimaryV6Subnet(n config.LabNetwork) (cidr6, gateway6 string, err error)
 // whichever vnet (primary or a Network.Vnets[] entry) it is reconciling; a
 // caller must never invoke this with an empty cidr — ensureLabSdnVnetSubnet
 // already skips the call in that case rather than passing one through.
-func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID, cidr, gateway string) error {
+func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID, cidr, gateway string, snat bool) error {
 	list, err := api.Cluster.ListSdnVnetsSubnets(ctx, vnetID, nil)
 	if err != nil {
 		return fmt.Errorf("list subnets on vnet %q: %w", vnetID, err)
@@ -544,17 +552,33 @@ func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID,
 		if gateway != "" {
 			params.Gateway = new(gateway)
 		}
+		if snat {
+			params.Snat = new(true)
+		}
 		if err := api.Cluster.CreateSdnVnetsSubnets(ctx, vnetID, params); err != nil {
 			return fmt.Errorf("create subnet %q on vnet %q: %w", cidr, vnetID, err)
 		}
 		return nil
 	}
 
-	if gateway == "" || existing.Gateway == gateway {
+	params := &cluster.UpdateSdnVnetsSubnetsParams{}
+	changed := false
+	if gateway != "" && existing.Gateway != gateway {
+		params.Gateway = new(gateway)
+		changed = true
+	}
+	// snat is only ever SET, never cleared: config.LabNetwork.Snat6's
+	// contract mirrors network.ipv6's, where switching the feature off
+	// stops further provisioning instead of tearing down what a previous
+	// run (or the operator, by hand) already applied.
+	if snat && !existing.Snat.Bool() {
+		params.Snat = new(true)
+		changed = true
+	}
+	if !changed {
 		return nil
 	}
 
-	params := &cluster.UpdateSdnVnetsSubnetsParams{Gateway: new(gateway)}
 	if err := api.Cluster.UpdateSdnVnetsSubnets(ctx, vnetID, existing.Subnet, params); err != nil {
 		return fmt.Errorf("update subnet %q on vnet %q: %w", existing.Subnet, vnetID, err)
 	}
@@ -588,7 +612,7 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 		return err
 	}
 	if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, n.VnetID, n.VnetAlias, n.VxlanTag,
-		n.CIDR, n.Mgmt.Gateway, primaryCIDR6, primaryGw6, tagAllowed); err != nil {
+		n.CIDR, n.Mgmt.Gateway, primaryCIDR6, primaryGw6, tagAllowed, n.Snat6); err != nil {
 		return err
 	}
 
@@ -601,7 +625,7 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 			return err
 		}
 		if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, v.ID, v.Alias, v.Tag,
-			v.CIDR, v.Gateway, cidr6, gw6, tagAllowed); err != nil {
+			v.CIDR, v.Gateway, cidr6, gw6, tagAllowed, n.Snat6); err != nil {
 			return err
 		}
 	}

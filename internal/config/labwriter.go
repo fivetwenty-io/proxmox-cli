@@ -205,11 +205,16 @@ func appendLabIPv6Block(b *strings.Builder, net LabNetwork) {
 	fmt.Fprint(b, "  # cidr6: the lab's IPv6 block (/48 or wider). Omitted means a\n")
 	fmt.Fprint(b, "  # stable RFC 4193 ULA /48 derived from cidr above, unique per lab\n")
 	fmt.Fprint(b, "  # with zero config.\n")
+	fmt.Fprint(b, "  # snat6: masquerade the lab's IPv6 subnets for egress. Off by\n")
+	fmt.Fprint(b, "  # default (ULA-internal); only honored on a simple zone.\n")
 	if net.IPv6 != nil {
 		fmt.Fprintf(b, "  ipv6: %t\n", *net.IPv6)
 	}
 	if net.CIDR6 != "" {
 		fmt.Fprintf(b, "  cidr6: %s\n", yamlQuote(net.CIDR6))
+	}
+	if net.Snat6 {
+		fmt.Fprint(b, "  snat6: true\n")
 	}
 }
 

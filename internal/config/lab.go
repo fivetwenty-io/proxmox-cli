@@ -94,6 +94,18 @@ type LabNetwork struct {
 	// when EffectiveIPv6 is false (validation refuses the combination).
 	CIDR6 string `yaml:"cidr6,omitempty" json:"cidr6,omitempty"`
 
+	// Snat6 requests source NAT (masquerade) on every IPv6 subnet the lab
+	// provisions, giving its ULA addresses egress through the outer node's
+	// own outgoing interface. Off by default: a lab's IPv6 is ULA-internal
+	// unless the operator asks for egress. PVE only honors the flag on a
+	// "simple" zone (and on an EVPN zone's exit nodes, which labs do not
+	// use), so validation refuses it on any other ZoneType, and it is
+	// refused outright when EffectiveIPv6 is false. Reconciliation only
+	// ever SETS the flag — like every other IPv6 field, turning it back off
+	// stops further provisioning rather than stripping what is already
+	// applied.
+	Snat6 bool `yaml:"snat6,omitempty" json:"snat6,omitempty"`
+
 	// ZoneName is the SDN zone this lab's vnet lives in. Empty defaults to
 	// "labs" (EffectiveZoneName) — the deployed outer Simple zone (decision
 	// D4 of the multi-node lab plan) — rather than the platform's historical
