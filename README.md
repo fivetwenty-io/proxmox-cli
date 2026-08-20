@@ -1050,8 +1050,13 @@ Set `network.ipv6: false` to keep a lab IPv4-only; turning it off later
 stops further IPv6 provisioning but never deletes what already exists.
 Set `network.snat6: true` for egress — `pmx lab create`/`pmx lab net
 apply` then mark every IPv6 subnet for masquerade, which PVE only renders
-on a `simple` zone (validation refuses it elsewhere). Cluster formation,
-NFS, and pmx's own ssh transport stay on IPv4 either way.
+on a `simple` zone (validation refuses it elsewhere). Rendering also needs
+the PVE host itself to have an IPv6 route: PVE picks the egress interface
+by routing to `2001:4860:4860::8888`, and on a host with no IPv6 route it
+logs `interface for SNAT could not be resolved` and writes no ip6tables
+rule at all, so `net apply` warns when the node declares no IPv6 gateway.
+Cluster formation, NFS, and pmx's own ssh transport stay on IPv4 either
+way.
 
 ```yaml
 labs_dir: labs.d/

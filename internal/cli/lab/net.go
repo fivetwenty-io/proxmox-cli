@@ -110,6 +110,17 @@ func newNetApplyCmd() *cobra.Command {
 				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
+			// The IPv6 half of the plan is checked here, not only where a
+			// lab is written (`lab config add`) or first built (`lab
+			// create`): a hand-edited labs.d file reaches this verb without
+			// passing either, and this is the verb that renders the IPv6
+			// subnets, so a contradiction — snat6 on a zone type PVE renders
+			// no SNAT from, snat6 with IPv6 off — must refuse here rather
+			// than apply as a silent no-op.
+			if issues := labIPv6PlanIssues(lab.Network); len(issues) > 0 {
+				return fmt.Errorf("lab %q: IPv6 plan is incoherent:\n  %s", name, strings.Join(issues, "\n  "))
+			}
+
 			ctx := cmd.Context()
 
 			if !dryRun {
@@ -119,6 +130,9 @@ func newNetApplyCmd() *cobra.Command {
 				}
 				if err := ensureLabSdnVnets(ctx, deps.API, lab.Network, zoneType); err != nil {
 					return err
+				}
+				if warning := labSnat6EgressWarning(ctx, deps.API, lab.Network, deps.Node); warning != "" {
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), warning)
 				}
 			}
 
@@ -599,6 +613,48 @@ func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID,
 // silently skipped, since every lab must name a primary vnet; an empty
 // Vnets[] entry id is likewise refused, so a malformed extra-vnet entry
 // cannot silently no-op instead of failing loud.
+// labSnat6EgressWarning reports when a lab asks for network.snat6 on a host
+// that looks unable to render it, as the empty string when there is nothing
+// to say.
+//
+// PVE resolves the SNAT egress interface by asking the kernel which route
+// reaches 2001:4860:4860::8888. On a host with no IPv6 route at all that
+// lookup fails, and SimplePlugin logs "interface for SNAT could not be
+// resolved" and renders NO ip6tables rule — the subnet keeps its snat flag
+// and nothing masquerades, which is precisely the silent no-op this flag's
+// validation exists to prevent. The host's own network config is the only
+// part of that this command can see, so the warning is phrased as a
+// possibility: a host reaching IPv6 through a router advertisement declares
+// no gateway6 anywhere and still renders fine.
+//
+// A failure to read the node's interfaces is not worth failing the apply
+// over — the SDN work already succeeded — so it yields no warning.
+func labSnat6EgressWarning(
+	ctx context.Context, api *apiclient.APIClient, n config.LabNetwork, node string,
+) string {
+	if !n.Snat6 || !n.EffectiveIPv6() {
+		return ""
+	}
+	list, err := api.Nodes.ListNetwork(ctx, node, nil)
+	if err != nil || list == nil {
+		return ""
+	}
+	ifaces, err := hostnetDecodeInterfaces(*list)
+	if err != nil {
+		return ""
+	}
+	for _, iface := range ifaces {
+		if iface.Gateway6 != "" {
+			return ""
+		}
+	}
+	return fmt.Sprintf(
+		"WARN: network.snat6 is set, but no interface on node %q declares an IPv6 gateway. PVE picks the "+
+			"SNAT egress interface by routing to 2001:4860:4860::8888; if the host has no IPv6 route it "+
+			"logs \"interface for SNAT could not be resolved\" and renders no ip6tables rule, leaving the "+
+			"subnet flagged for SNAT with nothing masquerading it.", node)
+}
+
 func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.LabNetwork, zoneType string) error {
 	if n.VnetID == "" {
 		return fmt.Errorf("lab network vnet_id is empty; cannot ensure an SDN vnet")

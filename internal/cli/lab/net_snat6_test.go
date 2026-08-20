@@ -142,3 +142,63 @@ func TestLabIPv6PlanIssues_Snat6Contradictions(t *testing.T) {
 
 	assert.Empty(t, labIPv6PlanIssues(snat6TestLab()), "a simple-zone dual-stack lab with snat6 is valid")
 }
+
+// TestLabSnat6EgressWarning_HostWithoutIPv6Route covers what a live run
+// turned up: PVE accepts the subnet's snat flag and then renders no
+// ip6tables rule at all when it cannot resolve an IPv6 egress interface, so
+// a lab on a host with no IPv6 route gets a flag that masquerades nothing.
+// The apply still succeeds — the warning is the whole point.
+func TestLabSnat6EgressWarning_HostWithoutIPv6Route(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/sm-0/network", []any{
+		map[string]any{"iface": "vmbr0", "type": "bridge", "gateway": "10.0.0.1"},
+	})
+	api, err := apiclient.NewAPIClient(f.Options)
+	require.NoError(t, err)
+
+	warning := labSnat6EgressWarning(context.Background(), api, snat6TestLab(), "sm-0")
+	assert.Contains(t, warning, "no interface on node \"sm-0\" declares an IPv6 gateway")
+}
+
+// TestLabSnat6EgressWarning_SilentWhenNotApplicable pins the three cases
+// that must stay quiet: a host that does declare an IPv6 gateway, a lab that
+// never asked for snat6, and a lab with IPv6 switched off.
+func TestLabSnat6EgressWarning_SilentWhenNotApplicable(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/sm-0/network", []any{
+		map[string]any{"iface": "vmbr0", "type": "bridge", "gateway6": "2001:db8::1"},
+	})
+	api, err := apiclient.NewAPIClient(f.Options)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	assert.Empty(t, labSnat6EgressWarning(ctx, api, snat6TestLab(), "sm-0"))
+
+	noSnat := snat6TestLab()
+	noSnat.Snat6 = false
+	assert.Empty(t, labSnat6EgressWarning(ctx, api, noSnat, "sm-0"))
+
+	off := false
+	ipv4Only := snat6TestLab()
+	ipv4Only.IPv6 = &off
+	assert.Empty(t, labSnat6EgressWarning(ctx, api, ipv4Only, "sm-0"))
+}
+
+// TestNetApply_RefusesIncoherentIPv6Plan pins where the snat6 contradiction
+// is caught. A hand-edited labs.d file never passes through `lab config add`
+// or `lab create`, so `net apply` — the verb that renders the IPv6 subnets —
+// has to refuse it itself rather than write a flag PVE renders nothing from.
+func TestNetApply_RefusesIncoherentIPv6Plan(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := netTestLab("wayne")
+	lab.Network.Snat6 = true
+	lab.Network.ZoneType = "vxlan"
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildNetCmd(t, path, f, "node1")
+
+	_, err := runNetCmd(t, cmd, "apply", "wayne")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "IPv6 plan is incoherent")
+	assert.Contains(t, err.Error(), "vxlan")
+}

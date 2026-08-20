@@ -406,9 +406,16 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   With **true**, **pmx lab create** and **pmx lab net apply** set the
   SDN subnet's **snat** flag on every IPv6 subnet they ensure (never on
   the IPv4 one). PVE only renders subnet SNAT on a **simple** zone, so
-  validation rejects the combination with any other **network.zone_type**.
-  Like every other IPv6 field, turning it back off stops provisioning it
-  and never strips the flag from a subnet that already carries it.
+  validation rejects the combination with any other **network.zone_type**,
+  and **pmx lab net apply** re-checks it even for a hand-edited lab file
+  that never passed through **pmx lab config add**. Rendering further
+  depends on the PVE host having an IPv6 route of its own: PVE resolves the
+  egress interface by routing to 2001:4860:4860::8888 and, failing that,
+  logs *interface for SNAT could not be resolved* and renders no rule, so
+  **net apply** warns when the target node declares no IPv6 gateway
+  anywhere. Like every other IPv6 field, turning it back off stops
+  provisioning it and never strips the flag from a subnet that already
+  carries it.
 
 **network.mgmt.subnet**
 : Management subnet CIDR: an address-plan reservation within
