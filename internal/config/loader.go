@@ -408,7 +408,7 @@ func ResolveLabs(cfg *Config, configPath string) (map[string]*Lab, error) {
 		return nil, err
 	}
 
-	if err := validateAllTopologies(result); err != nil {
+	if err := validateAllLabs(result); err != nil {
 		return nil, err
 	}
 
@@ -459,10 +459,11 @@ func validateVnetIDUniqueness(labs map[string]*Lab) error {
 	return nil
 }
 
-// validateAllTopologies runs ValidateTopology against every lab in labs and
-// returns a single combined error naming every issue found across every lab,
-// or nil when every lab's topology is valid.
-func validateAllTopologies(labs map[string]*Lab) error {
+// validateAllLabs runs ValidateTopology and ValidateStorage against every lab
+// in labs and returns a single combined error naming every issue found
+// across every lab, or nil when every lab's topology and storage config is
+// valid.
+func validateAllLabs(labs map[string]*Lab) error {
 	names := make([]string, 0, len(labs))
 	for name := range labs {
 		names = append(names, name)
@@ -472,12 +473,13 @@ func validateAllTopologies(labs map[string]*Lab) error {
 	var issues []string
 	for _, name := range names {
 		issues = append(issues, ValidateTopology(name, labs[name].Topology)...)
+		issues = append(issues, ValidateStorage(name, labs[name].Storage)...)
 	}
 
 	if len(issues) == 0 {
 		return nil
 	}
-	return fmt.Errorf("invalid lab topology:\n  %s", strings.Join(issues, "\n  "))
+	return fmt.Errorf("invalid lab config:\n  %s", strings.Join(issues, "\n  "))
 }
 
 // loadLabFile reads and parses path as a bare single-lab YAML document: the

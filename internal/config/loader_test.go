@@ -441,3 +441,27 @@ func TestResolveLabs_ValidTopology_Passes(t *testing.T) {
 	require.Equal(t, 3, labs["pve-cpi"].Topology.Nodes)
 	require.Equal(t, "pvecpi", labs["pve-cpi"].Network.VnetID)
 }
+
+// TestResolveLabs_OSDDisksSizeMissing_Errors covers ResolveLabs wiring
+// ValidateStorage in: a labs.d lab file setting storage.osd_disks.count
+// without storage.osd_disks.size_gb must fail to resolve, naming the missing
+// field.
+func TestResolveLabs_OSDDisksSizeMissing_Errors(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	labsDir := filepath.Join(dir, "labs.d")
+	require.NoError(t, os.MkdirAll(labsDir, 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(labsDir, "ceph.yaml"),
+		[]byte("mode: nested\nstorage:\n  osd_disks:\n    count: 2\n"),
+		0o600,
+	))
+
+	cfg := &config.Config{LabsDir: "labs.d"}
+
+	_, err := config.ResolveLabs(cfg, configPath)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "ceph")
+	require.ErrorContains(t, err, "osd_disks.size_gb")
+}

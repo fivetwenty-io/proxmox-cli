@@ -591,6 +591,21 @@ type LabStorage struct {
 
 	// SSD marks the disk as SSD-backed to the guest.
 	SSD bool `yaml:"ssd" json:"ssd"`
+
+	// OSDDisks describes extra whole-raw-device data disks attached to every
+	// node VM for nested Ceph OSDs. Nil means none — today's shape. Per-node
+	// overridable via LabNodeOverride.OSDDiskCount/OSDDiskGB.
+	OSDDisks *LabOSDDisks `yaml:"osd_disks,omitempty" json:"osd_disks,omitempty"`
+}
+
+// LabOSDDisks describes extra whole-raw-device data disks attached to every
+// node VM after the OS (scsi0) and data (scsi1) disks — scsi2 .. scsi(1+Count).
+// They exist for nested Ceph OSDs (ceph-lab-plan §5): each is emitted with
+// discard=on,iothread=1,ssd=1,backup=0 and a stable serial (osd0, osd1, ...)
+// so the guest sees them at /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_osdN.
+type LabOSDDisks struct {
+	Count  int `yaml:"count,omitempty" json:"count,omitempty"`
+	SizeGB int `yaml:"size_gb,omitempty" json:"size_gb,omitempty"`
 }
 
 // LabDNS describes the DNS zone associated with a lab.
@@ -658,11 +673,13 @@ type LabTopology struct {
 // for this field", not "set this field to zero" — there is no sizing
 // dimension for which zero is a meaningful VM spec.
 type LabNodeOverride struct {
-	VCPU        int `yaml:"vcpu,omitempty" json:"vcpu,omitempty"`
-	MemoryMinGB int `yaml:"memory_min_gb,omitempty" json:"memory_min_gb,omitempty"`
-	MemoryMaxGB int `yaml:"memory_max_gb,omitempty" json:"memory_max_gb,omitempty"`
-	OSDiskGB    int `yaml:"os_disk_gb,omitempty" json:"os_disk_gb,omitempty"`
-	DataDiskGB  int `yaml:"data_disk_gb,omitempty" json:"data_disk_gb,omitempty"`
+	VCPU         int `yaml:"vcpu,omitempty" json:"vcpu,omitempty"`
+	MemoryMinGB  int `yaml:"memory_min_gb,omitempty" json:"memory_min_gb,omitempty"`
+	MemoryMaxGB  int `yaml:"memory_max_gb,omitempty" json:"memory_max_gb,omitempty"`
+	OSDiskGB     int `yaml:"os_disk_gb,omitempty" json:"os_disk_gb,omitempty"`
+	DataDiskGB   int `yaml:"data_disk_gb,omitempty" json:"data_disk_gb,omitempty"`
+	OSDDiskCount int `yaml:"osd_disk_count,omitempty" json:"osd_disk_count,omitempty"`
+	OSDDiskGB    int `yaml:"osd_disk_gb,omitempty" json:"osd_disk_gb,omitempty"`
 }
 
 // MinTopologyNodes and MaxTopologyNodes bound LabTopology.Nodes' valid
@@ -671,6 +688,10 @@ const (
 	MinTopologyNodes = 1
 	MaxTopologyNodes = 5
 )
+
+// MaxOSDDisksPerNode bounds LabOSDDisks.Count (and its per-node override,
+// LabNodeOverride.OSDDiskCount): 0 through 8 extra OSD disks per node VM.
+const MaxOSDDisksPerNode = 8
 
 // Valid LabTopology.Qdevice values.
 const (
@@ -715,8 +736,8 @@ func QdeviceRequired(t LabTopology) bool {
 
 // ValidateTopology checks t for internal coherence and returns one message
 // per problem found, or nil when t is valid. name is the lab's name, used to
-// prefix every message so a multi-lab validation error (see
-// validateAllTopologies) can name which lab each issue belongs to.
+// prefix every message so a multi-lab validation error (see validateAllLabs)
+// can name which lab each issue belongs to.
 func ValidateTopology(name string, t LabTopology) []string {
 	var issues []string
 
@@ -782,6 +803,49 @@ func ValidateTopology(name string, t LabTopology) []string {
 	return issues
 }
 
+// OSDDiskCount returns the number of extra OSD disks s calls for, 0 when unset.
+func OSDDiskCount(s LabStorage) int {
+	if s.OSDDisks == nil {
+		return 0
+	}
+	return s.OSDDisks.Count
+}
+
+// OSDDiskSizeGB returns the per-disk OSD size in GiB, 0 when unset.
+func OSDDiskSizeGB(s LabStorage) int {
+	if s.OSDDisks == nil {
+		return 0
+	}
+	return s.OSDDisks.SizeGB
+}
+
+// ValidateStorage returns human-readable issues with a lab's storage config,
+// or nil. It mirrors ValidateTopology's contract and is run at load time.
+func ValidateStorage(name string, s LabStorage) []string {
+	if s.OSDDisks == nil {
+		return nil
+	}
+	var issues []string
+	d := *s.OSDDisks
+	if d.Count > 0 && s.Controller != "virtio-scsi-single" {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: storage.osd_disks requires storage.controller \"virtio-scsi-single\" (OSD disks are emitted with iothread=1, which PVE rejects on other SCSI controllers); got %q", name, s.Controller))
+	}
+	if d.Count < 0 || d.Count > MaxOSDDisksPerNode {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: storage.osd_disks.count %d is invalid: must be 0 through at most %d", name, d.Count, MaxOSDDisksPerNode))
+	}
+	if d.Count > 0 && d.SizeGB <= 0 {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: storage.osd_disks.size_gb is required (positive GiB) when osd_disks.count is set", name))
+	}
+	if d.Count == 0 && d.SizeGB > 0 {
+		issues = append(issues, fmt.Sprintf(
+			"lab %q: storage.osd_disks.count is required when osd_disks.size_gb is set", name))
+	}
+	return issues
+}
+
 // SizingProfile is a set of default per-node compute/storage values a lab's
 // nodes draw from when neither the lab's own Compute/Storage fields nor a
 // per-node override set a given value explicitly (multi-node lab plan §3.4).
@@ -823,9 +887,10 @@ func ProfileForTopology(t LabTopology) SizingProfile {
 // lab-wide base every node without a more specific override uses, matching
 // today's single-VM behavior when Compute/Storage are set), then layering
 // lab.Topology.NodeOverrides[idx]'s own non-zero fields on top of that. Only
-// the sizing fields are read from Storage (Controller/IOThread/Discard/SSD
-// and RefquotaGB/Pool are lab-wide and copied through unchanged from
-// lab.Storage). idx is not range-checked here — out-of-range indexes simply
+// the sizing fields (including OSDDisks — see LabNodeOverride.OSDDiskCount/
+// OSDDiskGB) are per-node overridable from Storage; Controller/IOThread/
+// Discard/SSD and RefquotaGB/Pool are lab-wide and copied through unchanged
+// from lab.Storage. idx is not range-checked here — out-of-range indexes simply
 // find no NodeOverrides entry and use the lab-level/profile values, since
 // range-checking is ValidateTopology's job at config-load time, not this
 // read path's.
@@ -866,6 +931,19 @@ func EffectiveNodeSizing(lab *Lab, idx int) (LabCompute, LabStorage) {
 		}
 		if ov.DataDiskGB != 0 {
 			storage.DataDiskGB = ov.DataDiskGB
+		}
+		if ov.OSDDiskCount > 0 || ov.OSDDiskGB > 0 {
+			cur := LabOSDDisks{}
+			if storage.OSDDisks != nil {
+				cur = *storage.OSDDisks
+			}
+			if ov.OSDDiskCount > 0 {
+				cur.Count = ov.OSDDiskCount
+			}
+			if ov.OSDDiskGB > 0 {
+				cur.SizeGB = ov.OSDDiskGB
+			}
+			storage.OSDDisks = &cur
 		}
 	}
 
