@@ -165,7 +165,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `lab context rm` | — | — | deferred — deletes a `lab-<name>` context from the operator's own config.yml and its keychain secret; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab context sync` | — | — | deferred — creates the pmx@pve token user and ACL on a lab's nested cluster and rewrites the local `lab-<name>` context and its keychain secret; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab create` | — | — | deferred — provisions SDN zone/vnet/subnet, storage, pool, and a VM on the cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
-| `lab destroy` | — | — | deferred — deletes a lab's VM, pool, storage, and SDN resources; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab destroy` | — | — | deferred — deletes a lab's VM(s), resource pool, storage definition, and optionally the ZFS dataset (--purge-dataset); SDN teardown stays with the host scripts; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab hostnet apply` | — | — | deferred — rewrites the outer node's bridge and bond configuration, which can sever the suite's own connection to it; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab list` | ✓ | — |  |
 | `lab net apply` | — | — | deferred — reconciles and commits cluster-wide SDN configuration; needs the dedicated lab-pmx destructive test lab as the standing target |

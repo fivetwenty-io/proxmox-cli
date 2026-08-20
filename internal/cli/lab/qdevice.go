@@ -701,8 +701,9 @@ func newQdeviceRemoveCmd() *cobra.Command {
 			"the nested cluster's corosync quorum config.\n\n" +
 			"Idempotent: if node 0 does not report a registered QDevice, the command reports " +
 			"it as already absent and does nothing further.\n\n" +
-			"This does NOT destroy the QDevice VM itself. Use `pmx lab destroy --node q`, or a " +
-			"full `pmx lab destroy`, for that once no cluster references it.\n\n" +
+			"This does NOT destroy the QDevice VM itself. Use `pmx pve qemu delete <vmid>` to " +
+			"delete the QDevice VM directly, or a full `pmx lab destroy`, for that once no " +
+			"cluster references it.\n\n" +
 			"Per multi-node lab plan §9, this must run BEFORE any node join that would " +
 			"otherwise leave the vote count in an odd+witness (Last-Man-Standing) shape — " +
 			"never simultaneously with a join.",

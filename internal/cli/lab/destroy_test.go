@@ -2,6 +2,7 @@ package lab
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
@@ -597,4 +599,288 @@ func TestDestroy_UnclassifiablePoolMember_RefusesLoudly(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "totally-unrelated")
 	assert.Zero(t, mutatingCalls, "must refuse before any mutating call")
+}
+
+// --- --purge-dataset -------------------------------------------------------
+
+// destroyWireSSH wires deps.Ctx and a fresh *exec.FakeRunner into cmd's
+// *cli.Deps, mirroring buildGuestSSHCmd's deps (guestssh_test.go:53-58). The
+// destroy fixtures leave both deps.Ctx and deps.Runner nil, so --purge-dataset
+// tests (which need an ssh transport) must wire them explicitly.
+func destroyWireSSH(t *testing.T, cmd *cobra.Command) (*cli.Deps, *exec.FakeRunner) {
+	t.Helper()
+
+	deps := cli.GetDeps(cmd)
+	deps.Ctx = &config.Context{Host: "sm-0.lab.internal", SSH: config.SSHBlock{User: "root", Port: 22}}
+	fake := exec.Fake()
+	deps.Runner = fake
+	return deps, fake
+}
+
+// TestDestroy_PurgeDataset_RunsZfsDestroyAfterStorageDelete covers the happy
+// path: --purge-dataset on a 1-node lab destroys the VM, pool, and storage
+// exactly as --purge does, then runs exactly one ssh call to destroy the
+// lab's ZFS dataset on the context host.
+func TestDestroy_PurgeDataset_RunsZfsDestroyAfterStorageDelete(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var calls []string
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "stopped", "type": "qemu",
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "Status")
+		testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": 100})
+	})
+	deleteUPID := "UPID:pve1:00000002:00000002:65000000:qmdestroy:100:root@pam:"
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/100", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "Delete")
+		testhelper.WriteData(w, deleteUPID)
+	})
+	destroyHandleTaskStatus(f, "pve1", deleteUPID)
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "DeletePool")
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "DeleteStorage")
+		testhelper.WriteData(w, nil)
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, fake := destroyWireSSH(t, cmd)
+
+	stdout, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"Status", "Delete", "DeletePool", "DeleteStorage"}, calls)
+
+	require.Len(t, fake.Calls, 1)
+	assert.Equal(t, "ssh", fake.Calls[0].Name)
+	argv := strings.Join(fake.Calls[0].Args, " ")
+	assert.Contains(t, argv, "sm-0.lab.internal")
+	assert.Contains(t, argv,
+		`if zfs list "tank/labs/alpha" >/dev/null 2>&1; then zfs destroy -r "tank/labs/alpha"; fi`)
+	assert.Contains(t, stdout.String(), "destroyed")
+}
+
+// TestDestroy_PurgeDataset_ThreeNodeLabRunsOnceAfterEverything covers the
+// multi-VM shape: a 4-node lab (even node count, so an auto QDevice is also
+// present per config.QdeviceRequired — odd counts never carry one) with
+// --purge-dataset destroys all five VMs (nodes 0-3 plus the QDevice), the
+// pool, and the storage, then runs the ssh dataset-destroy call exactly
+// once, and it is the very last Runner call.
+func TestDestroy_PurgeDataset_ThreeNodeLabRunsOnceAfterEverything(t *testing.T) {
+	lab := cleanLab("multi")
+	lab.Topology = config.LabTopology{Nodes: 4}
+	cfg := &config.Config{Labs: map[string]*config.Lab{"multi": lab}}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var calls []string
+	destroyHandleClusterResources(f,
+		map[string]any{"vmid": 300, "node": "pve1", "pool": "lab-multi", "name": "lab-multi-0", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 301, "node": "pve1", "pool": "lab-multi", "name": "lab-multi-1", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 302, "node": "pve1", "pool": "lab-multi", "name": "lab-multi-2", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 303, "node": "pve1", "pool": "lab-multi", "name": "lab-multi-3", "status": "stopped", "type": "qemu"},
+		map[string]any{"vmid": 304, "node": "pve1", "pool": "lab-multi", "name": "lab-multi-q", "status": "stopped", "type": "qemu"},
+	)
+	// Every route is registered up front, before destroyRun executes: see the
+	// identical note in TestDestroy_ThreeNodeCluster_DestroysInReverseOrder.
+	for _, vmid := range []string{"300", "301", "302", "303", "304"} {
+		deleteUPID := "UPID:pve1:00000000:00000000:65000000:qmdestroy:" + vmid + ":root@pam:"
+		f.HandleFunc("GET /api2/json/nodes/pve1/qemu/"+vmid+"/status/current", func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, map[string]any{"status": "stopped", "vmid": vmid})
+		})
+		f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/"+vmid, func(w http.ResponseWriter, _ *http.Request) {
+			calls = append(calls, "Delete-"+vmid)
+			testhelper.WriteData(w, deleteUPID)
+		})
+		destroyHandleTaskStatus(f, "pve1", deleteUPID)
+	}
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "DeletePool")
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-multi", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "DeleteStorage")
+		testhelper.WriteData(w, nil)
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, fake := destroyWireSSH(t, cmd)
+
+	stdout, _, err := destroyRun(t, cmd, "multi", "--yes", "--purge-dataset")
+	require.NoError(t, err)
+
+	require.Len(t, calls, 7, "5 VM deletes + pool + storage")
+	assert.Equal(t, []string{
+		"Delete-304", "Delete-303", "Delete-302", "Delete-301", "Delete-300", "DeletePool", "DeleteStorage",
+	}, calls)
+
+	require.Len(t, fake.Calls, 1, "the dataset destroy must run exactly once regardless of VM count")
+	assert.Equal(t, "ssh", fake.Calls[0].Name)
+	assert.Contains(t, stdout.String(), "destroyed")
+}
+
+// TestDestroy_PurgeDatasetImpliesPurge covers --purge-dataset passed alone
+// (without --purge): it must still remove the lab's pool and storage, since
+// --purge-dataset implies --purge.
+func TestDestroy_PurgeDatasetImpliesPurge(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var calls []string
+	destroyHandleClusterResources(f) // no live VMs at all
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "DeletePool")
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		calls = append(calls, "DeleteStorage")
+		testhelper.WriteData(w, nil)
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, fake := destroyWireSSH(t, cmd)
+
+	stdout, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"DeletePool", "DeleteStorage"}, calls,
+		"--purge-dataset alone must still delete pool and storage")
+	require.Len(t, fake.Calls, 1)
+	assert.Contains(t, stdout.String(), "destroyed")
+}
+
+// TestDestroy_PurgeDataset_InPlanAndPrompt covers --dry-run --purge-dataset:
+// the plan/prompt text must name the dataset and host that a real run would
+// destroy, and --dry-run must still perform no mutation at all — no HTTP
+// call and no Runner call.
+func TestDestroy_PurgeDataset_InPlanAndPrompt(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	var mutatingCalls int
+	destroyHandleClusterResources(f, map[string]any{
+		"vmid": 100, "node": "pve1", "pool": "lab-alpha", "name": "lab-alpha", "status": "running", "type": "qemu",
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, _ *http.Request) {
+		mutatingCalls++ // never reached in a dry-run; any call here is a bug
+	})
+	f.HandleFunc("DELETE /api2/json/nodes/pve1/qemu/100", func(w http.ResponseWriter, _ *http.Request) {
+		mutatingCalls++
+	})
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		mutatingCalls++
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		mutatingCalls++
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, fake := destroyWireSSH(t, cmd)
+
+	stdout, _, err := destroyRun(t, cmd, "alpha", "--dry-run", "--purge-dataset")
+	require.NoError(t, err)
+
+	assert.Zero(t, mutatingCalls, "dry-run must never mutate over the PVE API")
+	assert.Empty(t, fake.Calls, "dry-run must never mutate over ssh")
+
+	out := stdout.String()
+	assert.Contains(t, out, "dry-run")
+	assert.Contains(t, out, "ZFS dataset tank/labs/alpha on sm-0.lab.internal (recursive)")
+}
+
+// TestDestroy_PurgeDataset_SSHFailurePropagates covers the ssh transport
+// itself failing: the command error must name both the dataset and the host
+// destroy attempted to reach, not just wrap the bare exec error. It must
+// also fold in the remote command's captured stderr — a real "zfs destroy"
+// failure otherwise surfaces only as a bare "exit status 1" with the actual
+// reason thrown away, since destroyDatasetOnHost previously routed stderr to
+// io.Discard.
+func TestDestroy_PurgeDataset_SSHFailurePropagates(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	destroyHandleClusterResources(f) // no live VMs at all
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	deps := cli.GetDeps(cmd)
+	deps.Ctx = &config.Context{Host: "sm-0.lab.internal", SSH: config.SSHBlock{User: "root", Port: 22}}
+	deps.Runner = exec.Fake(exec.FakeResponse{
+		Err:    errors.New("connection refused"),
+		Stderr: "cannot destroy 'tank/labs/alpha': dataset is busy\n",
+	})
+
+	_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "tank/labs/alpha")
+	assert.ErrorContains(t, err, "sm-0.lab.internal")
+	assert.ErrorContains(t, err, "dataset is busy",
+		"the remote command's stderr must be folded into the returned error, not discarded")
+}
+
+// TestDestroy_PurgeDataset_NoContext_Errors covers the guard: --purge-dataset
+// with no active pmx context (deps.Ctx nil) refuses with an explanatory
+// error rather than panicking on a nil dereference.
+func TestDestroy_PurgeDataset_NoContext_Errors(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+
+	cmd := destroyTestCmd(t, path, nil, "pve1")
+	// deps.Ctx and deps.Runner are left nil deliberately.
+
+	_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "context host is required")
+}
+
+// TestDestroy_WithoutPurgeDataset_NoRunnerCalls is a regression check: plain
+// --purge (without --purge-dataset) must never touch the ssh Runner at all.
+func TestDestroy_WithoutPurgeDataset_NoRunnerCalls(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+	f, ac := destroyFakeClient(t)
+
+	destroyHandleClusterResources(f) // no live VMs at all
+	f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+
+	cmd := destroyTestCmd(t, path, ac, "pve1")
+	_, fake := destroyWireSSH(t, cmd)
+
+	_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge")
+	require.NoError(t, err)
+
+	assert.Empty(t, fake.Calls, "plain --purge must never touch the ssh Runner")
 }

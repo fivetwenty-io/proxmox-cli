@@ -2,10 +2,12 @@ package lab
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/peppi"
+	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
 // newDestroyCmd builds `pmx lab destroy <name>`.
@@ -40,10 +43,11 @@ import (
 // guessing which VM it is.
 func newDestroyCmd() *cobra.Command {
 	var (
-		yes         bool
-		dryRun      bool
-		purge       bool
-		keepContext bool
+		yes          bool
+		dryRun       bool
+		purge        bool
+		purgeDataset bool
+		keepContext  bool
 	)
 
 	cmd := &cobra.Command{
@@ -59,7 +63,11 @@ func newDestroyCmd() *cobra.Command {
 			"guessing which VM it is.\n\n" +
 			"Destroying requires --yes/-y or an interactive 'y' confirmation. Pass --purge to " +
 			"remove the lab's resource pool and storage definition as well, or --dry-run to " +
-			"preview what would be destroyed without mutating anything or prompting.",
+			"preview what would be destroyed without mutating anything or prompting.\n\n" +
+			"Pass --purge-dataset to also destroy the lab's ZFS dataset on the context host " +
+			"(implies --purge; irreversible). Labs running Ceph should tear down the storage " +
+			"layer first (see the lab repo's Ceph teardown script); the OSD data is destroyed " +
+			"with the VMs either way.",
 		Example: `  pmx lab destroy wayne --yes
   pmx lab destroy wayne --dry-run
   pmx lab destroy wayne --yes --purge`,
@@ -68,6 +76,14 @@ func newDestroyCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 			ctx := cmd.Context()
+
+			if purgeDataset {
+				purge = true
+			}
+			if purgeDataset && (deps.Ctx == nil || deps.Ctx.Host == "") {
+				return errors.New(
+					"lab destroy --purge-dataset: a context host is required; select an active pmx context with --context/-c")
+			}
 
 			lab, err := resolveLabForMutate(cmd, name)
 			if err != nil {
@@ -110,6 +126,9 @@ func newDestroyCmd() *cobra.Command {
 			if purge {
 				plan = append(plan, fmt.Sprintf("pool %q", poolID))
 				plan = append(plan, fmt.Sprintf("storage %q", stgID))
+			}
+			if purgeDataset {
+				plan = append(plan, fmt.Sprintf("ZFS dataset %s on %s (recursive)", zfsDatasetPath(lab), deps.Ctx.Host))
 			}
 
 			if len(plan) == 0 {
@@ -168,6 +187,12 @@ func newDestroyCmd() *cobra.Command {
 				}
 			}
 
+			if purgeDataset {
+				if err := destroyDatasetOnHost(deps, lab); err != nil {
+					return err
+				}
+			}
+
 			if !keepContext {
 				if cerr := cleanupLabContext(deps, name); cerr != nil {
 					summary += fmt.Sprintf("; context cleanup warning: %v", cerr)
@@ -184,6 +209,8 @@ func newDestroyCmd() *cobra.Command {
 		"preview what would be destroyed without mutating anything or prompting")
 	cmd.Flags().BoolVar(&purge, "purge", false,
 		"also remove the lab's resource pool and storage definition")
+	cmd.Flags().BoolVar(&purgeDataset, "purge-dataset", false,
+		"also destroy the lab's ZFS dataset on the context host (implies --purge; irreversible)")
 	cmd.Flags().BoolVar(&keepContext, "keep-context", false,
 		"do not remove the lab's pmx context and keychain secret on destroy")
 
@@ -343,6 +370,35 @@ func destroyDeleteStorage(ctx context.Context, api *apiclient.APIClient, stgID s
 	err := api.ClusterStorage.DeleteStorage(ctx, stgID)
 	if err != nil && !isStorageNotFound(err, stgID) {
 		return fmt.Errorf("delete storage %q: %w", stgID, err)
+	}
+	return nil
+}
+
+// destroyDatasetOnHost removes the lab's ZFS dataset over SSH to the context
+// host — the same transport quota set uses (quota.go), NOT guest SSH: the
+// dataset lives on the outer host, not in a lab guest. Absent dataset is
+// success (idempotent re-destroy); a real zfs destroy failure propagates.
+func destroyDatasetOnHost(deps *cli.Deps, lab *config.Lab) error {
+	ds := zfsDatasetPath(lab)
+	f := sshcmd.Flags{User: "root", Port: 22}
+	if deps.Ctx.SSH.User != "" {
+		f.User = deps.Ctx.SSH.User
+	}
+	if deps.Ctx.SSH.Port != 0 {
+		f.Port = deps.Ctx.SSH.Port
+	}
+	if deps.Ctx.SSH.Identity != "" {
+		f.Identity = deps.Ctx.SSH.Identity
+	}
+	argv := sshcmd.BaseArgs(&f, deps.Ctx.Host)
+	argv = append(argv, fmt.Sprintf(`if zfs list %q >/dev/null 2>&1; then zfs destroy -r %q; fi`, ds, ds))
+
+	var stderr bytes.Buffer
+	if err := deps.Runner.Run("ssh", argv, nil, nil, io.Discard, &stderr); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("destroy dataset %s on %s: %w (stderr: %s)", ds, deps.Ctx.Host, err, msg)
+		}
+		return fmt.Errorf("destroy dataset %s on %s: %w", ds, deps.Ctx.Host, err)
 	}
 	return nil
 }

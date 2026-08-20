@@ -205,8 +205,10 @@ def _deferred_mutations(ctx: Ctx) -> None:
     )
     ctx.defer(
         "destroy",
-        "deletes a lab's VM, pool, storage, and SDN resources; needs the "
-        "dedicated lab-pmx destructive test lab as the standing target",
+        "deletes a lab's VM(s), resource pool, storage definition, and "
+        "optionally the ZFS dataset (--purge-dataset); SDN teardown stays "
+        "with the host scripts; needs the dedicated lab-pmx destructive "
+        "test lab as the standing target",
         "pmx lab destroy pmx --yes",
         isolation=True,
     )
