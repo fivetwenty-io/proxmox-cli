@@ -829,7 +829,9 @@ func ValidateStorage(name string, s LabStorage) []string {
 	d := *s.OSDDisks
 	if d.Count > 0 && s.Controller != "virtio-scsi-single" {
 		issues = append(issues, fmt.Sprintf(
-			"lab %q: storage.osd_disks requires storage.controller \"virtio-scsi-single\" (OSD disks are emitted with iothread=1, which PVE rejects on other SCSI controllers); got %q", name, s.Controller))
+			"lab %q: storage.osd_disks requires storage.controller \"virtio-scsi-single\" (OSD disks are "+
+				"emitted with iothread=1, which PVE rejects on other SCSI controllers); got %q",
+			name, s.Controller))
 	}
 	if d.Count < 0 || d.Count > MaxOSDDisksPerNode {
 		issues = append(issues, fmt.Sprintf(
