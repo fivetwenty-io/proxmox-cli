@@ -55,7 +55,10 @@ func newScaleCmd() *cobra.Command {
 			"     never removed\n" +
 			"  4. add the QDevice once every join and delnode for this\n" +
 			"     transition has completed\n" +
-			"  5. reconcile the inner SDN zone and the NFS storage attachment\n" +
+			"  5. reconcile the nested host networking of every member node\n" +
+			"     (bonds, bridges, and each node's management IPv6), the\n" +
+			"     QDevice's own IPv6, the inner SDN zone, and the NFS storage\n" +
+			"     attachment\n" +
 			"  6. validate quorum, corosync links, and storage-active state on\n" +
 			"     EVERY node in the target topology\n\n" +
 			"A transition that completed — that is, was not deferred waiting on manual OS " +
@@ -71,6 +74,15 @@ func newScaleCmd() *cobra.Command {
 			"VM-shell provisioning for new node and QDevice VMs reuses `pmx lab create`'s own " +
 			"idempotent plan machinery and capacity gate. This command creates VM shells only — " +
 			"it never installs an OS, matching `pmx lab create`'s own scope.\n\n" +
+			"The nested host-network reconcile talks to the lab's OWN nested-cluster context " +
+			"(`lab-<name>`), not the outer host, so a grown node gets its management IPv6 without a " +
+			"separate `pmx lab hostnet apply` run. It is deliberately non-fatal: an unregistered " +
+			"context, an inner API that is not up yet, or a node still provisioning is reported as a " +
+			"deferred row naming the follow-up command, never as a failure of a transition whose " +
+			"cluster and storage work succeeded. The ssh-transported NIC-naming phase stays with " +
+			"`pmx lab hostnet apply` alone, since it can leave a node reboot-pending — and because " +
+			"of that, a node whose NICs are not named nic0-nic5 yet gets its IPv6 but no bond or " +
+			"bridge, which would otherwise be staged against interfaces that do not exist.\n\n" +
 			"Three things stay outside this command's scope.\n\n" +
 			"SNAT rules, PBS jobs, and DNS registration for new or removed nodes remain " +
 			"lab-repository host-side script responsibilities.\n\n" +
@@ -168,7 +180,7 @@ func runScale(cmd *cobra.Command, name string, nodesFlag int, qdeviceFlag, nodeF
 		// bug.
 		_, shellQdevicePresent := qdeviceLabVM(classified)
 		previewPlan := buildScalePlan(shellN, shellQdevicePresent, targetN, targetQdeviceRequired)
-		return deps.Out.Render(cmd.OutOrStdout(), renderScalePlanPreview(name, previewPlan), deps.Format)
+		return deps.Out.Render(cmd.OutOrStdout(), renderScalePlanPreview(eff, previewPlan), deps.Format)
 	}
 
 	// --- Real run: preflight (plan §9 step 1), authoritative from here on ---
@@ -486,7 +498,8 @@ func buildScalePlan(currentN int, currentQdevicePresent bool, targetN int, targe
 // action a real (non-dry-run) invocation would take, in the exact order
 // executeScalePlan performs them. It never touches deps.Runner or deps.API
 // — everything it needs is already captured in p.
-func renderScalePlanPreview(name string, p scalePlan) output.Result {
+func renderScalePlanPreview(eff *config.Lab, p scalePlan) output.Result {
+	name := eff.Name
 	headers := []string{"STEP", "STATUS"}
 	var rows [][]string
 
@@ -513,6 +526,19 @@ func renderScalePlanPreview(name string, p scalePlan) output.Result {
 		rows = append(rows, []string{"create QDevice VM shell (if missing)", "would run"})
 		rows = append(rows, []string{
 			"wire up QDevice (install packages + pvecm qdevice setup, once reachable)", "would run"})
+	}
+
+	// Nested host networking (bonds/bridges + management IPv6) for every
+	// target node, exactly as the real run reconciles it — a preview built
+	// from config alone, so it never probes the nested cluster.
+	previewIdxs := make([]int, 0, p.targetN)
+	for i := range p.targetN {
+		previewIdxs = append(previewIdxs, i)
+	}
+	rows = append(rows, hostnetReconcilePreviewRows(eff, previewIdxs)...)
+
+	if p.targetQdeviceRequired && !p.qdeviceAddNeeded && eff.Network.EffectiveIPv6() {
+		rows = append(rows, []string{"ensure IPv6 on the existing QDevice VM", "would run"})
 	}
 
 	if p.targetN >= 2 {
@@ -583,6 +609,13 @@ func executeScalePlan(
 	// 2. Grow: create VM shells for every new index, ensure node 0 is
 	// clustered, then join newly-reachable nodes serially, deferring (not
 	// failing) at the first not-yet-reachable node.
+	//
+	// firstUnjoinedIdx is the lowest node index this run left unjoined (a
+	// deferred grow); every index below it is a live cluster member the
+	// nested-host-network reconcile below can address. -1 means nothing
+	// deferred and every target index is reconcilable.
+	firstUnjoinedIdx := -1
+
 	if len(p.growIndices) > 0 {
 		if targetNode == "" {
 			return nil, fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
@@ -629,6 +662,7 @@ func executeScalePlan(
 							"scale` to join it", i, nodeIP),
 				})
 				deferred = true
+				firstUnjoinedIdx = i
 				break // serial order: never join node i+1 before node i.
 			}
 
@@ -698,18 +732,48 @@ func executeScalePlan(
 				return nil, err
 			}
 			for _, s := range wireSteps {
-				status := "done"
-				if s.skip {
-					status = "skip (already satisfied)"
-				}
-				rows = append(rows, []string{s.desc, status})
+				rows = append(rows, []string{s.desc, s.status()})
 			}
 		}
 	}
 
-	// 5. Reconcile: inner SDN zone peer list (multi-node labs only), then
-	// NFS storage attachment (every lab, regardless of node count).
+	// 5. Reconcile: nested host networking on every node that is actually
+	// a member after this run, the QDevice's own IPv6 when this run did not
+	// wire it, then the inner SDN zone peer list (multi-node labs only) and
+	// the NFS storage attachment (every lab, regardless of node count).
 	finalN := config.EffectiveTopologyNodes(eff.Topology)
+
+	// Nested host networking — bonds, bridges, and the management IPv6 a
+	// grown node would otherwise never receive (see hostnetreconcile.go).
+	// Reconciled for EVERY member node, not just the ones grown this run:
+	// the phase is idempotent, and a lab whose v6 predates a node's join
+	// (or predates dual-stack support entirely) converges on the next scale
+	// rather than staying half-addressed. Nodes whose join deferred are
+	// excluded — they are not cluster members yet, so the nested API has no
+	// node to address.
+	hostnetIdxs := make([]int, 0, finalN)
+	for i := range finalN {
+		if firstUnjoinedIdx >= 0 && i >= firstUnjoinedIdx {
+			continue
+		}
+		hostnetIdxs = append(hostnetIdxs, i)
+	}
+	rows = append(rows, hostnetReconcileNodes(ctx, cmd, deps, lab, hostnetIdxs)...)
+	if firstUnjoinedIdx >= 0 && hostnetReconcileNeeded(lab.Network) {
+		rows = append(rows, []string{
+			fmt.Sprintf("nested host network on node(s) %d-%d", firstUnjoinedIdx, finalN-1),
+			fmt.Sprintf("deferred: not cluster members yet; the re-run that joins them reconciles it, or %s",
+				hostnetReconcileFollowup(name))})
+	}
+
+	// The QDevice's management IPv6 rides `pmx lab qdevice add`'s wiring
+	// (step 4 above), which only runs when this transition ADDS a QDevice.
+	// A topology that already had one would otherwise never converge — the
+	// exact shape a lab that predates dual-stack support is in.
+	if p.targetQdeviceRequired && !p.qdeviceAddNeeded && lab.Network.EffectiveIPv6() {
+		rows = append(rows, scaleReconcileQdeviceIPv6(deps, lab, name)...)
+	}
+
 	if finalN >= 2 {
 		peerIPs := make([]string, 0, finalN)
 		for i := range finalN {
@@ -788,6 +852,32 @@ func executeScalePlan(
 	}
 
 	return rows, nil
+}
+
+// scaleReconcileQdeviceIPv6 ensures the management IPv6 of a QDevice this
+// run did not itself wire (qdeviceEnsureWired carries the ensure for one it
+// adds). Non-fatal in every failure mode, matching the rest of this
+// command's IPv6 reconciliation: an unreachable QDevice VM, or a guest that
+// refuses the ensure, is reported as a deferred row naming `pmx lab qdevice
+// add` — the verb that owns the same idempotent step — rather than failing a
+// transition whose cluster work already succeeded.
+func scaleReconcileQdeviceIPv6(deps *cli.Deps, lab *config.Lab, name string) [][]string {
+	qdeviceIP, err := labQdeviceMgmtIP(lab.Network)
+	if err != nil {
+		return [][]string{{"qdevice IPv6", fmt.Sprintf("deferred: resolve QDevice mgmt IP: %v", err)}}
+	}
+	followup := fmt.Sprintf("run `pmx lab qdevice add %s` to converge it", name)
+
+	if !scaleProbeReachable(deps, qdeviceIP) {
+		return [][]string{{"qdevice IPv6", fmt.Sprintf(
+			"deferred: QDevice VM (%s) is not ssh-reachable — %s", qdeviceIP, followup)}}
+	}
+
+	step, err := qdeviceEnsureIPv6(deps, lab.Network, name, qdeviceIP)
+	if err != nil {
+		return [][]string{{"qdevice IPv6", fmt.Sprintf("deferred: %v — %s", err, followup)}}
+	}
+	return [][]string{{step.desc, step.status()}}
 }
 
 // scaleValidateNode probes nodeIP for `pvecm status`, `corosync-cfgtool -s`
