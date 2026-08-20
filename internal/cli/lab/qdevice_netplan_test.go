@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/goccy/go-yaml"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -86,23 +88,27 @@ func TestQdeviceAdd_NetplanGuest_PersistsThroughNetplan(t *testing.T) {
 
 	setArgs := fmt.Sprintf("%v", fake.Calls[8].Args)
 	assert.Contains(t, setArgs,
-		fmt.Sprintf(`netplan set 'ethernets.ens18.addresses=["10.10.1.15/16","%s/48"]'`, addr6),
-		"the existing IPv4 address must be re-stated, since netplan set REPLACES the list")
-	assert.Contains(t, setArgs, fmt.Sprintf(`"via": "%s"`, gw6), "the v6 default route is written too")
+		fmt.Sprintf(`--origin-hint %s 'ethernets.ens18.addresses=["10.10.1.15/16","%s/48"]'`,
+			qdeviceNetplanOriginHint, addr6),
+		"the existing IPv4 address is re-stated, into a file of this command's own")
+	assert.Contains(t, setArgs, fmt.Sprintf(`{"to":"::/0","via":"%s"}`, gw6), "the v6 default route is written too")
 	assert.Contains(t, setArgs, "netplan generate", "the written config is validated, never applied")
 	assert.NotContains(t, setArgs, "netplan apply",
 		"applying would re-render the very interface this command is reached over")
 }
 
-// TestQdeviceAdd_NetplanGuest_ExistingRoutesAreNotRewritten pins the
-// deliberate limit: netplan routes are a list of mappings this code does not
-// round-trip, so an interface that already declares routes keeps them and
-// the operator is told to add the v6 default route by hand — far better than
-// silently rewriting a working IPv4 default route.
-func TestQdeviceAdd_NetplanGuest_ExistingRoutesAreNotRewritten(t *testing.T) {
+// TestQdeviceAdd_NetplanGuest_ExistingRoutesAreMerged pins what happens to
+// an interface that already declares routes: the IPv4 default route it
+// carries is re-stated beside the new IPv6 one, so the guest keeps its v4
+// gateway even on a netplan build where a later file's list replaces the
+// earlier one rather than merging into it.
+func TestQdeviceAdd_NetplanGuest_ExistingRoutesAreMerged(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
-	_, path := qdeviceIPv6TestLab(t, f)
+	lab, path := qdeviceIPv6TestLab(t, f)
 	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newQdeviceCmd())
+
+	gw6, err := labMgmtGateway6(lab.Network)
+	require.NoError(t, err)
 
 	fake := exec.Fake(
 		exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice},
@@ -113,18 +119,19 @@ func TestQdeviceAdd_NetplanGuest_ExistingRoutesAreNotRewritten(t *testing.T) {
 		exec.FakeResponse{Stdout: "addresses:\n- 10.10.1.15/16\n"},
 		exec.FakeResponse{Stdout: "- 10.10.1.15/16\n"},
 		exec.FakeResponse{Stdout: "- to: default\n  via: 10.10.1.1\n"}, // routes already declared
-		exec.FakeResponse{}, // netplan set (addresses only) + generate
+		exec.FakeResponse{}, // netplan set + generate
 		exec.FakeResponse{},
 		exec.FakeResponse{},
 	)
 	cli.GetDeps(cmd).Runner = fake
 
-	out, err := runGuestCmd(t, cmd, "add", "wayne")
+	_, err = runGuestCmd(t, cmd, "add", "wayne")
 	require.NoError(t, err)
-	assert.Contains(t, out, "add the ::/0 route")
 
 	setArgs := fmt.Sprintf("%v", fake.Calls[8].Args)
-	assert.NotContains(t, setArgs, "routes=", "an existing routes list must never be rewritten")
+	assert.Contains(t, setArgs, `{"to":"default","via":"10.10.1.1"}`,
+		"the guest's IPv4 default route survives into the written list")
+	assert.Contains(t, setArgs, fmt.Sprintf(`{"to":"::/0","via":"%s"}`, gw6))
 }
 
 // TestQdeviceAdd_NetplanInstalledButUnmanagedIface_FallsBackToIfupdown pins
@@ -235,18 +242,73 @@ func TestQdeviceAdd_NetplanGuestWithOnlyIfupdownDropIn_Rewrites(t *testing.T) {
 	assert.Contains(t, setArgs, "netplan set")
 }
 
-// TestQdeviceNetplanFallbackFile_CarriesFullAddressList pins the shape of
-// the file written when `netplan set` is unavailable: its keys win the merge
-// against the image's own file, so it must carry every address, not only the
-// IPv6 one.
-func TestQdeviceNetplanFallbackFile_CarriesFullAddressList(t *testing.T) {
-	doc := qdeviceNetplanFallbackFile("ens18", []string{"10.10.1.15/16", "fd10::f/48"}, "fd10::1", true)
-	assert.Contains(t, doc, "    ens18:")
-	assert.Contains(t, doc, "        - 10.10.1.15/16")
-	assert.Contains(t, doc, "        - fd10::f/48")
-	assert.Contains(t, doc, `        - to: "::/0"`)
-	assert.Contains(t, doc, `          via: "fd10::1"`)
+// TestQdeviceNetplanFallbackFile_CarriesFullAddressAndRouteLists pins the
+// shape of the file written when `netplan set` is unavailable: its keys win
+// the merge on a netplan build that replaces rather than appends, so it must
+// carry every address and every route the interface had, not only the IPv6
+// ones.
+func TestQdeviceNetplanFallbackFile_CarriesFullAddressAndRouteLists(t *testing.T) {
+	routes := `[{"to":"default","via":"10.10.1.1"},{"to":"::/0","via":"fd10::1"}]`
+	doc, err := qdeviceNetplanFallbackFile("ens18", []string{"10.10.1.15/16", "fd10::f/48"}, routes)
+	require.NoError(t, err)
 
-	noRoute := qdeviceNetplanFallbackFile("ens18", []string{"10.10.1.15/16"}, "fd10::1", false)
-	assert.NotContains(t, noRoute, "routes:")
+	var parsed struct {
+		Network struct {
+			Version   int `yaml:"version"`
+			Ethernets map[string]struct {
+				Addresses []string            `yaml:"addresses"`
+				Routes    []map[string]string `yaml:"routes"`
+			} `yaml:"ethernets"`
+		} `yaml:"network"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(doc), &parsed))
+	assert.Equal(t, 2, parsed.Network.Version)
+	eth := parsed.Network.Ethernets["ens18"]
+	assert.Equal(t, []string{"10.10.1.15/16", "fd10::f/48"}, eth.Addresses)
+	assert.Equal(t, []map[string]string{
+		{"to": "default", "via": "10.10.1.1"},
+		{"to": "::/0", "via": "fd10::1"},
+	}, eth.Routes)
+
+	noRoutes, err := qdeviceNetplanFallbackFile("ens18", []string{"10.10.1.15/16"}, "")
+	require.NoError(t, err)
+	assert.NotContains(t, noRoutes, "routes:")
+}
+
+// TestQdeviceNetplanRoutesValue_MergesRatherThanReplaces covers the routes
+// half of the write. The guest's existing IPv4 default route has to survive
+// into the value written, since a netplan build that lets a later file
+// replace the list would otherwise leave the guest with no IPv4 gateway
+// after a reboot.
+func TestQdeviceNetplanRoutesValue_MergesRatherThanReplaces(t *testing.T) {
+	value, note := qdeviceNetplanRoutesValue("- to: \"default\"\n  via: \"10.10.1.1\"\n", "fd10::1", "ens18")
+	assert.Empty(t, note)
+	assert.JSONEq(t, `[{"to":"default","via":"10.10.1.1"},{"to":"::/0","via":"fd10::1"}]`, value)
+
+	unset, note := qdeviceNetplanRoutesValue("null\n", "fd10::1", "ens18")
+	assert.Empty(t, note)
+	assert.JSONEq(t, `[{"to":"::/0","via":"fd10::1"}]`, unset)
+}
+
+// TestQdeviceNetplanRoutesValue_AlreadyDeclaredIsNotDuplicated pins
+// idempotence: a second run must not append the same ::/0 route again.
+func TestQdeviceNetplanRoutesValue_AlreadyDeclaredIsNotDuplicated(t *testing.T) {
+	in := "- to: \"default\"\n  via: \"10.10.1.1\"\n- to: \"::/0\"\n  via: \"fd10::1\"\n"
+	value, note := qdeviceNetplanRoutesValue(in, "fd10::1", "ens18")
+	assert.Empty(t, note)
+	assert.JSONEq(t, `[{"to":"default","via":"10.10.1.1"},{"to":"::/0","via":"fd10::1"}]`, value)
+}
+
+// TestQdeviceNetplanRoutesValue_UnparseableIsLeftAlone pins the refusal: a
+// routes list this code cannot read, or one carrying a quote that would end
+// the shell argument it travels in, is never rewritten — the operator is
+// told to add the route instead.
+func TestQdeviceNetplanRoutesValue_UnparseableIsLeftAlone(t *testing.T) {
+	value, note := qdeviceNetplanRoutesValue("- to: \"default\"\n   via: [unbalanced\n", "fd10::1", "ens18")
+	assert.Empty(t, value)
+	assert.Contains(t, note, "by hand")
+
+	value, note = qdeviceNetplanRoutesValue("- to: \"default\"\n  via: \"10.10.1.1'x\"\n", "fd10::1", "ens18")
+	assert.Empty(t, value)
+	assert.Contains(t, note, "by hand")
 }

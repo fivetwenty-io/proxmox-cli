@@ -1,11 +1,13 @@
 package lab
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -37,10 +39,23 @@ const qdeviceIPv6PersistPath = "/etc/network/interfaces.d/lab-ipv6"
 // next reboot.
 const qdeviceIPv6PersistDirs = "/etc/network/interfaces.d /etc/netplan"
 
+// qdeviceNetplanOriginHint names the file `netplan set` is told to write
+// (netplan appends the .yaml suffix), keeping every key this command writes
+// in one file of its own.
+//
+// Without the hint, `netplan set` edits the file that already DEFINES the
+// key — on a cloud image, that is 50-cloud-init.yaml, which cloud-init is
+// free to regenerate from its datasource on the next boot, taking the
+// address with it. The name sorts after the distro's own files, so on a
+// netplan build that lets a later file override a key rather than merging
+// into it, this file still wins.
+const qdeviceNetplanOriginHint = "70-pmx-lab-ipv6"
+
 // qdeviceNetplanFallbackPath is the netplan file written when `netplan set`
 // is unavailable (netplan older than 0.98). It sorts after the distro's own
 // 50-cloud-init.yaml, so its keys win the merge — which is why it re-states
-// the interface's full address list rather than only the IPv6 one.
+// the interface's full address list and route list rather than only the
+// IPv6 ones.
 const qdeviceNetplanFallbackPath = "/etc/netplan/99-pmx-lab-ipv6.yaml"
 
 // qdeviceNetplanMarker is echoed by the convergence probe on a guest whose
@@ -467,15 +482,18 @@ func qdeviceEnsureIPv6(
 // qdevicePersistIPv6Netplan persists the QDevice VM's management IPv6 on a
 // netplan-rendered guest, returning any caveat the operator must still see.
 //
-// Two netplan facts shape this. First, a `netplan set` (or any later-sorting
-// file) REPLACES a key rather than merging into it, so writing only the IPv6
-// address under ethernets.<iface>.addresses would drop whatever IPv4 address
-// the image's own file declares there — hence the read-merge-write against
-// the effective list `netplan get` reports. Second, an interface netplan
-// does not know about must not be given a stanza here at all: doing so hands
-// it to networkd on the next boot, taking it away from whatever does manage
-// it today. That case falls back to the ifupdown drop-in, which is what such
-// a guest reads anyway.
+// Three netplan facts shape this. First, `netplan set` writes into the file
+// that already defines the key unless it is told otherwise, which on a cloud
+// image means editing 50-cloud-init.yaml — a file cloud-init may regenerate
+// on the next boot; every write here therefore carries --origin-hint. Second,
+// whether a list in a later-sorting file merges into the earlier one or
+// replaces it varies by netplan build, so the address and route lists are
+// read back and re-stated in FULL: writing the IPv6 entries alone would drop
+// the guest's IPv4 address and default route on a build that replaces.
+// Third, an interface netplan does not know about must not be given a stanza
+// here at all: doing so hands it to networkd on the next boot, taking it away
+// from whatever does manage it today. That case falls back to the ifupdown
+// drop-in, which is what such a guest reads anyway.
 //
 // Nothing is applied: `netplan apply` would re-render every interface,
 // including the management one this command is reached over, to no benefit —
@@ -514,18 +532,19 @@ func qdevicePersistIPv6Netplan(
 		addrs = append(addrs, want)
 	}
 
-	// The v6 default route is only written when the interface has no routes
-	// list of its own. netplan's routes are a list of mappings, which this
-	// code deliberately does not round-trip: re-stating a structure it
-	// cannot fully parse is how a working IPv4 default route gets silently
-	// rewritten. An interface that already has routes gets the caveat
-	// instead.
+	// The v6 default route is merged into whatever the interface already
+	// declares, and both lists are then re-stated in full. Netplan builds
+	// differ in whether a list in a later-sorting file is appended to the
+	// earlier one or replaces it outright (this lab's Debian 13 guests
+	// append); re-stating is correct under either reading, while writing
+	// only the IPv6 route would drop the guest's IPv4 default route on a
+	// build that replaces.
 	routesOut, err := runGuestSSH(deps, qdeviceIP, fmt.Sprintf("netplan get ethernets.%s.routes", iface))
 	if err != nil {
 		return "", fmt.Errorf(
 			"lab %q: read netplan routes for %q on QDevice VM (%s): %w", name, iface, qdeviceIP, err)
 	}
-	writeRoute := strings.TrimSpace(routesOut.Stdout) == "null" || strings.TrimSpace(routesOut.Stdout) == ""
+	routesVal, routeNote := qdeviceNetplanRoutesValue(routesOut.Stdout, gw6, iface)
 
 	// Every entry is double-quoted inside the single-quoted shell argument:
 	// an unquoted IPv6 address is a plain scalar whose colons a YAML flow
@@ -535,10 +554,10 @@ func qdevicePersistIPv6Netplan(
 	for _, a := range addrs {
 		quoted = append(quoted, fmt.Sprintf("%q", a))
 	}
-	setCmd := fmt.Sprintf("netplan set 'ethernets.%s.addresses=[%s]'", iface, strings.Join(quoted, ","))
-	if writeRoute {
-		setCmd += fmt.Sprintf(" && netplan set 'ethernets.%s.routes=[{\"to\": \"::/0\", \"via\": \"%s\"}]'",
-			iface, gw6)
+	set := fmt.Sprintf("netplan set --origin-hint %s ", qdeviceNetplanOriginHint)
+	setCmd := set + fmt.Sprintf("'ethernets.%s.addresses=[%s]'", iface, strings.Join(quoted, ","))
+	if routesVal != "" {
+		setCmd += " && " + set + fmt.Sprintf("'ethernets.%s.routes=%s'", iface, routesVal)
 	}
 	setCmd += " && netplan generate"
 
@@ -546,8 +565,13 @@ func qdevicePersistIPv6Netplan(
 		// `netplan set` has shipped since netplan 0.98 (both Debian 12 and
 		// Ubuntu 22.04 carry it), but an older image would fail the whole
 		// chain above; fall back to a last-sorting file carrying the same
-		// merged address list.
-		fallback := qdeviceNetplanFallbackFile(iface, addrs, gw6, writeRoute)
+		// merged address and route lists.
+		fallback, ferr := qdeviceNetplanFallbackFile(iface, addrs, routesVal)
+		if ferr != nil {
+			return "", fmt.Errorf(
+				"lab %q: persist IPv6 via netplan on QDevice VM (%s): %w (fallback render also failed: %v)",
+				name, qdeviceIP, serr, ferr)
+		}
 		writeCmd := fmt.Sprintf("umask 077 && cat > %s <<'PMXEOF'\n%sPMXEOF\nnetplan generate",
 			qdeviceNetplanFallbackPath, fallback)
 		if _, werr := runGuestSSH(deps, qdeviceIP, writeCmd); werr != nil {
@@ -558,9 +582,7 @@ func qdevicePersistIPv6Netplan(
 		note = fmt.Sprintf("`netplan set` unavailable; wrote %s", qdeviceNetplanFallbackPath)
 	}
 
-	if !writeRoute {
-		routeNote := fmt.Sprintf(
-			"%s already declares netplan routes; add the ::/0 route via %s there by hand", iface, gw6)
+	if routeNote != "" {
 		if note != "" {
 			return note + "; " + routeNote, nil
 		}
@@ -569,27 +591,80 @@ func qdevicePersistIPv6Netplan(
 	return note, nil
 }
 
+// qdeviceNetplanRoutesValue renders the routes value to write for iface: the
+// routes `netplan get` reported, with the lab's IPv6 default route appended
+// when it is not already among them, as the JSON `netplan set` takes for a
+// list value. It returns "" when the routes must be left alone, in which
+// case note says why.
+//
+// A route list this code cannot parse, or one carrying a single quote (which
+// would end the shell argument the value is passed inside), is left
+// untouched on purpose: re-stating a structure it did not fully understand
+// is how a working IPv4 default route gets silently rewritten.
+func qdeviceNetplanRoutesValue(routesOut, gw6, iface string) (value, note string) {
+	trimmed := strings.TrimSpace(routesOut)
+
+	var routes []any
+	if trimmed != "" && trimmed != "null" {
+		if err := yaml.Unmarshal([]byte(routesOut), &routes); err != nil {
+			return "", fmt.Sprintf(
+				"could not parse the netplan routes already on %s (%v); add the ::/0 route via %s by hand",
+				iface, err, gw6)
+		}
+	}
+
+	declared := false
+	for _, r := range routes {
+		m, ok := r.(map[string]any)
+		if !ok {
+			continue
+		}
+		if to, _ := m["to"].(string); to == "::/0" {
+			declared = true
+			break
+		}
+	}
+	if !declared {
+		routes = append(routes, map[string]any{"to": "::/0", "via": gw6})
+	}
+
+	raw, err := json.Marshal(routes)
+	if err != nil {
+		return "", fmt.Sprintf(
+			"could not render the netplan routes for %s (%v); add the ::/0 route via %s by hand",
+			iface, err, gw6)
+	}
+	if strings.ContainsAny(string(raw), "'\n") {
+		return "", fmt.Sprintf(
+			"the netplan routes already on %s carry a quote or newline this command will not pass through "+
+				"a shell; add the ::/0 route via %s by hand", iface, gw6)
+	}
+	return string(raw), ""
+}
+
 // qdeviceNetplanFallbackFile renders the netplan document written when
-// `netplan set` is unavailable: the interface's full address list (the
-// merged one read from the guest, our IPv6 included, since this file's keys
-// win the merge) and, when the interface had no routes of its own, the IPv6
-// default route.
-func qdeviceNetplanFallbackFile(iface string, addrs []string, gw6 string, withRoute bool) string {
-	var b strings.Builder
-	b.WriteString("network:\n")
-	b.WriteString("  version: 2\n")
-	b.WriteString("  ethernets:\n")
-	fmt.Fprintf(&b, "    %s:\n", iface)
-	b.WriteString("      addresses:\n")
-	for _, a := range addrs {
-		fmt.Fprintf(&b, "        - %s\n", a)
+// `netplan set` is unavailable: the interface's full address list and its
+// full route list (both merged from what the guest reported, this command's
+// IPv6 entries included), since this file's keys win the merge.
+func qdeviceNetplanFallbackFile(iface string, addrs []string, routesValue string) (string, error) {
+	ifaceCfg := map[string]any{"addresses": addrs}
+	if routesValue != "" {
+		var routes []any
+		if err := json.Unmarshal([]byte(routesValue), &routes); err != nil {
+			return "", fmt.Errorf("decode merged netplan routes: %w", err)
+		}
+		ifaceCfg["routes"] = routes
 	}
-	if withRoute {
-		b.WriteString("      routes:\n")
-		b.WriteString("        - to: \"::/0\"\n")
-		fmt.Fprintf(&b, "          via: \"%s\"\n", gw6)
+	doc, err := yaml.Marshal(map[string]any{
+		"network": map[string]any{
+			"version":   2,
+			"ethernets": map[string]any{iface: ifaceCfg},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("render netplan document: %w", err)
 	}
-	return b.String()
+	return string(doc), nil
 }
 
 // ensureGuestPackage probes host for pkg via `dpkg -s`, installing it via
