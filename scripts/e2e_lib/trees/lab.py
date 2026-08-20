@@ -158,6 +158,14 @@ def _mutating_error_contracts(ctx: Ctx) -> None:
                     must_contain="not found")
     ctx.expect_fail("ceph mgr (unknown lab)", "lab", "ceph", "mgr", ABSENT,
                     must_contain="not found")
+    ctx.expect_fail("ceph osd (unknown lab)", "lab", "ceph", "osd", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("ceph pool (unknown lab)", "lab", "ceph", "pool", ABSENT,
+                    must_contain="not found")
+    # `ceph status` is read-only, but it resolves its lab the same way, so the
+    # same unresolvable-lab contract holds.
+    ctx.expect_fail("ceph status (unknown lab)", "lab", "ceph", "status", ABSENT,
+                    must_contain="not found")
     ctx.expect_fail("context sync (unknown lab)", "lab", "context", "sync", ABSENT,
                     must_contain="not found")
     ctx.expect_fail("hostnet apply (unknown lab)", "lab", "hostnet", "apply", ABSENT,
@@ -290,6 +298,31 @@ def _deferred_mutations(ctx: Ctx) -> None:
         "cluster's own API context; needs the dedicated lab-pmx destructive "
         "test lab as the standing target",
         "pmx lab ceph mgr pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "ceph osd",
+        "creates Ceph OSDs on a lab's per-node OSD disks, wiping them when "
+        "asked; needs the dedicated lab-pmx destructive test lab as the "
+        "standing target",
+        "pmx lab ceph osd pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "ceph pool",
+        "creates the lab's replicated Ceph pool and wires it up as VM/CT "
+        "storage on the nested cluster; needs the dedicated lab-pmx "
+        "destructive test lab as the standing target",
+        "pmx lab ceph pool pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "ceph status",
+        "reads `ceph status` from a lab's node 0 through the nested cluster's "
+        "own API context, so it needs a provisioned lab with Ceph running; "
+        "needs the dedicated lab-pmx destructive test lab as the standing "
+        "target",
+        "pmx lab ceph status pmx",
         isolation=True,
     )
     ctx.defer(

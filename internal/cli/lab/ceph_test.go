@@ -334,3 +334,404 @@ func TestLabCephMgr_CreatesMissingMgrs(t *testing.T) {
 	assert.Contains(t, out, "mgr lab-ceph-2")
 	assert.Contains(t, out, "created")
 }
+
+// --- osd / pool / status ----------------------------------------------------
+
+// cephOSDTestLab is cephTestLab plus per-node OSD disks: `lab ceph osd`
+// derives the device paths it expects from storage.osd_disks, so a fixture
+// without them exercises only the refusal path. The controller is pinned
+// because ValidateStorage (run by config.Load) refuses osd_disks on anything
+// but virtio-scsi-single.
+func cephOSDTestLab(name string, nodes, disks int) *config.Lab {
+	lab := cephTestLab(name, nodes)
+	lab.Storage.Controller = "virtio-scsi-single"
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: disks, SizeGB: 100}
+	return lab
+}
+
+// cephDiskEntryJSON builds one GET /nodes/{n}/disks/list element for the
+// idx-th OSD disk, carrying the four fields the verb reads. devpath is the
+// kernel name a wipe targets; by_id_link is the stable path
+// createOSDDiskValue's serial=osdN guarantees, and the one an OSD is created
+// on.
+func cephDiskEntryJSON(idx int, used string, osdid int) map[string]any {
+	return map[string]any{
+		"devpath":    "/dev/sd" + string(rune('c'+idx)),
+		"by_id_link": cephOSDDevPath(idx),
+		"used":       used,
+		"osdid":      osdid,
+	}
+}
+
+// cephHandleDisksList registers node's disk listing on f.
+func cephHandleDisksList(f *testhelper.FakePVE, node string, entries ...map[string]any) {
+	list := make([]any, 0, len(entries))
+	for _, e := range entries {
+		list = append(list, e)
+	}
+	f.HandleJSON("GET /api2/json/nodes/"+node+"/disks/list", list)
+}
+
+// cephRecordOSDCreate records POST /nodes/{node}/ceph/osd on f, answering
+// with a terminal task so cephWaitTask returns immediately.
+func cephRecordOSDCreate(f *testhelper.FakePVE, rec *[]hostnetRecordedRequest, node string) {
+	upid := cephTaskUPID(node)
+	hostnetRecord(f, rec, nil, "", "POST /api2/json/nodes/"+node+"/ceph/osd", upid, 200)
+	cephHandleTaskStatus(f, node, upid)
+}
+
+func TestLabCephOsd_UnknownLab_Errors(t *testing.T) {
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{}})
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+
+	_, err := runGuestCmd(t, cmd, "osd", "ceph")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "not found")
+	assert.Empty(t, fake.Calls)
+}
+
+func TestLabCephPool_UnknownLab_Errors(t *testing.T) {
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{}})
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+
+	_, err := runGuestCmd(t, cmd, "pool", "ceph")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "not found")
+	assert.Empty(t, fake.Calls)
+}
+
+func TestLabCephStatus_UnknownLab_Errors(t *testing.T) {
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{}})
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+
+	_, err := runGuestCmd(t, cmd, "status", "ceph")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "not found")
+	assert.Empty(t, fake.Calls)
+}
+
+func TestLabCephOsd_NoOSDDisksConfigured_Errors(t *testing.T) {
+	lab := cephTestLab("ceph", 3) // no storage.osd_disks at all
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+
+	prev := labInnerAPIClient
+	t.Cleanup(func() { labInnerAPIClient = prev })
+	labInnerAPIClient = func(_ *cobra.Command, _ *cli.Deps, _ string) (*apiclient.APIClient, error) {
+		t.Fatal("a lab with no OSD disks must be refused before the inner client is built")
+		return nil, nil
+	}
+
+	_, err := runGuestCmd(t, cmd, "osd", "ceph")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "has no storage.osd_disks configured")
+}
+
+func TestLabCephOsd_DryRun_NoAPICalls(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+
+	prev := labInnerAPIClient
+	t.Cleanup(func() { labInnerAPIClient = prev })
+	labInnerAPIClient = func(_ *cobra.Command, _ *cli.Deps, _ string) (*apiclient.APIClient, error) {
+		t.Fatal("dry-run constructed the inner client")
+		return nil, nil
+	}
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, out, "[dry-run]")
+	assert.Contains(t, out, cephOSDDevPath(0))
+	assert.Empty(t, fake.Calls)
+}
+
+func TestLabCephOsd_CreatesOSDOnCleanDevices(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec, wipeRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		cephHandleDisksList(f, node, cephDiskEntryJSON(0, "", -1))
+		cephRecordOSDCreate(f, &createRec, node)
+		hostnetRecord(f, &wipeRec, nil, "", "PUT /api2/json/nodes/"+node+"/disks/wipedisk", nil, 200)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph")
+	require.NoError(t, err)
+
+	require.Len(t, createRec, 3, "one OSD must be created per node")
+	assert.Empty(t, wipeRec, "a clean device must never be wiped")
+	for _, rec := range createRec {
+		assert.Equal(t, cephOSDDevPath(0), rec.body["dev"],
+			"the OSD must be created on the stable by-id path, not the kernel name")
+	}
+	assert.Contains(t, out, "created")
+}
+
+func TestLabCephOsd_ExistingOSDNeverWiped(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec, wipeRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		// used is "LVM" exactly as a live OSD reports it: only osdid tells a
+		// healthy OSD apart from a foreign LVM volume, so it alone may gate.
+		cephHandleDisksList(f, node, cephDiskEntryJSON(0, "LVM", 0))
+		cephRecordOSDCreate(f, &createRec, node)
+		hostnetRecord(f, &wipeRec, nil, "", "PUT /api2/json/nodes/"+node+"/disks/wipedisk", nil, 200)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph", "--wipe", "--yes")
+	require.NoError(t, err)
+
+	assert.Empty(t, wipeRec, "--wipe must never touch a device Ceph already owns")
+	assert.Empty(t, createRec, "an existing OSD must not be recreated")
+	assert.Contains(t, out, "already OSD 0")
+}
+
+func TestLabCephOsd_InUseDeviceSkippedWithoutWipe(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec, wipeRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		cephHandleDisksList(f, node, cephDiskEntryJSON(0, "partitions", -1))
+		cephRecordOSDCreate(f, &createRec, node)
+		hostnetRecord(f, &wipeRec, nil, "", "PUT /api2/json/nodes/"+node+"/disks/wipedisk", nil, 200)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph")
+	require.NoError(t, err)
+
+	assert.Empty(t, wipeRec, "without --wipe nothing may be wiped")
+	assert.Empty(t, createRec, "an in-use device must not be handed to Ceph")
+	assert.Contains(t, out, "in use (skipped)")
+	assert.Contains(t, out, "partitions")
+}
+
+func TestLabCephOsd_WipeRequiresConfirmation(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec, wipeRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		cephHandleDisksList(f, node, cephDiskEntryJSON(0, "partitions", -1))
+		cephRecordOSDCreate(f, &createRec, node)
+		hostnetRecord(f, &wipeRec, nil, "", "PUT /api2/json/nodes/"+node+"/disks/wipedisk", nil, 200)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+	// Empty stdin is a non-interactive invocation: the confirmation read
+	// hits EOF and must decline rather than hang or error.
+	cmd.SetIn(strings.NewReader(""))
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph", "--wipe")
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "Aborted.")
+	assert.Empty(t, wipeRec, "a declined confirmation must wipe nothing")
+	assert.Empty(t, createRec, "a declined confirmation must create nothing")
+}
+
+func TestLabCephOsd_WipeThenCreate(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec, wipeRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		cephHandleDisksList(f, node, cephDiskEntryJSON(0, "partitions", -1))
+		upid := cephTaskUPID(node)
+		hostnetRecord(f, &wipeRec, nil, "", "PUT /api2/json/nodes/"+node+"/disks/wipedisk", upid, 200)
+		cephHandleTaskStatus(f, node, upid)
+		cephRecordOSDCreate(f, &createRec, node)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph", "--wipe", "--yes")
+	require.NoError(t, err)
+
+	require.Len(t, wipeRec, 3, "each in-use device must be wiped once")
+	for _, rec := range wipeRec {
+		assert.Equal(t, "/dev/sdc", rec.body["disk"],
+			"wipedisk takes the kernel device name, not the by-id path")
+	}
+	require.Len(t, createRec, 3, "each wiped device must then become an OSD")
+	assert.Contains(t, out, "wiped")
+}
+
+func TestLabCephOsd_ConfiguredDiskMissingFromListing_Errors(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		// Only the OS disk is present: the configured OSD disk was never
+		// attached to this VM.
+		cephHandleDisksList(f, node, map[string]any{
+			"devpath": "/dev/sda", "by_id_link": "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi0",
+			"used": "LVM", "osdid": -1,
+		})
+		cephRecordOSDCreate(f, &createRec, node)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	_, err := runGuestCmd(t, cmd, "osd", "ceph")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "lab-ceph-0")
+	assert.ErrorContains(t, err, cephOSDDevPath(0))
+	assert.ErrorContains(t, err, "pmx pve qemu disk add")
+	assert.Empty(t, createRec, "an unresolvable device must abort before any OSD is created")
+}
+
+func TestLabCephPool_CreatesWithDefaults(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/pool", []any{})
+
+	var createRec []hostnetRecordedRequest
+	upid := cephTaskUPID("lab-ceph-0")
+	hostnetRecord(f, &createRec, nil, "", "POST /api2/json/nodes/lab-ceph-0/ceph/pool", upid, 200)
+	cephHandleTaskStatus(f, "lab-ceph-0", upid)
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "pool", "ceph")
+	require.NoError(t, err)
+
+	require.Len(t, createRec, 1)
+	assert.Equal(t, "labrbd", createRec[0].body["name"])
+	assert.Equal(t, "3", createRec[0].body["size"])
+	assert.Equal(t, "2", createRec[0].body["min_size"])
+	assert.Equal(t, "on", createRec[0].body["pg_autoscale_mode"])
+	assert.Equal(t, "1", createRec[0].body["add_storages"])
+	assert.Contains(t, out, "created")
+}
+
+func TestLabCephPool_FlagOverridesReachTheRequest(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/pool", []any{})
+
+	var createRec []hostnetRecordedRequest
+	upid := cephTaskUPID("lab-ceph-0")
+	hostnetRecord(f, &createRec, nil, "", "POST /api2/json/nodes/lab-ceph-0/ceph/pool", upid, 200)
+	cephHandleTaskStatus(f, "lab-ceph-0", upid)
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	_, err := runGuestCmd(t, cmd, "pool", "ceph", "--name", "labpool", "--size", "2",
+		"--min-size", "1", "--pg-autoscale-mode", "warn", "--add-storages=false")
+	require.NoError(t, err)
+
+	require.Len(t, createRec, 1)
+	assert.Equal(t, "labpool", createRec[0].body["name"])
+	assert.Equal(t, "2", createRec[0].body["size"])
+	assert.Equal(t, "1", createRec[0].body["min_size"])
+	assert.Equal(t, "warn", createRec[0].body["pg_autoscale_mode"])
+	assert.Equal(t, "0", createRec[0].body["add_storages"])
+}
+
+func TestLabCephPool_ExistingPoolSkips(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/pool", []any{
+		map[string]any{"pool": 2, "pool_name": "labrbd"},
+	})
+
+	var createRec []hostnetRecordedRequest
+	hostnetRecord(f, &createRec, nil, "", "POST /api2/json/nodes/lab-ceph-0/ceph/pool", nil, 200)
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "pool", "ceph")
+	require.NoError(t, err)
+
+	assert.Empty(t, createRec, "an existing pool must not be re-created")
+	assert.Contains(t, out, "already present")
+}
+
+func TestLabCephPool_DryRun_NoAPICalls(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+
+	prev := labInnerAPIClient
+	t.Cleanup(func() { labInnerAPIClient = prev })
+	labInnerAPIClient = func(_ *cobra.Command, _ *cli.Deps, _ string) (*apiclient.APIClient, error) {
+		t.Fatal("dry-run constructed the inner client")
+		return nil, nil
+	}
+
+	out, err := runGuestCmd(t, cmd, "pool", "ceph", "--dry-run")
+	require.NoError(t, err)
+	assert.Contains(t, out, "[dry-run]")
+	assert.Contains(t, out, "labrbd")
+	assert.Empty(t, fake.Calls)
+}
+
+func TestLabCephStatus_RendersHealth(t *testing.T) {
+	lab := cephTestLab("ceph", 3)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/lab-ceph-0/ceph/status", map[string]any{
+		"health": map[string]any{"status": "HEALTH_WARN"},
+		"monmap": map[string]any{"mons": []any{
+			map[string]any{"name": "lab-ceph-0"},
+			map[string]any{"name": "lab-ceph-1"},
+			map[string]any{"name": "lab-ceph-2"},
+		}},
+		"mgrmap": map[string]any{
+			"active_name": "lab-ceph-0",
+			"standbys":    []any{map[string]any{"name": "lab-ceph-1"}},
+		},
+		// Deliberately three distinct counts, so a renderer that reads the
+		// wrong field cannot pass by coincidence.
+		"osdmap": map[string]any{"num_osds": 4, "num_up_osds": 3, "num_in_osds": 2},
+		"pgmap":  map[string]any{"num_pools": 5},
+	})
+
+	cmd, fake := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "status", "ceph")
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "HEALTH_WARN")
+	assert.Contains(t, out, "3 up / 2 in / 4 total")
+	assert.Contains(t, out, "mons")
+	assert.Contains(t, out, "pools")
+	assert.Empty(t, fake.Calls, "ceph status is API-only: it must never ssh into a guest")
+}
