@@ -965,17 +965,28 @@ const (
 // EffectiveRefquotaGB returns lab.Storage.RefquotaGB when set, else the
 // profile-appropriate default: DefaultSingleRefquotaGB for a single-node
 // lab, or EffectiveTopologyNodes(lab.Topology) × DefaultClusterRefquotaPerNodeGB
-// for a multi-node lab. Used by the capacity gate (`pmx lab create`) to
-// estimate a lab's pool reservation when the operator has not pinned an
-// explicit refquota.
+// for a multi-node lab, plus every node's OSD disk total (count × size,
+// resolved per node via EffectiveNodeSizing so per-node OSD overrides are
+// counted individually rather than the lab-wide value being multiplied by
+// the node count). An explicit storage.refquota_gb is authoritative and is
+// NOT augmented by OSD disks: the operator who set it owns the whole number
+// (ceph-lab-plan §5 sets 1150 explicitly for exactly this reason). Used by
+// the capacity gate (`pmx lab create`) to estimate a lab's pool reservation
+// when the operator has not pinned an explicit refquota.
 func EffectiveRefquotaGB(lab *Lab) int {
 	if lab.Storage.RefquotaGB > 0 {
 		return lab.Storage.RefquotaGB
 	}
-	if EffectiveTopologyNodes(lab.Topology) == 1 {
-		return DefaultSingleRefquotaGB
+	nodes := EffectiveTopologyNodes(lab.Topology)
+	base := DefaultSingleRefquotaGB
+	if nodes > 1 {
+		base = nodes * DefaultClusterRefquotaPerNodeGB
 	}
-	return EffectiveTopologyNodes(lab.Topology) * DefaultClusterRefquotaPerNodeGB
+	for i := range nodes {
+		_, st := EffectiveNodeSizing(lab, i)
+		base += OSDDiskCount(st) * OSDDiskSizeGB(st)
+	}
+	return base
 }
 
 // DefaultNFSQuotaGB is the fallback ZFS `quota` EffectiveNFSQuotaGB applies

@@ -291,3 +291,53 @@ func TestEffectiveRefquotaGB_ClusterDefaultScalesWithNodes(t *testing.T) {
 	lab := &config.Lab{Name: "wayne", Topology: config.LabTopology{Nodes: 3}}
 	assert.Equal(t, 3*config.DefaultClusterRefquotaPerNodeGB, config.EffectiveRefquotaGB(lab))
 }
+
+// TestEffectiveRefquotaGB_AddsOSDDisksToDefault covers Task 4: the default
+// refquota derivation (storage.refquota_gb unset) now adds every node's OSD
+// disk total on top of the cluster base, so an operator relying on the
+// default gets a capacity-gate reservation that actually reflects the OSD
+// disks the lab will allocate.
+func TestEffectiveRefquotaGB_AddsOSDDisksToDefault(t *testing.T) {
+	lab := &config.Lab{
+		Name:     "ceph",
+		Storage:  config.LabStorage{OSDDisks: &config.LabOSDDisks{Count: 2, SizeGB: 100}},
+		Topology: config.LabTopology{Nodes: 3},
+	}
+	// default cluster base: 3 * DefaultClusterRefquotaPerNodeGB, plus 3 nodes * 2 * 100
+	assert.Equal(t, 3*config.DefaultClusterRefquotaPerNodeGB+600, config.EffectiveRefquotaGB(lab))
+}
+
+// TestEffectiveRefquotaGB_ExplicitRefquotaIgnoresOSDDisks covers the other
+// half of Task 4's scope: an explicit storage.refquota_gb is authoritative
+// and is NOT augmented by OSD disks — the operator who set it owns the whole
+// number.
+func TestEffectiveRefquotaGB_ExplicitRefquotaIgnoresOSDDisks(t *testing.T) {
+	lab := &config.Lab{
+		Name: "ceph",
+		Storage: config.LabStorage{
+			RefquotaGB: 1150,
+			OSDDisks:   &config.LabOSDDisks{Count: 2, SizeGB: 100},
+		},
+		Topology: config.LabTopology{Nodes: 3},
+	}
+	assert.Equal(t, 1150, config.EffectiveRefquotaGB(lab))
+}
+
+// TestEffectiveRefquotaGB_PerNodeOSDOverridesCounted covers per-node OSD
+// disk overrides being summed individually rather than the lab-wide value
+// being multiplied by the node count: node 1 overrides OSDDiskCount to 1,
+// so the total is base + (2+1+2)*100, not base + 3*2*100.
+func TestEffectiveRefquotaGB_PerNodeOSDOverridesCounted(t *testing.T) {
+	lab := &config.Lab{
+		Name:    "ceph",
+		Storage: config.LabStorage{OSDDisks: &config.LabOSDDisks{Count: 2, SizeGB: 100}},
+		Topology: config.LabTopology{
+			Nodes: 3,
+			NodeOverrides: map[int]config.LabNodeOverride{
+				1: {OSDDiskCount: 1},
+			},
+		},
+	}
+	want := 3*config.DefaultClusterRefquotaPerNodeGB + (2+1+2)*100
+	assert.Equal(t, want, config.EffectiveRefquotaGB(lab))
+}

@@ -1766,6 +1766,66 @@ func TestCreateCapacityGate_UsesEffectiveLabNotOnDiskConfig(t *testing.T) {
 		"the numerator must use the 5-node refquota default (5*264G), not the on-disk 1-node default (480G)")
 }
 
+// TestCreateCapacityGate_OSDDisksPushOverRefuseThreshold covers Task 4: OSD
+// disks now factor into the capacity gate's default refquota derivation
+// (storage.refquota_gb left unset). The default single-node base (480G)
+// plus this lab's 2*100G OSD disks (200G) totals 680G, which against a 700G
+// pool (97.1%) crosses the 85% refuse threshold — proving OSD disks are
+// counted even though no field here mentions refquota_gb at all.
+func TestCreateCapacityGate_OSDDisksPushOverRefuseThreshold(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 0 // force the default derivation, which now folds in OSD disks
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
+
+	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
+	createHandleDisksZfs(f, "node1", "tank", 700*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createForbid(f, t, "GET /api2/json/cluster/nextid")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "capacity gate")
+	assert.ErrorContains(t, err, "--force")
+}
+
+// TestCreateCapacityGate_OSDDisksOverrideShrinksReservation covers the other
+// side of Task 4: overriding the OSD disks down via --osd-disks/--osd-disk-gb
+// shrinks the gate's default-derived reservation, taking the same lab/pool
+// shape from TestCreateCapacityGate_OSDDisksPushOverRefuseThreshold back
+// under the threshold (480G base only, against the same 700G pool: 68.5%).
+func TestCreateCapacityGate_OSDDisksOverrideShrinksReservation(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 0
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
+
+	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
+	createHandleDisksZfs(f, "node1", "tank", 700*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	// --osd-disk-gb 0 alongside --osd-disks 0: leaving size_gb at its
+	// lab-config value (100) with count overridden to 0 would fail
+	// ValidateStorage's "count is required when size_gb is set" check, so a
+	// shrinking override must zero both.
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--osd-disks", "0", "--osd-disk-gb", "0")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "capacity gate")
+	require.Len(t, qemuCreateRec, 1)
+}
+
 // --- capacity gate storage lookup (field finding F4 fix) --------------
 
 // TestCreateCapacityGate_IgnoresNestedPerLabStorage_UsesZfsPoolFallback
