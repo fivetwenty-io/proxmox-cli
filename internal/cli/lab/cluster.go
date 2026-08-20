@@ -221,6 +221,13 @@ func newClusterJoinCmd() *cobra.Command {
 			"without it, reporting success all the while.\n\n" +
 			"For the same reason, the joining node is re-probed once `pvecm add` returns, to " +
 			"confirm it actually joined before the wait for quorum begins.\n\n" +
+			"Once the node is a member, its nested host networking is reconciled against the " +
+			"lab's own nested-cluster context: every configured bond and bridge, plus the " +
+			"management IPv6 address the lab's address plan gives that node index. That phase " +
+			"never fails the join — anything it cannot do is reported as a deferred line naming " +
+			"`pmx lab hostnet apply`, which also owns the ssh NIC-naming phase this does not " +
+			"attempt; until that phase has run, a node whose NICs are still ens18-style gets its " +
+			"IPv6 here but no bonds.\n\n" +
 			"Join nodes one at a time, in index order: 1, then 2, then 3, and so on. Never run " +
 			"two joins for the same lab concurrently, and never join node i before node i-1 " +
 			"has finished joining and reached quorum.",
@@ -274,19 +281,36 @@ func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) erro
 	// comment for why this mirrors quota.go's established precedent instead
 	// of buildCreatePlan's API-GET-based preview.
 	if dryRun {
-		res := output.Result{Message: fmt.Sprintf(
+		msg := fmt.Sprintf(
 			"[dry-run] would seed root ssh trust from node %d (%s) to node 0 (%s) (ensure root keypair, "+
 				"push its public key into node 0's authorized_keys, accept node 0's host key) then run on "+
 				"node %d (%s): %s",
-			idx, nodeIP, node0IP, idx, nodeIP, joinCmd)}
-		return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
+			idx, nodeIP, node0IP, idx, nodeIP, joinCmd)
+		var b strings.Builder
+		b.WriteString(msg)
+		for _, row := range hostnetReconcilePreviewRows(lab, []int{idx}) {
+			fmt.Fprintf(&b, "\n[dry-run] then, against the lab's own context: %s (%s)", row[0], row[1])
+		}
+		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: b.String()}, deps.Format)
 	}
 
 	message, err := ensureClusterJoin(cmd.Context(), deps, lab, name, idx, node0IP, nodeIP)
 	if err != nil {
 		return err
 	}
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format)
+
+	// A joined node still has no nested host networking of its own: no
+	// bonds, no bridges, and — the reason this runs by default — no
+	// management IPv6. Reconcile it here rather than leaving the operator
+	// to remember a separate `hostnet apply`. Non-fatal by construction
+	// (hostnetreconcile.go): the join itself has already succeeded, and
+	// nothing here may retroactively fail it.
+	var out strings.Builder
+	out.WriteString(message)
+	for _, row := range hostnetReconcileNodes(cmd.Context(), cmd, deps, lab, []int{idx}) {
+		fmt.Fprintf(&out, "\n%s: %s", row[0], row[1])
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: out.String()}, deps.Format)
 }
 
 // ensureClusterJoin performs `cluster join`'s actual work — probe, guest-
