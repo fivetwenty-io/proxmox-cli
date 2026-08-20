@@ -11,6 +11,153 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
+// --- disk add ---------------------------------------------------------------
+
+func TestQemuDiskAdd_HappyPath(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"scsi0": "local-lvm:32", "digest": "abc123"})
+	})
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+	// mutationSuffix (security.go:138) unconditionally GETs status/current and
+	// errors if it fails — every test that reaches the PUT must register this.
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "stopped"})
+	})
+	var buf bytes.Buffer
+	err := run(depsFor(t, ac, "table", "pve1", false), &buf,
+		"disk", "add", "100", "--disk", "scsi2", "--storage", "tank-lab-ceph", "--size-gb", "100",
+		"--options", "discard=on,ssd=1,serial=osd0")
+	require.NoError(t, err)
+	form := parseForm(t, body)
+	require.Equal(t, "tank-lab-ceph:100,discard=on,ssd=1,serial=osd0", form.Get("scsi2"))
+	require.Equal(t, "abc123", form.Get("digest"))
+	require.Contains(t, buf.String(), "disk scsi2 added")
+	require.Contains(t, buf.String(), "Change applies on next start.")
+	// discard/ssd in --options → cold power-cycle caveat (spec §5: a reboot
+	// is NOT enough for these flags; the VM must be stopped and started).
+	require.Contains(t, buf.String(), "full power-off and power-on")
+}
+
+func TestQemuDiskAdd_NoDiscardOptions_NoPowerCycleCaveat(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"scsi0": "local-lvm:32", "digest": "abc123"})
+	})
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "stopped"})
+	})
+	var buf bytes.Buffer
+	err := run(depsFor(t, ac, "table", "pve1", false), &buf,
+		"disk", "add", "100", "--disk", "scsi2", "--storage", "tank-lab-ceph", "--size-gb", "100",
+		"--options", "backup=0")
+	require.NoError(t, err)
+	require.NotContains(t, buf.String(), "full power-off and power-on")
+}
+
+func TestQemuDiskAdd_OccupiedSlotRefused(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"scsi2": "existing:10", "digest": "abc123"})
+	})
+	// No PUT handler registered: a PUT would 404-fail the test.
+	var buf bytes.Buffer
+	err := run(depsFor(t, ac, "table", "pve1", false), &buf,
+		"disk", "add", "100", "--disk", "scsi2", "--storage", "local-lvm", "--size-gb", "10")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already exists")
+	require.Contains(t, err.Error(), "scsi2")
+}
+
+func TestQemuDiskAdd_RequiredFlagsAndSlotValidation(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantContain string
+	}{
+		{
+			name:        "missing disk",
+			args:        []string{"disk", "add", "100", "--storage", "local-lvm", "--size-gb", "10"},
+			wantContain: "--disk is required",
+		},
+		{
+			name:        "missing storage",
+			args:        []string{"disk", "add", "100", "--disk", "scsi2", "--size-gb", "10"},
+			wantContain: "--storage is required",
+		},
+		{
+			name:        "missing size-gb",
+			args:        []string{"disk", "add", "100", "--disk", "scsi2", "--storage", "local-lvm"},
+			wantContain: "--size-gb is required",
+		},
+		{
+			name: "size-gb zero",
+			args: []string{"disk", "add", "100", "--disk", "scsi2", "--storage", "local-lvm",
+				"--size-gb", "0"},
+			wantContain: "positive",
+		},
+		{
+			name: "invalid slot bus",
+			args: []string{"disk", "add", "100", "--disk", "floppy0", "--storage", "local-lvm",
+				"--size-gb", "10"},
+			wantContain: "not a valid slot",
+		},
+		{
+			name: "scsi index out of range",
+			args: []string{"disk", "add", "100", "--disk", "scsi31", "--storage", "local-lvm",
+				"--size-gb", "10"},
+			wantContain: "out of range",
+		},
+		{
+			name: "ide index out of range",
+			args: []string{"disk", "add", "100", "--disk", "ide4", "--storage", "local-lvm",
+				"--size-gb", "10"},
+			wantContain: "out of range",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Numeric vmid + explicit node short-circuits resolveGuest, and all
+			// these cases fail before any HTTP call, so no handler is registered.
+			_, ac := newFakeClient(t)
+			deps := depsFor(t, ac, output.FormatTable, "pve1", false)
+
+			var buf bytes.Buffer
+			err := run(deps, &buf, tc.args...)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.wantContain)
+		})
+	}
+}
+
+func TestQemuDiskAdd_VirtioBusUsesVirtioField(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"digest": "abc123"})
+	})
+	var body string
+	f.HandleFunc("PUT /api2/json/nodes/pve1/qemu/100/config", func(w http.ResponseWriter, r *http.Request) {
+		body = readBody(t, r)
+		testhelper.WriteData(w, nil)
+	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/qemu/100/status/current", func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "stopped"})
+	})
+	var buf bytes.Buffer
+	err := run(depsFor(t, ac, "table", "pve1", false), &buf,
+		"disk", "add", "100", "--disk", "virtio1", "--storage", "local-lvm", "--size-gb", "50")
+	require.NoError(t, err)
+	form := parseForm(t, body)
+	require.Equal(t, "local-lvm:50", form.Get("virtio1"))
+}
+
 // --- disk resize ------------------------------------------------------------
 
 func TestQemuDiskResize_Sync(t *testing.T) {

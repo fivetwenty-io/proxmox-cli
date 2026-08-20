@@ -1280,9 +1280,13 @@ def vm_lifecycle(r: Runner) -> None:
                            "pve", "qemu", "delete", clone_id, "--yes",
                            "--purge", "--destroy-unreferenced-disks")
 
-        # Disk ops on the (stopped) base VM: grow scsi0, relocate it to another
-        # storage when one exists, then detach it. All operate on the isolated
-        # pmx-cli VM and its own disk, so nothing else in the lab is touched.
+        # Disk ops on the (stopped) base VM: attach a new disk on scsi1, grow
+        # scsi0, relocate it to another storage when one exists, then detach
+        # it. All operate on the isolated pmx-cli VM and its own disks, so
+        # nothing else in the lab is touched.
+        r.step("qemu", "disk add", f"disk add scsi1 on {vmid}",
+               "pve", "qemu", "disk", "add", vmid, "--disk", "scsi1",
+               "--storage", ROOTDIR_STORAGE, "--size-gb", "1")
         r.step("qemu", "disk resize", f"disk resize scsi0 on {vmid} (+1G)",
                "pve", "qemu", "disk", "resize", vmid, "--disk", "scsi0", "--size", "+1G")
         alt = _alt_image_storage(r, ROOTDIR_STORAGE)

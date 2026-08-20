@@ -253,6 +253,7 @@ def run(ctx: Ctx) -> None:
     # Verify clone, migrate, disk, and firewall help text parses (commands are wired).
     ctx.check("clone --help", "pve", "qemu", "clone", "--help", fmt="")
     ctx.check("migrate --help", "pve", "qemu", "migrate", "--help", fmt="")
+    ctx.check("disk add --help", "pve", "qemu", "disk", "add", "--help", fmt="")
     ctx.check("disk resize --help", "pve", "qemu", "disk", "resize", "--help", fmt="")
     ctx.check("disk move --help", "pve", "qemu", "disk", "move", "--help", fmt="")
     ctx.check("disk unlink --help", "pve", "qemu", "disk", "unlink", "--help", fmt="")

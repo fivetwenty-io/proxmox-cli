@@ -3,6 +3,9 @@ package qemu
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,18 +15,135 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// newDiskCmd builds the `pmx pve qemu disk` sub-tree (resize, move, unlink).
+// newDiskCmd builds the `pmx pve qemu disk` sub-tree (attach, resize, move, unlink).
 func newDiskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "disk",
 		Short: "Manage QEMU virtual machine disks",
-		Long:  "Grow, relocate, and detach the disks attached to a QEMU virtual machine.",
+		Long:  "Attach, grow, relocate, and detach the disks attached to a QEMU virtual machine.",
 	}
 	cmd.AddCommand(
+		newDiskAddCmd(),
 		newDiskResizeCmd(),
 		newDiskMoveCmd(),
 		newDiskUnlinkCmd(),
 	)
+	return cmd
+}
+
+var diskAddSlotRE = regexp.MustCompile(`^(ide|sata|scsi|virtio)(\d+)$`)
+
+// Per-bus maximum slot index, from the PVE qemu config schema
+// (scsi 0-30, ide 0-3, sata 0-5, virtio 0-15).
+var diskAddSlotMax = map[string]int{"ide": 3, "sata": 5, "scsi": 30, "virtio": 15}
+
+// newDiskAddCmd attaches a newly allocated volume to a free disk slot via
+// PUT /nodes/{node}/qemu/{vmid}/config using the STORAGE_ID:SIZE_IN_GiB
+// allocation syntax. The PUT is synchronous (no task UPID). On a running VM
+// without hotplug the disk lands as a pending change until the next restart.
+func newDiskAddCmd() *cobra.Command {
+	var (
+		disk     string
+		storage  string
+		sizeGB   int
+		options  string
+		digest   string
+		skiplock bool
+	)
+	cmd := &cobra.Command{
+		Use:   "add <vmid|name>",
+		Short: "Attach a new disk to a QEMU virtual machine",
+		Long: "Allocate a new volume on a storage and attach it to a free disk slot. " +
+			"Extra PVE disk properties (discard=on, ssd=1, serial=..., backup=0, iothread=1, " +
+			"import-from=...) ride along verbatim via --options.",
+		Example: `  pmx pve qemu disk add 100 --disk scsi2 --storage local-lvm --size-gb 100
+  pmx pve qemu disk add 100 --disk scsi2 --storage tank-lab-ceph --size-gb 100 --options discard=on,ssd=1,backup=0,serial=osd0`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deps := cli.GetDeps(cmd)
+			vmid, node, err := resolveGuest(cmd.Context(), deps, args[0])
+			if err != nil {
+				return err
+			}
+			fl := cmd.Flags()
+			if !fl.Changed("disk") {
+				return fmt.Errorf("--disk is required: provide the slot to attach (for example, scsi2)")
+			}
+			if !fl.Changed("storage") {
+				return fmt.Errorf("--storage is required: provide the storage to allocate the volume on")
+			}
+			if !fl.Changed("size-gb") {
+				return fmt.Errorf("--size-gb is required: provide the disk size as a whole number of GiB")
+			}
+			if sizeGB <= 0 {
+				return fmt.Errorf("--size-gb must be a positive whole number of GiB")
+			}
+			m := diskAddSlotRE.FindStringSubmatch(disk)
+			if m == nil {
+				return fmt.Errorf("--disk %q is not a valid slot: use <bus><index>, for example scsi2, virtio1, sata0, or ide0", disk)
+			}
+			idx, _ := strconv.Atoi(m[2])
+			if idx > diskAddSlotMax[m[1]] {
+				return fmt.Errorf("--disk %s: index %d is out of range for %s (0 through %d)", disk, idx, m[1], diskAddSlotMax[m[1]])
+			}
+
+			cfg, cfgDigest, err := readRawConfig(cmd.Context(), deps, node, vmid)
+			if err != nil {
+				return err
+			}
+			if cur, ok := rawStr(cfg, disk); ok {
+				return fmt.Errorf("disk %s already exists on VM %s (%s): use disk resize or disk move, or pick a free slot", disk, vmid, cur)
+			}
+
+			value := fmt.Sprintf("%s:%d", storage, sizeGB)
+			if options != "" {
+				value += "," + options
+			}
+			params := &nodes.UpdateQemuConfigParams{}
+			slot := map[int]string{idx: value}
+			switch m[1] {
+			case "ide":
+				params.Ide = slot
+			case "sata":
+				params.Sata = slot
+			case "scsi":
+				params.Scsi = slot
+			case "virtio":
+				params.Virtio = slot
+			}
+			applyDigest(params, fl, digest, cfgDigest)
+			if fl.Changed("skiplock") {
+				params.Skiplock = new(skiplock)
+			}
+			if err := deps.API.Nodes.UpdateQemuConfig(cmd.Context(), node, vmid, params); err != nil {
+				return fmt.Errorf("add disk %s on VM %s (node %q): %w", disk, vmid, node, err)
+			}
+			msg := fmt.Sprintf("VM %s disk %s added (%s).", vmid, disk, value)
+
+			suffix, err := mutationSuffix(cmd, deps, vmid, node, false)
+			if err != nil {
+				return err
+			}
+			// discard=on and ssd=1 take effect only after a full power-off and
+			// power-on, not a reboot (ceph-lab-plan §5): a reboot preserves the
+			// guest's already-loaded view of hotplugged/reconfigured devices,
+			// so already-booted VMs need the cold cycle to see the change.
+			if strings.Contains(options, "discard") || strings.Contains(options, "ssd") {
+				suffix += " Note: discard/ssd flags need a full power-off and power-on, not a reboot."
+			}
+			return deps.Out.Render(cmd.OutOrStdout(),
+				output.Result{
+					Message: msg + suffix,
+					Raw:     map[string]any{"vmid": vmid, "node": node, "disk": disk, "value": value},
+				}, deps.Format)
+		},
+	}
+	cmd.Flags().StringVar(&disk, "disk", "", "target slot, for example scsi2 or virtio1 (required)")
+	cmd.Flags().StringVar(&storage, "storage", "", "storage ID to allocate the new volume on (required)")
+	cmd.Flags().IntVar(&sizeGB, "size-gb", 0, "disk size as a whole number of GiB (required)")
+	cmd.Flags().StringVar(&options, "options", "", "extra PVE disk properties appended verbatim, comma-separated (for example discard=on,ssd=1,serial=osd0)")
+	cmd.Flags().StringVar(&digest, "digest", "", "only apply if the current config matches this SHA1 digest")
+	cmd.Flags().BoolVar(&skiplock, "skiplock", false, "ignore VM locks (root only)")
 	return cmd
 }
 
