@@ -120,6 +120,7 @@ func LabFileTemplate(lab *Lab) []byte {
 	fmt.Fprintf(&b, "  iothread: %t\n", lab.Storage.IOThread)
 	fmt.Fprintf(&b, "  discard: %t\n", lab.Storage.Discard)
 	fmt.Fprintf(&b, "  ssd: %t\n", lab.Storage.SSD)
+	appendLabOSDDisksBlock(&b, lab.Storage.OSDDisks)
 	appendLabNFSQuotaLine(&b, lab.Storage.NFSQuotaGB)
 	fmt.Fprint(&b, "\n")
 
@@ -216,6 +217,19 @@ func appendLabIPv6Block(b *strings.Builder, net LabNetwork) {
 	if net.Snat6 {
 		fmt.Fprint(b, "  snat6: true\n")
 	}
+}
+
+// appendLabOSDDisksBlock writes the storage.osd_disks sub-block: the
+// explanatory comment always, the keys only when configured, so an unset
+// value round-trips as absent (see the goccy empty-collection caveat above).
+func appendLabOSDDisksBlock(b *strings.Builder, d *LabOSDDisks) {
+	fmt.Fprint(b, "  # storage.osd_disks: extra whole-raw-device disks per node (scsi2..) for nested Ceph OSDs.\n")
+	if d == nil {
+		return
+	}
+	fmt.Fprint(b, "  osd_disks:\n")
+	fmt.Fprintf(b, "    count: %d\n", d.Count)
+	fmt.Fprintf(b, "    size_gb: %d\n", d.SizeGB)
 }
 
 // appendLabVnetsBlock documents network.vnets with a short comment,

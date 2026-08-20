@@ -51,6 +51,7 @@ func fullLab() *config.Lab {
 			IOThread:   true,
 			Discard:    true,
 			SSD:        true,
+			OSDDisks:   &config.LabOSDDisks{Count: 2, SizeGB: 100},
 		},
 		DNS: config.LabDNS{
 			Zone: "wayne.lab.fivetwenty.io",
@@ -221,6 +222,18 @@ func TestLabFileTemplate_ZoneKeys_RenderedOnlyWhenSet(t *testing.T) {
 	require.Contains(t, rendered, "\n  zone_name: \"labsvx\"")
 	require.Contains(t, rendered, "\n  zone_type: \"vxlan\"")
 	require.Contains(t, rendered, "\n  zone_peers: \"10.0.0.1,10.0.0.2\"")
+}
+
+func TestLabFileTemplate_OSDDisks_RenderedOnlyWhenSet(t *testing.T) {
+	lab := fullLab()
+	lab.Storage.OSDDisks = nil
+	out := string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "# storage.osd_disks:")
+	require.NotContains(t, out, "\n  osd_disks:")
+
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
+	out = string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "  osd_disks:\n    count: 2\n    size_gb: 100\n")
 }
 
 func TestWriteLabFile_ZoneKeysRoundTripThroughResolveLabs(t *testing.T) {
