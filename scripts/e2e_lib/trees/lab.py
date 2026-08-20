@@ -152,6 +152,12 @@ def _mutating_error_contracts(ctx: Ctx) -> None:
                     must_contain="not found")
     ctx.expect_fail("ceph install (unknown lab)", "lab", "ceph", "install", ABSENT,
                     must_contain="not found")
+    ctx.expect_fail("ceph init (unknown lab)", "lab", "ceph", "init", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("ceph mon (unknown lab)", "lab", "ceph", "mon", ABSENT,
+                    must_contain="not found")
+    ctx.expect_fail("ceph mgr (unknown lab)", "lab", "ceph", "mgr", ABSENT,
+                    must_contain="not found")
     ctx.expect_fail("context sync (unknown lab)", "lab", "context", "sync", ABSENT,
                     must_contain="not found")
     ctx.expect_fail("hostnet apply (unknown lab)", "lab", "hostnet", "apply", ABSENT,
@@ -260,6 +266,30 @@ def _deferred_mutations(ctx: Ctx) -> None:
         "installs the Ceph packages over ssh on each of a lab's nodes; needs "
         "the dedicated lab-pmx destructive test lab as the standing target",
         "pmx lab ceph install pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "ceph init",
+        "runs `pveceph init` on a lab's node 0 through the nested cluster's "
+        "own API context; needs the dedicated lab-pmx destructive test lab "
+        "as the standing target",
+        "pmx lab ceph init pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "ceph mon",
+        "creates Ceph monitor daemons on a lab's nodes through the nested "
+        "cluster's own API context; needs the dedicated lab-pmx destructive "
+        "test lab as the standing target",
+        "pmx lab ceph mon pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "ceph mgr",
+        "creates Ceph manager daemons on a lab's nodes through the nested "
+        "cluster's own API context; needs the dedicated lab-pmx destructive "
+        "test lab as the standing target",
+        "pmx lab ceph mgr pmx",
         isolation=True,
     )
     ctx.defer(
