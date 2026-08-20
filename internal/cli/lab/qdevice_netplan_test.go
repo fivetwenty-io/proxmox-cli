@@ -23,16 +23,21 @@ func TestQdeviceParseNetplanList_EveryYAMLShape(t *testing.T) {
 	assert.Empty(t, qdeviceParseNetplanList(""))
 }
 
-// TestQdeviceIPv6Persisted_AnyStacksConfigFileCounts pins the stack-agnostic
-// convergence marker: the probe's `grep -rl` phase naming ANY config file
-// that holds the address is what counts, so an ifupdown drop-in and a
-// netplan document are equally valid evidence — and a stray line of `ip`
-// output is not.
-func TestQdeviceIPv6Persisted_AnyStacksConfigFileCounts(t *testing.T) {
-	assert.True(t, qdeviceIPv6Persisted("/etc/network/interfaces.d/lab-ipv6\n"))
-	assert.True(t, qdeviceIPv6Persisted("/etc/netplan/70-netplan-set.yaml\n"))
-	assert.False(t, qdeviceIPv6Persisted("    inet6 fd10::f/48 scope global\n"))
-	assert.False(t, qdeviceIPv6Persisted(""))
+// TestQdeviceIPv6Persisted_OnlyTheGuestsOwnRendererCounts pins the
+// convergence marker to the file the guest actually reads. The case that
+// matters is the third one: a netplan guest carrying only the old
+// ifupdown drop-in is precisely the state this round set out to fix, so it
+// must never read as converged — that would restore the original bug, with
+// the address live now and gone after a reboot.
+func TestQdeviceIPv6Persisted_OnlyTheGuestsOwnRendererCounts(t *testing.T) {
+	assert.True(t, qdeviceIPv6Persisted("/etc/network/interfaces.d/lab-ipv6\n", false))
+	assert.True(t, qdeviceIPv6Persisted("/etc/netplan/70-netplan-set.yaml\n", true))
+	assert.False(t, qdeviceIPv6Persisted("/etc/network/interfaces.d/lab-ipv6\n", true),
+		"a netplan guest does not read /etc/network/interfaces.d")
+	assert.False(t, qdeviceIPv6Persisted("/etc/netplan/60-lab-ipv6.yaml\n", false),
+		"a guest with no netplan installed does not read /etc/netplan")
+	assert.False(t, qdeviceIPv6Persisted("    inet6 fd10::f/48 scope global\n", false))
+	assert.False(t, qdeviceIPv6Persisted("", false))
 }
 
 // TestQdeviceAdd_NetplanGuest_PersistsThroughNetplan covers the gap this
@@ -184,6 +189,50 @@ func TestQdeviceAdd_NetplanGuest_ConvergedSkips(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "skip (already satisfied)")
 	require.Len(t, fake.Calls, 5, "a converged netplan guest costs exactly one IPv6 probe")
+}
+
+// TestQdeviceAdd_NetplanGuestWithOnlyIfupdownDropIn_Rewrites covers the
+// upgrade path a lab built before the netplan writer is actually in: the
+// guest is live and routed, and /etc/network/interfaces.d/lab-ipv6 holds
+// the address — but netplan renders this guest and never reads that file,
+// so the address is gone at the next boot. The run must repair it through
+// netplan rather than reading the stale drop-in as proof of convergence.
+func TestQdeviceAdd_NetplanGuestWithOnlyIfupdownDropIn_Rewrites(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab, path := qdeviceIPv6TestLab(t, f)
+	cmd, _ := buildGuestSSHAndAPICmd(t, path, f, newQdeviceCmd())
+
+	addr6, err := labQdeviceMgmtIP6(lab.Network)
+	require.NoError(t, err)
+	gw6, err := labMgmtGateway6(lab.Network)
+	require.NoError(t, err)
+
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: samplePvecmStatusWithQdevice},
+		exec.FakeResponse{},
+		// Live, routed, and persisted — but only in the file a netplan
+		// guest ignores.
+		exec.FakeResponse{Stdout: qdeviceIPv6ConvergedProbe(addr6, gw6) + qdeviceNetplanMarker + "\n"},
+		exec.FakeResponse{Stdout: "2: ens18    inet 10.10.1.15/16 scope global ens18"},
+		exec.FakeResponse{}, // live ip -6 apply
+		exec.FakeResponse{Stdout: "addresses:\n- 10.10.1.15/16\n"},
+		exec.FakeResponse{Stdout: "- 10.10.1.15/16\n"},
+		exec.FakeResponse{Stdout: "null\n"},
+		exec.FakeResponse{}, // netplan set + generate
+		exec.FakeResponse{},
+		exec.FakeResponse{},
+	)
+	cli.GetDeps(cmd).Runner = fake
+
+	out, err := runGuestCmd(t, cmd, "add", "wayne")
+	require.NoError(t, err)
+	assert.Regexp(t, `ensure IPv6[^\n]*done`, out,
+		"an ifupdown drop-in is not persistence on a netplan guest, so the row must not skip")
+
+	require.Len(t, fake.Calls, 11)
+	setArgs := fmt.Sprintf("%v", fake.Calls[8].Args)
+	assert.Contains(t, setArgs, fmt.Sprintf(`%s/48`, addr6))
+	assert.Contains(t, setArgs, "netplan set")
 }
 
 // TestQdeviceNetplanFallbackFile_CarriesFullAddressList pins the shape of

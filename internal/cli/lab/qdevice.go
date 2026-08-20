@@ -290,27 +290,40 @@ var qdeviceIfaceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 // from an older run must not read as converged, since `ip -6 addr replace`
 // cannot remove it), the DEFAULT route via the mgmt gateway (`ip -6 route
 // show default`'s "default via <gw>"), and a persisted copy of the address
-// in some network-config file (qdeviceIPv6Persisted). Anything less is a
-// half-applied state the apply must repair — matching on the live address
-// alone would read "addr landed, route/persist chain died" as converged
-// forever.
+// in a config file THE GUEST'S OWN RENDERER READS (qdeviceIPv6Persisted).
+// Anything less is a half-applied state the apply must repair — matching on
+// the live address alone would read "addr landed, route/persist chain died"
+// as converged forever.
 func qdeviceIPv6Converged(probeOut, addr6, gw6 string) bool {
 	return strings.Contains(probeOut, fmt.Sprintf("inet6 %s/%d", addr6, labV6InterfacePrefixBits)) &&
 		strings.Contains(probeOut, "default via "+gw6) &&
-		qdeviceIPv6Persisted(probeOut)
+		qdeviceIPv6Persisted(probeOut, qdeviceUsesNetplan(probeOut))
 }
 
-// qdeviceIPv6Persisted reports whether the probe's `grep -rl` phase named
-// any config file holding the planned address. Deliberately stack-agnostic:
-// the marker is the FILE the address was found in, not a syntax the check
-// would have to know per renderer, so an ifupdown drop-in and a netplan
-// YAML both count and neither is privileged. Only paths under the two
+// qdeviceIPv6Persisted reports whether the probe's `grep -rl` phase named a
+// config file that the guest's OWN renderer reads: a netplan document on a
+// netplan guest, an ifupdown drop-in otherwise. Only paths under the two
 // directories the probe searched are honored, so an unrelated line of `ip`
 // output can never read as persistence.
-func qdeviceIPv6Persisted(probeOut string) bool {
+//
+// The stack has to gate this, not merely select the writer. A netplan guest
+// carrying only /etc/network/interfaces.d/lab-ipv6 — exactly what an
+// upgraded lab has, since the older ifupdown-only writer put it there — has
+// its address in a file nothing reads, so it is NOT persisted, and a
+// stack-agnostic check would report the pre-fix bug as converged forever.
+//
+// A netplan guest whose management interface netplan does not manage keeps
+// its ifupdown drop-in (qdevicePersistIPv6Netplan falls back to writing
+// one), and that case simply never reports converged: the apply path is
+// idempotent and re-derives the same answer, which is a few ssh round trips
+// against being wrong.
+func qdeviceIPv6Persisted(probeOut string, netplan bool) bool {
+	dir := "/etc/network/interfaces.d/"
+	if netplan {
+		dir = "/etc/netplan/"
+	}
 	for line := range strings.SplitSeq(probeOut, "\n") {
-		l := strings.TrimSpace(line)
-		if strings.HasPrefix(l, "/etc/network/interfaces.d/") || strings.HasPrefix(l, "/etc/netplan/") {
+		if strings.HasPrefix(strings.TrimSpace(line), dir) {
 			return true
 		}
 	}
