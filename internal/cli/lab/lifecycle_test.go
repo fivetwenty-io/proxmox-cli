@@ -318,7 +318,7 @@ func TestStatus_RunningVMShowsPowerIPAndConfig(t *testing.T) {
 
 	var table jsonTable
 	require.NoError(t, json.Unmarshal([]byte(body), &table))
-	assert.Equal(t, []string{"NODE", "VMID", "PVE_NODE", "STATUS", "IP", "AGENT", "VCPU", "MEMORY_MAX_GB", "WARNING"}, table.Headers)
+	assert.Equal(t, []string{"NODE", "VMID", "PVE_NODE", "STATUS", "IP", "IP6", "AGENT", "VCPU", "MEMORY_MAX_GB", "WARNING"}, table.Headers)
 	require.Len(t, table.Rows, 2, "one node row plus a trailing summary row (single-node/default topology)")
 
 	row := table.Rows[0]
@@ -327,9 +327,11 @@ func TestStatus_RunningVMShowsPowerIPAndConfig(t *testing.T) {
 	assert.Equal(t, "pve1", row[2], "pve node")
 	assert.Equal(t, "running", row[3], "status")
 	assert.Equal(t, "10.10.1.50", row[4], "guest-agent-reported IP")
-	assert.Equal(t, "ok", row[5], "agent")
-	assert.Equal(t, "16", row[6], "vcpu falls back to the single-node profile default")
-	assert.Equal(t, "128", row[7], "memory_max_gb falls back to the single-node profile default")
+	assert.Equal(t, "fd15:8c8e:bba8:1::a", row[5],
+		"the planned management IPv6, since this agent result reports no global v6 of its own")
+	assert.Equal(t, "ok", row[6], "agent")
+	assert.Equal(t, "16", row[7], "vcpu falls back to the single-node profile default")
+	assert.Equal(t, "128", row[8], "memory_max_gb falls back to the single-node profile default")
 
 	summary := table.Rows[1]
 	assert.Equal(t, "summary", summary[0])
@@ -363,9 +365,10 @@ func TestStatus_VMAbsentIsConfigOnlyAndSucceeds(t *testing.T) {
 	assert.Equal(t, "", row[1], "no VMID when absent")
 	assert.Equal(t, "", row[2], "no pve node when absent")
 	assert.Equal(t, "absent", row[3], "status")
-	assert.Equal(t, "n/a", row[5], "agent")
-	assert.Equal(t, "8", row[6], "vcpu reflects the lab's configured override")
-	assert.Equal(t, "64", row[7], "memory_max_gb reflects the lab's configured override")
+	assert.Equal(t, "fd15:8c8e:bba8:1::a", row[5], "an absent VM still reports its planned management IPv6")
+	assert.Equal(t, "n/a", row[6], "agent")
+	assert.Equal(t, "8", row[7], "vcpu reflects the lab's configured override")
+	assert.Equal(t, "64", row[8], "memory_max_gb reflects the lab's configured override")
 }
 
 func TestStatus_UnknownLab(t *testing.T) {

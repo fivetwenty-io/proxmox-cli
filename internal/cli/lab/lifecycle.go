@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -361,6 +362,52 @@ func (a *agentNetworkInterfaces) firstIPv4() (string, bool) {
 	return "", false
 }
 
+// firstIPv6 returns the first globally-scoped IPv6 address in the agent
+// result: loopback (::1) and link-local (fe80::/10) are skipped, since
+// neither is the lab address plan's ::a+i / ::f that `lab status` is
+// reporting against. A guest that has only those (or no IPv6 at all)
+// reports nothing, and the caller falls back to the configured address.
+func (a *agentNetworkInterfaces) firstIPv6() (string, bool) {
+	for _, iface := range a.Result {
+		if iface.Name == "lo" {
+			continue
+		}
+		for _, addr := range iface.IPAddresses {
+			if addr.IPAddressType != "ipv6" || addr.IPAddress == "" {
+				continue
+			}
+			parsed, err := netip.ParseAddr(addr.IPAddress)
+			if err != nil || !parsed.Is6() || parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
+				continue
+			}
+			return addr.IPAddress, true
+		}
+	}
+	return "", false
+}
+
+// statusConfiguredIP6 returns the management IPv6 the lab's address plan
+// gives tgt — node index i's ::a+i, or the QDevice's ::f — or "-" when the
+// lab is IPv4-only (network.ipv6: false) or the plan cannot be derived.
+func statusConfiguredIP6(l *config.Lab, tgt lifecycleTarget) string {
+	if !l.Network.EffectiveIPv6() {
+		return "-"
+	}
+	var (
+		ip  string
+		err error
+	)
+	if tgt.isNode {
+		ip, err = labNodeMgmtIP6(l.Network, tgt.index)
+	} else {
+		ip, err = labQdeviceMgmtIP6(l.Network)
+	}
+	if err != nil {
+		return "-"
+	}
+	return ip
+}
+
 // statusRow renders one row of `pmx lab status`'s per-node/QDevice table for
 // tgt: VM state, node, agent-reported (falling back to configured) IP, the
 // target's configured sizing, and a network-prefix hazard warning (see
@@ -384,10 +431,11 @@ func statusRow(ctx context.Context, deps *cli.Deps, l *config.Lab, tgt lifecycle
 	} else if ip, err := labQdeviceMgmtIP(l.Network); err == nil {
 		configuredIP = ip
 	}
+	configuredIP6 := statusConfiguredIP6(l, tgt)
 
 	vm, found := tgt.lookup(classified)
 	if !found {
-		return []string{tgt.label, "", "", "absent", configuredIP, "n/a", vcpu, memMaxGB, ""}, nil
+		return []string{tgt.label, "", "", "absent", configuredIP, configuredIP6, "n/a", vcpu, memMaxGB, ""}, nil
 	}
 
 	vmid := strconv.FormatInt(vm.VMID, 10)
@@ -401,6 +449,7 @@ func statusRow(ctx context.Context, deps *cli.Deps, l *config.Lab, tgt lifecycle
 	}
 
 	ip := configuredIP
+	ip6 := configuredIP6
 	agent := "n/a"
 	warning := ""
 	if current.Status == "running" {
@@ -408,6 +457,12 @@ func statusRow(ctx context.Context, deps *cli.Deps, l *config.Lab, tgt lifecycle
 			agent = "ok"
 			if liveIP, ok2 := ifaces.firstIPv4(); ok2 {
 				ip = liveIP
+			}
+			// A live v6 only ever replaces the planned one; an IPv4-only
+			// lab keeps its "-" rather than reporting an address the plan
+			// never asked for.
+			if liveIP6, ok2 := ifaces.firstIPv6(); ok2 && ip6 != "-" {
+				ip6 = liveIP6
 			}
 			if w, ok2 := guestPrefixWarning(ifaces, l.Network.CIDR); ok2 {
 				warning = w
@@ -417,7 +472,7 @@ func statusRow(ctx context.Context, deps *cli.Deps, l *config.Lab, tgt lifecycle
 		}
 	}
 
-	return []string{tgt.label, vmid, vm.Node, current.Status, ip, agent, vcpu, memMaxGB, warning}, nil
+	return []string{tgt.label, vmid, vm.Node, current.Status, ip, ip6, agent, vcpu, memMaxGB, warning}, nil
 }
 
 // newStatusCmd builds `pmx lab status <name>`.
@@ -426,13 +481,15 @@ func newStatusCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "status <name>",
-		Short: "Show a lab's per-node power state, IP, and sizing",
+		Short: "Show a lab's per-node power state, IPs, and sizing",
 		Long: "Show one row per configured node, plus the QDevice tie-breaker VM when the " +
 			"lab's topology calls for one:\n\n" +
 			"  * live power state\n" +
 			"  * PVE host node\n" +
 			"  * IP address — reported by the guest agent while the VM runs\n" +
 			"    and the agent answers, else the target's configured mgmt IP\n" +
+			"  * IPv6 address — the same live-then-configured fallback against\n" +
+			"    the lab's dual-stack address plan; \"-\" for an IPv4-only lab\n" +
 			"  * guest-agent responsiveness\n" +
 			"  * configured vCPU and memory sizing\n\n" +
 			"A target whose VM has not been created yet is reported as absent, with its " +
@@ -467,7 +524,8 @@ func newStatusCmd() *cobra.Command {
 				return err
 			}
 
-			headers := []string{"NODE", "VMID", "PVE_NODE", "STATUS", "IP", "AGENT", "VCPU", "MEMORY_MAX_GB", "WARNING"}
+			headers := []string{
+				"NODE", "VMID", "PVE_NODE", "STATUS", "IP", "IP6", "AGENT", "VCPU", "MEMORY_MAX_GB", "WARNING"}
 			rows := make([][]string, 0, len(targets)+1)
 			for _, tgt := range targets {
 				row, err := statusRow(cmd.Context(), deps, l, tgt, classified)
