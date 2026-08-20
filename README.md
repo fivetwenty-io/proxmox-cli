@@ -1030,10 +1030,28 @@ the IPv4 plan (gateway `::1`, node *i* at `::a`+*i*, QDevice `::f`).
 `pmx lab create` and `pmx lab net apply` ensure the vnets' IPv6 subnets,
 `pmx lab hostnet apply` puts each nested node's management IPv6 on
 `vmbr0`, `pmx lab qdevice add` addresses the QDevice VM, and
-`pmx lab sdn vlan apply` carves a `/64` per inner client VLAN. Set
-`network.ipv6: false` to keep a lab IPv4-only; turning it off later stops
-further IPv6 provisioning but never deletes what already exists. Cluster
-formation, NFS, and pmx's own ssh transport stay on IPv4 either way.
+`pmx lab sdn vlan apply` carves a `/64` per inner client VLAN.
+
+The verbs that bring a node into a lab carry the same addressing rather
+than leaving it for a follow-up run: `pmx lab scale` and `pmx lab cluster
+join` reconcile each member node's nested host networking — bonds,
+bridges, and that node's management IPv6 — against the lab's own
+nested-cluster context, and `pmx lab scale` also ensures the QDevice's
+IPv6 when the topology already had one. That phase never fails a
+transition: anything it cannot reach is reported as a deferred row naming
+`pmx lab hostnet apply`, which remains the sole owner of the ssh
+NIC-naming pass (it can leave a node reboot-pending) — and until that pass
+has run on a node, the transition gives it IPv6 but no bonds, rather than
+staging a bond against interfaces that do not exist yet. `pmx lab status`
+shows each target's IPv6 beside its IPv4, live from the guest agent when
+the VM is running.
+
+Set `network.ipv6: false` to keep a lab IPv4-only; turning it off later
+stops further IPv6 provisioning but never deletes what already exists.
+Set `network.snat6: true` for egress — `pmx lab create`/`pmx lab net
+apply` then mark every IPv6 subnet for masquerade, which PVE only renders
+on a `simple` zone (validation refuses it elsewhere). Cluster formation,
+NFS, and pmx's own ssh transport stay on IPv4 either way.
 
 ```yaml
 labs_dir: labs.d/

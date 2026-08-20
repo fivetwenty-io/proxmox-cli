@@ -377,7 +377,10 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   vnet gets an IPv6 subnet alongside its IPv4 one (**pmx lab create**,
   **pmx lab net apply**, **pmx lab sdn vlan apply**), and the nested
   nodes and QDevice VM get management IPv6 addresses (**pmx lab hostnet
-  apply**, **pmx lab qdevice add**). Set to **false** to keep the lab
+  apply**, **pmx lab qdevice add**, and — for the nodes a transition
+  brings into the cluster — **pmx lab scale** and **pmx lab cluster
+  join**, which reconcile it against the lab's own nested context). Set
+  to **false** to keep the lab
   IPv4-only; disabling it later stops further IPv6 provisioning but
   never deletes anything already created. Cluster formation, NFS, and
   pmx's own ssh transport stay on IPv4 either way.
@@ -396,6 +399,16 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   carving scheme fits at most 16 **network.vnets** entries; validation
   rejects more while IPv6 is enabled. Rejected when **network.ipv6** is
   **false**.
+
+**network.snat6**
+: Whether the lab's IPv6 subnets are masqueraded for egress. Defaults to
+  **false**: a lab's IPv6 is ULA-internal unless egress is asked for.
+  With **true**, **pmx lab create** and **pmx lab net apply** set the
+  SDN subnet's **snat** flag on every IPv6 subnet they ensure (never on
+  the IPv4 one). PVE only renders subnet SNAT on a **simple** zone, so
+  validation rejects the combination with any other **network.zone_type**.
+  Like every other IPv6 field, turning it back off stops provisioning it
+  and never strips the flag from a subnet that already carries it.
 
 **network.mgmt.subnet**
 : Management subnet CIDR: an address-plan reservation within
