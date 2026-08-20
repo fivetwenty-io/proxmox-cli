@@ -1066,6 +1066,56 @@ func TestCreateCloneFrom_PeppiGuardRefusesProtectedSourceName(t *testing.T) {
 	assert.ErrorContains(t, err, "peppiprd")
 }
 
+// TestCreateCloneFrom_OSDDisksAppliedViaFollowUpConfigUpdate covers a
+// clone-path create against a lab whose storage.osd_disks config calls for 2
+// extra raw disks per node: CreateQemuClone only carries identity/placement
+// parameters, so the OSD disks (like the rest of the compute/network spec)
+// must be applied by the follow-up UpdateQemuConfig call, not the clone call
+// itself.
+func TestCreateCloneFrom_OSDDisksAppliedViaFollowUpConfigUpdate(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
+		[]any{
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			createPrimaryV6SubnetRow(t, lab.Network),
+		})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	var cloneRec []createRecordedRequest
+	createRecord(f, &cloneRec, nil, "qemu-clone", "POST /api2/json/nodes/node1/qemu/9400/clone", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	var configRec []createRecordedRequest
+	createRecord(f, &configRec, nil, "qemu-config-update",
+		"PUT /api2/json/nodes/node1/qemu/9500/config", map[string]any{}, 200)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--clone-from", "9400")
+	require.NoError(t, err)
+
+	require.Len(t, cloneRec, 1)
+	_, cloneHasScsi2 := cloneRec[0].body["scsi2"]
+	assert.False(t, cloneHasScsi2, "CreateQemuClone only carries identity/placement parameters, never disk options")
+
+	require.Len(t, configRec, 1, "the cloned VM's OSD disks must be applied by the follow-up config update")
+	body := configRec[0].body
+	assert.Equal(t, "tank-lab-wayne:100,discard=on,iothread=1,ssd=1,backup=0,serial=osd0", body["scsi2"])
+	assert.Equal(t, "tank-lab-wayne:100,discard=on,iothread=1,ssd=1,backup=0,serial=osd1", body["scsi3"])
+}
+
 // TestCreatePeppiGuard_RefusesExistingProtectedVMID covers a lab whose VM
 // already exists at a protected peppi VMID (50000): the command must refuse
 // before any mutating call, including the SDN zone/vnet steps that are

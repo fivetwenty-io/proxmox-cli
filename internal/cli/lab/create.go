@@ -93,10 +93,10 @@ type createPoolMember struct {
 }
 
 // createOverrides holds the parsed --vcpu/--memory-*/--data-disk-gb/--os-disk-gb/
-// --vxlan-tag/--cidr/--pool/--clone-from/--nodes/--qdevice/--qdevice-clone-from
-// flag values for `pmx lab create`. Values are only applied to the effective
-// lab copy when cmd.Flags().Changed reports the corresponding flag was
-// actually passed (flag-over-config precedence).
+// --vxlan-tag/--cidr/--pool/--clone-from/--nodes/--qdevice/--qdevice-clone-from/
+// --osd-disks/--osd-disk-gb flag values for `pmx lab create`. Values are only
+// applied to the effective lab copy when cmd.Flags().Changed reports the
+// corresponding flag was actually passed (flag-over-config precedence).
 type createOverrides struct {
 	vcpu             int
 	memMaxGB         int
@@ -110,6 +110,8 @@ type createOverrides struct {
 	nodes            int
 	qdevice          string
 	qdeviceCloneFrom string
+	osdDisks         int
+	osdDiskGB        int
 }
 
 // createStep is one entry in the ordered plan `pmx lab create` builds before
@@ -176,7 +178,8 @@ func newCreateCmd() *cobra.Command {
 			"  4. its resource pool\n" +
 			"  5. one VM per configured topology.nodes index, plus a QDevice VM\n" +
 			"     when the lab's topology calls for a tie-breaker, each at its\n" +
-			"     resolved compute spec\n\n" +
+			"     resolved compute spec, plus any storage.osd_disks raw disks\n" +
+			"     (scsi2..) each node VM needs for nested Ceph OSDs\n\n" +
 			"Every step queries live state first, so re-running create against a " +
 			"partially-built lab is safe.\n\n" +
 			"Pass --clone-from to clone each node VM from an existing VM instead of creating " +
@@ -197,7 +200,8 @@ func newCreateCmd() *cobra.Command {
   pmx lab create wayne --node sm-0 --dry-run
   pmx lab create wayne --node sm-0 --vcpu 24 --memory-max-gb 128
   pmx lab create pve-cpi --node sm-0 --nodes 3
-  pmx lab create wayne --node sm-0 --nodes 2 --qdevice auto`,
+  pmx lab create wayne --node sm-0 --nodes 2 --qdevice auto
+  pmx lab create pve-cpi --node sm-0 --osd-disks 2 --osd-disk-gb 100`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -226,6 +230,13 @@ func newCreateCmd() *cobra.Command {
 			// refused before creating anything either.
 			if issues := config.ValidateTopology(name, eff.Topology); len(issues) > 0 {
 				return fmt.Errorf("lab %q topology is invalid:\n  %s", name, strings.Join(issues, "\n  "))
+			}
+
+			// --osd-disks/--osd-disk-gb can likewise move storage.osd_disks to a
+			// state config-load validation never saw (e.g. --osd-disks with no
+			// size anywhere); re-validate the effective storage the same way.
+			if issues := config.ValidateStorage(name, eff.Storage); len(issues) > 0 {
+				return fmt.Errorf("lab %q storage is invalid:\n  %s", name, strings.Join(issues, "\n  "))
 			}
 
 			// Flag overrides (in particular --pool) can change an identifier
@@ -295,6 +306,8 @@ func newCreateCmd() *cobra.Command {
 	f.StringVar(&ov.qdevice, "qdevice", "", "override topology.qdevice (\"auto\" or \"never\")")
 	f.StringVar(&ov.qdeviceCloneFrom, "qdevice-clone-from", "",
 		"VMID of an existing template (e.g. tmpl-qdevice) to clone the QDevice VM from")
+	f.IntVar(&ov.osdDisks, "osd-disks", 0, "extra raw OSD disks per node (scsi2..), overriding storage.osd_disks.count")
+	f.IntVar(&ov.osdDiskGB, "osd-disk-gb", 0, "size in GiB of each OSD disk, overriding storage.osd_disks.size_gb")
 
 	return cmd
 }
@@ -343,6 +356,19 @@ func applyCreateOverrides(fl interface{ Changed(string) bool }, lab *config.Lab,
 	if fl.Changed("qdevice") {
 		eff.Topology.Qdevice = ov.qdevice
 	}
+	if fl.Changed("osd-disks") || fl.Changed("osd-disk-gb") {
+		cur := config.LabOSDDisks{}
+		if eff.Storage.OSDDisks != nil {
+			cur = *eff.Storage.OSDDisks
+		}
+		if fl.Changed("osd-disks") {
+			cur.Count = ov.osdDisks
+		}
+		if fl.Changed("osd-disk-gb") {
+			cur.SizeGB = ov.osdDiskGB
+		}
+		eff.Storage.OSDDisks = &cur
+	}
 
 	return &eff
 }
@@ -365,6 +391,18 @@ func createDiskOptions(st config.LabStorage) string {
 		return ""
 	}
 	return "," + strings.Join(opts, ",")
+}
+
+// createOSDDiskValue renders the scsiN value for the idx-th OSD disk. The
+// options are fixed, not derived from LabStorage's discard/iothread/ssd
+// booleans: whole-raw-device Ceph OSDs require discard (zvol TRIM), ssd
+// (CRUSH class), backup=0 (never PBS-copy replicated data), and a stable
+// serial for /dev/disk/by-id — see ceph-lab-plan §5. iothread=1 is safe to
+// fix because ValidateStorage (run at load time AND re-run below after flag
+// overrides) refuses osd_disks on any controller other than
+// virtio-scsi-single — the only one PVE accepts iothread on.
+func createOSDDiskValue(stID string, sizeGB, idx int) string {
+	return fmt.Sprintf("%s:%d,discard=on,iothread=1,ssd=1,backup=0,serial=osd%d", stID, sizeGB, idx)
 }
 
 // createDecodeNextID decodes the raw response of GET /cluster/nextid, which
@@ -1668,6 +1706,9 @@ func createVM(
 			},
 			Net: netMap,
 		}
+		for i := 0; i < config.OSDDiskCount(storage); i++ {
+			params.Scsi[2+i] = createOSDDiskValue(stID, config.OSDDiskSizeGB(storage), i)
+		}
 		if compute.CPUType != "" {
 			params.Cpu = new(compute.CPUType)
 		}
@@ -1739,6 +1780,13 @@ func createVM(
 		updateParams.Scsihw = new(storage.Controller)
 	}
 	updateParams.Net = netMap
+	if n := config.OSDDiskCount(storage); n > 0 {
+		scsi := make(map[int]string, n)
+		for i := range n {
+			scsi[2+i] = createOSDDiskValue(stID, config.OSDDiskSizeGB(storage), i)
+		}
+		updateParams.Scsi = scsi
+	}
 
 	if err := ac.Nodes.UpdateQemuConfig(ctx, node, vmidStr, updateParams); err != nil {
 		return fmt.Errorf("update cloned VM %d config on node %q: %w", vmid, node, err)

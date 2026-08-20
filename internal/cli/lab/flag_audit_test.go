@@ -233,3 +233,95 @@ func TestCreateAuditFields_CloneFromForwardsToCloneAndConfigUpdate(t *testing.T)
 	require.Len(t, configRec, 1, "the cloned VM's compute/network spec must be applied with a follow-up config update")
 	assert.Equal(t, "16", configRec[0].body["cores"])
 }
+
+// TestCreate_OSDDisks_EmittedOnEveryNodeVM covers a lab whose storage.osd_disks
+// config calls for 2 extra raw disks per node (nested Ceph OSDs,
+// ceph-lab-plan §5): every node VM's create body must carry scsi2/scsi3 with
+// the fixed discard/iothread/ssd/backup options and a stable per-index
+// serial, in create order.
+func TestCreate_OSDDisks_EmittedOnEveryNodeVM(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("ceph") // Storage.Controller "virtio-scsi-single" already set
+	lab.Topology = config.LabTopology{Nodes: 3}
+	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "ceph", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	createHandleNextIDSequence(f, "9500", "9501", "9502")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "ceph", "--node", "node1")
+	require.NoError(t, err)
+
+	require.Len(t, qemuCreateRec, 3, "one qemu-create call per node; an odd node count never adds a QDevice")
+	for i, rec := range qemuCreateRec {
+		body := rec.body
+		require.Equal(t, "tank-lab-ceph:100,discard=on,iothread=1,ssd=1,backup=0,serial=osd0", body["scsi2"], "node %d", i)
+		require.Equal(t, "tank-lab-ceph:100,discard=on,iothread=1,ssd=1,backup=0,serial=osd1", body["scsi3"], "node %d", i)
+	}
+}
+
+// TestCreate_OSDDiskFlags_OverrideConfig covers --osd-disks/--osd-disk-gb
+// overriding a lab config that sets no storage.osd_disks at all: the created
+// VM must carry exactly one OSD disk at the flag-given size, and no second
+// one.
+func TestCreate_OSDDiskFlags_OverrideConfig(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne") // no storage.osd_disks configured
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
+		[]any{
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			createPrimaryV6SubnetRow(t, lab.Network),
+		})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
+	createHandleDisksZfs(f, "node1", "tank", 10*1024*1024*1024*1024, 0)
+	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
+	createPoolNotFoundRoute(f, lab.Access.Pool)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9500")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--osd-disks", "1", "--osd-disk-gb", "50")
+	require.NoError(t, err)
+
+	require.Len(t, qemuCreateRec, 1)
+	body := qemuCreateRec[0].body
+	assert.Equal(t, "tank-lab-wayne:50,discard=on,iothread=1,ssd=1,backup=0,serial=osd0", body["scsi2"],
+		"--osd-disks/--osd-disk-gb must override storage.osd_disks (unset in config)")
+	_, hasScsi3 := body["scsi3"]
+	assert.False(t, hasScsi3, "--osd-disks 1 must emit exactly one OSD disk")
+}
+
+// TestCreate_OSDDiskFlags_InvalidCombinationRefused covers --osd-disks passed
+// alone, with no storage.osd_disks.size_gb anywhere (config or --osd-disk-gb):
+// config.ValidateStorage's re-run after flag overrides must refuse before any
+// qemu-create call is made.
+func TestCreate_OSDDiskFlags_InvalidCombinationRefused(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+
+	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--osd-disks", "2")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "osd_disks.size_gb")
+}
