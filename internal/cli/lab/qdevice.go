@@ -3,6 +3,7 @@ package lab
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -20,10 +21,31 @@ const (
 	qdeviceClientPackage = "corosync-qdevice"
 )
 
-// qdeviceIPv6PersistPath is the ifupdown drop-in written on the QDevice VM
-// so its management IPv6 address survives reboots (Debian's default
-// /etc/network/interfaces sources interfaces.d/*).
+// qdeviceIPv6PersistPath is the ifupdown drop-in written on an
+// ifupdown-managed QDevice VM so its management IPv6 address survives
+// reboots (Debian's default /etc/network/interfaces sources
+// interfaces.d/*).
 const qdeviceIPv6PersistPath = "/etc/network/interfaces.d/lab-ipv6"
+
+// qdeviceIPv6PersistDirs are every directory the convergence probe greps
+// for a persisted copy of the planned address: the ifupdown drop-in's
+// directory and netplan's. Which one actually holds it depends on the
+// guest image's network stack, which is exactly what this pair exists to
+// stop mattering — a QDevice image that renders its network with netplan
+// (the lab's own tmpl-qdevice does) never reads interfaces.d at all, so an
+// ifupdown-only persist looks applied while silently evaporating at the
+// next reboot.
+const qdeviceIPv6PersistDirs = "/etc/network/interfaces.d /etc/netplan"
+
+// qdeviceNetplanFallbackPath is the netplan file written when `netplan set`
+// is unavailable (netplan older than 0.98). It sorts after the distro's own
+// 50-cloud-init.yaml, so its keys win the merge — which is why it re-states
+// the interface's full address list rather than only the IPv6 one.
+const qdeviceNetplanFallbackPath = "/etc/netplan/99-pmx-lab-ipv6.yaml"
+
+// qdeviceNetplanMarker is echoed by the convergence probe on a guest whose
+// network is netplan-rendered, selecting the persistence writer.
+const qdeviceNetplanMarker = "PMX-NETPLAN-PRESENT"
 
 // qdeviceStepResult records one step of `pmx lab qdevice add`'s execution
 // for the final STEP/STATUS table, mirroring create.go's createStep render
@@ -31,6 +53,22 @@ const qdeviceIPv6PersistPath = "/etc/network/interfaces.d/lab-ipv6"
 type qdeviceStepResult struct {
 	desc string
 	skip bool
+	// note carries a caveat the operator must see even though the step
+	// itself succeeded — e.g. a persistence path that could only be half
+	// written. Rendered alongside the step's status.
+	note string
+}
+
+// status renders the step's STATUS cell: its skip/done state, plus any note.
+func (s qdeviceStepResult) status() string {
+	base := "done"
+	if s.skip {
+		base = "skip (already satisfied)"
+	}
+	if s.note != "" {
+		return base + " — " + s.note
+	}
+	return base
 }
 
 // newQdeviceCmd builds `pmx lab qdevice` and its subcommands.
@@ -177,11 +215,7 @@ func runQdeviceAdd(cmd *cobra.Command, name string, dryRun bool) error {
 	headers := []string{"STEP", "STATUS"}
 	rows := make([][]string, 0, len(steps)+1)
 	for _, s := range steps {
-		status := "done"
-		if s.skip {
-			status = "skip (already satisfied)"
-		}
-		rows = append(rows, []string{s.desc, status})
+		rows = append(rows, []string{s.desc, s.status()})
 	}
 	rows = append(rows, []string{"summary", fmt.Sprintf("lab %q: QDevice wired up against cluster %q.", name, lab.Name)})
 
@@ -255,33 +289,87 @@ var qdeviceIfaceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 // planned prefix (`ip -6 addr`'s "inet6 <addr>/48" — a stale <addr>/64
 // from an older run must not read as converged, since `ip -6 addr replace`
 // cannot remove it), the DEFAULT route via the mgmt gateway (`ip -6 route
-// show default`'s "default via <gw>"), and the persistence drop-in's
-// "address <addr>/<prefix>" line. Anything less is a half-applied state
-// the apply must repair — matching on the live address alone would read
-// "addr landed, route/persist chain died" as converged forever.
+// show default`'s "default via <gw>"), and a persisted copy of the address
+// in some network-config file (qdeviceIPv6Persisted). Anything less is a
+// half-applied state the apply must repair — matching on the live address
+// alone would read "addr landed, route/persist chain died" as converged
+// forever.
 func qdeviceIPv6Converged(probeOut, addr6, gw6 string) bool {
 	return strings.Contains(probeOut, fmt.Sprintf("inet6 %s/%d", addr6, labV6InterfacePrefixBits)) &&
 		strings.Contains(probeOut, "default via "+gw6) &&
-		strings.Contains(probeOut, fmt.Sprintf("address %s/%d", addr6, labV6InterfacePrefixBits))
+		qdeviceIPv6Persisted(probeOut)
+}
+
+// qdeviceIPv6Persisted reports whether the probe's `grep -rl` phase named
+// any config file holding the planned address. Deliberately stack-agnostic:
+// the marker is the FILE the address was found in, not a syntax the check
+// would have to know per renderer, so an ifupdown drop-in and a netplan
+// YAML both count and neither is privileged. Only paths under the two
+// directories the probe searched are honored, so an unrelated line of `ip`
+// output can never read as persistence.
+func qdeviceIPv6Persisted(probeOut string) bool {
+	for line := range strings.SplitSeq(probeOut, "\n") {
+		l := strings.TrimSpace(line)
+		if strings.HasPrefix(l, "/etc/network/interfaces.d/") || strings.HasPrefix(l, "/etc/netplan/") {
+			return true
+		}
+	}
+	return false
+}
+
+// qdeviceUsesNetplan reports whether the probed guest renders its network
+// with netplan, selecting which persistence writer qdeviceEnsureIPv6 uses.
+func qdeviceUsesNetplan(probeOut string) bool {
+	return strings.Contains(probeOut, qdeviceNetplanMarker)
+}
+
+// qdeviceParseNetplanList decodes the YAML `netplan get` prints for a list
+// value: a block sequence ("- 10.0.1.15/24" per line), an inline flow
+// sequence ("[10.0.1.15/24]"), or the literal "null" for an unset key
+// (which decodes to no entries). Quotes around entries are stripped, so a
+// value round-trips through a `netplan set` unchanged.
+func qdeviceParseNetplanList(out string) []string {
+	var items []string
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		l := strings.TrimSpace(line)
+		switch {
+		case l == "" || l == "null":
+			continue
+		case strings.HasPrefix(l, "- "):
+			items = append(items, strings.Trim(strings.TrimSpace(l[2:]), `"'`))
+		case strings.HasPrefix(l, "[") && strings.HasSuffix(l, "]"):
+			for part := range strings.SplitSeq(l[1:len(l)-1], ",") {
+				if p := strings.Trim(strings.TrimSpace(part), `"'`); p != "" {
+					items = append(items, p)
+				}
+			}
+		}
+	}
+	return items
 }
 
 // qdeviceEnsureIPv6 ensures the QDevice VM (reached over ssh at its IPv4
 // management address) carries its planned management IPv6 address —
 // labQdeviceMgmtIP6's ::f, addressed with the /48 interface prefix per
 // labV6InterfacePrefixBits — with a v6 default route via the management
-// gateway, both live (ip) and persisted for reboots (an ifupdown drop-in at
-// qdeviceIPv6PersistPath; the lab's Debian QDevice template is ifupdown-
-// managed and sources interfaces.d — on a guest that is not, the live
-// address still lands and the next run re-converges after a reboot). The
-// management interface is resolved from the VM's own IPv4 address rather
-// than assumed, so a template with a different NIC name converges the same
-// way. Idempotent two ways: one probe checks address, route, AND drop-in
-// together and skips only on all three, and the apply itself uses
-// replace-style commands so re-running over a half-applied state repairs it
-// rather than failing on what already exists. The nested PVE nodes get
-// their IPv6 through `pmx lab hostnet apply`'s API-staged vmbr0 path
-// instead; the QDevice VM is a plain Debian guest with no PVE network API,
-// hence ssh.
+// gateway, both live (ip) and persisted for reboots.
+//
+// Persistence is written for the stack the guest actually renders its
+// network with, probed rather than assumed: an ifupdown drop-in at
+// qdeviceIPv6PersistPath, or netplan (qdevicePersistIPv6Netplan) on an
+// image whose network is netplan-rendered — the lab's own tmpl-qdevice
+// image among them, which never reads interfaces.d, so an ifupdown-only
+// persist there looks applied and then evaporates at the next reboot.
+//
+// The management interface is resolved from the VM's own IPv4 address
+// rather than assumed, so a template with a different NIC name converges
+// the same way. Idempotent two ways: one probe checks address, route, AND
+// persistence together and skips only on all three, and the apply itself
+// uses replace-style commands so re-running over a half-applied state
+// repairs it rather than failing on what already exists. The nested PVE
+// nodes get their IPv6 through `pmx lab hostnet apply`'s API-staged vmbr0
+// path instead; the QDevice VM is a plain Debian guest with no PVE network
+// API, hence ssh.
 func qdeviceEnsureIPv6(
 	deps *cli.Deps, n config.LabNetwork, name, qdeviceIP string,
 ) (qdeviceStepResult, error) {
@@ -295,11 +383,15 @@ func qdeviceEnsureIPv6(
 	}
 	desc := fmt.Sprintf("ensure IPv6 %s/%d on QDevice VM (%s)", addr6, labV6InterfacePrefixBits, qdeviceIP)
 
-	// One compound probe for all three markers; the trailing `true` pins
-	// exit 0 (`cat` on a missing drop-in exits 1), so a non-nil error here
-	// is a transport-level failure, never "not converged".
-	probeCmd := fmt.Sprintf("ip -6 addr show to %s/128; ip -6 route show default; cat %s 2>/dev/null; true",
-		addr6, qdeviceIPv6PersistPath)
+	// One compound probe for all three convergence markers plus the guest's
+	// network stack; the trailing `true` pins exit 0 (grep exits 1 when it
+	// matches nothing), so a non-nil error here is a transport-level
+	// failure, never "not converged".
+	probeCmd := fmt.Sprintf(
+		"ip -6 addr show to %[1]s/128; ip -6 route show default; "+
+			"grep -rlsF -- '%[1]s/%[2]d' %[3]s; "+
+			"command -v netplan >/dev/null 2>&1 && echo %[4]s; true",
+		addr6, labV6InterfacePrefixBits, qdeviceIPv6PersistDirs, qdeviceNetplanMarker)
 	probe, perr := runGuestSSH(deps, qdeviceIP, probeCmd)
 	if perr != nil && guestCommandTransportFailed(perr) {
 		return qdeviceStepResult{}, fmt.Errorf("lab %q: probe IPv6 on QDevice VM (%s): %w", name, qdeviceIP, perr)
@@ -329,14 +421,162 @@ func qdeviceEnsureIPv6(
 				"interface name; refusing to use it in a shell command", name, qdeviceIP, fields[1])
 	}
 
-	applyCmd := fmt.Sprintf(
-		"ip -6 addr replace %[1]s/%[2]d dev %[3]s && ip -6 route replace default via %[4]s dev %[3]s && "+
-			"printf '%%s\\n' 'iface %[3]s inet6 static' '\taddress %[1]s/%[2]d' '\tgateway %[4]s' > %[5]s",
-		addr6, labV6InterfacePrefixBits, iface, gw6, qdeviceIPv6PersistPath)
-	if _, aerr := runGuestSSH(deps, qdeviceIP, applyCmd); aerr != nil {
+	// The live half is identical for either stack: the address and the
+	// default route the cluster needs right now.
+	liveCmd := fmt.Sprintf(
+		"ip -6 addr replace %[1]s/%[2]d dev %[3]s && ip -6 route replace default via %[4]s dev %[3]s",
+		addr6, labV6InterfacePrefixBits, iface, gw6)
+
+	// An ifupdown guest persists in the same breath — one command, so a
+	// half-applied state cannot be created by the transport dying between
+	// two of them. A netplan guest needs its config read before it can be
+	// written (qdevicePersistIPv6Netplan), which no single command can do.
+	if !qdeviceUsesNetplan(probe.Stdout) {
+		applyCmd := liveCmd + fmt.Sprintf(
+			" && printf '%%s\\n' 'iface %[3]s inet6 static' '\taddress %[1]s/%[2]d' '\tgateway %[4]s' > %[5]s",
+			addr6, labV6InterfacePrefixBits, iface, gw6, qdeviceIPv6PersistPath)
+		if _, aerr := runGuestSSH(deps, qdeviceIP, applyCmd); aerr != nil {
+			return qdeviceStepResult{}, fmt.Errorf("lab %q: add IPv6 to QDevice VM (%s): %w", name, qdeviceIP, aerr)
+		}
+		return qdeviceStepResult{desc: desc}, nil
+	}
+
+	if _, aerr := runGuestSSH(deps, qdeviceIP, liveCmd); aerr != nil {
 		return qdeviceStepResult{}, fmt.Errorf("lab %q: add IPv6 to QDevice VM (%s): %w", name, qdeviceIP, aerr)
 	}
-	return qdeviceStepResult{desc: desc}, nil
+	note, perr := qdevicePersistIPv6Netplan(deps, name, qdeviceIP, iface, addr6, gw6)
+	if perr != nil {
+		return qdeviceStepResult{}, perr
+	}
+	return qdeviceStepResult{desc: desc, note: note}, nil
+}
+
+// qdevicePersistIPv6Netplan persists the QDevice VM's management IPv6 on a
+// netplan-rendered guest, returning any caveat the operator must still see.
+//
+// Two netplan facts shape this. First, a `netplan set` (or any later-sorting
+// file) REPLACES a key rather than merging into it, so writing only the IPv6
+// address under ethernets.<iface>.addresses would drop whatever IPv4 address
+// the image's own file declares there — hence the read-merge-write against
+// the effective list `netplan get` reports. Second, an interface netplan
+// does not know about must not be given a stanza here at all: doing so hands
+// it to networkd on the next boot, taking it away from whatever does manage
+// it today. That case falls back to the ifupdown drop-in, which is what such
+// a guest reads anyway.
+//
+// Nothing is applied: `netplan apply` would re-render every interface,
+// including the management one this command is reached over, to no benefit —
+// the live address is already in place. `netplan generate` validates the
+// written config instead, so a file that would fail at boot fails here.
+func qdevicePersistIPv6Netplan(
+	deps *cli.Deps, name, qdeviceIP, iface, addr6, gw6 string,
+) (note string, err error) {
+	want := fmt.Sprintf("%s/%d", addr6, labV6InterfacePrefixBits)
+
+	ifaceCfg, err := runGuestSSH(deps, qdeviceIP, fmt.Sprintf("netplan get ethernets.%s", iface))
+	if err != nil {
+		return "", fmt.Errorf(
+			"lab %q: read netplan config for %q on QDevice VM (%s): %w", name, iface, qdeviceIP, err)
+	}
+	if strings.TrimSpace(ifaceCfg.Stdout) == "null" || strings.TrimSpace(ifaceCfg.Stdout) == "" {
+		persistCmd := fmt.Sprintf(
+			"printf '%%s\\n' 'iface %[3]s inet6 static' '\taddress %[1]s/%[2]d' '\tgateway %[4]s' > %[5]s",
+			addr6, labV6InterfacePrefixBits, iface, gw6, qdeviceIPv6PersistPath)
+		if _, aerr := runGuestSSH(deps, qdeviceIP, persistCmd); aerr != nil {
+			return "", fmt.Errorf(
+				"lab %q: persist IPv6 on QDevice VM (%s): %w", name, qdeviceIP, aerr)
+		}
+		return fmt.Sprintf(
+			"netplan is installed but does not manage %s; persisted to %s instead",
+			iface, qdeviceIPv6PersistPath), nil
+	}
+
+	addrsOut, err := runGuestSSH(deps, qdeviceIP, fmt.Sprintf("netplan get ethernets.%s.addresses", iface))
+	if err != nil {
+		return "", fmt.Errorf(
+			"lab %q: read netplan addresses for %q on QDevice VM (%s): %w", name, iface, qdeviceIP, err)
+	}
+	addrs := qdeviceParseNetplanList(addrsOut.Stdout)
+	if !slices.Contains(addrs, want) {
+		addrs = append(addrs, want)
+	}
+
+	// The v6 default route is only written when the interface has no routes
+	// list of its own. netplan's routes are a list of mappings, which this
+	// code deliberately does not round-trip: re-stating a structure it
+	// cannot fully parse is how a working IPv4 default route gets silently
+	// rewritten. An interface that already has routes gets the caveat
+	// instead.
+	routesOut, err := runGuestSSH(deps, qdeviceIP, fmt.Sprintf("netplan get ethernets.%s.routes", iface))
+	if err != nil {
+		return "", fmt.Errorf(
+			"lab %q: read netplan routes for %q on QDevice VM (%s): %w", name, iface, qdeviceIP, err)
+	}
+	writeRoute := strings.TrimSpace(routesOut.Stdout) == "null" || strings.TrimSpace(routesOut.Stdout) == ""
+
+	// Every entry is double-quoted inside the single-quoted shell argument:
+	// an unquoted IPv6 address is a plain scalar whose colons a YAML flow
+	// sequence is entitled to read as a mapping separator, and which parser
+	// netplan happens to be built against is not this command's business.
+	quoted := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		quoted = append(quoted, fmt.Sprintf("%q", a))
+	}
+	setCmd := fmt.Sprintf("netplan set 'ethernets.%s.addresses=[%s]'", iface, strings.Join(quoted, ","))
+	if writeRoute {
+		setCmd += fmt.Sprintf(" && netplan set 'ethernets.%s.routes=[{\"to\": \"::/0\", \"via\": \"%s\"}]'",
+			iface, gw6)
+	}
+	setCmd += " && netplan generate"
+
+	if _, serr := runGuestSSH(deps, qdeviceIP, setCmd); serr != nil {
+		// `netplan set` has shipped since netplan 0.98 (both Debian 12 and
+		// Ubuntu 22.04 carry it), but an older image would fail the whole
+		// chain above; fall back to a last-sorting file carrying the same
+		// merged address list.
+		fallback := qdeviceNetplanFallbackFile(iface, addrs, gw6, writeRoute)
+		writeCmd := fmt.Sprintf("umask 077 && cat > %s <<'PMXEOF'\n%sPMXEOF\nnetplan generate",
+			qdeviceNetplanFallbackPath, fallback)
+		if _, werr := runGuestSSH(deps, qdeviceIP, writeCmd); werr != nil {
+			return "", fmt.Errorf(
+				"lab %q: persist IPv6 via netplan on QDevice VM (%s): %w (fallback write also failed: %v)",
+				name, qdeviceIP, serr, werr)
+		}
+		note = fmt.Sprintf("`netplan set` unavailable; wrote %s", qdeviceNetplanFallbackPath)
+	}
+
+	if !writeRoute {
+		routeNote := fmt.Sprintf(
+			"%s already declares netplan routes; add the ::/0 route via %s there by hand", iface, gw6)
+		if note != "" {
+			return note + "; " + routeNote, nil
+		}
+		return routeNote, nil
+	}
+	return note, nil
+}
+
+// qdeviceNetplanFallbackFile renders the netplan document written when
+// `netplan set` is unavailable: the interface's full address list (the
+// merged one read from the guest, our IPv6 included, since this file's keys
+// win the merge) and, when the interface had no routes of its own, the IPv6
+// default route.
+func qdeviceNetplanFallbackFile(iface string, addrs []string, gw6 string, withRoute bool) string {
+	var b strings.Builder
+	b.WriteString("network:\n")
+	b.WriteString("  version: 2\n")
+	b.WriteString("  ethernets:\n")
+	fmt.Fprintf(&b, "    %s:\n", iface)
+	b.WriteString("      addresses:\n")
+	for _, a := range addrs {
+		fmt.Fprintf(&b, "        - %s\n", a)
+	}
+	if withRoute {
+		b.WriteString("      routes:\n")
+		b.WriteString("        - to: \"::/0\"\n")
+		fmt.Fprintf(&b, "          via: \"%s\"\n", gw6)
+	}
+	return b.String()
 }
 
 // ensureGuestPackage probes host for pkg via `dpkg -s`, installing it via

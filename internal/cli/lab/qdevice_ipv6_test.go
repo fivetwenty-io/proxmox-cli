@@ -27,14 +27,27 @@ func qdeviceIPv6TestLab(t *testing.T, f *testhelper.FakePVE) (*config.Lab, strin
 }
 
 // qdeviceIPv6ConvergedProbe returns the combined probe stdout of a FULLY
-// converged QDevice VM: live address (ip -6 addr), default route (ip -6
-// route show default), and the persisted ifupdown drop-in (cat) — the three
-// markers qdeviceEnsureIPv6's single probe command checks before skipping.
+// converged ifupdown-managed QDevice VM: live address (ip -6 addr), default
+// route (ip -6 route show default), and the persistence grep naming the
+// ifupdown drop-in — the three markers qdeviceEnsureIPv6's single probe
+// command checks before skipping.
 func qdeviceIPv6ConvergedProbe(addr6, gw6 string) string {
 	return fmt.Sprintf(
 		"    inet6 %[1]s/48 scope global\n"+
 			"default via %[2]s dev ens18 metric 1024 pref medium\n"+
-			"iface ens18 inet6 static\n\taddress %[1]s/48\n\tgateway %[2]s\n",
+			"/etc/network/interfaces.d/lab-ipv6\n",
+		addr6, gw6)
+}
+
+// qdeviceIPv6ConvergedNetplanProbe is qdeviceIPv6ConvergedProbe's netplan
+// counterpart: the persisted copy lives in a netplan document, and the
+// stack marker is present.
+func qdeviceIPv6ConvergedNetplanProbe(addr6, gw6 string) string {
+	return fmt.Sprintf(
+		"    inet6 %[1]s/48 scope global\n"+
+			"default via %[2]s dev ens18 metric 1024 pref medium\n"+
+			"/etc/netplan/70-netplan-set.yaml\n"+
+			qdeviceNetplanMarker+"\n",
 		addr6, gw6)
 }
 
@@ -94,8 +107,8 @@ func TestQdeviceAdd_IPv6Absent_AddsAddressToQdeviceVM(t *testing.T) {
 	probeArgs := fmt.Sprintf("%v", fake.Calls[2].Args)
 	assert.Contains(t, probeArgs, fmt.Sprintf("ip -6 addr show to %s/128", addr6))
 	assert.Contains(t, probeArgs, "ip -6 route show default", "the probe must check the default route too")
-	assert.Contains(t, probeArgs, "cat /etc/network/interfaces.d/lab-ipv6",
-		"the probe must check the persistence drop-in too")
+	assert.Contains(t, probeArgs, fmt.Sprintf("grep -rlsF -- '%s/48' /etc/network/interfaces.d /etc/netplan", addr6),
+		"the probe must look for a persisted copy in BOTH stacks' config directories")
 	assert.Contains(t, fake.Calls[2].Args, "root@10.10.1.15")
 	assert.Contains(t, fake.Calls[3].Args, "ip -o -4 addr show to 10.10.1.15/32")
 	applyArgs := fmt.Sprintf("%v", fake.Calls[4].Args)
