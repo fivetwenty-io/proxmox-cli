@@ -102,7 +102,7 @@ func newVncshellCmd() *cobra.Command {
 			"for a VNC shell session on the node. The ticket, host, and port fields\n" +
 			"are printed; hand them to a VNC viewer (e.g. TigerVNC, RealVNC, or the\n" +
 			"Proxmox web UI) to open the session.\n\n" +
-			"VNC is a GUI protocol — this command emits connection info only and\n" +
+			"VNC is a GUI protocol: this command emits connection info only and\n" +
 			"does not open an interactive terminal.\n\n" +
 			"Use --cmd to run a specific command instead of the default login shell\n" +
 			"(requires root@pam credentials).",

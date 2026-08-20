@@ -60,7 +60,7 @@ func newSecuritySecurebootShowCmd() *cobra.Command {
 
 			if (deps.Format == output.FormatTable || deps.Format == output.FormatPlain) && bp.Posture == "ovmf-no-efidisk" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
-					"note: bios=ovmf without an efidisk0 — EFI variables (including Secure Boot "+
+					"note: bios=ovmf without an efidisk0: EFI variables (including Secure Boot "+
 						"state) will not persist across restarts")
 			}
 
@@ -104,7 +104,7 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 			"pre-enrolled-keys=1, which enables Secure Boot by default. Pass " +
 			"--no-pre-enrolled-keys for an empty vars store (UEFI without Secure Boot keys).\n\n" +
 			"Switching an installed guest from SeaBIOS to OVMF usually makes it unbootable " +
-			"until the OS is converted to UEFI booting — do this on new VMs or after preparing " +
+			"until the OS is converted to UEFI booting; do this on new VMs or after preparing " +
 			"the guest. Replacing an existing efidisk0 discards all stored EFI variables " +
 			"(enrolled keys, boot entries) and requires --recreate.\n\n" +
 			"Example: pmx pve qemu security secureboot enable win11 --storage local-lvm --ms-cert 2023",
@@ -184,7 +184,7 @@ func newSecuritySecurebootEnableCmd() *cobra.Command {
 
 			if bp.Bios != "ovmf" {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-					"WARNING: switching VM %s from SeaBIOS to OVMF — an already-installed guest OS may "+
+					"WARNING: switching VM %s from SeaBIOS to OVMF: an already-installed guest OS may "+
 						"fail to boot until converted to UEFI\n", vmid)
 			}
 

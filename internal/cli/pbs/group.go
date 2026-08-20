@@ -59,8 +59,8 @@ func newGroupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "group",
 		Short: "Manage PBS backup groups",
-		Long: "List, delete, and annotate backup groups — the collection of every " +
-			"snapshot sharing a backup-type/backup-id pair — in a datastore. A group is " +
+		Long: "List, delete, and annotate backup groups (the collection of every " +
+			"snapshot sharing a backup-type/backup-id pair) in a datastore. A group is " +
 			"addressed as <type>/<id>, where type is one of vm, ct, or host.",
 	}
 	cmd.AddCommand(

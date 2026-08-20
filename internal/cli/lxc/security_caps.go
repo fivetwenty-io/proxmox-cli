@@ -495,7 +495,7 @@ func newSecurityCapsRemoveCmd() *cobra.Command {
 		Short: "Revoke capability(ies) from the container",
 		Long: "Revoke one or more capabilities from the container. In keep mode the caps are removed " +
 			"from lxc.cap.keep; in drop mode they are added to lxc.cap.drop. With no capability " +
-			"configuration yet, remove bootstraps an lxc.cap.drop entry — the natural way to take " +
+			"configuration yet, remove bootstraps an lxc.cap.drop entry, the natural way to take " +
 			"a single capability away from PVE's defaults.",
 		Example: `  pmx pve lxc security caps remove 200 net_raw`,
 		Args:    cobra.MinimumNArgs(2),

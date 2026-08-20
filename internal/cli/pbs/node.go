@@ -259,7 +259,7 @@ func newNodeReportCmd(nf *nodeFlags) *cobra.Command {
 		Use:   "report",
 		Short: "Generate a full system report for the node",
 		Long: "Generate a diagnostic report covering system, network, and storage " +
-			"configuration for the node — the same report `proxmox-backup-manager report` " +
+			"configuration for the node, the same report `proxmox-backup-manager report` " +
 			"produces on the host itself.",
 		Example: "  pmx pbs node report",
 		Args:    cobra.NoArgs,

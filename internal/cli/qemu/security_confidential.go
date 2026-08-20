@@ -265,7 +265,7 @@ func newSecurityConfidentialClearCmd() *cobra.Command {
 					deps.Format)
 			}
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-				"WARNING: clearing %s on VM %s — the guest will boot with unencrypted memory and "+
+				"WARNING: clearing %s on VM %s: the guest will boot with unencrypted memory and "+
 					"existing attestation workflows will break\n",
 				cp.Platform, vmid)
 

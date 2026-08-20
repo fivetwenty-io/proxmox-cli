@@ -97,7 +97,7 @@ func hostnetReconcileNodes(
 	api, err := labInnerAPIClient(cmd, deps, name)
 	if err != nil {
 		return [][]string{{"reconcile nested host network", fmt.Sprintf(
-			"deferred: cannot reach lab context %q (%v) — register it with `pmx lab context sync %s`, then %s",
+			"deferred: cannot reach lab context %q (%v); register it with `pmx lab context sync %s`, then %s",
 			labContextName(name), err, name, hostnetReconcileFollowup(name))}}
 	}
 
@@ -108,7 +108,7 @@ func hostnetReconcileNodes(
 	// table that a bonded lab is fully converged.
 	if len(nn.Bonds) > 0 {
 		rows = append(rows, []string{"reconcile nested host network", fmt.Sprintf(
-			"NIC naming (nic0-nic%d) not attempted here — it can leave a node reboot-pending; %s",
+			"NIC naming (nic0-nic%d) not attempted here (it can leave a node reboot-pending); %s",
 			hostnetRequiredNICCount-1, hostnetReconcileFollowup(name))})
 	}
 
@@ -128,7 +128,7 @@ func hostnetReconcileNodes(
 			switch {
 			case nerr != nil:
 				rows = append(rows, []string{step,
-					fmt.Sprintf("deferred: %v — %s", nerr, hostnetReconcileFollowup(name))})
+					fmt.Sprintf("deferred: %v; %s", nerr, hostnetReconcileFollowup(name))})
 				continue
 			case !named:
 				nodeNN = config.LabNestedNetwork{}
@@ -141,7 +141,7 @@ func hostnetReconcileNodes(
 
 		nodeRows, err := hostnetEnsureNode(ctx, api, name, nodeName, nodeNN, v6Want)
 		if err != nil {
-			rows = append(rows, []string{step, fmt.Sprintf("deferred: %v — %s", err, hostnetReconcileFollowup(name))})
+			rows = append(rows, []string{step, fmt.Sprintf("deferred: %v; %s", err, hostnetReconcileFollowup(name))})
 			continue
 		}
 		for _, r := range nodeRows {

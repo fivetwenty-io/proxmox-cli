@@ -780,7 +780,7 @@ func ValidateTopology(name string, t LabTopology) []string {
 	// QdeviceRequired already treats as mandatory at 2 nodes on its own.
 	if EffectiveTopologyNodes(t) == 2 && t.Qdevice == QdeviceNever {
 		issues = append(issues, fmt.Sprintf(
-			"lab %q: topology.qdevice: \"never\" is invalid at 2 nodes — a QDevice is mandatory for a "+
+			"lab %q: topology.qdevice: \"never\" is invalid at 2 nodes; a QDevice is mandatory for a "+
 				"2-node cluster (without a tie-breaker, any single node outage loses quorum); "+
 				"use 3 or more nodes if you want no QDevice at all",
 			name))

@@ -220,7 +220,7 @@ func newSecurityCpuFlagsShowCmd() *cobra.Command {
 
 			if (deps.Format == output.FormatTable || deps.Format == output.FormatPlain) && cp.CPUType == "host" {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
-					"note: cputype=host — most mitigation flags are irrelevant because the host CPU is passed through")
+					"note: cputype=host: most mitigation flags are irrelevant because the host CPU is passed through")
 			}
 
 			enabledSet := make(map[string]bool, len(cp.Enabled))

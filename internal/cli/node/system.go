@@ -366,7 +366,7 @@ func newReportCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "report",
 		Short:   "Generate the node's system report",
-		Long:    "Generate the node's full system report — a single text document summarizing host configuration and state.",
+		Long:    "Generate the node's full system report: a single text document summarizing host configuration and state.",
 		Example: `  pmx pve node report`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

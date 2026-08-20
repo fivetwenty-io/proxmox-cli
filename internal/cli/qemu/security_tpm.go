@@ -78,7 +78,7 @@ func newSecurityTpmAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <vmid|name>",
 		Short: "Add a TPM state device",
-		Long: "Allocate a TPM state disk (tpmstate0). The version defaults to v2.0 — the current, " +
+		Long: "Allocate a TPM state disk (tpmstate0). The version defaults to v2.0, the current, " +
 			"recommended interface (note: the PVE API's own default is the legacy v1.2; this " +
 			"command overrides that). The version is immutable after creation.\n\n" +
 			"Example: pmx pve qemu security tpm add win11 --storage local-lvm",
@@ -111,7 +111,7 @@ func newSecurityTpmAddCmd() *cobra.Command {
 				}
 				return fmt.Errorf(
 					"VM %s already has a TPM state device (version %s); the version cannot be changed "+
-						"in place — remove it first with 'pmx pve qemu security tpm remove %s --force' "+
+						"in place; remove it first with 'pmx pve qemu security tpm remove %s --force' "+
 						"(this destroys all keys sealed in the TPM)", vmid, tp.Version, vmid)
 			}
 
@@ -153,8 +153,8 @@ func newSecurityTpmRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <vmid|name>",
 		Short: "Remove the TPM state device (destroys all sealed keys)",
-		Long: "Detach and delete the tpmstate0 disk. Everything sealed in the TPM — BitLocker " +
-			"keys, Windows Hello credentials, measured-boot state — is destroyed and cannot be " +
+		Long: "Detach and delete the tpmstate0 disk. Everything sealed in the TPM (BitLocker " +
+			"keys, Windows Hello credentials, measured-boot state) is destroyed and cannot be " +
 			"recovered. A guest relying on TPM-bound disk encryption may become unbootable.",
 		Example: `  pmx pve qemu security tpm remove win11 --force`,
 		Args:    cobra.ExactArgs(1),
@@ -181,7 +181,7 @@ func newSecurityTpmRemoveCmd() *cobra.Command {
 						"in it (e.g. BitLocker) will be permanently destroyed", vmid)
 			}
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-				"WARNING: destroying TPM state of VM %s — keys sealed in the TPM are unrecoverable\n", vmid)
+				"WARNING: destroying TPM state of VM %s: keys sealed in the TPM are unrecoverable\n", vmid)
 
 			params := &nodes.UpdateQemuConfigParams{Delete: new("tpmstate0")}
 			applyDigest(params, fl, digest, autoDigest)

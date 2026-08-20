@@ -118,7 +118,7 @@ func newCephInstallCmd() *cobra.Command {
 			"the lab's nested cluster.\n\n" +
 			"Idempotent: a node that already reports the ceph-osd package installed is skipped " +
 			"rather than re-run.\n\n" +
-			"Requires topology.nodes >= 3 — Ceph needs at least a 3-node lab.",
+			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
 		Example: `  pmx lab ceph install wayne
   pmx lab ceph install wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -197,7 +197,7 @@ func cephInnerAPI(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab) (*apiclie
 	api, err := labInnerAPIClient(cmd, deps, lab.Name)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"lab %q: cannot reach lab context %q: %w — register it with `pmx lab context sync %s`",
+			"lab %q: cannot reach lab context %q: %w; register it with `pmx lab context sync %s`",
 			lab.Name, labContextName(lab.Name), err, lab.Name)
 	}
 	return api, nil
@@ -345,9 +345,9 @@ func newCephInitCmd() *cobra.Command {
 		Use:   "init <name>",
 		Short: "Initialize the Ceph cluster configuration on a lab's nested cluster",
 		Long: "Run `pveceph init` against the lab's own nested-cluster API context, on node 0, " +
-			"scoped to the lab's network /16 (network.cidr) — never the mgmt /24 nodes are addressed on.\n\n" +
+			"scoped to the lab's network /16 (network.cidr), never the mgmt /24 nodes are addressed on.\n\n" +
 			"Idempotent: a node that already reports a [global] section in ceph.conf is skipped.\n\n" +
-			"Requires topology.nodes >= 3 — Ceph needs at least a 3-node lab.",
+			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
 		Example: `  pmx lab ceph init wayne
   pmx lab ceph init wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -404,7 +404,7 @@ func newCephDaemonCmd(kind, short string) *cobra.Command {
 		Long: fmt.Sprintf("Create a Ceph %s daemon on every node of a lab's nested cluster that does not "+
 			"already have one, named after the node it runs on.\n\n"+
 			"Idempotent: a node already listed as running a %s is skipped.\n\n"+
-			"Requires topology.nodes >= 3 — Ceph needs at least a 3-node lab.", kind, kind),
+			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.", kind, kind),
 		Example: fmt.Sprintf("  pmx lab ceph %s wayne\n  pmx lab ceph %s wayne --dry-run", kind, kind),
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -575,7 +575,7 @@ func cephResolveOSDDevices(ctx context.Context, api *apiclient.APIClient,
 		if match == nil {
 			return nil, fmt.Errorf(
 				"node %s reports no disk at %s: the VM likely predates the lab's storage.osd_disks "+
-					"config — attach the disk with `pmx pve qemu disk add`", want.node, want.byID)
+					"config; attach the disk with `pmx pve qemu disk add`", want.node, want.byID)
 		}
 		want.devpath = match.Devpath
 		if want.devpath == "" {
@@ -658,7 +658,7 @@ func newCephOsdCmd() *cobra.Command {
 			"Idempotent: a device Ceph already owns is reported and left alone, even with --wipe. " +
 			"A device in use by anything else is skipped unless --wipe is given, which destroys all " +
 			"data on it and needs --yes or an interactive confirmation.\n\n" +
-			"Requires topology.nodes >= 3 — Ceph needs at least a 3-node lab.",
+			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
 		Example: `  pmx lab ceph osd wayne
   pmx lab ceph osd wayne --dry-run
   pmx lab ceph osd wayne --wipe --yes`,
@@ -816,7 +816,7 @@ func newCephPoolCmd() *cobra.Command {
 		Long: "Create a replicated Ceph pool on a lab's node 0, through the lab's own " +
 			"nested-cluster API context, and wire it up as VM/CT storage.\n\n" +
 			"Idempotent: a pool the nested cluster already lists under the same name is skipped.\n\n" +
-			"Requires topology.nodes >= 3 — Ceph needs at least a 3-node lab.",
+			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
 		Example: `  pmx lab ceph pool wayne
   pmx lab ceph pool wayne --name labrbd --size 3 --min-size 2
   pmx lab ceph pool wayne --dry-run`,

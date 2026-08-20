@@ -129,7 +129,7 @@ func newSecurityShowCmd() *cobra.Command {
 			// structured output carries "unprivileged": false and no prose.
 			if !unpriv && (deps.Format == output.FormatTable || deps.Format == output.FormatPlain) {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
-					"WARNING: privileged container — the root user in the CT maps to root on the host")
+					"WARNING: privileged container: the root user in the CT maps to root on the host")
 			}
 
 			single := map[string]string{

@@ -37,22 +37,22 @@ func newScaleCmd() *cobra.Command {
 			"target, per multi-node lab plan §9.\n\n" +
 			"Preflight, before any mutation:\n\n" +
 			"  1. rename a surviving legacy `lab-<member>` VM (no index suffix)\n" +
-			"     to `lab-<member>-0` — decision D3's safety net\n" +
+			"     to `lab-<member>-0` (decision D3's safety net)\n" +
 			"  2. verify the CURRENT cluster, if there is one, is quorate\n" +
 			"  3. run the capacity gate if this run will create any VM shell\n\n" +
 			"All of that happens before the QDevice-removal step, so a capacity refusal never " +
 			"strands the cluster witness-less.\n\n" +
 			"Then the transition itself:\n\n" +
 			"  1. remove the QDevice first if the target no longer needs one,\n" +
-			"     and destroy its now-orphaned VM — never leave an odd+witness\n" +
+			"     and destroy its now-orphaned VM: never leave an odd+witness\n" +
 			"     (Last-Man-Standing) shape mid-transition\n" +
 			"  2. grow by creating VM shells and joining every newly-reachable\n" +
 			"     node in serial index order, deferring rather than failing at\n" +
 			"     the first node whose OS/ssh is not yet provisioned (re-run\n" +
 			"     once it is)\n" +
 			"  3. shrink by evacuating guests to node 0, delnode, and destroying\n" +
-			"     each departing node's VM in reverse index order — node 0 is\n" +
-			"     never removed\n" +
+			"     each departing node's VM in reverse index order (node 0 is\n" +
+			"     never removed)\n" +
 			"  4. add the QDevice once every join and delnode for this\n" +
 			"     transition has completed\n" +
 			"  5. reconcile the nested host networking of every member node\n" +
@@ -61,8 +61,8 @@ func newScaleCmd() *cobra.Command {
 			"     attachment\n" +
 			"  6. validate quorum, corosync links, and storage-active state on\n" +
 			"     EVERY node in the target topology\n\n" +
-			"A transition that completed — that is, was not deferred waiting on manual OS " +
-			"provisioning — but ends non-quorate, link-degraded, or storage-inactive on any " +
+			"A transition that completed (that is, was not deferred waiting on manual OS " +
+			"provisioning) but ends non-quorate, link-degraded, or storage-inactive on any " +
 			"node returns a non-zero exit after rendering the full report. A deferred, " +
 			"still-in-progress transition does not.\n\n" +
 			"Every step besides the final validation is individually idempotent, so a scale " +
@@ -72,7 +72,7 @@ func newScaleCmd() *cobra.Command {
 			"therefore resumes joining and wiring shells that already exist, rather than " +
 			"reading their existence as \"done.\"\n\n" +
 			"VM-shell provisioning for new node and QDevice VMs reuses `pmx lab create`'s own " +
-			"idempotent plan machinery and capacity gate. This command creates VM shells only — " +
+			"idempotent plan machinery and capacity gate. This command creates VM shells only: " +
 			"it never installs an OS, matching `pmx lab create`'s own scope.\n\n" +
 			"The nested host-network reconcile talks to the lab's OWN nested-cluster context " +
 			"(`lab-<name>`), not the outer host, so a grown node gets its management IPv6 without a " +
@@ -80,7 +80,7 @@ func newScaleCmd() *cobra.Command {
 			"context, an inner API that is not up yet, or a node still provisioning is reported as a " +
 			"deferred row naming the follow-up command, never as a failure of a transition whose " +
 			"cluster and storage work succeeded. The ssh-transported NIC-naming phase stays with " +
-			"`pmx lab hostnet apply` alone, since it can leave a node reboot-pending — and because " +
+			"`pmx lab hostnet apply` alone, since it can leave a node reboot-pending, and because " +
 			"of that, a node whose NICs are not named nic0-nic5 yet gets its IPv6 but no bond or " +
 			"bridge, which would otherwise be staged against interfaces that do not exist.\n\n" +
 			"Three things stay outside this command's scope.\n\n" +
@@ -355,7 +355,7 @@ func scaleCurrentNodeCount(classified []classifiedLabVM) (int, error) {
 		if !present[i] {
 			return 0, fmt.Errorf(
 				"node VMs are not contiguous: node %d is missing while node %d exists; pmx lab scale "+
-					"requires a contiguous 0..N-1 node set — resolve the gap manually first (e.g. `pmx lab "+
+					"requires a contiguous 0..N-1 node set; resolve the gap manually first (e.g. `pmx lab "+
 					"create` to fill it in)", i, maxIdx)
 		}
 	}
@@ -660,7 +660,7 @@ func executeScalePlan(
 				rows = append(rows, []string{
 					fmt.Sprintf("join node %d", i),
 					fmt.Sprintf(
-						"deferred: node %d (%s) is not yet ssh-reachable — provision its OS (lab "+
+						"deferred: node %d (%s) is not yet ssh-reachable; provision its OS (lab "+
 							"repository provisioning pipeline), confirm ssh works, then re-run `pmx lab "+
 							"scale` to join it", i, nodeIP),
 				})
@@ -718,7 +718,7 @@ func executeScalePlan(
 			rows = append(rows, []string{
 				"wire up QDevice",
 				fmt.Sprintf(
-					"deferred: QDevice VM (%s) is not yet ssh-reachable — provision its OS then re-run "+
+					"deferred: QDevice VM (%s) is not yet ssh-reachable; provision its OS, then re-run "+
 						"`pmx lab scale` to wire it up", qdeviceIP),
 			})
 			deferred = true
@@ -838,7 +838,7 @@ func executeScalePlan(
 	// when the node count actually changed this run.
 	if len(p.growIndices) > 0 || len(p.shrinkIndices) > 0 {
 		rows = append(rows, []string{"PDM remote", fmt.Sprintf(
-			"reminder: node count changed (%d -> %d) — swap this lab's PDM remote (single-host vs. "+
+			"reminder: node count changed (%d -> %d); swap this lab's PDM remote (single-host vs. "+
 				"cluster endpoint) via the lab repository's own PDM tooling (plan §5.5); `pmx lab scale` "+
 				"does not do this", p.currentN, p.targetN)})
 	}
@@ -850,7 +850,7 @@ func executeScalePlan(
 	if !deferred && !allHealthy {
 		return rows, fmt.Errorf(
 			"lab %q: scale actions completed but final validation found a non-converged state on at "+
-				"least one target node (quorum, corosync links, or storage) — see the final-validation "+
+				"least one target node (quorum, corosync links, or storage); see the final-validation "+
 				"rows above", name)
 	}
 
@@ -873,12 +873,12 @@ func scaleReconcileQdeviceIPv6(deps *cli.Deps, lab *config.Lab, name string) [][
 
 	if !scaleProbeReachable(deps, qdeviceIP) {
 		return [][]string{{"qdevice IPv6", fmt.Sprintf(
-			"deferred: QDevice VM (%s) is not ssh-reachable — %s", qdeviceIP, followup)}}
+			"deferred: QDevice VM (%s) is not ssh-reachable; %s", qdeviceIP, followup)}}
 	}
 
 	step, err := qdeviceEnsureIPv6(deps, lab.Network, name, qdeviceIP)
 	if err != nil {
-		return [][]string{{"qdevice IPv6", fmt.Sprintf("deferred: %v — %s", err, followup)}}
+		return [][]string{{"qdevice IPv6", fmt.Sprintf("deferred: %v; %s", err, followup)}}
 	}
 	return [][]string{{step.desc, step.status()}}
 }

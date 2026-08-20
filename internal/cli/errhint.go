@@ -14,7 +14,7 @@ import (
 
 // unauthorizedHint is printed after a 401 so the operator knows the request
 // reached Proxmox but the credentials were rejected, and how to inspect them.
-const unauthorizedHint = `hint: authentication failed (HTTP 401) — Proxmox rejected the credentials.
+const unauthorizedHint = `hint: authentication failed (HTTP 401): Proxmox rejected the credentials.
   Inspect the active context:   pmx context show
   For token auth the API header is USER@REALM!TOKENID=SECRET, split across three fields:
     - auth.username : the user and realm, e.g. root@pam
@@ -26,10 +26,10 @@ const unauthorizedHint = `hint: authentication failed (HTTP 401) — Proxmox rej
 // forbiddenHint is printed after a 403 so the operator knows the credentials
 // authenticated but lack the privilege for the requested path — most often the
 // token's own ACL, not the owning user's.
-const forbiddenHint = `hint: permission denied (HTTP 403) — the credentials authenticated but lack privileges for this path.
+const forbiddenHint = `hint: permission denied (HTTP 403): the credentials authenticated but lack privileges for this path.
   Grant an ACL role at the required path: Datacenter → Permissions.
   API tokens have "Privilege Separation" enabled by default, so the token needs its
-  OWN ACL entry — granting the owning user access is not enough.`
+  OWN ACL entry; granting the owning user access is not enough.`
 
 // AuthHint returns an actionable, multi-line hint for authentication and
 // authorisation failures, or "" when err is not an auth error. The auth
@@ -83,7 +83,7 @@ func PortConventionHint(err error, ctx *config.Context, contextName, cmdPrefix s
 		}
 		if ctx.Port == config.DefaultPortForProduct(other) {
 			return fmt.Sprintf(
-				"hint: port %d is the %s default; context %q is set to product %s — check '%s context show %s'",
+				"hint: port %d is the %s default; context %q is set to product %s: check '%s context show %s'",
 				ctx.Port, ProductDisplayName(other), contextName, product, cmdPrefix, contextName,
 			)
 		}
@@ -111,7 +111,7 @@ func UnreachableHint(err error, ctx *config.Context, contextName, cmdPrefix stri
 		port = config.DefaultPortForProduct(ctx.ProductOrDefault())
 	}
 
-	return fmt.Sprintf(`hint: could not reach %s:%d — the connection was never established.
+	return fmt.Sprintf(`hint: could not reach %s:%d: the connection was never established.
   Nothing is listening there, or a firewall or proxy is dropping the connection.
   Confirm the name resolves to the node itself, not a CDN or reverse proxy:
     dig +short %s

@@ -247,7 +247,7 @@ func newConfigAcmeAccountAddCmd() *cobra.Command {
 	f.StringVar(&directory, "directory", "", "URL of the ACME directory to register with (default: Let's Encrypt)")
 	f.StringVar(&eabKid, "eab-kid", "", "key identifier for External Account Binding")
 	f.StringVar(&eabHmacKey, "eab-hmac-key", "", "HMAC key for External Account Binding")
-	f.StringVar(&tosUrl, "tos-url", "", "CA Terms of Service URL — setting this indicates agreement")
+	f.StringVar(&tosUrl, "tos-url", "", "CA Terms of Service URL (setting this indicates agreement)")
 	cli.MustMarkRequired(cmd, "contact")
 	return cmd
 }

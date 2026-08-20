@@ -127,7 +127,7 @@ type Deps struct {
 func GetDeps(cmd *cobra.Command) *Deps {
 	v := cmd.Context().Value(ctxKey)
 	if v == nil {
-		panic("cli.GetDeps: Deps not set in command context — called before PersistentPreRunE?")
+		panic("cli.GetDeps: Deps not set in command context (called before PersistentPreRunE?)")
 	}
 	return v.(*Deps)
 }
@@ -289,7 +289,7 @@ func NewRootCmd(persona string) (*cobra.Command, func()) {
 	switch persona {
 	case "pve":
 		root.Annotations = map[string]string{ProductAnnotation: config.ProductPVE}
-		root.Short = "pve — Proxmox VE CLI"
+		root.Short = "pve: Proxmox VE CLI"
 		root.Long = `pve is a command-line interface for the Proxmox VE API.
 
 It supports multiple named contexts, token and password authentication, and
@@ -299,7 +299,7 @@ The full combined tree (Proxmox VE and Proxmox Backup Server) is available
 via the pmx binary as ` + "`pmx pve ...`" + ` / ` + "`pmx pbs ...`" + `.`
 	case "pbs":
 		root.Annotations = map[string]string{ProductAnnotation: config.ProductPBS}
-		root.Short = "pbs — Proxmox Backup Server CLI"
+		root.Short = "pbs: Proxmox Backup Server CLI"
 		root.Long = `pbs is a command-line interface for the Proxmox Backup Server API.
 
 It supports multiple named contexts, token and password authentication, and
@@ -309,7 +309,7 @@ The full combined tree (Proxmox VE and Proxmox Backup Server) is available
 via the pmx binary as ` + "`pmx pve ...`" + ` / ` + "`pmx pbs ...`" + `.`
 	case "pdm":
 		root.Annotations = map[string]string{ProductAnnotation: config.ProductPDM}
-		root.Short = "pdm — Proxmox Datacenter Manager CLI"
+		root.Short = "pdm: Proxmox Datacenter Manager CLI"
 		root.Long = `pdm is a command-line interface for the Proxmox Datacenter Manager API.
 
 It supports multiple named contexts, token and password authentication, and
@@ -320,7 +320,7 @@ The full combined tree (Proxmox VE, Proxmox Backup Server, and Proxmox
 Datacenter Manager) is available via the pmx binary as ` + "`pmx pve ...`" + ` /
 ` + "`pmx pbs ...`" + ` / ` + "`pmx pdm ...`" + `.`
 	default:
-		root.Short = "pmx — Proxmox CLI"
+		root.Short = "pmx: Proxmox CLI"
 		root.Long = `pmx is a command-line interface for the Proxmox VE and Proxmox Backup Server APIs.
 
 It supports multiple named contexts, token and password authentication, and
@@ -799,7 +799,7 @@ func productMismatchError(cmd *cobra.Command, contextName, ctxProduct, required 
 	}
 
 	return fmt.Errorf(
-		"context %q targets %s (product: %s); this command requires a %s context — %s",
+		"context %q targets %s (product: %s); this command requires a %s context: %s",
 		contextName, ProductDisplayName(ctxProduct), ctxProd, strings.ToUpper(required), advice,
 	)
 }

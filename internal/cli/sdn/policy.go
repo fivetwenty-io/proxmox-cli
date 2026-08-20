@@ -524,7 +524,7 @@ func newRouteMapEntryCmd() *cobra.Command {
 		Use:   "entry",
 		Short: "Manage individual entries of SDN route maps",
 		Long: "List, add, inspect, update, and delete the individual match/set entries of SDN " +
-			"route maps. A route map has no standalone object of its own — it comes into " +
+			"route maps. A route map has no standalone object of its own; it comes into " +
 			"existence when its first entry is added. Changes are staged until committed " +
 			"with `pmx pve sdn apply`.",
 	}

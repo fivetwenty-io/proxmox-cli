@@ -44,10 +44,10 @@ func newNetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "net",
 		Short: "Manage a lab's SDN network",
-		Long: "Reconcile a lab's SDN zone, every configured vnet — the primary vnet plus any " +
-			"network.vnets entries — and their subnets against its config.\n\n" +
+		Long: "Reconcile a lab's SDN zone, every configured vnet (the primary vnet plus any " +
+			"network.vnets entries), and their subnets against its config.\n\n" +
 			"Labs are dual-stack by default: alongside each IPv4 subnet, every addressed vnet " +
-			"gets an IPv6 subnet from the lab's IPv6 block — network.cidr6 when set, else a " +
+			"gets an IPv6 subnet from the lab's IPv6 block: network.cidr6 when set, else a " +
 			"stable RFC 4193 ULA /48 derived from network.cidr. Set `network.ipv6: false` to " +
 			"opt a lab out (existing IPv6 subnets are left alone, never deleted).\n\n" +
 			"The resulting pending changeset is previewed, then applied.",
@@ -88,7 +88,7 @@ func newNetApplyCmd() *cobra.Command {
 			"Unless `network.ipv6: false`, each addressed vnet's IPv6 subnet is ensured too: " +
 			"the primary vnet carries the lab's whole IPv6 block gatewayed at the management " +
 			"::1, and each network.vnets entry gets its own /64 (or its cidr6 override). " +
-			"Disabling IPv6 later only stops creating — nothing already on the host is " +
+			"Disabling IPv6 later only stops creating; nothing already on the host is " +
 			"deleted.\n\n" +
 			"--dry-run stops after that preview, without ensuring any resource or calling " +
 			"apply.\n\n" +

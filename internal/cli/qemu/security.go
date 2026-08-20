@@ -575,11 +575,11 @@ func newSecurityShowCmd() *cobra.Command {
 				}
 				if s, ok := rawStr(m, "hookscript"); ok && s != "" {
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
-						"WARNING: a hookscript is configured — it executes on the HOST during VM lifecycle events")
+						"WARNING: a hookscript is configured: it executes on the HOST during VM lifecycle events")
 				}
 				if posture.Boot.Posture == "ovmf-no-efidisk" {
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
-						"note: bios=ovmf without an efidisk0 — EFI variables (including Secure Boot "+
+						"note: bios=ovmf without an efidisk0: EFI variables (including Secure Boot "+
 							"state) will not persist across restarts")
 				}
 			}

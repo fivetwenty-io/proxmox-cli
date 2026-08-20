@@ -262,7 +262,7 @@ func newShutdownCmd() *cobra.Command {
 func newResetCmd() *cobra.Command {
 	var skiplock bool
 	cmd := newLifecycleCmd("reset", "Reset a VM (hard reset)",
-		"Hard-reset the running VM, equivalent to pressing a physical reset button — the "+
+		"Hard-reset the running VM, equivalent to pressing a physical reset button; the "+
 			"guest OS is not asked to shut down cleanly. Submits a PVE task and blocks until "+
 			"it completes; pass --async to print the task UPID immediately instead of "+
 			"waiting.",

@@ -2135,7 +2135,7 @@ func TestNewRootCmd_PersonaDescribesActiveProduct(t *testing.T) {
 	pdmRoot, cleanup := cli.NewRootCmd("pdm")
 	defer cleanup()
 
-	require.Equal(t, "pmx — Proxmox CLI", pmxRoot.Short,
+	require.Equal(t, "pmx: Proxmox CLI", pmxRoot.Short,
 		"the default pmx persona's Short text must be unchanged")
 
 	require.Contains(t, pbsRoot.Short, "Backup Server",

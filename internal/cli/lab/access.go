@@ -56,7 +56,7 @@ func newAccessGrantCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "grant <name> <user>",
 		Short: "Grant a pve user pool-scoped access to a lab",
-		Long: "Grant a user — a pve-realm userid such as wayne@pve — a role scoped to the " +
+		Long: "Grant a user (a pve-realm userid such as wayne@pve) a role scoped to the " +
 			"named lab's resource pool.\n\n" +
 			"Three things are ensured first, in order:\n\n" +
 			"  1. the lab's pool, created if absent\n" +

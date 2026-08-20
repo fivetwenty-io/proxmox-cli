@@ -17,7 +17,7 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
   environment variables, the system keychain, or literals.
 
 - Structured output in four formats: `table` (default), `plain`, `json`, and
-  `yaml` — JSON/YAML preserve native API types.
+  `yaml` (JSON/YAML preserve native API types).
 
 - Block-by-default on asynchronous tasks (VM/CT lifecycle, snapshots, services),
   with `--async` to return the task UPID immediately.
@@ -26,18 +26,18 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
   exec.
 
 - Proxmox Backup Server support: contexts with `product: pbs` drive the full
-  `pmx pbs` command group — datastores, snapshots, sync/prune/GC/verify jobs,
+  `pmx pbs` command group: datastores, snapshots, sync/prune/GC/verify jobs,
   access control, tape backup, and a raw API passthrough.
 
 - Proxmox Datacenter Manager support: contexts with `product: pdm` drive the
-  full `pmx pdm` command group — managed-remote directory, aggregated
+  full `pmx pdm` command group: managed-remote directory, aggregated
   resources/SDN/Ceph, subscription pool management, access control, the
   instance's own node/config administration, automated installation, and
   proxied PVE/PBS remote operations.
 
 - Persona-aware binary: run it as `pmx` for the combined tree, or as `pve`/
   `pbs`/`pdm` (a symlink to the same binary) to hoist that product's commands
-  straight onto the root — see [Personas](#personas).
+  straight onto the root (see [Personas](#personas)).
 
 - JSONL audit logs written to `~/.pmx/logs/`, with secrets redacted.
 
@@ -54,7 +54,7 @@ brew install --cask fivetwenty-io/tap/pmx
 This installs `pmx` plus the `pve`/`pbs`/`pdm` persona symlinks, man pages
 for every command tree, and shell completions for `pmx` (Homebrew casks only
 support one completion script per shell, so the persona binaries do not get
-their own — see [Download a release archive](#download-a-release-archive) or
+their own; see [Download a release archive](#download-a-release-archive) or
 [Download a `.deb` or `.rpm` package](#download-a-deb-or-rpm-package) for
 per-persona completions). The macOS binaries are signed with an Apple
 Developer ID and notarized, so Gatekeeper accepts them on first launch even
@@ -88,7 +88,7 @@ tar -xzf "pmx_${VERSION}_${PLATFORM}.tar.gz"
 Each archive contains the `pmx` binary, `README.md`, `LICENSE`, and a
 `share/` tree with man pages for every command tree (`pmx`, `pve`, `pbs`,
 `pdm`) and shell completions for `pmx` and each persona (mirroring what `make
-install` lays down under a prefix — see below):
+install` lays down under a prefix; see below):
 
 ```
 pmx
@@ -129,7 +129,7 @@ for `linux/amd64` and `linux/arm64`, named
 `/usr/bin/pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages (gzipped)
 under `/usr/share/man/`, shell completions for `pmx` and each persona under
 `/usr/share/{bash-completion,zsh,fish}/`, and `LICENSE` under
-`/usr/share/doc/pmx/` — no separate symlink or `share/` setup step needed.
+`/usr/share/doc/pmx/`; no separate symlink or `share/` setup step needed.
 
 ```bash
 # Debian/Ubuntu
@@ -203,14 +203,14 @@ pmx context add lab \
   --secret '${PMX_TOKEN}' \
   --select
 
-# 2. Use it. (Proxmox VE commands live under `pve` — see Personas below;
-#    this is the same as running the `pve` binary/symlink without the prefix.)
+# 2. Use it. (Proxmox VE commands live under `pve`; see Personas below.
+#    This is the same as running the `pve` binary/symlink without the prefix.)
 pmx pve cluster status
 pmx pve node list
 pmx pve --node pve1 qemu list
 ```
 
-The same flow works for the other products — pass `--product pbs` or
+The same flow works for the other products: pass `--product pbs` or
 `--product pdm` to `pmx context add` (the default port follows the product:
 8006 PVE, 8007 PBS, 8443 PDM) and use the matching command group or binary:
 
@@ -226,7 +226,7 @@ pmx pbs datastore ls --context backup
 `pmx` inspects how it was invoked (`argv[0]`, with any `.exe` suffix
 stripped) to decide which command surface to expose:
 
-- Invoked as `pmx` (or anything else — `go run`/`go test` temp binary names,
+- Invoked as `pmx` (or anything else, e.g. `go run`/`go test` temp binary names,
   etc.): the combined tree. Proxmox VE resource groups live under
   `pmx pve`, Proxmox Backup Server groups under `pmx pbs`, Proxmox
   Datacenter Manager groups under `pmx pdm`, and the shared commands below
@@ -234,18 +234,18 @@ stripped) to decide which command surface to expose:
 
 - Invoked as `pve`: the Proxmox VE groups (`cluster`, `qemu`, `lxc`, `node`,
   `storage`, `sdn`, `pool`, `access`, `task`) are hoisted directly onto the
-  root — `pve node ls` instead of `pmx pve node ls`.
+  root: `pve node ls` instead of `pmx pve node ls`.
 
 - Invoked as `pbs`: the Proxmox Backup Server groups (`datastore`,
   `snapshot`, `sync`, and the rest of the [Proxmox Backup
-  Server](#proxmox-backup-server-pmx-pbs) subtree) are hoisted the same way
-  — `pbs datastore ls` instead of `pmx pbs datastore ls`.
+  Server](#proxmox-backup-server-pmx-pbs) subtree) are hoisted the same way:
+  `pbs datastore ls` instead of `pmx pbs datastore ls`.
 
 - Invoked as `pdm`: the Proxmox Datacenter Manager groups (`remote`,
   `resource`, `sdn`, `ceph`, `subscription`, `user`, `token`, `acl`, `role`,
   `permission`, `tfa`, `realm`, `config`, `node`, `auto-install`, and the
-  proxied `pbs`/`pve` remote-operation subtrees — see [Proxmox Datacenter
-  Manager](#proxmox-datacenter-manager-pmx-pdm)) are hoisted the same way —
+  proxied `pbs`/`pve` remote-operation subtrees, see [Proxmox Datacenter
+  Manager](#proxmox-datacenter-manager-pmx-pdm)) are hoisted the same way:
   `pdm remote ls` instead of `pmx pdm remote ls`. Under this persona `pve`
   and `pbs` at the root are the PDM-proxied remote-operation groups, not the
   native `pve`/`pbs` persona trees.
@@ -261,7 +261,7 @@ sudo ln -s pmx /usr/local/bin/pbs
 sudo ln -s pmx /usr/local/bin/pdm
 ```
 
-Every persona — `pmx`, `pve`, `pbs`, and `pdm` — exposes the same top-level
+Every persona (`pmx`, `pve`, `pbs`, and `pdm`) exposes the same top-level
 commands, since these operate on the active context rather than a specific
 product:
 
@@ -309,7 +309,7 @@ contexts:
     host: pve.example.com
     port: 8006
     protocol: https
-    product: pve               # pve (default), pbs, or pdm — selects the API dialect
+    product: pve               # pve (default), pbs, or pdm; selects the API dialect
     realm: pam
     default-node: pve1
     default-output: table      # per-context output format override
@@ -350,7 +350,7 @@ setting over from the source context automatically.
   context trust that fingerprint without prompting again.
 
 - On a non-interactive run (scripts, CI, piped input), an unrecognized
-  certificate is always rejected outright — no prompt, no blocking read on
+  certificate is always rejected outright: no prompt, no blocking read on
   stdin. Only fingerprints already cached (or explicitly set via
   `tls.fingerprint`) are trusted.
 
@@ -363,10 +363,10 @@ without `--insecure`.
 
 The `auth.secret` value is resolved in three tiers:
 
-- Environment reference: `${VAR}` or `$VAR` — read from the environment;
+- Environment reference: `${VAR}` or `$VAR`, read from the environment;
   `${VAR}` errors if unset.
 
-- Keychain reference: `keychain:path` — read from the system keychain.
+- Keychain reference: `keychain:path`, read from the system keychain.
 
 - Literal: any other value is used verbatim, with a one-time stderr warning so
   plaintext secrets in config are visible.
@@ -377,7 +377,7 @@ target; `pmx auth logout` wipes it.
 ## Contexts
 
 `pmx context` (alias: `pmx ctx`) manages the named Proxmox contexts stored in
-the config file — each targeting one product: Proxmox VE, Proxmox Backup
+the config file, each targeting one product: Proxmox VE, Proxmox Backup
 Server, or Proxmox Datacenter Manager. All verbs operate on the local config
 and never contact a Proxmox API, except `validate --connect`, which probes
 the configured endpoint live.
@@ -440,11 +440,11 @@ job's guest, and storage verbs pick a node carrying the storage (see below).
 Each context targets one product. The default, `product: pve`, is a Proxmox VE
 API endpoint (port 8006); `product: pbs` marks the context as a Proxmox Backup
 Server (port 8007 unless `--port` is given) and enables the `pmx pbs` command
-group for it — see
-[Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below; `product: pdm`
+group for it (see
+[Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below); `product: pdm`
 marks the context as a Proxmox Datacenter Manager (port 8443 unless `--port`
-is given) and enables the `pmx pdm` command group for it — see
-[Proxmox Datacenter Manager](#proxmox-datacenter-manager-pmx-pdm) below.
+is given) and enables the `pmx pdm` command group for it (see
+[Proxmox Datacenter Manager](#proxmox-datacenter-manager-pmx-pdm) below).
 
 ```bash
 # Add a PBS context (defaults to port 8007), then attach the token secret.
@@ -463,7 +463,7 @@ pmx auth set-token --context dcmgr --token-id automation --secret '${PDM_TOKEN}'
 
 Passing `--secret '${VAR}'` directly to `context add` also works; prefer an
 env or `keychain:` reference over a literal, which lands in shell history
-and the config file in plaintext. Single-quote the reference — unquoted,
+and the config file in plaintext. Single-quote the reference: unquoted,
 the shell expands `${VAR}` before `pmx` ever sees it, and the plaintext
 secret is what gets stored.
 
@@ -503,7 +503,7 @@ Proxmox Datacenter Manager (PDM). The subcommands `status`, `set-token`,
 two-factor authentication) is PVE-only; PBS and PDM contexts use `--tfa-challenge`
 instead. OIDC login via `--oidc` works with all products. The client library handles
 per-product API token wire format differences (PVE uses `=` as separator, PBS/PDM use
-`:`) automatically — users configure tokens the same way for all products.
+`:`) automatically, so users configure tokens the same way for all products.
 
 ## Output and logging
 
@@ -541,8 +541,8 @@ embed credentials in forms no `key=value` scan recognises. Clean up old files wi
 preview), or set `log.retention: <days>` in the config file to both default
 that cutoff and run an automatic prune once per day.
 
-`pmx --version` (or `-v`) prints the CLI's own build information — release tag,
-short commit, build date, Go toolchain, and OS/arch — without contacting any
+`pmx --version` (or `-v`) prints the CLI's own build information (release tag,
+short commit, build date, Go toolchain, and OS/arch) without contacting any
 server. `make build` and release binaries inject these via ldflags; ad-hoc
 `go build` binaries report a dev version with unknown commit. The same
 information is available as a command (with `-o json`/`-o yaml` support) via
@@ -589,9 +589,9 @@ The top-level alias `pmx ctx` resolves to `pmx context`.
 | `pool` | Resource pools | `list`, `get`, `show`, `create`, `set`, `delete`, `permissions` |
 | `task` | Task inspection and control | `list`, `log`, `wait`, `stop` |
 
-`pmx pbs` — Proxmox Backup Server (contexts with `product: pbs`) — is documented
+`pmx pbs` (Proxmox Backup Server, contexts with `product: pbs`) is documented
 separately: see [Proxmox Backup Server](#proxmox-backup-server-pmx-pbs) below.
-`pmx pdm` — Proxmox Datacenter Manager (contexts with `product: pdm`) — is
+`pmx pdm` (Proxmox Datacenter Manager, contexts with `product: pdm`) is
 documented separately: see [Proxmox Datacenter
 Manager](#proxmox-datacenter-manager-pmx-pdm) below.
 
@@ -616,7 +616,7 @@ pve node ssh pve1 -- uptime
 pve node rsync ./bundle/ pve1:/var/tmp/bundle/ --identity ~/.ssh/id_ed25519
 pve node shell pve1
 
-# Top-level ssh/rsync (same node resolver as above, no "node" prefix; shared —
+# Top-level ssh/rsync (same node resolver as above, no "node" prefix; shared:
 # use the pmx binary, not pve/pbs, since these commands never take a "pve"/"pbs" prefix).
 pmx ssh pve1
 pmx ssh -c prod pve1 uptime
@@ -645,7 +645,7 @@ in the same invocation is rejected rather than silently overwritten.
 ipset get-member <vmid> <name> <cidr>` (with `pmx pve lxc` equivalents) read a
 single firewall alias or IP set member by name, alongside the existing `list`
 verbs. `pmx pve qemu migrate capabilities` reports the node's QEMU
-live-migration feature support — the same data as `pmx pve node capabilities
+live-migration feature support: the same data as `pmx pve node capabilities
 qemu migration`.
 
 ### Cloud-init snippets over SSH
@@ -673,7 +673,7 @@ pmx pve --node pve1 qemu config set 100 --cicustom "user=local:snippets/user-dat
 pmx pve --node pve1 qemu cloudinit update 100
 ```
 
-`--checksum` is not supported in this mode, and no PVE task is created — the
+`--checksum` is not supported in this mode, and no PVE task is created; the
 transfer is a plain SSH stream. Once the upstream API grows a snippets content
 type, the SSH path can be retired in favor of the normal upload endpoint.
 
@@ -710,7 +710,7 @@ Everything else works exactly like the PVE side: the same output formats,
 | `status` | Server-wide status | `datastore-usage` |
 
 The PBS version, a reachability check, and a raw API passthrough are shared
-root commands (present under every persona — see [Personas](#personas)),
+root commands (present under every persona, see [Personas](#personas)),
 not part of this subtree: `pmx version` (or `pbs version`), `pmx version
 ping` (or `pbs version ping`), and `pmx api get\|post\|put\|delete` (or
 `pbs api ...`), each against a `product: pbs` context.
@@ -746,7 +746,7 @@ logging, and exit codes.
 
 A Proxmox Datacenter Manager instance itself manages a fleet of PVE and PBS
 remotes. The `pdm pve` and `pdm pbs` groups proxy operations against those
-managed remotes — they are distinct from, and nested under, the top-level
+managed remotes; they are distinct from, and nested under, the top-level
 `pmx pve`/`pmx pbs` command trees, which talk directly to a PVE/PBS context
 instead of through a PDM instance.
 
@@ -771,7 +771,7 @@ instead of through a PDM instance.
 | `pve` | Proxy operations against managed PVE remotes | `remote`, `scan`, `probe-tls`, `realms`, `options`, `updates`, `cluster`, `firewall`, `node`, `storage`, `task`, `qemu`, `lxc` |
 
 The PDM version, a reachability check, and a raw API passthrough are shared
-root commands (present under every persona — see [Personas](#personas)), not
+root commands (present under every persona, see [Personas](#personas)), not
 part of this subtree: `pmx version` (or `pdm version`) and `pmx api
 get\|post\|put\|delete` (or `pdm api ...`), each against a `product: pdm`
 context.
@@ -808,7 +808,7 @@ pmx -c dcmgr api get /remotes
 QEMU VM: the protection flag, Secure Boot / EFI and TPM state, confidential
 computing (AMD SEV / Intel TDX), security-relevant CPU flags, the guest
 agent configuration, and per-NIC firewall coverage. Every command uses only
-the PVE config and firewall APIs — no ssh.
+the PVE config and firewall APIs, not ssh.
 
 ```bash
 pmx pve qemu security show 100              # full posture: protection, boot chain, TPM, confidential, agent, NIC firewall
@@ -871,8 +871,8 @@ enrolled key and boot entry; pass `--recreate` (optionally with a different
 `pmx pve lxc security` inspects and hardens the layered security posture of an LXC
 container: its privilege level, its `features=` flags, and the low-level Linux
 capability whitelist. Containers created through `pmx pve lxc create` are
-**unprivileged by default** — the container's `root` is mapped to an unprivileged
-host UID — which is the safe baseline. The `security` commands help you keep that
+**unprivileged by default**: the container's `root` is mapped to an unprivileged
+host UID, which is the safe baseline. The `security` commands help you keep that
 baseline and grant only the capabilities a workload actually needs.
 
 All the read verbs use only the API and need no SSH:
@@ -938,8 +938,8 @@ changes only take effect on the next container start.
 
 ## Object permissions
 
-Every object tree with its own ACL path — `qemu`, `lxc`, `storage`, `pool`,
-`node`, `sdn zone`, and `sdn vnet` — carries a `permissions` sub-command
+Every object tree with its own ACL path (`qemu`, `lxc`, `storage`, `pool`,
+`node`, `sdn zone`, and `sdn vnet`) carries a `permissions` sub-command
 that derives that path automatically, so day-to-day ACL work never
 requires typing PVE's path grammar (`/vms/100`, `/pool/lab`,
 `/sdn/zones/dmz/vnet0`, and so on) by hand.
@@ -961,7 +961,7 @@ another user or token, which needs `Sys.Audit` on `/access`), and `grant`/
 comma-separated, and accept `--no-propagate` to withhold the default
 propagation to sub-paths). `pmx pve pool permissions` derives PVE's singular
 `/pool/{poolid}` ACL path automatically, even though the `pool` object
-tree and its own sub-commands are plural — a mismatch the command handles
+tree and its own sub-commands are plural, a mismatch the command handles
 so the operator never has to remember it.
 
 These commands are thin, path-deriving wrappers: for any ACL path outside
@@ -999,7 +999,7 @@ own SDN vnet and subnet (carved out of a shared SDN zone), a VM, storage
 derived from that VM's disks, a resource pool, a pve-realm user's access
 grant on that pool, and a ZFS `refquota` on the lab's dataset. `pmx lab`
 is only available when the binary runs as `pmx`
-(or an unrecognized `argv[0]`) — it is not hoisted onto the `pve`, `pbs`,
+(or an unrecognized `argv[0]`); it is not hoisted onto the `pve`, `pbs`,
 or `pdm` persona roots the way `pve`'s own groups are (see
 [Personas](#personas)).
 
@@ -1015,14 +1015,14 @@ architecture. `network.zone_name` names the zone and defaults to `labs`;
 with `vxlan` the other type the lab verbs model; `network.zone_peers` is
 the VXLAN underlay peer list, meaningful only for a `vxlan` zone and
 ignored for a `simple` one. `pmx lab create` and `pmx lab net apply` reconcile that zone
-idempotently — creating it when absent, otherwise updating only the fields
+idempotently: creating it when absent, otherwise updating only the fields
 that have drifted (MTU, peers on a `vxlan` zone, node membership). A
 `simple` zone has no vnet-level tag concept and PVE rejects one, so
 `network.vxlan_tag` is omitted from the vnet call for that zone type and
 applies only to a tag-capable zone such as `vxlan`.
 
 Labs are dual-stack by default. Alongside the IPv4 plan, each lab gets an
-IPv6 block — `network.cidr6` when set (`/48` or wider), else a stable
+IPv6 block: `network.cidr6` when set (`/48` or wider), else a stable
 RFC 4193 ULA `/48` derived from `network.cidr`, so two labs with different
 IPv4 CIDRs can never collide even with zero IPv6 config. Per-role `/64`s
 are carved from that block at fixed subnet IDs, and host offsets mirror
@@ -1034,13 +1034,13 @@ the IPv4 plan (gateway `::1`, node *i* at `::a`+*i*, QDevice `::f`).
 
 The verbs that bring a node into a lab carry the same addressing rather
 than leaving it for a follow-up run: `pmx lab scale` and `pmx lab cluster
-join` reconcile each member node's nested host networking — bonds,
-bridges, and that node's management IPv6 — against the lab's own
+join` reconcile each member node's nested host networking (bonds,
+bridges, and that node's management IPv6) against the lab's own
 nested-cluster context, and `pmx lab scale` also ensures the QDevice's
 IPv6 when the topology already had one. That phase never fails a
 transition: anything it cannot reach is reported as a deferred row naming
 `pmx lab hostnet apply`, which remains the sole owner of the ssh
-NIC-naming pass (it can leave a node reboot-pending) — and until that pass
+NIC-naming pass (it can leave a node reboot-pending), and until that pass
 has run on a node, the transition gives it IPv6 but no bonds, rather than
 staging a bond against interfaces that do not exist yet. `pmx lab status`
 shows each target's IPv6 beside its IPv4, live from the guest agent when
@@ -1048,7 +1048,7 @@ the VM is running.
 
 Set `network.ipv6: false` to keep a lab IPv4-only; turning it off later
 stops further IPv6 provisioning but never deletes what already exists.
-Set `network.snat6: true` for egress — `pmx lab create`/`pmx lab net
+Set `network.snat6: true` for egress: `pmx lab create`/`pmx lab net
 apply` then mark every IPv6 subnet for masquerade, which PVE only renders
 on a `simple` zone (validation refuses it elsewhere). Rendering also needs
 the PVE host itself to have an IPv6 route: PVE picks the egress interface
@@ -1068,7 +1068,7 @@ labs:
       vnet_id: wayne
       zone_name: labs        # default; the shared outer zone this vnet joins
       zone_type: simple      # default; "vxlan" also supported (adds zone_peers)
-      vxlan_tag: 5001        # vnet tag — used by tag-capable zones, ignored on "simple"
+      vxlan_tag: 5001        # vnet tag, used by tag-capable zones, ignored on "simple"
       cidr: 10.108.0.0/16
       mgmt:
         gateway: 10.108.0.1
@@ -1107,7 +1107,7 @@ block; `--osd-disks N --osd-disk-gb G` (also accepted by `pmx lab create`)
 attaches N extra raw disks per node for nested Ceph OSDs, which requires
 `storage.controller: virtio-scsi-single`. Once a multi-node lab's nested
 cluster is formed (`pmx lab cluster init`/`join`), `pmx lab ceph
-install|init|mon|mgr|osd|pool|status <lab>` orchestrates Ceph across it —
+install|init|mon|mgr|osd|pool|status <lab>` orchestrates Ceph across it:
 `install` bootstraps packages over guest SSH, since PVE has no REST
 endpoint for that step, and the rest talk to the nested cluster's own API.
 
@@ -1116,14 +1116,14 @@ endpoint for that step, and the rest talk to the nested cluster's own API.
 ```bash
 # Create the lab: SDN zone/vnet/subnet, storage, resource pool, and VM, in
 # that order, skipping anything already in place. This stages the SDN
-# changes but does not commit them — pending zone/vnet/subnet changes are
+# changes but does not commit them; pending zone/vnet/subnet changes are
 # only committed by `pmx lab net apply` (or `pmx pve sdn apply`).
 pmx lab create wayne --node sm-0
 pmx lab net apply wayne             # always previews the pending SDN changeset first, then commits it
 
 # A multi-node lab with two extra 100 GB raw disks per node for nested
 # Ceph OSDs (requires storage.controller: virtio-scsi-single). Persist the
-# topology and OSD shape to the lab's config first — `pmx lab ceph` verbs
+# topology and OSD shape to the lab's config first: `pmx lab ceph` verbs
 # read it from there, not from create-time flags.
 pmx lab config add ceph --vxlan-tag 5015 --cidr 10.252.0.0/16 \
   --nodes 3 --qdevice never --osd-disks 2 --osd-disk-gb 100
@@ -1147,7 +1147,7 @@ pmx lab quota set wayne --refquota-gb 600
 # definition; --purge-dataset further destroys the lab's ZFS dataset
 # (<pool>/labs/<lab>), one of the things --purge alone leaves behind. The
 # SDN vnet and subnet definitions survive every combination of these flags
-# too — `pmx lab destroy` never touches them; SDN teardown stays with the
+# too: `pmx lab destroy` never touches them; SDN teardown stays with the
 # host scripts. Without either flag, only the VM is stopped and deleted.
 pmx lab destroy wayne --yes
 pmx lab destroy ceph --yes --purge --purge-dataset
@@ -1165,7 +1165,7 @@ stored VMID in config.
 plan up front: `network.mgmt.subnet`, `network.mgmt.host_ip`,
 `network.mgmt.gateway`, and `network.bosh_bloc` must all fall inside
 `network.cidr`. Note that `network.mgmt.subnet` is an address-plan
-reservation, not the lab host's interface prefix — the host's interface
+reservation, not the lab host's interface prefix: the host's interface
 must be addressed with the lab CIDR's own prefix length (`host_ip/16` for a
 `/16` lab, even when the management subnet is a `/24`), because a narrower
 interface prefix makes the host route replies to on-link guests via the
@@ -1188,7 +1188,7 @@ row when an in-CIDR interface is narrower than the lab CIDR.
 
 Once `pmx ssh`/`pmx rsync` (or `pmx pve node ssh`/`pmx pve node rsync`) hands
 off to the child process, `pmx` exits with that child's own exit code, verbatim,
-instead of one of the codes above — `ssh` uses 255 for a connection/auth
+instead of one of the codes above: `ssh` uses 255 for a connection/auth
 failure, `rsync` uses 23/24 for a partial transfer, and so on. A child exit
 code of 2 is indistinguishable from this table's `Bad arguments` (2): the
 child's code always wins once it has actually run.
@@ -1211,7 +1211,7 @@ Each Makefile category delegates to a script under `scripts/` (`build`, `test`,
 `scripts/e2e` is a live, read-only happy-path sweep of every command tree
 against a configured context (default: `lab`). It runs the trees in parallel and
 reports pass/fail/skip per check; mutating or destructive operations are never
-executed — they are listed as deferred. The `pbs` and `pdm` trees are opt-in:
+executed; they are listed as deferred. The `pbs` and `pdm` trees are opt-in:
 `pbs` sweeps the `pmx pbs` group against a separate `product: pbs` context
 named via `--pbs-context` (or `PBS_CONTEXT=`/`$PMX_E2E_PBS_CONTEXT`), and `pdm`
 sweeps the `pmx pdm` group against a separate `product: pdm` context named via
@@ -1246,15 +1246,15 @@ wired in, and `make stack-down` destroys the guests again. See
 one invocation. It provisions an isolated `pmxcli` SDN (zone, vnet, and a
 172.30.0.0/24 subnet off the host management network) and a `pmx-cli` resource
 pool, then drives a throwaway QEMU VM and an LXC container through **every**
-mutating sub-command — the full power-state matrix
+mutating sub-command: the full power-state matrix
 (`start`/`stop`/`shutdown`/`reboot`/`reset`/`suspend`/`resume`) plus
-`snapshot create`/`rollback`/`delete` — recording each verb individually, and
+`snapshot create`/`rollback`/`delete`, recording each verb individually, and
 tears everything down. Every created resource is tagged `pmx-cli`, placed in the
 `pmx-cli` pool, and attached to the isolated SDN, so other efforts on a shared
 lab are never disturbed. Teardown always runs, and a crashed prior run is swept
 clean before the next provisions. The storages it writes to are discovered from
-the target cluster rather than pinned — the snapshot-capable volume storage for
-guest disks, and file storages for templates, ISOs, and backups — and the run
+the target cluster rather than pinned: the snapshot-capable volume storage for
+guest disks, and file storages for templates, ISOs, and backups; and the run
 header prints the three it chose. Discovery stays inside this project's own
 storages: on a lab shared between members, whose datasets are named after their
 owner off a common stem (`tank-lab-pmx`, `tank-lab-dbell`), the siblings that
@@ -1266,7 +1266,7 @@ Set `PMX_E2E_ROOTDIR_STORAGE`,
 `PMX_E2E_TMPL_STORAGE`, or `PMX_E2E_BACKUP_STORAGE` to pin any of them.
 
 Verbs whose precondition the target lab cannot satisfy are recorded as SKIP
-with the reason that blocked them, never as failures — so a skip always names
+with the reason that blocked them, never as failures, so a skip always names
 what to change rather than reading as a pass. What each one needs:
 
 - qemu `reboot`
@@ -1282,7 +1282,7 @@ what to change rather than reading as a pass. What each one needs:
   `migrate`/`relocate`, `wakeonlan`
 
   a second cluster node to accept the guest, or in `wakeonlan`'s case simply to
-  address — the API refuses to wake the node serving the request. The bulk verbs
+  address: the API refuses to wake the node serving the request. The bulk verbs
   are always pinned with `--vmids` to the run's own throwaway clone, so they
   never sweep up another workload. A single-node lab records all of them as
   skips; scale the lab to two nodes to unlock them.
@@ -1302,16 +1302,16 @@ what to change rather than reading as a pass. What each one needs:
   again at teardown. A reload commits *all* staged interface changes on that
   node, so a node holding edits the run did not make is skipped and its bridge
   simply stays absent. Every node also needs `dnsmasq` installed (PVE's SDN DHCP
-  plugin refuses to reload without it) — the default instance should be disabled,
+  plugin refuses to reload without it); the default instance should be disabled,
   as PVE's own SDN setup requires.
 
 - `storage file-restore list` / `download`
 
   a Proxmox Backup Server: only PBS snapshots can be browsed, and a vzdump
-  archive on a directory storage cannot. The run stages its own — a scratch
+  archive on a directory storage cannot. The run stages its own: a scratch
   datastore on the appliance, a token scoped to that datastore alone, a
   fingerprint-pinned `pbs` storage on the cluster, and a second backup of the
-  throwaway container into it — and removes all of it at teardown. It backs up
+  throwaway container into it, and removes all of it at teardown. It backs up
   the container on purpose: that archive is a pxar of the rootfs, so the listing
   walks a real filesystem, where a VM archive holds raw block images the restore
   tooling can only open through a helper image. The run walks the archive down
@@ -1357,7 +1357,7 @@ plugin, the whole tape *configuration* surface, and the host verbs that cannot
 take the appliance off the network. Two things it stages for itself: a ~1KB host
 backup pushed with `proxmox-backup-client` over root SSH (nothing else can
 create a snapshot, and `snapshot delete`/`group delete` need one), and a
-throwaway LDAP responder bound to the appliance's loopback — PBS *connects* to
+throwaway LDAP responder bound to the appliance's loopback: PBS *connects* to
 the directory when an LDAP or AD realm is created, so those verbs cannot be
 pointed at a dead address. Both are removed when the block ends.
 
@@ -1365,9 +1365,9 @@ The PDM suite drives the verbs that act on the manager itself: users, tokens,
 ACLs, realms, dashboard views, WebAuthn and certificate configuration, the ACME
 plugin, remotes, the subscription key pool and its pending-change queue,
 automated-installation answers and tokens, and the same class of host verbs. It
-deliberately writes nothing *through* a managed remote — no guest on a
+deliberately writes nothing *through* a managed remote: no guest on a
 registered cluster is started, snapshotted, or migrated, and no subscription key
-is applied to a remote's node — so those verbs are recorded as skips naming what
+is applied to a remote's node, so those verbs are recorded as skips naming what
 they would have done. The same CLI paths are driven directly by the PVE suite
 against guests it owns.
 
@@ -1388,19 +1388,19 @@ per-leaf-command map of e2e and mutate-phase coverage.
 
 The binary entry point is `cmd/pmx`; all logic lives under `internal/`:
 
-- `internal/cli` — the cobra root, persistent flags, dependency wiring, and one
+- `internal/cli`: the cobra root, persistent flags, dependency wiring, and one
   package per command group under `internal/cli/<group>/`.
 
-- `internal/apiclient` — a thin wrapper assembling the `proxmox-apiclient-go`
+- `internal/apiclient`: a thin wrapper assembling the `proxmox-apiclient-go`
   service handles (PVE and PBS), UPID extraction, and task-wait helpers.
 
-- `internal/config` — config types, loader, atomic writer, and secret resolver.
+- `internal/config`: config types, loader, atomic writer, and secret resolver.
 
-- `internal/output` — the `table`/`plain`/`json`/`yaml` renderer.
+- `internal/output`: the `table`/`plain`/`json`/`yaml` renderer.
 
-- `internal/logx` — the JSONL slog logger.
+- `internal/logx`: the JSONL slog logger.
 
-- `internal/exec`, `internal/nodeaddr` — shell-out runner and node-address
+- `internal/exec`, `internal/nodeaddr`: shell-out runner and node-address
   resolution for SSH/rsync.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the full design.

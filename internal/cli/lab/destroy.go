@@ -55,8 +55,8 @@ func newDestroyCmd() *cobra.Command {
 		Short: "Destroy a lab's node VMs (and QDevice, if any)",
 		Long: "Destroy every node VM belonging to the named lab, and its QDevice VM if the " +
 			"lab's topology has one.\n\n" +
-			"VMs go in reverse start order — the QDevice first, if present, then node N-1 down " +
-			"to node 0 — stopping each one that is running before deleting it.\n\n" +
+			"VMs go in reverse start order (the QDevice first, if present, then node N-1 down " +
+			"to node 0), stopping each one that is running before deleting it.\n\n" +
 			"Every live VM in the lab's pool is classified by name against the node/QDevice " +
 			"naming convention, the same classification start, stop, and status use. A pool " +
 			"member whose name matches none of it refuses the whole command rather than " +
@@ -133,7 +133,7 @@ func newDestroyCmd() *cobra.Command {
 
 			if len(plan) == 0 {
 				msg := fmt.Sprintf(
-					"lab %q: nothing to destroy — no VM found in pool %q", name, poolID)
+					"lab %q: nothing to destroy, no VM found in pool %q", name, poolID)
 				if dryRun {
 					// --dry-run must not mutate: preview the context/keychain
 					// cleanup instead of performing it.

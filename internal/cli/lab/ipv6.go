@@ -70,7 +70,7 @@ func labULAPrefix(n config.LabNetwork) (netip.Prefix, error) {
 		if p.Bits() > 48 {
 			return netip.Prefix{}, fmt.Errorf(
 				"network.cidr6 %q is narrower than /48; the lab block must be /48 or wider so per-role "+
-					"/64s (mgmt, vnets) can be carved from it — set per-vnet cidr6 overrides instead if "+
+					"/64s (mgmt, vnets) can be carved from it; set per-vnet cidr6 overrides instead if "+
 					"you only have a single /64", n.CIDR6)
 		}
 		p48, err := p.Masked().Addr().Prefix(48)

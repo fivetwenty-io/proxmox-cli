@@ -35,7 +35,7 @@ func validateLabNameCharset(name string) error {
 	if !labNameCharsetRE.MatchString(name) {
 		return fmt.Errorf(
 			"lab name %q contains characters outside the allowed charset (lowercase letters, "+
-				"digits, and internal hyphens only; must start and end with a letter or digit) — "+
+				"digits, and internal hyphens only; must start and end with a letter or digit), "+
 				"refusing before it can reach any remote command line", name)
 	}
 	return nil
@@ -61,7 +61,7 @@ func validateLabPoolCharset(pool string) error {
 	if !labPoolCharsetRE.MatchString(pool) {
 		return fmt.Errorf(
 			"lab storage.pool %q contains characters outside the allowed charset (a leading "+
-				"letter, then letters, digits, and _ . : - only) — refusing before it can reach "+
+				"letter, then letters, digits, and _ . : - only), refusing before it can reach "+
 				"any remote command line", pool)
 	}
 	return nil

@@ -123,8 +123,8 @@ func newNfsCmd() *cobra.Command {
 		Long: "Register, inspect, or remove the shared NFS service's storage on a lab: its own " +
 			"per-lab images and backup exports, plus the cluster-wide read-only ISO/template " +
 			"export.\n\n" +
-			"They are registered as PVE storage on the lab's nested cluster — or single-node " +
-			"lab, since NFS attach applies regardless of node count — over ssh/pvesm against " +
+			"They are registered as PVE storage on the lab's nested cluster (or single-node " +
+			"lab, since NFS attach applies regardless of node count) over ssh/pvesm against " +
 			"node 0.\n\n" +
 			"`attach` also ensures the SERVER-side ZFS dataset and export objects those " +
 			"storage entries point at (`tank/nfs/labs/<lab>/{images,backup}`, plus this lab's " +
@@ -147,7 +147,7 @@ func newNfsAttachCmd() *cobra.Command {
 		Long: "Attach works in three phases: the server-side export objects, the outer host's " +
 			"firewall, then the client-side storage entries on the lab itself.\n\n" +
 			"Server side. Ensures this lab's NFS export objects exist on the outer PVE node " +
-			"hosting tank/nfs, resolved via --node, $PMX_NODE, or the context default node — " +
+			"hosting tank/nfs, resolved via --node, $PMX_NODE, or the context default node, " +
 			"the same resolution `pmx pve node ssh` uses:\n\n" +
 			"  * the `tank/nfs/labs/<name>/{images,backup}` datasets, created\n" +
 			"    if missing, with their recordsize\n" +
@@ -169,11 +169,11 @@ func newNfsAttachCmd() *cobra.Command {
 			"is a loud failure, never silently skipped or force-enabled.\n\n" +
 			"Client side. Runs `pvesm add nfs ...` over ssh on node 0 for each of the lab's " +
 			"three fixed exports:\n\n" +
-			"  * nfs-images — rw, hard-mounted, scoped to this lab under\n" +
+			"  * nfs-images: rw, hard-mounted, scoped to this lab under\n" +
 			"    `tank/nfs/labs/<name>`, content images,import,snippets,iso\n" +
 			"    (full BOSH-CPI-target parity from day one)\n" +
-			"  * nfs-backup — rw, hard-mounted, scoped the same way\n" +
-			"  * shared-iso — ro, soft-mounted, the one ISO/template export\n" +
+			"  * nfs-backup: rw, hard-mounted, scoped the same way\n" +
+			"  * shared-iso: ro, soft-mounted, the one ISO/template export\n" +
 			"    every lab shares\n\n" +
 			"An already-attached entry whose content-type list lacks any of these types is " +
 			"widened in place (`pvesm set`), only ever adding types.\n\n" +
@@ -181,7 +181,7 @@ func newNfsAttachCmd() *cobra.Command {
 			"entry is skipped rather than re-created or re-added, so re-running attach against " +
 			"a partially-built lab is safe.\n\n" +
 			"The shared NFS service's own host software (nfs-kernel-server) must already be " +
-			"built and healthy — lab repo scripts/60-nfs-service's nfsd and health groups. " +
+			"built and healthy (lab repo scripts/60-nfs-service's nfsd and health groups). " +
 			"Attach provisions this lab's own export objects and firewall rules, never the " +
 			"shared NFS host service itself.\n\n" +
 			"Shared exports work differently. When this lab's storage.nfs_export names " +
@@ -424,7 +424,7 @@ func newNfsStatusCmd() *cobra.Command {
 		Use:   "status <name>",
 		Short: "Show a lab's NFS storage attachment state",
 		Long: "Run `pvesm status` over ssh on node 0 and report whether each of the lab's " +
-			"three fixed NFS storage entries — nfs-images, nfs-backup, shared-iso — is " +
+			"three fixed NFS storage entries (nfs-images, nfs-backup, shared-iso) is " +
 			"configured and, if so, its live status (active, inactive, and so on).\n\n" +
 			"Also reports the resolved NFS export owner (this lab's own name, unless " +
 			"storage.nfs_export aliases another lab) and every other lab currently sharing that " +
@@ -497,7 +497,7 @@ func newNfsDetachCmd() *cobra.Command {
 		Long: "Run `pvesm remove <id>` over ssh on node 0 for each of the lab's three NFS " +
 			"storage entries.\n\n" +
 			"Idempotent: an entry that is not configured is skipped rather than treated as an " +
-			"error. Removal is safe only once no VM disk still references the storage — PVE " +
+			"error. Removal is safe only once no VM disk still references the storage: PVE " +
 			"itself refuses to remove a storage entry with in-use content. Detaching requires " +
 			"--yes/-y or an interactive 'y' confirmation.\n\n" +
 			"IMPORTANT ASYMMETRY: detach removes the CLIENT-side pvesm storage entries and " +
@@ -513,7 +513,7 @@ func newNfsDetachCmd() *cobra.Command {
 			"to exclude this lab's own mgmt /24. The owner's dataset and quota are still never " +
 			"touched.\n\n" +
 			"Detaching the export OWNER while other members still depend on it is refused " +
-			"outright — repoint or detach every member first. A lab that owns and is the sole " +
+			"outright; repoint or detach every member first. A lab that owns and is the sole " +
 			"member of its own export (today's non-aliased shape) is unaffected: detach never " +
 			"touches server-side state for it, exactly as before this feature existed.",
 		Example: `  pmx lab nfs detach wayne --yes
@@ -556,7 +556,7 @@ func runNfsDetach(cmd *cobra.Command, name string, dryRun, yes bool) error {
 	// succeed.
 	if sharesExport && isOwner {
 		return fmt.Errorf(
-			"lab %q: cannot detach — it owns the shared NFS export tank/nfs/labs/%s, still shared by "+
+			"lab %q: cannot detach: it owns the shared NFS export tank/nfs/labs/%s, still shared by "+
 				"%s; repoint each member's storage.nfs_export elsewhere (or detach them first) before "+
 				"detaching the owner",
 			name, lab.Name, strings.Join(nfsExportMemberNames(remainingMembers), ", "))

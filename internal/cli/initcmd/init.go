@@ -46,7 +46,7 @@ func NewCommand() *cobra.Command {
 // rendered file still parses as valid YAML once a context's placeholders are set.
 const configTemplate = `# pmx CLI configuration.
 # Location: ~/.config/pmx/config.yml (override with --config or $XDG_CONFIG_HOME).
-# This file is written 0600; keep it that way — it may hold credentials.
+# This file is written 0600; keep it that way, it may hold credentials.
 
 # Name of the context used when --context/-c is not given. Set this to one of
 # the keys under "contexts:" below once you have filled a context in.
@@ -73,7 +73,7 @@ contexts:
       # PVE user the token or password belongs to, e.g. root@pam or ci@pve.
       username: root@pam
 
-      # For type: token only — the token identifier (the part after the '!').
+      # For type: token only, the token identifier (the part after the '!').
       token-id: automation
 
       # The token secret or password. Resolution, in order:

@@ -202,7 +202,7 @@ func appendLabZoneBlock(b *strings.Builder, net LabNetwork) {
 // lab that leaves both at their defaults (IPv6 on, ULA auto-derived)
 // round-trips through ResolveLabs at its true zero value.
 func appendLabIPv6Block(b *strings.Builder, net LabNetwork) {
-	fmt.Fprint(b, "  # ipv6: labs are dual-stack by default — every addressed vnet gets\n")
+	fmt.Fprint(b, "  # ipv6: labs are dual-stack by default: every addressed vnet gets\n")
 	fmt.Fprint(b, "  # an IPv6 subnet alongside its IPv4 one, and nodes/QDevice get\n")
 	fmt.Fprint(b, "  # management IPv6 addresses. Set to false to keep this lab\n")
 	fmt.Fprint(b, "  # IPv4-only.\n")
@@ -240,7 +240,7 @@ func appendLabOSDDisksBlock(b *strings.Builder, d *LabOSDDisks) {
 // iteration order is nondeterministic, so the keys are sorted before
 // rendering to keep the output stable across runs).
 func appendLabTopologyBlock(b *strings.Builder, t LabTopology) {
-	fmt.Fprint(b, "# topology: multi-node lab shape — node count, qdevice policy, per-node sizing overrides.\n")
+	fmt.Fprint(b, "# topology: multi-node lab shape (node count, qdevice policy, per-node sizing overrides).\n")
 	if t.Nodes == 0 && t.Qdevice == "" && len(t.NodeOverrides) == 0 {
 		fmt.Fprint(b, "\n")
 		return

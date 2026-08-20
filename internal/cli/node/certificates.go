@@ -94,7 +94,7 @@ func newCertAcmeListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "Show the node's ACME-managed certificate",
-		Long: "Show the certificate installed at " + acmeManagedCertFilename + " on the resolved node — the file " +
+		Long: "Show the certificate installed at " + acmeManagedCertFilename + " on the resolved node, the file " +
 			"ACME orders and renewals manage. If none is installed, the node is serving its self-signed certificate.",
 		Example: `  pmx pve node cert acme list`,
 		Args:    cobra.NoArgs,
@@ -261,7 +261,7 @@ func newCertCustomUploadCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "upload",
 		Short: "Upload a custom certificate for the node",
-		Long: "Install a PEM-encoded certificate (chain) — and optionally its private key — as the node's " +
+		Long: "Install a PEM-encoded certificate (chain), and optionally its private key, as the node's " +
 			"API certificate. The private key is sent to the API but never echoed back. Use --restart to " +
 			"reload pveproxy so the new certificate takes effect immediately.",
 		Example: `  pmx pve node cert custom upload --certificates "$(cat cert.pem)" --yes`,

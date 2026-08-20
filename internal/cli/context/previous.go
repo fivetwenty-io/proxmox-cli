@@ -93,7 +93,7 @@ func checkContextRef(cfg *config.Config, field, name string) error {
 	}
 	return fmt.Errorf(
 		"%s references context %q which no longer exists; "+
-			"the stale reference has been cleared — use 'pmx context select <name>'",
+			"the stale reference has been cleared, use 'pmx context select <name>'",
 		field, name,
 	)
 }

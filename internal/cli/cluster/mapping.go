@@ -245,7 +245,7 @@ func newMappingPciSetCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringArrayVar(&entries, "map", nil, "per-node device mapping entry (repeatable, required — re-sends the full list)")
+	f.StringArrayVar(&entries, "map", nil, "per-node device mapping entry (repeatable, required; re-sends the full list)")
 	f.StringVar(&description, "description", "", "description of the mapping")
 	f.BoolVar(&liveMig, "live-migration-capable", false, "mark the device(s) as live-migration capable (experimental)")
 	f.BoolVar(&mdev, "mdev", false, "mark the device(s) as able to provide mediated devices")
@@ -350,7 +350,7 @@ func newMappingUsbSetCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringArrayVar(&entries, "map", nil, "per-node device mapping entry (repeatable, required — re-sends the full list)")
+	f.StringArrayVar(&entries, "map", nil, "per-node device mapping entry (repeatable, required; re-sends the full list)")
 	f.StringVar(&description, "description", "", "description of the mapping")
 	f.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")
@@ -453,7 +453,7 @@ func newMappingDirSetCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringArrayVar(&entries, "map", nil, "per-node directory mapping entry (repeatable, required — re-sends the full list)")
+	f.StringArrayVar(&entries, "map", nil, "per-node directory mapping entry (repeatable, required; re-sends the full list)")
 	f.StringVar(&description, "description", "", "description of the mapping")
 	f.StringVar(&digest, "digest", "", "prevent changes if the config digest differs")
 	f.StringVar(&del, "delete", "", "comma-separated list of settings to reset to default")

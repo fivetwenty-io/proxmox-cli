@@ -129,7 +129,7 @@ func labIPv6PlanIssues(n config.LabNetwork) []string {
 	if n.Snat6 && n.EffectiveZoneType() != config.DefaultZoneType {
 		issues = append(issues, fmt.Sprintf(
 			"network.snat6: true is set but network.zone_type is %q; PVE only renders subnet SNAT on a "+
-				"%q zone, so the flag would be silently inert — drop snat6 or move the lab to a %q zone",
+				"%q zone, so the flag would be silently inert; drop snat6 or move the lab to a %q zone",
 			n.EffectiveZoneType(), config.DefaultZoneType, config.DefaultZoneType))
 	}
 
@@ -141,9 +141,9 @@ func labIPv6PlanIssues(n config.LabNetwork) []string {
 
 	if maxVnets := labV6SubnetInnerBase - labV6SubnetVnetBase; len(n.Vnets) > maxVnets {
 		issues = append(issues, fmt.Sprintf(
-			"network.vnets has %d entries; with IPv6 enabled at most %d fit the address plan — vnet %d's "+
-				"carved /64 (subnet ID %d) would collide with the inner vlan zone's block (subnet IDs %d+) — "+
-				"drop vnets or set network.ipv6: false",
+			"network.vnets has %d entries; with IPv6 enabled at most %d fit the address plan: vnet %d's "+
+				"carved /64 (subnet ID %d) would collide with the inner vlan zone's block (subnet IDs %d+), "+
+				"so drop vnets or set network.ipv6: false",
 			len(n.Vnets), maxVnets, maxVnets, labV6SubnetVnetBase+maxVnets, labV6SubnetInnerBase))
 	}
 
@@ -193,7 +193,7 @@ func labIPv6PlanIssues(n config.LabNetwork) []string {
 		if p.Bits() > 112 {
 			issues = append(issues, fmt.Sprintf(
 				"network.vnets[%d].cidr6 %q (/%d) is narrower than /112, so it cannot hold the plan's "+
-					"16-bit host offsets — its derived ::1 gateway would land outside the subnet",
+					"16-bit host offsets: its derived ::1 gateway would land outside the subnet",
 				i, v.CIDR6, p.Bits()))
 			continue
 		}

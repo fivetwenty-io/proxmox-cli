@@ -83,7 +83,7 @@ func newSdnCmd() *cobra.Command {
 		Short: "Manage a lab's inner (nested-cluster) VXLAN networking",
 		Long: "Reconcile the VXLAN zone spanning every node of a multi-node lab's OWN nested " +
 			"cluster: a plain flood-and-learn VXLAN zone, so BOSH and Cloud Foundry L2 guests " +
-			"can run on — and live-migrate to — any node in the cluster.\n\n" +
+			"can run on, and live-migrate to, any node in the cluster.\n\n" +
 			"Distinct from `pmx lab net`, which manages the outer per-lab Simple-zone vnet on " +
 			"the physical host.\n\n" +
 			"Applied over ssh/pvesh against node 0; a single-node lab has nothing to reconcile.",
@@ -102,12 +102,12 @@ func newSdnApplyCmd() *cobra.Command {
 		Short: "Reconcile a lab's inner VXLAN zone against its current node set",
 		Long: "Ensure the nested cluster's \"labvx\" VXLAN zone exists (type vxlan, MTU 1450) " +
 			"with a peer list equal to every currently-configured node's mgmt IP, " +
-			"comma-separated — Proxmox VE's own SDN zone peers format — then commit the change " +
+			"comma-separated, in Proxmox VE's own SDN zone peers format, then commit the change " +
 			"via `pvesh set /cluster/sdn`.\n\n" +
 			"Runs over ssh against node 0, and must run after the nested cluster is formed " +
 			"(`pmx lab cluster init`/`join`): SDN changes propagate through pmxcfs, which needs " +
 			"healthy inter-node communication.\n\n" +
-			"A single-node lab (topology.nodes=1) is a no-op with a notice — it has no nested " +
+			"A single-node lab (topology.nodes=1) is a no-op with a notice: it has no nested " +
 			"cluster for an inner zone to span.\n\n" +
 			"Re-running this after a scale up or down reconciles the peer list to the lab's " +
 			"current node set (multi-node lab plan §7/§9). It does not create or manage " +
@@ -281,9 +281,9 @@ func newSdnVlanApplyCmd() *cobra.Command {
 			"`pvesh set /cluster/sdn` iff anything changed.\n\n" +
 			"Unless `network.ipv6: false`, each vnet also gets an IPv6 /64 carved from the lab's " +
 			"IPv6 block (network.cidr6 when set, else a stable ULA /48 derived from " +
-			"network.cidr), gatewayed at its ::1 — dual-stack client VLANs with zero extra " +
+			"network.cidr), gatewayed at its ::1: dual-stack client VLANs with zero extra " +
 			"config.\n\n" +
-			"Each piece is independently idempotent — probe before create or update, mirroring " +
+			"Each piece is independently idempotent: probe before create or update, mirroring " +
 			"`pmx lab sdn apply`'s zone-reconciliation pattern.\n\n" +
 			"Runs over ssh against node 0, and must run after the nested cluster's bonds and " +
 			"bridges exist (`pmx lab hostnet apply`): the zone's bridge must already exist for " +

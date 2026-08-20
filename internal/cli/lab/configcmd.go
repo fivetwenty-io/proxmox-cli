@@ -267,7 +267,7 @@ func newConfigInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Scaffold labs_dir with a commented example lab",
 		Long: "Ensure the lab include directory exists (0700) and write a fully-commented " +
-			"example.yaml to it, documenting every lab schema field — ready to copy by hand, " +
+			"example.yaml to it, documenting every lab schema field: ready to copy by hand, " +
 			"or to use as a starting point for `pmx lab config add`.\n\n" +
 			"Never rewrites config.yml. If labs_dir is not already set there, the one line to " +
 			"add is printed rather than written for you, so config.yml's comments are never " +
@@ -336,7 +336,7 @@ func newConfigAddCmd() *cobra.Command {
 		Long: "Build a lab definition from schema defaults plus any flag overrides, and write " +
 			"it to a file named after the lab inside labs_dir.\n\n" +
 			"It refuses to overwrite an existing file at that path, and refuses when the name " +
-			"already resolves via the current config — inline, or another included file — " +
+			"already resolves via the current config (inline, or another included file) " +
 			"unless --force.\n\n" +
 			"The written file never carries default_user_password: Lab has no such field, so a " +
 			"per-lab file cannot leak the fleet's bootstrap secret.",
@@ -576,8 +576,8 @@ func newConfigShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show a resolved lab and where it came from",
-		Long: "Resolve the named lab the same way every other lab verb does — inline " +
-			"config.yml plus labs_dir/include files — and render its merged definition " +
+		Long: "Resolve the named lab the same way every other lab verb does (inline " +
+			"config.yml plus labs_dir/include files), and render its merged definition " +
 			"alongside its provenance: \"config.yml (inline)\", or the path of the file it was " +
 			"loaded from.\n\n" +
 			"-o/--output (inherited from the root command) selects table, plain, json, or yaml.",

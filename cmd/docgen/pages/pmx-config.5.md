@@ -69,7 +69,7 @@ schema of a lab block.
   unset, **pmx lab access grant** refuses to create a missing user and tells
   the operator to either set this key or create the account manually with
   **pmx pve access user create**. This key lives only here, at the top level
-  of config.yml — the lab schema (see **LAB KEYS**) has no password field of
+  of config.yml; the lab schema (see **LAB KEYS**) has no password field of
   its own, so a per-lab file under **labs_dir** or named by **include** can
   never carry this secret even if it is shared or committed separately from
   config.yml. Setting this key imposes a stricter file-mode requirement on
@@ -190,17 +190,17 @@ Each entry under **contexts** is a mapping with the following keys.
   written here is resolved at connection time with the following
   precedence:
 
-  1. **${VAR}** — read environment variable **VAR** (any name you choose);
+  1. **${VAR}**: read environment variable **VAR** (any name you choose);
      an unset variable is a hard error.
-  2. **$VAR** — read environment variable **VAR** only when it looks like a
+  2. **$VAR**: read environment variable **VAR** only when it looks like a
      valid variable name *and* is actually set; otherwise the whole string
      falls through to rule 4, so a literal secret that happens to start with
      **$** is not silently misread as an env lookup.
-  3. **keychain:service** or **keychain:service/account** — look up a
+  3. **keychain:service** or **keychain:service/account**: look up a
      generic password in the macOS login keychain (macOS only; on other
      platforms this form errors, telling the operator to use **${VAR}**
      instead).
-  4. Anything else — used verbatim as a plaintext literal. pmx emits a
+  4. Anything else: used verbatim as a plaintext literal. pmx emits a
      one-time warning to stderr the first time a literal secret is resolved,
      since committing this file then leaks the credential.
 
@@ -270,12 +270,12 @@ sources every time a lab verb runs:
    resolved against config.yml's directory).
 3. Every **<name>.yaml** file directly inside **labs_dir**, which is
    pure sugar for one more **include** pattern
-   (**<labs_dir>/*.yaml**) — the same code path, not a special case.
+   (**<labs_dir>/*.yaml**); it is the same code path, not a special case.
 
 A lab's name is its **name** key when set, else (for an inline entry) its
 map key, else (for a file) the file's basename with **.yaml** stripped. A
-name that resolves from two different sources — two inline entries, an
-inline entry and a file, or two files — is a hard configuration error
+name that resolves from two different sources (two inline entries, an
+inline entry and a file, or two files) is a hard configuration error
 naming both locations (for example **config.yml (inline)** and the
 conflicting file's path); the merge never silently prefers one definition
 over the other. **pmx lab config show <name>** reports which of these
@@ -303,8 +303,8 @@ unless **--force**. It never rewrites config.yml itself, so any comments an
 operator has added there are preserved. **pmx lab config init** scaffolds
 **<labs_dir>/example.yaml**, a fully-commented reference covering every
 field in **LAB KEYS**, without requiring **labs_dir** to already be set. A
-field that would contradict the example's own shape — **network.zone_peers**,
-which belongs to a **vxlan** zone, while the example is a **simple** one —
+field that would contradict the example's own shape (**network.zone_peers**,
+which belongs to a **vxlan** zone, while the example is a **simple** one)
 is documented in a comment instead of being rendered as a key.
 
 # LAB KEYS
@@ -350,7 +350,7 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 **network.zone_type**
 : PVE SDN zone plugin used when this lab's zone is created. Defaults to
   **simple**; **vxlan** is the other type the lab verbs model. Only
-  consulted when the zone does not yet exist — an existing zone keeps its
+  consulted when the zone does not yet exist; an existing zone keeps its
   live type.
 
 **network.zone_peers**
@@ -377,8 +377,8 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   vnet gets an IPv6 subnet alongside its IPv4 one (**pmx lab create**,
   **pmx lab net apply**, **pmx lab sdn vlan apply**), and the nested
   nodes and QDevice VM get management IPv6 addresses (**pmx lab hostnet
-  apply**, **pmx lab qdevice add**, and — for the nodes a transition
-  brings into the cluster — **pmx lab scale** and **pmx lab cluster
+  apply**, **pmx lab qdevice add**, and, for the nodes a transition
+  brings into the cluster, **pmx lab scale** and **pmx lab cluster
   join**, which reconcile it against the lab's own nested context). Set
   to **false** to keep the lab
   IPv4-only; disabling it later stops further IPv6 provisioning but
@@ -388,8 +388,8 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 **network.cidr6**
 : The lab's IPv6 block, a prefix of **/48** or wider (its first /48 is
   used). Omitted means a stable RFC 4193 ULA /48 derived from
-  **network.cidr** — the same lab file always derives the same block,
-  and labs with different IPv4 CIDRs can never collide — so most labs
+  **network.cidr** (the same lab file always derives the same block,
+  and labs with different IPv4 CIDRs can never collide), so most labs
   never set this. Per-role /64s are carved from the block by fixed
   subnet IDs: management (gateway **::1**, node *i* at **::a**+*i*, the
   QDevice at **::f**, mirroring the IPv4 offsets), one per
@@ -500,20 +500,20 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 **storage.osd_disks.count**
 : Number of extra whole-raw-device disks (**scsi2**, **scsi3**, ...)
   attached to every node VM for nested Ceph OSDs, 0 through 8. Requires
-  **storage.controller: virtio-scsi-single** — OSD disks are emitted with
+  **storage.controller: virtio-scsi-single**, because OSD disks are emitted with
   **iothread=1**, which PVE rejects on any other SCSI controller. Zero or
   unset means none, today's shape. Overridable per node with
   **topology.node_overrides.<n>.osd_disk_count**.
 
 **storage.osd_disks.size_gb**
 : Size in gigabytes of each OSD disk. Required (and must be positive) when
-  **storage.osd_disks.count** is set. Every disk is emitted identically —
-  **discard=on,iothread=1,ssd=1,backup=0,serial=osdN** (N starting at 0) —
+  **storage.osd_disks.count** is set. Every disk is emitted identically, as
+  **discard=on,iothread=1,ssd=1,backup=0,serial=osdN** (N starting at 0),
   so the guest sees each at a stable
   **/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_osdN** path rather than a
   guessed **/dev/sdX**, and PBS never backs one up. On an already-running
   VM, **discard** and **ssd** only take effect after a full power-off and
-  power-on — a reboot is not enough — though this never matters for
+  power-on (a reboot is not enough), though this never matters for
   **pmx lab create**, since the VM has not booted yet. OSD disks raise the
   *default* **storage.refquota_gb** derivation (count × size_gb, added per
   node) but never augment an explicit **storage.refquota_gb**: the operator
@@ -552,7 +552,7 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 
 **topology.nodes**
 : Number of PVE node VMs in the lab's nested cluster, 1 through 5 (node
-  indexes 0 through nodes-1). Zero or unset defaults to 1 — today's
+  indexes 0 through nodes-1). Zero or unset defaults to 1, today's
   single-node shape, unchanged. **pmx lab config add --nodes N** and
   **pmx lab create --nodes N** both set this.
 
@@ -565,20 +565,20 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 
 **topology.node_overrides.<n>**
 : Optional per-node sizing overrides, keyed by 0-based node index (0
-  through 4, and must be below the lab's own effective **topology.nodes** —
+  through 4, and must be below the lab's own effective **topology.nodes**;
   index 3 is invalid for a 2-node lab). A node index absent from this map
   uses the lab's own Compute/Storage values (which are themselves layered
-  over the sizing profile the effective node count selects — 16 vCPU /
+  over the sizing profile the effective node count selects: 16 vCPU /
   32-128 GB memory / 64 GB OS disk / 400 GB data disk for a single-node
   lab, 8 vCPU / 16-48 GB / 64 GB / 200 GB for a multi-node one). Within a
-  present entry, a zero-valued field falls through the same way — there is
+  present entry, a zero-valued field falls through the same way; there is
   no sizing dimension for which zero is a meaningful override. Keys:
 
-  - **vcpu** — vCPU count for this node.
-  - **memory_min_gb** / **memory_max_gb** — guaranteed/ballooned memory
+  - **vcpu**: vCPU count for this node.
+  - **memory_min_gb** / **memory_max_gb**: guaranteed/ballooned memory
     for this node.
-  - **os_disk_gb** / **data_disk_gb** — OS/data disk size for this node.
-  - **osd_disk_count** / **osd_disk_gb** — this node's
+  - **os_disk_gb** / **data_disk_gb**: OS/data disk size for this node.
+  - **osd_disk_count** / **osd_disk_gb**: this node's
     **storage.osd_disks.count**/**size_gb**.
 
 # PERMISSIONS
@@ -587,8 +587,8 @@ config.yml is checked for group- or world-accessible permission bits
 (**mode & 0077 != 0**) whenever **default_user_password** is set to a
 non-empty value: loading the config then fails with a message naming the
 file and telling the operator to **chmod 0600** it. This check runs only
-when **default_user_password** is present — a config file with no lab
-password configured is not stat'd or rejected on this basis — because that
+when **default_user_password** is present (a config file with no lab
+password configured is not stat'd or rejected on this basis) because that
 key is the one place in this file a plaintext bootstrap password for newly
 created lab users can live. Files written by **pmx lab config init** and
 **pmx lab config add** under **labs_dir** are themselves written at mode
@@ -762,12 +762,12 @@ labs:
         size_gb: 100
 ```
 
-**storage.controller: virtio-scsi-single** is mandatory here —
+**storage.controller: virtio-scsi-single** is mandatory here:
 **storage.osd_disks.count** above 0 fails validation without it.
 **storage.refquota_gb** is set explicitly to 1150 (roughly 364 GB
-provisioned per node — OS, data, and OSD disks — times 3 nodes, plus EFI
-and slack) rather than left for the *default* derivation — node-count ×
-264 GB, plus every node's OSD disk total — that **pmx lab create** and
+provisioned per node for OS, data, and OSD disks, times 3 nodes, plus EFI
+and slack) rather than left for the *default* derivation (node-count ×
+264 GB, plus every node's OSD disk total) that **pmx lab create** and
 **pmx lab config add** apply automatically when **storage.refquota_gb** is
 omitted; an explicit value like this one is never augmented further by
 OSD disk size.

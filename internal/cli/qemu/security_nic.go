@@ -64,7 +64,7 @@ func newSecurityNicShowCmd() *cobra.Command {
 					for _, n := range nics {
 						if !n.Firewall {
 							_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-								"note: VM firewall is enabled but net%d has firewall=0 — its traffic bypasses all rules\n", n.Slot)
+								"note: VM firewall is enabled but net%d has firewall=0: its traffic bypasses all rules\n", n.Slot)
 						}
 					}
 				}
@@ -194,7 +194,7 @@ func newSecurityNicFirewallCmd() *cobra.Command {
 
 			if off && len(changed) > 0 {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-					"WARNING: disabling the firewall on %s of VM %s — its traffic bypasses all VM firewall rules\n",
+					"WARNING: disabling the firewall on %s of VM %s: its traffic bypasses all VM firewall rules\n",
 					strings.Join(changed, ", "), vmid)
 			}
 

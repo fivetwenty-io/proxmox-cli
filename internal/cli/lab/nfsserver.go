@@ -392,7 +392,7 @@ func nfsServerEnsureSharedIso(deps *cli.Deps, host string, plan nfsServerEnsureP
 		return nil, fmt.Errorf(
 			"shared ISO export %q has no sharenfs configured (value %q); this pmx step only ensures "+
 				"lab-subnet MEMBERSHIP in an already-built ro= list, it never constructs one from scratch "+
-				"(it cannot know every other lab's subnet) — run scripts/60-nfs-service (lab repo) 'shared' "+
+				"(it cannot know every other lab's subnet); run scripts/60-nfs-service (lab repo) 'shared' "+
 				"group first, then retry `pmx lab nfs attach`",
 			plan.sharedIsoDataset, current)
 	}

@@ -169,8 +169,8 @@ func newCreateCmd() *cobra.Command {
 		Long: "Create a lab, ensuring each piece of it in order and skipping anything " +
 			"already in place:\n\n" +
 			"  1. the lab's config-resolved SDN zone (zone \"labs\", type\n" +
-			"     \"simple\" by default — decision D4)\n" +
-			"  2. the lab's own vnet and its subnets — IPv4, and (unless\n" +
+			"     \"simple\" by default, per decision D4)\n" +
+			"  2. the lab's own vnet and its subnets: IPv4, and (unless\n" +
 			"     `network.ipv6: false`) an IPv6 subnet from the lab's IPv6\n" +
 			"     block: network.cidr6 when set, else a stable ULA /48 derived\n" +
 			"     from network.cidr, so labs are dual-stack by default\n" +

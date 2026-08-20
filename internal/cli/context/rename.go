@@ -62,7 +62,7 @@ func newRenameCmd() *cobra.Command {
 			}
 			if _, exists := cfg.Contexts[newName]; exists {
 				return fmt.Errorf(
-					"context %q already exists; rename never overwrites — remove it first with 'rm' or pick another name",
+					"context %q already exists; rename never overwrites: remove it first with 'rm' or pick another name",
 					newName,
 				)
 			}

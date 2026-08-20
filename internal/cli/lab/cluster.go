@@ -77,7 +77,7 @@ func newClusterInitCmd() *cobra.Command {
 			"node 0, then verify it reports a quorate 1-of-1-vote cluster.\n\n" +
 			"Idempotent: if node 0 already reports a cluster with this lab's name, the command " +
 			"reports it as already initialized and does nothing further.\n\n" +
-			"Requires topology.nodes >= 2 — a single-node lab has no cluster to create.",
+			"Requires topology.nodes >= 2: a single-node lab has no cluster to create.",
 		Example: `  pmx lab cluster init wayne
   pmx lab cluster init wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
@@ -205,7 +205,7 @@ func newClusterJoinCmd() *cobra.Command {
 		Use:   "join <name>",
 		Short: "Join one more node to a lab's nested PVE cluster",
 		Long: "Run `pvecm add <node-0-mgmt-ip> --link0 <node-i-mgmt-ip> --use_ssh` over ssh on " +
-			"the joining node (--node, required, 1-4 — node 0 is created, never joined), then " +
+			"the joining node (--node, required, 1-4; node 0 is created, never joined), then " +
 			"block until node 0 reports the expected vote count reached and every corosync " +
 			"link connected (multi-node lab plan §6.2).\n\n" +
 			"Idempotent: if the target node already reports membership in this lab's cluster, " +
@@ -224,7 +224,7 @@ func newClusterJoinCmd() *cobra.Command {
 			"Once the node is a member, its nested host networking is reconciled against the " +
 			"lab's own nested-cluster context: every configured bond and bridge, plus the " +
 			"management IPv6 address the lab's address plan gives that node index. That phase " +
-			"never fails the join — anything it cannot do is reported as a deferred line naming " +
+			"never fails the join: anything it cannot do is reported as a deferred line naming " +
 			"`pmx lab hostnet apply`, which also owns the ssh NIC-naming phase this does not " +
 			"attempt; until that phase has run, a node whose NICs are still ens18-style gets its " +
 			"IPv6 here but no bonds.\n\n" +
@@ -380,9 +380,9 @@ func ensureClusterJoin(
 	vst := parsePvecmStatus(verifyRes.Stdout)
 	if !vst.Clustered || vst.ClusterName != lab.Name {
 		return "", fmt.Errorf(
-			"lab %q: node %d (%s) did not actually join cluster %q — `pvecm add` exited %d but a "+
+			"lab %q: node %d (%s) did not actually join cluster %q: `pvecm add` exited %d but a "+
 				"follow-up `pvecm status` on the joining node reports clustered=%v cluster=%q; "+
-				"pvecm add output — stdout: %q stderr: %q",
+				"pvecm add output (stdout: %q stderr: %q)",
 			name, idx, nodeIP, lab.Name, joinRes.ExitCode, vst.Clustered, vst.ClusterName,
 			strings.TrimSpace(joinRes.Stdout), strings.TrimSpace(joinRes.Stderr))
 	}
@@ -509,7 +509,7 @@ func clusterEnsureGuestFree(deps *cli.Deps, idx int, nodeIP string) error {
 	}
 	if n := clusterCountGuestListRows(qmRes.Stdout); n > 0 {
 		return fmt.Errorf(
-			"node %d (%s) hosts %d VM(s); joining nodes must be guest-free (multi-node lab plan §6.2) — "+
+			"node %d (%s) hosts %d VM(s); joining nodes must be guest-free (multi-node lab plan §6.2); "+
 				"evacuate or destroy them before joining", idx, nodeIP, n)
 	}
 
@@ -519,7 +519,7 @@ func clusterEnsureGuestFree(deps *cli.Deps, idx int, nodeIP string) error {
 	}
 	if n := clusterCountGuestListRows(pctRes.Stdout); n > 0 {
 		return fmt.Errorf(
-			"node %d (%s) hosts %d container(s); joining nodes must be guest-free (multi-node lab plan §6.2) — "+
+			"node %d (%s) hosts %d container(s); joining nodes must be guest-free (multi-node lab plan §6.2); "+
 				"evacuate or destroy them before joining", idx, nodeIP, n)
 	}
 
@@ -613,7 +613,7 @@ func newClusterStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status <name>",
 		Short: "Show a lab's nested cluster quorum and corosync link state",
-		Long: "Run `pvecm status` and `corosync-cfgtool -s` over ssh against one node — node 0 " +
+		Long: "Run `pvecm status` and `corosync-cfgtool -s` over ssh against one node: node 0 " +
 			"by default, or pass --node to target a different index.\n\n" +
 			"Reports cluster membership, quorum, vote counts, QDevice presence, and whether " +
 			"every corosync link is connected.\n\n" +

@@ -81,7 +81,7 @@ func (s qdeviceStepResult) status() string {
 		base = "skip (already satisfied)"
 	}
 	if s.note != "" {
-		return base + " — " + s.note
+		return base + ": " + s.note
 	}
 	return base
 }
@@ -95,9 +95,9 @@ func newQdeviceCmd() *cobra.Command {
 			"topology calls for one: mandatory at exactly 2 nodes, `qdevice: auto`-recommended " +
 			"at 4.\n\n" +
 			"`pmx lab create` already provisions the QDevice VM itself when the topology calls " +
-			"for one. This group handles what goes on top of that VM — the " +
+			"for one. This group handles what goes on top of that VM: the " +
 			"corosync-qnetd/corosync-qdevice package installation and the `pvecm qdevice " +
-			"setup`/`remove` steps — all over ssh into the lab guests.",
+			"setup`/`remove` steps, all over ssh into the lab guests.",
 	}
 	cmd.AddCommand(newQdeviceAddCmd(), newQdeviceRemoveCmd())
 	return cmd
@@ -705,7 +705,7 @@ func newQdeviceRemoveCmd() *cobra.Command {
 			"delete the QDevice VM directly, or a full `pmx lab destroy`, for that once no " +
 			"cluster references it.\n\n" +
 			"Per multi-node lab plan §9, this must run BEFORE any node join that would " +
-			"otherwise leave the vote count in an odd+witness (Last-Man-Standing) shape — " +
+			"otherwise leave the vote count in an odd+witness (Last-Man-Standing) shape, " +
 			"never simultaneously with a join.",
 		Example: `  pmx lab qdevice remove wayne
   pmx lab qdevice remove wayne --dry-run`,

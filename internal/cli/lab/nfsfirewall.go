@@ -176,7 +176,7 @@ func nfsEnsureFirewallRules(ctx context.Context, deps *cli.Deps, plan nfsServerE
 				}
 				return nil, fmt.Errorf(
 					"host firewall rule %q on node %q exists but %s, so NFS traffic from %s is still "+
-						"dropped; this phase never edits a rule it did not create — fix it with "+
+						"dropped; this phase never edits a rule it did not create, so fix it with "+
 						"`pmx pve node firewall rules update %s --enable 1 --source %s --node %s` "+
 						"(or delete it and re-run attach)",
 					comment, deps.Node, reason, plan.mgmtCIDR, nfsFirewallRulePos(v), plan.mgmtCIDR, deps.Node)

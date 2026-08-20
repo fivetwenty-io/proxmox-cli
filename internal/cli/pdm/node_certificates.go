@@ -111,7 +111,7 @@ func newNodeCertificateUploadCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "upload <node>",
 		Short: "Upload a custom certificate for the node",
-		Long: "Install a PEM-encoded certificate (chain) — and optionally its private key — as " +
+		Long: "Install a PEM-encoded certificate (chain), and optionally its private key, as " +
 			"the node's API certificate. The private key is sent to the API but never echoed " +
 			"back. Use --restart to reload the API proxy so the new certificate takes effect " +
 			"immediately.",

@@ -257,8 +257,8 @@ func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List every configured lab and its live VM state",
-		Long: "List every lab defined in config — inline `labs:` entries plus whatever " +
-			"`labs_dir`/`include` pulls in — beside the live state of its node-0 VM in the " +
+		Long: "List every lab defined in config (inline `labs:` entries plus whatever " +
+			"`labs_dir`/`include` pulls in), beside the live state of its node-0 VM in the " +
 			"configured PVE cluster: present or absent, running or stopped, VMID, and node.\n\n" +
 			"A lab whose node-0 VM has not been created yet, or was destroyed, shows an absent " +
 			"state rather than an error.\n\n" +
@@ -486,9 +486,9 @@ func newStatusCmd() *cobra.Command {
 			"lab's topology calls for one:\n\n" +
 			"  * live power state\n" +
 			"  * PVE host node\n" +
-			"  * IP address — reported by the guest agent while the VM runs\n" +
+			"  * IP address: reported by the guest agent while the VM runs\n" +
 			"    and the agent answers, else the target's configured mgmt IP\n" +
-			"  * IPv6 address — the same live-then-configured fallback against\n" +
+			"  * IPv6 address: the same live-then-configured fallback against\n" +
 			"    the lab's dual-stack address plan; \"-\" for an IPv4-only lab\n" +
 			"  * guest-agent responsiveness\n" +
 			"  * configured vCPU and memory sizing\n\n" +
@@ -694,8 +694,8 @@ func newStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start <name>",
 		Short: "Start a lab's node VMs (and QDevice, if any)",
-		Long: "Start every configured node VM in order — node 0 first, so a fresh cluster " +
-			"regains quorum predictably — then the QDevice VM if the lab's topology calls for " +
+		Long: "Start every configured node VM in order (node 0 first, so a fresh cluster " +
+			"regains quorum predictably), then the QDevice VM if the lab's topology calls for " +
 			"one.\n\n" +
 			"Idempotent per target: a VM that is already running is reported as a no-op " +
 			"rather than re-issuing the start call. A target with no VM created yet is skipped " +

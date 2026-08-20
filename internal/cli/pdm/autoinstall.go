@@ -320,7 +320,7 @@ var jsonObjectFlags = []string{
 func preparedAnswerErr(action string, err error) error {
 	if strings.Contains(err.Error(), "complex (sub) objects") {
 		return fmt.Errorf("%s: %s are nested JSON objects, and Proxmox Datacenter "+
-			"Manager's form-encoded API cannot accept one — the request has to carry a "+
+			"Manager's form-encoded API cannot accept one; the request has to carry a "+
 			"JSON body, which this client does not yet send. There is no flag value that "+
 			"works around it: %w",
 			action, strings.Join(quoteFlags(jsonObjectFlags), ", "), err)
@@ -962,7 +962,7 @@ func newAutoInstallTokenUpdateCmd() *cobra.Command {
 		Long: "Update an existing token used to authenticate automated installation " +
 			"requests (PUT /auto-install/tokens/{id}). Only flags explicitly set are " +
 			"sent; use --delete to reset properties to their default, or --regenerate " +
-			"to issue a new secret — the new secret is printed once in the response " +
+			"to issue a new secret: the new secret is printed once in the response " +
 			"and is never retrievable again.",
 		Example: `  pmx pdm auto-install token update ci-installer --enabled=false
   pmx pdm auto-install token update ci-installer --regenerate`,

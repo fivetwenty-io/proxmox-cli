@@ -28,7 +28,7 @@ func newHostnetCmd() *cobra.Command {
 		Short: "Manage a lab's nested-node host network interfaces",
 		Long: "Reconcile the guest-OS network interfaces inside each of a lab's nested PVE nodes " +
 			"against its config: the bonds and bridges declared in network.nested_network.bonds, " +
-			"and — unless `network.ipv6: false` — each node's management IPv6 address on vmbr0.\n\n" +
+			"and, unless `network.ipv6: false`, each node's management IPv6 address on vmbr0.\n\n" +
 			"Distinct from `pmx lab net` (the outer host's own SDN vnet) and `pmx lab " +
 			"sdn`/`pmx lab sdn vlan` (the nested cluster's own SDN zones): this manages the " +
 			"plain Linux bond and bridge interfaces those SDN zones are layered on top of.\n\n" +
@@ -56,11 +56,11 @@ func newHostnetApplyCmd() *cobra.Command {
 			"     management IPv6 address and gateway from the lab's IPv6 plan\n" +
 			"     (network.cidr6 when set, else a stable ULA block derived from\n" +
 			"     network.cidr), carrying its IPv4 addressing and ports forward\n" +
-			"  5. call UpdateNetwork once — the staged-changes reload — when\n" +
+			"  5. call UpdateNetwork once (the staged-changes reload) when\n" +
 			"     anything changed for that node\n\n" +
 			"Idempotent and safe to rerun. This is the only path for a node whose bonds were " +
 			"never rendered at OS-install time, such as an already-installed node picking up a " +
-			"newly-added network.nested_network config without a reinstall — and likewise the " +
+			"newly-added network.nested_network config without a reinstall; it is likewise the " +
 			"path for adding IPv6 to nodes installed before the lab's IPv6 plan existed. A node " +
 			"that does not report a vmbr0 yet is skipped with a notice; rerun once it exists.\n\n" +
 			"Requires the lab's own `lab-<name>` context (registered by `pmx lab context sync`) " +
@@ -220,8 +220,8 @@ func runHostnetApply(cmd *cobra.Command, name string, dryRun bool) error {
 
 	if anyRebootPending {
 		return fmt.Errorf(
-			"lab %q: hostnet apply left one or more nodes with pending NIC renames (see the table above) — "+
-				"reboot each reboot-pending node, one at a time (never in parallel — cluster runbook §10.2 "+
+			"lab %q: hostnet apply left one or more nodes with pending NIC renames (see the table above); "+
+				"reboot each reboot-pending node, one at a time (never in parallel: cluster runbook §10.2 "+
 				"quorum-safe serial reboot procedure), then re-run 'pmx lab hostnet apply %s' to finish the "+
 				"bond/bridge reconciliation on those nodes",
 			name, name)
@@ -748,7 +748,7 @@ func hostnetEnsureNICNaming(deps *cli.Deps, name, nodeName string, idx int, node
 		}
 		return nil, hostnetNICNamingAlreadyDone, fmt.Errorf(
 			"lab %q: node %d (%s): expected exactly %d physical NICs (net0-net%d from `pmx lab create`), "+
-				"found %d with a resolvable PCI address: [%s] — the NIC reconcile + reboot step "+
+				"found %d with a resolvable PCI address: [%s]; the NIC reconcile + reboot step "+
 				"(scripts/first-boot-network.sh.tmpl's day-1 equivalent) must run first, or this node's "+
 				"PVE q35 NIC layout does not match the lab convention",
 			name, idx, nodeIP, hostnetRequiredNICCount, hostnetRequiredNICCount-1, len(sorted), strings.Join(found, ", "))
@@ -803,7 +803,7 @@ func hostnetEnsureNICNaming(deps *cli.Deps, name, nodeName string, idx int, node
 	} else {
 		status += "; no stale interface-name references found in /etc/network/interfaces(.d/*)"
 	}
-	status += " — REBOOT REQUIRED before bond/bridge work can proceed on this node (serialize reboots " +
+	status += "; REBOOT REQUIRED before bond/bridge work can proceed on this node (serialize reboots " +
 		"one node at a time per cluster runbook §10.2, then re-run hostnet apply)"
 	return []string{nodeName, stepLabel, status}, hostnetNICNamingRebootPending, nil
 }
@@ -1160,7 +1160,7 @@ func hostnetRestageBridgeIfSlaveConflict(ctx context.Context, api *apiclient.API
 	for _, port := range ports {
 		if !slices.Contains(b.NICs, port) {
 			return false, nil, fmt.Errorf(
-				"node %q: bridge %q already exists with bridge_ports %q, which references %q — not "+
+				"node %q: bridge %q already exists with bridge_ports %q, which references %q, not "+
 					"one of bond %q's configured nics (%s) and not %q itself; refusing to restage it "+
 					"automatically, since this is not the expected \"bridge still directly holds one of "+
 					"its own future bond's slave nics\" retrofit shape",

@@ -65,7 +65,7 @@ func resolveNfsExportOwner(labs map[string]*config.Lab, lab *config.Lab) (*nfsEx
 	if ownerAlias := config.EffectiveNFSExport(owner); ownerAlias != owner.Name {
 		return nil, fmt.Errorf(
 			"lab %q: storage.nfs_export owner %q is itself aliased to %q's export; chained nfs_export "+
-				"aliases are not supported — point storage.nfs_export directly at %q's ultimate owner instead",
+				"aliases are not supported; point storage.nfs_export directly at %q's ultimate owner instead",
 			lab.Name, owner.Name, ownerAlias, ownerAlias)
 	}
 
