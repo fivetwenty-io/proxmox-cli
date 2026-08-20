@@ -66,6 +66,13 @@ func fullLab() *config.Lab {
 			Pool:  "lab-wayne",
 			Role:  "PMXAdmin",
 		},
+		Topology: config.LabTopology{
+			Nodes:   3,
+			Qdevice: config.QdeviceNever,
+			NodeOverrides: map[int]config.LabNodeOverride{
+				1: {VCPU: 4, OSDDiskCount: 1},
+			},
+		},
 	}
 }
 
@@ -234,6 +241,35 @@ func TestLabFileTemplate_OSDDisks_RenderedOnlyWhenSet(t *testing.T) {
 	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
 	out = string(config.LabFileTemplate(lab))
 	require.Contains(t, out, "  osd_disks:\n    count: 2\n    size_gb: 100\n")
+}
+
+func TestLabFileTemplate_Topology_RenderedOnlyWhenSet(t *testing.T) {
+	lab := fullLab()
+	lab.Topology = config.LabTopology{}
+	out := string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "# topology: multi-node lab shape")
+	require.NotContains(t, out, "\ntopology:")
+
+	lab.Topology = config.LabTopology{
+		Nodes:   3,
+		Qdevice: config.QdeviceNever,
+		NodeOverrides: map[int]config.LabNodeOverride{
+			2: {VCPU: 8},
+			0: {VCPU: 4},
+		},
+	}
+	out = string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "\ntopology:\n")
+	require.Contains(t, out, "  nodes: 3\n")
+	require.Contains(t, out, "  qdevice: \"never\"\n")
+
+	// node_overrides map iteration order is nondeterministic; the writer
+	// must sort keys so index 0's block always precedes index 2's.
+	idx0 := strings.Index(out, "    0:\n")
+	idx2 := strings.Index(out, "    2:\n")
+	require.GreaterOrEqual(t, idx0, 0, "expected node_overrides index 0 block")
+	require.GreaterOrEqual(t, idx2, 0, "expected node_overrides index 2 block")
+	require.Less(t, idx0, idx2, "node_overrides must render in ascending index order")
 }
 
 func TestWriteLabFile_ZoneKeysRoundTripThroughResolveLabs(t *testing.T) {

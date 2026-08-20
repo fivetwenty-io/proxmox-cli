@@ -225,6 +225,12 @@ func configExampleLab() *config.Lab {
 			IOThread:   true,
 			Discard:    true,
 			SSD:        true,
+			// OSDDisks documents storage.osd_disks' shape: extra whole-raw-device
+			// disks per node for nested Ceph OSDs. The writer's block comment
+			// (appendLabOSDDisksBlock) carries the full explanation; this
+			// example value is just realistic enough to show the two keys in
+			// use together.
+			OSDDisks: &config.LabOSDDisks{Count: 2, SizeGB: 100},
 		},
 		DNS: config.LabDNS{
 			Zone: "example.lab.fivetwenty.io",
@@ -238,6 +244,14 @@ func configExampleLab() *config.Lab {
 			Realm: "pve",
 			Pool:  "lab-example",
 			Role:  configDefaultAccessRole,
+		},
+		// Topology documents the multi-node lab shape: node count and qdevice
+		// policy. The writer's block comment (appendLabTopologyBlock) carries
+		// the full explanation; a single-node lab (today's default) simply
+		// omits this field entirely.
+		Topology: config.LabTopology{
+			Nodes:   3,
+			Qdevice: config.QdeviceNever,
 		},
 	}
 }
@@ -297,19 +311,23 @@ func newConfigInitCmd() *cobra.Command {
 // newConfigAddCmd builds `pmx lab config add <name>`.
 func newConfigAddCmd() *cobra.Command {
 	var (
-		labsDirFlag string
-		force       bool
-		vnetID      string
-		vxlanTag    int
-		cidr        string
-		vcpu        int
-		memoryMaxGB int
-		dataDiskGB  int
-		refquotaGB  int
-		owner       string
-		pool        string
-		role        string
-		mode        string
+		labsDirFlag  string
+		force        bool
+		vnetID       string
+		vxlanTag     int
+		cidr         string
+		vcpu         int
+		memoryMaxGB  int
+		dataDiskGB   int
+		refquotaGB   int
+		owner        string
+		pool         string
+		role         string
+		mode         string
+		addNodes     int
+		addQdevice   string
+		addOSDDisks  int
+		addOSDDiskGB int
 	)
 
 	cmd := &cobra.Command{
@@ -352,8 +370,35 @@ func newConfigAddCmd() *cobra.Command {
 			if flags.Changed("data-disk-gb") {
 				lab.Storage.DataDiskGB = dataDiskGB
 			}
+			if flags.Changed("nodes") {
+				lab.Topology.Nodes = addNodes
+			}
+			if flags.Changed("qdevice") {
+				lab.Topology.Qdevice = addQdevice
+			}
+			if flags.Changed("osd-disks") || flags.Changed("osd-disk-gb") {
+				lab.Storage.OSDDisks = &config.LabOSDDisks{Count: addOSDDisks, SizeGB: addOSDDiskGB}
+				// config add has no --controller flag, so the schema default
+				// ("virtio-scsi-single") already satisfies ValidateStorage's
+				// controller requirement for OSD disks; this guard only
+				// matters if a future flag or default ever leaves it empty.
+				if flags.Changed("osd-disks") && lab.Storage.Controller == "" {
+					lab.Storage.Controller = "virtio-scsi-single"
+				}
+			}
 			if flags.Changed("refquota-gb") {
 				lab.Storage.RefquotaGB = refquotaGB
+			} else {
+				// No explicit refquota: zero out the schema default first —
+				// EffectiveRefquotaGB treats a positive RefquotaGB as
+				// authoritative and returns it unchanged, so leaving
+				// configSchemaDefaultLab's flat 480 in place here would defeat
+				// the recompute — then derive the real value from the
+				// topology/OSD flags just applied above, rather than baking
+				// in a default that does not account for multi-node fan-out
+				// or OSD disk space.
+				lab.Storage.RefquotaGB = 0
+				lab.Storage.RefquotaGB = config.EffectiveRefquotaGB(lab)
 			}
 			if flags.Changed("owner") {
 				lab.Owner = owner
@@ -439,6 +484,10 @@ func newConfigAddCmd() *cobra.Command {
 		"pve resource pool for the lab's access grant (derived from the lab name, e.g. lab-wayne, when omitted)")
 	cmd.Flags().StringVar(&role, "role", configDefaultAccessRole, "pve role granted to the lab's owner")
 	cmd.Flags().StringVar(&mode, "mode", configDefaultMode, `lab mode: "nested" or "hardware"`)
+	cmd.Flags().IntVar(&addNodes, "nodes", 0, "number of PVE node VMs (1-5); omit for a single-node lab")
+	cmd.Flags().StringVar(&addQdevice, "qdevice", "", "qdevice policy for even node counts: auto or never")
+	cmd.Flags().IntVar(&addOSDDisks, "osd-disks", 0, "extra raw OSD disks per node (for nested Ceph)")
+	cmd.Flags().IntVar(&addOSDDiskGB, "osd-disk-gb", 0, "size in GiB of each OSD disk")
 
 	cmd.Annotations = map[string]string{"noClient": "true"}
 	return cmd
@@ -507,6 +556,13 @@ func validateConfigAddLab(lab *config.Lab) error {
 	}
 	if lab.Storage.NFSQuotaGB < 0 {
 		return fmt.Errorf("storage.nfs_quota_gb must be >= 0, got %d", lab.Storage.NFSQuotaGB)
+	}
+
+	if issues := config.ValidateTopology(lab.Name, lab.Topology); len(issues) > 0 {
+		return fmt.Errorf("topology is invalid:\n  %s", strings.Join(issues, "\n  "))
+	}
+	if issues := config.ValidateStorage(lab.Name, lab.Storage); len(issues) > 0 {
+		return fmt.Errorf("storage is invalid:\n  %s", strings.Join(issues, "\n  "))
 	}
 
 	return nil

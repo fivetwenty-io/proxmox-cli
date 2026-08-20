@@ -342,6 +342,118 @@ func TestConfigAdd_AppliesSchemaDefaultsWhenFlagsOmitted(t *testing.T) {
 	assert.Equal(t, configDefaultMode, got.Mode)
 }
 
+func TestConfigAdd_TopologyFlags_RoundTrip(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "ceph",
+		"--vxlan-tag", "5040", "--cidr", "10.140.0.0/16",
+		"--nodes", "3", "--qdevice", "never",
+		"--osd-disks", "2", "--osd-disk-gb", "100",
+	)
+	require.NoError(t, err)
+
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	labs, err := config.ResolveLabs(cfg, cfgPath)
+	require.NoError(t, err)
+
+	got := labs["ceph"]
+	require.NotNil(t, got)
+	assert.Equal(t, 3, config.EffectiveTopologyNodes(got.Topology))
+	assert.Equal(t, config.QdeviceNever, got.Topology.Qdevice)
+	assert.Equal(t, 2, config.OSDDiskCount(got.Storage))
+	assert.Equal(t, 100, config.OSDDiskSizeGB(got.Storage))
+	assert.Equal(t, "virtio-scsi-single", got.Storage.Controller)
+}
+
+func TestConfigAdd_TopologyOnly_NoOSDFlags(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "trio",
+		"--vxlan-tag", "5041", "--cidr", "10.141.0.0/16",
+		"--nodes", "3", "--qdevice", "never",
+	)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(cfgPath), "labs.d", "trio.yaml"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "\n  osd_disks:")
+
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	labs, err := config.ResolveLabs(cfg, cfgPath)
+	require.NoError(t, err)
+
+	got := labs["trio"]
+	require.NotNil(t, got)
+	assert.Equal(t, 3, config.EffectiveTopologyNodes(got.Topology))
+	assert.Equal(t, config.QdeviceNever, got.Topology.Qdevice)
+	assert.Nil(t, got.Storage.OSDDisks)
+}
+
+// TestConfigAdd_DerivedRefquotaCoversOSDDisks is P9's own acceptance case:
+// leaving --refquota-gb unset while adding a multi-node lab with OSD disks
+// must not persist the flat 480G schema default (configSchemaDefaultLab),
+// which under-provisions a multi-node + OSD lab enough to hit ENOSPC mid
+// `pmx lab create` (create.go's dataset -o refquota=... comes straight from
+// this written value). The written refquota_gb must instead be
+// config.EffectiveRefquotaGB's derived total: 3 nodes * 264G/node +
+// 3 nodes * 2 disks * 100G/disk = 792 + 600 = 1392.
+func TestConfigAdd_DerivedRefquotaCoversOSDDisks(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "sizing",
+		"--vxlan-tag", "5042", "--cidr", "10.142.0.0/16",
+		"--nodes", "3", "--osd-disks", "2", "--osd-disk-gb", "100",
+	)
+	require.NoError(t, err)
+
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+	labs, err := config.ResolveLabs(cfg, cfgPath)
+	require.NoError(t, err)
+
+	got := labs["sizing"]
+	require.NotNil(t, got)
+	assert.Equal(t, 1392, got.Storage.RefquotaGB)
+}
+
+func TestConfigAdd_InvalidNodes_RefusedBeforeWrite(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "badnodes",
+		"--vxlan-tag", "5043", "--cidr", "10.143.0.0/16", "--nodes", "7")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nodes")
+
+	_, statErr := os.Stat(filepath.Join(filepath.Dir(cfgPath), "labs.d", "badnodes.yaml"))
+	assert.True(t, os.IsNotExist(statErr), "invalid topology must refuse before any write")
+}
+
+func TestConfigAdd_InvalidQdevice_Refused(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "badqdev",
+		"--vxlan-tag", "5044", "--cidr", "10.144.0.0/16", "--qdevice", "sometimes")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "qdevice")
+
+	_, statErr := os.Stat(filepath.Join(filepath.Dir(cfgPath), "labs.d", "badqdev.yaml"))
+	assert.True(t, os.IsNotExist(statErr), "invalid topology must refuse before any write")
+}
+
+func TestConfigAdd_OSDDisksWithoutSize_Refused(t *testing.T) {
+	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
+
+	_, err := runConfigCmd(t, cfgPath, "add", "badosd",
+		"--vxlan-tag", "5045", "--cidr", "10.145.0.0/16", "--osd-disks", "2")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "osd_disks.size_gb")
+
+	_, statErr := os.Stat(filepath.Join(filepath.Dir(cfgPath), "labs.d", "badosd.yaml"))
+	assert.True(t, os.IsNotExist(statErr), "invalid storage must refuse before any write")
+}
+
 func TestConfigAdd_RefusesExistingFileWithoutForce(t *testing.T) {
 	cfgPath := writeConfigCmdYAML(t, &config.Config{LabsDir: "labs.d"})
 

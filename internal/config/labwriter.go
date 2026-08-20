@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -124,6 +125,8 @@ func LabFileTemplate(lab *Lab) []byte {
 	appendLabNFSQuotaLine(&b, lab.Storage.NFSQuotaGB)
 	fmt.Fprint(&b, "\n")
 
+	appendLabTopologyBlock(&b, lab.Topology)
+
 	fmt.Fprint(&b, "# dns: DNS zone associated with the lab.\n")
 	fmt.Fprint(&b, "dns:\n")
 	fmt.Fprintf(&b, "  zone: %s\n\n", yamlQuote(lab.DNS.Zone))
@@ -230,6 +233,55 @@ func appendLabOSDDisksBlock(b *strings.Builder, d *LabOSDDisks) {
 	fmt.Fprint(b, "  osd_disks:\n")
 	fmt.Fprintf(b, "    count: %d\n", d.Count)
 	fmt.Fprintf(b, "    size_gb: %d\n", d.SizeGB)
+}
+
+// appendLabTopologyBlock writes the topology block: the comment always, the
+// keys only when set, node_overrides in ascending node-index order (map
+// iteration order is nondeterministic, so the keys are sorted before
+// rendering to keep the output stable across runs).
+func appendLabTopologyBlock(b *strings.Builder, t LabTopology) {
+	fmt.Fprint(b, "# topology: multi-node lab shape — node count, qdevice policy, per-node sizing overrides.\n")
+	if t.Nodes == 0 && t.Qdevice == "" && len(t.NodeOverrides) == 0 {
+		fmt.Fprint(b, "\n")
+		return
+	}
+	fmt.Fprint(b, "topology:\n")
+	if t.Nodes != 0 {
+		fmt.Fprintf(b, "  nodes: %d\n", t.Nodes)
+	}
+	if t.Qdevice != "" {
+		fmt.Fprintf(b, "  qdevice: %s\n", yamlQuote(t.Qdevice))
+	}
+	if len(t.NodeOverrides) > 0 {
+		fmt.Fprint(b, "  node_overrides:\n")
+		idxs := make([]int, 0, len(t.NodeOverrides))
+		for i := range t.NodeOverrides {
+			idxs = append(idxs, i)
+		}
+		sort.Ints(idxs)
+		for _, i := range idxs {
+			o := t.NodeOverrides[i]
+			fmt.Fprintf(b, "    %d:\n", i)
+			appendIntWhenSet(b, "      vcpu", o.VCPU)
+			appendIntWhenSet(b, "      memory_min_gb", o.MemoryMinGB)
+			appendIntWhenSet(b, "      memory_max_gb", o.MemoryMaxGB)
+			appendIntWhenSet(b, "      os_disk_gb", o.OSDiskGB)
+			appendIntWhenSet(b, "      data_disk_gb", o.DataDiskGB)
+			appendIntWhenSet(b, "      osd_disk_count", o.OSDDiskCount)
+			appendIntWhenSet(b, "      osd_disk_gb", o.OSDDiskGB)
+		}
+	}
+	fmt.Fprint(b, "\n")
+}
+
+// appendIntWhenSet writes "<key>: <v>\n" only when v is non-zero, matching
+// the block-helper convention every other optional numeric field in this
+// file follows: an unset field round-trips as absent, not as an explicit
+// zero that would misread as "set to zero" on reload.
+func appendIntWhenSet(b *strings.Builder, key string, v int) {
+	if v != 0 {
+		fmt.Fprintf(b, "%s: %d\n", key, v)
+	}
 }
 
 // appendLabVnetsBlock documents network.vnets with a short comment,
