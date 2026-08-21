@@ -399,13 +399,17 @@ func TestCreateHappyPath_OrderedCalls(t *testing.T) {
 	// precede writes here, rather than interleaving list/create per resource.
 	// "storage-list" appears twice: once for the storage step's own
 	// existence check, once more for the capacity gate's (step 6, after
-	// pool-list) base-pool storage lookup. The IPv6 subnet step (dual-stack
-	// default) probes existence against the planning phase's single
-	// subnet-list, but its apply runs net.go's ensureLabSdnSubnetOn, which
-	// lists again before creating — hence the second subnet-list/subnet-create
-	// pair in the write phase, right after the primary IPv4 subnet-create.
+	// pool-list) base-pool storage lookup.
+	//
+	// The planning phase issues NO subnet-list: this lab's vnet does not
+	// exist yet ("vnet-list" returns it absent, and "vnet-create" follows),
+	// and PVE answers a subnet listing for an unknown vnet with an error
+	// rather than an empty list, so asking would abort planning outright.
+	// The single subnet-list in the write phase belongs to the IPv6 step's
+	// apply, which runs net.go's ensureLabSdnSubnetOn and lists before
+	// creating.
 	assert.Equal(t, []string{
-		"zone-list", "vnet-list", "subnet-list", "storage-list", "pool-list", "storage-list", "qemu-list", "nextid",
+		"zone-list", "vnet-list", "storage-list", "pool-list", "storage-list", "qemu-list", "nextid",
 		"zone-create", "vnet-create", "subnet-create", "subnet-list", "subnet-create",
 		"storage-create", "pool-create", "qemu-create",
 	}, order)
@@ -847,6 +851,41 @@ func TestCreateDryRun_NoMutationsShowsPlaceholderVMID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "<vmid>")
 	assert.Contains(t, out, "would create")
+}
+
+// TestCreateDryRun_AbsentVnetIsNeverListedForSubnets pins the bug the fixture
+// above hid. Line for line, TestCreateDryRun_NoMutationsShowsPlaceholderVMID
+// answers a subnet listing for a vnet that does not exist with an empty 200,
+// which real PVE never does: it refuses with "sdn vnet 'x' does not exist".
+// Planning asked anyway, so `pmx lab create --dry-run` could not preview any
+// lab whose vnet had not been created yet, which is every lab the first time
+// and the exact case a preview is for.
+//
+// Modelling PVE's real refusal here means the plan can only be built by not
+// making the call at all.
+func TestCreateDryRun_AbsentVnetIsNeverListedForSubnets(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+
+	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{})
+	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{})
+	f.HandleFunc("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
+		func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteError(w, 500, "sdn vnet 'labwayne' does not exist")
+		})
+	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank", "type": "zfspool", "pool": "tank"}})
+	f.HandleJSON("GET /api2/json/pools", []any{})
+	createPoolNotFoundRoute(f, "lab-wayne")
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"wayne": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1", "--dry-run")
+	require.NoError(t, err, "a lab whose vnet does not exist yet must still preview")
+	assert.Contains(t, out, "would create")
+	assert.Contains(t, out, "sdn vnet")
+	assert.Contains(t, out, "sdn subnet", "an absent vnet has no subnets, so the subnet step plans a create")
 }
 
 // TestCreateFlagOverride_VCPUAndMemory covers flag-over-config precedence: a flag that

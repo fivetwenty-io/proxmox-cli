@@ -1247,11 +1247,18 @@ func buildCreatePlan(
 	// field, not the PVE-assigned Subnet identifier those two fields carry
 	// separately (see sdnSubnetState), so create and net apply always agree
 	// on which live subnet corresponds to this lab's CIDR.
-	subnets, err := ac.Cluster.ListSdnVnetsSubnets(ctx, eff.Network.VnetID, &cluster.ListSdnVnetsSubnetsParams{})
+	//
+	// The listing is skipped when the vnet itself does not exist yet. PVE
+	// refuses that call outright ("sdn vnet 'x' does not exist") rather than
+	// returning an empty list, and asking anyway is what stopped `pmx lab
+	// create --dry-run` from previewing a lab that had never been created:
+	// the one case the preview exists for. A vnet that is absent has no
+	// subnets, so step 3 and step 3a below both plan a create.
+	subnets, err := createListVnetSubnets(ctx, ac, eff.Network.VnetID, vnetExists)
 	if err != nil {
-		return nil, fmt.Errorf("list subnets of vnet %q: %w", eff.Network.VnetID, err)
+		return nil, err
 	}
-	_, subnetExists, err := findSdnSubnet(*subnets, eff.Network.CIDR)
+	_, subnetExists, err := findSdnSubnet(subnets, eff.Network.CIDR)
 	if err != nil {
 		return nil, fmt.Errorf("decode subnet list for vnet %q: %w", eff.Network.VnetID, err)
 	}
@@ -1281,7 +1288,7 @@ func buildCreatePlan(
 		return nil, err
 	}
 	if primaryCIDR6 != "" {
-		existing6, subnet6Exists, serr := findSdnSubnet(*subnets, primaryCIDR6)
+		existing6, subnet6Exists, serr := findSdnSubnet(subnets, primaryCIDR6)
 		if serr != nil {
 			return nil, fmt.Errorf("decode subnet list for vnet %q: %w", eff.Network.VnetID, serr)
 		}
@@ -1331,17 +1338,20 @@ func buildCreatePlan(
 		extraSubnetExists := v.CIDR == ""
 		extraSubnet6Exists := cidr6 == ""
 		if v.CIDR != "" {
-			extraSubnets, serr := ac.Cluster.ListSdnVnetsSubnets(ctx, v.ID, &cluster.ListSdnVnetsSubnetsParams{})
+			// Same skip-when-absent rule as the primary vnet above: an extra
+			// vnet this run would create has no subnets to list, and PVE
+			// refuses the call rather than answering with an empty list.
+			extraSubnets, serr := createListVnetSubnets(ctx, ac, v.ID, extraVnetExists)
 			if serr != nil {
-				return nil, fmt.Errorf("list subnets of vnet %q: %w", v.ID, serr)
+				return nil, serr
 			}
-			_, extraSubnetExists, serr = findSdnSubnet(*extraSubnets, v.CIDR)
+			_, extraSubnetExists, serr = findSdnSubnet(extraSubnets, v.CIDR)
 			if serr != nil {
 				return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 			}
 			if cidr6 != "" {
 				var existing6 sdnSubnetState
-				existing6, extraSubnet6Exists, serr = findSdnSubnet(*extraSubnets, cidr6)
+				existing6, extraSubnet6Exists, serr = findSdnSubnet(extraSubnets, cidr6)
 				if serr != nil {
 					return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 				}
@@ -2192,6 +2202,34 @@ func createRawList(resp any) ([]json.RawMessage, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// createListVnetSubnets lists vnetID's SDN subnets, or returns an empty list
+// without calling the API when the vnet does not exist yet.
+//
+// The guard is the whole point. PVE answers a subnet listing for an unknown
+// vnet with "sdn vnet 'x' does not exist" rather than an empty list, so a plan
+// that asks unconditionally cannot be built for any lab whose vnet has not
+// been created — which is every lab the first time, and exactly what
+// `--dry-run` is for. An absent vnet has no subnets, so an empty list is both
+// the honest answer and the one that makes the plan say "would create".
+func createListVnetSubnets(
+	ctx context.Context, ac *apiclient.APIClient, vnetID string, vnetExists bool,
+) (cluster.ListSdnVnetsSubnetsResponse, error) {
+	if !vnetExists {
+		return nil, nil
+	}
+
+	subnets, err := ac.Cluster.ListSdnVnetsSubnets(ctx, vnetID, &cluster.ListSdnVnetsSubnetsParams{})
+	if err != nil {
+		return nil, fmt.Errorf("list subnets of vnet %q: %w", vnetID, err)
+	}
+
+	if subnets == nil {
+		return nil, nil
+	}
+
+	return *subnets, nil
 }
 
 // runCreateContextHook registers or refreshes the lab-<name> pmx context after

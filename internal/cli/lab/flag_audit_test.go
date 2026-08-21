@@ -109,18 +109,20 @@ func TestCreateAuditFields_NetworkStorageAndPoolOverrides(t *testing.T) {
 	require.Len(t, vnetRec, 2, "expected one vnet list + one vnet create")
 	assert.Equal(t, "6002", vnetRec[1].body["tag"], "--vxlan-tag must override network.vxlan_tag (5001)")
 
-	// Four subnet calls: the planning-phase list, the IPv4 create, then the
-	// dual-stack IPv6 ensure's own apply-time list + create.
-	require.Len(t, subnetRec, 4, "expected two subnet lists + an IPv4 and an IPv6 subnet create")
-	assert.Equal(t, "10.10.9.0/24", subnetRec[1].body["subnet"], "--cidr must override network.cidr (10.10.1.0/24)")
+	// Three subnet calls: the IPv4 create, then the dual-stack IPv6 ensure's
+	// own apply-time list + create. The planning phase issues no list of its
+	// own here, because this lab's vnet does not exist yet and PVE refuses a
+	// subnet listing for a vnet it does not have.
+	require.Len(t, subnetRec, 3, "expected an IPv4 create, then the IPv6 ensure's list and create")
+	assert.Equal(t, "10.10.9.0/24", subnetRec[0].body["subnet"], "--cidr must override network.cidr (10.10.1.0/24)")
 	// The IPv6 subnet must be derived from the OVERRIDDEN CIDR, not the
 	// on-disk one: the lab's ULA block is a hash of network.cidr.
 	overridden := lab.Network
 	overridden.CIDR = "10.10.9.0/24"
 	cidr6, gw6, err := labPrimaryV6Subnet(overridden)
 	require.NoError(t, err)
-	assert.Equal(t, cidr6, subnetRec[3].body["subnet"], "the IPv6 subnet must follow the --cidr override")
-	assert.Equal(t, gw6, subnetRec[3].body["gateway"])
+	assert.Equal(t, cidr6, subnetRec[2].body["subnet"], "the IPv6 subnet must follow the --cidr override")
+	assert.Equal(t, gw6, subnetRec[2].body["gateway"])
 
 	require.Len(t, poolRec, 2, "expected one pool list + one pool create")
 	assert.Equal(t, "custom-pool-wayne", poolRec[1].body["poolid"], "--pool must override access.pool (lab-wayne)")
