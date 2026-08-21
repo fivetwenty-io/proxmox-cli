@@ -276,6 +276,13 @@ Each entry under **contexts** is a mapping with the following keys.
   **fingerprint**, and **tofu** all behave exactly as they do on a direct
   connection.
 
+  The jump host resolves **host** itself, since it is the end that opens the
+  forwarded connection. A name that resolves only on your workstation (a
+  **/etc/hosts** entry, or a split-DNS or MagicDNS name the bastion does not
+  share) leaves the API hanging until the request times out, while ssh-based
+  commands to the same context still work. Give **host** an address the jump
+  host can reach when the two do not share a resolver.
+
   Per-invocation **-J/--jump** overrides the ssh transport only. The API
   connection follows the context's configured **ssh.jump**, since it is
   built before any command's flags are parsed.
