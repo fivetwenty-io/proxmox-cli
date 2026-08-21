@@ -3,6 +3,7 @@ package lab
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -357,4 +358,44 @@ func TestRunGuestSSH_NonZeroExitReturnsErrorAndExitCode(t *testing.T) {
 func TestGuestCommandTransportFailed_NonExitError(t *testing.T) {
 	assert.True(t, guestCommandTransportFailed(assert.AnError), "a non-ExitError must be treated as a transport failure")
 	assert.False(t, guestCommandTransportFailed(nil))
+}
+
+// assertGuestPkgInstall asserts that argv's remote command installs pkg with
+// every prompt a TTY-less ssh session cannot answer suppressed. It checks the
+// properties that matter rather than the exact command line, so adding a
+// newly-discovered prompt to guestNonInteractivePkgEnv does not churn every
+// call site's test.
+func assertGuestPkgInstall(t *testing.T, argv []string, pkg string) {
+	t.Helper()
+	require.NotEmpty(t, argv)
+	remote := argv[len(argv)-1]
+
+	assert.Contains(t, remote, "install -y "+pkg, "must install the requested package")
+	assert.Contains(t, remote, "apt-get update", "must refresh the index before installing")
+	assert.True(t, strings.HasPrefix(remote, "export "),
+		"the variables must be exported, not prefixed onto one command of a compound line: %q", remote)
+	for _, guard := range []string{
+		"DEBIAN_FRONTEND=noninteractive",
+		"NEEDRESTART_MODE=a",
+		"APT_LISTCHANGES_FRONTEND=none",
+		"--force-confold",
+	} {
+		assert.Contains(t, remote, guard, "install must suppress the %s prompt", guard)
+	}
+}
+
+// TestGuestPkgCommand_ExportsForWholeCompoundLine pins the bug that made the
+// prefix form wrong: "apt-get update && apt-get install" is two commands, and
+// a "VAR=x cmd" prefix binds to the first one only, leaving the install (the
+// half that prompts, and therefore the half that hangs) unprotected.
+func TestGuestPkgCommand_ExportsForWholeCompoundLine(t *testing.T) {
+	got := guestPkgCommand("apt-get update && apt-get install -y corosync-qnetd")
+
+	require.True(t, strings.HasPrefix(got, "export "), "got %q", got)
+	env, cmds, found := strings.Cut(got, "; ")
+	require.True(t, found, "the export must be its own statement: %q", got)
+	assert.NotContains(t, cmds, "=noninteractive",
+		"no variable may remain bound to a single command of the compound line")
+	assert.Contains(t, env, "NEEDRESTART_SUSPEND=1")
+	assert.Equal(t, "apt-get update && apt-get install -y corosync-qnetd", cmds)
 }

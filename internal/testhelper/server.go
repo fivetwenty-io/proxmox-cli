@@ -122,6 +122,7 @@ type FakePVE struct {
 //
 //   - GET /api2/json/version
 //   - GET /api2/json/cluster/status
+//   - GET /api2/json/cluster/resources
 //   - GET /api2/json/nodes
 //
 // The caller may override these or register additional routes via Handle /
@@ -166,6 +167,13 @@ func NewFakePVE(t *testing.T) *FakePVE {
 			"nodeid": 1,
 		},
 	})
+
+	// Default route: /api2/json/cluster/resources. Empty by default, meaning a
+	// cluster with no guests: every real cluster answers this endpoint, so a
+	// fixture that omitted it would 404 code that legitimately reads the guest
+	// inventory (e.g. the lab VMID allocator's free-ID check). A test that
+	// needs live guests re-registers the route, which replaces this one.
+	f.HandleJSON("GET /api2/json/cluster/resources", []any{})
 
 	// Default route: /api2/json/nodes
 	f.HandleJSON("GET /api2/json/nodes", []any{

@@ -2555,3 +2555,49 @@ func TestCreate_ZfsDatasetEnsure_SSHTransportFailure_AbortsWithoutCreate(t *test
 
 	require.Len(t, fake.Calls, 1, "the probe ran once; the transport failure must abort before any zfs create attempt")
 }
+
+// TestCreateThreeNodeCluster_SkipsVMIDsAlreadyTakenByUnrelatedGuests is the
+// regression test for the allocator's free check. GET /cluster/nextid returns
+// the lowest free VMID, NOT the base of a free range, so on a cluster with
+// gaps (the normal state once anything has ever been destroyed) the ID right
+// above it can already belong to some unrelated guest. Here nextid answers
+// 9500 while VMID 9501 is taken by a container that has nothing to do with
+// this lab. Incrementing blindly hands 9501 to node 1 and its create fails
+// "VM already exists"; the allocator must skip it and use 9502 instead.
+func TestCreateThreeNodeCluster_SkipsVMIDsAlreadyTakenByUnrelatedGuests(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("pve-cpi")
+	lab.Topology = config.LabTopology{Nodes: 3}
+	poolID := lab.Access.Pool
+
+	createSharedResourcesExist(f, t, lab, "pve-cpi", poolID)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+
+	// The cluster already holds 9501 (an lxc, so it is invisible to any
+	// qemu-only listing) and 9503, leaving 9500, 9502 and 9504 free.
+	f.HandleJSON("GET /api2/json/cluster/resources", []any{
+		map[string]any{"type": "lxc", "vmid": 9501, "node": "node1", "name": "someone-elses-ct"},
+		map[string]any{"type": "qemu", "vmid": 9503, "node": "node1", "name": "someone-elses-vm"},
+	})
+
+	state := newCreateStatefulPVEState()
+	createHandleStatefulNextID(f, state, 9500)
+	var qemuCreateRec []createRecordedRequest
+	createHandleStatefulQemuCreate(f, state, &qemuCreateRec, "node1")
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"pve-cpi": lab}})
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	_, err := runCreateCmd(t, cmd, "pve-cpi", "--node", "node1")
+	require.NoError(t, err)
+
+	require.Len(t, qemuCreateRec, 3, "one qemu-create call per node")
+	var got []string
+	for _, rec := range qemuCreateRec {
+		vmid, _ := rec.body["vmid"].(string)
+		got = append(got, vmid)
+	}
+	assert.Equal(t, []string{"9500", "9502", "9504"}, got,
+		"the allocator must skip every VMID already present in the cluster, of any guest type")
+}

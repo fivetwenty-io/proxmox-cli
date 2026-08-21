@@ -69,6 +69,7 @@ var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"--ssh-user"}, takesValue: true, target: "ssh", dest: "ssh-user"},
 	{names: []string{"--ssh-port"}, takesValue: true, target: "ssh", dest: "ssh-port"},
 	{names: []string{"--ssh-identity"}, takesValue: true, target: "ssh", dest: "ssh-identity"},
+	{names: []string{"--ssh-jump"}, takesValue: true, target: "ssh", dest: "ssh-jump"},
 	{names: []string{"--ssh-agent"}, takesValue: false, target: "ssh", dest: "ssh-agent"},
 	{names: []string{"--no-strict"}, takesValue: false, target: "ssh", dest: "no-strict"},
 }
@@ -367,7 +368,7 @@ func classifyRsyncArgs(tokens []string) (operands []rsyncOperand, node string, e
 			if isReservedRemoteShellFlag(tok) {
 				return nil, "", fmt.Errorf(
 					"flag %q is reserved: pmx injects its own remote-shell command; "+
-						"use --ssh-user/--ssh-port/--ssh-identity/--ssh-agent/--no-strict instead", tok)
+						"use --ssh-user/--ssh-port/--ssh-identity/--ssh-jump/--ssh-agent/--no-strict instead", tok)
 			}
 
 			if strings.HasPrefix(tok, "-") {

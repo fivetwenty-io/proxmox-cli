@@ -399,7 +399,7 @@ func lxcLockPath(vmid string) string { return "/run/lock/lxc/pve-config-" + vmid
 // effective login user is root, since /etc/pve is only writable by root. The
 // node's management address is resolved from cluster status.
 func nodeConn(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string) (*nodefile.Conn, error) {
-	remote.ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
+	remote.ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity", "jump")
 	if f.User != "root" {
 		return nil, fmt.Errorf(
 			"editing /etc/pve requires a root ssh login, but the ssh user is %q; "+

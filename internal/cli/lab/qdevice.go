@@ -669,7 +669,8 @@ func qdeviceNetplanFallbackFile(iface string, addrs []string, routesValue string
 
 // ensureGuestPackage probes host for pkg via `dpkg -s`, installing it via
 // `apt-get update && apt-get install -y <pkg>` when the probe reports it is
-// not present. alreadyInstalled is true when the probe succeeded (pkg was
+// not present. The install runs through guestPkgCommand/guestAptGetOpts, so
+// no prompt can stall it on the TTY-less guest ssh session it runs over. alreadyInstalled is true when the probe succeeded (pkg was
 // already there) and no install command was run. A probe failure that is
 // not a plain non-zero exit (guestCommandTransportFailed) is treated as a
 // real error rather than "not installed", since it means ssh itself could
@@ -683,7 +684,8 @@ func ensureGuestPackage(deps *cli.Deps, host, pkg string) (alreadyInstalled bool
 		return false, fmt.Errorf("probe package %q on %s: %w", pkg, host, perr)
 	}
 
-	installCmd := fmt.Sprintf("apt-get update && apt-get install -y %s", pkg)
+	installCmd := guestPkgCommand(fmt.Sprintf(
+		"apt-get update && apt-get %s install -y %s", guestAptGetOpts, pkg))
 	if _, ierr := runGuestSSH(deps, host, installCmd); ierr != nil {
 		return false, fmt.Errorf("install package %q on %s: %w", pkg, host, ierr)
 	}

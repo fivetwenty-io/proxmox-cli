@@ -44,7 +44,7 @@ func SSH(deps *cli.Deps) *cobra.Command {
 			"is required, and resolves to that node's cluster management address. Against a " +
 			"PBS or PDM context there is only one host, so no node argument is accepted at " +
 			"all and the first token is read as an ssh option or remote command.\n\n" +
-			"The connection flags below (-l, -i, -p, -A, --no-strict) must come before the " +
+			"The connection flags below (-l, -i, -p, -J, -A, --no-strict) must come before the " +
 			"node.\n\n" +
 			"Everything after the node goes to ssh verbatim. Options such as " +
 			"-L 8080:localhost:80 or -N are reordered ahead of the destination, because " +
@@ -103,7 +103,7 @@ func SSH(deps *cli.Deps) *cobra.Command {
 // context requires a non-empty node and resolves it to its cluster
 // management address via nodeaddr.Resolve; any other product is rejected.
 func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, rest []string) error {
-	ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
+	ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity", "jump")
 
 	var product string
 	if deps.Ctx != nil {
@@ -143,14 +143,14 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 	return nil
 }
 
-// ApplyContextSSHDefaults fills any of f's User/Port/Identity fields the
+// ApplyContextSSHDefaults fills any of f's User/Port/Identity/Jump fields the
 // caller did not explicitly set (checked via cmd.Flags().Changed under the
 // given flag names) from the active context's SSH block. An explicit flag
 // always wins; a context value never overrides one the operator actually
 // passed. deps or deps.Ctx being nil (no active context, e.g. a noClient
 // command path) leaves f untouched.
 func ApplyContextSSHDefaults(
-	cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, userFlag, portFlag, identityFlag string,
+	cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, userFlag, portFlag, identityFlag, jumpFlag string,
 ) {
 	if deps == nil || deps.Ctx == nil {
 		return
@@ -164,6 +164,9 @@ func ApplyContextSSHDefaults(
 	}
 	if block.Identity != "" && !cmd.Flags().Changed(identityFlag) {
 		f.Identity = block.Identity
+	}
+	if block.Jump != "" && !cmd.Flags().Changed(jumpFlag) {
+		f.Jump = block.Jump
 	}
 }
 

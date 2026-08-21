@@ -86,6 +86,13 @@ func cephResolveNodes(lab *config.Lab) (int, error) {
 	return n, nil
 }
 
+// cephInstallCommand is the single source of the remote pveceph install
+// command line, so the dry-run preview cannot drift from what the real run
+// executes (they previously repeated the same literal in two places).
+func cephInstallCommand() string {
+	return guestPkgCommand("pveceph install --repository no-subscription -y")
+}
+
 // ensureCephInstalled probes for the ceph packages and runs pveceph install
 // when absent. pveceph install has no REST endpoint anywhere in PVE, so this
 // is guest SSH by necessity, not convenience.
@@ -98,10 +105,11 @@ func ensureCephInstalled(deps *cli.Deps, nodeIP string) (bool, error) {
 	if strings.TrimSpace(probe.Stdout) == "installed" {
 		return true, nil
 	}
-	// -y is required: DEBIAN_FRONTEND covers apt, not pveceph's own
-	// confirmation prompt, which aborts on EOF over non-TTY SSH.
-	if _, err := runGuestSSH(deps, nodeIP,
-		"DEBIAN_FRONTEND=noninteractive pveceph install --repository no-subscription -y"); err != nil {
+	// -y is required on top of the environment prefix: it answers pveceph's
+	// own confirmation prompt, which aborts on EOF over non-TTY SSH, while
+	// guestPkgCommand silences the debconf, needrestart, and listchanges
+	// prompts of the apt-get run pveceph performs underneath.
+	if _, err := runGuestSSH(deps, nodeIP, cephInstallCommand()); err != nil {
 		return false, fmt.Errorf("pveceph install on %s: %w", nodeIP, err)
 	}
 	return false, nil
@@ -115,7 +123,8 @@ func newCephInstallCmd() *cobra.Command {
 		Use:   "install <name>",
 		Short: "Install the Ceph packages on every node of a lab's nested cluster",
 		Long: "Run `pveceph install --repository no-subscription -y` over ssh on every node of " +
-			"the lab's nested cluster.\n\n" +
+			"the lab's nested cluster, with every package-manager prompt a TTY-less ssh session " +
+			"cannot answer suppressed.\n\n" +
 			"Idempotent: a node that already reports the ceph-osd package installed is skipped " +
 			"rather than re-run.\n\n" +
 			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",
@@ -156,8 +165,7 @@ func runCephInstall(cmd *cobra.Command, name string, dryRun bool) error {
 			if i > 0 {
 				b.WriteString("\n")
 			}
-			fmt.Fprintf(&b, "[dry-run] would run on node %d (%s): "+
-				"DEBIAN_FRONTEND=noninteractive pveceph install --repository no-subscription -y", i, nodeIP)
+			fmt.Fprintf(&b, "[dry-run] would run on node %d (%s): %s", i, nodeIP, cephInstallCommand())
 		}
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: b.String()}, deps.Format)
 	}
@@ -465,12 +473,30 @@ func newCephMgrCmd() *cobra.Command {
 	return newCephDaemonCmd("mgr", "Create Ceph manager daemons on a lab's nested cluster")
 }
 
-// cephOSDDevPath is the stable by-id path `pmx lab create`'s serial=osd<idx>
-// disk option (createOSDDiskValue, create.go) guarantees inside the guest.
-// Deriving it beats guessing a kernel name: /dev/sdX ordering is not stable
-// across boots, while the QEMU serial is.
-func cephOSDDevPath(idx int) string {
-	return fmt.Sprintf("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_osd%d", idx)
+// cephOSDSerial is the QEMU disk serial `pmx lab create`'s serial=osd<idx>
+// disk option (createOSDDiskValue, create.go) pins on the idx-th OSD disk.
+// The serial, not a kernel name, is what identifies an OSD disk: /dev/sdX
+// ordering is not stable across boots, while the serial is.
+func cephOSDSerial(idx int) string {
+	return fmt.Sprintf("osd%d", idx)
+}
+
+// cephOSDLegacyByIDPath is the /dev/disk/by-id path this package used to
+// DERIVE from a disk's serial and match against a node's disk listing.
+// It is retained only as a fallback matcher, never as an OSD create target.
+//
+// The derivation is wrong on PVE 9.2 (live finding): the by-id symlink udev
+// creates for a QEMU SCSI disk is keyed off the DRIVE NAME
+// (scsi-0QEMU_QEMU_HARDDISK_drive-scsi1), not off the serial= option, which
+// surfaces only as the disk's ID_SCSI_SERIAL udev property (what lsblk and
+// PVE's own disks listing report as "serial"). Deriving the by-id path from
+// the serial therefore produced a path that exists on no node, so every
+// device failed to match and `pmx lab ceph osd` could not create a single
+// OSD. Matching on the reported serial and taking the by-id path from the
+// listing itself (cephResolveOSDDevices) is correct on every PVE build,
+// because it reads the link rather than guessing its shape.
+func cephOSDLegacyByIDPath(serial string) string {
+	return "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_" + serial
 }
 
 // cephDiskEntry is the slice of one GET /nodes/{node}/disks/list element the
@@ -483,15 +509,23 @@ func cephOSDDevPath(idx int) string {
 type cephDiskEntry struct {
 	Devpath  string `json:"devpath"`
 	ByIDLink string `json:"by_id_link"`
-	Used     string `json:"used"`
-	Osdid    int    `json:"osdid"`
+	// Serial is the disk's ID_SCSI_SERIAL udev property, which for a lab OSD
+	// disk is the serial=osd<N> value `pmx lab create` pins on it. It is the
+	// only field that survives a PVE build changing how it names by-id
+	// symlinks, so it is what an OSD disk is matched on (cephMatchDisk).
+	Serial string `json:"serial"`
+	Used   string `json:"used"`
+	Osdid  int    `json:"osdid"`
 }
 
-// cephOSDDevice is one OSD device a lab's config calls for: node and byID
+// cephOSDDevice is one OSD device a lab's config calls for: node and serial
 // come from storage.osd_disks, the rest from that node's live disk listing
-// once cephResolveOSDDevices has matched the two.
+// once cephResolveOSDDevices has matched the two. byID is therefore empty
+// until resolution: it is READ from the listing, never derived, so it is
+// whatever path that PVE build actually publishes for the disk.
 type cephOSDDevice struct {
 	node    string
+	serial  string
 	byID    string
 	devpath string
 	used    string
@@ -509,7 +543,7 @@ func cephExpectedOSDDevices(lab *config.Lab) ([]cephOSDDevice, error) {
 		_, storage := config.EffectiveNodeSizing(lab, i)
 		node := labNodeVMName(lab.Name, i)
 		for j := range config.OSDDiskCount(storage) {
-			devices = append(devices, cephOSDDevice{node: node, byID: cephOSDDevPath(j), osdid: -1})
+			devices = append(devices, cephOSDDevice{node: node, serial: cephOSDSerial(j), osdid: -1})
 		}
 	}
 	if len(devices) == 0 {
@@ -541,12 +575,23 @@ func cephListDisks(ctx context.Context, api *apiclient.APIClient, node string) (
 	return entries, nil
 }
 
-// cephMatchDisk finds the listing entry for byID, preferring the by-id link
-// and falling back to devpath for a PVE build that reports the stable path
-// there instead.
-func cephMatchDisk(entries []cephDiskEntry, byID string) *cephDiskEntry {
+// cephMatchDisk finds the listing entry for the OSD disk carrying serial,
+// matching on the reported serial first and only then falling back to the
+// by-id path this package used to derive from that serial.
+//
+// Serial first is what makes this correct on PVE 9.2, where the by-id link is
+// named after the drive rather than the serial (cephOSDLegacyByIDPath). The
+// fallback is kept for a PVE build whose disk listing omits serial entirely,
+// where the derived path is the only identifier available.
+func cephMatchDisk(entries []cephDiskEntry, serial string) *cephDiskEntry {
 	for i := range entries {
-		if entries[i].ByIDLink == byID || entries[i].Devpath == byID {
+		if serial != "" && entries[i].Serial == serial {
+			return &entries[i]
+		}
+	}
+	legacy := cephOSDLegacyByIDPath(serial)
+	for i := range entries {
+		if entries[i].ByIDLink == legacy || entries[i].Devpath == legacy {
 			return &entries[i]
 		}
 	}
@@ -571,15 +616,28 @@ func cephResolveOSDDevices(ctx context.Context, api *apiclient.APIClient,
 			}
 			listings[want.node] = entries
 		}
-		match := cephMatchDisk(entries, want.byID)
+		match := cephMatchDisk(entries, want.serial)
 		if match == nil {
 			return nil, fmt.Errorf(
-				"node %s reports no disk at %s: the VM likely predates the lab's storage.osd_disks "+
-					"config; attach the disk with `pmx pve qemu disk add`", want.node, want.byID)
+				"node %s reports no disk with serial %q: the VM likely predates the lab's storage.osd_disks "+
+					"config; attach the disk with `pmx pve qemu disk add`", want.node, want.serial)
 		}
+		// The OSD is created on the path the node itself publishes, never on
+		// one derived from the serial: see cephOSDLegacyByIDPath for the PVE
+		// 9.2 naming that makes deriving it wrong. by-id is still preferred
+		// over devpath because /dev/sdX ordering is not stable across boots.
+		want.byID = match.ByIDLink
 		want.devpath = match.Devpath
+		if want.byID == "" {
+			want.byID = want.devpath
+		}
 		if want.devpath == "" {
 			want.devpath = want.byID
+		}
+		if want.byID == "" {
+			return nil, fmt.Errorf(
+				"node %s reports the disk with serial %q but gives it neither a by-id link nor a device path",
+				want.node, want.serial)
 		}
 		want.used = match.Used
 		want.osdid = match.Osdid
@@ -652,9 +710,9 @@ func newCephOsdCmd() *cobra.Command {
 		Short: "Create Ceph OSDs on a lab's nested cluster",
 		Long: "Create a Ceph OSD on every disk storage.osd_disks gives a lab's nodes, through the " +
 			"lab's own nested-cluster API context.\n\n" +
-			"Devices are derived, never guessed: each one is addressed by the stable " +
-			"/dev/disk/by-id path `pmx lab create` pins with serial=osdN, matched against the node's " +
-			"own disk listing.\n\n" +
+			"Devices are matched, never guessed: each one is found in the node's own disk listing " +
+			"by the serial=osdN value `pmx lab create` pins on it, and its OSD is then created on " +
+			"whatever device path that listing reports for it.\n\n" +
 			"Idempotent: a device Ceph already owns is reported and left alone, even with --wipe. " +
 			"A device in use by anything else is skipped unless --wipe is given, which destroys all " +
 			"data on it and needs --yes or an interactive confirmation.\n\n" +
@@ -699,7 +757,10 @@ func runCephOsd(cmd *cobra.Command, name string, wipe, yes, dryRun bool) error {
 			if i > 0 {
 				b.WriteString("\n")
 			}
-			fmt.Fprintf(&b, "[dry-run] would ensure a Ceph OSD on %s at %s", d.node, d.byID)
+			// The device path is not known until the node's disk listing is
+			// read, which dry-run deliberately never does, so this names the
+			// disk the way the run itself will match it: by serial.
+			fmt.Fprintf(&b, "[dry-run] would ensure a Ceph OSD on %s at the disk with serial %s", d.node, d.serial)
 		}
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: b.String()}, deps.Format)
 	}

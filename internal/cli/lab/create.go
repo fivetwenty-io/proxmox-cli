@@ -400,7 +400,11 @@ func createDiskOptions(st config.LabStorage) string {
 // options are fixed, not derived from LabStorage's discard/iothread/ssd
 // booleans: whole-raw-device Ceph OSDs require discard (zvol TRIM), ssd
 // (CRUSH class), backup=0 (never PBS-copy replicated data), and a stable
-// serial for /dev/disk/by-id — see ceph-lab-plan §5. iothread=1 is safe to
+// serial, which is how `pmx lab ceph osd` identifies each disk in the node's
+// disk listing (cephOSDSerial, ceph.go). The serial does NOT name the disk's
+// /dev/disk/by-id symlink: on PVE 9.2 that link is keyed off the drive name,
+// and the serial surfaces only as the ID_SCSI_SERIAL udev property that
+// lsblk and PVE's disk listing report. iothread=1 is safe to
 // fix because ValidateStorage (run at load time AND re-run below after flag
 // overrides) refuses osd_disks on any controller other than
 // virtio-scsi-single — the only one PVE accepts iothread on.
@@ -824,24 +828,68 @@ func createPoolMembers(ctx context.Context, api *apiclient.APIClient, poolID str
 // then fail "VM already exists" against node 0's already-created VM.
 //
 // This allocator instead queries ListNextid exactly once per buildCreatePlan
-// run, then hands out baseline, baseline+1, baseline+2, ... for every
-// subsequent call, so every target that needs a fresh VMID in one command
-// invocation gets a distinct one even though none of them exist yet at
-// planning time. This does not eliminate the inherent cross-process TOCTOU
-// race every nextid-based allocation carries (PVE does not lock the ID it
-// returns) — a concurrent `pmx lab create`/`qm create` elsewhere could still
-// collide with one of these IDs before this command's execute phase
-// reaches it, exactly as a single bare nextid call always could — it only
-// fixes the guaranteed self-collision across this command's own targets.
+// run to establish the starting point, and pairs it with the cluster's live
+// guest inventory so every ID it hands out is checked free before it is
+// handed out.
+//
+// The free check is what makes the walk correct, and it is not optional:
+// /cluster/nextid returns the lowest free VMID, NOT the base of a free RANGE.
+// A cluster holding 100 and 102 answers 101, so incrementing blindly hands
+// out 101, then 102 — which already exists. That is a deterministic
+// collision on any cluster whose VMIDs have gaps (the normal state after
+// anything is ever destroyed), not a rare race, and it surfaced as node 1's
+// create failing "VM already exists" against a guest with no relation to
+// this lab. Skipping IDs already present in the inventory closes it.
+//
+// What remains, and cannot be closed here, is the inherent cross-process
+// TOCTOU race every nextid-based allocation carries: PVE does not lock the ID
+// it returns, so a concurrent `pmx lab create`/`qm create` elsewhere can
+// still claim one of these IDs between this command's planning phase and its
+// execute phase, exactly as a single bare nextid call always could.
 type createNextVMIDAllocator struct {
 	ac     *apiclient.APIClient
 	next   int64
+	used   map[int64]bool
 	primed bool
 }
 
-// allocate returns the next distinct VMID from a, querying
-// GET /cluster/nextid on the first call and incrementing locally on every
-// call after that.
+// createMaxVMID bounds the allocator's free-ID walk. PVE itself refuses a
+// VMID above this, so a walk that reaches it has nothing left to hand out and
+// must say so rather than return an ID the create call would reject.
+const createMaxVMID = 999999999
+
+// createListUsedVMIDs returns every VMID currently present in the cluster, of
+// every guest type. Unlike listLiveVMs (lifecycle.go) this deliberately keeps
+// lxc containers as well as qemu VMs: a container's VMID is just as taken as
+// a VM's, and handing it out would fail the create just the same.
+func createListUsedVMIDs(ctx context.Context, ac *apiclient.APIClient) (map[int64]bool, error) {
+	typeVM := "vm"
+	resp, err := ac.Cluster.ListResources(ctx, &cluster.ListResourcesParams{Type: &typeVM})
+	if err != nil {
+		return nil, fmt.Errorf("list cluster guests: %w", err)
+	}
+	used := make(map[int64]bool)
+	if resp == nil {
+		return used, nil
+	}
+	for _, raw := range *resp {
+		var entry struct {
+			VMID int64 `json:"vmid"`
+		}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return nil, fmt.Errorf("decode cluster guest entry: %w", err)
+		}
+		if entry.VMID > 0 {
+			used[entry.VMID] = true
+		}
+	}
+	return used, nil
+}
+
+// allocate returns the next VMID that is free both in the cluster's live
+// guest inventory and against every ID this allocator has already handed out
+// in the same run. GET /cluster/nextid and the inventory are each queried
+// once, on the first call.
 func (a *createNextVMIDAllocator) allocate(ctx context.Context) (int64, error) {
 	if !a.primed {
 		nextRaw, nerr := a.ac.Cluster.ListNextid(ctx, &cluster.ListNextidParams{})
@@ -855,11 +903,27 @@ func (a *createNextVMIDAllocator) allocate(ctx context.Context) (int64, error) {
 		if derr != nil {
 			return 0, derr
 		}
+		used, uerr := createListUsedVMIDs(ctx, a.ac)
+		if uerr != nil {
+			return 0, fmt.Errorf("allocate next VMID: %w", uerr)
+		}
 		a.next = id
+		a.used = used
 		a.primed = true
 	}
 
+	for a.used[a.next] {
+		a.next++
+		if a.next > createMaxVMID {
+			return 0, fmt.Errorf("allocate next VMID: no free VMID at or below %d", createMaxVMID)
+		}
+	}
+
 	id := a.next
+	// Marking it used covers this run's own later calls even though the guest
+	// does not exist yet: planning resolves every target's VMID before any of
+	// them is created.
+	a.used[id] = true
 	a.next++
 	return id, nil
 }

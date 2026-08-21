@@ -17,6 +17,10 @@ type Flags struct {
 	Port     int
 	Agent    bool
 	NoStrict bool
+	// Jump is an ssh -J destination list ("[user@]host[:port]", comma-separated
+	// for a chain), used to reach a target that is not directly routable from
+	// where pmx runs. Empty means connect directly.
+	Jump string
 }
 
 // RegisterFlags installs the shared SSH connection flags on cmd.
@@ -26,13 +30,24 @@ func RegisterFlags(cmd *cobra.Command, f *Flags) {
 	cmd.Flags().IntVarP(&f.Port, "port", "p", 22, "SSH port")
 	cmd.Flags().BoolVarP(&f.Agent, "agent", "A", false, "enable SSH agent forwarding")
 	cmd.Flags().BoolVar(&f.NoStrict, "no-strict", false, "disable strict host key checking")
+	cmd.Flags().StringVarP(&f.Jump, "jump", "J", "",
+		"jump host to tunnel through, as [user@]host[:port] (comma-separated for a chain)")
 }
 
 // OptionArgs builds the ssh option argv (everything before the destination)
-// from the supplied flags: -p, and optionally -i, -A, -o StrictHostKeyChecking=no.
+// from the supplied flags: -p, and optionally -J, -i, -A,
+// -o StrictHostKeyChecking=no.
+//
+// -J is emitted first so it is never separated from its value by another
+// option, and because ssh applies -i/-A to the jump connection as well as the
+// final hop, which is what an operator reaching a lab behind a bastion with
+// one key expects.
 func OptionArgs(f *Flags) []string {
-	args := make([]string, 0, 8)
+	args := make([]string, 0, 10)
 	args = append(args, "-p", strconv.Itoa(f.Port))
+	if f.Jump != "" {
+		args = append(args, "-J", f.Jump)
+	}
 	if f.Identity != "" {
 		args = append(args, "-i", f.Identity)
 	}

@@ -56,6 +56,13 @@ func labGuestSSHFlags(deps *cli.Deps) (sshcmd.Flags, error) {
 	if deps.Ctx.SSH.Identity != "" {
 		f.Identity = deps.Ctx.SSH.Identity
 	}
+	// A lab guest's mgmt IP lives on the lab's own SDN vnet, so it is reachable
+	// only from inside the context's network. When the context itself is
+	// reached through a bastion, every guest behind it is too, and without this
+	// each guest command fails with a bare connect timeout.
+	if deps.Ctx.SSH.Jump != "" {
+		f.Jump = deps.Ctx.SSH.Jump
+	}
 	return f, nil
 }
 
@@ -104,6 +111,52 @@ func labGuestSSHArgs(f sshcmd.Flags, host string) []string {
 	args = append(args, sshcmd.KeepaliveOptionArgs()...)
 	args = append(args, sshcmd.Dest(&f, host))
 	return args
+}
+
+// guestNonInteractivePkgEnv is the environment prefix every guest command
+// that installs Debian packages must carry.
+//
+// A guest ssh session has no TTY, and each of these variables silences a
+// different prompt that would otherwise stall or abort the install:
+//
+//   - DEBIAN_FRONTEND=noninteractive stops debconf asking configuration
+//     questions.
+//   - DEBCONF_NONINTERACTIVE_SEEN=true keeps a package that re-asks a seen
+//     question from falling back to the interactive frontend anyway.
+//   - NEEDRESTART_MODE=a / NEEDRESTART_SUSPEND=1 stop needrestart, which
+//     Debian 12 and PVE 8/9 run from an apt hook, opening its "which services
+//     should be restarted?" full-screen menu mid-install. This is the one that
+//     actually hangs rather than aborts, because needrestart draws on the
+//     terminal rather than reading stdin, so an EOF on stdin does not dismiss
+//     it.
+//   - APT_LISTCHANGES_FRONTEND=none stops apt-listchanges paging changelogs.
+//
+// DEBIAN_FRONTEND alone is not enough, which is what made this a live hang
+// even on the call site that already set it (`pmx lab ceph install`).
+const guestNonInteractivePkgEnv = "DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true " +
+	"NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 APT_LISTCHANGES_FRONTEND=none"
+
+// guestAptGetOpts are the apt-get options that keep dpkg from stopping on a
+// modified configuration file. The conffile prompt is dpkg's own, not
+// debconf's, so no frontend setting suppresses it; without these two, an
+// upgrade that touches a config file the image already customised stops and
+// waits. Keeping the installed version (confold) is the safe default for a
+// guest whose config this package wrote deliberately.
+const guestAptGetOpts = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
+// guestPkgCommand wraps a package-management command line with the
+// environment that makes it safe to run over a non-TTY guest ssh session.
+// Every caller that installs or upgrades packages on a guest must route
+// through this rather than prefixing variables by hand, so a newly-added
+// prompt is silenced in one place instead of missed at one call site.
+//
+// The variables are exported in their own statement rather than prefixed onto
+// the command, because a "VAR=x cmd" prefix applies to that ONE command only:
+// against a compound line like "apt-get update && apt-get install ...", a
+// prefix would cover the update and leave the install (the half that actually
+// prompts) exposed. Exporting covers every command in the line.
+func guestPkgCommand(cmdLine string) string {
+	return "export " + guestNonInteractivePkgEnv + "; " + cmdLine
 }
 
 // guestSSHResult holds the outcome of one runGuestSSH call: both output

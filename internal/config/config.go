@@ -308,6 +308,14 @@ type SSHBlock struct {
 
 	// Identity is the default path to an SSH private key (identity) file for this context.
 	Identity string `yaml:"identity,omitempty"`
+
+	// Jump is the default ssh -J jump host for this context, as
+	// "[user@]host[:port]" (comma-separated for a chain). Set it when the
+	// context's nodes are not directly routable from where pmx runs, so every
+	// ssh-based command (and the lab guest commands, which reach guests on
+	// their own mgmt IPs) tunnels through the same bastion without repeating
+	// --jump on each invocation.
+	Jump string `yaml:"jump,omitempty"`
 }
 
 // Session holds a live ticket and CSRF token obtained after password login.

@@ -377,15 +377,25 @@ func cephOSDTestLab(name string, nodes, disks int) *config.Lab {
 	return lab
 }
 
+// cephDiskByIDLink is the by-id link PVE 9.2 publishes for the idx-th OSD
+// disk. It is named after the DRIVE (scsi2 is the first OSD disk, after the
+// OS and data disks on scsi0/scsi1), NOT after the serial: reproducing that
+// exact naming is the point of this fixture, since deriving the link from the
+// serial instead is what broke `pmx lab ceph osd` on PVE 9.2.
+func cephDiskByIDLink(idx int) string {
+	return fmt.Sprintf("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi%d", idx+2)
+}
+
 // cephDiskEntryJSON builds one GET /nodes/{n}/disks/list element for the
-// idx-th OSD disk, carrying the four fields the verb reads. devpath is the
-// kernel name a wipe targets; by_id_link is the stable path
-// createOSDDiskValue's serial=osdN guarantees, and the one an OSD is created
-// on.
+// idx-th OSD disk, carrying the fields the verb reads. devpath is the kernel
+// name a wipe targets; serial is what the disk is matched on; by_id_link is
+// the path the OSD is then created on, read from this listing rather than
+// derived from the serial.
 func cephDiskEntryJSON(idx int, used string, osdid int) map[string]any {
 	return map[string]any{
 		"devpath":    "/dev/sd" + string(rune('c'+idx)),
-		"by_id_link": cephOSDDevPath(idx),
+		"by_id_link": cephDiskByIDLink(idx),
+		"serial":     cephOSDSerial(idx),
 		"used":       used,
 		"osdid":      osdid,
 	}
@@ -470,7 +480,9 @@ func TestLabCephOsd_DryRun_NoAPICalls(t *testing.T) {
 	out, err := runGuestCmd(t, cmd, "osd", "ceph", "--dry-run")
 	require.NoError(t, err)
 	assert.Contains(t, out, "[dry-run]")
-	assert.Contains(t, out, cephOSDDevPath(0))
+	// Dry-run never reads a disk listing, so it names the disk the way the
+	// real run will match it: by serial.
+	assert.Contains(t, out, cephOSDSerial(0))
 	assert.Empty(t, fake.Calls)
 }
 
@@ -496,8 +508,9 @@ func TestLabCephOsd_CreatesOSDOnCleanDevices(t *testing.T) {
 	require.Len(t, createRec, 3, "one OSD must be created per node")
 	assert.Empty(t, wipeRec, "a clean device must never be wiped")
 	for _, rec := range createRec {
-		assert.Equal(t, cephOSDDevPath(0), rec.body["dev"],
-			"the OSD must be created on the stable by-id path, not the kernel name")
+		assert.Equal(t, cephDiskByIDLink(0), rec.body["dev"],
+			"the OSD must be created on the by-id path the node itself reported, "+
+				"not on one derived from the serial and not on the kernel name")
 	}
 	assert.Contains(t, out, "created")
 }
@@ -633,7 +646,7 @@ func TestLabCephOsd_ConfiguredDiskMissingFromListing_Errors(t *testing.T) {
 	_, err := runGuestCmd(t, cmd, "osd", "ceph")
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "lab-ceph-0")
-	assert.ErrorContains(t, err, cephOSDDevPath(0))
+	assert.ErrorContains(t, err, cephOSDSerial(0))
 	assert.ErrorContains(t, err, "pmx pve qemu disk add")
 	assert.Empty(t, createRec, "an unresolvable device must abort before any OSD is created")
 }
@@ -808,4 +821,38 @@ func TestLabCephStatus_EmptyPayload_ReportsNoStatus(t *testing.T) {
 
 	assert.Contains(t, out, "no status reported")
 	assert.Empty(t, fake.Calls)
+}
+
+// TestCephMatchDisk_MatchesSerialNotDerivedByIDPath pins the PVE 9.2 shape
+// that broke OSD creation: the by-id link is named after the DRIVE, so the
+// path this package used to derive from the serial matches nothing. Matching
+// on the reported serial finds the disk, and the by-id path is then read from
+// the listing rather than guessed.
+func TestCephMatchDisk_MatchesSerialNotDerivedByIDPath(t *testing.T) {
+	entries := []cephDiskEntry{
+		{Devpath: "/dev/sda", ByIDLink: "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi0", Serial: "os0"},
+		{Devpath: "/dev/sdc", ByIDLink: cephDiskByIDLink(0), Serial: cephOSDSerial(0), Osdid: -1},
+	}
+
+	require.NotContains(t, cephDiskByIDLink(0), cephOSDSerial(0),
+		"fixture guard: on PVE 9.2 the by-id link must not contain the serial")
+	assert.Nil(t, cephMatchDisk(entries, "osd9"), "an absent serial must not match anything")
+
+	got := cephMatchDisk(entries, cephOSDSerial(0))
+	require.NotNil(t, got, "the OSD disk must be found by its serial")
+	assert.Equal(t, cephDiskByIDLink(0), got.ByIDLink)
+	assert.Equal(t, "/dev/sdc", got.Devpath)
+}
+
+// TestCephMatchDisk_FallsBackToDerivedPathWhenSerialAbsent covers a PVE build
+// whose disk listing omits serial entirely, where the derived by-id path is
+// the only identifier available.
+func TestCephMatchDisk_FallsBackToDerivedPathWhenSerialAbsent(t *testing.T) {
+	entries := []cephDiskEntry{
+		{Devpath: "/dev/sdc", ByIDLink: cephOSDLegacyByIDPath(cephOSDSerial(0)), Osdid: -1},
+	}
+
+	got := cephMatchDisk(entries, cephOSDSerial(0))
+	require.NotNil(t, got, "a listing without serials must still match on the legacy derived path")
+	assert.Equal(t, "/dev/sdc", got.Devpath)
 }

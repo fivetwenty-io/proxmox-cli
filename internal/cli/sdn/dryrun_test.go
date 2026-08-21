@@ -19,7 +19,7 @@ func TestDryRun_RendersDiff(t *testing.T) {
 		"interfaces-diff": "+ auto vnet0",
 	}, 200)
 
-	out, err := run(t, f, "", "dry-run", "--node", "pve")
+	out, err := run(t, f, "", "dry-run", "--node", "pve1")
 	require.NoError(t, err)
 	require.Contains(t, out, "router bgp 65000")
 	require.Contains(t, out, "auto vnet0")
@@ -46,9 +46,25 @@ func TestDryRun_Error(t *testing.T) {
 	var rec []recordedRequest
 	record(f, &rec, "GET /api2/json/cluster/sdn/dry-run", nil, 500)
 
-	_, err := run(t, f, "", "dry-run", "--node", "pve")
+	_, err := run(t, f, "", "dry-run", "--node", "pve1")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "preview SDN configuration on node \"pve\"")
+	require.ErrorContains(t, err, "preview SDN configuration on node \"pve1\"")
+}
+
+// TestDryRun_UnknownNodeFailsFast verifies a node name that is not a cluster
+// member is rejected client-side, before the request that would otherwise
+// leave the command waiting on the server while it tries to reach a node that
+// does not exist.
+func TestDryRun_UnknownNodeFailsFast(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/dry-run", map[string]any{}, 200)
+
+	_, err := run(t, f, "", "dry-run", "--node", "typo")
+	require.Error(t, err)
+	require.ErrorContains(t, err, `node "typo" is not a member of this cluster`)
+	require.ErrorContains(t, err, "pve1", "the error must name the nodes that do exist")
+	require.Empty(t, rec, "no dry-run request must be issued for a node that cannot exist")
 }
 
 // --- rollback ---

@@ -258,6 +258,19 @@ Each entry under **contexts** is a mapping with the following keys.
 : Path to a default SSH private key (identity) file for this context.
   Unset by default, meaning the SSH client's own key discovery is used.
 
+**ssh.jump**
+: Default jump host to tunnel through, as **[user@]host[:port]**, or a
+  comma-separated chain. Passed to ssh as **-J**. Unset by default, meaning a
+  direct connection. Set this when the context's nodes are not routable from
+  where **pmx** runs: every ssh-based command picks it up, including the
+  **pmx lab** verbs that reach lab guests on their own SDN mgmt IPs, which are
+  reachable only from inside the context's network. Override per invocation
+  with **-J/--jump** (**--ssh-jump** on **pmx rsync**).
+
+  It applies to the ssh transport only. The Proxmox API connection is a
+  separate transport and does not tunnel through it, so the context's **host**
+  must still be reachable directly.
+
 # LAB CONFIGURATION
 
 **pmx lab** and its sub-commands (**pmx lab create**, **pmx lab start**,
@@ -509,9 +522,13 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
 : Size in gigabytes of each OSD disk. Required (and must be positive) when
   **storage.osd_disks.count** is set. Every disk is emitted identically, as
   **discard=on,iothread=1,ssd=1,backup=0,serial=osdN** (N starting at 0),
-  so the guest sees each at a stable
-  **/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_osdN** path rather than a
-  guessed **/dev/sdX**, and PBS never backs one up. On an already-running
+  and PBS never backs one up. The serial is how **pmx lab ceph osd** picks
+  each disk out of the node's own disk listing, which is stable where a
+  **/dev/sdX** kernel name is not; the OSD is then created on whatever device
+  path that listing reports. Note that the serial does not name the disk's
+  **/dev/disk/by-id** symlink: on PVE 9.2 that link is keyed off the drive
+  name, and the serial surfaces only as the **ID_SCSI_SERIAL** udev property
+  that **lsblk** and the disk listing report. On an already-running
   VM, **discard** and **ssd** only take effect after a full power-off and
   power-on (a reboot is not enough), though this never matters for
   **pmx lab create**, since the VM has not booted yet. OSD disks raise the

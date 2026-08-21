@@ -178,7 +178,7 @@ func uploadSnippetSSH(
 			strings.Join(append(splitContentList(scfg.Content), "snippets"), ","))
 	}
 
-	remote.ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity")
+	remote.ApplyContextSSHDefaults(cmd, deps, f, "user", "port", "identity", "jump")
 
 	host, err := nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, deps.Node, deps.Log)
 	if err != nil {

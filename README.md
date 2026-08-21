@@ -327,7 +327,13 @@ contexts:
       user: root                   # default -l/--user for `pmx ssh`/`pmx rsync`
       port: 22                     # default -p/--port
       identity: ~/.ssh/id_ed25519  # default -i/--identity
+      jump: admin@bastion:22       # default -J/--jump (ssh transport only)
 ```
+
+`ssh.jump` tunnels every ssh-based command through a bastion, including the
+`pmx lab` verbs that reach lab guests on their SDN mgmt IPs. The API
+connection is a separate transport, so `host:` must still be reachable
+directly.
 
 Configs written by an earlier version of `pmx` use `targets:` and
 `current-target:`. Run `scripts/migrate-config.py` (or

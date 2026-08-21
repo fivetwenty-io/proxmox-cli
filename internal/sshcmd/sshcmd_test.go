@@ -371,3 +371,32 @@ func TestRemoteShell(t *testing.T) {
 		})
 	}
 }
+
+// TestOptionArgs_JumpEmitsProxyJump verifies a configured jump host reaches
+// ssh as -J, immediately followed by its value, and that an unset jump host
+// adds nothing at all.
+func TestOptionArgs_JumpEmitsProxyJump(t *testing.T) {
+	args := OptionArgs(&Flags{Port: 22, Jump: "bastion.example.net"})
+
+	idx := -1
+	for i, a := range args {
+		if a == "-J" {
+			idx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, idx, "-J must be present: %v", args)
+	require.Less(t, idx+1, len(args), "-J must be followed by its value")
+	require.Equal(t, "bastion.example.net", args[idx+1])
+
+	require.NotContains(t, OptionArgs(&Flags{Port: 22}), "-J",
+		"an unset jump host must add no option")
+}
+
+// TestRemoteShell_QuotesJumpForRsync verifies the jump host survives rsync's
+// whitespace re-parsing of the -e string.
+func TestRemoteShell_QuotesJumpForRsync(t *testing.T) {
+	got := RemoteShell(&Flags{Port: 22, Jump: "admin@bastion.example.net:2222"})
+	require.Contains(t, got, "-J")
+	require.Contains(t, got, "admin@bastion.example.net:2222")
+}

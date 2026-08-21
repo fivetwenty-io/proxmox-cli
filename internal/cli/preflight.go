@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 )
 
@@ -65,6 +66,57 @@ func WarnInboundAllow(w io.Writer, state InboundAllowState, scope string) {
 		_, _ = fmt.Fprintf(w, "WARNING: no inbound ACCEPT rule found in the %s rule set; "+
 			"enabling the firewall may cut off SSH (22) and GUI (8006) access\n", scope)
 	}
+}
+
+// RequireClusterNode fails fast when node is not a member of the cluster,
+// before a caller forwards that name to an endpoint that would proxy it to a
+// node that does not exist.
+//
+// This exists because the API cannot fast-fail such a name for us. A node name
+// travels inside the request to the context host, which is reachable by
+// definition, so the client-side dial timeout (apiclient.BuildOptions) never
+// applies; the server then tries to reach the named node itself and the CLI
+// simply waits on the response. `pmx pve sdn dry-run --node typo` stalled that
+// way with no diagnosis. Checking membership against /cluster/status first
+// turns that wait into an immediate, named error.
+//
+// Deliberately permissive about its own failures: a status fetch that errors,
+// returns nothing, or lists no nodes at all (a standalone install reports no
+// cluster status) returns nil and lets the real call proceed, so this can only
+// ever convert a knowably-wrong node name into a clear error, never block a
+// working one.
+func RequireClusterNode(ctx context.Context, deps *Deps, node string) error {
+	if deps == nil || deps.API == nil || node == "" {
+		return nil
+	}
+	resp, err := deps.API.Cluster.ListStatus(ctx)
+	if err != nil || resp == nil {
+		return nil
+	}
+
+	var names []string
+	for _, raw := range *resp {
+		var e struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			continue
+		}
+		if e.Type == "node" && e.Name != "" {
+			if e.Name == node {
+				return nil
+			}
+			names = append(names, e.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+
+	sort.Strings(names)
+	return fmt.Errorf("node %q is not a member of this cluster (known nodes: %s)",
+		node, strings.Join(names, ", "))
 }
 
 // WarnIfInquorate fetches /cluster/status and warns on w when the cluster

@@ -53,7 +53,7 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 			"any label works, `pbs:/path` included.\n\n" +
 			"rsync owns most short flags, so pmx's own connection flags are long-only and " +
 			"must precede the rsync arguments: --ssh-user, --ssh-port, --ssh-identity, " +
-			"--ssh-agent, and --no-strict. -c/--context, --config, --insecure, and --debug " +
+			"--ssh-jump, --ssh-agent, and --no-strict. -c/--context, --config, --insecure, and --debug " +
 			"are recognised in that same leading position.\n\n" +
 			"Supplying your own -e/--rsh is rejected, since pmx always injects its own.",
 		Example: `  pmx rsync ./backup.tar pve1:/var/tmp/
@@ -72,6 +72,8 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 	cmd.Flags().StringVar(&f.User, "ssh-user", "root", "SSH login user")
 	cmd.Flags().StringVar(&f.Identity, "ssh-identity", "", "path to SSH identity (private key) file")
 	cmd.Flags().IntVar(&f.Port, "ssh-port", 22, "SSH port")
+	cmd.Flags().StringVar(&f.Jump, "ssh-jump", "",
+		"jump host to tunnel through, as [user@]host[:port] (comma-separated for a chain)")
 	cmd.Flags().BoolVar(&f.Agent, "ssh-agent", false, "enable SSH agent forwarding")
 	cmd.Flags().BoolVar(&f.NoStrict, "no-strict", false, "disable strict host key checking")
 
@@ -127,7 +129,7 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 // the agreed node to its cluster management address via nodeaddr.Resolve;
 // any other product is rejected.
 func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []string) error {
-	ApplyContextSSHDefaults(cmd, deps, f, "ssh-user", "ssh-port", "ssh-identity")
+	ApplyContextSSHDefaults(cmd, deps, f, "ssh-user", "ssh-port", "ssh-identity", "ssh-jump")
 
 	operands, node, err := classifyRsyncArgs(rsyncArgs)
 	if err != nil {

@@ -29,6 +29,12 @@ func newDryRunCmd() *cobra.Command {
 			if deps.Node == "" {
 				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
+			// The node name is proxied server-side, so a name that names no
+			// node leaves this command waiting on the API rather than failing:
+			// see cli.RequireClusterNode.
+			if err := cli.RequireClusterNode(cmd.Context(), deps, deps.Node); err != nil {
+				return err
+			}
 
 			resp, err := deps.API.Cluster.ListSdnDryRun(
 				cmd.Context(), &cluster.ListSdnDryRunParams{Node: deps.Node})

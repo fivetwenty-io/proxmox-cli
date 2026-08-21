@@ -111,14 +111,14 @@ func TestQdeviceAdd_HappyPath_InstallsAndSetsUp(t *testing.T) {
 	require.Len(t, fake.Calls, 10)
 	assert.Contains(t, fake.Calls[0].Args, "pvecm status")
 	assert.Contains(t, fake.Calls[1].Args, "dpkg -s corosync-qnetd")
-	assert.Contains(t, fake.Calls[2].Args, "apt-get update && apt-get install -y corosync-qnetd")
+	assertGuestPkgInstall(t, fake.Calls[2].Args, "corosync-qnetd")
 	assert.Contains(t, fake.Calls[2].Args, "root@10.10.1.15")
 	assert.Contains(t, fake.Calls[5].Args, "root@10.10.1.15") // IPv6 apply lands on the QDevice VM
 	assert.Contains(t, fake.Calls[6].Args, "dpkg -s corosync-qdevice")
 	assert.Contains(t, fake.Calls[6].Args, "root@10.10.1.10")
 	assert.Contains(t, fake.Calls[7].Args, "dpkg -s corosync-qdevice")
 	assert.Contains(t, fake.Calls[7].Args, "root@10.10.1.11")
-	assert.Contains(t, fake.Calls[8].Args, "apt-get update && apt-get install -y corosync-qdevice")
+	assertGuestPkgInstall(t, fake.Calls[8].Args, "corosync-qdevice")
 	assert.Contains(t, fake.Calls[9].Args, "pvecm qdevice setup 10.10.1.15")
 	assert.Contains(t, fake.Calls[9].Args, "root@10.10.1.10")
 }
