@@ -144,19 +144,48 @@ const guestNonInteractivePkgEnv = "DEBIAN_FRONTEND=noninteractive DEBCONF_NONINT
 // guest whose config this package wrote deliberately.
 const guestAptGetOpts = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
 
-// guestPkgCommand wraps a package-management command line with the
-// environment that makes it safe to run over a non-TTY guest ssh session.
-// Every caller that installs or upgrades packages on a guest must route
-// through this rather than prefixing variables by hand, so a newly-added
-// prompt is silenced in one place instead of missed at one call site.
+// guestAptConfPath is the throwaway apt configuration file guestPkgCommand
+// writes on the guest, and points APT_CONFIG at, before running the command.
+//
+// It exists for the apt runs this package does not spell out itself. The one
+// that matters is `pveceph install`, which shells out to
+//
+//	apt-get --no-install-recommends -o Dpkg::Options::=--force-confnew install -- ceph ...
+//
+// with no --assume-yes anywhere (checked against PVE 9.2.6,
+// /usr/share/perl5/PVE/CLI/pveceph.pm). That apt-get therefore asks "Do you
+// want to continue? [Y/n]", and no frontend variable answers it: the prompt is
+// apt's own, and pveceph's own `local $ENV{DEBIAN_FRONTEND} = 'noninteractive'`
+// does nothing for it. Because the flags belong to an apt-get we never see, a
+// command-line option cannot reach it and configuration is the only channel.
+//
+// /run is tmpfs, so the file never outlives a reboot, and APT_CONFIG only
+// displaces Dir::Etc::main (/etc/apt/apt.conf, which PVE does not ship);
+// everything in /etc/apt/apt.conf.d still loads.
+const guestAptConfPath = "/run/pmx-apt-noninteractive.conf"
+
+// guestPkgCommand wraps a package-management command line with the environment
+// that makes it safe to run over a non-TTY guest ssh session. Every caller that
+// installs or upgrades packages on a guest must route through this rather than
+// prefixing variables by hand, so a newly-added prompt is silenced in one place
+// instead of missed at one call site.
 //
 // The variables are exported in their own statement rather than prefixed onto
 // the command, because a "VAR=x cmd" prefix applies to that ONE command only:
 // against a compound line like "apt-get update && apt-get install ...", a
 // prefix would cover the update and leave the install (the half that actually
 // prompts) exposed. Exporting covers every command in the line.
+//
+// The command runs inside a brace group with stdin on /dev/null for the same
+// reason the export is hoisted: a bare "cmd </dev/null" suffix would redirect
+// the last command of a compound line only. The redirect is the backstop for a
+// prompt none of the settings above anticipated, turning what would be an
+// ssh session wedged forever on an unanswerable question into a prompt that
+// reads EOF and fails.
 func guestPkgCommand(cmdLine string) string {
-	return "export " + guestNonInteractivePkgEnv + "; " + cmdLine
+	return "export " + guestNonInteractivePkgEnv + " APT_CONFIG=" + guestAptConfPath + "; " +
+		"printf '%s\\n' 'APT::Get::Assume-Yes \"true\";' >" + guestAptConfPath + "; " +
+		"{ " + cmdLine + "; } </dev/null"
 }
 
 // guestSSHResult holds the outcome of one runGuestSSH call: both output

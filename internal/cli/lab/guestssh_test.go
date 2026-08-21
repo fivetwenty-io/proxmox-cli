@@ -392,10 +392,45 @@ func TestGuestPkgCommand_ExportsForWholeCompoundLine(t *testing.T) {
 	got := guestPkgCommand("apt-get update && apt-get install -y corosync-qnetd")
 
 	require.True(t, strings.HasPrefix(got, "export "), "got %q", got)
-	env, cmds, found := strings.Cut(got, "; ")
+	env, rest, found := strings.Cut(got, "; ")
 	require.True(t, found, "the export must be its own statement: %q", got)
-	assert.NotContains(t, cmds, "=noninteractive",
+	assert.NotContains(t, rest, "=noninteractive",
 		"no variable may remain bound to a single command of the compound line")
 	assert.Contains(t, env, "NEEDRESTART_SUSPEND=1")
-	assert.Equal(t, "apt-get update && apt-get install -y corosync-qnetd", cmds)
+	assert.Contains(t, got, "{ apt-get update && apt-get install -y corosync-qnetd; }",
+		"the caller's line must survive verbatim inside the group: %q", got)
+}
+
+// TestGuestPkgCommand_GroupsCompoundLineForStdinRedirect pins the second half
+// of the same bug class as the export: a bare "cmd </dev/null" suffix binds to
+// the LAST command of a compound line, so on "apt-get update && apt-get
+// install ..." it would protect the update and leave the install (the half
+// that prompts) reading a live ssh stdin that never reaches EOF. The brace
+// group puts every command of the line behind the redirect.
+func TestGuestPkgCommand_GroupsCompoundLineForStdinRedirect(t *testing.T) {
+	got := guestPkgCommand("apt-get update && apt-get install -y corosync-qnetd")
+
+	require.True(t, strings.HasSuffix(got, "; } </dev/null"),
+		"the whole line must be grouped behind the redirect: %q", got)
+	group := strings.LastIndex(got, "{ ")
+	require.GreaterOrEqual(t, group, 0, "expected a brace group in %q", got)
+	assert.NotContains(t, got[:group], "</dev/null",
+		"the redirect must apply to the group, not to an inner command")
+}
+
+// TestGuestPkgCommand_AnswersAptsOwnContinuePrompt pins the prompt that wedged
+// the first live `pmx lab ceph install`. apt-get's "Do you want to continue?
+// [Y/n]" is apt's own question, not debconf's, so DEBIAN_FRONTEND does not
+// touch it; and because pveceph builds that apt-get itself (with no
+// --assume-yes, PVE 9.2.6), we cannot pass it a flag. APT_CONFIG is the only
+// channel that reaches it.
+func TestGuestPkgCommand_AnswersAptsOwnContinuePrompt(t *testing.T) {
+	got := guestPkgCommand("pveceph install --repository no-subscription")
+
+	assert.Contains(t, got, "APT_CONFIG="+guestAptConfPath,
+		"apt must be pointed at the generated config: %q", got)
+	assert.Contains(t, got, `APT::Get::Assume-Yes "true";`,
+		"the generated config must answer apt's continue prompt: %q", got)
+	assert.Less(t, strings.Index(got, ">"+guestAptConfPath), strings.Index(got, "pveceph"),
+		"the config must be written before the command that reads it: %q", got)
 }

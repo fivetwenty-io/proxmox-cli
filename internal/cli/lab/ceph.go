@@ -89,8 +89,19 @@ func cephResolveNodes(lab *config.Lab) (int, error) {
 // cephInstallCommand is the single source of the remote pveceph install
 // command line, so the dry-run preview cannot drift from what the real run
 // executes (they previously repeated the same literal in two places).
+//
+// There is deliberately no -y: pveceph install takes only --allow-experimental,
+// --repository, and --version (PVE 9.2.6). Anything else is rejected outright
+// by the CLI option parser with "Unknown option: y / 400 unable to parse
+// option", so the -y this used to pass meant the install aborted at argument
+// parsing without touching a single package.
+//
+// Nothing replaces it, because pveceph needs no confirmation here. Each of its
+// three prompts is guarded by `-t STDOUT`, and over ssh stdout is a pipe, so on
+// a guest session they are skipped rather than asked. The prompt that actually
+// hangs comes from the apt-get underneath, which guestPkgCommand answers.
 func cephInstallCommand() string {
-	return guestPkgCommand("pveceph install --repository no-subscription -y")
+	return guestPkgCommand("pveceph install --repository no-subscription")
 }
 
 // ensureCephInstalled probes for the ceph packages and runs pveceph install
@@ -105,10 +116,6 @@ func ensureCephInstalled(deps *cli.Deps, nodeIP string) (bool, error) {
 	if strings.TrimSpace(probe.Stdout) == "installed" {
 		return true, nil
 	}
-	// -y is required on top of the environment prefix: it answers pveceph's
-	// own confirmation prompt, which aborts on EOF over non-TTY SSH, while
-	// guestPkgCommand silences the debconf, needrestart, and listchanges
-	// prompts of the apt-get run pveceph performs underneath.
 	if _, err := runGuestSSH(deps, nodeIP, cephInstallCommand()); err != nil {
 		return false, fmt.Errorf("pveceph install on %s: %w", nodeIP, err)
 	}
@@ -122,9 +129,11 @@ func newCephInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install <name>",
 		Short: "Install the Ceph packages on every node of a lab's nested cluster",
-		Long: "Run `pveceph install --repository no-subscription -y` over ssh on every node of " +
+		Long: "Run `pveceph install --repository no-subscription` over ssh on every node of " +
 			"the lab's nested cluster, with every package-manager prompt a TTY-less ssh session " +
-			"cannot answer suppressed.\n\n" +
+			"cannot answer suppressed. That includes the \"Do you want to continue? [Y/n]\" of " +
+			"the apt-get pveceph runs underneath, which no frontend setting answers because " +
+			"pveceph passes it no --assume-yes.\n\n" +
 			"Idempotent: a node that already reports the ceph-osd package installed is skipped " +
 			"rather than re-run.\n\n" +
 			"Requires topology.nodes >= 3: Ceph needs at least a 3-node lab.",

@@ -75,8 +75,10 @@ func TestLabCephInstall_HappyPath_InstallsOnAllThree(t *testing.T) {
 
 	require.Len(t, fake.Calls, 6)
 	installCmd := fake.Calls[1].Args[len(fake.Calls[1].Args)-1]
-	assert.True(t, strings.HasSuffix(installCmd, "pveceph install --repository no-subscription -y"),
-		"the install command must end with the mandatory -y flag, got %q", installCmd)
+	assert.Contains(t, installCmd, "pveceph install --repository no-subscription;",
+		"got %q", installCmd)
+	assert.NotContains(t, installCmd, "no-subscription -y",
+		"pveceph install takes no -y: the option parser rejects it outright and nothing installs")
 }
 
 func TestLabCephInstall_AlreadyInstalled_Skips(t *testing.T) {
