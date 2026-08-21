@@ -46,14 +46,27 @@ const (
 	qdeviceDiskGB   = 8
 )
 
-// createCapacityWarnRatio and createCapacityRefuseRatio are the pool-fill
-// thresholds the capacity gate (createCapacityGate) checks aggregate lab
-// refquota reservation against, relative to the shared ZFS pool's live total
-// size (multi-node lab plan §3.4): a warning above 75%, a hard refusal
-// (absent --force) above 85%.
+// The capacity gate (createCapacityGate) applies these thresholds to two
+// SEPARATE ratios, because a thin-provisioned pool has two different things
+// worth measuring and only one of them is a reason to stop.
+//
+// Fill is how full the pool ACTUALLY is: bytes really written, against pool
+// size. That is what breaks a host, so it is what refuses (absent --force)
+// above createCapacityFillRefuseRatio, and warns above
+// createCapacityFillWarnRatio.
+//
+// Commitment is the sum of every configured lab's declared refquota plus
+// the NFS reserve, against pool size. On a thin-provisioned pool this is
+// EXPECTED to exceed 100%: over-subscription is the entire point of thin
+// provisioning, and quotas are ceilings almost no lab reaches. So crossing
+// createCapacityCommitWarnRatio warns and never refuses. Refusing on
+// commitment (as this gate once did) makes the gate fire hardest on exactly
+// the healthy, mostly-empty pools thin provisioning is meant to produce:
+// the fleet's pool sat at 8% full while the gate refused every create.
 const (
-	createCapacityWarnRatio   = 0.75
-	createCapacityRefuseRatio = 0.85
+	createCapacityFillWarnRatio   = 0.75
+	createCapacityFillRefuseRatio = 0.85
+	createCapacityCommitWarnRatio = 1.0
 )
 
 // createStorageEntry is the subset of a /cluster/storage element this command
@@ -187,9 +200,12 @@ func newCreateCmd() *cobra.Command {
 			"blank disks, and --qdevice-clone-from to clone the QDevice VM. --clone-from " +
 			"assumes the source VM lives on the same node as the new lab VMs; the platform is " +
 			"single-node today, so this always holds.\n\n" +
-			"Before any node or QDevice VM is added, a capacity gate sums every configured " +
-			"lab's ZFS refquota reservation against the shared pool's live size. It warns " +
-			"above 75% full and refuses above 85% full unless --force is passed.\n\n" +
+			"Before any node or QDevice VM is added, a capacity gate checks the shared " +
+			"pool twice. It warns when the pool is over 75% full and refuses over 85% full " +
+			"unless --force is passed, measured on bytes actually written. Separately it " +
+			"warns (never refuses) when every configured lab's ZFS refquota plus the NFS " +
+			"reserve together exceed the pool's size, since a thin-provisioned pool is " +
+			"over-subscribed by design.\n\n" +
 			"This does not run `pmx lab net apply`: the vnet and subnet definitions stay " +
 			"staged, not yet live, until that command (or `pmx pve sdn apply`) commits them.\n\n" +
 			"Every other lab verb (destroy, start, stop, list, status) finds the lab's VMs by " +
@@ -293,7 +309,7 @@ func newCreateCmd() *cobra.Command {
 
 	f := cmd.Flags()
 	f.BoolVar(&dryRun, "dry-run", false, "preview the ordered plan without mutating anything")
-	f.BoolVar(&force, "force", false, "override the capacity gate's 85% pool-fill refusal threshold")
+	f.BoolVar(&force, "force", false, "override the capacity gate's 85% actual-pool-fill refusal threshold")
 	f.StringVar(&node, "node", "", "node to create the lab's VMs on (defaults to --node/PMX_NODE/config default)")
 	f.BoolVar(&start, "start", false, "start every created VM after creation and verify the guest agent responds")
 	f.BoolVar(&noContext, "no-context", false, "skip auto-registering the lab-<name> pmx context after --start")
@@ -630,15 +646,23 @@ func createResolveCapacityDenominator(
 	return createCapacityDenominator{}, false, nil
 }
 
-// createCapacityGate is the sum-of-refquotas-vs-pool-size check `pmx lab
-// create` runs before adding one more node/QDevice VM step to the plan
-// (multi-node lab plan §3.4): it sums config.EffectiveRefquotaGB across
-// every lab config.ResolveLabs resolves, substituting eff for the on-disk
-// entry of the same name (see below), compares that sum against the live
-// pool's total capacity — read via createResolveCapacityDenominator for the
-// lab's base pool (zfsBasePool(eff), e.g. "tank") — and returns a non-empty
-// warning string when the ratio exceeds createCapacityWarnRatio, or an
-// error when it exceeds createCapacityRefuseRatio and force is false. When
+// createCapacityGate is the pool-capacity check `pmx lab create` runs
+// before adding one more node/QDevice VM step to the plan (multi-node lab
+// plan §3.4). It reads the live pool via createResolveCapacityDenominator
+// for the lab's base pool (zfsBasePool(eff), e.g. "tank") and measures two
+// separate ratios against it (see the threshold constants for why they are
+// separate, and why only one of them refuses):
+//
+//   - fill, the pool's actual used/total, which refuses above
+//     createCapacityFillRefuseRatio when force is false and warns above
+//     createCapacityFillWarnRatio;
+//   - commitment, config.EffectiveRefquotaGB summed across every lab
+//     config.ResolveLabs resolves (substituting eff for the on-disk entry of
+//     the same name, see below) plus the NFS reserve, which only ever warns,
+//     above createCapacityCommitWarnRatio.
+//
+// It returns a non-empty warning string carrying whichever of the two (or
+// both) crossed their threshold, and an error only for a refused fill. When
 // no live capacity source exists for the base pool at all, the gate refuses
 // loudly (an operator-actionable error naming the base pool) rather than
 // silently skipping, since a bare capacity gate with no live signal at all
@@ -689,47 +713,51 @@ func createCapacityGate(ctx context.Context, deps *cli.Deps, eff *config.Lab, no
 	totalBytes := denom.totalBytes
 	const bytesPerGB = int64(1024 * 1024 * 1024)
 
-	// "Peppi actuals" (multi-node lab plan §3.4: "sum of all lab refquotas +
-	// peppi actuals vs. pool size"): denom.usedBytes — the pool-wide
-	// allocated/used figure createResolveCapacityDenominator's resolved
-	// source reports (a pool-rooted storage's live "used", or a zpool's
-	// "alloc") — is the only actual-usage signal available without an
-	// SSH-based `zfs list` (out of scope for this API-only gate), so
-	// peppi's actual usage cannot be cleanly isolated from every lab's own
-	// actual usage, which it necessarily also includes. Rather than risk
-	// under-counting (and letting the gate pass a pool that is actually
-	// close to full), this deliberately takes the conservative, higher
-	// estimate: the whole pool's live used bytes are added on top of
-	// reservedGB's per-lab refquota sum, even though that double-counts a
-	// lab whose actual usage is smaller than its refquota (once via its own
-	// quota headroom, once via the pool-wide used figure). Over-estimating
-	// the reservation trips the gate sooner rather than later — the safe
-	// direction to err in a "before the pool actually fills" check. A
-	// resolved source reporting no used figure at all degrades this term to
-	// 0 rather than skipping the whole gate: unlike a missing/zero total,
-	// which leaves no denominator to compute a ratio at all, a missing used
-	// figure still leaves the refquota-sum and NFS-reserve terms meaningful
-	// on their own.
+	// Fill: what the pool has ACTUALLY consumed, straight from the resolved
+	// source's own used/total pair. Both halves come from that one source,
+	// so this ratio never mixes accounting domains, which matters: a
+	// zpool's alloc is post-compression and post-dedup while a dataset's
+	// refquota is neither, and a pool running dedup at 3.5x reports figures
+	// that differ by more than a factor of three between the two. A source
+	// reporting no used figure degrades this term to 0 rather than skipping
+	// the gate: unlike a missing total, which leaves no denominator at all,
+	// a missing used figure still leaves the commitment check meaningful.
 	usedGB := denom.usedBytes / bytesPerGB
+	totalGB := totalBytes / bytesPerGB
+	fillRatio := float64(denom.usedBytes) / float64(totalBytes)
 
-	reservedBytes := (reservedGB + usedGB + nfsReservedGB) * bytesPerGB
-	ratio := float64(reservedBytes) / float64(totalBytes)
+	// Commitment: what every configured lab is ALLOWED to consume, plus the
+	// NFS reserve. Deliberately NOT added on top of usedGB, because the
+	// pool-wide used figure already contains every lab's real consumption,
+	// so summing the two counts each lab twice (once through its unused
+	// quota headroom, once through the bytes it has actually written).
+	committedGB := reservedGB + nfsReservedGB
+	commitRatio := float64(committedGB*bytesPerGB) / float64(totalBytes)
 
-	switch {
-	case ratio > createCapacityRefuseRatio && !force:
+	if fillRatio > createCapacityFillRefuseRatio && !force {
 		return "", fmt.Errorf(
-			"capacity gate: configured labs reserve %dG + pool actual usage %dG + NFS reserve %dG "+
-				"against pool %q's %dG capacity (%.0f%%), over the %.0f%% refuse threshold; "+
-				"pass --force to override",
-			reservedGB, usedGB, nfsReservedGB, basePool, totalBytes/bytesPerGB, ratio*100, createCapacityRefuseRatio*100)
-	case ratio > createCapacityWarnRatio:
-		return fmt.Sprintf(
-			"capacity gate WARNING: configured labs reserve %dG + pool actual usage %dG + NFS reserve %dG "+
-				"against pool %q's %dG capacity (%.0f%%), over the %.0f%% warning threshold.",
-			reservedGB, usedGB, nfsReservedGB, basePool, totalBytes/bytesPerGB, ratio*100, createCapacityWarnRatio*100), nil
-	default:
+			"capacity gate: pool %q is %.0f%% full (%dG used of %dG), over the %.0f%% refuse threshold; "+
+				"free space on the pool, or pass --force to override",
+			basePool, fillRatio*100, usedGB, totalGB, createCapacityFillRefuseRatio*100)
+	}
+
+	var notes []string
+	if fillRatio > createCapacityFillWarnRatio {
+		notes = append(notes, fmt.Sprintf(
+			"pool %q is %.0f%% full (%dG used of %dG), over the %.0f%% warning threshold",
+			basePool, fillRatio*100, usedGB, totalGB, createCapacityFillWarnRatio*100))
+	}
+	if commitRatio > createCapacityCommitWarnRatio {
+		notes = append(notes, fmt.Sprintf(
+			"configured labs reserve %dG + NFS reserve %dG against pool %q's %dG capacity "+
+				"(%.0f%% committed, pool %.0f%% full): the pool is over-subscribed, so it holds only "+
+				"while labs stay under their quotas",
+			reservedGB, nfsReservedGB, basePool, totalGB, commitRatio*100, fillRatio*100))
+	}
+	if len(notes) == 0 {
 		return "", nil
 	}
+	return "capacity gate WARNING: " + strings.Join(notes, "; ") + ".", nil
 }
 
 // resourceNotFoundPattern matches PVE's "<kind> '<id>' does not exist" error
@@ -997,15 +1025,18 @@ func createZfsDatasetProbeArgs(dataset string) []string {
 // createZfsDatasetCreateArgs builds the remote argv (after the ssh
 // destination) that creates dataset: "-p" creates any missing parent
 // datasets (e.g. "tank/labs" ahead of "tank/labs/wayne"), matching the
-// historical lab-provisioning script this step supersedes. refquotaGB is
-// included as "-o refquota=<N>G" only when positive; a lab that leaves
-// storage.refquota_gb unset gets a dataset with no refquota enforced at
-// creation time (an operator can still set one later via `pmx lab quota
-// set`).
+// historical lab-provisioning script this step supersedes. A positive
+// refquotaGB contributes one "-o" per labDatasetQuotaProps entry (both
+// quota and refquota; see that function for why refquota alone bounds
+// nothing). A lab that leaves storage.refquota_gb unset gets a dataset with
+// no cap enforced at creation time (an operator can still set one later via
+// `pmx lab quota set`).
 func createZfsDatasetCreateArgs(dataset string, refquotaGB int) []string {
 	args := []string{"zfs", "create", "-p"}
 	if refquotaGB > 0 {
-		args = append(args, "-o", fmt.Sprintf("refquota=%dG", refquotaGB))
+		for _, prop := range labDatasetQuotaProps(refquotaGB) {
+			args = append(args, "-o", prop)
+		}
 	}
 	return append(args, dataset)
 }
@@ -1473,6 +1504,15 @@ func buildCreatePlan(
 				Type:    "zfspool",
 				Pool:    new(zfsDatasetPath(eff)),
 				Content: new("images,rootdir"),
+				// Sparse is what makes every zvol PVE allocates here thin.
+				// PVE's zfspool driver defaults sparse OFF, which gives each
+				// disk a refreservation equal to its whole volsize: the disk
+				// consumes its full declared size against the pool the moment
+				// it is created, before a single byte is written. A
+				// three-node nested-Ceph lab reserves over a terabyte that
+				// way to hold a few gigabytes of real data, and the pool
+				// fills with reservations for data that does not exist.
+				Sparse: new(true),
 			}
 			_, err := ac.ClusterStorage.CreateStorage(ctx, params)
 			return err

@@ -99,7 +99,7 @@ func TestQuotaSet_HappyPathWithYes_UsesConfigRefquota(t *testing.T) {
 		"-p", "2222",
 		"-i", "/home/wayne/.ssh/lab_ed25519",
 		"root@sm-0.lab.internal",
-		"zfs", "set", "refquota=50G", "tank/labs/alpha",
+		"zfs", "set", "quota=50G", "refquota=50G", "tank/labs/alpha",
 	}, call.Args)
 }
 
@@ -145,7 +145,9 @@ func TestQuotaSet_RefquotaFlagOverridesConfig(t *testing.T) {
 
 	require.Len(t, fake.Calls, 1)
 	assert.Contains(t, fake.Calls[0].Args, "refquota=999G")
+	assert.Contains(t, fake.Calls[0].Args, "quota=999G")
 	assert.NotContains(t, fake.Calls[0].Args, "refquota=50G")
+	assert.NotContains(t, fake.Calls[0].Args, "quota=50G")
 }
 
 func TestQuotaSet_DryRun_RecordsNoCallAndPrintsCommand(t *testing.T) {
@@ -168,7 +170,7 @@ func TestQuotaSet_DryRun_RecordsNoCallAndPrintsCommand(t *testing.T) {
 	assert.Contains(t, out, "ssh")
 	assert.Contains(t, out, "-p 2222")
 	assert.Contains(t, out, "root@sm-0.lab.internal")
-	assert.Contains(t, out, "zfs set refquota=50G tank/labs/alpha")
+	assert.Contains(t, out, "zfs set quota=50G refquota=50G tank/labs/alpha")
 }
 
 func TestQuotaSet_RefusesWithoutYesNonInteractively(t *testing.T) {

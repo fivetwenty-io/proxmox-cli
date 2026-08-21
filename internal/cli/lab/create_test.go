@@ -1631,17 +1631,20 @@ func TestCreateCapacityGate_BelowWarnThreshold_NoNote(t *testing.T) {
 	assert.NotContains(t, out, "capacity gate")
 }
 
-// TestCreateCapacityGate_AboveWarnThreshold_AddsWarningNote covers the
-// warning path: aggregate reservation (refquota + live used + the default
-// NFS reserve) over 75% of the pool's reported size (but under 85%) still
-// creates the lab, with a WARNING note in the output naming all three terms.
-func TestCreateCapacityGate_AboveWarnThreshold_AddsWarningNote(t *testing.T) {
+// TestCreateCapacityGate_OverCommitted_WarnsButCreates covers the
+// commitment half of the gate: every configured lab's refquota plus the NFS
+// reserve exceeding the pool's size is a WARNING naming both terms, never a
+// refusal, because an over-subscribed pool is what thin provisioning
+// produces on purpose. The pool here is completely empty, so the fill half
+// of the gate stays silent and the warning can only have come from
+// commitment.
+func TestCreateCapacityGate_OverCommitted_WarnsButCreates(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 7000 // 7000G refquota + 0G used + 1024G default NFS reserve = 8024G
+	lab.Storage.RefquotaGB = 7000 // 7000G refquota + 1024G default NFS reserve = 8024G committed
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 10000*1024*1024*1024, 0) // 10000G total: 8024/10000 = 80.24%
+	createHandleDisksZfs(f, "node1", "tank", 7000*1024*1024*1024, 0) // 7000G total, 0 used: 8024/7000 = 115%
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1656,23 +1659,23 @@ func TestCreateCapacityGate_AboveWarnThreshold_AddsWarningNote(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "capacity gate WARNING")
 	assert.Contains(t, out, "reserve 7000G", "must name the refquota-sum term")
-	assert.Contains(t, out, "usage 0G", "must name the peppi-actuals (\"used\") term")
 	assert.Contains(t, out, "NFS reserve 1024G", "must name the default NFS-reserve term")
-	require.Len(t, qemuCreateRec, 1, "a warning does not block creation")
+	assert.Contains(t, out, "committed", "must report this as a commitment ratio, not a fill ratio")
+	require.Len(t, qemuCreateRec, 1, "over-commitment warns, it never blocks creation")
 }
 
 // TestCreateCapacityGate_AboveRefuseThreshold_RefusesWithoutForce covers the
-// hard-refusal path: aggregate reservation (refquota + live used + the
-// default NFS reserve) over 85% of the pool's reported size refuses create
-// entirely, before any VMID is allocated or any VM step added, unless
-// --force is passed.
+// hard-refusal path: the pool's ACTUAL fill over 85% of its reported size
+// refuses create entirely, before any VMID is allocated or any VM step
+// added, unless --force is passed. The lab's own refquota is tiny here, so
+// the refusal can only have come from the fill term.
 func TestCreateCapacityGate_AboveRefuseThreshold_RefusesWithoutForce(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 900 // 900G + 0G used + 1024G default NFS reserve = 1924G against a 1000G pool
+	lab.Storage.RefquotaGB = 10
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 900*1024*1024*1024) // 90% full
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	createForbid(f, t, "GET /api2/json/cluster/nextid")
 	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
@@ -1691,10 +1694,10 @@ func TestCreateCapacityGate_AboveRefuseThreshold_RefusesWithoutForce(t *testing.
 func TestCreateCapacityGate_ForceOverridesRefusal(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 900
+	lab.Storage.RefquotaGB = 10
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 900*1024*1024*1024) // 90% full
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9900")
 
@@ -1714,16 +1717,17 @@ func TestCreateCapacityGate_ForceOverridesRefusal(t *testing.T) {
 // (amended): the tank/nfs quota reserve counts in the capacity-gate
 // numerator even when no lab config mentions it at all. A refquota/pool
 // combination that would stay well under the warning threshold on its own
-// (200G against a 1600G pool: 12.5%) crosses it once config.DefaultNFSReservedGB
-// (1024G) is added in (200+1024=1224G, 76.5%), proving the default reserve
-// is applied even without any explicit storage.nfs_reserved_gb config.
+// (200G against a 1000G pool: 20% committed) crosses it once
+// config.DefaultNFSReservedGB (1024G) is added in (200+1024=1224G, 122%
+// committed), proving the default reserve is applied even without any
+// explicit storage.nfs_reserved_gb config.
 func TestCreateCapacityGate_NFSReserveIncludedByDefault(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
 	lab.Storage.RefquotaGB = 200
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 1600*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1738,7 +1742,7 @@ func TestCreateCapacityGate_NFSReserveIncludedByDefault(t *testing.T) {
 	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
 	require.NoError(t, err)
 	assert.Contains(t, out, "capacity gate WARNING",
-		"the default 1024G NFS reserve alone must be enough to cross the 75% warning threshold here")
+		"the default 1024G NFS reserve alone must be enough to push commitment past the pool's size here")
 	assert.Contains(t, out, "NFS reserve 1024G")
 }
 
@@ -1754,7 +1758,7 @@ func TestCreateCapacityGate_NFSReserveOverriddenToZero(t *testing.T) {
 	lab.Storage.RefquotaGB = 200
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 1600*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1768,23 +1772,55 @@ func TestCreateCapacityGate_NFSReserveOverriddenToZero(t *testing.T) {
 	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
 	require.NoError(t, err)
 	assert.NotContains(t, out, "capacity gate",
-		"storage.nfs_reserved_gb: 0 must remove the NFS term entirely, leaving this well under the warning threshold")
+		"storage.nfs_reserved_gb: 0 must remove the NFS term entirely, leaving commitment well under the pool's size")
 }
 
-// TestCreateCapacityGate_PeppiActualUsageCounted covers the "peppi actuals"
-// term (multi-node lab plan §3.4: "sum of all lab refquotas + peppi actuals
-// vs. pool size"): a small lab refquota alone would stay well under the
-// warning threshold, but the pool's live "used" figure (standing in for
-// peppi's actual usage, per createCapacityGate's documented conservative
-// estimate) alone crosses it. NFS reserve is zeroed out here to isolate the
-// "used" term from the default NFS reserve's own contribution.
-func TestCreateCapacityGate_PeppiActualUsageCounted(t *testing.T) {
+// TestCreateCapacityGate_UsedIsNotAddedOnTopOfRefquotas is the regression
+// guard for the double-count this gate used to do: it summed every lab's
+// refquota AND the pool-wide used figure, even though that used figure
+// already contains every lab's real consumption, so each lab was counted
+// twice (once through its unused quota headroom, once through the bytes it
+// had actually written). The numbers here are chosen so the old formula and
+// the new one disagree about the outcome, not merely about the percentage:
+// 500G reserved + 400G used against a 1000G pool is 90% under the old
+// blended ratio (a hard refusal), while the pool is only 40% full and 50%
+// committed, nowhere near any threshold. A pool at 40% must create.
+func TestCreateCapacityGate_UsedIsNotAddedOnTopOfRefquotas(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 100 // 100G refquota + 1500G used + 0G NFS reserve = 1600G
+	lab.Storage.RefquotaGB = 500
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 2000*1024*1024*1024, 1500*1024*1024*1024) // 1600/2000 = 80%
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 400*1024*1024*1024)
+	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
+
+	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
+	cmd := buildCreateCmd(t, path, f, "node1")
+
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.NoError(t, err, "500G reserved + 400G used against a 1000G pool must not refuse: the pool is 40%% full")
+	assert.NotContains(t, out, "capacity gate",
+		"neither ratio crosses a threshold on its own, so the gate must stay silent")
+	require.Len(t, qemuCreateRec, 1)
+}
+
+// TestCreateCapacityGate_ActualPoolFillWarns covers the fill half of the
+// gate on its own: the pool's live "used" figure past the 75% warning
+// threshold warns even though this lab's commitment is trivial (100G
+// against a 2000G pool, with the NFS reserve zeroed out), proving fill is
+// measured independently of the refquota sum rather than blended into it.
+func TestCreateCapacityGate_ActualPoolFillWarns(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := createTestLab("wayne")
+	lab.Storage.RefquotaGB = 100 // trivial commitment: 100/2000 = 5%, nowhere near over-subscribed
+
+	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
+	createHandleDisksZfs(f, "node1", "tank", 2000*1024*1024*1024, 1600*1024*1024*1024) // 1600/2000 = 80% full
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
 
@@ -1798,7 +1834,10 @@ func TestCreateCapacityGate_PeppiActualUsageCounted(t *testing.T) {
 	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
 	require.NoError(t, err)
 	assert.Contains(t, out, "capacity gate WARNING")
-	assert.Contains(t, out, "usage 1500G", "the pool's live \"used\" figure must be counted as the peppi-actuals term")
+	assert.Contains(t, out, "80% full", "the pool's live \"used\" figure must drive the fill warning")
+	assert.Contains(t, out, "1600G used of 2000G")
+	assert.NotContains(t, out, "committed",
+		"a 5% commitment must not also raise the over-subscription warning")
 	require.Len(t, qemuCreateRec, 1)
 }
 
@@ -1807,10 +1846,11 @@ func TestCreateCapacityGate_PeppiActualUsageCounted(t *testing.T) {
 // the on-disk config entry of the same name, not the stale pre-override
 // figure. The on-disk lab leaves topology.nodes unset (defaults to 1,
 // EffectiveRefquotaGB 480G); --nodes 5 raises the reservation to the
-// 5-node default (5*264=1320G). Against a 1600G pool, the on-disk figure
-// alone would stay under the 75% warning threshold (480/1600=30%), but the
-// --nodes 5 override crosses it (1320/1600=82.5%) — proving the gate
-// reflects the override, not the stale on-disk topology.
+// 5-node default (5*264=1320G). Against a 1200G pool, the on-disk figure
+// alone would leave the pool under-committed (480/1200=40%), but the
+// --nodes 5 override pushes commitment past the pool's whole size
+// (1320/1200=110%), proving the gate reflects the override, not the stale
+// on-disk topology.
 func TestCreateCapacityGate_UsesEffectiveLabNotOnDiskConfig(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne") // on-disk: topology.nodes unset (defaults to 1)
@@ -1822,7 +1862,7 @@ func TestCreateCapacityGate_UsesEffectiveLabNotOnDiskConfig(t *testing.T) {
 	lab.Storage.RefquotaGB = 0
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 1600*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1200*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 
 	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
@@ -1836,31 +1876,37 @@ func TestCreateCapacityGate_UsesEffectiveLabNotOnDiskConfig(t *testing.T) {
 		"the numerator must use the 5-node refquota default (5*264G), not the on-disk 1-node default (480G)")
 }
 
-// TestCreateCapacityGate_OSDDisksPushOverRefuseThreshold covers Task 4: OSD
-// disks now factor into the capacity gate's default refquota derivation
+// TestCreateCapacityGate_OSDDisksPushOverCommitThreshold covers Task 4: OSD
+// disks factor into the capacity gate's default refquota derivation
 // (storage.refquota_gb left unset). The default single-node base (480G)
-// plus this lab's 2*100G OSD disks (200G) totals 680G, which against a 700G
-// pool (97.1%) crosses the 85% refuse threshold — proving OSD disks are
-// counted even though no field here mentions refquota_gb at all.
-func TestCreateCapacityGate_OSDDisksPushOverRefuseThreshold(t *testing.T) {
+// plus this lab's 2*100G OSD disks (200G) totals 680G, which against a 600G
+// pool over-subscribes it (113%), proving OSD disks are counted even
+// though no field here mentions refquota_gb at all. The warning names the
+// derived figure, which is what pins the derivation.
+func TestCreateCapacityGate_OSDDisksPushOverCommitThreshold(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
 	lab.Storage.RefquotaGB = 0 // force the default derivation, which now folds in OSD disks
 	lab.Storage.OSDDisks = &config.LabOSDDisks{Count: 2, SizeGB: 100}
 
 	createSharedResourcesExist(f, t, lab, "wayne", lab.Access.Pool)
-	createHandleDisksZfs(f, "node1", "tank", 700*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 600*1024*1024*1024, 0)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
-	createForbid(f, t, "GET /api2/json/cluster/nextid")
-	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
+	f.HandleJSON("GET /api2/json/cluster/nextid", "9800")
+
+	var qemuCreateRec []createRecordedRequest
+	createRecord(f, &qemuCreateRec, nil, "qemu-create", "POST /api2/json/nodes/node1/qemu", createTestUPID, 200)
+	createHandleTaskStatus(f)
 
 	path := writeConfig(t, createNoNFSReserve(map[string]*config.Lab{"wayne": lab}))
 	cmd := buildCreateCmd(t, path, f, "node1")
 
-	_, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "capacity gate")
-	assert.ErrorContains(t, err, "--force")
+	out, err := runCreateCmd(t, cmd, "wayne", "--node", "node1")
+	require.NoError(t, err)
+	assert.Contains(t, out, "capacity gate WARNING")
+	assert.Contains(t, out, "reserve 680G",
+		"the derived reservation must fold in 2*100G of OSD disks on top of the 480G base")
+	require.Len(t, qemuCreateRec, 1, "over-commitment warns, it never blocks creation")
 }
 
 // TestCreateCapacityGate_OSDDisksOverrideShrinksReservation covers the other
@@ -1971,7 +2017,7 @@ func TestCreateCapacityGate_IgnoresNestedPerLabStorage_UsesZfsPoolFallback(t *te
 func TestCreateCapacityGate_PrefersRootedStorageOverZfsPoolFallback(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 900 // 900G + 0G used + 0G NFS reserve (opted out below)
+	lab.Storage.RefquotaGB = 10 // trivial: only the fill term can trip this gate
 
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
@@ -1985,12 +2031,13 @@ func TestCreateCapacityGate_PrefersRootedStorageOverZfsPoolFallback(t *testing.T
 	})
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
-	// Rooted storage status: 900G/1000G = 90%, over the refuse threshold.
-	createHandleStorageStatus(f, "node1", "tank", 1000*1024*1024*1024, 0)
-	// disks/zfs: if this were read instead, 900G/10000G = 9%, comfortably
-	// under every threshold. Its presence must not affect the outcome once
-	// a rooted storage.cfg entry exists.
-	createHandleDisksZfs(f, "node1", "tank", 10000*1024*1024*1024, 0)
+	// Rooted storage status: 900G used of 1000G = 90% full, over the refuse
+	// threshold.
+	createHandleStorageStatus(f, "node1", "tank", 1000*1024*1024*1024, 900*1024*1024*1024)
+	// disks/zfs: if this were read instead, 900G/10000G = 9% full,
+	// comfortably under every threshold. Its presence must not affect the
+	// outcome once a rooted storage.cfg entry exists.
+	createHandleDisksZfs(f, "node1", "tank", 10000*1024*1024*1024, 900*1024*1024*1024)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	createForbid(f, t, "GET /api2/json/cluster/nextid")
 	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
@@ -2013,7 +2060,7 @@ func TestCreateCapacityGate_PrefersRootedStorageOverZfsPoolFallback(t *testing.T
 func TestCreateCapacityGate_SkipsNodeRestrictedRootedStorage(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 900 // over the refuse threshold against the disks/zfs 1000G pool below
+	lab.Storage.RefquotaGB = 10 // trivial: only the disks/zfs fill figure below can trip this gate
 
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
@@ -2030,7 +2077,7 @@ func TestCreateCapacityGate_SkipsNodeRestrictedRootedStorage(t *testing.T) {
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
 	createForbid(f, t, "GET /api2/json/nodes/node1/storage/tank/status")
-	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 0)
+	createHandleDisksZfs(f, "node1", "tank", 1000*1024*1024*1024, 900*1024*1024*1024) // 90% full
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	createForbid(f, t, "GET /api2/json/cluster/nextid")
 	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
@@ -2099,7 +2146,7 @@ func TestCreateCapacityGate_NoMatchingStorage_RefusesLoudly(t *testing.T) {
 func TestCreateCapacityGate_CapacityStorageIDOverride(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	lab := createTestLab("wayne")
-	lab.Storage.RefquotaGB = 900 // 900G + 0G used + 0G NFS reserve against a 1000G pool: over refuse threshold
+	lab.Storage.RefquotaGB = 10 // trivial: only the override storage's fill figure can trip this gate
 
 	f.HandleJSON("GET /api2/json/cluster/sdn/zones", []any{map[string]any{"zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
@@ -2117,7 +2164,7 @@ func TestCreateCapacityGate_CapacityStorageIDOverride(t *testing.T) {
 		[]any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}}, 200)
 	f.HandleJSON("GET /api2/json/pools", []any{map[string]any{"poolid": lab.Access.Pool}})
 	createPoolNotFoundRoute(f, lab.Access.Pool)
-	createHandleStorageStatus(f, "node1", "custom-tank-storage", 1000*1024*1024*1024, 0)
+	createHandleStorageStatus(f, "node1", "custom-tank-storage", 1000*1024*1024*1024, 900*1024*1024*1024)
 	f.HandleJSON("GET /api2/json/nodes/node1/qemu", []any{})
 	createForbid(f, t, "GET /api2/json/cluster/nextid")
 	createForbid(f, t, "POST /api2/json/nodes/node1/qemu")
@@ -2458,7 +2505,8 @@ func TestCreate_ZfsDatasetEnsure_AbsentProbesThenCreatesWithRefquota(t *testing.
 	}, probe.Args)
 	assert.Equal(t, "ssh", create.Name)
 	assert.Equal(t, []string{
-		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p", "-o", "refquota=50G", "tank/labs/wayne",
+		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p",
+		"-o", "quota=50G", "-o", "refquota=50G", "tank/labs/wayne",
 	}, create.Args)
 	assert.NotContains(t, probe.Args, "root@"+createDatasetTestWrongCtxHost)
 	assert.NotContains(t, create.Args, "root@"+createDatasetTestWrongCtxHost)
@@ -2525,7 +2573,7 @@ func TestCreate_ZfsDatasetEnsure_NoRefquotaConfigured_OmitsRefquotaOption(t *tes
 	require.Len(t, fake.Calls, 2)
 	assert.Equal(t, []string{
 		"-p", "22", "root@" + createDatasetTestNodeIP, "zfs", "create", "-p", "tank/labs/wayne",
-	}, fake.Calls[1].Args, "no refquota configured: no -o refquota=... option")
+	}, fake.Calls[1].Args, "no refquota configured: no -o quota=/-o refquota=... options")
 }
 
 // TestCreate_ZfsDatasetEnsure_DryRun_NeverTouchesSSH covers --dry-run: even

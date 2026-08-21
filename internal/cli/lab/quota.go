@@ -11,6 +11,27 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/sshcmd"
 )
 
+// labDatasetQuotaProps returns the ZFS property assignments that cap a lab
+// dataset at refquotaGB, as "quota=<N>G" then "refquota=<N>G".
+//
+// BOTH properties are required, and setting refquota alone (as this code
+// once did) caps nothing that matters. refquota bounds only a dataset's OWN
+// referenced bytes, never its descendants', and a lab dataset holds no data
+// itself: every VM disk PVE allocates is a child zvol under it, so the
+// parent's REFER stays at a few kilobytes no matter how large the lab
+// grows. A lab carrying refquota=1150G and nothing else was therefore free
+// to consume the whole pool. quota is the property that bounds a dataset
+// plus all its descendants, so it is the one that actually holds a lab to
+// its declared size; refquota is kept alongside it to match the historical
+// provisioning script's datasets, and to stop the parent itself from
+// spending the lab's whole allowance.
+func labDatasetQuotaProps(refquotaGB int) []string {
+	return []string{
+		fmt.Sprintf("quota=%dG", refquotaGB),
+		fmt.Sprintf("refquota=%dG", refquotaGB),
+	}
+}
+
 // newQuotaCmd builds the `pmx lab quota` parent command. ZFS refquota
 // management has no Proxmox VE API endpoint at all (confirmed absent from
 // the generated API client's storage-parameter struct, not merely
@@ -106,7 +127,8 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 	}
 
 	dataset := zfsDatasetPath(lab)
-	remoteCmd := []string{"zfs", "set", fmt.Sprintf("refquota=%dG", refquotaGB), dataset}
+	remoteCmd := append([]string{"zfs", "set"}, labDatasetQuotaProps(refquotaGB)...)
+	remoteCmd = append(remoteCmd, dataset)
 
 	argv := sshcmd.BaseArgs(&f, deps.Ctx.Host)
 	argv = append(argv, remoteCmd...)
