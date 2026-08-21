@@ -28,6 +28,8 @@ func newScaleCmd() *cobra.Command {
 		dryRun      bool
 		force       bool
 		yes         bool
+
+		requireContext bool
 	)
 
 	cmd := &cobra.Command{
@@ -98,7 +100,7 @@ func newScaleCmd() *cobra.Command {
   pmx lab scale wayne --nodes 1 --yes`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runScale(cmd, args[0], nodesFlag, qdeviceFlag, nodeFlag, dryRun, force, yes)
+			return runScale(cmd, args[0], nodesFlag, qdeviceFlag, nodeFlag, dryRun, force, yes, requireContext)
 		},
 	}
 
@@ -113,11 +115,15 @@ func newScaleCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&force, "force", false,
 		"override the capacity gate's refusal threshold when this scale creates new VM shells")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
+	registerRequireContextFlag(cmd.Flags(), &requireContext)
 
 	return cmd
 }
 
-func runScale(cmd *cobra.Command, name string, nodesFlag int, qdeviceFlag, nodeFlag string, dryRun, force, yes bool) error {
+func runScale(
+	cmd *cobra.Command, name string, nodesFlag int, qdeviceFlag, nodeFlag string,
+	dryRun, force, yes, requireContext bool,
+) error {
 	deps := cli.GetDeps(cmd)
 	ctx := cmd.Context()
 
@@ -272,7 +278,7 @@ func runScale(cmd *cobra.Command, name string, nodesFlag int, qdeviceFlag, nodeF
 		}
 	}
 
-	rows, execErr := executeScalePlan(ctx, cmd, deps, lab, eff, plan, targetNode, force)
+	rows, execErr := executeScalePlan(ctx, cmd, deps, lab, eff, plan, targetNode, force, requireContext)
 	rows = append(preflightRows, rows...)
 
 	if len(rows) > 0 {
@@ -579,10 +585,14 @@ func renderScalePlanPreview(eff *config.Lab, p scalePlan) output.Result {
 // convention.
 func executeScalePlan(
 	ctx context.Context, cmd *cobra.Command, deps *cli.Deps, lab, eff *config.Lab, p scalePlan,
-	targetNode string, force bool,
+	targetNode string, force, requireContext bool,
 ) ([][]string, error) {
 	name := lab.Name
 	var rows [][]string
+	// ctxErrs collects the lab-context failures the STEP table reports as
+	// warning rows. They never fail the scale on their own; --require-context
+	// is what turns them into this function's error.
+	var ctxErrs []error
 	deferred := false
 
 	node0IP, err := labNodeMgmtIP(lab.Network, 0)
@@ -646,9 +656,11 @@ func executeScalePlan(
 		}
 		rows = append(rows, []string{"cluster init (node 0)", clusterMsg})
 
-		if note := refreshLabContextAfterClusterInit(cmd, deps, lab); note != "" {
+		note, ctxErr := refreshLabContextAfterClusterInit(cmd, deps, lab)
+		if note != "" {
 			rows = append(rows, []string{"context refresh", note})
 		}
+		ctxErrs = append(ctxErrs, ctxErr)
 
 		for _, i := range p.growIndices {
 			nodeIP, err := labNodeMgmtIP(lab.Network, i)
@@ -761,7 +773,9 @@ func executeScalePlan(
 		}
 		hostnetIdxs = append(hostnetIdxs, i)
 	}
-	rows = append(rows, hostnetReconcileNodes(ctx, cmd, deps, lab, hostnetIdxs)...)
+	hostnetRows, hostnetCtxErr := hostnetReconcileNodes(ctx, cmd, deps, lab, hostnetIdxs)
+	rows = append(rows, hostnetRows...)
+	ctxErrs = append(ctxErrs, hostnetCtxErr)
 	if firstUnjoinedIdx >= 0 && hostnetReconcileNeeded(lab.Network) {
 		rows = append(rows, []string{
 			fmt.Sprintf("nested host network on node(s) %d-%d", firstUnjoinedIdx, finalN-1),
@@ -854,7 +868,7 @@ func executeScalePlan(
 				"rows above", name)
 	}
 
-	return rows, nil
+	return rows, requireContextErr(requireContext, name, ctxErrs)
 }
 
 // scaleReconcileQdeviceIPv6 ensures the management IPv6 of a QDevice this

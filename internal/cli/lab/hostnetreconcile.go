@@ -80,15 +80,21 @@ func hostnetReconcileNeeded(n config.LabNetwork) bool {
 // staged and then applied per node (hostnetEnsureNode).
 //
 // It returns STEP/STATUS rows for the caller's own table (node name folded
-// into the step, since scale and cluster join both render two columns) and
-// never an error: see this file's header for why every failure becomes a
-// deferred row instead. An empty idxs, or a lab with nothing to reconcile,
+// into the step, since scale and cluster join both render two columns): see
+// this file's header for why every failure becomes a deferred row rather than
+// failing the caller. An empty idxs, or a lab with nothing to reconcile,
 // returns no rows at all.
+//
+// The second return value is non-nil only when the lab's own context could not
+// be reached at all, which is the one failure here that --require-context
+// promotes to a non-zero exit. A per-node reconcile that failed against a
+// context that WAS reachable stays a deferred row and nothing more: it
+// describes host networking, not the context registration the flag is about.
 func hostnetReconcileNodes(
 	ctx context.Context, cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, idxs []int,
-) [][]string {
+) ([][]string, error) {
 	if len(idxs) == 0 || !hostnetReconcileNeeded(lab.Network) {
-		return nil
+		return nil, nil
 	}
 
 	name := lab.Name
@@ -97,8 +103,9 @@ func hostnetReconcileNodes(
 	api, err := labInnerAPIClient(cmd, deps, name)
 	if err != nil {
 		return [][]string{{"reconcile nested host network", fmt.Sprintf(
-			"deferred: cannot reach lab context %q (%v); register it with `pmx lab context sync %s`, then %s",
-			labContextName(name), err, name, hostnetReconcileFollowup(name))}}
+				"deferred: cannot reach lab context %q (%v); register it with `pmx lab context sync %s`, then %s",
+				labContextName(name), err, name, hostnetReconcileFollowup(name))}},
+			fmt.Errorf("reach lab context %s: %w", labContextName(name), err)
 	}
 
 	var rows [][]string
@@ -151,7 +158,7 @@ func hostnetReconcileNodes(
 		}
 	}
 
-	return rows
+	return rows, nil
 }
 
 // hostnetNodeNICsNamed reports whether nodeName's interface list already

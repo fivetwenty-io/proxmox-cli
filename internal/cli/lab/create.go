@@ -155,12 +155,13 @@ type createPlan struct {
 // newCreateCmd builds `pmx lab create <name>`.
 func newCreateCmd() *cobra.Command {
 	var (
-		dryRun    bool
-		force     bool
-		node      string
-		start     bool
-		noContext bool
-		ov        createOverrides
+		dryRun         bool
+		force          bool
+		node           string
+		start          bool
+		noContext      bool
+		requireContext bool
+		ov             createOverrides
 	)
 
 	cmd := &cobra.Command{
@@ -281,8 +282,12 @@ func newCreateCmd() *cobra.Command {
 				}
 			}
 
-			plan.contextNote = runCreateContextHook(cmd, deps, eff, name, start, noContext)
-			return renderCreatePlan(cmd, deps, plan, false)
+			var ctxErr error
+			plan.contextNote, ctxErr = runCreateContextHook(cmd, deps, eff, name, start, noContext)
+			if rerr := renderCreatePlan(cmd, deps, plan, false); rerr != nil {
+				return rerr
+			}
+			return requireContextErr(requireContext, name, []error{ctxErr})
 		},
 	}
 
@@ -292,6 +297,7 @@ func newCreateCmd() *cobra.Command {
 	f.StringVar(&node, "node", "", "node to create the lab's VMs on (defaults to --node/PMX_NODE/config default)")
 	f.BoolVar(&start, "start", false, "start every created VM after creation and verify the guest agent responds")
 	f.BoolVar(&noContext, "no-context", false, "skip auto-registering the lab-<name> pmx context after --start")
+	registerRequireContextFlag(f, &requireContext)
 	f.IntVar(&ov.vcpu, "vcpu", 0, "override compute.vcpu (base sizing for every node before per-node overrides)")
 	f.IntVar(&ov.memMaxGB, "memory-max-gb", 0, "override compute.memory.max_gb")
 	f.IntVar(&ov.memMinGB, "memory-min-gb", 0, "override compute.memory.min_gb")
@@ -2189,31 +2195,35 @@ func createRawList(resp any) ([]json.RawMessage, error) {
 }
 
 // runCreateContextHook registers or refreshes the lab-<name> pmx context after
-// a successful create, and returns the STEP-table note describing the outcome.
-// It is strictly best-effort: any failure yields a warning note pointing at
-// `pmx lab context sync` and never affects create's exit code. When --start
-// was not given the VMs are powered off, so it emits guidance instead of
-// polling a dead node; --no-context suppresses it entirely.
+// a successful create, and returns the STEP-table note describing the outcome
+// along with the underlying failure, if any. It is strictly best-effort: any
+// failure yields a warning note pointing at `pmx lab context sync` and never
+// affects create's exit code unless the caller passed --require-context, which
+// is the only consumer of the returned error. When --start was not given the
+// VMs are powered off, so it emits guidance instead of polling a dead node;
+// --no-context suppresses it entirely.
 func runCreateContextHook(
 	cmd *cobra.Command, deps *cli.Deps, lab *config.Lab, name string, start, noContext bool,
-) string {
+) (string, error) {
 	if noContext {
-		return ""
+		return "", nil
 	}
 	ctxName := labContextName(name)
 	if !start {
-		return fmt.Sprintf("skipped (no --start); run 'pmx lab context sync %s' after 'pmx lab start %s'", name, name)
+		return fmt.Sprintf(
+			"skipped (no --start); run 'pmx lab context sync %s' after 'pmx lab start %s'", name, name), nil
 	}
 
 	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: true})
 	if err != nil {
-		return fmt.Sprintf("⚠ context %s: %v; run 'pmx lab context sync %s' to retry", ctxName, err, name)
+		return fmt.Sprintf("⚠ context %s: %v; run 'pmx lab context sync %s' to retry", ctxName, err, name),
+			fmt.Errorf("register context %s: %w", ctxName, err)
 	}
 	verb := "reused existing token"
 	if res.Rotated {
 		verb = "rotated token"
 	}
-	return fmt.Sprintf("context %s ready (%s)", ctxName, verb)
+	return fmt.Sprintf("context %s ready (%s)", ctxName, verb), nil
 }
 
 // renderCreatePlan renders plan as a STEP/STATUS table. In dry-run mode every

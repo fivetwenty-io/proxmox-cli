@@ -55,7 +55,7 @@ func TestHostnetReconcileNodes_StagesV6OnEveryNode(t *testing.T) {
 	}
 
 	cmd := reconcileTestCmd(t, f, lab)
-	rows := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0, 1})
+	rows, _ := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0, 1})
 
 	require.Len(t, updateRec, 2, "one vmbr0 IPv6 stage per node")
 	require.Len(t, applyRec, 2, "each node's staged changes applied exactly once")
@@ -92,7 +92,7 @@ func TestHostnetReconcileNodes_UnreachableContextDefersWithFollowup(t *testing.T
 		return nil, fmt.Errorf("context %q not found", "lab-wayne")
 	}
 
-	rows := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+	rows, _ := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
 	require.Len(t, rows, 1)
 	assert.Contains(t, rows[0][1], "deferred")
 	assert.Contains(t, rows[0][1], "pmx lab context sync wayne")
@@ -116,7 +116,7 @@ func TestHostnetReconcileNodes_NodeFailureDefersAndContinues(t *testing.T) {
 	hostnetRecord(f, nil, nil, "", "PUT /api2/json/nodes/lab-wayne-1/network", nil, 200)
 
 	cmd := reconcileTestCmd(t, f, lab)
-	rows := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0, 1})
+	rows, _ := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0, 1})
 
 	joined := fmt.Sprintf("%v", rows)
 	assert.Contains(t, joined, "deferred", "node 0's failure is reported")
@@ -140,7 +140,9 @@ func TestHostnetReconcileNodes_NothingConfiguredIsSilent(t *testing.T) {
 		return apiclient.NewAPIClient(f.Options)
 	}
 
-	assert.Empty(t, hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0}))
+	noopRows, noopErr := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+	assert.Empty(t, noopRows)
+	assert.NoError(t, noopErr)
 	assert.False(t, called, "a lab with nothing to reconcile must not build a nested-context client")
 }
 
@@ -160,7 +162,7 @@ func TestHostnetReconcileNodes_BondsCarryNICNamingCaveat(t *testing.T) {
 	hostnetRecord(f, nil, nil, "", "PUT /api2/json/nodes/lab-wayne-0/network", nil, 200)
 
 	cmd := reconcileTestCmd(t, f, lab)
-	rows := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+	rows, _ := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
 
 	joined := fmt.Sprintf("%v", rows)
 	assert.Contains(t, joined, "NIC naming")
@@ -221,7 +223,7 @@ func TestHostnetReconcileNodes_UnnamedNICsSkipBondsButStillAddressIPv6(t *testin
 	hostnetRecord(f, nil, nil, "", "PUT /api2/json/nodes/lab-wayne-0/network", nil, 200)
 
 	cmd := reconcileTestCmd(t, f, lab)
-	rows := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+	rows, _ := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
 
 	assert.Empty(t, bondRec, "no bond may be staged against NICs that do not exist yet")
 	require.Len(t, updateRec, 1, "the node still gets its management IPv6")
@@ -247,9 +249,52 @@ func TestHostnetReconcileNodes_NamedNICsStageBonds(t *testing.T) {
 	hostnetRecord(f, nil, nil, "", "PUT /api2/json/nodes/lab-wayne-0/network", nil, 200)
 
 	cmd := reconcileTestCmd(t, f, lab)
-	rows := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+	rows, _ := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
 
 	require.Len(t, bondRec, 1, "the configured bond is created")
 	assert.Equal(t, "bond0", bondRec[0].body["iface"])
 	assert.NotContains(t, fmt.Sprintf("%v", rows), "bond/bridge phase skipped")
+}
+
+// TestHostnetReconcileNodes_UnreachableContextIsReportedAndReturned pins the
+// distinction --require-context rests on. A lab context that cannot be built
+// at all is a context failure: the rows still say "deferred" (the join or
+// scale that called this has already succeeded, and nothing here may
+// retroactively fail it), but the error return carries the failure so a
+// caller that asked to be told can exit non-zero on it.
+func TestHostnetReconcileNodes_UnreachableContextIsReportedAndReturned(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := cleanLab("wayne")
+	lab.Name = "wayne"
+
+	cmd := reconcileTestCmd(t, f, lab)
+	labInnerAPIClient = func(_ *cobra.Command, _ *cli.Deps, _ string) (*apiclient.APIClient, error) {
+		return nil, fmt.Errorf("no context lab-wayne")
+	}
+
+	rows, err := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+
+	require.Error(t, err, "an unreachable lab context must be returned, not only printed")
+	assert.Contains(t, err.Error(), "lab-wayne")
+	assert.Contains(t, fmt.Sprintf("%v", rows), "deferred",
+		"the row stays a warning: the caller's own work already succeeded")
+}
+
+// TestHostnetReconcileNodes_NodeFailureIsNotAContextFailure is the other side
+// of the same line. Node 0's 500 here comes back through a context that WAS
+// reachable, so it describes host networking, not context registration, and
+// --require-context must not promote it: a lab whose bond staging failed on
+// one node still has a usable context.
+func TestHostnetReconcileNodes_NodeFailureIsNotAContextFailure(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	lab := cleanLab("wayne")
+	lab.Name = "wayne"
+
+	hostnetRecord(f, nil, nil, "", "GET /api2/json/nodes/lab-wayne-0/network", nil, 500)
+
+	cmd := reconcileTestCmd(t, f, lab)
+	rows, err := hostnetReconcileNodes(context.Background(), cmd, cli.GetDeps(cmd), lab, []int{0})
+
+	require.NoError(t, err)
+	assert.Contains(t, fmt.Sprintf("%v", rows), "deferred")
 }

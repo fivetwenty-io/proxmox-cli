@@ -650,3 +650,42 @@ func TestClusterInit_RefreshesExistingContextFingerprint(t *testing.T) {
 	assert.Contains(t, out, "context lab-demo refreshed")
 	require.Len(t, fake.Calls, 7)
 }
+
+// TestClusterInit_ContextRefreshFailureExitsZeroByDefault pins the contract
+// --require-context is the opt-out from: the cluster is up, only the
+// convenience refresh failed, and reporting that as a failed cluster init
+// would misdescribe what happened to the lab.
+func TestClusterInit_ContextRefreshFailureExitsZeroByDefault(t *testing.T) {
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // probe
+		exec.FakeResponse{}, // pvecm create
+		exec.FakeResponse{Stdout: samplePvecmStatusQuorate1of1()}, // verify
+		exec.FakeResponse{ExitCode: 255, Stderr: "ssh: connect to host 10.0.0.10 port 22: No route to host"},
+	)
+	cmd, _ := buildClusterCmdWithContext(t, fake, "demo")
+
+	out, err := runGuestCmd(t, cmd, "init", "demo")
+	require.NoError(t, err, "a failed context refresh must not fail the cluster init that succeeded")
+	assert.Contains(t, out, "context lab-demo refresh failed")
+	assert.Contains(t, out, "pmx lab context sync demo")
+}
+
+// TestClusterInit_RequireContextFailsOnRefreshFailure is the unattended half:
+// the same run, the same rows, but the caller asked to be told, so the exit
+// code stops hiding a context that was never registered.
+func TestClusterInit_RequireContextFailsOnRefreshFailure(t *testing.T) {
+	fake := exec.Fake(
+		exec.FakeResponse{Stdout: samplePvecmStatusNotClustered, ExitCode: 1}, // probe
+		exec.FakeResponse{}, // pvecm create
+		exec.FakeResponse{Stdout: samplePvecmStatusQuorate1of1()}, // verify
+		exec.FakeResponse{ExitCode: 255, Stderr: "ssh: connect to host 10.0.0.10 port 22: No route to host"},
+	)
+	cmd, _ := buildClusterCmdWithContext(t, fake, "demo")
+
+	out, err := runGuestCmd(t, cmd, "init", "demo", "--require-context")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--require-context")
+	assert.Contains(t, err.Error(), "pmx lab context sync demo")
+	assert.Contains(t, out, "cluster",
+		"the table still renders: the exit code reports the context, not the cluster work")
+}

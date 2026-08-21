@@ -68,7 +68,7 @@ func newClusterCmd() *cobra.Command {
 
 // newClusterInitCmd builds `pmx lab cluster init <name>`.
 func newClusterInitCmd() *cobra.Command {
-	var dryRun bool
+	var dryRun, requireContext bool
 
 	cmd := &cobra.Command{
 		Use:   "init <name>",
@@ -82,14 +82,15 @@ func newClusterInitCmd() *cobra.Command {
   pmx lab cluster init wayne --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runClusterInit(cmd, args[0], dryRun)
+			return runClusterInit(cmd, args[0], dryRun, requireContext)
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the ssh commands that would run, without executing them")
+	registerRequireContextFlag(cmd.Flags(), &requireContext)
 	return cmd
 }
 
-func runClusterInit(cmd *cobra.Command, name string, dryRun bool) error {
+func runClusterInit(cmd *cobra.Command, name string, dryRun, requireContext bool) error {
 	deps := cli.GetDeps(cmd)
 
 	lab, err := resolveLabForMutate(cmd, name)
@@ -124,10 +125,14 @@ func runClusterInit(cmd *cobra.Command, name string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	if note := refreshLabContextAfterClusterInit(cmd, deps, lab); note != "" {
+	note, ctxErr := refreshLabContextAfterClusterInit(cmd, deps, lab)
+	if note != "" {
 		message += "; " + note
 	}
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format)
+	if rerr := deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: message}, deps.Format); rerr != nil {
+		return rerr
+	}
+	return requireContextErr(requireContext, name, []error{ctxErr})
 }
 
 // refreshLabContextAfterClusterInit refreshes the lab's pmx context after
@@ -135,16 +140,19 @@ func runClusterInit(cmd *cobra.Command, name string, dryRun bool) error {
 // cluster CA and so invalidates any previously pinned TLS fingerprint. It runs
 // only when a lab-<name> context already exists (a --no-context lab is left
 // untouched), is best-effort, and returns a short note for the command
-// message; it never fails cluster init, which has already succeeded.
-func refreshLabContextAfterClusterInit(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab) string {
+// message; it never fails cluster init, which has already succeeded. The
+// returned error carries the same failure for --require-context callers, and
+// is the only thing that can turn it into a non-zero exit.
+func refreshLabContextAfterClusterInit(cmd *cobra.Command, deps *cli.Deps, lab *config.Lab) (string, error) {
 	ctxName := labContextName(lab.Name)
 	if deps.Cfg == nil || deps.Cfg.Contexts[ctxName] == nil {
-		return ""
+		return "", nil
 	}
 	if _, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false}); err != nil {
-		return fmt.Sprintf("⚠ context %s refresh failed: %v; run 'pmx lab context sync %s'", ctxName, err, lab.Name)
+		return fmt.Sprintf("⚠ context %s refresh failed: %v; run 'pmx lab context sync %s'", ctxName, err, lab.Name),
+			fmt.Errorf("refresh context %s: %w", ctxName, err)
 	}
-	return fmt.Sprintf("context %s refreshed", ctxName)
+	return fmt.Sprintf("context %s refreshed", ctxName), nil
 }
 
 // ensureClusterInit performs `cluster init`'s actual work — probe, create,
@@ -197,8 +205,9 @@ func ensureClusterInit(deps *cli.Deps, lab *config.Lab, name, node0IP string) (m
 // newClusterJoinCmd builds `pmx lab cluster join <name> --node <i>`.
 func newClusterJoinCmd() *cobra.Command {
 	var (
-		nodeFlag string
-		dryRun   bool
+		nodeFlag       string
+		dryRun         bool
+		requireContext bool
 	)
 
 	cmd := &cobra.Command{
@@ -235,15 +244,16 @@ func newClusterJoinCmd() *cobra.Command {
   pmx lab cluster join wayne --node 1 --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runClusterJoin(cmd, args[0], nodeFlag, dryRun)
+			return runClusterJoin(cmd, args[0], nodeFlag, dryRun, requireContext)
 		},
 	}
 	cmd.Flags().StringVar(&nodeFlag, "node", "", "node index to join (1-4); required")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the ssh commands that would run, without executing them")
+	registerRequireContextFlag(cmd.Flags(), &requireContext)
 	return cmd
 }
 
-func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) error {
+func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun, requireContext bool) error {
 	deps := cli.GetDeps(cmd)
 
 	lab, err := resolveLabForMutate(cmd, name)
@@ -307,10 +317,14 @@ func runClusterJoin(cmd *cobra.Command, name, nodeFlag string, dryRun bool) erro
 	// nothing here may retroactively fail it.
 	var out strings.Builder
 	out.WriteString(message)
-	for _, row := range hostnetReconcileNodes(cmd.Context(), cmd, deps, lab, []int{idx}) {
+	hostnetRows, ctxErr := hostnetReconcileNodes(cmd.Context(), cmd, deps, lab, []int{idx})
+	for _, row := range hostnetRows {
 		fmt.Fprintf(&out, "\n%s: %s", row[0], row[1])
 	}
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: out.String()}, deps.Format)
+	if rerr := deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: out.String()}, deps.Format); rerr != nil {
+		return rerr
+	}
+	return requireContextErr(requireContext, name, []error{ctxErr})
 }
 
 // ensureClusterJoin performs `cluster join`'s actual work — probe, guest-
