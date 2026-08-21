@@ -860,7 +860,7 @@ func contextOptions(
 		ctx.TLS.Fingerprint,
 	)
 
-	return cli.ApplyTOFUOptions(
+	opts = cli.ApplyTOFUOptions(
 		opts,
 		ctx.TLS.Tofu,
 		insecure,
@@ -870,6 +870,10 @@ func contextOptions(
 		cmd.InOrStdin(),
 		func() bool { return isInteractiveInput(cmd.InOrStdin()) },
 	)
+
+	// Same ordering as the root command's builder: the jump host changes
+	// where the connection comes from, never what TLS checks at the far end.
+	return apiclient.ApplyJumpOptions(opts, ctx.SSH.Jump)
 }
 
 // isInteractiveInput reports whether in is an interactive terminal, used to

@@ -29,6 +29,12 @@ coverage.html
 # the generated file on failure, so it only survives an interrupted run
 /docs/.test-coverage-matrix.stamp
 
+# Local Go workspace used to build against a sibling module checkout (an
+# unreleased proxmox-apiclient-go, say). Never committed: CI resolves the
+# pinned module version from go.mod alone.
+/go.work
+/go.work.sum
+
 # Scratch directories some local tooling creates. They hold intermediate
 # working state, never anything this repo should carry.
 /.superpowers/

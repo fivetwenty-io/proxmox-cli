@@ -327,13 +327,16 @@ contexts:
       user: root                   # default -l/--user for `pmx ssh`/`pmx rsync`
       port: 22                     # default -p/--port
       identity: ~/.ssh/id_ed25519  # default -i/--identity
-      jump: admin@bastion:22       # default -J/--jump (ssh transport only)
+      jump: admin@bastion:22       # default -J/--jump, ssh and API alike
 ```
 
-`ssh.jump` tunnels every ssh-based command through a bastion, including the
-`pmx lab` verbs that reach lab guests on their SDN mgmt IPs. The API
-connection is a separate transport, so `host:` must still be reachable
-directly.
+`ssh.jump` tunnels every command through a bastion, both the ssh-based ones
+(including the `pmx lab` verbs that reach lab guests on their SDN mgmt IPs)
+and the Proxmox API connection, so a `host:` reachable only from the bastion
+needs no further setup. API connections go through `ssh -W`, so they reuse the
+keys, agent, `known_hosts`, and `~/.ssh/config` you already have. TLS is still
+negotiated against `host:` itself, leaving fingerprint pinning and TOFU
+unchanged.
 
 Configs written by an earlier version of `pmx` use `targets:` and
 `current-target:`. Run `scripts/migrate-config.py` (or

@@ -267,9 +267,18 @@ Each entry under **contexts** is a mapping with the following keys.
   reachable only from inside the context's network. Override per invocation
   with **-J/--jump** (**--ssh-jump** on **pmx rsync**).
 
-  It applies to the ssh transport only. The Proxmox API connection is a
-  separate transport and does not tunnel through it, so the context's **host**
-  must still be reachable directly.
+  The Proxmox API connection tunnels through it too, so a context whose
+  **host** is reachable only from the bastion works without any further
+  setup. **pmx** runs **ssh -W** for each API connection, which means the
+  same keys, agent, **known_hosts**, and **~/.ssh/config** the ssh transport
+  already uses apply unchanged. TLS is still negotiated against the
+  context's **host** at the far end, so certificate verification, a pinned
+  **fingerprint**, and **tofu** all behave exactly as they do on a direct
+  connection.
+
+  Per-invocation **-J/--jump** overrides the ssh transport only. The API
+  connection follows the context's configured **ssh.jump**, since it is
+  built before any command's flags are parsed.
 
 # LAB CONFIGURATION
 

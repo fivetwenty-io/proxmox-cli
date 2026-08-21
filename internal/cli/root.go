@@ -964,6 +964,12 @@ func buildContextOptions(
 		isTTY,
 	)
 
+	// Routing the connection through the context's ssh jump host is the last
+	// step deliberately: it changes only where the TCP connection originates,
+	// and every TLS decision above still applies against ctx.Host at the far
+	// end.
+	opts = apiclient.ApplyJumpOptions(opts, ctx.SSH.Jump)
+
 	return opts, ctx, contextName, nil
 }
 
