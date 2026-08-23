@@ -111,12 +111,16 @@ func TestJumpDialContext_RejectsNonTCP(t *testing.T) {
 // pipe plumbing, the deadline support net.Conn requires, and the teardown all
 // work, without needing an actual bastion.
 func TestJumpConn_CarriesBytesBothWays(t *testing.T) {
-	if _, err := exec.LookPath("sh"); err != nil {
-		t.Skip("sh not available")
+	// /dev/tcp is a bash/ksh feature, not a POSIX one: on Debian-family hosts
+	// /bin/sh is dash, which has no such redirection, so the script would die
+	// on the first line and leave this test reading EOF. Ask for bash by name.
+	shell, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
+	ln, lerr := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, lerr)
 
 	defer func() { _ = ln.Close() }()
 
@@ -140,11 +144,11 @@ func TestJumpConn_CarriesBytesBothWays(t *testing.T) {
 		_, _ = conn.Write([]byte("PONG!"))
 	}()
 
-	// A netcat-equivalent that is present everywhere Go's tests run: a tiny
-	// Go program would need building, so use the shell's own /dev/tcp.
+	// A netcat-equivalent that is present wherever bash is: a tiny Go program
+	// would need building, so use the shell's own /dev/tcp.
 	script := "exec 3<>/dev/tcp/127.0.0.1/" + portOf(t, ln.Addr()) + "; cat <&0 >&3 & cat <&3"
 
-	conn, err := dialViaCommand(context.Background(), "sh", []string{"-c", script}, "test", ln.Addr().String())
+	conn, err := dialViaCommand(context.Background(), shell, []string{"-c", script}, "test", ln.Addr().String())
 	if err != nil {
 		t.Skipf("shell /dev/tcp unavailable: %v", err)
 	}
