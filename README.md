@@ -157,7 +157,7 @@ make build      # builds ./dist/pmx (+ pve/pbs/pdm symlinks) with version ldflag
 make install    # installs pmx + pve/pbs/pdm symlinks, man pages, and completions
 ```
 
-Requires Go 1.26 or newer.
+Requires Go 1.27 or newer.
 
 `make install` follows FHS/GNU conventions and defaults to `PREFIX=/usr/local`
 (so it typically needs `sudo`):
