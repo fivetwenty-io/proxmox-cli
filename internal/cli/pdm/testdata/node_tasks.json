@@ -1,0 +1,50 @@
+[
+  {
+    "endtime": 1787554910,
+    "node": "localhost",
+    "pid": 119811,
+    "pstart": 304163858,
+    "starttime": 1787554909,
+    "status": "OK",
+    "upid": "UPID:pdm:0001D403:12212C12:00000000:6A8BEC5D:aptupdate::root@pam:",
+    "user": "root@pam",
+    "worker_id": null,
+    "worker_type": "aptupdate"
+  },
+  {
+    "endtime": 1787544000,
+    "node": "localhost",
+    "pid": 720,
+    "pstart": 451,
+    "starttime": 1787544000,
+    "status": "OK",
+    "upid": "UPID:pdm:000002D0:000001C3:00000023:6A8BC1C0:logrotate::root@pam:",
+    "user": "root@pam",
+    "worker_id": null,
+    "worker_type": "logrotate"
+  },
+  {
+    "endtime": 1787461430,
+    "node": "localhost",
+    "pid": 115894,
+    "pstart": 294815858,
+    "starttime": 1787461429,
+    "status": "OK",
+    "upid": "UPID:pdm:0001C4B6:11928872:00000000:6A8A7F35:aptupdate::root@pam:",
+    "user": "root@pam",
+    "worker_id": null,
+    "worker_type": "aptupdate"
+  },
+  {
+    "endtime": 1787457600,
+    "node": "localhost",
+    "pid": 720,
+    "pstart": 451,
+    "starttime": 1787457600,
+    "status": "OK",
+    "upid": "UPID:pdm:000002D0:000001C3:00000022:6A8A7040:logrotate::root@pam:",
+    "user": "root@pam",
+    "worker_id": null,
+    "worker_type": "logrotate"
+  }
+]

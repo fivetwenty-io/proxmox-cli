@@ -26,10 +26,14 @@ type nodeAptPackageEntry struct {
 // nodeAptVersionEntry mirrors one element of the JSON array PDM returns from
 // GET /nodes/{node}/apt/versions (installed package versions).
 type nodeAptVersionEntry struct {
-	Package       string `json:"package"`
-	Version       string `json:"version"`
-	OldVersion    string `json:"oldversion,omitempty"`
-	RunningKernel string `json:"runningkernel,omitempty"`
+	Package    string `json:"package"`
+	Version    string `json:"version"`
+	OldVersion string `json:"oldversion,omitempty"`
+	// ExtraInfo is what PDM sends alongside a version: for the kernel meta
+	// package it names the running kernel, which is why this column was once
+	// called RUNNING-KERNEL. No "runningkernel" field exists, so the column
+	// was blank on every row.
+	ExtraInfo string `json:"extrainfo,omitempty"`
 }
 
 // newNodeAptCmd builds `pmx pdm node apt` and its
@@ -331,10 +335,10 @@ func newNodeAptVersionsCmd() *cobra.Command {
 				return fmt.Errorf("decode apt versions on node %q: %w", node, err)
 			}
 
-			headers := []string{"PACKAGE", "VERSION", "OLD-VERSION", "RUNNING-KERNEL"}
+			headers := []string{"PACKAGE", "VERSION", "OLD-VERSION", "EXTRA-INFO"}
 			rows := make([][]string, 0, len(entries))
 			for _, e := range entries {
-				rows = append(rows, []string{e.Package, e.Version, e.OldVersion, e.RunningKernel})
+				rows = append(rows, []string{e.Package, e.Version, e.OldVersion, e.ExtraInfo})
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: entries}

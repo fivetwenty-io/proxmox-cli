@@ -18,7 +18,7 @@ func TestNodeTaskLs_MapsFiltersAndRendersEntries(t *testing.T) {
 
 	var rec recordedRequest
 	recordJSON(f, "GET /api2/json/nodes/pdm-host/tasks", &rec, []map[string]any{
-		{"upid": validUPID, "node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1000, "type": "aptupdate", "user": "root@pam", "status": "OK"},
+		{"upid": validUPID, "node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1000, "worker_type": "aptupdate", "user": "root@pam", "status": "OK"},
 	})
 
 	var buf bytes.Buffer
@@ -38,7 +38,7 @@ func TestNodeTaskStatus_RendersSingle(t *testing.T) {
 	deps := depsFor(t, pc, output.FormatJSON, false)
 
 	f.HandleJSON("GET /api2/json/nodes/pdm-host/tasks/"+validUPID+"/status", map[string]any{
-		"upid": validUPID, "node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1000, "type": "aptupdate", "user": "root@pam", "status": "stopped",
+		"upid": validUPID, "node": "pdm-host", "pid": 100, "pstart": 1, "starttime": 1000, "worker_type": "aptupdate", "user": "root@pam", "status": "stopped",
 	})
 
 	var buf bytes.Buffer

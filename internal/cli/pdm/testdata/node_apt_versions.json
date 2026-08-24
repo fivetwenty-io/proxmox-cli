@@ -1,0 +1,37 @@
+[
+  {
+    "Arch": "amd64",
+    "Description": "Proxmox Datacenter Manager meta package\n This is a meta package which will install everything needed to run a Proxmox\n Datacenter Manager server. This package also depends on the latest available\n Proxmox kernel.",
+    "ExtraInfo": "running kernel: 7.0.14-4-pve",
+    "OldVersion": "1.1.0",
+    "Origin": "Proxmox",
+    "Package": "proxmox-datacenter-manager-meta",
+    "Priority": "optional",
+    "Section": "admin",
+    "Title": "Proxmox Datacenter Manager meta package",
+    "Version": "1.1.0"
+  },
+  {
+    "Arch": "amd64",
+    "Description": "Manage multiple Proxmox VE cluster and other Proxmox projects\n This package provides the API daemons of the Proxmox Datacenter Manager (PDM)\n which allows one to add multiple Proxmox VE and Proxmox Backup Server\n instances to manage them centrally.",
+    "ExtraInfo": "running version: 1.1.6",
+    "OldVersion": "1.1.6",
+    "Origin": "Proxmox",
+    "Package": "proxmox-datacenter-manager",
+    "Priority": "optional",
+    "Section": "admin",
+    "Title": "Manage multiple Proxmox VE cluster and other Proxmox projects",
+    "Version": "1.1.7"
+  },
+  {
+    "Arch": "amd64",
+    "Description": "Function for various kernel maintenance tasks.\n This package includes kernel-hooks for marking certain kernels as\n NeverAutoRemove and helpers for systemd-boot",
+    "OldVersion": "9.2.0",
+    "Origin": "Proxmox",
+    "Package": "proxmox-kernel-helper",
+    "Priority": "optional",
+    "Section": "admin",
+    "Title": "Function for various kernel maintenance tasks.",
+    "Version": "9.2.0"
+  }
+]
