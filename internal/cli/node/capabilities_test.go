@@ -20,7 +20,7 @@ func TestNodeCapabilities_QemuCpu(t *testing.T) {
 	var rec recordedRequest
 	recordOn(f, "GET /api2/json/nodes/pve1/capabilities/qemu/cpu", &rec, []any{
 		map[string]any{"name": "host", "vendor": "AMD", "custom": 0},
-		map[string]any{"name": "qemu64", "vendor": "QEMU", "custom": 0},
+		map[string]any{"name": "x86-64-v3", "vendor": "default", "custom": 0, "abstract": 1},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -32,7 +32,10 @@ func TestNodeCapabilities_QemuCpu(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "NAME")
 	require.Contains(t, out, "host")
-	require.Contains(t, out, "qemu64")
+	require.Contains(t, out, "AMD", "the vendor gets a column of its own")
+	require.Contains(t, out, "x86-64-v3")
+	require.Contains(t, out, "yes", "an abstract model is marked as one")
+	require.Contains(t, out, "no", "an ordinary model says so rather than rendering blank")
 }
 
 func TestNodeCapabilities_QemuCpuArchQuery(t *testing.T) {
@@ -54,6 +57,8 @@ func TestNodeCapabilities_QemuMachines(t *testing.T) {
 	var rec recordedRequest
 	recordOn(f, "GET /api2/json/nodes/pve1/capabilities/qemu/machines", &rec, []any{
 		map[string]any{"id": "pc", "type": "i440fx", "version": "9.0"},
+		map[string]any{"id": "pc-q35-9.0+pve1", "type": "q35", "version": "9.0+pve1",
+			"changes": "Fix the VirtIO NIC default."},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -61,7 +66,10 @@ func TestNodeCapabilities_QemuMachines(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 	require.Equal(t, "/api2/json/nodes/pve1/capabilities/qemu/machines", rec.path)
-	require.Contains(t, buf.String(), "i440fx")
+	out := buf.String()
+	require.Contains(t, out, "i440fx")
+	require.Contains(t, out, "pc-q35-9.0+pve1", "the id the guest config takes leads the row")
+	require.Contains(t, out, "Fix the VirtIO NIC default.", "a patched version reports what it changed")
 }
 
 func TestNodeCapabilities_QemuMachinesArchQuery(t *testing.T) {

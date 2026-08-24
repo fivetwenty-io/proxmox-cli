@@ -63,7 +63,11 @@ func newCapabilitiesQemuCpuCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list QEMU CPU capabilities on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			res, err := capview.CPUModels(derefRaws(resp))
+			if err != nil {
+				return fmt.Errorf("decode QEMU CPU models on node %q: %w", deps.Node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&arch, "arch", "", "virtual processor architecture (defaults to the host architecture)")
@@ -133,7 +137,11 @@ func newCapabilitiesQemuMachinesCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list QEMU machine capabilities on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			res, err := capview.Machines(derefRaws(resp))
+			if err != nil {
+				return fmt.Errorf("decode QEMU machine types on node %q: %w", deps.Node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&arch, "arch", "", "virtual processor architecture (defaults to the host architecture)")

@@ -9,7 +9,6 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-cli/internal/capview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
-	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // newCpuCmd builds the `pmx pve qemu cpu` sub-group.
@@ -58,7 +57,11 @@ func newCpuListCmd() *cobra.Command {
 			if resp != nil {
 				raw = *resp
 			}
-			return renderRawList(cmd, deps, raw)
+			res, err := capview.CPUModels(raw)
+			if err != nil {
+				return fmt.Errorf("decode QEMU CPU models on node %q: %w", node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&arch, "arch", "", "filter by virtual processor architecture, e.g. x86_64 or aarch64")
@@ -110,7 +113,11 @@ func newMachineListCmd() *cobra.Command {
 			if resp != nil {
 				raw = *resp
 			}
-			return renderRawList(cmd, deps, raw)
+			res, err := capview.Machines(raw)
+			if err != nil {
+				return fmt.Errorf("decode QEMU machine types on node %q: %w", node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&arch, "arch", "", "filter by virtual processor architecture, e.g. x86_64 or aarch64")
@@ -166,19 +173,4 @@ func newCpuFlagsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&arch, "arch", "", "filter by virtual processor architecture, e.g. x86_64 or aarch64")
 	cmd.Flags().StringVar(&accel, "accel", "", "filter by acceleration type to check node compatibility for")
 	return cmd
-}
-
-// renderRawList renders a []json.RawMessage list. Each element is marshalled to
-// its compact JSON representation in a single RAW column for table output, and
-// the full slice is passed as Raw for JSON/YAML output.
-func renderRawList(cmd *cobra.Command, deps *cli.Deps, items []json.RawMessage) error {
-	rows := make([][]string, 0, len(items))
-	for _, item := range items {
-		rows = append(rows, []string{string(item)})
-	}
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{
-		Headers: []string{"DATA"},
-		Rows:    rows,
-		Raw:     items,
-	}, deps.Format)
 }

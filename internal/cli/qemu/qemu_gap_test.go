@@ -222,13 +222,17 @@ func TestQemuGap_CpuListRequest(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/capabilities/qemu/cpu",
 		func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
-			testhelper.WriteData(w, []any{map[string]any{"name": "host"}})
+			testhelper.WriteData(w, []any{
+				map[string]any{"name": "host", "vendor": "AuthenticAMD", "custom": 0},
+			})
 		})
 	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "cpu", "list"))
 	require.Equal(t, "/api2/json/nodes/pve1/capabilities/qemu/cpu", gotPath)
-	require.Contains(t, buf.String(), "host")
+	out := buf.String()
+	require.Contains(t, out, "host")
+	require.Contains(t, out, "AuthenticAMD", "the model renders in columns, not as one JSON cell")
 }
 
 // TestQemuGap_MachineListRequest asserts `qemu machine list` calls the correct endpoint.
@@ -238,13 +242,17 @@ func TestQemuGap_MachineListRequest(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/capabilities/qemu/machines",
 		func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
-			testhelper.WriteData(w, []any{map[string]any{"id": "q35"}})
+			testhelper.WriteData(w, []any{
+				map[string]any{"id": "pc-q35-9.0", "type": "q35", "version": "9.0"},
+			})
 		})
 	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
 	require.NoError(t, run(deps, &buf, "machine", "list"))
 	require.Equal(t, "/api2/json/nodes/pve1/capabilities/qemu/machines", gotPath)
-	require.Contains(t, buf.String(), "q35")
+	out := buf.String()
+	require.Contains(t, out, "pc-q35-9.0")
+	require.Contains(t, out, "VERSION", "the machine type renders in columns, not as one JSON cell")
 }
 
 // TestQemuGap_CpuFlagsRequest asserts `qemu cpu-flags` calls the correct endpoint.
