@@ -1,0 +1,260 @@
+{
+ "election_epoch": 12,
+ "fsid": "6cc5bd83-cfe8-4fd5-88d4-63fabe93f424",
+ "fsmap": {
+  "btime": "2026-08-24T11:18:00:104785-0400",
+  "by_rank": [
+   {
+    "filesystem_id": 1,
+    "gid": 499680,
+    "name": "lab-ceph-0",
+    "rank": 0,
+    "status": "up:active"
+   }
+  ],
+  "epoch": 6,
+  "id": 1,
+  "in": 1,
+  "max": 1,
+  "up": 1,
+  "up:standby": 1
+ },
+ "health": {
+  "checks": {},
+  "mutes": [],
+  "status": "HEALTH_OK"
+ },
+ "mgrmap": {
+  "active_addr": "10.252.0.10:6801/2529909535",
+  "active_addrs": {
+   "addrvec": [
+    {
+     "addr": "10.252.0.10:6800",
+     "nonce": 2529909535,
+     "type": "v2"
+    },
+    {
+     "addr": "10.252.0.10:6801",
+     "nonce": 2529909535,
+     "type": "v1"
+    }
+   ]
+  },
+  "active_change": "2026-08-20T19:40:37.076432-0400",
+  "active_clients": [
+   {
+    "addrvec": [
+     {
+      "addr": "10.252.0.10:0",
+      "nonce": 907683928,
+      "type": "v2"
+     }
+    ],
+    "name": "devicehealth"
+   },
+   {
+    "addrvec": [
+     {
+      "addr": "10.252.0.10:0",
+      "nonce": 3724945914,
+      "type": "v2"
+     }
+    ],
+    "name": "libcephsqlite"
+   },
+   {
+    "addrvec": [
+     {
+      "addr": "10.252.0.10:0",
+      "nonce": 3922365613,
+      "type": "v2"
+     }
+    ],
+    "name": "rbd_support"
+   },
+   {
+    "addrvec": [
+     {
+      "addr": "10.252.0.10:0",
+      "nonce": 3373797787,
+      "type": "v2"
+     }
+    ],
+    "name": "volumes"
+   }
+  ],
+  "active_gid": 4107,
+  "active_mgr_features": 4541880224203014000,
+  "active_name": "lab-ceph-0",
+  "available": true,
+  "epoch": 6,
+  "flags": 0,
+  "force_disabled_modules": {},
+  "last_failure_osd_epoch": 0,
+  "modules": [
+   "iostat",
+   "nfs"
+  ],
+  "services": {},
+  "standbys": [
+   {
+    "gid": 14104,
+    "mgr_features": 4541880224203014000,
+    "name": "lab-ceph-1"
+   },
+   {
+    "gid": 14129,
+    "mgr_features": 4541880224203014000,
+    "name": "lab-ceph-2"
+   }
+  ]
+ },
+ "monmap": {
+  "created": "2026-08-20T23:40:35.742697Z",
+  "disallowed_leaders": "",
+  "election_strategy": 1,
+  "epoch": 3,
+  "features": {
+   "optional": [],
+   "persistent": [
+    "kraken",
+    "luminous",
+    "mimic",
+    "osdmap-prune",
+    "nautilus",
+    "octopus",
+    "pacific",
+    "elector-pinging",
+    "quincy",
+    "reef",
+    "squid",
+    "tentacle",
+    "nvmeof_beacon_diff"
+   ]
+  },
+  "fsid": "6cc5bd83-cfe8-4fd5-88d4-63fabe93f424",
+  "min_mon_release": 20,
+  "min_mon_release_name": "tentacle",
+  "modified": "2026-08-20T23:40:43.710815Z",
+  "mons": [
+   {
+    "addr": "10.252.0.10:6789/0",
+    "crush_location": "{}",
+    "name": "lab-ceph-0",
+    "priority": 0,
+    "public_addr": "10.252.0.10:6789/0",
+    "public_addrs": {
+     "addrvec": [
+      {
+       "addr": "10.252.0.10:3300",
+       "nonce": 0,
+       "type": "v2"
+      },
+      {
+       "addr": "10.252.0.10:6789",
+       "nonce": 0,
+       "type": "v1"
+      }
+     ]
+    },
+    "rank": 0,
+    "weight": 0
+   },
+   {
+    "addr": "10.252.0.11:6789/0",
+    "crush_location": "{}",
+    "name": "lab-ceph-1",
+    "priority": 0,
+    "public_addr": "10.252.0.11:6789/0",
+    "public_addrs": {
+     "addrvec": [
+      {
+       "addr": "10.252.0.11:3300",
+       "nonce": 0,
+       "type": "v2"
+      },
+      {
+       "addr": "10.252.0.11:6789",
+       "nonce": 0,
+       "type": "v1"
+      }
+     ]
+    },
+    "rank": 1,
+    "weight": 0
+   },
+   {
+    "addr": "10.252.0.12:6789/0",
+    "crush_location": "{}",
+    "name": "lab-ceph-2",
+    "priority": 0,
+    "public_addr": "10.252.0.12:6789/0",
+    "public_addrs": {
+     "addrvec": [
+      {
+       "addr": "10.252.0.12:3300",
+       "nonce": 0,
+       "type": "v2"
+      },
+      {
+       "addr": "10.252.0.12:6789",
+       "nonce": 0,
+       "type": "v1"
+      }
+     ]
+    },
+    "rank": 2,
+    "weight": 0
+   }
+  ],
+  "quorum": [
+   0,
+   1,
+   2
+  ],
+  "removed_ranks": "",
+  "stretch_mode": false,
+  "tiebreaker_mon": ""
+ },
+ "osdmap": {
+  "epoch": 947,
+  "num_in_osds": 6,
+  "num_osds": 6,
+  "num_remapped_pgs": 0,
+  "num_up_osds": 6,
+  "osd_in_since": 1787269294,
+  "osd_up_since": 1787269298
+ },
+ "pgmap": {
+  "bytes_avail": 644001140736,
+  "bytes_total": 644219928576,
+  "bytes_used": 218787840,
+  "data_bytes": 605546,
+  "num_objects": 27,
+  "num_pgs": 97,
+  "num_pools": 4,
+  "pgs_by_state": [
+   {
+    "count": 97,
+    "state_name": "active+clean"
+   }
+  ]
+ },
+ "progress_events": {},
+ "quorum": [
+  0,
+  1,
+  2
+ ],
+ "quorum_age": 324275,
+ "quorum_names": [
+  "lab-ceph-0",
+  "lab-ceph-1",
+  "lab-ceph-2"
+ ],
+ "servicemap": {
+  "epoch": 3525,
+  "modified": "2026-08-24T13:42:41.988906-0400",
+  "services": {}
+ }
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -47,7 +48,7 @@ func newCephOsdListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list Ceph OSDs on node %q: %w", deps.Node, err)
 			}
-			return renderObject(cmd, deps, resp)
+			return renderCephView(cmd, deps, cephview.OSDTree, resp, "Ceph OSD tree")
 		},
 	}
 }
@@ -72,7 +73,7 @@ func newCephOsdGetCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get Ceph OSD %q on node %q: %w", args[0], deps.Node, err)
 			}
-			return renderObject(cmd, deps, resp)
+			return renderCephView(cmd, deps, cephview.OSDMetadata, resp, "Ceph OSD metadata")
 		},
 	}
 }
@@ -123,7 +124,7 @@ func newCephOsdMetadataCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get metadata for Ceph OSD %q on node %q: %w", args[0], deps.Node, err)
 			}
-			return renderObject(cmd, deps, resp)
+			return renderCephView(cmd, deps, cephview.OSDMetadata, resp, "Ceph OSD metadata")
 		},
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
@@ -43,7 +44,7 @@ func newCephPoolListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list Ceph pools on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderCephView(cmd, deps, cephview.Pools, resp, "Ceph pool list")
 		},
 	}
 }

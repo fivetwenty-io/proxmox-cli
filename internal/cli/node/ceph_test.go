@@ -110,14 +110,37 @@ func TestNodeCephOsd_List(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleJSON("GET /api2/json/nodes/pve1/ceph/osd", map[string]any{
 		"flags": "noout",
-		"root":  map[string]any{"name": "default", "id": -1},
+		// The outermost "root" PVE sends is an unnamed container; the CRUSH
+		// roots are its children.
+		"root": map[string]any{"leaf": 0, "children": []any{
+			map[string]any{
+				"name": "default", "id": "-1", "type": "root", "reweight": -1, "leaf": 0,
+				"children": []any{
+					map[string]any{
+						"name": "pve1", "id": -3, "type": "host", "reweight": -1, "leaf": 0,
+						"children": []any{
+							map[string]any{
+								"name": "osd.0", "id": 0, "type": "osd", "device_class": "ssd",
+								"status": "up", "in": 1, "crush_weight": 0.09769, "reweight": 1,
+								"pgs": 33, "leaf": 1,
+							},
+						},
+					},
+				},
+			},
+		}},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
 	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "osd", "list"))
 
 	require.NoError(t, root.Execute())
-	require.Contains(t, buf.String(), "noout")
+	// The CRUSH tree is one row per bucket and OSD; the cluster-wide flags are
+	// not per-OSD and stay in -o json.
+	out := buf.String()
+	require.Contains(t, out, "default")
+	require.Contains(t, out, "pve1")
+	require.Contains(t, out, "osd.0")
 }
 
 // TestNodeCephOsd_Get verifies `osd get` reads the metadata child endpoint:
@@ -197,8 +220,11 @@ func TestNodeCephOsd_Metadata(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
 	recordOn(f, "GET /api2/json/nodes/pve1/ceph/osd/0/metadata", &rec, map[string]any{
-		"osd":     map[string]any{"id": 0, "hostname": "pve1"},
-		"devices": []any{map[string]any{"dev": "/dev/sdb"}},
+		"osd": map[string]any{"id": 0, "hostname": "pve1"},
+		"devices": []any{map[string]any{
+			"device": "block", "dev_node": "/dev/sdb", "physical_device": "sdb",
+			"type": "ssd", "size": 107369988096, "support_discard": true,
+		}},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())

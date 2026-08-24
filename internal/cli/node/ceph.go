@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -43,6 +44,19 @@ func renderRawMessage(cmd *cobra.Command, deps *cli.Deps, resp *json.RawMessage)
 	}
 	// Fallback: render raw bytes as-is.
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: string(raw), Raw: raw}, deps.Format)
+}
+
+// renderCephView renders a Ceph payload through one of the curated views in
+// internal/cephview. Every one of these endpoints answers with Ceph's own
+// nested JSON, which the generic renderer can only flatten; the view selects
+// what the command is asked for and leaves the whole payload to -o json.
+func renderCephView(cmd *cobra.Command, deps *cli.Deps,
+	view func(any) (output.Result, error), resp any, what string) error {
+	res, err := view(resp)
+	if err != nil {
+		return fmt.Errorf("decode %s on node %q: %w", what, deps.Node, err)
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 }
 
 // renderCephTask renders the asynchronous task started by a Ceph operation. The
@@ -113,7 +127,7 @@ func newCephStatusCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get Ceph status on node %q: %w", deps.Node, err)
 			}
-			return renderObject(cmd, deps, resp)
+			return renderCephView(cmd, deps, cephview.Status, resp, "Ceph status")
 		},
 	}
 }

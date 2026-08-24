@@ -1,0 +1,26 @@
+{
+ "devices": [
+  {
+   "dev_node": "/dev/dm-8",
+   "device": "block",
+   "physical_device": "sdc",
+   "size": 107369988096,
+   "support_discard": true,
+   "type": "ssd"
+  }
+ ],
+ "osd": {
+  "back_addr": "[v2:10.252.0.10:6804/1991401973,v1:10.252.0.10:6805/1991401973]",
+  "encrypted": 0,
+  "front_addr": "[v2:10.252.0.10:6802/1991401973,v1:10.252.0.10:6803/1991401973]",
+  "hb_back_addr": "[v2:10.252.0.10:6808/1991401973,v1:10.252.0.10:6809/1991401973]",
+  "hb_front_addr": "[v2:10.252.0.10:6806/1991401973,v1:10.252.0.10:6807/1991401973]",
+  "hostname": "lab-ceph-0",
+  "id": 0,
+  "mem_usage": 95626240,
+  "osd_data": "/var/lib/ceph/osd/ceph-0",
+  "osd_objectstore": "bluestore",
+  "pid": 29575,
+  "version": "20.2.2 (tentacle)"
+ }
+}

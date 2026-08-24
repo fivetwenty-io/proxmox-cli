@@ -8,6 +8,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -47,12 +48,11 @@ func newCephStatusCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get ceph status: %w", err)
 			}
-			single, raw, err := objectToSingle(resp)
+			res, err := cephview.Status(resp)
 			if err != nil {
 				return fmt.Errorf("decode ceph status: %w", err)
 			}
-			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Single: single, Raw: raw}, deps.Format)
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 }
@@ -239,12 +239,11 @@ func newCephMetadataCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get ceph metadata: %w", err)
 			}
-			single, raw, err := objectToSingle(resp)
+			res, err := cephview.ClusterMetadata(resp)
 			if err != nil {
 				return fmt.Errorf("decode ceph metadata: %w", err)
 			}
-			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Single: single, Raw: raw}, deps.Format)
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&scope, "scope", "",
