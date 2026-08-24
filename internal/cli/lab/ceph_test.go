@@ -954,3 +954,46 @@ func TestCephListDisks_CapturedPayload_Decodes(t *testing.T) {
 	assert.NotEqual(t, cephOSDSerial(0), entries[2].Serial)
 	assert.Equal(t, cephDiskByIDLink(0), entries[2].ByIDLink)
 }
+
+// TestLabCephOsd_DBWALCarrierNeverWiped covers the device osdid alone cannot
+// classify: a shared DB or WAL device is not itself an OSD (osdid -1), so the
+// osdid check reads it as free, yet its osdid-list names the OSDs whose
+// metadata it carries. Wiping it destroys those OSDs. --wipe --yes must
+// decline it and say which OSDs it serves.
+func TestLabCephOsd_DBWALCarrierNeverWiped(t *testing.T) {
+	lab := cephOSDTestLab("ceph", 3, 1)
+	path := writeConfig(t, &config.Config{Labs: map[string]*config.Lab{"ceph": lab}})
+	f := testhelper.NewFakePVE(t)
+
+	var createRec, wipeRec []hostnetRecordedRequest
+	for i := range 3 {
+		node := fmt.Sprintf("lab-ceph-%d", i)
+		entry := cephDiskEntryJSON(0, "LVM", -1)
+		entry["osdid-list"] = []any{"3", "4"}
+		cephHandleDisksList(f, node, entry)
+		cephRecordOSDCreate(f, &createRec, node)
+		hostnetRecord(f, &wipeRec, nil, "", "PUT /api2/json/nodes/"+node+"/disks/wipedisk", nil, 200)
+	}
+
+	cmd, _ := buildGuestSSHCmd(t, path, newCephCmd())
+	stubInnerAPIClient(t, f)
+
+	out, err := runGuestCmd(t, cmd, "osd", "ceph", "--wipe", "--yes")
+	require.NoError(t, err)
+
+	assert.Empty(t, wipeRec, "--wipe must never destroy a device backing another OSD's DB or WAL")
+	assert.Empty(t, createRec, "a DB or WAL carrier must not be handed to Ceph as a new OSD")
+	assert.Contains(t, out, "backs OSD 3, 4")
+}
+
+// TestCephOSDWipeCount_ExcludesCarriers pins the count the confirmation
+// prompt quotes: only devices a wipe would genuinely destroy.
+func TestCephOSDWipeCount_ExcludesCarriers(t *testing.T) {
+	devices := []cephOSDDevice{
+		{node: "a", osdid: -1, used: "partitions"},                 // wipeable
+		{node: "b", osdid: 0, used: "LVM"},                         // already an OSD
+		{node: "c", osdid: -1, used: ""},                           // free
+		{node: "d", osdid: -1, used: "LVM", osdidList: []int64{2}}, // DB or WAL carrier
+	}
+	assert.Equal(t, 1, cephOSDWipeCount(devices))
+}

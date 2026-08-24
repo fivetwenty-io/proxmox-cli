@@ -674,22 +674,48 @@ func cephResolveOSDDevices(ctx context.Context, api *apiclient.APIClient,
 
 // cephOSDWipeCount counts the devices a --wipe run would actually destroy:
 // in use by something other than Ceph. A device Ceph already owns is never
-// counted, because it is never wiped.
+// counted, because it is never wiped, and neither is one that backs another
+// OSD's DB or WAL (cephOSDServes).
 func cephOSDWipeCount(devices []cephOSDDevice) int {
 	n := 0
 	for _, d := range devices {
-		if d.osdid < 0 && d.used != "" {
+		if d.osdid < 0 && d.used != "" && len(d.osdidList) == 0 {
 			n++
 		}
 	}
 	return n
 }
 
+// cephOSDServes reports the OSDs a device carries data for without itself
+// being one of them: its osdid is -1, yet the node's disk listing names OSDs
+// in its osdid-list, which is how PVE reports a shared DB or WAL device.
+//
+// Such a device is not free. Wiping it destroys every OSD in the list, and
+// the osdid check alone cannot see that, because the device is not an OSD.
+func cephOSDServes(d cephOSDDevice) []int64 {
+	if d.osdid >= 0 {
+		return nil
+	}
+	return d.osdidList
+}
+
+// cephOSDServesStatus renders the skip status for a DB or WAL carrier,
+// naming the OSDs it serves so the operator can see why --wipe declined it.
+func cephOSDServesStatus(ids []int64) string {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		names = append(names, strconv.FormatInt(id, 10))
+	}
+	return "backs OSD " + strings.Join(names, ", ") + " (skipped): DB or WAL device, wiping it destroys those OSDs"
+}
+
 // ensureCephOSDs creates an OSD on every resolved device that does not
 // already carry one. A device Ceph owns (osdid >= 0) is left alone even under
-// wipe — refusing to touch a device Ceph owns is the whole point of reading
-// osdid rather than a filesystem probe. A device in use by anything else is
-// skipped unless wipe is set, in which case it is wiped first.
+// wipe, because refusing to touch a device Ceph owns is the whole point of
+// reading osdid rather than a filesystem probe. So is a device that backs
+// another OSD's DB or WAL (cephOSDServes), which osdid alone cannot identify.
+// A device in use by anything else is skipped unless wipe is set, in which
+// case it is wiped first.
 func ensureCephOSDs(ctx context.Context, api *apiclient.APIClient,
 	devices []cephOSDDevice, wipe bool) ([]cephStepResult, error) {
 	rows := make([]cephStepResult, 0, len(devices))
@@ -697,6 +723,10 @@ func ensureCephOSDs(ctx context.Context, api *apiclient.APIClient,
 		step := fmt.Sprintf("osd %s %s", d.node, d.byID)
 		if d.osdid >= 0 {
 			rows = append(rows, cephStepResult{Step: step, Status: fmt.Sprintf("already OSD %d", d.osdid)})
+			continue
+		}
+		if serves := cephOSDServes(d); len(serves) > 0 {
+			rows = append(rows, cephStepResult{Step: step, Status: cephOSDServesStatus(serves)})
 			continue
 		}
 		status := "created"
