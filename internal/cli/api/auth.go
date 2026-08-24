@@ -60,14 +60,19 @@ func newAuthCmd() *cobra.Command {
 	return noClient(cmd)
 }
 
-// resolveContextName returns the context name to operate on: the --context flag
-// if set, otherwise the config's current-context.
-func resolveContextName(flagContext string, cfg *config.Config) (string, error) {
-	if flagContext != "" {
-		return flagContext, nil
-	}
-	if cfg.CurrentContext != "" {
-		return cfg.CurrentContext, nil
+// resolveContextName returns the context name the auth verbs operate on.
+//
+// deps.CtxName already carries the root's resolution, in --context/-c >
+// $PMX_CONTEXT > current-context order. These verbs used to register their
+// OWN --context flag and read that instead. A local flag of the same name
+// shadows the root's persistent one and takes its shorthand with it, so
+// `pmx -c lab auth status` failed outright with "unknown shorthand flag:
+// 'c'", and $PMX_CONTEXT was ignored, so `pmx auth set-token` could store a
+// credential against a context the user had not named while the rest of the
+// invocation targeted the one they had.
+func resolveContextName(deps *cli.Deps) (string, error) {
+	if deps.CtxName != "" {
+		return deps.CtxName, nil
 	}
 	return "", fmt.Errorf("no context specified: use --context or set a current context")
 }
@@ -84,7 +89,6 @@ func lookupContext(cfg *config.Config, name string) (*config.Context, error) {
 // newAuthLoginCmd builds `pmx auth login`.
 func newAuthLoginCmd() *cobra.Command {
 	var (
-		contextName  string
 		username     string
 		realm        string
 		password     string
@@ -117,7 +121,7 @@ func newAuthLoginCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveContextName(contextName, cfg)
+			name, err := resolveContextName(deps)
 			if err != nil {
 				return err
 			}
@@ -160,7 +164,6 @@ func newAuthLoginCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	cmd.Flags().StringVar(&username, "username", "", "username (defaults to context's username)")
 	cmd.Flags().StringVar(&realm, "realm", "", "authentication realm (defaults to context's realm)")
 	cmd.Flags().StringVar(&password, "password", "", "password (defaults to the context's resolved secret)")
@@ -348,7 +351,6 @@ func redactRedirectURL(rawURL string) string {
 // for a password context.
 func newAuthRefreshCmd() *cobra.Command {
 	var (
-		contextName  string
 		tfaChallenge string
 	)
 
@@ -370,7 +372,7 @@ func newAuthRefreshCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveContextName(contextName, cfg)
+			name, err := resolveContextName(deps)
 			if err != nil {
 				return err
 			}
@@ -409,15 +411,12 @@ func newAuthRefreshCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	cmd.Flags().StringVar(&tfaChallenge, "tfa-challenge", "", "signed challenge response for second-step two-factor authentication")
 	return noClient(cmd)
 }
 
 // newAuthLogoutCmd builds `pmx auth logout`.
 func newAuthLogoutCmd() *cobra.Command {
-	var contextName string
-
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Invalidate the session ticket and remove it from the config",
@@ -435,7 +434,7 @@ func newAuthLogoutCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveContextName(contextName, cfg)
+			name, err := resolveContextName(deps)
 			if err != nil {
 				return err
 			}
@@ -462,14 +461,11 @@ func newAuthLogoutCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	return noClient(cmd)
 }
 
 // newAuthStatusCmd builds `pmx auth status`.
 func newAuthStatusCmd() *cobra.Command {
-	var contextName string
-
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show authentication status for a context",
@@ -490,7 +486,7 @@ func newAuthStatusCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveContextName(contextName, cfg)
+			name, err := resolveContextName(deps)
 			if err != nil {
 				return err
 			}
@@ -532,7 +528,6 @@ func newAuthStatusCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	return noClient(cmd)
 }
 
@@ -563,14 +558,8 @@ func newAuthWhoamiCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
-			// The root resolved and built the client for this context name using
-			// the same precedence (--context/-c > $PMX_CONTEXT > current-context).
-			flagContext := ""
-			if f := cmd.Flags().Lookup("context"); f != nil {
-				flagContext = f.Value.String()
-			}
-			name := config.Resolve(flagContext, "PMX_CONTEXT", deps.Cfg.CurrentContext, "")
-			ctx, _, err := config.ResolveContext(deps.Cfg, name)
+			// The root resolved and built the client for this same name.
+			ctx, _, err := config.ResolveContext(deps.Cfg, deps.CtxName)
 			if err != nil {
 				return err
 			}
@@ -585,11 +574,11 @@ func newAuthWhoamiCmd() *cobra.Command {
 				perms, err = deps.API.Access.ListPermissions(cmd.Context(), nil)
 			}
 			if err != nil {
-				return fmt.Errorf("verify credentials for context %q: %w", name, err)
+				return fmt.Errorf("verify credentials for context %q: %w", deps.CtxName, err)
 			}
 
 			single := map[string]string{
-				"Context":   name,
+				"Context":   deps.CtxName,
 				"Auth-type": ctx.Auth.Type,
 				"Identity":  authIdentity(ctx),
 			}
@@ -617,10 +606,9 @@ func authIdentity(ctx *config.Context) string {
 // newAuthSetTokenCmd builds `pmx auth set-token`.
 func newAuthSetTokenCmd() *cobra.Command {
 	var (
-		contextName string
-		tokenID     string
-		secret      string
-		username    string
+		tokenID  string
+		secret   string
+		username string
 	)
 
 	cmd := &cobra.Command{
@@ -640,7 +628,7 @@ func newAuthSetTokenCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveContextName(contextName, cfg)
+			name, err := resolveContextName(deps)
 			if err != nil {
 				return err
 			}
@@ -674,7 +662,6 @@ func newAuthSetTokenCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	cmd.Flags().StringVar(&tokenID, "token-id", "", "API token id (required)")
 	cmd.Flags().StringVar(&secret, "secret", "", "token secret reference (required)")
 	cmd.Flags().StringVar(&username, "username", "", "PVE username for the token")
@@ -684,9 +671,8 @@ func newAuthSetTokenCmd() *cobra.Command {
 // newAuthSetPasswordCmd builds `pmx auth set-password`.
 func newAuthSetPasswordCmd() *cobra.Command {
 	var (
-		contextName string
-		username    string
-		secret      string
+		username string
+		secret   string
 	)
 
 	cmd := &cobra.Command{
@@ -706,7 +692,7 @@ func newAuthSetPasswordCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			name, err := resolveContextName(contextName, cfg)
+			name, err := resolveContextName(deps)
 			if err != nil {
 				return err
 			}
@@ -738,7 +724,6 @@ func newAuthSetPasswordCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&contextName, "context", "", "context name (defaults to current context)")
 	cmd.Flags().StringVar(&username, "username", "", "PVE username (required)")
 	cmd.Flags().StringVar(&secret, "secret", "", "password reference (required)")
 	return noClient(cmd)
