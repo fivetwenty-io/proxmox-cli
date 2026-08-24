@@ -15,11 +15,14 @@ import (
 // nodeServiceEntry mirrors one element of the JSON array PBS returns from
 // GET /nodes/{node}/services.
 type nodeServiceEntry struct {
-	Service     string `json:"service"`
-	Name        string `json:"name"`
-	Desc        string `json:"desc"`
-	State       string `json:"state"`
-	ActiveState string `json:"active-state"`
+	Service string `json:"service"`
+	Name    string `json:"name"`
+	Desc    string `json:"desc"`
+	State   string `json:"state"`
+	// ActiveState carries the tag PBS actually sends. A live PBS 4.2 answers
+	// the service list with "unit-state", not the documented "active-state",
+	// so the ACTIVE-STATE column was blank on every row.
+	ActiveState string `json:"unit-state"`
 }
 
 // nodeServiceName returns e.Service, falling back to e.Name when Service is

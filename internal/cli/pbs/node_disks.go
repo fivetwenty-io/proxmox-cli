@@ -26,9 +26,13 @@ type nodeDiskEntry struct {
 	Model   *string `json:"model,omitempty"`
 	Serial  *string `json:"serial,omitempty"`
 	Rpm     *int64  `json:"rpm,omitempty"`
-	Type    *string `json:"type,omitempty"`
 	Wearout *int64  `json:"wearout,omitempty"`
-	Health  *string `json:"health,omitempty"`
+	// Type and Health carry the tags PBS actually sends. The BlockDevice
+	// schema documents "type" and "health", but a live PBS 4.2 answers with
+	// "disk-type" and "status", so the TYPE and HEALTH columns were blank on
+	// every row.
+	Type   *string `json:"disk-type,omitempty"`
+	Health *string `json:"status,omitempty"`
 }
 
 // nodeDirEntry mirrors one element of the JSON array PBS returns from

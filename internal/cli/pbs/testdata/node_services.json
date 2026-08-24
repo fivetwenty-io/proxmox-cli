@@ -1,0 +1,23 @@
+[
+  {
+    "desc": "Proxmox Backup API Server",
+    "name": "proxmox-backup",
+    "service": "proxmox-backup",
+    "state": "running",
+    "unit-state": "enabled"
+  },
+  {
+    "desc": "Proxmox Backup API Proxy Server",
+    "name": "proxmox-backup-proxy",
+    "service": "proxmox-backup-proxy",
+    "state": "running",
+    "unit-state": "enabled"
+  },
+  {
+    "desc": "OpenBSD Secure Shell server",
+    "name": "sshd",
+    "service": "sshd",
+    "state": "running",
+    "unit-state": "enabled"
+  }
+]

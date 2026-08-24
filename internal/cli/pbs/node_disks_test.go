@@ -15,7 +15,10 @@ func TestNodeDisksLs_AuditAllFlags(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "GET "+nodeAPIBase+"/disks/list", &rec, []map[string]any{
-		{"devpath": "/dev/sda", "size": 1000000, "type": "ssd", "vendor": "Acme", "model": "X1", "serial": "S123", "health": "PASSED"},
+		// disk-type and status, not the documented type and health: see
+		// nodeDiskEntry for what PBS actually sends here.
+		{"devpath": "/dev/sda", "size": 1000000, "disk-type": "ssd", "vendor": "Acme",
+			"model": "X1", "serial": "S123", "status": "passed"},
 	})
 
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -29,6 +32,8 @@ func TestNodeDisksLs_AuditAllFlags(t *testing.T) {
 	require.Equal(t, "1", rec.query.Get("skipsmart"))
 	require.Equal(t, "journal_disks", rec.query.Get("usage-type"))
 	require.Contains(t, buf.String(), "/dev/sda")
+	require.Contains(t, buf.String(), "ssd")
+	require.Contains(t, buf.String(), "passed")
 }
 
 func TestNodeDisksLs_SurfacesAPIError(t *testing.T) {

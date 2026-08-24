@@ -1,0 +1,34 @@
+[
+  {
+    "devpath": "/dev/nvme0n1",
+    "disk-type": "ssd",
+    "gpt": true,
+    "model": "INTEL SSDPF2KX019T1M",
+    "name": "nvme0n1",
+    "partitions": null,
+    "rpm": null,
+    "serial": "PHAX405504041P9BGN",
+    "size": 1920383410176,
+    "status": "passed",
+    "used": "zfs",
+    "vendor": null,
+    "wearout": 100,
+    "wwn": "eui.01000000000000005cd2e4a0d3705651"
+  },
+  {
+    "devpath": "/dev/nvme10n1",
+    "disk-type": "ssd",
+    "gpt": true,
+    "model": "INTEL SSDPF2KX019T1M",
+    "name": "nvme10n1",
+    "partitions": null,
+    "rpm": null,
+    "serial": "PHAX405501Z01P9BGN",
+    "size": 1920383410176,
+    "status": "passed",
+    "used": "zfs",
+    "vendor": null,
+    "wearout": 100,
+    "wwn": "eui.01000000000000005cd2e429ca705651"
+  }
+]

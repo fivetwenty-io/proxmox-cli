@@ -1,0 +1,38 @@
+[
+  {
+    "endtime": 1787565600,
+    "node": "localhost",
+    "pid": 447839,
+    "pstart": 125938559,
+    "starttime": 1787565600,
+    "status": "OK",
+    "upid": "UPID:sm-0:0006D55F:0781AB7F:00000195:6A8C1620:verificationjob:backups\\x3averify\\x2dstale:root@pam:",
+    "user": "root@pam",
+    "worker_id": "backups:verify-stale",
+    "worker_type": "verificationjob"
+  },
+  {
+    "endtime": 1787562018,
+    "node": "localhost",
+    "pid": 447839,
+    "pstart": 125938559,
+    "starttime": 1787562000,
+    "status": "OK",
+    "upid": "UPID:sm-0:0006D55F:0781AB7F:00000194:6A8C0810:garbage_collection:backups:root@pam:",
+    "user": "root@pam",
+    "worker_id": "backups",
+    "worker_type": "garbage_collection"
+  },
+  {
+    "endtime": 1787559300,
+    "node": "localhost",
+    "pid": 447839,
+    "pstart": 125938559,
+    "starttime": 1787559300,
+    "status": "OK",
+    "upid": "UPID:sm-0:0006D55F:0781AB7F:00000193:6A8BFD84:prunejob:backups\\x3alabs:root@pam:",
+    "user": "root@pam",
+    "worker_id": "backups:labs",
+    "worker_type": "prunejob"
+  }
+]

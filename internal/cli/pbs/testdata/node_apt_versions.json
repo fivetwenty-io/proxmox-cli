@@ -1,0 +1,25 @@
+[
+  {
+    "Arch": "unknown",
+    "Description": "unknown",
+    "ExtraInfo": "running kernel: 7.0.14-5-pve",
+    "Origin": "unknown",
+    "Package": "proxmox-backup",
+    "Priority": "unknown",
+    "Section": "unknown",
+    "Title": "unknown",
+    "Version": "unknown"
+  },
+  {
+    "Arch": "amd64",
+    "Description": "Proxmox Backup Server daemon with tools and GUI\n This package contains the Proxmox Backup Server daemons and related\n tools. This includes a web-based graphical user interface.",
+    "ExtraInfo": "running version: 4.2.4",
+    "OldVersion": "4.2.4-1",
+    "Origin": "Proxmox",
+    "Package": "proxmox-backup-server",
+    "Priority": "optional",
+    "Section": "admin",
+    "Title": "Proxmox Backup Server daemon with tools and GUI",
+    "Version": "4.2.5-1"
+  }
+]

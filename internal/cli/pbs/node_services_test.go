@@ -15,8 +15,10 @@ func TestNodeServicesLs_RendersTable(t *testing.T) {
 	f, pc := newFakeClient(t)
 	var rec recordedRequest
 	recordJSON(f, "GET "+nodeAPIBase+"/services", &rec, []map[string]any{
+		// unit-state, not the documented active-state: see
+		// nodeServiceEntry for what PBS actually sends here.
 		{"service": "proxmox-backup", "name": "proxmox-backup.service", "state": "running",
-			"desc": "PBS core", "active-state": "active"},
+			"desc": "PBS core", "unit-state": "enabled"},
 	})
 
 	deps := depsFor(t, pc, output.FormatTable, false)
@@ -26,7 +28,7 @@ func TestNodeServicesLs_RendersTable(t *testing.T) {
 
 	require.Equal(t, http.MethodGet, rec.method)
 	require.Contains(t, buf.String(), "proxmox-backup")
-	require.Contains(t, buf.String(), "active")
+	require.Contains(t, buf.String(), "enabled")
 }
 
 func TestNodeServicesLs_SurfacesAPIError(t *testing.T) {

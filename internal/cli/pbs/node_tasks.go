@@ -21,16 +21,20 @@ import (
 type nodeTaskEntry struct {
 	Endtime    *int64  `json:"endtime,omitempty"`
 	Exitstatus *string `json:"exitstatus,omitempty"`
-	Id         *string `json:"id,omitempty"`
-	Node       string  `json:"node"`
-	Pid        int64   `json:"pid"`
-	Pstart     int64   `json:"pstart"`
-	Starttime  int64   `json:"starttime"`
-	Status     string  `json:"status"`
-	Tokenid    *string `json:"tokenid,omitempty"`
-	Type       string  `json:"type"`
-	Upid       string  `json:"upid"`
-	User       string  `json:"user"`
+	// Id and Type carry the tags PBS actually sends. The API documents the
+	// TaskListItem schema with "id" and "type", but a live PBS 4.2 answers
+	// with "worker_id" and "worker_type", so both columns were blank on
+	// every row while the values sat unread in the response.
+	Id        *string `json:"worker_id,omitempty"`
+	Node      string  `json:"node"`
+	Pid       int64   `json:"pid"`
+	Pstart    int64   `json:"pstart"`
+	Starttime int64   `json:"starttime"`
+	Status    string  `json:"status"`
+	Tokenid   *string `json:"tokenid,omitempty"`
+	Type      string  `json:"worker_type"`
+	Upid      string  `json:"upid"`
+	User      string  `json:"user"`
 }
 
 // newNodeTasksCmd builds `pmx pbs node tasks` and its ls/show/log/delete

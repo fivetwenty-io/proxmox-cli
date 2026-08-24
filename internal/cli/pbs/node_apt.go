@@ -26,10 +26,14 @@ type nodeAptPackageEntry struct {
 // nodeAptVersionEntry mirrors one element of the JSON array PBS returns from
 // GET /nodes/{node}/apt/versions (installed package versions).
 type nodeAptVersionEntry struct {
-	Package       string `json:"package"`
-	Version       string `json:"version"`
-	OldVersion    string `json:"oldversion,omitempty"`
-	RunningKernel string `json:"runningkernel,omitempty"`
+	Package    string `json:"package"`
+	Version    string `json:"version"`
+	OldVersion string `json:"oldversion,omitempty"`
+	// ExtraInfo carries the tag PBS actually sends, and is free text rather
+	// than a kernel version: entries read "running kernel: 7.0.14-5-pve" and
+	// "running version: 4.2.4". Decoding it as "runningkernel" matched
+	// nothing, so the column was blank on every row.
+	ExtraInfo string `json:"extrainfo,omitempty"`
 }
 
 // newNodeAptCmd builds `pmx pbs node apt` and its
@@ -284,10 +288,10 @@ func newNodeAptVersionsCmd(nf *nodeFlags) *cobra.Command {
 				return fmt.Errorf("decode apt versions on node %q: %w", nf.node, err)
 			}
 
-			headers := []string{"PACKAGE", "VERSION", "OLD-VERSION", "RUNNING-KERNEL"}
+			headers := []string{"PACKAGE", "VERSION", "OLD-VERSION", "EXTRA-INFO"}
 			rows := make([][]string, 0, len(entries))
 			for _, e := range entries {
-				rows = append(rows, []string{e.Package, e.Version, e.OldVersion, e.RunningKernel})
+				rows = append(rows, []string{e.Package, e.Version, e.OldVersion, e.ExtraInfo})
 			}
 
 			res := output.Result{Headers: headers, Rows: rows, Raw: entries}
