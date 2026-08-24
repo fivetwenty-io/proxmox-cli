@@ -194,3 +194,33 @@ func TestBudget_ExplicitPreferenceWins(t *testing.T) {
 	t.Setenv("COLUMNS", "")
 	assert.Equal(t, 0, budget(&bytes.Buffer{}, 0), "a non-terminal writer has no budget")
 }
+
+// TestRenderTable_HeaderSeparatorsCountAgainstTheBudget covers the miss that
+// let a table overrun its budget by two columns per separator: the renderer
+// lays "WEB-URL" out as "WEB - URL", so measuring the header as given
+// undersizes its column and every border after it shifts right.
+func TestRenderTable_HeaderSeparatorsCountAgainstTheBudget(t *testing.T) {
+	res := Result{
+		Headers: []string{"ID", "TYPE", "AUTHID", "NODES", "WEB-URL"},
+		Rows: [][]string{
+			{"dbell", "pve", "root@pam!pdm", strings.Repeat("10.110.0.10,fingerprint=9D:ED,", 40), ""},
+			{"drhu", "pve", "root@pam!pdm", "10.112.0.10", ""},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, NewWidth(120).Render(&buf, res, FormatTable))
+
+	assert.LessOrEqual(t, widest(buf.String()), 120)
+	assert.Contains(t, buf.String(), "WEB - URL", "the header is laid out with its separator spaced")
+}
+
+// TestClampHeader_ShortenedHeaderStillFits covers the second-order version of
+// the same thing: the ellipsis a shortened header ends with is itself spaced
+// out, so cutting a header to the limit can leave it two columns over.
+func TestClampHeader_ShortenedHeaderStillFits(t *testing.T) {
+	for _, limit := range []int{8, 10, 12} {
+		got := clampHeader("PRESSURE-CPU-SOME", limit)
+		assert.LessOrEqual(t, headerWidth(got), limit, "limit %d", limit)
+	}
+}

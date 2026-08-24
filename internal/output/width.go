@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/olekukonko/tablewriter/tw"
 	"golang.org/x/term"
 )
 
@@ -106,7 +107,9 @@ func clampRows(res Result, width int) Result {
 			natural[i] = max(natural[i], min(cellWidth(cell), maxCellRunes))
 		}
 	}
-	measure(res.Headers)
+	for i, h := range res.Headers {
+		natural[i] = max(natural[i], min(headerWidth(h), maxCellRunes))
+	}
 	for _, row := range res.Rows {
 		measure(row)
 	}
@@ -114,7 +117,7 @@ func clampRows(res Result, width int) Result {
 	limits := columnLimits(natural, nil, width)
 
 	out := res
-	out.Headers = clampRow(res.Headers, limits)
+	out.Headers = clampHeaderRow(res.Headers, limits)
 	out.Rows = make([][]string, len(res.Rows))
 	for i, row := range res.Rows {
 		out.Rows[i] = clampRow(row, limits)
@@ -228,6 +231,54 @@ func clampRow(row []string, limits []int) []string {
 		out[i] = clampCell(cell, maxCellRunes)
 	}
 	return out
+}
+
+// clampHeaderRow applies limits to the header row, in laid-out width rather
+// than in source runes.
+func clampHeaderRow(row []string, limits []int) []string {
+	if row == nil {
+		return nil
+	}
+	out := make([]string, len(row))
+	for i, cell := range row {
+		limit := maxCellRunes
+		if i < len(limits) {
+			limit = limits[i]
+		}
+		out[i] = clampHeader(cell, limit)
+	}
+	return out
+}
+
+// clampHeader shortens a header until the width it is laid out in fits limit.
+// It searches down from the limit because the layout is not monotone in the
+// obvious way: dropping a rune can widen the result, since the ellipsis that
+// replaces it is itself spaced out.
+func clampHeader(s string, limit int) string {
+	limit = min(limit, maxCellRunes)
+	limit = max(limit, 1)
+	if headerWidth(s) <= limit {
+		return s
+	}
+	for k := min(limit, len([]rune(s))); k > 1; k-- {
+		if c := clampCell(s, k); headerWidth(c) <= limit {
+			return c
+		}
+	}
+	return clampCell(s, 1)
+}
+
+// headerWidth is the width tablewriter lays a header out in, which is not the
+// width of the string it was given: its header auto-format splits the text on
+// case and character class and rejoins the pieces with spaces, so "WEB-URL"
+// occupies "WEB - URL" and "MEMAVAIL…" occupies "MEMAVAIL …". Measuring the
+// source string undersizes the column, and the table then overruns the budget
+// by two columns per separator.
+//
+// This calls the same transform the renderer does rather than reproducing it,
+// so the two cannot drift.
+func headerWidth(s string) int {
+	return cellWidth(tw.Title(strings.Join(tw.SplitCamelCase(s), tw.Space)))
 }
 
 // cellWidth is the width a cell occupies: the longest of its lines, since
