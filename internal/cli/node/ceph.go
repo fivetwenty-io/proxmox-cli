@@ -27,7 +27,7 @@ func renderRawMessage(cmd *cobra.Command, deps *cli.Deps, resp *json.RawMessage)
 	if json.Unmarshal(raw, &obj) == nil {
 		single := make(map[string]string, len(obj))
 		for k, v := range obj {
-			single[k] = anyCell(v)
+			single[k] = output.Cell(v)
 		}
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Single: single, Raw: obj}, deps.Format)
 	}

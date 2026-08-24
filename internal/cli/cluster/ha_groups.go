@@ -78,12 +78,12 @@ func newHaGroupListCmd() *cobra.Command {
 					}
 					raw = append(raw, m)
 					rows = append(rows, []string{
-						anyCell(m["group"]),
-						anyCell(m["nodes"]),
-						anyCell(m["restricted"]),
-						anyCell(m["nofailback"]),
-						anyCell(m["type"]),
-						anyCell(m["comment"]),
+						output.Cell(m["group"]),
+						output.Cell(m["nodes"]),
+						output.Cell(m["restricted"]),
+						output.Cell(m["nofailback"]),
+						output.Cell(m["type"]),
+						output.Cell(m["comment"]),
 					})
 				}
 			}
@@ -334,14 +334,14 @@ func newHaRuleListCmd() *cobra.Command {
 					}
 					raw = append(raw, m)
 					rows = append(rows, []string{
-						anyCell(m["rule"]),
-						anyCell(m["type"]),
-						anyCell(m["affinity"]),
-						anyCell(m["resources"]),
-						anyCell(m["nodes"]),
-						anyCell(m["strict"]),
-						anyCell(m["disable"]),
-						anyCell(m["comment"]),
+						output.Cell(m["rule"]),
+						output.Cell(m["type"]),
+						output.Cell(m["affinity"]),
+						output.Cell(m["resources"]),
+						output.Cell(m["nodes"]),
+						output.Cell(m["strict"]),
+						output.Cell(m["disable"]),
+						output.Cell(m["comment"]),
 					})
 				}
 			}

@@ -86,12 +86,12 @@ func newHaResourceListCmd() *cobra.Command {
 					}
 					raw = append(raw, m)
 					rows = append(rows, []string{
-						anyCell(m["sid"]),
-						anyCell(m["state"]),
-						anyCell(m["group"]),
-						anyCell(m["max_restart"]),
-						anyCell(m["max_relocate"]),
-						anyCell(m["comment"]),
+						output.Cell(m["sid"]),
+						output.Cell(m["state"]),
+						output.Cell(m["group"]),
+						output.Cell(m["max_restart"]),
+						output.Cell(m["max_relocate"]),
+						output.Cell(m["comment"]),
 					})
 				}
 			}

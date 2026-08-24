@@ -497,7 +497,7 @@ func rawFixedColumnsResult(raws []json.RawMessage, columns []string) (output.Res
 	for _, e := range entries {
 		row := make([]string, len(columns))
 		for i, k := range columns {
-			row[i] = anyCell(e[k])
+			row[i] = output.Cell(e[k])
 		}
 		rows = append(rows, row)
 	}
@@ -532,7 +532,7 @@ func rawUnionResult(raws []json.RawMessage) (output.Result, error) {
 	for _, e := range entries {
 		row := make([]string, len(keys))
 		for i, k := range keys {
-			row[i] = anyCell(e[k])
+			row[i] = output.Cell(e[k])
 		}
 		rows = append(rows, row)
 	}

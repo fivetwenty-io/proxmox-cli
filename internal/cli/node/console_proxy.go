@@ -173,7 +173,7 @@ func writeSpiceVV(obj map[string]any) (string, error) {
 		if !ok {
 			continue
 		}
-		_, _ = fmt.Fprintf(&sb, "%s=%s\n", key, anyCell(v))
+		_, _ = fmt.Fprintf(&sb, "%s=%s\n", key, output.Cell(v))
 		written[key] = true
 	}
 	// Append any response fields not in the canonical list.
@@ -181,7 +181,7 @@ func writeSpiceVV(obj map[string]any) (string, error) {
 		if written[key] {
 			continue
 		}
-		_, _ = fmt.Fprintf(&sb, "%s=%s\n", key, anyCell(v))
+		_, _ = fmt.Fprintf(&sb, "%s=%s\n", key, output.Cell(v))
 	}
 	// Tell virt-viewer to remove the file after opening it.
 	if !written["delete-this-file"] {

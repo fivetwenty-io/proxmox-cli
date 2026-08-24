@@ -79,32 +79,6 @@ func anyFlagChanged(fl *pflag.FlagSet, names ...string) bool {
 	return slices.ContainsFunc(names, fl.Changed)
 }
 
-// anyCell renders an arbitrary JSON value as a single table cell.
-func anyCell(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "yes"
-		}
-		return "no"
-	case float64:
-		if t == float64(int64(t)) {
-			return fmt.Sprintf("%d", int64(t))
-		}
-		return fmt.Sprintf("%g", t)
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return fmt.Sprintf("%v", t)
-		}
-		return string(b)
-	}
-}
-
 // objectToSingle marshals v to JSON and flattens the top-level object into a
 // key→cell map (plus the decoded object for lossless Raw output). A
 // *json.RawMessage marshals to its own bytes, so an aliased Get* response works
@@ -120,7 +94,7 @@ func objectToSingle(v any) (map[string]string, any, error) {
 	}
 	single := make(map[string]string, len(obj))
 	for k, val := range obj {
-		single[k] = anyCell(val)
+		single[k] = output.Cell(val)
 	}
 	return single, obj, nil
 }
@@ -182,7 +156,7 @@ func renderRawList(cmd *cobra.Command, deps *cli.Deps, raws []json.RawMessage) e
 	for _, obj := range objs {
 		row := make([]string, 0, len(keys))
 		for _, k := range keys {
-			row = append(row, anyCell(obj[k]))
+			row = append(row, output.Cell(obj[k]))
 		}
 		res.Rows = append(res.Rows, row)
 	}

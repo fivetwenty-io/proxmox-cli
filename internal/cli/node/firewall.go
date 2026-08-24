@@ -726,35 +726,9 @@ func objectToSingle(v any) (map[string]string, any, error) {
 	}
 	single := make(map[string]string, len(obj))
 	for k, val := range obj {
-		single[k] = anyCell(val)
+		single[k] = output.Cell(val)
 	}
 	return single, obj, nil
-}
-
-// anyCell renders an arbitrary JSON value as a single table/Single cell.
-func anyCell(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "yes"
-		}
-		return "no"
-	case float64:
-		if t == float64(int64(t)) {
-			return fmt.Sprintf("%d", int64(t))
-		}
-		return fmt.Sprintf("%g", t)
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return fmt.Sprintf("%v", t)
-		}
-		return string(b)
-	}
 }
 
 // anyFlagChanged reports whether at least one of the named flags was set.

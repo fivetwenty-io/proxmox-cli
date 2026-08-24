@@ -76,7 +76,7 @@ func rawObjectListResult(raws []json.RawMessage) (output.Result, error) {
 	for _, obj := range objs {
 		row := make([]string, len(keys))
 		for i, k := range keys {
-			row[i] = anyCell(obj[k])
+			row[i] = output.Cell(obj[k])
 		}
 		rows = append(rows, row)
 	}

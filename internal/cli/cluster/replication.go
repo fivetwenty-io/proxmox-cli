@@ -69,7 +69,7 @@ func newReplicationListCmd() *cobra.Command {
 			for _, e := range entries {
 				row := make([]string, len(replicationListColumns))
 				for i, k := range replicationListColumns {
-					row[i] = anyCell(e[k])
+					row[i] = output.Cell(e[k])
 				}
 				rows = append(rows, row)
 			}

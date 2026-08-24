@@ -99,13 +99,13 @@ func newBackupListCmd() *cobra.Command {
 					}
 					raw = append(raw, m)
 					rows = append(rows, []string{
-						anyCell(m["id"]),
-						anyCell(m["schedule"]),
-						anyCell(m["storage"]),
-						anyCell(m["mode"]),
+						output.Cell(m["id"]),
+						output.Cell(m["schedule"]),
+						output.Cell(m["storage"]),
+						output.Cell(m["mode"]),
 						enabledCell(m),
 						vmidCell(m),
-						anyCell(m["comment"]),
+						output.Cell(m["comment"]),
 					})
 				}
 			}
@@ -541,32 +541,6 @@ func newBackupDeleteCmd() *cobra.Command {
 
 // --- helpers ---
 
-// anyCell renders an arbitrary decoded JSON scalar as a table cell.
-func anyCell(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
-			return "yes"
-		}
-		return "no"
-	case float64:
-		if t == float64(int64(t)) {
-			return fmt.Sprintf("%d", int64(t))
-		}
-		return fmt.Sprintf("%g", t)
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return fmt.Sprintf("%v", t)
-		}
-		return string(b)
-	}
-}
-
 // enabledCell renders the enabled flag, treating an absent flag as enabled (the
 // PVE default for a freshly created job).
 func enabledCell(m map[string]any) string {
@@ -580,19 +554,19 @@ func enabledCell(m map[string]any) string {
 		}
 		return "yes"
 	}
-	return anyCell(v)
+	return output.Cell(v)
 }
 
 // vmidCell renders the guest selection: the explicit VMID list, or "all" when the
 // job has the all flag set, or the pool when pool-scoped.
 func vmidCell(m map[string]any) string {
-	if v := anyCell(m["vmid"]); v != "" {
+	if v := output.Cell(m["vmid"]); v != "" {
 		return v
 	}
 	if f, ok := m["all"].(float64); ok && f != 0 {
 		return "all"
 	}
-	if p := anyCell(m["pool"]); p != "" {
+	if p := output.Cell(m["pool"]); p != "" {
 		return "pool:" + p
 	}
 	return ""
@@ -611,7 +585,7 @@ func objectToSingle(v any) (map[string]string, any, error) {
 	}
 	single := make(map[string]string, len(obj))
 	for k, val := range obj {
-		single[k] = anyCell(val)
+		single[k] = output.Cell(val)
 	}
 	return single, obj, nil
 }
@@ -640,7 +614,7 @@ func dynamicTable(entries []map[string]any) ([]string, [][]string) {
 	for _, e := range entries {
 		row := make([]string, len(keys))
 		for i, k := range keys {
-			row[i] = anyCell(e[k])
+			row[i] = output.Cell(e[k])
 		}
 		rows = append(rows, row)
 	}
