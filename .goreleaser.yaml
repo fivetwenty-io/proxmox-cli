@@ -202,8 +202,10 @@ notarize:
         key: '{{ envOrDefault "MACOS_NOTARY_KEY" "" }}'
         wait: true
         # First submissions from a new team have been observed to exceed
-        # quill's 15m default; give Apple generous headroom.
-        timeout: 30m
+        # quill's 15m default, so give Apple headroom. 20m is the ceiling:
+        # goreleaser refuses anything longer because Apple rejects an
+        # authentication token with a lifetime past that.
+        timeout: 20m
 
 # NOTE: `brews:` is hard-deprecated as of the installed goreleaser (v2.17,
 # deprecated since v2.10/hard since v2.16) — `goreleaser check` fails on it.
