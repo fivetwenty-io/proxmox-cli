@@ -35,7 +35,14 @@ jobs:
         with:
           go-version: "1.27.0"
           check-latest: true
-          cache: true
+          # Off on purpose: these jobs run on the host (not in a container),
+          # so ~/go/pkg/mod and ~/.cache/go-build already survive between
+          # jobs on the persistent self-hosted runner. The Actions cache
+          # would haul a multi-GB tarball over the lab link to restore what
+          # is already on disk, then untar it over Go's read-only module
+          # cache -- thousands of tar "Cannot open: File exists" lines and
+          # minutes of wall clock for no gain. Local disk is the cache.
+          cache: false
 
       - name: gofmt
         run: |
@@ -94,7 +101,14 @@ jobs:
         with:
           go-version: "1.27.0"
           check-latest: true
-          cache: true
+          # Off on purpose: these jobs run on the host (not in a container),
+          # so ~/go/pkg/mod and ~/.cache/go-build already survive between
+          # jobs on the persistent self-hosted runner. The Actions cache
+          # would haul a multi-GB tarball over the lab link to restore what
+          # is already on disk, then untar it over Go's read-only module
+          # cache -- thousands of tar "Cannot open: File exists" lines and
+          # minutes of wall clock for no gain. Local disk is the cache.
+          cache: false
 
       # Reachability-aware CVE scan of the module graph against the Go vuln
       # database; unlike trivy below it only fails on vulnerabilities in code

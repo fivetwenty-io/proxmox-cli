@@ -32,7 +32,14 @@ jobs:
         with:
           go-version: "1.27.0"
           check-latest: true
-          cache: true
+          # Off on purpose: these jobs run on the host (not in a container),
+          # so ~/go/pkg/mod and ~/.cache/go-build already survive between
+          # jobs on the persistent self-hosted runner. The Actions cache
+          # would haul a multi-GB tarball over the lab link to restore what
+          # is already on disk, then untar it over Go's read-only module
+          # cache -- thousands of tar "Cannot open: File exists" lines and
+          # minutes of wall clock for no gain. Local disk is the cache.
+          cache: false
 
       - name: Vet
         run: go vet ./...
@@ -61,7 +68,14 @@ jobs:
         with:
           go-version: "1.27.0"
           check-latest: true
-          cache: true
+          # Off on purpose: these jobs run on the host (not in a container),
+          # so ~/go/pkg/mod and ~/.cache/go-build already survive between
+          # jobs on the persistent self-hosted runner. The Actions cache
+          # would haul a multi-GB tarball over the lab link to restore what
+          # is already on disk, then untar it over Go's read-only module
+          # cache -- thousands of tar "Cannot open: File exists" lines and
+          # minutes of wall clock for no gain. Local disk is the cache.
+          cache: false
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
