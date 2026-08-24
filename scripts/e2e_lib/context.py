@@ -8,11 +8,13 @@ threads without sharing mutable state.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from . import render
 from .model import Deferred, Result, Status
 from .text import reason_of
 
@@ -70,12 +72,17 @@ class Ctx:
         if node:
             argv += ["--node", node]
         argv += list(args)
+        # Pin the terminal width so table rendering is reproducible off a tty:
+        # pmx prefers $COLUMNS over the tty size for exactly this reason, and
+        # the render audit asserts against that budget.
+        env = dict(os.environ, COLUMNS=str(render.BUDGET))
         try:
             proc = subprocess.run(
                 argv,
                 capture_output=True,
                 text=True,
                 timeout=self.env.timeout_s,
+                env=env,
             )
             return CmdResult(argv, proc.returncode, proc.stdout, proc.stderr)
         except subprocess.TimeoutExpired:
@@ -98,6 +105,7 @@ class Ctx:
         with_context: bool = True,
         validate: Callable[[CmdResult], str | None] | None = None,
         skip_on: dict[str, str] | None = None,
+        audit_render: bool = True,
     ) -> CmdResult:
         """Run a command, record PASS/FAIL.
 
@@ -110,6 +118,11 @@ class Ctx:
         For failures caused by the environment or by server-side policy (an
         endpoint that only accepts ticket auth, a kernel without ZFS), not by
         the CLI under test.
+
+        A passing check is re-run once as a table and audited for the two
+        rendering defects `-o json` cannot show: a line wider than the pinned
+        budget, and a column blank in every row. Pass `audit_render=False` for
+        a check whose second invocation would not be free of side effects.
         """
         start = time.monotonic()
         res = self.run(*args, node=node, fmt=fmt, with_context=with_context)
@@ -136,11 +149,48 @@ class Ctx:
             if err:
                 status = Status.FAIL
                 detail = err
+        if status is Status.PASS and audit_render:
+            err = self.audit_render(*args, node=node, with_context=with_context)
+            if err:
+                status = Status.FAIL
+                detail = err
 
         self.results.append(
             Result(self.tree, name, status, command=cmd, detail=detail, duration_s=dur)
         )
         return res
+
+    def audit_render(self, *args: str, node: str | None = None,
+                     with_context: bool = True) -> str:
+        """Render args as a table and return a rendering defect, or "".
+
+        Only a read-only command path is re-run, so a check that drove a
+        scratch config is never replayed. A non-zero exit is not reported
+        here: the caller has already asserted the command succeeds in its own
+        format, and a verb that only renders as JSON is not a rendering
+        defect.
+        """
+        leaf = self.leaf(args)
+        if not render.is_read_only(leaf):
+            return ""
+        res = self.run(*args, node=node, fmt="table", with_context=with_context)
+        if res.rc != 0 or not res.stdout.strip():
+            return ""
+        return render.audit(leaf, res.stdout)
+
+    @staticmethod
+    def leaf(args: tuple[str, ...] | list[str]) -> str:
+        """The command path of args, flags and their values dropped.
+
+        This is the key EMPTY_COLUMN_ALLOWLIST is written against, so that an
+        exemption reads as the command an operator would type.
+        """
+        path = []
+        for a in args:
+            if a.startswith("-"):
+                break
+            path.append(a)
+        return " ".join(path)
 
     def check_formats(self, name: str, *args: str, node: str | None = None) -> None:
         """Assert a read command renders cleanly in every `-o` format.
@@ -159,6 +209,10 @@ class Ctx:
             if not res.stdout.strip():
                 bad = f"{fmt}: empty output"
                 break
+            if fmt == "table":
+                bad = render.audit(self.leaf(args), res.stdout)
+                if bad:
+                    break
         dur = time.monotonic() - start
         cmd = self.pretty([self.env.binary, *args]) + " (×4 formats)"
         status = Status.PASS if not bad else Status.FAIL
