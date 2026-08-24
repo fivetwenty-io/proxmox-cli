@@ -73,3 +73,21 @@ func addSubcommands(parent *cobra.Command) {
 		newValidateCmd(),
 	)
 }
+
+// targetName is the context a verb acts on when the user gave no name
+// argument: the one --context/-c or $PMX_CONTEXT named, falling back to
+// current-context.
+//
+// deps.CtxName already carries that resolution, in flag > env > config order.
+// Reading cfg.CurrentContext directly instead is why `pmx -c lab-ceph context
+// validate --connect` validated whichever context current-context pointed at
+// and presented the result as lab-ceph's.
+func targetName(deps *cli.Deps) string {
+	if deps.CtxName != "" {
+		return deps.CtxName
+	}
+	if deps.Cfg == nil {
+		return ""
+	}
+	return deps.Cfg.CurrentContext
+}

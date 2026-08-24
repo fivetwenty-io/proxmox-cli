@@ -2437,3 +2437,81 @@ func TestPersistentPreRunE_WarningsAsErrors_Precedence(t *testing.T) {
 		})
 	}
 }
+
+// TestPersistentPreRunE_CtxName_Precedence pins the context resolution every
+// command that builds no API client depends on: the context group and the
+// auth group act on a NAME, not on a client, so if that name does not follow
+// --context/-c > $PMX_CONTEXT > current-context they silently read, validate,
+// or write credentials against the wrong context.
+//
+// deps.CtxName used to be assigned after the noClient early return, so it was
+// empty for exactly the commands that needed it and they fell back to
+// current-context unconditionally.
+func TestPersistentPreRunE_CtxName_Precedence(t *testing.T) {
+	cfgPath := writeTwoContextConfig(t)
+
+	cases := []struct {
+		name string
+		env  string
+		args []string
+		want string
+	}{
+		{name: "current-context only", args: []string{"inspect"}, want: "alpha"},
+		{name: "env wins over current-context", env: "beta", args: []string{"inspect"}, want: "beta"},
+		{name: "long flag wins over current-context", args: []string{"--context", "beta", "inspect"}, want: "beta"},
+		{name: "short flag wins over current-context", args: []string{"-c", "beta", "inspect"}, want: "beta"},
+		{name: "long flag wins over env", env: "alpha", args: []string{"--context", "beta", "inspect"}, want: "beta"},
+		{name: "short flag wins over env", env: "alpha", args: []string{"-c", "beta", "inspect"}, want: "beta"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PMX_CONTEXT", tc.env)
+			t.Setenv("PMX_OUTPUT", "")
+			t.Setenv("PMX_NODE", "")
+
+			root, cleanup := cli.NewRootCmd("pmx")
+			defer cleanup()
+			root.SetContext(context.Background())
+
+			var deps *cli.Deps
+			cmd := buildInspectCmd(&deps)
+			cmd.Annotations = map[string]string{"noClient": "true"}
+			root.AddCommand(cmd)
+
+			var buf bytes.Buffer
+			root.SetOut(&buf)
+			root.SetErr(&buf)
+			root.SetArgs(append([]string{"--config", cfgPath}, tc.args...))
+			require.NoError(t, root.Execute())
+			require.NotNil(t, deps)
+			require.Equal(t, tc.want, deps.CtxName)
+		})
+	}
+}
+
+// writeTwoContextConfig writes a config with contexts alpha and beta, alpha
+// current, so a resolution test can tell which one won.
+func writeTwoContextConfig(t *testing.T) string {
+	t.Helper()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	ctx := func(host string) *config.Context {
+		return &config.Context{
+			Host:    host,
+			Port:    8006,
+			Product: config.ProductPVE,
+			Auth: config.AuthBlock{
+				Type:     "token",
+				Username: "root@pam",
+				TokenID:  "cli",
+				Secret:   "literal-secret",
+			},
+			TLS: config.TLSBlock{Insecure: true},
+		}
+	}
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "alpha",
+		Contexts:       map[string]*config.Context{"alpha": ctx("alpha.invalid"), "beta": ctx("beta.invalid")},
+	}))
+	return cfgPath
+}

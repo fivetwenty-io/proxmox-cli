@@ -84,7 +84,7 @@ func newValidateCmd() *cobra.Command {
 					name = args[0]
 				}
 				if name == "" {
-					name = cfg.CurrentContext
+					name = targetName(deps)
 				}
 				if name == "" {
 					return fmt.Errorf(

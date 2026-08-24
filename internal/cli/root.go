@@ -100,9 +100,15 @@ type Deps struct {
 	// runs before context resolution; such commands must nil-check before use.
 	Ctx *config.Context
 
-	// CtxName is the canonical name of the resolved context in Ctx (the
-	// --context/-c, $PMX_CONTEXT, or current-context value that won). Empty
-	// for noClient commands, matching Ctx.
+	// CtxName is the name the --context/-c flag, $PMX_CONTEXT, or
+	// current-context resolved to for this invocation. Unlike Ctx it is
+	// populated for noClient commands too: it is assigned before the noClient
+	// early return in persistentPreRunE, precisely because those commands
+	// (the context group, the auth group) are the ones that must act on the
+	// context the user named rather than on current-context.
+	//
+	// It is empty only when nothing named a context and the config has no
+	// current-context, so callers fall back to cfg.CurrentContext.
 	CtxName string
 
 	// ConfigPath is the resolved --config file path. Config-mutating commands
@@ -526,6 +532,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		ConfigPath:   pf.config,
 		Runner:       exec.Real(),
 		Insecure:     pf.insecure,
+		CtxName:      ctxName,
 	}
 
 	// Stash deps NOW, before any client construction can fail: Execute's
@@ -595,7 +602,6 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		return logCloser, err
 	}
 	deps.Ctx = ctx
-	deps.CtxName = config.Resolve(pf.context, "PMX_CONTEXT", cfg.CurrentContext, "")
 
 	// Apply per-context defaults for --node and --output.
 	// Precedence: explicit flag > context default > existing global default.

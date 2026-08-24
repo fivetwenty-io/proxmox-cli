@@ -994,3 +994,62 @@ func TestValidate_WithoutConnect_Unchanged(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, out, "REACHABLE", "without --connect the output shape must not change")
 }
+
+// TestContextVerbs_ActOnResolvedContextNotCurrent covers the defect where
+// `pmx -c lab-ceph context validate --connect` validated whichever context
+// current-context pointed at and presented the result as lab-ceph's.
+//
+// deps.CtxName carries the root's --context/-c > $PMX_CONTEXT >
+// current-context resolution. These verbs read cfg.CurrentContext directly
+// instead, so every one of them silently acted on the wrong context whenever
+// the user named one.
+func TestContextVerbs_ActOnResolvedContextNotCurrent(t *testing.T) {
+	newCfg := func() *config.Config {
+		ctx := func(host string) *config.Context {
+			return &config.Context{
+				Host: host, Port: 8006, Protocol: "https",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+			}
+		}
+		return &config.Config{
+			CurrentContext: "current",
+			Contexts: map[string]*config.Context{
+				"current": ctx("current.example.com"),
+				"named":   ctx("named.example.com"),
+			},
+		}
+	}
+
+	// show and validate report a context without needing an editor or a
+	// server, so both can assert which one they picked from their output.
+	for _, args := range [][]string{{"show"}, {"validate"}} {
+		t.Run(args[0], func(t *testing.T) {
+			path, cfg := makeConfig(t, newCfg())
+
+			// validate reports an unresolvable secret as an error while
+			// still rendering its row, so the rendered output, not the
+			// error, is what says which context it picked.
+			deps := makeDeps(t, path, cfg)
+			out, _ := run(t, deps, "", args...)
+			require.Contains(t, out, "current", "with nothing named, current-context still applies")
+
+			deps = makeDeps(t, path, cfg)
+			deps.CtxName = "named"
+			out, _ = run(t, deps, "", args...)
+			require.Contains(t, out, "named")
+			require.NotContains(t, out, "current.example.com",
+				"the verb must act on the context the invocation named, not on current-context")
+		})
+	}
+
+	// An explicit argument still outranks everything.
+	t.Run("explicit arg wins", func(t *testing.T) {
+		path, cfg := makeConfig(t, newCfg())
+		deps := makeDeps(t, path, cfg)
+		deps.CtxName = "named"
+
+		out, err := run(t, deps, "", "show", "current")
+		require.NoError(t, err)
+		require.Contains(t, out, "current.example.com")
+	})
+}

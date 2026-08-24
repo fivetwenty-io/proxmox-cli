@@ -49,13 +49,13 @@ func newEditCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			cfg := deps.Cfg
 
-			// Resolve context name: explicit arg > current-context.
+			// Resolve name: explicit arg > --context/-c > $PMX_CONTEXT > current-context.
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
 			}
 			if name == "" {
-				name = cfg.CurrentContext
+				name = targetName(deps)
 			}
 			if name == "" {
 				return fmt.Errorf(
