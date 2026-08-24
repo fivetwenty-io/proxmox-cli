@@ -64,6 +64,10 @@ type Config struct {
 	// Log holds JSONL command-log preferences (layout and level).
 	Log ConfigLog `yaml:"log,omitempty" json:"log,omitzero"`
 
+	// Output holds rendering preferences for the table formats.
+	// omitzero on the json side for the same reason as Storage above.
+	Output ConfigOutput `yaml:"output,omitempty" json:"output,omitzero"`
+
 	// WarningsAsErrors makes a task that finished with a "WARNINGS: N" exit
 	// status fail the command (exit code 8) instead of succeeding with a
 	// warning on stderr. Overridable per-invocation by --warnings-as-errors
@@ -86,6 +90,15 @@ const (
 
 // DefaultLogLevel is the log level used when log.level is unset.
 const DefaultLogLevel = "info"
+
+// ConfigOutput holds rendering preferences for the table and ascii output
+// formats. JSON, YAML, and plain output are never affected by them.
+type ConfigOutput struct {
+	// MaxWidth pins the table layout budget to a fixed number of columns.
+	// Zero (the default) detects one from $COLUMNS or the terminal, and the
+	// --wide flag overrides both by disabling the budget entirely.
+	MaxWidth int `yaml:"max_width,omitempty" json:"max_width,omitempty"`
+}
 
 // ConfigLog holds logging preferences for the JSONL command logs written
 // under ~/.pmx/logs.

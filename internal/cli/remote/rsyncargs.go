@@ -66,6 +66,7 @@ var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"--async"}, takesValue: false, target: "root", dest: "async"},
 	{names: []string{"--warnings-as-errors"}, takesValue: false, target: "root",
 		dest: "warnings-as-errors"},
+	{names: []string{"--wide"}, takesValue: false, target: "root", dest: "wide"},
 	{names: []string{"--ssh-user"}, takesValue: true, target: "ssh", dest: "ssh-user"},
 	{names: []string{"--ssh-port"}, takesValue: true, target: "ssh", dest: "ssh-port"},
 	{names: []string{"--ssh-identity"}, takesValue: true, target: "ssh", dest: "ssh-identity"},

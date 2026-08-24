@@ -49,21 +49,34 @@ type Renderer interface {
 }
 
 // defaultRenderer is the concrete Renderer returned by New.
-type defaultRenderer struct{}
+type defaultRenderer struct {
+	// maxWidth is the table layout budget in columns: 0 detects one from
+	// $COLUMNS or the terminal, WidthUnbounded disables it, and a positive
+	// value is used as given. It applies to the table and ascii formats
+	// only; plain, JSON, and YAML are never clamped.
+	maxWidth int
+}
 
 // New returns the default Renderer backed by tablewriter v1.1.4, encoding/json,
-// and goccy/go-yaml.
+// and goccy/go-yaml. Table width is detected from the output stream.
 func New() Renderer {
 	return &defaultRenderer{}
+}
+
+// NewWidth returns the default Renderer with an explicit table layout budget:
+// a positive column count, or WidthUnbounded for none. Zero detects one, the
+// same as New.
+func NewWidth(maxWidth int) Renderer {
+	return &defaultRenderer{maxWidth: maxWidth}
 }
 
 // Render dispatches to the appropriate format renderer.
 func (r *defaultRenderer) Render(w io.Writer, res Result, f Format) error {
 	switch f {
 	case FormatTable:
-		return renderTable(w, res, false)
+		return renderTable(w, clamp(res, budget(w, r.maxWidth)), false)
 	case FormatASCII:
-		return renderTable(w, res, true)
+		return renderTable(w, clamp(res, budget(w, r.maxWidth)), true)
 	case FormatPlain:
 		return renderPlain(w, res)
 	case FormatJSON:

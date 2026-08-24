@@ -225,6 +225,9 @@ type persistentFlags struct {
 	noLog    bool
 	async    bool
 	insecure bool
+	// wide disables the table layout budget, so columns keep their natural
+	// width. The per-cell cap still applies.
+	wide bool
 	// warningsAsErrors is read together with its Changed state, since
 	// --warnings-as-errors=false must be able to override a config file
 	// that enables it (see config.ResolveBool).
@@ -358,6 +361,8 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 	root.PersistentFlags().BoolVar(&pf.insecure, "insecure", false, "disable TLS certificate verification")
 	root.PersistentFlags().BoolVar(&pf.warningsAsErrors, "warnings-as-errors", false,
 		"treat a task that finishes with warnings as a failure (exit 8)")
+	root.PersistentFlags().BoolVar(&pf.wide, "wide", false,
+		"do not shorten table columns to fit the terminal")
 
 	wrapFlagUsages(root)
 
@@ -518,7 +523,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	attrs = append(attrs, invocationTargetAttrs(cfg, ctxName)...)
 	logger.Info("invocation", attrs...)
 
-	renderer := output.New()
+	renderer := output.NewWidth(resolveMaxWidth(pf.wide, cfg))
 
 	deps := &Deps{
 		Out:          renderer,
@@ -1386,4 +1391,18 @@ func Main(persona string, factories []GroupFactory) int {
 		return exitcode.FromError(err)
 	}
 	return exitcode.OK
+}
+
+// resolveMaxWidth returns the table layout budget for this invocation:
+// --wide disables it outright, a positive output.max_width in the config
+// pins it, and anything else leaves the renderer to detect one from $COLUMNS
+// or the terminal.
+func resolveMaxWidth(wide bool, cfg *config.Config) int {
+	if wide {
+		return output.WidthUnbounded
+	}
+	if cfg != nil && cfg.Output.MaxWidth > 0 {
+		return cfg.Output.MaxWidth
+	}
+	return 0
 }

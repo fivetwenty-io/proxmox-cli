@@ -211,6 +211,17 @@ Every command returns an `output.Result` value (headers + rows for tables,
 `--output/-o` (or `$PMX_OUTPUT`, or the context's `default-output`) formats
 the result to stdout. JSON and YAML preserve native API types.
 
+The table renderers clamp before handing rows to tablewriter
+(`internal/output/width.go`), because tablewriter's own options do not do the
+job: `WithMaxWidth` leaves an oversized cell fully expanded, and
+`WithColumnMax` truncates the key column of a key/value view to nothing.
+Columns are levelled to fit the layout budget (`$COLUMNS`, else the
+terminal's width, overridden by `output.max_width` and disabled by
+`--wide`), widest column first, with an 8-column floor and a one-rune
+ellipsis. A 512-column per-cell cap applies unconditionally, TTY or not: the
+worst case was a redirect, where one nested payload rendered 3.95 MB across
+a single 515,739-column line. `plain`, JSON, and YAML are never clamped.
+
 ## Audit logging
 
 All commands write a JSONL log under `~/.pmx/logs/`, nested by command path

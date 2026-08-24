@@ -527,6 +527,15 @@ pmx pve cluster resources -o yaml
 pmx pve qemu list -o ascii         # ASCII-only table borders
 ```
 
+Table and ascii output is laid out for the terminal: columns are shortened
+to fit its width, widest first, and a shortened cell is marked with `…`. No
+cell exceeds 512 columns even when output is piped or redirected, which
+bounds an endpoint that returns a large nested payload. Pass `--wide` to
+keep every column at its natural width, or set `output.max_width` in the
+config file to lay out for a fixed number of columns instead of the
+terminal's. `plain`, `json`, and `yaml` are never shortened, so the full
+value is always one flag away.
+
 Diagnostic logs are written as JSON Lines to
 `~/.pmx/logs/{command}/{subcommand…}/{timestamp}.jsonl` (for example
 `~/.pmx/logs/pve/storage/volume/copy/20260714-132051.jsonl`). Set
