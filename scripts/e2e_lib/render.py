@@ -3,6 +3,12 @@
 Both were found by a manual sweep and neither was visible from `-o json`, so
 they live here and run against the table rendering of every read-only check.
 
+Two callers share them. The read-only sweep re-runs each passing check as a
+table (`Ctx.audit_render`). The destructive suites audit each step's own
+output (`Runner._audit`), which is the only place the argument-taking
+read-only leaves are reached with a real argument: `pve cluster ha rule get
+<sid>` needs a rule to exist, and only a lifecycle run makes one.
+
 Width
   `pmx pve node ceph status` wrote 3.95 MB and a 515,739-column line, because
   the generic renderer marshalled a nested payload into one cell and
@@ -15,6 +21,13 @@ Always-empty columns
   lost. Four of those shipped (PBS task TYPE/ID, disk TYPE/HEALTH, service
   ACTIVE-STATE, apt RUNNING-KERNEL). A column blank in every row of a
   many-row table is the signature.
+
+Placeholder cells
+  A value the server never sent, rendered through fmt's %v, reaches the table
+  as the literal "<nil>" and reads as something PVE actually said. That form
+  also hides the column from the always-empty check, because the cell is not
+  blank: `pve lxc config pending` printed "<nil>" down its whole
+  PENDING-VALUE column and the empty-column audit saw a populated column.
 """
 
 from __future__ import annotations
@@ -35,7 +48,7 @@ MIN_ROWS = 3
 # Add to it only after confirming the field really is unset on the server, by
 # reading the same leaf with -o json.
 EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
-    "context list": {"DEFAULT NODE", "DEFAULT OUTPUT"},
+    "context ls": {"DEFAULT NODE", "DEFAULT OUTPUT"},
     "pve access user list": {"FIRSTNAME", "LASTNAME", "EMAIL", "COMMENT", "GROUPS"},
     "pve access group list": {"COMMENT", "MEMBERS"},
     "pve access role list": {"COMMENT"},
@@ -59,7 +72,7 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
     # or node to name.
     "lab list": {"VMID", "NODE"},
     "lab status": {"VMID", "PVE NODE"},
-    "pbs datastore list": {"COMMENT"},
+    "pbs datastore ls": {"COMMENT"},
     "pbs user ls": {"EXPIRE", "FIRSTNAME", "LASTNAME", "EMAIL"},
     # The PBS disk endpoint reports a model but no separate vendor.
     "pbs node disks ls": {"VENDOR"},
@@ -76,6 +89,18 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
         "ASSIGNED-KEY", "CURRENT-KEY", "NEXT-DUE-DATE", "CHECK-TIME",
     },
     "pdm sdn zone ls": {"STATE", "CONTROLLER", "NODES", "VRF-VXLAN"},
+    # PVE sets a pending entry's delete flag only on a key staged for removal,
+    # and no lab guest has one staged. Confirmed against -o json: the payload
+    # carries no delete key on any of the 25 rows. The native
+    # `pve qemu config pending` renders no such column, so only the PDM proxy
+    # needs the exemption.
+    "pdm pve qemu pending": {"DELETE"},
+    # Same field, same reason, on the native leaves: PVE reports a pending
+    # value and a delete flag only for a key that has one staged, and a lab
+    # guest between two config writes has none. Confirmed against -o json.
+    "pve qemu config pending": {"PENDING-VALUE"},
+    "pve lxc config pending": {"PENDING-VALUE"},
+    "pve qemu cloudinit pending": {"PENDING", "DELETE"},
     # The Ceph daemon tables note only what is wrong with a daemon (a missing
     # systemd unit or data directory), so a healthy cluster leaves the column
     # empty on every row.
@@ -83,6 +108,14 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
     "pve node ceph mgr list": {"NOTES"},
     "pve node ceph mds list": {"NOTES"},
 }
+
+# ROOT_COMMANDS are pmx's top-level command groups, which is where a command
+# path starts. Ctx.leaf reads it to tell a global flag's value ("--config
+# /tmp/x") from the command, since the two are indistinguishable by shape.
+ROOT_COMMANDS = frozenset({
+    "api", "auth", "completion", "context", "help", "init", "lab", "logs",
+    "pbs", "pdm", "pve", "rsync", "ssh", "version",
+})
 
 # READ_VERBS gates the audit's extra invocation. A check is re-run as a table
 # only when its command path contains one of these, so a tree that drives a
@@ -92,12 +125,41 @@ READ_VERBS = frozenset({
     "versions", "version", "members", "describe", "usage", "log", "logs",
     "metadata", "df", "content", "capabilities", "report", "dns", "hosts",
     "netstat", "rrddata", "subscription", "whoami", "permissions", "aplinfo",
+    # Read verbs that name what they return rather than the act of reading.
+    # Every leaf carrying one of these is read-only; checked against the leaf
+    # set before adding, because a token here also decides whether a check may
+    # be re-run.
+    "pending", "bridges", "ip-vrf", "mac-vrf", "interfaces", "neighbors",
+    "routes",
 })
 
 
 def is_read_only(leaf: str) -> bool:
     """Whether the audit may re-run leaf for its table rendering."""
     return any(tok in READ_VERBS for tok in leaf.split())
+
+
+def command_path(args: tuple[str, ...] | list[str]) -> str:
+    """The pmx command path in args, global flags and their values dropped.
+
+    This is the key EMPTY_COLUMN_ALLOWLIST is written against, so that an
+    exemption reads as the command an operator would type.
+
+    The path starts at the first token naming a top-level pmx command, because
+    a caller may lead with a global flag: the scratch-config checks pass
+    `--config <path>` first, and reading the path from the first non-flag token
+    would make `<path>` the command and leave those leaves un-audited.
+    """
+    path: list[str] = []
+    for a in args:
+        if not path:
+            if a in ROOT_COMMANDS:
+                path.append(a)
+            continue
+        if a.startswith("-"):
+            break
+        path.append(a)
+    return " ".join(path)
 
 
 def table_lines(out: str) -> list[str]:
@@ -246,6 +308,38 @@ def empty_columns(command: str, out: str, min_rows: int = MIN_ROWS) -> str:
     )
 
 
+# PLACEHOLDERS are the renderings of a Go value that no server ever sends.
+# Each is what fmt's %v prints for a type that reached a table cell without
+# being turned into text first. A pointer's "0x..." is deliberately not here:
+# PVE reports PCI vendor and device ids in exactly that form.
+PLACEHOLDERS = ("<nil>", "%!", "map[", "[]interface {}", "&{")
+
+
+def placeholder_cells(out: str) -> str:
+    """Cells rendering a Go value verbatim rather than a server value; else "".
+
+    Unlike the empty-column check this fires on a single cell, because one is
+    already a defect: there is no lab state under which PVE sends "<nil>".
+    """
+    header, rows = parse_table(out)
+    if not header:
+        return ""
+    found: list[str] = []
+    for row in rows:
+        for i, cell in enumerate(row):
+            if not cell.startswith(PLACEHOLDERS):
+                continue
+            name = header[i] if i < len(header) else f"column {i}"
+            desc = f"{name}={cell}"
+            if desc not in found:
+                found.append(desc)
+    if not found:
+        return ""
+    return (f"cell(s) rendering a Go value, not a server value: "
+            f"{', '.join(found)} (render the field through cli.StringifyValue)")
+
+
 def audit(command: str, out: str) -> str:
     """Both audits over one table rendering. Returns "" when it is clean."""
-    return width_violation(out) or empty_columns(command, out)
+    return (width_violation(out) or placeholder_cells(out)
+            or empty_columns(command, out))

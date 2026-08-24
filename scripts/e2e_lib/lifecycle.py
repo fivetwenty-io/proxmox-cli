@@ -48,7 +48,9 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from typing import Callable
 
+from . import render
 from .model import Isolation
 from .runner import (
     BOLD,
@@ -166,6 +168,20 @@ class Runner:
         self.node = node
         self.timeout = timeout
         self.cov: list[Step] = []
+        # Rendering defects found while auditing a step's table output. Kept
+        # apart from cov because a bad table is not a broken verb: it must be
+        # reported and must fail the run, but it must never abort the
+        # create-chain and strand a guest the teardown was going to remove.
+        self.render_defects: list[tuple[str, str]] = []
+
+    def _env(self) -> dict[str, str]:
+        """The child environment, with the terminal width pinned.
+
+        pmx prefers $COLUMNS over the tty size, so pinning it is what makes a
+        table rendering reproducible off a tty and lets the render audit assert
+        against a known budget. The read-only sweep pins the same one.
+        """
+        return dict(os.environ, COLUMNS=str(render.BUDGET))
 
     def pmx(self, *args: str, json_out: bool = False, node: bool = True,
             stdin: str | None = None) -> Cmd:
@@ -177,7 +193,7 @@ class Runner:
         argv += list(args)
         try:
             p = subprocess.run(argv, input=stdin, capture_output=True, text=True,
-                               timeout=self.timeout)
+                               timeout=self.timeout, env=self._env())
             return Cmd(p.returncode, p.stdout, p.stderr)
         except subprocess.TimeoutExpired:
             return Cmd(124, "", f"timed out after {self.timeout}s")
@@ -190,7 +206,8 @@ class Runner:
             argv += ["-o", "json"]
         argv += list(args)
         try:
-            p = subprocess.run(argv, capture_output=True, text=True, timeout=self.timeout)
+            p = subprocess.run(argv, capture_output=True, text=True,
+                               timeout=self.timeout, env=self._env())
             return Cmd(p.returncode, p.stdout, p.stderr)
         except subprocess.TimeoutExpired:
             return Cmd(124, "", f"timed out after {self.timeout}s")
@@ -211,20 +228,61 @@ class Runner:
         self.cov.append(Step(guest, verb, FAIL, detail))
         raise LifecycleError(label)
 
+    # Audit a read step's table rendering for the rendering defect classes,
+    # and record any finding. This is where the argument-taking read-only leaves
+    # get looked at: `pve cluster ha rule get <sid>`, `pve sdn status zones
+    # content <zone>`, and the rest of them need inventory that only exists
+    # inside a lifecycle run, so the read-only sweep never reaches them with a
+    # real argument. The suite already reads every one of them back after
+    # creating it; all that was missing was looking at what came out.
+    #
+    # The read-back steps assert on parsed JSON, so most ask for `-o json` and
+    # their own output is not a rendering at all. `rerun` produces the same
+    # command as a table when that is the case; when the step already rendered
+    # one, its output is used as it stands.
+    #
+    # The gate is the step's own declared verb, not the command path: a path
+    # carries its arguments, and `is_read_only` matches any token in it, which
+    # would call `pdm subscription key add` read-only for the word
+    # "subscription" and re-run a mutation. The verb is the leaf's own, so its
+    # last word is the real one.
+    def _audit(self, verb: str, args: tuple[str, ...], res: Cmd,
+               json_out: bool, rerun: Callable[[], Cmd]) -> None:
+        if res.rc != 0 or verb.split()[-1] not in render.READ_VERBS:
+            return
+        out = res.out
+        if json_out:
+            table = rerun()
+            if table.rc != 0:
+                return
+            out = table.out
+        leaf = render.command_path(args)
+        if not leaf or not out.strip():
+            return
+        found = render.audit(leaf, out)
+        if found:
+            print(RED(f"      render: {found}"))
+            self.render_defects.append((leaf, found))
+
     # A required, coverage-recorded step: print result, record it, raise on failure.
     # node=False suppresses the auto-injected `--node` for cluster-global verbs
     # whose command defines its own `--node` field flag (e.g. sdn controller).
     def step(self, guest: str, verb: str, label: str, *args: str,
              json_out: bool = False, node: bool = True,
              stdin: str | None = None) -> Cmd:
-        return self._record(guest, verb, label,
-                            self.pmx(*args, json_out=json_out, node=node, stdin=stdin))
+        res = self._record(guest, verb, label,
+                           self.pmx(*args, json_out=json_out, node=node, stdin=stdin))
+        self._audit(verb, args, res, json_out,
+                    lambda: self.pmx(*args, node=node, stdin=stdin))
+        return res
 
     # Like step(), but runs the binary verbatim (no --context/--node), for verbs
     # driven against a scratch `--config` file or an explicit --context.
     def step_raw(self, guest: str, verb: str, label: str, *args: str,
                  json_out: bool = False) -> Cmd:
-        return self._record(guest, verb, label, self.pmx_raw(*args, json_out=json_out))
+        res = self._record(guest, verb, label, self.pmx_raw(*args, json_out=json_out))
+        self._audit(verb, args, res, json_out, lambda: self.pmx_raw(*args))
+        return res
 
     # A soft, coverage-recorded step for verbs whose completion depends on the
     # host (e.g. LXC suspend needs CRIU). PASS on success; on a recognised
@@ -232,15 +290,21 @@ class Runner:
     # failure is a real bug — record FAIL and raise.
     def soft_step(self, guest: str, verb: str, label: str, *args: str,
                   skip_markers: tuple[str, ...] = (), skip_reason: str = "") -> bool:
-        return self._record_soft(guest, verb, label, self.pmx(*args),
-                                 skip_markers, skip_reason)
+        res = self.pmx(*args)
+        ok = self._record_soft(guest, verb, label, res, skip_markers, skip_reason)
+        if ok:
+            self._audit(verb, args, res, False, lambda: res)
+        return ok
 
     # soft_step's counterpart for verbs driven against a scratch `--config`
     # file or an explicit --context, the way step_raw relates to step.
     def soft_step_raw(self, guest: str, verb: str, label: str, *args: str,
                       skip_markers: tuple[str, ...] = (), skip_reason: str = "") -> bool:
-        return self._record_soft(guest, verb, label, self.pmx_raw(*args),
-                                 skip_markers, skip_reason)
+        res = self.pmx_raw(*args)
+        ok = self._record_soft(guest, verb, label, res, skip_markers, skip_reason)
+        if ok:
+            self._audit(verb, args, res, False, lambda: res)
+        return ok
 
     def _record_soft(self, guest: str, verb: str, label: str, res: Cmd,
                      skip_markers: tuple[str, ...], skip_reason: str) -> bool:
@@ -4047,6 +4111,26 @@ def _residue(r: Runner) -> list[str]:
 # --- coverage report --------------------------------------------------------
 
 
+def _print_render_defects(r: Runner) -> None:
+    """The rendering defects the suite's own table output turned up.
+
+    Reported apart from the verb coverage above because they say something
+    different: the verb worked, and what it printed was unreadable or was
+    missing a field. Each line names the leaf so it can be reproduced by hand.
+    """
+    if not r.render_defects:
+        return
+    print()
+    print(BOLD("Rendering defects in step output:"))
+    seen: set[tuple[str, str]] = set()
+    for leaf, found in r.render_defects:
+        if (leaf, found) in seen:
+            continue
+        seen.add((leaf, found))
+        print(f"  {RED('✗')} pmx {leaf}")
+        print(RED(f"      {found}"))
+
+
 def _print_coverage(r: Runner) -> None:
     """Per-group table of every mutating verb the suite drove, with its result.
     Groups: infra (sdn/pool/task), the qemu + lxc guests, and the access /
@@ -5779,8 +5863,11 @@ def run(context: str, binary: str | None, build: bool, strict: bool,
 
     print()
     _print_coverage(r)
+    _print_render_defects(r)
     # A recorded FAIL means a mutating verb did not behave; surface it.
     if any(s.status == FAIL for s in r.cov):
+        failed = True
+    if r.render_defects:
         failed = True
     if _residue(r):
         failed = True

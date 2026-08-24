@@ -40,6 +40,7 @@ from .lifecycle import (
     LifecycleError,
     Runner,
     _print_coverage,
+    _print_render_defects,
     _resolve_host,
     _ssh_node,
 )
@@ -1525,7 +1526,10 @@ def run(context: str, binary: str | None, build: bool, strict: bool) -> int:
 
     print()
     _print_coverage(r)
+    _print_render_defects(r)
     if any(s.status == FAIL for s in r.cov):
+        failed = True
+    if r.render_defects:
         failed = True
 
     dur = time.monotonic() - started

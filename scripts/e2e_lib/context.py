@@ -184,13 +184,11 @@ class Ctx:
 
         This is the key EMPTY_COLUMN_ALLOWLIST is written against, so that an
         exemption reads as the command an operator would type.
+
+        The extraction is shared with the lifecycle suites, which audit the
+        same way against the same allowlist; see render.command_path.
         """
-        path = []
-        for a in args:
-            if a.startswith("-"):
-                break
-            path.append(a)
-        return " ".join(path)
+        return render.command_path(args)
 
     def check_formats(self, name: str, *args: str, node: str | None = None) -> None:
         """Assert a read command renders cleanly in every `-o` format.
