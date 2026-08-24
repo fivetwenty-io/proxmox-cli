@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -506,31 +505,18 @@ func upperKey(k string) string {
 	return string(b)
 }
 
-// stringifyValue renders a decoded JSON scalar as a string; composite values are
-// re-encoded as compact JSON so they survive in a flat key/value view.
+// stringifyValue renders a decoded JSON scalar as a string; composite values
+// are re-marshalled. The decoding is cli.StringifyValue except for booleans,
+// which the realm tables render the way PVE writes them on the wire, as 1 and
+// 0, so a synced realm flag reads the same here as in its own config.
 func stringifyValue(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case bool:
-		if t {
+	if b, ok := v.(bool); ok {
+		if b {
 			return "1"
 		}
 		return "0"
-	case float64:
-		if t == float64(int64(t)) {
-			return strconv.FormatInt(int64(t), 10)
-		}
-		return strconv.FormatFloat(t, 'f', -1, 64)
-	default:
-		b, err := json.Marshal(v)
-		if err != nil {
-			return fmt.Sprintf("%v", v)
-		}
-		return string(b)
 	}
+	return cli.StringifyValue(v)
 }
 
 // rawString returns the string value of a raw JSON message when it encodes a

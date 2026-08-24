@@ -95,6 +95,7 @@ func TestConfigPending_Table(t *testing.T) {
 		testhelper.WriteData(w, []any{
 			map[string]any{"key": "memory", "value": 512, "pending": 1024},
 			map[string]any{"key": "hostname", "value": "old", "pending": nil},
+			map[string]any{"key": "maxdisk", "value": 1048576, "pending": nil},
 		})
 	})
 
@@ -108,6 +109,14 @@ func TestConfigPending_Table(t *testing.T) {
 	require.Contains(t, out, "KEY")
 	require.Contains(t, out, "memory")
 	require.Contains(t, out, "hostname")
+	// A key with nothing staged has no pending value, and the cell has to read
+	// as absent. Rendering the nil through fmt's %v put the literal "<nil>"
+	// down the whole column, which reads as something PVE said.
+	require.NotContains(t, out, "<nil>")
+	// %v also switches to exponent notation past six digits, so a byte count
+	// rendered that way arrives as "1.048576e+06".
+	require.Contains(t, out, "1048576")
+	require.NotContains(t, out, "e+06")
 }
 
 func TestConfigPending_ServerError(t *testing.T) {

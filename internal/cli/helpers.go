@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -41,4 +42,35 @@ func ParseIndexedValues(vals []string, flagName string) (map[int]string, error) 
 		out[idx] = val
 	}
 	return out, nil
+}
+
+// StringifyValue renders a JSON-decoded value as a table cell. It is the
+// shared renderer for the endpoints that return an untyped config map or a
+// pending-change list, where a value's JSON type varies by key.
+//
+// The nil case is the one that matters: fmt's %v renders a nil interface as
+// the literal "<nil>", which reaches the table as text and reads as a value
+// the server sent. An absent value renders as an empty cell instead. The
+// float case matters for the same reason: %v switches to exponent notation
+// above six digits, so a memory size would render as "1.048576e+06".
+func StringifyValue(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	case bool:
+		return strconv.FormatBool(t)
+	case float64:
+		if t == float64(int64(t)) {
+			return strconv.FormatInt(int64(t), 10)
+		}
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	default:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return fmt.Sprintf("%v", t)
+		}
+		return string(b)
+	}
 }

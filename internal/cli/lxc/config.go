@@ -486,8 +486,8 @@ func newConfigPendingCmd() *cobra.Command {
 					}
 					rows = append(rows, []string{
 						e.Key,
-						fmt.Sprintf("%v", e.Value),
-						fmt.Sprintf("%v", e.Pending),
+						cli.StringifyValue(e.Value),
+						cli.StringifyValue(e.Pending),
 					})
 				}
 			}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -134,26 +133,10 @@ func configToSingle(data any) (map[string]string, error) {
 }
 
 // stringifyValue renders a JSON-decoded scalar (or nested value) as a string.
+// The decoding is cli.StringifyValue; this stays as a name the package reads
+// naturally at its twenty-odd call sites.
 func stringifyValue(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case float64:
-		if t == float64(int64(t)) {
-			return strconv.FormatInt(int64(t), 10)
-		}
-		return strconv.FormatFloat(t, 'f', -1, 64)
-	case bool:
-		return strconv.FormatBool(t)
-	case nil:
-		return ""
-	default:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return fmt.Sprintf("%v", t)
-		}
-		return string(b)
-	}
+	return cli.StringifyValue(v)
 }
 
 // newConfigSetCmd builds `pmx pve qemu config set <vmid>`.

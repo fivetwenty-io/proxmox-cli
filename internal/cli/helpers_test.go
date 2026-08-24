@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
@@ -107,5 +108,31 @@ func TestParseIndexedValues_Errors(t *testing.T) {
 		if !strings.Contains(err.Error(), wantMsg) {
 			t.Errorf("error %q does not contain %q", err.Error(), wantMsg)
 		}
+	}
+}
+
+func TestStringifyValue(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   any
+		want string
+	}{
+		// A value the server never sent must read as absent. Through fmt's %v
+		// this arrived in a table cell as the literal "<nil>".
+		{name: "nil", in: nil, want: ""},
+		{name: "string", in: "local-lvm:vm-102-disk-0", want: "local-lvm:vm-102-disk-0"},
+		{name: "empty string", in: "", want: ""},
+		{name: "bool true", in: true, want: "true"},
+		{name: "bool false", in: false, want: "false"},
+		{name: "whole float", in: float64(512), want: "512"},
+		// %v renders this one as 1.048576e+06.
+		{name: "large whole float", in: float64(1048576), want: "1048576"},
+		{name: "fractional float", in: 2.5, want: "2.5"},
+		{name: "object", in: map[string]any{"a": float64(1)}, want: `{"a":1}`},
+		{name: "array", in: []any{"a", "b"}, want: `["a","b"]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, cli.StringifyValue(tc.in))
+		})
 	}
 }
