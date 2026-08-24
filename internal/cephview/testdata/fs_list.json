@@ -1,0 +1,14 @@
+[
+  {
+    "data_pool": "cephfs_data",
+    "data_pool_ids": [
+      3
+    ],
+    "data_pools": [
+      "cephfs_data"
+    ],
+    "metadata_pool": "cephfs_metadata",
+    "metadata_pool_id": 4,
+    "name": "cephfs"
+  }
+]

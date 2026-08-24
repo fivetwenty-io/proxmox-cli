@@ -251,3 +251,110 @@ func TestAgeCell_IsCoarse(t *testing.T) {
 	assert.Equal(t, "2h", ageCell(7200))
 	assert.Equal(t, "3d", ageCell(259200))
 }
+
+// TestMonList_DropsTheRepeatedVersionBannerAndTheAllYesFlags covers the
+// monitor table, which reported the version twice per row (the full banner
+// beside the number it contains) and spent two more columns on flags that
+// read "yes" on every daemon of a working cluster.
+func TestMonList_DropsTheRepeatedVersionBannerAndTheAllYesFlags(t *testing.T) {
+	res, err := MonList(captured(t, "mon_list.json"))
+	require.NoError(t, err)
+
+	assert.Equal(t, monHeaders, res.Headers)
+	require.Len(t, res.Rows, 3)
+	assert.Equal(t, []string{"lab-ceph-0", "lab-ceph-1", "lab-ceph-2"}, column(res, 0))
+	assert.Equal(t, []string{"0", "1", "2"}, column(res, 3))
+	assert.Equal(t, []string{"yes", "yes", "yes"}, column(res, 4))
+	assert.Equal(t, []string{"20.2.2", "20.2.2", "20.2.2"}, column(res, 6))
+	assert.Equal(t, []string{"", "", ""}, column(res, 7), "a healthy daemon has nothing to note")
+	for _, row := range res.Rows {
+		for _, c := range row {
+			assert.NotContains(t, c, "ceph version", "the banner belongs in -o json")
+		}
+	}
+	assert.NotNil(t, res.Raw)
+}
+
+// TestMdsList_NamesTheRankAndFilesystem checks that a standby, which holds
+// rank -1, leaves the column blank rather than reporting a negative rank.
+func TestMdsList_NamesTheRankAndFilesystem(t *testing.T) {
+	res, err := MdsList(captured(t, "mds_list.json"))
+	require.NoError(t, err)
+
+	assert.Equal(t, mdsHeaders, res.Headers)
+	require.Len(t, res.Rows, 2)
+	assert.Equal(t, []string{"up:active", "up:standby"}, column(res, 2))
+	assert.Equal(t, []string{"0", ""}, column(res, 3))
+	assert.Equal(t, []string{"cephfs", ""}, column(res, 4))
+}
+
+// TestMgrList_ReportsWhichManagerIsActive covers the manager table, which
+// carries neither a rank nor a quorum.
+func TestMgrList_ReportsWhichManagerIsActive(t *testing.T) {
+	res, err := MgrList(captured(t, "mgr_list.json"))
+	require.NoError(t, err)
+
+	assert.Equal(t, mgrHeaders, res.Headers)
+	require.Len(t, res.Rows, 3)
+	assert.Equal(t, []string{"active", "standby", "standby"}, column(res, 2))
+	assert.Equal(t, []string{"20.2.2", "20.2.2", "20.2.2"}, column(res, 4))
+}
+
+// TestDaemonNotes_ReportsOnlyWhatIsWrong is why the flags are a notes column:
+// they carry information exactly when they are false.
+func TestDaemonNotes_ReportsOnlyWhatIsWrong(t *testing.T) {
+	res, err := MonList(json.RawMessage(`[
+		{"name": "pve1", "host": "pve1", "state": "running", "direxists": false, "service": false},
+		{"name": "pve2", "host": "pve2", "state": "running", "direxists": true, "service": true}
+	]`))
+	require.NoError(t, err)
+
+	require.Len(t, res.Rows, 2)
+	assert.Equal(t, "no systemd unit, no data directory", res.Rows[0][7])
+	assert.Empty(t, res.Rows[1][7])
+}
+
+// TestDaemonList_MissingFlagsAreNotFailures covers a payload that omits the
+// flags entirely, which must not read as a daemon with nothing installed.
+func TestDaemonList_MissingFlagsAreNotFailures(t *testing.T) {
+	res, err := MonList(json.RawMessage(`[{"name": "pve1", "host": "pve1", "state": "running"}]`))
+	require.NoError(t, err)
+
+	require.Len(t, res.Rows, 1)
+	assert.Empty(t, res.Rows[0][4], "an unreported quorum is blank, not a no")
+	assert.Empty(t, res.Rows[0][7])
+}
+
+// TestFSList_PairsEachPoolWithItsID covers the filesystem table, where the
+// data pool arrived as a scalar, as a list, and as a parallel array of ids.
+func TestFSList_PairsEachPoolWithItsID(t *testing.T) {
+	res, err := FSList(captured(t, "fs_list.json"))
+	require.NoError(t, err)
+
+	assert.Equal(t, fsHeaders, res.Headers)
+	require.Len(t, res.Rows, 1)
+	assert.Equal(t, []string{"cephfs", "cephfs_metadata (4)", "cephfs_data (3)"}, res.Rows[0])
+}
+
+// TestFSList_ExtraDataPoolWithoutAnID covers a filesystem whose id array is
+// shorter than its pool list, which must still name every pool.
+func TestFSList_ExtraDataPoolWithoutAnID(t *testing.T) {
+	res, err := FSList(json.RawMessage(`[{
+		"name": "cephfs", "metadata_pool": "meta", "metadata_pool_id": 4,
+		"data_pools": ["a", "b"], "data_pool_ids": [3]
+	}]`))
+	require.NoError(t, err)
+
+	require.Len(t, res.Rows, 1)
+	assert.Equal(t, "a (3), b", res.Rows[0][2])
+}
+
+// TestDaemonList_EmptyListRendersAnEmptyTable covers a node that has no
+// daemon of the kind at all.
+func TestDaemonList_EmptyListRendersAnEmptyTable(t *testing.T) {
+	res, err := MgrList(json.RawMessage(`[]`))
+	require.NoError(t, err)
+
+	assert.Equal(t, mgrHeaders, res.Headers)
+	assert.Empty(t, res.Rows)
+}

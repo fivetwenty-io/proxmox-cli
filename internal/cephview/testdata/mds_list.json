@@ -1,0 +1,27 @@
+[
+  {
+    "addr": "10.252.0.11:6817/3959870310",
+    "ceph_version": "ceph version 20.2.2 (06f6a7ab7187f570d9fc04b7ac9664f1fb6b84b0) tentacle (stable - None)",
+    "ceph_version_short": "20.2.2",
+    "direxists": true,
+    "host": "lab-ceph-1",
+    "name": "lab-ceph-1",
+    "rank": -1,
+    "service": true,
+    "standby_replay": false,
+    "state": "up:standby"
+  },
+  {
+    "addr": "10.252.0.10:6819/1629033570",
+    "ceph_version": "ceph version 20.2.2 (06f6a7ab7187f570d9fc04b7ac9664f1fb6b84b0) tentacle (stable - None)",
+    "ceph_version_short": "20.2.2",
+    "direxists": true,
+    "fs_name": "cephfs",
+    "host": "lab-ceph-0",
+    "name": "lab-ceph-0",
+    "rank": 0,
+    "service": true,
+    "standby_replay": false,
+    "state": "up:active"
+  }
+]

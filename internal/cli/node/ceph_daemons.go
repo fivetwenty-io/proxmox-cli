@@ -7,6 +7,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
@@ -38,7 +39,7 @@ func newCephMonListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list Ceph monitors on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderCephView(cmd, deps, cephview.MonList, resp, "Ceph monitor list")
 		},
 	}
 }
@@ -139,7 +140,7 @@ func newCephMdsListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list Ceph metadata servers on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderCephView(cmd, deps, cephview.MdsList, resp, "Ceph metadata server list")
 		},
 	}
 }
@@ -240,7 +241,7 @@ func newCephMgrListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list Ceph managers on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderCephView(cmd, deps, cephview.MgrList, resp, "Ceph manager list")
 		},
 	}
 }
@@ -332,7 +333,7 @@ func newCephFsListCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list CephFS filesystems on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			return renderCephView(cmd, deps, cephview.FSList, resp, "CephFS filesystem list")
 		},
 	}
 }

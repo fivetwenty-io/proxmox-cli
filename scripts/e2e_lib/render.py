@@ -76,6 +76,12 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
         "ASSIGNED-KEY", "CURRENT-KEY", "NEXT-DUE-DATE", "CHECK-TIME",
     },
     "pdm sdn zone ls": {"STATE", "CONTROLLER", "NODES", "VRF-VXLAN"},
+    # The Ceph daemon tables note only what is wrong with a daemon (a missing
+    # systemd unit or data directory), so a healthy cluster leaves the column
+    # empty on every row.
+    "pve node ceph mon list": {"NOTES"},
+    "pve node ceph mgr list": {"NOTES"},
+    "pve node ceph mds list": {"NOTES"},
 }
 
 # READ_VERBS gates the audit's extra invocation. A check is re-run as a table

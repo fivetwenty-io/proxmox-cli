@@ -1,0 +1,38 @@
+[
+  {
+    "addr": "10.252.0.12:6789/0",
+    "ceph_version": "ceph version 20.2.2 (06f6a7ab7187f570d9fc04b7ac9664f1fb6b84b0) tentacle (stable - None)",
+    "ceph_version_short": "20.2.2",
+    "direxists": true,
+    "host": "lab-ceph-2",
+    "name": "lab-ceph-2",
+    "quorum": 1,
+    "rank": 2,
+    "service": true,
+    "state": "running"
+  },
+  {
+    "addr": "10.252.0.10:6789/0",
+    "ceph_version": "ceph version 20.2.2 (06f6a7ab7187f570d9fc04b7ac9664f1fb6b84b0) tentacle (stable - None)",
+    "ceph_version_short": "20.2.2",
+    "direxists": true,
+    "host": "lab-ceph-0",
+    "name": "lab-ceph-0",
+    "quorum": 1,
+    "rank": 0,
+    "service": true,
+    "state": "running"
+  },
+  {
+    "addr": "10.252.0.11:6789/0",
+    "ceph_version": "ceph version 20.2.2 (06f6a7ab7187f570d9fc04b7ac9664f1fb6b84b0) tentacle (stable - None)",
+    "ceph_version_short": "20.2.2",
+    "direxists": true,
+    "host": "lab-ceph-1",
+    "name": "lab-ceph-1",
+    "quorum": 1,
+    "rank": 1,
+    "service": true,
+    "state": "running"
+  }
+]
