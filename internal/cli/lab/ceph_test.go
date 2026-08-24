@@ -1,9 +1,13 @@
 package lab
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -393,14 +397,28 @@ func cephDiskByIDLink(idx int) string {
 // name a wipe targets; serial is what the disk is matched on; by_id_link is
 // the path the OSD is then created on, read from this listing rather than
 // derived from the serial.
+//
+// osdid is rendered the way PVE renders it and not the way its schema
+// documents it: a JSON NUMBER for a disk Ceph does not own (-1) and a JSON
+// STRING for one it does ("0"). Both forms appear in the same array, because
+// PVE is Perl and a scalar carries whichever type it was last used as. A
+// fixture that emitted only numbers is why a decoder that could not read the
+// real listing still passed its tests. See testdata/ for the captured
+// payload this mirrors.
 func cephDiskEntryJSON(idx int, used string, osdid int) map[string]any {
-	return map[string]any{
+	e := map[string]any{
 		"devpath":    "/dev/sd" + string(rune('c'+idx)),
 		"by_id_link": cephDiskByIDLink(idx),
 		"serial":     cephOSDSerial(idx),
 		"used":       used,
 		"osdid":      osdid,
+		"osdid-list": nil,
 	}
+	if osdid >= 0 {
+		e["osdid"] = strconv.Itoa(osdid)
+		e["osdid-list"] = []any{strconv.Itoa(osdid)}
+	}
+	return e
 }
 
 // cephHandleDisksList registers node's disk listing on f.
@@ -857,4 +875,82 @@ func TestCephMatchDisk_FallsBackToDerivedPathWhenSerialAbsent(t *testing.T) {
 	got := cephMatchDisk(entries, cephOSDSerial(0))
 	require.NotNil(t, got, "a listing without serials must still match on the legacy derived path")
 	assert.Equal(t, "/dev/sdc", got.Devpath)
+}
+
+// TestCephDiskEntry_DecodesEveryScalarFormPVEEmits pins the decode of osdid
+// and osdid-list across every form PVE renders them in. PVE is Perl: the same
+// disks/list array carries osdid as a number for a disk Ceph does not own and
+// as a string for one it does, and osdid-list is null, absent, or an array of
+// either form. A decoder that accepts only one of those fails on the real
+// listing, which is exactly what `pmx lab ceph osd` did.
+func TestCephDiskEntry_DecodesEveryScalarFormPVEEmits(t *testing.T) {
+	cases := []struct {
+		name     string
+		json     string
+		wantID   int64
+		wantList []int64
+	}{
+		{"number negative", `{"osdid":-1,"osdid-list":null}`, -1, nil},
+		{"number zero", `{"osdid":0,"osdid-list":[0]}`, 0, []int64{0}},
+		{"number positive", `{"osdid":3,"osdid-list":[3]}`, 3, []int64{3}},
+		{"string zero", `{"osdid":"0","osdid-list":["0"]}`, 0, []int64{0}},
+		{"string positive", `{"osdid":"12","osdid-list":["12"]}`, 12, []int64{12}},
+		{"string negative", `{"osdid":"-1"}`, -1, nil},
+		{"mixed list", `{"osdid":-1,"osdid-list":["4",5]}`, -1, []int64{4, 5}},
+		{"empty string", `{"osdid":""}`, 0, nil},
+		{"null", `{"osdid":null}`, -1, nil},
+		{"absent", `{"devpath":"/dev/sdc"}`, -1, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// -1 is the seed cephListDisks uses, so an absent or null field
+			// must survive as "not an OSD" rather than reading as OSD 0.
+			e := cephDiskEntry{Osdid: -1}
+			require.NoError(t, json.Unmarshal([]byte(tc.json), &e))
+			assert.Equal(t, tc.wantID, e.Osdid.Int())
+
+			got := make([]int64, 0, len(e.OsdidList))
+			for _, id := range e.OsdidList {
+				got = append(got, id.Int())
+			}
+			if tc.wantList == nil {
+				assert.Empty(t, got)
+				return
+			}
+			assert.Equal(t, tc.wantList, got)
+		})
+	}
+}
+
+// TestCephListDisks_CapturedPayload_Decodes drives the decoder from a
+// disks/list response captured verbatim from a live PVE 9.2.11 node with two
+// Ceph OSDs, so the fixture cannot drift toward what the schema documents and
+// away from what the API sends.
+func TestCephListDisks_CapturedPayload_Decodes(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "ceph_disks_list_lab-ceph-0.json"))
+	require.NoError(t, err)
+
+	var elems []json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &elems))
+	require.Len(t, elems, 4)
+
+	entries := make([]cephDiskEntry, 0, len(elems))
+	for _, el := range elems {
+		e := cephDiskEntry{Osdid: -1}
+		require.NoError(t, json.Unmarshal(el, &e))
+		entries = append(entries, e)
+	}
+
+	// The OS and data disks report osdid as the NUMBER -1; the two OSD disks
+	// report it as the STRING "0" and "1", in the same array.
+	assert.Equal(t, int64(-1), entries[0].Osdid.Int())
+	assert.Equal(t, int64(-1), entries[1].Osdid.Int())
+	assert.Equal(t, int64(0), entries[2].Osdid.Int())
+	assert.Equal(t, int64(1), entries[3].Osdid.Int())
+
+	// The serial PVE reports is the DRIVE name, never the serial= option
+	// `pmx lab create` pins on the disk.
+	assert.Equal(t, "drive-scsi2", entries[2].Serial)
+	assert.NotEqual(t, cephOSDSerial(0), entries[2].Serial)
+	assert.Equal(t, cephDiskByIDLink(0), entries[2].ByIDLink)
 }

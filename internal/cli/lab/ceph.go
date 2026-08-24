@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -524,7 +525,15 @@ type cephDiskEntry struct {
 	// symlinks, so it is what an OSD disk is matched on (cephMatchDisk).
 	Serial string `json:"serial"`
 	Used   string `json:"used"`
-	Osdid  int    `json:"osdid"`
+	// Osdid and OsdidList are pve.PVEInt, not int, because PVE renders them
+	// through Perl scalars: the same disks/list array carries osdid as a JSON
+	// number (-1) for a disk Ceph does not own and as a JSON string ("0") for
+	// one it does, so a plain int fails to decode the listing at all.
+	Osdid pve.PVEInt `json:"osdid"`
+	// OsdidList names every OSD this device backs. A device whose Osdid is -1
+	// but whose OsdidList is non-empty carries another OSD's DB or WAL: it is
+	// not a free device, and wiping it destroys the OSDs it serves.
+	OsdidList []pve.PVEInt `json:"osdid-list"`
 }
 
 // cephOSDDevice is one OSD device a lab's config calls for: node and serial
@@ -538,7 +547,11 @@ type cephOSDDevice struct {
 	byID    string
 	devpath string
 	used    string
-	osdid   int
+	osdid   int64
+	// osdidList names every OSD this device backs, read from the listing's
+	// osdid-list. A device with osdid -1 and a non-empty osdidList is a DB or
+	// WAL carrier for those OSDs, not a free device.
+	osdidList []int64
 }
 
 // cephExpectedOSDDevices derives every OSD device lab's config calls for,
@@ -649,7 +662,11 @@ func cephResolveOSDDevices(ctx context.Context, api *apiclient.APIClient,
 				want.node, want.serial)
 		}
 		want.used = match.Used
-		want.osdid = match.Osdid
+		want.osdid = match.Osdid.Int()
+		want.osdidList = want.osdidList[:0]
+		for _, id := range match.OsdidList {
+			want.osdidList = append(want.osdidList, id.Int())
+		}
 		out = append(out, want)
 	}
 	return out, nil

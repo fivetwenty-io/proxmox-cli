@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
@@ -522,11 +523,14 @@ func newFirewallRulesDeleteCmd() *cobra.Command {
 
 // fwIpsetEntry is the minimal decoded shape of one IP set list/member entry.
 type fwIpsetEntry struct {
-	Name    string `json:"name"`
-	Cidr    string `json:"cidr"`
-	Nomatch bool   `json:"nomatch"`
-	Comment string `json:"comment"`
-	Digest  string `json:"digest"`
+	Name string `json:"name"`
+	Cidr string `json:"cidr"`
+	// Nomatch is pve.PVEBool, not bool: PVE emits its own booleans as the
+	// numbers 1 and 0, never as JSON true/false, so a plain bool fails to
+	// decode any IP set entry that actually has the flag set.
+	Nomatch pve.PVEBool `json:"nomatch"`
+	Comment string      `json:"comment"`
+	Digest  string      `json:"digest"`
 }
 
 func newFirewallIpsetCmd() *cobra.Command {
@@ -683,7 +687,7 @@ func newFirewallIpsetListCmd() *cobra.Command {
 				}
 				entries = append(entries, e)
 				if len(args) == 2 {
-					rows = append(rows, []string{e.Cidr, strconv.FormatBool(e.Nomatch), e.Comment})
+					rows = append(rows, []string{e.Cidr, strconv.FormatBool(e.Nomatch.Bool()), e.Comment})
 				} else {
 					rows = append(rows, []string{e.Name, e.Comment})
 				}

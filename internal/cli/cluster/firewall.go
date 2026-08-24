@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
@@ -743,11 +744,14 @@ func newClusterFirewallGroupRuleDeleteCmd() *cobra.Command {
 
 // fwIpsetEntry is the minimal decoded shape of one IP set list/member entry.
 type fwIpsetEntry struct {
-	Name    string `json:"name"`
-	Cidr    string `json:"cidr"`
-	Nomatch bool   `json:"nomatch"`
-	Comment string `json:"comment"`
-	Digest  string `json:"digest"`
+	Name string `json:"name"`
+	Cidr string `json:"cidr"`
+	// Nomatch is pve.PVEBool, not bool: PVE emits its own booleans as the
+	// numbers 1 and 0, never as JSON true/false, so a plain bool fails to
+	// decode any IP set entry that actually has the flag set.
+	Nomatch pve.PVEBool `json:"nomatch"`
+	Comment string      `json:"comment"`
+	Digest  string      `json:"digest"`
 }
 
 func newClusterFirewallIpsetCmd() *cobra.Command {
@@ -839,7 +843,7 @@ func newClusterFirewallIpsetListCmd() *cobra.Command {
 				}
 				entries = append(entries, e)
 				if member {
-					rows = append(rows, []string{e.Cidr, strconv.FormatBool(e.Nomatch), e.Comment})
+					rows = append(rows, []string{e.Cidr, strconv.FormatBool(e.Nomatch.Bool()), e.Comment})
 				} else {
 					rows = append(rows, []string{e.Name, e.Comment})
 				}

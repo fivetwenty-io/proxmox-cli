@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
@@ -306,7 +307,12 @@ func TestClusterFirewallIpset_ListMembers(t *testing.T) {
 	f, ac := newFakeClient(t)
 	f.HandleFunc("GET /api2/json/cluster/firewall/ipset/pmxcli-ips", func(w http.ResponseWriter, _ *http.Request) {
 		testhelper.WriteData(w, []any{
-			map[string]any{"cidr": "172.30.0.0/24", "nomatch": false, "comment": "lab"},
+			// PVE renders its own booleans as the number 1 and OMITS the key
+			// entirely when the flag is unset: it never sends JSON true/false
+			// here, which is why a plain Go bool could not decode a real IP
+			// set that had any nomatch member.
+			map[string]any{"cidr": "172.30.0.0/24", "comment": "lab"},
+			map[string]any{"cidr": "172.31.0.0/24", "nomatch": 1, "comment": "excluded"},
 		})
 	})
 
@@ -317,6 +323,11 @@ func TestClusterFirewallIpset_ListMembers(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "CIDR")
 	require.Contains(t, out, "172.30.0.0/24")
+	// The nomatch column must reflect the numeric 1 PVE sends, and the
+	// omitted key must read as false rather than failing the decode.
+	require.Contains(t, out, "172.31.0.0/24")
+	require.Contains(t, out, "true")
+	require.Contains(t, out, "false")
 }
 
 func TestClusterFirewallIpset_Create(t *testing.T) {
@@ -523,5 +534,33 @@ func TestClusterFirewallCommandTree(t *testing.T) {
 	}
 	for _, want := range []string{"list", "create", "delete", "rules", "rule-add", "rule-update", "rule-delete"} {
 		require.True(t, groupVerbs[want], "expected group verb %q", want)
+	}
+}
+
+// TestClusterFwIpsetEntry_DecodesEveryNomatchFormPVEEmits pins the decode of the
+// nomatch flag. PVE renders its own booleans as the numbers 1 and 0, never as
+// JSON true/false, and omits the key entirely when the flag is unset, so a
+// plain Go bool errors out on any IP set that has a nomatch member.
+func TestClusterFwIpsetEntry_DecodesEveryNomatchFormPVEEmits(t *testing.T) {
+	cases := []struct {
+		name string
+		json string
+		want bool
+	}{
+		{"number one", `{"nomatch":1}`, true},
+		{"number zero", `{"nomatch":0}`, false},
+		{"string one", `{"nomatch":"1"}`, true},
+		{"string zero", `{"nomatch":"0"}`, false},
+		{"empty string", `{"nomatch":""}`, false},
+		{"bool true", `{"nomatch":true}`, true},
+		{"bool false", `{"nomatch":false}`, false},
+		{"absent", `{"cidr":"10.0.0.0/8"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var e fwIpsetEntry
+			require.NoError(t, json.Unmarshal([]byte(tc.json), &e))
+			require.Equal(t, tc.want, e.Nomatch.Bool())
+		})
 	}
 }
