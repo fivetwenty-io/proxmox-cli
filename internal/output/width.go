@@ -250,9 +250,7 @@ func cellWidth(s string) int {
 // maxCellRunes, so a caller that passes no budget still gets a bounded cell.
 func clampCell(s string, limit int) string {
 	limit = min(limit, maxCellRunes)
-	if limit < 1 {
-		limit = 1
-	}
+	limit = max(limit, 1)
 	if cellWidth(s) <= limit {
 		return s
 	}

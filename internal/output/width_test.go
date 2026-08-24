@@ -12,7 +12,7 @@ import (
 // widest returns the longest line of s, in runes.
 func widest(s string) int {
 	w := 0
-	for _, line := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(s, "\n"), "\n") {
 		w = max(w, len([]rune(line)))
 	}
 	return w
