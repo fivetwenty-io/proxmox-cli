@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/proxmox-cli/internal/capview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -155,7 +156,11 @@ func newCpuFlagsCmd() *cobra.Command {
 			if resp != nil {
 				raw = *resp
 			}
-			return renderRawList(cmd, deps, raw)
+			res, err := capview.CPUFlags(raw)
+			if err != nil {
+				return fmt.Errorf("decode QEMU CPU flags on node %q: %w", node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&arch, "arch", "", "filter by virtual processor architecture, e.g. x86_64 or aarch64")

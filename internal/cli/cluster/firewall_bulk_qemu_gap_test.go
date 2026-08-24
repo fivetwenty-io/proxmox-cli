@@ -191,8 +191,8 @@ func TestClusterQemuCpuFlags_List(t *testing.T) {
 	f.HandleFunc("GET /api2/json/cluster/qemu/cpu-flags", func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath, gotQuery = r.Method, r.URL.Path, r.URL.RawQuery
 		testhelper.WriteData(w, []any{
-			map[string]any{"flag": "pcid", "description": "PCID cpu flag"},
-			map[string]any{"flag": "spec-ctrl", "description": "Spectre mitigation"},
+			map[string]any{"name": "pcid", "description": "PCID cpu flag", "supported-on": []any{"pve1", "pve2"}},
+			map[string]any{"name": "spec-ctrl", "description": "Spectre mitigation", "supported-on": []any{}},
 		})
 	})
 
@@ -208,6 +208,8 @@ func TestClusterQemuCpuFlags_List(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "pcid")
 	require.Contains(t, out, "spec-ctrl")
+	require.Contains(t, out, "pve1, pve2", "the nodes offering a flag are named")
+	require.Contains(t, out, "none", "a flag no node offers says so rather than rendering blank")
 }
 
 // TestClusterQemuCpuFlags_WithAccel verifies --accel is forwarded when supplied.

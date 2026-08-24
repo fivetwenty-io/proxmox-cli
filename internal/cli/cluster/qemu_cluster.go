@@ -7,6 +7,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/capview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
@@ -53,11 +54,10 @@ func newClusterQemuCpuFlagsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list QEMU CPU flags: %w", err)
 			}
-			res, err := rawUnionResult(derefRawList(resp))
+			res, err := capview.CPUFlags(derefRawList(resp))
 			if err != nil {
-				return fmt.Errorf("list QEMU CPU flags: %w", err)
+				return fmt.Errorf("decode QEMU CPU flags: %w", err)
 			}
-			res.Raw = resp
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}

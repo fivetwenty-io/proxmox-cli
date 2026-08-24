@@ -626,7 +626,11 @@ func TestNodeCapabilities_QemuCpuFlags(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
 	recordOn(f, "GET /api2/json/nodes/pve1/capabilities/qemu/cpu-flags", &rec, []any{
-		map[string]any{"id": "pcid", "description": "PCID processor context IDs"},
+		map[string]any{
+			"name":         "pcid",
+			"description":  "PCID processor context IDs",
+			"supported-on": []any{"pve1"},
+		},
 	})
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -636,6 +640,7 @@ func TestNodeCapabilities_QemuCpuFlags(t *testing.T) {
 	require.Equal(t, "GET", rec.method)
 	require.Equal(t, "/api2/json/nodes/pve1/capabilities/qemu/cpu-flags", rec.path)
 	require.Contains(t, buf.String(), "pcid")
+	require.Contains(t, buf.String(), "pve1", "the nodes offering a flag are named")
 }
 
 func TestNodeCapabilities_QemuCpuFlags_WithAccel(t *testing.T) {

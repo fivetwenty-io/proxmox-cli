@@ -7,6 +7,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/capview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 )
 
@@ -98,7 +99,11 @@ func newCapabilitiesQemuCpuFlagsCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("list QEMU CPU flags on node %q: %w", deps.Node, err)
 			}
-			return renderScan(cmd, deps, derefRaws(resp), resp)
+			res, err := capview.CPUFlags(derefRaws(resp))
+			if err != nil {
+				return fmt.Errorf("decode QEMU CPU flags on node %q: %w", deps.Node, err)
+			}
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&accel, "accel", "", "acceleration type to check node compatibility for")

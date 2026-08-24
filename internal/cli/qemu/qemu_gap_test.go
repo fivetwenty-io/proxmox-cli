@@ -254,7 +254,9 @@ func TestQemuGap_CpuFlagsRequest(t *testing.T) {
 	f.HandleFunc("GET /api2/json/nodes/pve1/capabilities/qemu/cpu-flags",
 		func(w http.ResponseWriter, r *http.Request) {
 			gotPath = r.URL.Path
-			testhelper.WriteData(w, []any{map[string]any{"id": "aes"}})
+			testhelper.WriteData(w, []any{
+				map[string]any{"name": "aes", "supported-on": []any{"pve1"}},
+			})
 		})
 	deps := depsFor(t, ac, output.FormatTable, "pve1", false)
 	var buf bytes.Buffer
