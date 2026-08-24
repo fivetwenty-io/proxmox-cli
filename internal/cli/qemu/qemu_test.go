@@ -125,12 +125,11 @@ func TestQemuList_Table(t *testing.T) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		testhelper.WriteData(w, []any{
 			map[string]any{
-				"vmid":     100,
-				"name":     "web",
-				"status":   "running",
-				"mem":      1024,
-				"bootdisk": "scsi0",
-				"pid":      4242,
+				"vmid":   100,
+				"name":   "web",
+				"status": "running",
+				"mem":    1024,
+				"pid":    4242,
 			},
 		})
 	})

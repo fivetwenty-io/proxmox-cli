@@ -17,14 +17,13 @@ import (
 // or a cluster/resources VM entry. Type is only present in cluster/resources
 // entries and is used to keep qemu guests and drop lxc ones.
 type qemuListEntry struct {
-	VMID     int64  `json:"vmid"`
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Mem      int64  `json:"mem"`
-	Bootdisk string `json:"bootdisk"`
-	PID      int64  `json:"pid"`
-	Node     string `json:"node"`
-	Type     string `json:"type"`
+	VMID   int64  `json:"vmid"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Mem    int64  `json:"mem"`
+	PID    int64  `json:"pid"`
+	Node   string `json:"node"`
+	Type   string `json:"type"`
 }
 
 // newListCmd builds `pmx pve qemu list`.
@@ -52,7 +51,7 @@ func newListCmd() *cobra.Command {
 				return fmt.Errorf("--full is node-scoped and cannot be combined with --cluster")
 			}
 
-			headers := []string{"VMID", "NAME", "STATUS", "MEM", "BOOTDISK", "PID", "NODE"}
+			headers := []string{"VMID", "NAME", "STATUS", "MEM", "PID", "NODE"}
 			entries := make([]qemuListEntry, 0)
 			rawAll := make([]json.RawMessage, 0)
 			rows := make([][]string, 0)
@@ -83,7 +82,6 @@ func newListCmd() *cobra.Command {
 						e.Name,
 						e.Status,
 						strconv.FormatInt(e.Mem, 10),
-						e.Bootdisk,
 						pid,
 						e.Node,
 					})
