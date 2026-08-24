@@ -31,6 +31,16 @@ func TestPVEBool_UnmarshalJSON(t *testing.T) {
 		{name: "bool true", input: `true`, wantCell: "1", wantBool: true},
 		{name: "bool false", input: `false`, wantCell: "0", wantBool: false},
 		{name: "string true", input: `"true"`, wantCell: "1", wantBool: true},
+		// PVE writes a boolean out of Perl in whatever form the endpoint's
+		// author reached for. The SDK decoder this type delegates to knows
+		// all of them; the hand-rolled copy it replaced read every one of
+		// these as false.
+		{name: "string yes", input: `"yes"`, wantCell: "1", wantBool: true},
+		{name: "string no", input: `"no"`, wantCell: "0", wantBool: false},
+		{name: "string on", input: `"on"`, wantCell: "1", wantBool: true},
+		{name: "string off", input: `"off"`, wantCell: "0", wantBool: false},
+		{name: "string false", input: `"false"`, wantCell: "0", wantBool: false},
+		{name: "string empty", input: `""`, wantCell: "0", wantBool: false},
 		{name: "null", input: `null`, wantCell: "", wantBool: false},
 	}
 	for _, tc := range cases {
@@ -59,9 +69,9 @@ func TestPVEBool_Absent_RendersEmptyCell(t *testing.T) {
 func TestPVEBool_UnmarshalJSON_InvalidEncodings(t *testing.T) {
 	t.Parallel()
 
-	// "frog" starts with 'f' (routed to the bool branch) but is not a valid
-	// JSON bool literal; [1,2] and {"nested":true} are routed to the numeric
-	// branch (anything not starting with t/f/") and are not valid numbers.
+	// "frog" is not valid JSON at all; [1,2] and {"nested":true} are, but
+	// reach the decoder's numeric branch (anything that is not a bool
+	// literal, a string, or null) and are not numbers.
 	cases := []string{`frog`, `[1,2]`, `{"nested":true}`}
 	for _, in := range cases {
 		var b permshared.PVEBool

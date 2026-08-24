@@ -2,7 +2,6 @@ package access
 
 import (
 	"bytes"
-	"encoding/json"
 
 	"github.com/spf13/cobra"
 
@@ -45,40 +44,29 @@ token delete, group delete, role delete, domain delete, tfa delete) require
 	return cmd
 }
 
-// pveBool is an optional boolean that tolerates the several JSON encodings the
-// Proxmox VE API uses for boolean flags: a real JSON bool, the numbers 1/0, and
-// the strings "1"/"0". A nil value means the field was absent.
+// pveBool is an optional boolean for the hand-rolled raw decodes in this
+// package. The decoding is the SDK's client.PVEBool; what this type adds is
+// the distinction the SDK's plain bool cannot carry, between a flag PVE set
+// to false and one it never sent, which is what separates a "0" cell from an
+// empty one.
 type pveBool struct {
 	set bool
-	val bool
+	val client.PVEBool
 }
 
-// UnmarshalJSON decodes bool, numeric, and string encodings of a boolean.
+// UnmarshalJSON records that the field arrived and hands the value to the
+// SDK's decoder, which accepts every encoding PVE emits: a real JSON bool,
+// the numbers 1/0, and the strings "1"/"0", "true"/"false", "yes"/"no", and
+// "on"/"off".
 func (b *pveBool) UnmarshalJSON(data []byte) error {
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 || string(data) == "null" {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		return nil
 	}
-	switch data[0] {
-	case 't', 'f':
-		var v bool
-		if err := json.Unmarshal(data, &v); err != nil {
-			return err
-		}
-		b.set, b.val = true, v
-	case '"':
-		var s string
-		if err := json.Unmarshal(data, &s); err != nil {
-			return err
-		}
-		b.set, b.val = true, s == "1" || s == "true"
-	default:
-		var n float64
-		if err := json.Unmarshal(data, &n); err != nil {
-			return err
-		}
-		b.set, b.val = true, n != 0
+	if err := b.val.UnmarshalJSON(data); err != nil {
+		return err
 	}
+	b.set = true
 	return nil
 }
 
@@ -87,7 +75,7 @@ func (b pveBool) cell() string {
 	if !b.set {
 		return ""
 	}
-	if b.val {
+	if b.val.Bool() {
 		return "1"
 	}
 	return "0"

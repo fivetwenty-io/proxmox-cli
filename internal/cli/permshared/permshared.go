@@ -1,11 +1,9 @@
 // Package permshared provides the ACL/permission decode, filter, and render
 // helpers shared by the per-object-tree `permissions` sub-commands (qemu,
-// lxc, storage, pool, node, sdn zone, sdn vnet). It deliberately duplicates a
-// small amount of decode logic already present, unexported, in
-// internal/cli/access (the PVE tolerant-boolean decoder and the ACL entry
-// shape) rather than exporting it from that package: access is the escape
-// hatch for raw ACL/permission paths and should not gain a dependency edge
-// from every object tree just to satisfy this shared library.
+// lxc, storage, pool, node, sdn zone, sdn vnet). It carries its own ACL entry
+// shape rather than exporting one from internal/cli/access: access is the
+// escape hatch for raw ACL/permission paths and should not gain a dependency
+// edge from every object tree just to satisfy this shared library.
 //
 // This package does not own any object tree's ACL path grammar (e.g. the
 // singular "/pool/{poolid}" segment): each tree derives its own path and
@@ -20,45 +18,35 @@ import (
 	"strings"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // PVEBool is an optional boolean that tolerates the several JSON encodings
-// the Proxmox VE API uses for boolean flags: a real JSON bool, the numbers
-// 1/0, and the strings "1"/"0". A zero-value PVEBool (never unmarshalled)
-// renders as "" via Cell and reports false via Bool.
+// the Proxmox VE API uses for boolean flags. The decoding is the SDK's
+// pve.PVEBool; what this type adds is the distinction the SDK's plain bool
+// cannot carry, between a flag PVE set to false and one it never sent. A
+// zero-value PVEBool (never unmarshalled) renders as "" via Cell and reports
+// false via Bool.
 type PVEBool struct {
 	set bool
-	val bool
+	val pve.PVEBool
 }
 
-// UnmarshalJSON decodes bool, numeric, and string encodings of a boolean.
+// UnmarshalJSON records that the field arrived and hands the value to the
+// SDK's decoder, which accepts every encoding PVE emits: a real JSON bool,
+// the numbers 1/0, and the strings "1"/"0", "true"/"false", "yes"/"no", and
+// "on"/"off".
 func (b *PVEBool) UnmarshalJSON(data []byte) error {
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 || string(data) == "null" {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		return nil
 	}
-	switch data[0] {
-	case 't', 'f':
-		var v bool
-		if err := json.Unmarshal(data, &v); err != nil {
-			return fmt.Errorf("decode bool: %w", err)
-		}
-		b.set, b.val = true, v
-	case '"':
-		var s string
-		if err := json.Unmarshal(data, &s); err != nil {
-			return fmt.Errorf("decode string bool: %w", err)
-		}
-		b.set, b.val = true, s == "1" || s == "true"
-	default:
-		var n float64
-		if err := json.Unmarshal(data, &n); err != nil {
-			return fmt.Errorf("decode numeric bool: %w", err)
-		}
-		b.set, b.val = true, n != 0
+	if err := b.val.UnmarshalJSON(data); err != nil {
+		return fmt.Errorf("decode ACL boolean: %w", err)
 	}
+	b.set = true
 	return nil
 }
 
@@ -70,7 +58,7 @@ func (b PVEBool) MarshalJSON() ([]byte, error) {
 	if !b.set {
 		return []byte("null"), nil
 	}
-	if b.val {
+	if b.val.Bool() {
 		return []byte("1"), nil
 	}
 	return []byte("0"), nil
@@ -83,7 +71,7 @@ func (b PVEBool) MarshalYAML() (any, error) {
 	if !b.set {
 		return nil, nil
 	}
-	if b.val {
+	if b.val.Bool() {
 		return 1, nil
 	}
 	return 0, nil
@@ -95,7 +83,7 @@ func (b PVEBool) Cell() string {
 	if !b.set {
 		return ""
 	}
-	if b.val {
+	if b.val.Bool() {
 		return "1"
 	}
 	return "0"
@@ -103,7 +91,7 @@ func (b PVEBool) Cell() string {
 
 // Bool reports the decoded value; an unset PVEBool reports false.
 func (b PVEBool) Bool() bool {
-	return b.set && b.val
+	return b.set && b.val.Bool()
 }
 
 // AclEntry is a single row of the GET /access/acl response.
