@@ -602,11 +602,11 @@ type LabStorage struct {
 // LabOSDDisks describes extra whole-raw-device data disks attached to every
 // node VM after the OS (scsi0) and data (scsi1) disks — scsi2 .. scsi(1+Count).
 // They exist for nested Ceph OSDs (ceph-lab-plan §5): each is emitted with
-// discard=on,iothread=1,ssd=1,backup=0 and a stable serial (osd0, osd1, ...),
-// which is how `pmx lab ceph osd` picks each one out of the node's disk
-// listing. The serial does not name the disk's /dev/disk/by-id symlink: on
-// PVE 9.2 that link is keyed off the drive name, and the serial surfaces only
-// as the ID_SCSI_SERIAL udev property lsblk and PVE's disk listing report.
+// discard=on,iothread=1,ssd=1,backup=0 and a serial (osd0, osd1, ...) that
+// serves as a label only. `pmx lab ceph osd` picks each disk out of the
+// node's disk listing by its SCSI slot, because PVE never reports that
+// serial: the listing carries ID_SERIAL_SHORT (the drive name), while
+// serial= surfaces only as ID_SCSI_SERIAL.
 type LabOSDDisks struct {
 	Count  int `yaml:"count,omitempty" json:"count,omitempty"`
 	SizeGB int `yaml:"size_gb,omitempty" json:"size_gb,omitempty"`

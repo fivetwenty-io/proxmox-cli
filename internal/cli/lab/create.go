@@ -421,12 +421,13 @@ func createDiskOptions(st config.LabStorage) string {
 // createOSDDiskValue renders the scsiN value for the idx-th OSD disk. The
 // options are fixed, not derived from LabStorage's discard/iothread/ssd
 // booleans: whole-raw-device Ceph OSDs require discard (zvol TRIM), ssd
-// (CRUSH class), backup=0 (never PBS-copy replicated data), and a stable
-// serial, which is how `pmx lab ceph osd` identifies each disk in the node's
-// disk listing (cephOSDSerial, ceph.go). The serial does NOT name the disk's
-// /dev/disk/by-id symlink: on PVE 9.2 that link is keyed off the drive name,
-// and the serial surfaces only as the ID_SCSI_SERIAL udev property that
-// lsblk and PVE's disk listing report. iothread=1 is safe to
+// (CRUSH class), and backup=0 (never PBS-copy replicated data).
+//
+// The serial is retained as a label, not as an identifier. It is invisible to
+// PVE: serial= lands in SCSI VPD page 0x80 (udev's ID_SCSI_SERIAL), while the
+// disk listing reports ID_SERIAL_SHORT from page 0x83, which QEMU builds from
+// the drive name. `pmx lab ceph osd` therefore matches on the SCSI slot this
+// function allocates (cephOSDByIDForSlot, ceph.go). iothread=1 is safe to
 // fix because ValidateStorage (run at load time AND re-run below after flag
 // overrides) refuses osd_disks on any controller other than
 // virtio-scsi-single — the only one PVE accepts iothread on.

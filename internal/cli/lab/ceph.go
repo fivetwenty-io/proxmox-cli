@@ -483,28 +483,54 @@ func newCephMgrCmd() *cobra.Command {
 	return newCephDaemonCmd("mgr", "Create Ceph manager daemons on a lab's nested cluster")
 }
 
+// cephOSDFirstSlot is the SCSI slot the first OSD disk occupies. `pmx lab
+// create` fills scsi0 with the OS disk and scsi1 with the data disk, then
+// allocates OSD disks from scsi2 up (createOSDDiskValue and the --osd-disks
+// flag help, create.go).
+const cephOSDFirstSlot = 2
+
+// cephOSDSlot is the SCSI slot of the idx-th OSD disk.
+func cephOSDSlot(idx int) int { return cephOSDFirstSlot + idx }
+
 // cephOSDSerial is the QEMU disk serial `pmx lab create`'s serial=osd<idx>
 // disk option (createOSDDiskValue, create.go) pins on the idx-th OSD disk.
-// The serial, not a kernel name, is what identifies an OSD disk: /dev/sdX
-// ordering is not stable across boots, while the serial is.
+//
+// It is a fallback matcher, not the primary one, because PVE does not report
+// it. The serial= option lands in SCSI VPD page 0x80, which udev exposes as
+// ID_SCSI_SERIAL; PVE's disks/list reports ID_SERIAL_SHORT, which comes from
+// VPD page 0x83 and which QEMU builds from the DRIVE NAME. On a live PVE
+// 9.2.11 OSD disk:
+//
+//	ID_SERIAL_SHORT=drive-scsi2      <- what PVE reports as "serial"
+//	ID_SCSI_SERIAL=osd0              <- what serial=osd0 actually sets
+//
+// Matching on it is kept only for a build that does surface ID_SCSI_SERIAL.
 func cephOSDSerial(idx int) string {
 	return fmt.Sprintf("osd%d", idx)
 }
 
+// cephOSDByIDForSlot is the /dev/disk/by-id path udev publishes for the QEMU
+// SCSI disk in the given slot. The link is named after the DRIVE, so the slot
+// determines it exactly, which makes it the reliable key for matching an OSD
+// disk in a node's disk listing.
+//
+// The coupling is to `pmx lab create`: createOSDDiskValue (create.go) is what
+// guarantees the idx-th OSD disk lands in slot cephOSDSlot(idx). A future
+// allocator that moves OSD disks off scsi2.. must update cephOSDSlot with it.
+func cephOSDByIDForSlot(slot int) string {
+	return fmt.Sprintf("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi%d", slot)
+}
+
 // cephOSDLegacyByIDPath is the /dev/disk/by-id path this package used to
 // DERIVE from a disk's serial and match against a node's disk listing.
-// It is retained only as a fallback matcher, never as an OSD create target.
+// It is retained only as a last-resort fallback matcher, never as an OSD
+// create target.
 //
-// The derivation is wrong on PVE 9.2 (live finding): the by-id symlink udev
-// creates for a QEMU SCSI disk is keyed off the DRIVE NAME
-// (scsi-0QEMU_QEMU_HARDDISK_drive-scsi1), not off the serial= option, which
-// surfaces only as the disk's ID_SCSI_SERIAL udev property (what lsblk and
-// PVE's own disks listing report as "serial"). Deriving the by-id path from
-// the serial therefore produced a path that exists on no node, so every
-// device failed to match and `pmx lab ceph osd` could not create a single
-// OSD. Matching on the reported serial and taking the by-id path from the
-// listing itself (cephResolveOSDDevices) is correct on every PVE build,
-// because it reads the link rather than guessing its shape.
+// The derivation is wrong on every PVE build: the by-id symlink udev creates
+// for a QEMU SCSI disk is keyed off the drive name (cephOSDByIDForSlot), not
+// off the serial= option. Deriving the by-id path from the serial produced a
+// path that exists on no node, so every device failed to match and `pmx lab
+// ceph osd` could not create a single OSD.
 func cephOSDLegacyByIDPath(serial string) string {
 	return "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_" + serial
 }
@@ -519,10 +545,10 @@ func cephOSDLegacyByIDPath(serial string) string {
 type cephDiskEntry struct {
 	Devpath  string `json:"devpath"`
 	ByIDLink string `json:"by_id_link"`
-	// Serial is the disk's ID_SCSI_SERIAL udev property, which for a lab OSD
-	// disk is the serial=osd<N> value `pmx lab create` pins on it. It is the
-	// only field that survives a PVE build changing how it names by-id
-	// symlinks, so it is what an OSD disk is matched on (cephMatchDisk).
+	// Serial is the disk's ID_SERIAL_SHORT udev property, NOT the serial=
+	// option `pmx lab create` pins on a lab OSD disk: on a live PVE 9.2.11
+	// node it reads "drive-scsi2", never "osd0" (cephOSDSerial). It is
+	// matched on only as a fallback, after the by-id link (cephMatchDisk).
 	Serial string `json:"serial"`
 	Used   string `json:"used"`
 	// Osdid and OsdidList are pve.PVEInt, not int, because PVE renders them
@@ -542,7 +568,10 @@ type cephDiskEntry struct {
 // until resolution: it is READ from the listing, never derived, so it is
 // whatever path that PVE build actually publishes for the disk.
 type cephOSDDevice struct {
-	node    string
+	node string
+	// slot is the SCSI slot `pmx lab create` allocated this disk in, which is
+	// what names its by-id link and therefore what it is matched on.
+	slot    int
 	serial  string
 	byID    string
 	devpath string
@@ -565,7 +594,8 @@ func cephExpectedOSDDevices(lab *config.Lab) ([]cephOSDDevice, error) {
 		_, storage := config.EffectiveNodeSizing(lab, i)
 		node := labNodeVMName(lab.Name, i)
 		for j := range config.OSDDiskCount(storage) {
-			devices = append(devices, cephOSDDevice{node: node, serial: cephOSDSerial(j), osdid: -1})
+			devices = append(devices, cephOSDDevice{
+				node: node, slot: cephOSDSlot(j), serial: cephOSDSerial(j), osdid: -1})
 		}
 	}
 	if len(devices) == 0 {
@@ -597,24 +627,37 @@ func cephListDisks(ctx context.Context, api *apiclient.APIClient, node string) (
 	return entries, nil
 }
 
-// cephMatchDisk finds the listing entry for the OSD disk carrying serial,
-// matching on the reported serial first and only then falling back to the
-// by-id path this package used to derive from that serial.
+// cephMatchDisk finds the listing entry for the OSD disk in slot, trying the
+// keys in descending order of reliability:
 //
-// Serial first is what makes this correct on PVE 9.2, where the by-id link is
-// named after the drive rather than the serial (cephOSDLegacyByIDPath). The
-// fallback is kept for a PVE build whose disk listing omits serial entirely,
-// where the derived path is the only identifier available.
-func cephMatchDisk(entries []cephDiskEntry, serial string) *cephDiskEntry {
-	for i := range entries {
-		if serial != "" && entries[i].Serial == serial {
-			return &entries[i]
-		}
-	}
-	legacy := cephOSDLegacyByIDPath(serial)
-	for i := range entries {
-		if entries[i].ByIDLink == legacy || entries[i].Devpath == legacy {
-			return &entries[i]
+//  1. the by-id link for that slot (cephOSDByIDForSlot), which udev names
+//     after the drive and PVE reports verbatim;
+//  2. the reported serial (which on PVE 9.2 is the drive name, so this also
+//     catches a listing that gives no by-id link at all);
+//  3. the serial= value, for any build that does surface ID_SCSI_SERIAL;
+//  4. the by-id path this package used to derive from that value.
+//
+// devpath is deliberately never matched on: /dev/sdX ordering does not track
+// slot order. On lab-ceph-2 the kernel names invert, so /dev/sda is
+// drive-scsi1, and a devpath match would hand Ceph the wrong disk.
+func cephMatchDisk(entries []cephDiskEntry, slot int, serial string) *cephDiskEntry {
+	byID := cephOSDByIDForSlot(slot)
+	driveName := fmt.Sprintf("drive-scsi%d", slot)
+	for _, key := range []struct {
+		byIDLink, serial string
+	}{
+		{byIDLink: byID},
+		{serial: driveName},
+		{serial: serial},
+		{byIDLink: cephOSDLegacyByIDPath(serial)},
+	} {
+		for i := range entries {
+			if key.byIDLink != "" && entries[i].ByIDLink == key.byIDLink {
+				return &entries[i]
+			}
+			if key.serial != "" && entries[i].Serial == key.serial {
+				return &entries[i]
+			}
 		}
 	}
 	return nil
@@ -638,16 +681,17 @@ func cephResolveOSDDevices(ctx context.Context, api *apiclient.APIClient,
 			}
 			listings[want.node] = entries
 		}
-		match := cephMatchDisk(entries, want.serial)
+		match := cephMatchDisk(entries, want.slot, want.serial)
 		if match == nil {
 			return nil, fmt.Errorf(
-				"node %s reports no disk with serial %q: the VM likely predates the lab's storage.osd_disks "+
-					"config; attach the disk with `pmx pve qemu disk add`", want.node, want.serial)
+				"node %s reports no disk at %s (nor one with serial %q): the VM likely predates the lab's "+
+					"storage.osd_disks config; attach the disk with `pmx pve qemu disk add`",
+				want.node, cephOSDByIDForSlot(want.slot), want.serial)
 		}
 		// The OSD is created on the path the node itself publishes, never on
-		// one derived from the serial: see cephOSDLegacyByIDPath for the PVE
-		// 9.2 naming that makes deriving it wrong. by-id is still preferred
-		// over devpath because /dev/sdX ordering is not stable across boots.
+		// one derived from the serial: see cephOSDLegacyByIDPath for the
+		// naming that makes deriving it wrong. by-id is still preferred over
+		// devpath because /dev/sdX ordering is not stable across boots.
 		want.byID = match.ByIDLink
 		want.devpath = match.Devpath
 		if want.byID == "" {
@@ -767,8 +811,8 @@ func newCephOsdCmd() *cobra.Command {
 		Long: "Create a Ceph OSD on every disk storage.osd_disks gives a lab's nodes, through the " +
 			"lab's own nested-cluster API context.\n\n" +
 			"Devices are matched, never guessed: each one is found in the node's own disk listing " +
-			"by the serial=osdN value `pmx lab create` pins on it, and its OSD is then created on " +
-			"whatever device path that listing reports for it.\n\n" +
+			"by the SCSI slot `pmx lab create` allocated it (scsi2 and up), and its OSD is then " +
+			"created on whatever device path that listing reports for it.\n\n" +
 			"Idempotent: a device Ceph already owns is reported and left alone, even with --wipe. " +
 			"A device in use by anything else is skipped unless --wipe is given, which destroys all " +
 			"data on it and needs --yes or an interactive confirmation.\n\n" +
@@ -813,10 +857,12 @@ func runCephOsd(cmd *cobra.Command, name string, wipe, yes, dryRun bool) error {
 			if i > 0 {
 				b.WriteString("\n")
 			}
-			// The device path is not known until the node's disk listing is
-			// read, which dry-run deliberately never does, so this names the
-			// disk the way the run itself will match it: by serial.
-			fmt.Fprintf(&b, "[dry-run] would ensure a Ceph OSD on %s at the disk with serial %s", d.node, d.serial)
+			// The device path the OSD is created on is not known until the
+			// node's disk listing is read, which dry-run deliberately never
+			// does, so this names the disk the way the run itself will match
+			// it: by the by-id link of its SCSI slot.
+			fmt.Fprintf(&b, "[dry-run] would ensure a Ceph OSD on %s at %s",
+				d.node, cephOSDByIDForSlot(d.slot))
 		}
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: b.String()}, deps.Format)
 	}
