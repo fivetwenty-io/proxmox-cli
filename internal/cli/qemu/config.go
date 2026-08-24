@@ -582,8 +582,8 @@ func newConfigPendingCmd() *cobra.Command {
 		Use:   "pending <vmid|name>",
 		Short: "Show pending configuration changes for a VM",
 		Long: "List every configuration key together with its current value and any pending " +
-			"(not-yet-applied) value; a key with no pending change shows the same value in " +
-			"both columns.",
+			"(not-yet-applied) value. PVE reports a pending value only for a key that has " +
+			"one, so PENDING-VALUE is empty on every key that is not staged to change.",
 		Example: `  pmx pve qemu config pending 100
   pmx pve qemu config pending web1`,
 		Args: cobra.ExactArgs(1),
