@@ -9,6 +9,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -33,14 +34,14 @@ func newTaskCmd() *cobra.Command {
 
 // taskListEntry is the minimal decoded shape of a node task list entry.
 type taskListEntry struct {
-	UPID      string `json:"upid"`
-	Type      string `json:"type"`
-	ID        string `json:"id"`
-	Node      string `json:"node"`
-	Starttime int64  `json:"starttime"`
-	Endtime   int64  `json:"endtime"`
-	Status    string `json:"status"`
-	User      string `json:"user"`
+	UPID      string     `json:"upid"`
+	Type      string     `json:"type"`
+	ID        string     `json:"id"`
+	Node      string     `json:"node"`
+	Starttime pve.PVEInt `json:"starttime"`
+	Endtime   pve.PVEInt `json:"endtime"`
+	Status    string     `json:"status"`
+	User      string     `json:"user"`
 }
 
 // newTaskListCmd builds `pmx pve node task list <node>`.
@@ -106,8 +107,8 @@ func newTaskListCmd() *cobra.Command {
 						e.Type,
 						e.ID,
 						e.Node,
-						strconv.FormatInt(e.Starttime, 10),
-						strconv.FormatInt(e.Endtime, 10),
+						strconv.FormatInt(int64(e.Starttime), 10),
+						strconv.FormatInt(int64(e.Endtime), 10),
 						e.Status,
 						e.User,
 					})
@@ -131,8 +132,8 @@ func newTaskListCmd() *cobra.Command {
 
 // taskLogLine is the minimal decoded shape of a task log line.
 type taskLogLine struct {
-	N int64  `json:"n"`
-	T string `json:"t"`
+	N pve.PVEInt `json:"n"`
+	T string     `json:"t"`
 }
 
 // newTaskLogCmd builds `pmx pve node task log <node> <upid>`.
@@ -176,7 +177,7 @@ func newTaskLogCmd() *cobra.Command {
 						return fmt.Errorf("decode task log line: %w", err)
 					}
 					lines = append(lines, line)
-					rows = append(rows, []string{strconv.FormatInt(line.N, 10), line.T})
+					rows = append(rows, []string{strconv.FormatInt(int64(line.N), 10), line.T})
 				}
 			}
 

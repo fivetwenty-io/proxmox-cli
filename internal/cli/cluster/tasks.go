@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -14,13 +15,13 @@ import (
 // Starttime is a pointer so an absent value renders as an empty cell rather
 // than a misleading zero.
 type clusterTaskEntry struct {
-	UPID      string `json:"upid"`
-	Node      string `json:"node"`
-	Type      string `json:"type"`
-	ID        string `json:"id"`
-	Starttime *int64 `json:"starttime"`
-	Status    string `json:"status"`
-	User      string `json:"user"`
+	UPID      string      `json:"upid"`
+	Node      string      `json:"node"`
+	Type      string      `json:"type"`
+	ID        string      `json:"id"`
+	Starttime *pve.PVEInt `json:"starttime"`
+	Status    string      `json:"status"`
+	User      string      `json:"user"`
 }
 
 // newTasksCmd builds `pmx pve cluster tasks`.
@@ -53,7 +54,7 @@ func newTasksCmd() *cobra.Command {
 						e.Node,
 						e.Type,
 						e.ID,
-						formatIntPtr(e.Starttime),
+						formatIntPtr((*int64)(e.Starttime)),
 						e.Status,
 						e.User,
 					})

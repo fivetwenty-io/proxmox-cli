@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -443,10 +444,10 @@ func isASCIIDigits(s string) bool {
 // element holds the current committed value and any pending (next-reboot) value
 // for a single config key.
 type lxcPendingEntry struct {
-	Key     string `json:"key"`
-	Value   any    `json:"value"`
-	Pending any    `json:"pending"`
-	Delete  int    `json:"delete"`
+	Key     string     `json:"key"`
+	Value   any        `json:"value"`
+	Pending any        `json:"pending"`
+	Delete  pve.PVEInt `json:"delete"`
 }
 
 // newConfigPendingCmd builds `pmx pve lxc config pending <vmid|name>`.

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // Guest type identifiers. These match the "type" field of a cluster/resources
@@ -32,18 +33,18 @@ func guestLabel(guestType string) string {
 // guestResource is the minimal decoded shape of one cluster/resources entry
 // needed to resolve a guest target to its VMID and the node it runs on.
 type guestResource struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-	Node string `json:"node"`
-	VMID *int64 `json:"vmid"`
-	ID   string `json:"id"`
+	Type string      `json:"type"`
+	Name string      `json:"name"`
+	Node string      `json:"node"`
+	VMID *pve.PVEInt `json:"vmid"`
+	ID   string      `json:"id"`
 }
 
 // vmidString returns the entry's numeric VMID as a string, deriving it from the
 // id suffix (e.g. "qemu/100") when the vmid field is absent.
 func (g guestResource) vmidString() string {
 	if g.VMID != nil {
-		return strconv.FormatInt(*g.VMID, 10)
+		return strconv.FormatInt(int64(*g.VMID), 10)
 	}
 	if i := strings.LastIndex(g.ID, "/"); i >= 0 {
 		return g.ID[i+1:]

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -91,11 +92,11 @@ func newTfaListCmd() *cobra.Command {
 
 // tfaEntry is a single two-factor entry as returned by GET /access/tfa/{userid}.
 type tfaEntry struct {
-	Id          string  `json:"id"`
-	Type        string  `json:"type"`
-	Description string  `json:"description,omitempty"`
-	Created     int64   `json:"created,omitempty"`
-	Enable      pveBool `json:"enable"`
+	Id          string     `json:"id"`
+	Type        string     `json:"type"`
+	Description string     `json:"description,omitempty"`
+	Created     pve.PVEInt `json:"created,omitempty"`
+	Enable      pveBool    `json:"enable"`
 }
 
 // newTfaGetCmd builds `pmx pve access tfa get <userid>`, listing one user's entries.
@@ -124,7 +125,7 @@ func newTfaGetCmd() *cobra.Command {
 				}
 				created := ""
 				if e.Created != 0 {
-					created = strconv.FormatInt(e.Created, 10)
+					created = strconv.FormatInt(int64(e.Created), 10)
 				}
 				rows = append(rows, []string{e.Id, e.Type, e.Description, e.Enable.cell(), created})
 			}

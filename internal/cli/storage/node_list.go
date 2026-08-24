@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -19,14 +20,14 @@ import (
 // endpoint reports the runtime availability and usage of each storage as seen
 // from a single node.
 type nodeStorageEntry struct {
-	Storage string `json:"storage"`
-	Type    string `json:"type"`
-	Content string `json:"content"`
-	Active  int    `json:"active"`
-	Enabled int    `json:"enabled"`
-	Total   int64  `json:"total"`
-	Used    int64  `json:"used"`
-	Avail   int64  `json:"avail"`
+	Storage string     `json:"storage"`
+	Type    string     `json:"type"`
+	Content string     `json:"content"`
+	Active  pve.PVEInt `json:"active"`
+	Enabled pve.PVEInt `json:"enabled"`
+	Total   pve.PVEInt `json:"total"`
+	Used    pve.PVEInt `json:"used"`
+	Avail   pve.PVEInt `json:"avail"`
 }
 
 // newStorageNodeListCmd builds `pmx pve storage node-list` — the storages available
@@ -98,9 +99,9 @@ func newStorageNodeListCmd() *cobra.Command {
 					e.Content,
 					boolCell(e.Active == 1),
 					boolCell(e.Enabled == 1),
-					strconv.FormatInt(e.Total, 10),
-					strconv.FormatInt(e.Used, 10),
-					strconv.FormatInt(e.Avail, 10),
+					strconv.FormatInt(int64(e.Total), 10),
+					strconv.FormatInt(int64(e.Used), 10),
+					strconv.FormatInt(int64(e.Avail), 10),
 				})
 			}
 

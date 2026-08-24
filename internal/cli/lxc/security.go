@@ -14,6 +14,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -172,18 +173,18 @@ func newSecurityShowCmd() *cobra.Command {
 // lxcResource is the minimal decoded shape of one cluster/resources entry used
 // by `security list` to enumerate containers and the nodes they run on.
 type lxcResource struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-	Node string `json:"node"`
-	VMID *int64 `json:"vmid"`
-	ID   string `json:"id"`
+	Type string      `json:"type"`
+	Name string      `json:"name"`
+	Node string      `json:"node"`
+	VMID *pve.PVEInt `json:"vmid"`
+	ID   string      `json:"id"`
 }
 
 // vmidString returns the entry's numeric VMID as a string, deriving it from the
 // id suffix (e.g. "lxc/101") when the vmid field is absent.
 func (r lxcResource) vmidString() string {
 	if r.VMID != nil {
-		return strconv.FormatInt(*r.VMID, 10)
+		return strconv.FormatInt(int64(*r.VMID), 10)
 	}
 	if i := strings.LastIndex(r.ID, "/"); i >= 0 {
 		return r.ID[i+1:]

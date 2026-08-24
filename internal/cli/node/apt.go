@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -270,9 +271,9 @@ func newAptRepositoriesCmd() *cobra.Command {
 // table. status is 1 when the repository is configured and enabled, 0 when
 // configured but disabled, and absent when it is not configured at all.
 type aptStandardRepo struct {
-	Handle string `json:"handle"`
-	Name   string `json:"name"`
-	Status *int64 `json:"status"`
+	Handle string      `json:"handle"`
+	Name   string      `json:"name"`
+	Status *pve.PVEInt `json:"status"`
 }
 
 func aptRepoStatusCell(status *int64) string {
@@ -309,7 +310,7 @@ func newAptReposListCmd() *cobra.Command {
 					if err := json.Unmarshal(raw, &r); err != nil {
 						return fmt.Errorf("decode standard repository entry: %w", err)
 					}
-					rows = append(rows, []string{r.Handle, r.Name, aptRepoStatusCell(r.Status)})
+					rows = append(rows, []string{r.Handle, r.Name, aptRepoStatusCell((*int64)(r.Status))})
 				}
 			}
 			sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })

@@ -138,7 +138,7 @@ func TestFindLabVMs_ClassifiesThreeNodeCluster(t *testing.T) {
 	for i := range 3 {
 		vm, found := nodeLabVM(classified, i)
 		require.True(t, found, "node %d", i)
-		assert.Equal(t, int64(100+i), vm.VMID)
+		assert.Equal(t, int64(100+i), vm.VMID.Int())
 	}
 	_, found := nodeLabVM(classified, 3)
 	assert.False(t, found)
@@ -161,15 +161,15 @@ func TestFindLabVMs_ClassifiesTwoNodePlusQdevice(t *testing.T) {
 
 	vm0, ok := nodeLabVM(classified, 0)
 	require.True(t, ok)
-	assert.Equal(t, int64(200), vm0.VMID)
+	assert.Equal(t, int64(200), vm0.VMID.Int())
 
 	vm1, ok := nodeLabVM(classified, 1)
 	require.True(t, ok)
-	assert.Equal(t, int64(201), vm1.VMID)
+	assert.Equal(t, int64(201), vm1.VMID.Int())
 
 	q, ok := qdeviceLabVM(classified)
 	require.True(t, ok)
-	assert.Equal(t, int64(202), q.VMID)
+	assert.Equal(t, int64(202), q.VMID.Int())
 }
 
 // TestFindLabVMs_LegacyBareNameClassifiesAsNodeZero covers the back-compat
@@ -186,7 +186,7 @@ func TestFindLabVMs_LegacyBareNameClassifiesAsNodeZero(t *testing.T) {
 
 	vm, ok := nodeLabVM(classified, 0)
 	require.True(t, ok)
-	assert.Equal(t, int64(300), vm.VMID)
+	assert.Equal(t, int64(300), vm.VMID.Int())
 }
 
 // TestFindLabVMs_UnclassifiableName_Errors covers a pool member whose name

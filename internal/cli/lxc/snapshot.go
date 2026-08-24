@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -15,10 +16,10 @@ import (
 // lxcSnapshotEntry is the subset of a /nodes/{node}/lxc/{vmid}/snapshot element
 // rendered in the snapshot list table.
 type lxcSnapshotEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Snaptime    int64  `json:"snaptime"`
-	Parent      string `json:"parent"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Snaptime    pve.PVEInt `json:"snaptime"`
+	Parent      string     `json:"parent"`
 }
 
 // newSnapshotCmd builds `pmx pve lxc snapshot` and its sub-commands.
@@ -224,7 +225,7 @@ func newSnapshotListCmd() *cobra.Command {
 			}
 			for _, e := range entries {
 				res.Rows = append(res.Rows, []string{
-					e.Name, e.Description, fmtSnaptime(e.Snaptime), e.Parent,
+					e.Name, e.Description, fmtSnaptime(int64(e.Snaptime)), e.Parent,
 				})
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

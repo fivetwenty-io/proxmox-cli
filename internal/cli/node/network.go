@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -66,14 +67,14 @@ func newNetstatCmd() *cobra.Command {
 // netIfaceEntry is the minimal decoded shape of one network list entry. PVE
 // returns the active/autostart flags as integers (1/0).
 type netIfaceEntry struct {
-	Iface     string `json:"iface"`
-	Type      string `json:"type"`
-	Method    string `json:"method"`
-	Active    int64  `json:"active"`
-	Autostart int64  `json:"autostart"`
-	Cidr      string `json:"cidr"`
-	Address   string `json:"address"`
-	Gateway   string `json:"gateway"`
+	Iface     string     `json:"iface"`
+	Type      string     `json:"type"`
+	Method    string     `json:"method"`
+	Active    pve.PVEInt `json:"active"`
+	Autostart pve.PVEInt `json:"autostart"`
+	Cidr      string     `json:"cidr"`
+	Address   string     `json:"address"`
+	Gateway   string     `json:"gateway"`
 }
 
 func netIfaceHeaders() []string {
@@ -83,7 +84,7 @@ func netIfaceHeaders() []string {
 func netIfaceRow(e netIfaceEntry) []string {
 	return []string{
 		e.Iface, e.Type, e.Method,
-		strconv.FormatInt(e.Active, 10), strconv.FormatInt(e.Autostart, 10),
+		strconv.FormatInt(int64(e.Active), 10), strconv.FormatInt(int64(e.Autostart), 10),
 		e.Cidr, e.Address, e.Gateway,
 	}
 }

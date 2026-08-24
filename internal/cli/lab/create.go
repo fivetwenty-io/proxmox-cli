@@ -84,8 +84,8 @@ type createPoolEntry struct {
 // createQemuEntry is the subset of a /nodes/{node}/qemu element this command
 // needs to find an already-existing lab VM by name.
 type createQemuEntry struct {
-	VMID int64  `json:"vmid"`
-	Name string `json:"name"`
+	VMID pve.PVEInt `json:"vmid"`
+	Name string     `json:"name"`
 }
 
 // createPoolMember is the decoded shape of one entry from
@@ -2195,7 +2195,7 @@ func createFindQemuByName(resp *nodes.ListQemuResponse, name string) (int64, boo
 			return 0, false, err
 		}
 		if e.Name == name {
-			return e.VMID, true, nil
+			return int64(e.VMID), true, nil
 		}
 	}
 	return 0, false, nil
@@ -2215,7 +2215,7 @@ func createFindQemuNameByVMID(resp *nodes.ListQemuResponse, vmid int64) (string,
 		if err := json.Unmarshal(raw, &e); err != nil {
 			return "", false, err
 		}
-		if e.VMID == vmid {
+		if e.VMID.Int() == vmid {
 			return e.Name, true, nil
 		}
 	}

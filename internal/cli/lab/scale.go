@@ -427,7 +427,7 @@ func scaleRenameLegacyNodeZero(ctx context.Context, deps *cli.Deps, lab *config.
 		return "", err
 	}
 
-	vmidStr := strconv.FormatInt(vm.VMID, 10)
+	vmidStr := strconv.FormatInt(int64(vm.VMID), 10)
 	if err := deps.API.Nodes.UpdateQemuConfig(ctx, vm.Node, vmidStr, &nodes.UpdateQemuConfigParams{Name: new(newName)}); err != nil {
 		return "", fmt.Errorf("rename legacy VM %d (%q) to %q on node %q: %w", vm.VMID, legacyName, newName, vm.Node, err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -15,11 +16,11 @@ import (
 // contentEntry is the subset of a /nodes/{node}/storage/{storage}/content
 // element rendered in the content list table.
 type contentEntry struct {
-	Volid  string `json:"volid"`
-	Conten string `json:"content"`
-	Format string `json:"format"`
-	Size   int64  `json:"size"`
-	Vmid   int64  `json:"vmid"`
+	Volid  string     `json:"volid"`
+	Conten string     `json:"content"`
+	Format string     `json:"format"`
+	Size   pve.PVEInt `json:"size"`
+	Vmid   pve.PVEInt `json:"vmid"`
 }
 
 // newContentCmd builds `pmx pve storage content <storage>` — the volumes stored on
@@ -79,10 +80,10 @@ func newContentCmd() *cobra.Command {
 			for _, e := range entries {
 				vmidCell := ""
 				if e.Vmid != 0 {
-					vmidCell = strconv.FormatInt(e.Vmid, 10)
+					vmidCell = strconv.FormatInt(int64(e.Vmid), 10)
 				}
 				res.Rows = append(res.Rows, []string{
-					e.Volid, e.Conten, e.Format, strconv.FormatInt(e.Size, 10), vmidCell,
+					e.Volid, e.Conten, e.Format, strconv.FormatInt(int64(e.Size), 10), vmidCell,
 				})
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

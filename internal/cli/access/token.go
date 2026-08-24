@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -30,10 +31,10 @@ func newTokenCmd() *cobra.Command {
 
 // tokenListEntry is a single row of the GET /access/users/{userid}/token list.
 type tokenListEntry struct {
-	Tokenid string  `json:"tokenid"`
-	Expire  *int64  `json:"expire,omitempty"`
-	Privsep pveBool `json:"privsep"`
-	Comment string  `json:"comment,omitempty"`
+	Tokenid string      `json:"tokenid"`
+	Expire  *pve.PVEInt `json:"expire,omitempty"`
+	Privsep pveBool     `json:"privsep"`
+	Comment string      `json:"comment,omitempty"`
 }
 
 // newTokenListCmd builds `pmx pve access user token list <userid>`.
@@ -61,7 +62,7 @@ func newTokenListCmd() *cobra.Command {
 				if err := json.Unmarshal(raw, &e); err != nil {
 					return fmt.Errorf("decode token entry: %w", err)
 				}
-				rows = append(rows, []string{e.Tokenid, intCell(e.Expire), e.Privsep.cell(), e.Comment})
+				rows = append(rows, []string{e.Tokenid, intCell((*int64)(e.Expire)), e.Privsep.cell(), e.Comment})
 			}
 
 			result := output.Result{

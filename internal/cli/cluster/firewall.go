@@ -41,15 +41,15 @@ func newFirewallCmd() *cobra.Command {
 
 // fwRuleEntry is the minimal decoded shape of one firewall rule list entry.
 type fwRuleEntry struct {
-	Pos     int64  `json:"pos"`
-	Type    string `json:"type"`
-	Action  string `json:"action"`
-	Proto   string `json:"proto"`
-	Source  string `json:"source"`
-	Dest    string `json:"dest"`
-	Dport   string `json:"dport"`
-	Enable  int64  `json:"enable"`
-	Comment string `json:"comment"`
+	Pos     pve.PVEInt `json:"pos"`
+	Type    string     `json:"type"`
+	Action  string     `json:"action"`
+	Proto   string     `json:"proto"`
+	Source  string     `json:"source"`
+	Dest    string     `json:"dest"`
+	Dport   string     `json:"dport"`
+	Enable  pve.PVEInt `json:"enable"`
+	Comment string     `json:"comment"`
 }
 
 func fwRuleHeaders() []string {
@@ -58,9 +58,9 @@ func fwRuleHeaders() []string {
 
 func fwRuleRow(e fwRuleEntry) []string {
 	return []string{
-		strconv.FormatInt(e.Pos, 10),
+		strconv.FormatInt(int64(e.Pos), 10),
 		e.Type, e.Action, e.Proto, e.Source, e.Dest, e.Dport,
-		strconv.FormatInt(e.Enable, 10), e.Comment,
+		strconv.FormatInt(int64(e.Enable), 10), e.Comment,
 	}
 }
 

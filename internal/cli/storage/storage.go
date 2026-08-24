@@ -14,6 +14,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/clusterstorage"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // Group builds the `pmx pve storage` command and all of its sub-commands.
@@ -83,15 +84,15 @@ func Group(_ *cli.Deps) *cobra.Command {
 // Storage definitions are returned by the API as untyped objects, so fields are
 // decoded individually and absent fields render as empty cells.
 type storageEntry struct {
-	Storage string `json:"storage"`
-	Type    string `json:"type"`
-	Content string `json:"content"`
-	Path    string `json:"path"`
-	Server  string `json:"server"`
-	Export  string `json:"export"`
-	Nodes   string `json:"nodes"`
-	Shared  int    `json:"shared"`
-	Disable int    `json:"disable"`
+	Storage string     `json:"storage"`
+	Type    string     `json:"type"`
+	Content string     `json:"content"`
+	Path    string     `json:"path"`
+	Server  string     `json:"server"`
+	Export  string     `json:"export"`
+	Nodes   string     `json:"nodes"`
+	Shared  pve.PVEInt `json:"shared"`
+	Disable pve.PVEInt `json:"disable"`
 }
 
 // pathOrServer returns the most descriptive location field for a storage entry:

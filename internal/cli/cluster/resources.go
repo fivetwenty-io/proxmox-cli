@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -17,15 +18,15 @@ import (
 // cluster.ListResources. Numeric usage fields are pointers so an absent value
 // renders as an empty cell rather than a misleading zero.
 type clusterResourceEntry struct {
-	Type   string   `json:"type"`
-	ID     string   `json:"id"`
-	Node   string   `json:"node"`
-	Name   string   `json:"name"`
-	Status string   `json:"status"`
-	Cpu    *float64 `json:"cpu"`
-	Mem    *int64   `json:"mem"`
-	Disk   *int64   `json:"disk"`
-	Uptime *int64   `json:"uptime"`
+	Type   string        `json:"type"`
+	ID     string        `json:"id"`
+	Node   string        `json:"node"`
+	Name   string        `json:"name"`
+	Status string        `json:"status"`
+	Cpu    *pve.PVEFloat `json:"cpu"`
+	Mem    *pve.PVEInt   `json:"mem"`
+	Disk   *pve.PVEInt   `json:"disk"`
+	Uptime *pve.PVEInt   `json:"uptime"`
 }
 
 // newResourcesCmd builds `pmx pve cluster resources`.
@@ -69,10 +70,10 @@ func newResourcesCmd() *cobra.Command {
 						e.Node,
 						e.Name,
 						e.Status,
-						formatFloatPtr(e.Cpu),
-						formatIntPtr(e.Mem),
-						formatIntPtr(e.Disk),
-						formatIntPtr(e.Uptime),
+						formatFloatPtr((*float64)(e.Cpu)),
+						formatIntPtr((*int64)(e.Mem)),
+						formatIntPtr((*int64)(e.Disk)),
+						formatIntPtr((*int64)(e.Uptime)),
 					})
 				}
 			}

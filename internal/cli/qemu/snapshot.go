@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -34,11 +35,11 @@ func newSnapshotCmd() *cobra.Command {
 
 // snapshotEntry is the minimal decoded shape of one entry from nodes.ListQemuSnapshot.
 type snapshotEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Snaptime    int64  `json:"snaptime"`
-	Vmstate     int64  `json:"vmstate"`
-	Parent      string `json:"parent"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Snaptime    pve.PVEInt `json:"snaptime"`
+	Vmstate     pve.PVEInt `json:"vmstate"`
+	Parent      string     `json:"parent"`
 }
 
 // newSnapshotListCmd builds `pmx pve qemu snapshot list <vmid>`.
@@ -75,13 +76,13 @@ func newSnapshotListCmd() *cobra.Command {
 					entries = append(entries, e)
 					snaptime := ""
 					if e.Snaptime != 0 {
-						snaptime = strconv.FormatInt(e.Snaptime, 10)
+						snaptime = strconv.FormatInt(int64(e.Snaptime), 10)
 					}
 					rows = append(rows, []string{
 						e.Name,
 						e.Description,
 						snaptime,
-						strconv.FormatInt(e.Vmstate, 10),
+						strconv.FormatInt(int64(e.Vmstate), 10),
 						e.Parent,
 					})
 				}

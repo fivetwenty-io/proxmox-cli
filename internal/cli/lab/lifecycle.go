@@ -13,6 +13,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
@@ -27,12 +28,12 @@ import (
 // returns lxc guests under type=vm; Type is kept so callers can filter those
 // out.
 type labVM struct {
-	VMID   int64  `json:"vmid"`
-	Node   string `json:"node"`
-	Pool   string `json:"pool"`
-	Status string `json:"status"`
-	Type   string `json:"type"`
-	Name   string `json:"name"`
+	VMID   pve.PVEInt `json:"vmid"`
+	Node   string     `json:"node"`
+	Pool   string     `json:"pool"`
+	Status string     `json:"status"`
+	Type   string     `json:"type"`
+	Name   string     `json:"name"`
 }
 
 // listLiveVMs queries GET /cluster/resources for every QEMU guest in the
@@ -301,7 +302,7 @@ func newListCmd() *cobra.Command {
 
 				vmidStr, node, status := "", "", "absent"
 				if vm, found := nodeLabVM(classified, 0); found {
-					vmidStr = strconv.FormatInt(vm.VMID, 10)
+					vmidStr = strconv.FormatInt(int64(vm.VMID), 10)
 					node = vm.Node
 					status = vm.Status
 				}
@@ -438,7 +439,7 @@ func statusRow(ctx context.Context, deps *cli.Deps, l *config.Lab, tgt lifecycle
 		return []string{tgt.label, "", "", "absent", configuredIP, configuredIP6, "n/a", vcpu, memMaxGB, ""}, nil
 	}
 
-	vmid := strconv.FormatInt(vm.VMID, 10)
+	vmid := strconv.FormatInt(int64(vm.VMID), 10)
 
 	current, err := deps.API.Nodes.ListQemuStatusCurrent(ctx, vm.Node, vmid)
 	if err != nil {
@@ -632,11 +633,11 @@ func runLifecycleMutate(cmd *cobra.Command, name string, dryRun bool, nodeFlag s
 		}
 		anyFound = true
 
-		if err := guardVMID(l, vm.VMID); err != nil {
+		if err := guardVMID(l, int64(vm.VMID)); err != nil {
 			return err
 		}
 
-		vmid := strconv.FormatInt(vm.VMID, 10)
+		vmid := strconv.FormatInt(int64(vm.VMID), 10)
 
 		current, err := deps.API.Nodes.ListQemuStatusCurrent(cmd.Context(), vm.Node, vmid)
 		if err != nil {

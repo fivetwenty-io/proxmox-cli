@@ -9,16 +9,17 @@ import (
 	"strings"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 )
 
 // storageResource is the minimal decoded shape of one cluster/resources entry
 // of type "storage": which storage is visible on which node, whether it is
 // currently usable there, and whether every node sees the same contents.
 type storageResource struct {
-	Storage string `json:"storage"`
-	Node    string `json:"node"`
-	Status  string `json:"status"`
-	Shared  int    `json:"shared"`
+	Storage string     `json:"storage"`
+	Node    string     `json:"node"`
+	Status  string     `json:"status"`
+	Shared  pve.PVEInt `json:"shared"`
 }
 
 // ResolveStorageNode maps a storage identifier to a node that can serve it.

@@ -9,6 +9,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -17,13 +18,13 @@ import (
 // or a cluster/resources VM entry. Type is only present in cluster/resources
 // entries and is used to keep qemu guests and drop lxc ones.
 type qemuListEntry struct {
-	VMID   int64  `json:"vmid"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
-	Mem    int64  `json:"mem"`
-	PID    int64  `json:"pid"`
-	Node   string `json:"node"`
-	Type   string `json:"type"`
+	VMID   pve.PVEInt `json:"vmid"`
+	Name   string     `json:"name"`
+	Status string     `json:"status"`
+	Mem    pve.PVEInt `json:"mem"`
+	PID    pve.PVEInt `json:"pid"`
+	Node   string     `json:"node"`
+	Type   string     `json:"type"`
 }
 
 // newListCmd builds `pmx pve qemu list`.
@@ -75,13 +76,13 @@ func newListCmd() *cobra.Command {
 					rawAll = append(rawAll, raw)
 					pid := ""
 					if e.PID != 0 {
-						pid = strconv.FormatInt(e.PID, 10)
+						pid = strconv.FormatInt(int64(e.PID), 10)
 					}
 					rows = append(rows, []string{
-						strconv.FormatInt(e.VMID, 10),
+						strconv.FormatInt(int64(e.VMID), 10),
 						e.Name,
 						e.Status,
-						strconv.FormatInt(e.Mem, 10),
+						strconv.FormatInt(int64(e.Mem), 10),
 						pid,
 						e.Node,
 					})

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -42,13 +43,13 @@ func newDisksCmd() *cobra.Command {
 // table. The full element (including wwn, gpt, rpm, vendor, and partitions) is
 // preserved in the JSON/Raw output.
 type diskListEntry struct {
-	Devpath string  `json:"devpath"`
-	Type    string  `json:"type"`
-	Size    float64 `json:"size"`
-	Model   string  `json:"model"`
-	Serial  string  `json:"serial"`
-	Health  string  `json:"health"`
-	Used    string  `json:"used"`
+	Devpath string       `json:"devpath"`
+	Type    string       `json:"type"`
+	Size    pve.PVEFloat `json:"size"`
+	Model   string       `json:"model"`
+	Serial  string       `json:"serial"`
+	Health  string       `json:"health"`
+	Used    string       `json:"used"`
 }
 
 func diskSizeCell(size float64) string {
@@ -102,7 +103,7 @@ func newDisksListCmd() *cobra.Command {
 						return fmt.Errorf("decode disk entry: %w", err)
 					}
 					rows = append(rows, []string{
-						e.Devpath, e.Type, diskSizeCell(e.Size), e.Model, e.Serial, e.Health, e.Used,
+						e.Devpath, e.Type, diskSizeCell(float64(e.Size)), e.Model, e.Serial, e.Health, e.Used,
 					})
 				}
 			}

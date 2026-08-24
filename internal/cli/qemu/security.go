@@ -14,6 +14,7 @@ import (
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -641,16 +642,16 @@ func newSecurityShowCmd() *cobra.Command {
 // qemuResource is the minimal decoded shape of one cluster/resources entry
 // used by `security list` to enumerate VMs and the nodes they run on.
 type qemuResource struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-	Node string `json:"node"`
-	VMID *int64 `json:"vmid"`
-	ID   string `json:"id"`
+	Type string      `json:"type"`
+	Name string      `json:"name"`
+	Node string      `json:"node"`
+	VMID *pve.PVEInt `json:"vmid"`
+	ID   string      `json:"id"`
 }
 
 func (r qemuResource) vmidString() string {
 	if r.VMID != nil {
-		return strconv.FormatInt(*r.VMID, 10)
+		return strconv.FormatInt(int64(*r.VMID), 10)
 	}
 	if i := strings.LastIndex(r.ID, "/"); i >= 0 {
 		return r.ID[i+1:]

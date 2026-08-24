@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/access"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -33,14 +34,14 @@ func newUserCmd() *cobra.Command {
 // userListEntry is a single row of the GET /access/users response, which the
 // generated client returns as a slice of raw JSON objects.
 type userListEntry struct {
-	Userid    string  `json:"userid"`
-	Enable    pveBool `json:"enable"`
-	Expire    *int64  `json:"expire,omitempty"`
-	Firstname string  `json:"firstname,omitempty"`
-	Lastname  string  `json:"lastname,omitempty"`
-	Email     string  `json:"email,omitempty"`
-	Comment   string  `json:"comment,omitempty"`
-	Groups    string  `json:"groups,omitempty"`
+	Userid    string      `json:"userid"`
+	Enable    pveBool     `json:"enable"`
+	Expire    *pve.PVEInt `json:"expire,omitempty"`
+	Firstname string      `json:"firstname,omitempty"`
+	Lastname  string      `json:"lastname,omitempty"`
+	Email     string      `json:"email,omitempty"`
+	Comment   string      `json:"comment,omitempty"`
+	Groups    string      `json:"groups,omitempty"`
 }
 
 // newUserListCmd builds `pmx pve access user list`.
@@ -78,7 +79,7 @@ func newUserListCmd() *cobra.Command {
 					return fmt.Errorf("decode user entry: %w", err)
 				}
 				rows = append(rows, []string{
-					e.Userid, e.Enable.cell(), intCell(e.Expire),
+					e.Userid, e.Enable.cell(), intCell((*int64)(e.Expire)),
 					e.Firstname, e.Lastname, e.Email, e.Comment, e.Groups,
 				})
 			}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -13,14 +14,14 @@ import (
 
 // nodeListEntry is the minimal decoded shape of one entry from nodes.ListNodes.
 type nodeListEntry struct {
-	Node           string  `json:"node"`
-	Status         string  `json:"status"`
-	Cpu            float64 `json:"cpu"`
-	Maxcpu         int64   `json:"maxcpu"`
-	Mem            int64   `json:"mem"`
-	Maxmem         int64   `json:"maxmem"`
-	Uptime         int64   `json:"uptime"`
-	SSLFingerprint string  `json:"ssl_fingerprint"`
+	Node           string       `json:"node"`
+	Status         string       `json:"status"`
+	Cpu            pve.PVEFloat `json:"cpu"`
+	Maxcpu         pve.PVEInt   `json:"maxcpu"`
+	Mem            pve.PVEInt   `json:"mem"`
+	Maxmem         pve.PVEInt   `json:"maxmem"`
+	Uptime         pve.PVEInt   `json:"uptime"`
+	SSLFingerprint string       `json:"ssl_fingerprint"`
 }
 
 // newListCmd builds `pmx pve node list`.
@@ -53,11 +54,11 @@ func newListCmd() *cobra.Command {
 					rows = append(rows, []string{
 						e.Node,
 						e.Status,
-						strconv.FormatFloat(e.Cpu, 'f', 3, 64),
-						strconv.FormatInt(e.Maxcpu, 10),
-						strconv.FormatInt(e.Mem, 10),
-						strconv.FormatInt(e.Maxmem, 10),
-						strconv.FormatInt(e.Uptime, 10),
+						strconv.FormatFloat(float64(e.Cpu), 'f', 3, 64),
+						strconv.FormatInt(int64(e.Maxcpu), 10),
+						strconv.FormatInt(int64(e.Mem), 10),
+						strconv.FormatInt(int64(e.Maxmem), 10),
+						strconv.FormatInt(int64(e.Uptime), 10),
 						e.SSLFingerprint,
 					})
 				}

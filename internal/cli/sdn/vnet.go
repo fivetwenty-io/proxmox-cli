@@ -8,16 +8,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
 // vnetEntry is the subset of a /cluster/sdn/vnets element rendered in the list.
 type vnetEntry struct {
-	Vnet  string `json:"vnet"`
-	Zone  string `json:"zone"`
-	Tag   int64  `json:"tag"`
-	Alias string `json:"alias"`
+	Vnet  string     `json:"vnet"`
+	Zone  string     `json:"zone"`
+	Tag   pve.PVEInt `json:"tag"`
+	Alias string     `json:"alias"`
 }
 
 // newVnetCmd builds `pmx pve sdn vnet` and its sub-commands.
@@ -339,7 +340,7 @@ func newVnetListCmd() *cobra.Command {
 			for _, e := range entries {
 				tag := ""
 				if e.Tag != 0 {
-					tag = strconv.FormatInt(e.Tag, 10)
+					tag = strconv.FormatInt(int64(e.Tag), 10)
 				}
 				res.Rows = append(res.Rows, []string{e.Vnet, e.Zone, tag, e.Alias})
 			}

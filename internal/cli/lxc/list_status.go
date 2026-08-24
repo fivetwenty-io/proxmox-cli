@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
@@ -21,12 +22,12 @@ type lxcListEntry struct {
 	VMID    json.Number `json:"vmid"`
 	Name    string      `json:"name"`
 	Status  string      `json:"status"`
-	Mem     int64       `json:"mem"`
-	Swap    int64       `json:"swap"`
-	Maxmem  int64       `json:"maxmem"`
-	Disk    int64       `json:"disk"`
-	Maxdisk int64       `json:"maxdisk"`
-	Uptime  int64       `json:"uptime"`
+	Mem     pve.PVEInt  `json:"mem"`
+	Swap    pve.PVEInt  `json:"swap"`
+	Maxmem  pve.PVEInt  `json:"maxmem"`
+	Disk    pve.PVEInt  `json:"disk"`
+	Maxdisk pve.PVEInt  `json:"maxdisk"`
+	Uptime  pve.PVEInt  `json:"uptime"`
 	Node    string      `json:"node,omitempty"`
 	Type    string      `json:"type,omitempty"`
 }
@@ -112,8 +113,8 @@ func newListCmd() *cobra.Command {
 			for _, e := range entries {
 				res.Rows = append(res.Rows, []string{
 					e.VMID.String(), e.Name, e.Status,
-					fmtBytes(e.Mem), fmtBytes(e.Swap), fmtBytes(e.Maxmem),
-					fmtBytes(e.Disk), fmtUptime(e.Uptime), e.Node,
+					fmtBytes(int64(e.Mem)), fmtBytes(int64(e.Swap)), fmtBytes(int64(e.Maxmem)),
+					fmtBytes(int64(e.Disk)), fmtUptime(int64(e.Uptime)), e.Node,
 				})
 			}
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)

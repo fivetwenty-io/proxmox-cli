@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -15,14 +16,14 @@ import (
 
 // nodeMemUsage decodes the memory/rootfs sub-objects of a node status response.
 type nodeMemUsage struct {
-	Total int64 `json:"total"`
-	Used  int64 `json:"used"`
+	Total pve.PVEInt `json:"total"`
+	Used  pve.PVEInt `json:"used"`
 }
 
 // nodeCPUInfo decodes the cpuinfo sub-object of a node status response.
 type nodeCPUInfo struct {
-	Model string `json:"model"`
-	Cpus  int64  `json:"cpus"`
+	Model string     `json:"model"`
+	Cpus  pve.PVEInt `json:"cpus"`
 }
 
 // nodeKernel decodes the current-kernel sub-object of a node status response.
@@ -64,10 +65,10 @@ func newStatusCmd() *cobra.Command {
 				single["LOADAVG"] = resp.Loadavg[0]
 			}
 			if mem, ok := decodeMemUsage(resp.Memory); ok {
-				single["MEM"] = fmt.Sprintf("%s / %s", fmtBytes(mem.Used), fmtBytes(mem.Total))
+				single["MEM"] = fmt.Sprintf("%s / %s", fmtBytes(int64(mem.Used)), fmtBytes(int64(mem.Total)))
 			}
 			if disk, ok := decodeMemUsage(resp.Rootfs); ok {
-				single["DISK"] = fmt.Sprintf("%s / %s", fmtBytes(disk.Used), fmtBytes(disk.Total))
+				single["DISK"] = fmt.Sprintf("%s / %s", fmtBytes(int64(disk.Used)), fmtBytes(int64(disk.Total)))
 			}
 			if ci, ok := decodeCPUInfo(resp.Cpuinfo); ok {
 				single["CPUINFO"] = fmt.Sprintf("%s (%d cpus)", ci.Model, ci.Cpus)

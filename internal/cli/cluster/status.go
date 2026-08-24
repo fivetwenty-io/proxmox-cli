@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -16,14 +17,14 @@ import (
 // membership). Fields not relevant to a given entry type stay at their zero
 // value.
 type clusterStatusEntry struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	ID      string `json:"id"`
-	Online  int    `json:"online"`
-	Level   string `json:"level"`
-	NodeID  int    `json:"nodeid"`
-	Nodes   int    `json:"nodes"`
-	Quorate int    `json:"quorate"`
+	Type    string     `json:"type"`
+	Name    string     `json:"name"`
+	ID      string     `json:"id"`
+	Online  pve.PVEInt `json:"online"`
+	Level   string     `json:"level"`
+	NodeID  pve.PVEInt `json:"nodeid"`
+	Nodes   pve.PVEInt `json:"nodes"`
+	Quorate pve.PVEInt `json:"quorate"`
 }
 
 // newStatusCmd builds `pmx pve cluster status`.
@@ -55,11 +56,11 @@ func newStatusCmd() *cobra.Command {
 						e.Name,
 						e.Type,
 						e.ID,
-						strconv.Itoa(e.Online),
+						strconv.Itoa(int(e.Online)),
 						e.Level,
-						strconv.Itoa(e.NodeID),
-						strconv.Itoa(e.Nodes),
-						strconv.Itoa(e.Quorate),
+						strconv.Itoa(int(e.NodeID)),
+						strconv.Itoa(int(e.Nodes)),
+						strconv.Itoa(int(e.Quorate)),
 					})
 				}
 			}

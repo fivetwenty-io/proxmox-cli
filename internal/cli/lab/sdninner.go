@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -377,9 +378,9 @@ type sdnInnerVlanZoneState struct {
 // /cluster/sdn/vnets/<id> --output-format json` response this command needs
 // to decide whether an inner vlan-zone vnet has drifted.
 type sdnInnerVlanVnetState struct {
-	Zone  string `json:"zone"`
-	Tag   int    `json:"tag"`
-	Alias string `json:"alias"`
+	Zone  string     `json:"zone"`
+	Tag   pve.PVEInt `json:"tag"`
+	Alias string     `json:"alias"`
 }
 
 // sdnInnerVlanSubnetState is the subset of one element of a `pvesh get
@@ -524,7 +525,7 @@ func sdnEnsureVlanVnet(deps *cli.Deps, name, node0IP, zoneName string, v config.
 		if uerr := json.Unmarshal([]byte(probe.Stdout), &existing); uerr != nil {
 			return false, nil, fmt.Errorf("lab %q: decode existing inner vlan sdn vnet %q on node 0: %w", name, v.ID, uerr)
 		}
-		drift := existing.Zone != zoneName || existing.Tag != v.Tag || (v.Alias != "" && existing.Alias != v.Alias)
+		drift := existing.Zone != zoneName || existing.Tag.Int() != int64(v.Tag) || (v.Alias != "" && existing.Alias != v.Alias)
 		if !drift {
 			return false, []string{stepLabel, fmt.Sprintf("sdn vnet %q already matches on node 0", v.ID)}, nil
 		}

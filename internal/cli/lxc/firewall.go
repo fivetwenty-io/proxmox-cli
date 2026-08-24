@@ -40,8 +40,8 @@ func newFirewallCmd() *cobra.Command {
 // fwLogEntry is the decoded shape of one firewall log line: a line number and
 // the log text.
 type fwLogEntry struct {
-	N int64  `json:"n"`
-	T string `json:"t"`
+	N pve.PVEInt `json:"n"`
+	T string     `json:"t"`
 }
 
 // newFirewallLogCmd builds `pmx pve lxc firewall log <vmid|name>` — the per-container
@@ -93,7 +93,7 @@ func newFirewallLogCmd() *cobra.Command {
 						return fmt.Errorf("decode firewall log entry: %w", err)
 					}
 					entries = append(entries, e)
-					rows = append(rows, []string{strconv.FormatInt(e.N, 10), e.T})
+					rows = append(rows, []string{strconv.FormatInt(int64(e.N), 10), e.T})
 				}
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
@@ -172,15 +172,15 @@ func anyFlagChanged(fl interface{ Changed(string) bool }, names ...string) bool 
 
 // fwRuleEntry is the minimal decoded shape of one firewall rule list entry.
 type fwRuleEntry struct {
-	Pos     int64  `json:"pos"`
-	Type    string `json:"type"`
-	Action  string `json:"action"`
-	Proto   string `json:"proto"`
-	Source  string `json:"source"`
-	Dest    string `json:"dest"`
-	Dport   string `json:"dport"`
-	Enable  int64  `json:"enable"`
-	Comment string `json:"comment"`
+	Pos     pve.PVEInt `json:"pos"`
+	Type    string     `json:"type"`
+	Action  string     `json:"action"`
+	Proto   string     `json:"proto"`
+	Source  string     `json:"source"`
+	Dest    string     `json:"dest"`
+	Dport   string     `json:"dport"`
+	Enable  pve.PVEInt `json:"enable"`
+	Comment string     `json:"comment"`
 }
 
 func newFirewallRulesCmd() *cobra.Command {
@@ -230,9 +230,9 @@ func newFirewallRulesListCmd() *cobra.Command {
 					}
 					entries = append(entries, e)
 					rows = append(rows, []string{
-						strconv.FormatInt(e.Pos, 10),
+						strconv.FormatInt(int64(e.Pos), 10),
 						e.Type, e.Action, e.Proto, e.Source, e.Dest, e.Dport,
-						strconv.FormatInt(e.Enable, 10), e.Comment,
+						strconv.FormatInt(int64(e.Enable), 10), e.Comment,
 					})
 				}
 			}

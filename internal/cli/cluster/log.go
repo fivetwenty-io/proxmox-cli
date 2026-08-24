@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -16,9 +17,9 @@ import (
 // Pointer fields render as an empty cell when the API omits them rather than as
 // a misleading zero.
 type clusterLogEntry struct {
-	Time *int64 `json:"time"`
-	Node string `json:"node"`
-	Pid  *int64 `json:"pid"`
+	Time *pve.PVEInt `json:"time"`
+	Node string      `json:"node"`
+	Pid  *pve.PVEInt `json:"pid"`
 	// Uid is decoded as raw JSON because PVE renders it inconsistently: some
 	// entries carry a numeric uid, others a string (a username or "0"). A typed
 	// *int64 fails to decode the string form, so scalarCell normalizes both.
@@ -76,9 +77,9 @@ func newLogCmd() *cobra.Command {
 						return fmt.Errorf("decode cluster log entry: %w", err)
 					}
 					rows = append(rows, []string{
-						formatIntPtr(e.Time),
+						formatIntPtr((*int64)(e.Time)),
 						e.Node,
-						formatIntPtr(e.Pid),
+						formatIntPtr((*int64)(e.Pid)),
 						scalarCell(e.Uid),
 						e.Tag,
 						e.Msg,

@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -828,22 +829,22 @@ func hostnetEnsureNICNaming(deps *cli.Deps, name, nodeName string, idx int, node
 // vmbr0 flipped from `inet static` (with address+gateway) to `inet
 // manual` after an UpdateNetwork2 call that specified neither field.
 type hostnetIfaceState struct {
-	Iface           string `json:"iface"`
-	Type            string `json:"type"`
-	Slaves          string `json:"slaves"`
-	BondMode        string `json:"bond_mode"`
-	BondPrimary     string `json:"bond-primary"`
-	BridgePorts     string `json:"bridge_ports"`
-	BridgeVlanAware int64  `json:"bridge_vlan_aware"`
-	Autostart       int64  `json:"autostart"`
-	Cidr            string `json:"cidr"`
-	Address         string `json:"address"`
-	Netmask         string `json:"netmask"`
-	Gateway         string `json:"gateway"`
-	Cidr6           string `json:"cidr6"`
-	Address6        string `json:"address6"`
-	Netmask6        string `json:"netmask6"`
-	Gateway6        string `json:"gateway6"`
+	Iface           string     `json:"iface"`
+	Type            string     `json:"type"`
+	Slaves          string     `json:"slaves"`
+	BondMode        string     `json:"bond_mode"`
+	BondPrimary     string     `json:"bond-primary"`
+	BridgePorts     string     `json:"bridge_ports"`
+	BridgeVlanAware pve.PVEInt `json:"bridge_vlan_aware"`
+	Autostart       pve.PVEInt `json:"autostart"`
+	Cidr            string     `json:"cidr"`
+	Address         string     `json:"address"`
+	Netmask         string     `json:"netmask"`
+	Gateway         string     `json:"gateway"`
+	Cidr6           string     `json:"cidr6"`
+	Address6        string     `json:"address6"`
+	Netmask6        string     `json:"netmask6"`
+	Gateway6        string     `json:"gateway6"`
 }
 
 // hostnetDecodeInterfaces decodes every entry of list into a hostnetIfaceState,

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/optionschema"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -16,15 +17,15 @@ import (
 // vnetFwRuleEntry is the minimal decoded shape of one vnet firewall rule list
 // entry; the full element is preserved in Raw for lossless output.
 type vnetFwRuleEntry struct {
-	Pos     int64  `json:"pos"`
-	Type    string `json:"type"`
-	Action  string `json:"action"`
-	Proto   string `json:"proto"`
-	Source  string `json:"source"`
-	Dest    string `json:"dest"`
-	Dport   string `json:"dport"`
-	Enable  int64  `json:"enable"`
-	Comment string `json:"comment"`
+	Pos     pve.PVEInt `json:"pos"`
+	Type    string     `json:"type"`
+	Action  string     `json:"action"`
+	Proto   string     `json:"proto"`
+	Source  string     `json:"source"`
+	Dest    string     `json:"dest"`
+	Dport   string     `json:"dport"`
+	Enable  pve.PVEInt `json:"enable"`
+	Comment string     `json:"comment"`
 }
 
 // vnetRuleFlags collects the shared flag values for vnet firewall rule
@@ -245,8 +246,8 @@ func newVnetFirewallRulesListCmd() *cobra.Command {
 				}
 				entries = append(entries, e)
 				rows = append(rows, []string{
-					strconv.FormatInt(e.Pos, 10), e.Type, e.Action, e.Proto,
-					e.Source, e.Dest, e.Dport, strconv.FormatInt(e.Enable, 10), e.Comment,
+					strconv.FormatInt(int64(e.Pos), 10), e.Type, e.Action, e.Proto,
+					e.Source, e.Dest, e.Dport, strconv.FormatInt(int64(e.Enable), 10), e.Comment,
 				})
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),

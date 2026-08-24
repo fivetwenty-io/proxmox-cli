@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/permshared"
@@ -233,20 +234,20 @@ func sdnPreviewHasChanges(preview *cluster.ListSdnDryRunResponse) bool {
 // sdnZoneState is the subset of a /cluster/sdn/zones element net apply reads
 // to decide whether labZoneName exists and matches expectations.
 type sdnZoneState struct {
-	Zone  string `json:"zone"`
-	Type  string `json:"type"`
-	Mtu   int64  `json:"mtu"`
-	Nodes string `json:"nodes"`
-	Peers string `json:"peers"`
+	Zone  string     `json:"zone"`
+	Type  string     `json:"type"`
+	Mtu   pve.PVEInt `json:"mtu"`
+	Nodes string     `json:"nodes"`
+	Peers string     `json:"peers"`
 }
 
 // sdnVnetState is the subset of a /cluster/sdn/vnets element net apply reads
 // to decide whether a lab's vnet exists and matches expectations.
 type sdnVnetState struct {
-	Vnet  string `json:"vnet"`
-	Zone  string `json:"zone"`
-	Tag   int64  `json:"tag"`
-	Alias string `json:"alias"`
+	Vnet  string     `json:"vnet"`
+	Zone  string     `json:"zone"`
+	Tag   pve.PVEInt `json:"tag"`
+	Alias string     `json:"alias"`
 }
 
 // sdnSubnetState is the subset of a /cluster/sdn/vnets/{vnet}/subnets
@@ -371,7 +372,7 @@ func ensureLabSdnZone(ctx context.Context, api *apiclient.APIClient, net config.
 	params := &cluster.UpdateSdnZonesParams{}
 	changed := false
 
-	if mtu > 0 && existing.Mtu != mtu {
+	if mtu > 0 && existing.Mtu.Int() != mtu {
 		params.Mtu = new(mtu)
 		changed = true
 	}
@@ -473,7 +474,7 @@ func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneN
 			params.Zone = new(zoneName)
 			changed = true
 		}
-		if tagAllowed && tag64 != 0 && existing.Tag != tag64 {
+		if tagAllowed && tag64 != 0 && existing.Tag.Int() != tag64 {
 			params.Tag = new(tag64)
 			changed = true
 		}

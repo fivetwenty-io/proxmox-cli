@@ -9,6 +9,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -159,14 +160,14 @@ func newListCmd() *cobra.Command {
 
 // taskEntry is the subset of a task list entry rendered by `task list`.
 type taskEntry struct {
-	UPID      string `json:"upid"`
-	Type      string `json:"type"`
-	ID        string `json:"id"`
-	Node      string `json:"node"`
-	StartTime int64  `json:"starttime"`
-	EndTime   int64  `json:"endtime"`
-	Status    string `json:"status"`
-	User      string `json:"user"`
+	UPID      string     `json:"upid"`
+	Type      string     `json:"type"`
+	ID        string     `json:"id"`
+	Node      string     `json:"node"`
+	StartTime pve.PVEInt `json:"starttime"`
+	EndTime   pve.PVEInt `json:"endtime"`
+	Status    string     `json:"status"`
+	User      string     `json:"user"`
 }
 
 // buildTaskListResult converts the raw task list response into a renderable
@@ -197,8 +198,8 @@ func buildTaskRowsFromRaw(raws []json.RawMessage) (output.Result, error) {
 			e.Type,
 			e.ID,
 			e.Node,
-			formatTimestamp(e.StartTime),
-			formatTimestamp(e.EndTime),
+			formatTimestamp(int64(e.StartTime)),
+			formatTimestamp(int64(e.EndTime)),
 			e.Status,
 			e.User,
 		})
@@ -316,8 +317,8 @@ func newLogCmd() *cobra.Command {
 
 // logLine is one entry of a task log: a line number and its text.
 type logLine struct {
-	N int64  `json:"n"`
-	T string `json:"t"`
+	N pve.PVEInt `json:"n"`
+	T string     `json:"t"`
 }
 
 // buildTaskLogResult converts the raw task log response into a renderable Result.
@@ -336,7 +337,7 @@ func buildTaskLogResult(resp *nodes.ListTasksLogResponse) (output.Result, error)
 			return output.Result{}, fmt.Errorf("decode log line %d: %w", i, err)
 		}
 		lines = append(lines, l)
-		rows = append(rows, []string{strconv.FormatInt(l.N, 10), l.T})
+		rows = append(rows, []string{strconv.FormatInt(int64(l.N), 10), l.T})
 	}
 
 	return output.Result{Headers: headers, Rows: rows, Raw: lines}, nil

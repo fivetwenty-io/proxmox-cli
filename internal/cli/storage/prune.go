@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -18,11 +19,11 @@ import (
 // mark field reports the prune decision for each archive: keep, remove, or
 // protected.
 type pruneEntry struct {
-	Volid string `json:"volid"`
-	Ctime int64  `json:"ctime"`
-	Mark  string `json:"mark"`
-	Type  string `json:"type"`
-	Vmid  int64  `json:"vmid"`
+	Volid string     `json:"volid"`
+	Ctime pve.PVEInt `json:"ctime"`
+	Mark  string     `json:"mark"`
+	Type  string     `json:"type"`
+	Vmid  pve.PVEInt `json:"vmid"`
 }
 
 // keepFlags collects the prune-backups retention options. A value of -1 means the
@@ -160,11 +161,11 @@ func renderPrune(cmd *cobra.Command, deps *cli.Deps, entries []pruneEntry) error
 	for _, e := range entries {
 		vmidCell := ""
 		if e.Vmid != 0 {
-			vmidCell = strconv.FormatInt(e.Vmid, 10)
+			vmidCell = strconv.FormatInt(int64(e.Vmid), 10)
 		}
 		ctimeCell := ""
 		if e.Ctime != 0 {
-			ctimeCell = strconv.FormatInt(e.Ctime, 10)
+			ctimeCell = strconv.FormatInt(int64(e.Ctime), 10)
 		}
 		rows = append(rows, []string{e.Volid, e.Mark, e.Type, vmidCell, ctimeCell})
 	}
