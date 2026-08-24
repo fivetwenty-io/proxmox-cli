@@ -78,12 +78,16 @@ func newDatastoreCmd() *cobra.Command {
 
 // datastoreListEntry is the subset of a datastore configuration rendered in
 // `ls` table output. Absent optional fields decode to their zero value ("").
+//
+// Retention is not among them. It used to live on the datastore as
+// prune-schedule and keep-*, and current Proxmox Backup Server keeps it in
+// standalone prune jobs instead, so the datastore config carries no schedule
+// to show. `pmx pbs prune job ls` reports it.
 type datastoreListEntry struct {
-	Name          string `json:"name"`
-	Path          string `json:"path"`
-	Comment       string `json:"comment"`
-	GcSchedule    string `json:"gc-schedule"`
-	PruneSchedule string `json:"prune-schedule"`
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Comment    string `json:"comment"`
+	GcSchedule string `json:"gc-schedule"`
 }
 
 // newDatastoreLsCmd builds `pmx pbs datastore ls` — list configured
@@ -113,12 +117,12 @@ func newDatastoreLsCmd() *cobra.Command {
 			raws := make([]map[string]any, 0, len(table))
 			for _, t := range table {
 				e := t.Entry
-				rows = append(rows, []string{e.Name, e.Path, e.Comment, e.GcSchedule, e.PruneSchedule})
+				rows = append(rows, []string{e.Name, e.Path, e.Comment, e.GcSchedule})
 				raws = append(raws, t.Raw)
 			}
 
 			res := output.Result{
-				Headers: []string{"NAME", "PATH", "COMMENT", "GC-SCHEDULE", "PRUNE-SCHEDULE"},
+				Headers: []string{"NAME", "PATH", "COMMENT", "GC-SCHEDULE"},
 				Rows:    rows,
 				Raw:     raws,
 			}

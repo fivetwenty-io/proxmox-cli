@@ -45,9 +45,27 @@ func TestDatastoreLs_ListsDatastoresSortedByName(t *testing.T) {
 	require.Contains(t, out, "/mnt/store1")
 	require.Contains(t, out, "primary")
 	require.Contains(t, out, "daily")
-	require.Contains(t, out, "weekly")
+	// Retention moved to standalone prune jobs, so no current server sends a
+	// prune-schedule and the table no longer keeps a column for it. An old
+	// server that still sends one is not shown it here; -o json has it.
+	require.NotContains(t, out, "weekly")
+	require.NotContains(t, out, "PRUNE")
 	// store1 must be listed before store2 (sorted by name).
 	require.Less(t, strings.Index(out, "store1"), strings.Index(out, "store2"))
+}
+
+func TestDatastoreLs_JSONKeepsTheFieldsTheTableDrops(t *testing.T) {
+	f, pc := newFakeClient(t)
+	recordJSON(f, "GET "+pathConfigDatastore, &recordedRequest{}, []map[string]any{
+		{"name": "store1", "path": "/mnt/store1", "prune-schedule": "weekly"},
+	})
+
+	var buf bytes.Buffer
+	deps := depsFor(t, pc, output.FormatJSON, false)
+	require.NoError(t, run(deps, &buf, newDatastoreLsCmd(), "ls"))
+
+	require.Contains(t, buf.String(), "weekly",
+		"the table drops the column, not the payload")
 }
 
 func TestDatastoreLs_ServerError(t *testing.T) {
