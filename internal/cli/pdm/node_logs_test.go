@@ -36,6 +36,86 @@ func TestNodeJournal_MapsFlagsToQueryParams(t *testing.T) {
 	require.Contains(t, buf.String(), "line two")
 }
 
+// TestNodeJournal_ForwardsFilterFlags asserts that `node journal` maps
+// --priority, --service, --unit, and --kernel onto the query parameters of
+// the typed (non-structured) request.
+func TestNodeJournal_ForwardsFilterFlags(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "GET /api2/json/nodes/pdm-host/journal", &rec, []string{"line"})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeJournalCmd(), "journal", "pdm-host",
+		"--priority", "0..2", "--service", "proxmox-datacenter*", "--unit", "proxmox-datacenter-api", "--kernel")
+	require.NoError(t, err)
+
+	require.Equal(t, "0..2", rec.query.Get("priority"))
+	require.Equal(t, "proxmox-datacenter*", rec.query.Get("service"))
+	require.Equal(t, "proxmox-datacenter-api", rec.query.Get("unit"))
+	require.Equal(t, "1", rec.query.Get("kernel"))
+	require.Empty(t, rec.query.Get("structured"))
+}
+
+// TestNodeJournal_StructuredUsesRawTransport asserts that --structured routes
+// the request through the raw transport and renders the decoded records as a
+// table, skipping cursor markers.
+func TestNodeJournal_StructuredUsesRawTransport(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	recordJSON(f, "GET /api2/json/nodes/pdm-host/journal", &rec, []map[string]any{
+		{"c": "s=85fd;i=1f2a53", "ty": "cursor"},
+		{"id": "proxmox-datacenter-api", "msg": "ready", "p": 5, "pid": 900, "t": 1725000000123456},
+		{"c": "s=85fd;i=1f2a54", "ty": "cursor"},
+	})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeJournalCmd(), "journal", "pdm-host", "--structured", "--lastentries", "3")
+	require.NoError(t, err)
+
+	require.Equal(t, "1", rec.query.Get("structured"))
+	require.Equal(t, "3", rec.query.Get("lastentries"))
+	require.Contains(t, buf.String(), "TIMESTAMP")
+	require.Contains(t, buf.String(), "2024-08-30T06:40:00Z")
+	require.Contains(t, buf.String(), "ready")
+	require.NotContains(t, buf.String(), "s=85fd", "cursor markers are not rows")
+}
+
+// TestNodeJournal_StructuredEscapesTheNodeSegment asserts that the node
+// argument is escaped into the URL path so a node name carrying '#' cannot
+// alter the endpoint.
+func TestNodeJournal_StructuredEscapesTheNodeSegment(t *testing.T) {
+	f, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+
+	var rec recordedRequest
+	// The fake routes on the decoded r.URL.Path, so the pattern carries the
+	// literal '#'. An unescaped '#' on the wire would be parsed as a fragment,
+	// the request would arrive as GET /api2/json/nodes/pdm, and the fake would
+	// answer 404.
+	recordJSON(f, "GET /api2/json/nodes/pdm#x/journal", &rec, []map[string]any{})
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeJournalCmd(), "journal", "pdm#x", "--structured")
+	require.NoError(t, err)
+	require.Equal(t, "1", rec.query.Get("structured"))
+}
+
+// TestNodeJournal_RejectsIdentifiersWithoutStructured asserts that
+// --identifiers without --structured fails validation before issuing a
+// request.
+func TestNodeJournal_RejectsIdentifiersWithoutStructured(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newNodeJournalCmd(), "journal", "pdm-host", "--identifiers")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--identifiers requires --structured")
+}
+
 // TestNodeSyslog_MapsFlagsToQueryParams asserts that `node syslog` maps its
 // flags onto the wire request and renders decoded lines.
 func TestNodeSyslog_MapsFlagsToQueryParams(t *testing.T) {

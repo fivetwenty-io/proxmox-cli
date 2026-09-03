@@ -36,29 +36,42 @@ var validNodeRrdTimeframes = []string{"hour", "day", "week", "month", "year", "d
 // accepted by GET /nodes/{node}/rrddata, per the PDM API schema.
 var validNodeRrdConsolidations = []string{"MAX", "AVERAGE"}
 
-// newNodeJournalCmd builds `pmx pdm node journal <node>` — read raw systemd
-// journal lines (GET /nodes/{node}/journal), matching the PBS analog
-// (internal/cli/pbs/node_logs.go's newNodeJournalCmd).
+// newNodeJournalCmd builds `pmx pdm node journal <node>` — read the systemd
+// journal (GET /nodes/{node}/journal), as text lines or, with --structured,
+// as one record per entry read through the raw transport. Matches the PBS
+// analog in internal/cli/pbs/node_logs.go.
 func newNodeJournalCmd() *cobra.Command {
 	var (
 		lastentries  int64
 		since, until int64
 		startcursor  string
 		endcursor    string
+		jf           cli.JournalFilterFlags
 	)
 
 	cmd := &cobra.Command{
 		Use:   "journal <node>",
 		Short: "Read the node's systemd journal",
-		Long: "Read raw lines from the node's systemd journal, optionally limited to the " +
-			"last N entries or bounded by a Unix-epoch time range or cursor.",
+		Long: "Read the node's systemd journal, optionally limited to the last N entries, bounded by " +
+			"a Unix-epoch time range or cursor, or filtered by priority, syslog identifier, systemd " +
+			"unit, or kernel-only.\n\n" +
+			"By default the server returns pre-rendered text lines. With --structured it returns one " +
+			"record per entry with separate timestamp, priority, pid, identifier, and message fields, " +
+			"rendered as a table; the full records, including the start and end cursor markers usable " +
+			"with --startcursor and --endcursor, are available with -o json. --identifiers and --units " +
+			"instead list the distinct identifiers or units present, one per row, for building filters.",
 		Example: `  pmx pdm node journal pdm-01
-  pmx pdm node journal pdm-01 --lastentries 100`,
+  pmx pdm node journal pdm-01 --lastentries 100
+  pmx pdm node journal pdm-01 --priority 0..3 --unit proxmox-datacenter-api
+  pmx pdm node journal pdm-01 --structured --identifiers -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			node := args[0]
 			fl := cmd.Flags()
+			if err := jf.Validate(fl); err != nil {
+				return err
+			}
 
 			params := &pdmnodes.ListJournalParams{}
 			if fl.Changed("lastentries") {
@@ -75,6 +88,41 @@ func newNodeJournalCmd() *cobra.Command {
 			}
 			if fl.Changed("endcursor") {
 				params.Endcursor = &endcursor
+			}
+			if fl.Changed("priority") {
+				params.Priority = &jf.Priority
+			}
+			if fl.Changed("service") {
+				params.Service = &jf.Service
+			}
+			if fl.Changed("unit") {
+				params.Unit = &jf.Unit
+			}
+			if fl.Changed("kernel") {
+				params.Kernel = &jf.Kernel
+			}
+
+			if jf.Structured {
+				params.Structured = &jf.Structured
+				if fl.Changed("identifiers") {
+					params.Identifiers = &jf.Identifiers
+				}
+				if fl.Changed("units") {
+					params.Units = &jf.Units
+				}
+				query, err := cli.ParamsToMap(params)
+				if err != nil {
+					return fmt.Errorf("read journal on node %q: %w", node, err)
+				}
+				raw, err := cli.RawGetJSON(cmd.Context(), deps.PDM.Raw, cli.JournalPath(node), query)
+				if err != nil {
+					return fmt.Errorf("read journal on node %q: %w", node, err)
+				}
+				res, err := cli.StructuredJournalResult(raw)
+				if err != nil {
+					return fmt.Errorf("read journal on node %q: %w", node, err)
+				}
+				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 			}
 
 			resp, err := deps.PDM.Nodes.ListJournal(cmd.Context(), node, params)
@@ -103,6 +151,7 @@ func newNodeJournalCmd() *cobra.Command {
 	f.Int64Var(&until, "until", 0, "show entries until this Unix epoch (conflicts with --endcursor)")
 	f.StringVar(&startcursor, "startcursor", "", "start after this cursor (conflicts with --since)")
 	f.StringVar(&endcursor, "endcursor", "", "end before this cursor (conflicts with --until)")
+	jf.Register(cmd)
 
 	return cmd
 }
