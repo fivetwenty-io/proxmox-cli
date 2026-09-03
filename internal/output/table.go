@@ -27,6 +27,12 @@ func renderTable(w io.Writer, res Result, ascii bool) error {
 		t := tablewriter.NewTable(w,
 			tablewriter.WithSymbols(symbols),
 			tablewriter.WithHeader([]string{"KEY", "VALUE"}),
+			// Every header this package renders is already a finished, uppercase
+			// label. tablewriter's AutoFormat title-cases headers by splitting on
+			// case and character-class transitions, which no caller here relies
+			// on and which corrupts any hyphenated header (e.g. "ACCESS-KEY"
+			// becomes "ACCESS - KEY") because it treats '-' as its own token.
+			tablewriter.WithHeaderAutoFormat(tw.Off),
 		)
 
 		// Stable key order for deterministic output.
@@ -48,7 +54,7 @@ func renderTable(w io.Writer, res Result, ascii bool) error {
 	}
 
 	if len(res.Rows) > 0 || len(res.Headers) > 0 {
-		opts := []tablewriter.Option{tablewriter.WithSymbols(symbols)}
+		opts := []tablewriter.Option{tablewriter.WithSymbols(symbols), tablewriter.WithHeaderAutoFormat(tw.Off)}
 		if len(res.Headers) > 0 {
 			opts = append(opts, tablewriter.WithHeader(res.Headers))
 		}

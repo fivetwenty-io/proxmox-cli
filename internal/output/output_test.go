@@ -114,6 +114,37 @@ func TestRenderer_Table_Single(t *testing.T) {
 	require.Contains(t, out, "myvm")
 }
 
+// TestRenderer_Table_HyphenatedHeaderRendersVerbatim guards against
+// tablewriter's header AutoFormat, which (when left at its default) splits a
+// hyphen flanked by uppercase letters into its own token and rejoins it with
+// spaces, turning "ACCESS-KEY" into "ACCESS - KEY". Every header this
+// renderer prints is already a finished, uppercase label, so it must come out
+// unchanged.
+func TestRenderer_Table_HyphenatedHeaderRendersVerbatim(t *testing.T) {
+	t.Parallel()
+	r := output.New()
+	var buf bytes.Buffer
+	res := output.Result{
+		Headers: []string{"ID", "ACCESS-KEY"},
+		Rows:    [][]string{{"minio-lab", "AKIAMINIO"}},
+	}
+	require.NoError(t, r.Render(&buf, res, output.FormatTable))
+	out := buf.String()
+	require.Contains(t, out, "ACCESS-KEY")
+	require.NotContains(t, out, "ACCESS - KEY")
+}
+
+// TestRenderer_Table_PlainHeaderUnchanged confirms disabling AutoFormat
+// doesn't alter a header that was already plain.
+func TestRenderer_Table_PlainHeaderUnchanged(t *testing.T) {
+	t.Parallel()
+	r := output.New()
+	var buf bytes.Buffer
+	require.NoError(t, r.Render(&buf, fixture(), output.FormatTable))
+	out := buf.String()
+	require.Contains(t, out, "NAME")
+}
+
 func TestRenderer_Table_Message(t *testing.T) {
 	t.Parallel()
 	r := output.New()

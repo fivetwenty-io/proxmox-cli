@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/olekukonko/tablewriter/tw"
 	"golang.org/x/term"
 )
 
@@ -268,17 +267,14 @@ func clampHeader(s string, limit int) string {
 	return clampCell(s, 1)
 }
 
-// headerWidth is the width tablewriter lays a header out in, which is not the
-// width of the string it was given: its header auto-format splits the text on
-// case and character class and rejoins the pieces with spaces, so "WEB-URL"
-// occupies "WEB - URL" and "MEMAVAIL…" occupies "MEMAVAIL …". Measuring the
-// source string undersizes the column, and the table then overruns the budget
-// by two columns per separator.
-//
-// This calls the same transform the renderer does rather than reproducing it,
-// so the two cannot drift.
+// headerWidth is the width tablewriter lays a header out in. The renderer
+// disables tablewriter's header auto-format (see table.go), so a header is
+// laid out exactly as given, and this is just cellWidth by another name; it
+// stays a separate function because callers reason about header layout, not
+// generic cell layout, and because a future header transform would only need
+// to change here.
 func headerWidth(s string) int {
-	return cellWidth(tw.Title(strings.Join(tw.SplitCamelCase(s), tw.Space)))
+	return cellWidth(s)
 }
 
 // cellWidth is the width a cell occupies: the longest of its lines, since

@@ -195,11 +195,13 @@ func TestBudget_ExplicitPreferenceWins(t *testing.T) {
 	assert.Equal(t, 0, budget(&bytes.Buffer{}, 0), "a non-terminal writer has no budget")
 }
 
-// TestRenderTable_HeaderSeparatorsCountAgainstTheBudget covers the miss that
-// let a table overrun its budget by two columns per separator: the renderer
-// lays "WEB-URL" out as "WEB - URL", so measuring the header as given
-// undersizes its column and every border after it shifts right.
-func TestRenderTable_HeaderSeparatorsCountAgainstTheBudget(t *testing.T) {
+// TestRenderTable_HyphenatedHeaderFitsTheBudgetAndRendersVerbatim covers a
+// header that survives the layout budget unclamped: the renderer disables
+// tablewriter's header auto-format (table.go), so a hyphenated header like
+// "WEB-URL" is laid out exactly as given rather than split and rejoined with
+// spaces as "WEB - URL", and the budget accounting in headerWidth must agree
+// with that or every border after it shifts right.
+func TestRenderTable_HyphenatedHeaderFitsTheBudgetAndRendersVerbatim(t *testing.T) {
 	res := Result{
 		Headers: []string{"ID", "TYPE", "AUTHID", "NODES", "WEB-URL"},
 		Rows: [][]string{
@@ -212,12 +214,13 @@ func TestRenderTable_HeaderSeparatorsCountAgainstTheBudget(t *testing.T) {
 	require.NoError(t, NewWidth(120).Render(&buf, res, FormatTable))
 
 	assert.LessOrEqual(t, widest(buf.String()), 120)
-	assert.Contains(t, buf.String(), "WEB - URL", "the header is laid out with its separator spaced")
+	assert.Contains(t, buf.String(), "WEB-URL", "a header that fits its column renders verbatim, not spaced")
+	assert.NotContains(t, buf.String(), "WEB - URL")
 }
 
-// TestClampHeader_ShortenedHeaderStillFits covers the second-order version of
-// the same thing: the ellipsis a shortened header ends with is itself spaced
-// out, so cutting a header to the limit can leave it two columns over.
+// TestClampHeader_ShortenedHeaderStillFits pins clampHeader's search-down
+// loop: whatever it returns must fit within limit as measured by headerWidth,
+// for every limit in range.
 func TestClampHeader_ShortenedHeaderStillFits(t *testing.T) {
 	for _, limit := range []int{8, 10, 12} {
 		got := clampHeader("PRESSURE-CPU-SOME", limit)
