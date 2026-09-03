@@ -705,7 +705,7 @@ Everything else works exactly like the PVE side: the same output formats,
 
 | Group | Purpose | Sub-commands |
 |-------|---------|--------------|
-| `datastore` | Datastore configuration and usage | `ls`, `show`, `create`, `update`, `delete`, `status`, `usage`, `rrd` |
+| `datastore` | Datastore configuration and usage | `ls`, `show`, `create`, `update`, `delete`, `status`, `usage`, `rrd`, `s3-refresh` |
 | `snapshot` | Backup snapshots in a datastore | `ls`, `show`, `files`, `delete`, `protect`, `unprotect`, `notes` |
 | `group` | Backup groups | `ls`, `delete`, `notes` |
 | `prune` | Prune jobs and one-shot prune runs | `run`, `simulate`, `job` (CRUD + `run`) |
@@ -713,7 +713,7 @@ Everything else works exactly like the PVE side: the same output formats,
 | `verify` | Verification jobs and one-shot runs | `run`, `job` (CRUD + `run`) |
 | `sync` | Sync jobs and one-shot pull/push | `ls`, `job` (CRUD + `run`), `pull`, `push` |
 | `remote` | Remote PBS instances for sync | `ls`, `show`, `add`, `update`, `delete`, `scan` |
-| `s3` | S3 endpoint configurations for S3-backed datastores | `ls`, `show`, `add`, `update`, `delete`, `buckets` |
+| `s3` | S3 endpoint configurations for S3-backed datastores | `ls`, `show`, `add`, `update`, `delete`, `buckets`, `check`, `reset-counters` |
 | `traffic` | Traffic-control rules | `ls`, `show`, `add`, `update`, `delete`, `current` |
 | `node` | Node administration | `ls`, `status`, `reboot`, `shutdown`, `rrd`, `report`, `syslog`, `journal`, `dns`, `time`, `config`, `subscription`, `identity`, `tasks`, `services`, `apt`, `disks`, `network`, `certificates` |
 | `user` | Users and API tokens | `ls`, `show`, `add`, `update`, `delete`, `unlock-tfa`, `passwd`, `token` |

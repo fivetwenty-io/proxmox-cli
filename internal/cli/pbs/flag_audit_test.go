@@ -18,7 +18,7 @@ import (
 // is registered on the group.
 func TestPBS_AuditCommandTree(t *testing.T) {
 	groups := map[string][]string{
-		"datastore": {"ls", "show", "create", "update", "delete", "status", "usage", "rrd"},
+		"datastore": {"ls", "show", "create", "update", "delete", "status", "usage", "rrd", "s3-refresh"},
 		"snapshot":  {"ls", "show", "files", "delete", "protect", "unprotect", "notes"},
 		"group":     {"ls", "delete", "notes"},
 		"prune":     {"run", "simulate", "job"},
@@ -26,7 +26,7 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		"verify":    {"run", "job"},
 		"sync":      {"ls", "job", "pull", "push"},
 		"remote":    {"ls", "show", "add", "update", "delete", "scan"},
-		"s3":        {"ls", "show", "add", "update", "delete", "buckets"},
+		"s3":        {"ls", "show", "add", "update", "delete", "buckets", "check", "reset-counters"},
 		"traffic":   {"ls", "show", "add", "update", "delete", "current"},
 		"status":    {"datastore-usage"},
 		"node": {

@@ -135,7 +135,7 @@ func TestS3Add_PostsRequiredAndOptionalFields(t *testing.T) {
 	require.Equal(t, "1", rec.form.Get("path-style"))
 	require.Equal(t, "lab", rec.form.Get("region"))
 	require.Equal(t, "50", rec.form.Get("limit-active-requests"))
-	require.NotEmpty(t, rec.form["provider-quirks"])
+	require.Equal(t, []string{"skip-if-none-match-header", "delete-objects-via-delete-object"}, rec.form["provider-quirks"])
 	require.Empty(t, rec.form.Get("use-node-proxy"), "unset optional bool must not be sent")
 	require.Contains(t, buf.String(), `S3 endpoint "minio-lab" created.`)
 }
@@ -215,6 +215,15 @@ func TestS3Update_RejectsUndeletableProperty(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--delete")
 	require.Contains(t, err.Error(), "endpoint")
+}
+
+func TestS3Update_RejectsEmptySecretKey(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	err := run(deps, &buf, newS3Cmd(), "s3", "update", s3ID, "--secret-key", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--secret-key")
 }
 
 // --- s3 delete ---------------------------------------------------------------

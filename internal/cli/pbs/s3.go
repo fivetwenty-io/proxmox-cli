@@ -49,6 +49,8 @@ func newS3Cmd() *cobra.Command {
 		newS3UpdateCmd(),
 		newS3DeleteCmd(),
 		newS3BucketsCmd(),
+		newS3CheckCmd(),
+		newS3ResetCountersCmd(),
 	)
 	return cmd
 }
@@ -406,6 +408,9 @@ func newS3UpdateCmd() *cobra.Command {
 
 			if !anyFlagChanged(cmd.Flags()) {
 				return fmt.Errorf("update s3 endpoint %q: no changes requested: pass at least one flag", id)
+			}
+			if cmd.Flags().Changed("secret-key") && sf.secretKey == "" {
+				return fmt.Errorf("--secret-key must not be empty")
 			}
 			if err := validateS3ProviderQuirks(sf.providerQuirks); err != nil {
 				return err

@@ -61,7 +61,7 @@ func newDatastoreCmd() *cobra.Command {
 		Short: "Manage Proxmox Backup Server datastores",
 		Long: "List, inspect, create, update, and delete Proxmox Backup Server datastore " +
 			"configurations, and read their space usage, garbage-collection status, and " +
-			"RRD statistics.",
+			"RRD statistics, and refresh S3-backed datastores from their bucket.",
 	}
 	cmd.AddCommand(
 		newDatastoreLsCmd(),
@@ -72,6 +72,7 @@ func newDatastoreCmd() *cobra.Command {
 		newDatastoreStatusCmd(),
 		newDatastoreUsageCmd(),
 		newDatastoreRrdCmd(),
+		newDatastoreS3RefreshCmd(),
 	)
 	return cmd
 }
