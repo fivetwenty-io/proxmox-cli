@@ -108,7 +108,6 @@ from roughly sixty down to ten, all of which are now closed:
 | Node Ceph | `pmx pve node ceph cmd-safety` | Whether a stop/destroy action on a Ceph service is currently safe to perform |
 | Node Ceph | `pmx pve node ceph osd lv-info <osdid>` | LVM logical-volume detail (name, path, size, UUID, volume group) backing an OSD |
 | Node Ceph | `pmx pve node ceph osd metadata <osdid>` | Detailed OSD runtime metadata, including backing devices |
-| Node Ceph | `pmx pve node ceph releases` | The Ceph releases the node's package sources offer, with available, default, and unsupported flags; answers without a configured Ceph cluster |
 | SDN | `pmx pve sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
 | SDN | `pmx pve sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
 | SDN | `pmx pve sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |
@@ -131,10 +130,11 @@ No coverage gaps remain open as of this pass.
 
 ### Endpoints added by the SDK 3.10 client bump
 
-These two commands cover Proxmox VE API endpoints that did not exist at the time of the audit above; they were added once the `proxmox-apiclient-go` client pin moved to v3.10, and are not part of the ten-gap count.
+These three commands cover Proxmox VE API endpoints that did not exist at the time of the audit above; they were added once the `proxmox-apiclient-go` client pin moved to v3.10, and are not part of the ten-gap count.
 
 | Area | Command added | What it exposes |
 |---|---|---|
+| Node Ceph | `pmx pve node ceph releases` | The Ceph releases the node's package sources offer, with available, default, and unsupported flags; answers without a configured Ceph cluster |
 | Node Ceph | `pmx pve node ceph restart-bulk` | Rolling restart of the node's OSDs one at a time, with --dry-run printing the worker's plan, --only-outdated, --resume, and --set-noout=false |
 | Cluster Ceph | `pmx pve cluster ceph restart-bulk` | Rolling restart of one Ceph daemon type (mon, mgr, mds, or osd) across the cluster, with --dry-run printing the worker's plan and --only-outdated for OSDs |
 
