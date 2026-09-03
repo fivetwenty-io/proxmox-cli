@@ -196,6 +196,72 @@ func TestNodeJournal(t *testing.T) {
 	require.Contains(t, out, "journal line two")
 }
 
+func TestNodeJournal_ForwardsFilterFlags(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/journal", &rec, []any{"line"})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "journal",
+		"--priority", "0..3", "--service", "pve*", "--unit", "pvedaemon", "--kernel"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "priority=0..3")
+	require.Contains(t, rec.query, "service=pve%2A")
+	require.Contains(t, rec.query, "unit=pvedaemon")
+	require.Contains(t, rec.query, "kernel=1")
+	require.NotContains(t, rec.query, "structured")
+}
+
+func TestNodeJournal_StructuredUsesRawTransportAndCuratedColumns(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/journal", &rec, []any{
+		map[string]any{"c": "s=85fd;i=1f2a53", "ty": "cursor"},
+		map[string]any{"id": "sshd", "msg": "Accepted", "p": 6, "pid": 812, "t": 1725000000123456},
+		map[string]any{"c": "s=85fd;i=1f2a54", "ty": "cursor"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "journal", "--structured", "--lastentries", "10"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "structured=1")
+	require.Contains(t, rec.query, "lastentries=10")
+	out := buf.String()
+	require.Contains(t, out, "TIMESTAMP")
+	require.Contains(t, out, "2024-08-30T06:40:00Z")
+	require.Contains(t, out, "Accepted")
+	require.NotContains(t, out, "s=85fd", "cursor markers are not rows")
+}
+
+func TestNodeJournal_IdentifiersListsDistinctIdentifiers(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/journal", &rec, []any{
+		map[string]any{"ids": []any{"sshd", "pvedaemon"}},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "journal", "--structured", "--identifiers"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "structured=1")
+	require.Contains(t, rec.query, "identifiers=1")
+	require.Contains(t, buf.String(), "IDENTIFIER")
+	require.Contains(t, buf.String(), "pvedaemon")
+}
+
+func TestNodeJournal_RejectsIdentifiersWithoutStructured(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "journal", "--identifiers"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "--identifiers requires --structured")
+}
+
 func TestNodeReport(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest

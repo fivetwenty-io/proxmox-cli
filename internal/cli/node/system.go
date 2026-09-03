@@ -309,20 +309,34 @@ func newJournalCmd() *cobra.Command {
 		since, until int64
 		startcursor  string
 		endcursor    string
+		jf           cli.JournalFilterFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "journal",
 		Short: "Read the node's systemd journal",
-		Long: "Read raw lines from the node's systemd journal, optionally limited to the last N " +
-			"entries or bounded by a time range or cursor.",
-		Example: `  pmx pve node journal --lastentries 100`,
-		Args:    cobra.NoArgs,
+		Long: "Read the node's systemd journal, optionally limited to the last N entries, bounded by a " +
+			"time range or cursor, or filtered by priority, syslog identifier, systemd unit, or " +
+			"kernel-only.\n\n" +
+			"By default the server returns pre-rendered text lines, printed as they came. With " +
+			"--structured it returns one record per entry with separate timestamp, priority, pid, " +
+			"identifier, and message fields, rendered as a table; the full records, including the " +
+			"start and end cursor markers usable with --startcursor and --endcursor, are available " +
+			"with -o json. --identifiers and --units instead list the distinct identifiers or units " +
+			"present, one per row, for building filters.",
+		Example: `  pmx pve node journal --lastentries 100
+  pmx pve node journal --priority 0..3 --since 1725000000
+  pmx pve node journal --unit pvedaemon --structured
+  pmx pve node journal --structured --identifiers --lastentries 500 -o json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			if err := requireNode(deps); err != nil {
 				return err
 			}
 			fl := cmd.Flags()
+			if err := jf.Validate(fl); err != nil {
+				return err
+			}
 			params := &nodes.ListJournalParams{}
 			if fl.Changed("lastentries") {
 				params.Lastentries = &lastentries
@@ -338,6 +352,40 @@ func newJournalCmd() *cobra.Command {
 			}
 			if fl.Changed("endcursor") {
 				params.Endcursor = &endcursor
+			}
+			if fl.Changed("priority") {
+				params.Priority = &jf.Priority
+			}
+			if fl.Changed("service") {
+				params.Service = &jf.Service
+			}
+			if fl.Changed("unit") {
+				params.Unit = &jf.Unit
+			}
+			if fl.Changed("kernel") {
+				params.Kernel = &jf.Kernel
+			}
+			if jf.Structured {
+				params.Structured = &jf.Structured
+				if fl.Changed("identifiers") {
+					params.Identifiers = &jf.Identifiers
+				}
+				if fl.Changed("units") {
+					params.Units = &jf.Units
+				}
+				query, err := cli.ParamsToMap(params)
+				if err != nil {
+					return fmt.Errorf("read journal on node %q: %w", deps.Node, err)
+				}
+				raw, err := cli.RawGetJSON(cmd.Context(), deps.API.Raw, cli.JournalPath(deps.Node), query)
+				if err != nil {
+					return fmt.Errorf("read journal on node %q: %w", deps.Node, err)
+				}
+				res, err := cli.StructuredJournalResult(raw)
+				if err != nil {
+					return fmt.Errorf("read journal on node %q: %w", deps.Node, err)
+				}
+				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 			}
 			resp, err := deps.API.Nodes.ListJournal(cmd.Context(), deps.Node, params)
 			if err != nil {
@@ -357,6 +405,7 @@ func newJournalCmd() *cobra.Command {
 	f.Int64Var(&until, "until", 0, "show entries until this UNIX epoch")
 	f.StringVar(&startcursor, "startcursor", "", "start after the given journal cursor")
 	f.StringVar(&endcursor, "endcursor", "", "end before the given journal cursor")
+	jf.Register(cmd)
 	return cmd
 }
 
