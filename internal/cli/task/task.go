@@ -293,12 +293,7 @@ func newLogCmd() *cobra.Command {
 				params.Download = &download
 			}
 
-			resp, err := deps.API.Nodes.ListTasksLog(cmd.Context(), node, upid, params)
-			if err != nil {
-				return err
-			}
-
-			result, err := buildTaskLogResult(resp)
+			result, err := cli.TaskLogResult(cmd.Context(), deps, node, upid, params)
 			if err != nil {
 				return err
 			}
@@ -313,34 +308,6 @@ func newLogCmd() *cobra.Command {
 		"download the full tasklog file (cannot be combined with --limit/--start)")
 
 	return cmd
-}
-
-// logLine is one entry of a task log: a line number and its text.
-type logLine struct {
-	N pve.PVEInt `json:"n"`
-	T string     `json:"t"`
-}
-
-// buildTaskLogResult converts the raw task log response into a renderable Result.
-func buildTaskLogResult(resp *nodes.ListTasksLogResponse) (output.Result, error) {
-	headers := []string{"N", "T"}
-
-	if resp == nil {
-		return output.Result{Headers: headers, Raw: []logLine{}}, nil
-	}
-
-	lines := make([]logLine, 0, len(*resp))
-	rows := make([][]string, 0, len(*resp))
-	for i, raw := range *resp {
-		var l logLine
-		if err := json.Unmarshal(raw, &l); err != nil {
-			return output.Result{}, fmt.Errorf("decode log line %d: %w", i, err)
-		}
-		lines = append(lines, l)
-		rows = append(rows, []string{strconv.FormatInt(int64(l.N), 10), l.T})
-	}
-
-	return output.Result{Headers: headers, Rows: rows, Raw: lines}, nil
 }
 
 // newStopCmd builds `pmx pve task stop <upid>`.

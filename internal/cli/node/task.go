@@ -130,12 +130,6 @@ func newTaskListCmd() *cobra.Command {
 	return cmd
 }
 
-// taskLogLine is the minimal decoded shape of a task log line.
-type taskLogLine struct {
-	N pve.PVEInt `json:"n"`
-	T string     `json:"t"`
-}
-
 // newTaskLogCmd builds `pmx pve node task log <node> <upid>`.
 func newTaskLogCmd() *cobra.Command {
 	var (
@@ -162,27 +156,11 @@ func newTaskLogCmd() *cobra.Command {
 				params.Start = &start
 			}
 
-			resp, err := deps.API.Nodes.ListTasksLog(cmd.Context(), node, upid, params)
+			res, err := cli.TaskLogResult(cmd.Context(), deps, node, upid, params)
 			if err != nil {
-				return fmt.Errorf("get log for task %q on node %q: %w", upid, node, err)
+				return err
 			}
-
-			headers := []string{"N", "T"}
-			lines := make([]taskLogLine, 0)
-			rows := make([][]string, 0)
-			if resp != nil {
-				for _, raw := range *resp {
-					var line taskLogLine
-					if err := json.Unmarshal(raw, &line); err != nil {
-						return fmt.Errorf("decode task log line: %w", err)
-					}
-					lines = append(lines, line)
-					rows = append(rows, []string{strconv.FormatInt(int64(line.N), 10), line.T})
-				}
-			}
-
-			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Headers: headers, Rows: rows, Raw: lines}, deps.Format)
+			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
 
