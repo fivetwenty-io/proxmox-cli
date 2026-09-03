@@ -1180,6 +1180,36 @@ func TestNodeCeph_RestartBulk_FailedDryRunStillPrintsTheLog(t *testing.T) {
 	require.Contains(t, buf.String(), "refusing to plan without --force", "the log is the point of a dry run")
 }
 
+// TestNodeCeph_RestartBulk_DryRunWaitTimeoutStaysNeutral pins the fix for a
+// dry run whose client-side wait deadline expires: the worker only logged a
+// plan, so the error must not claim a restart is in progress. The task type
+// embedded in a real UPID is "cephrestartbulk", which itself contains the
+// substring "restart", so this test uses a plan-only UPID to make the "no
+// restart wording" assertion meaningful rather than trivially defeated by the
+// task handle's own name.
+func TestNodeCeph_RestartBulk_DryRunWaitTimeoutStaysNeutral(t *testing.T) {
+	planUPID := "UPID:pve1:00001234:00000ABC:66D0F2A0:cephosdplan:osd:root@pam:"
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, planUPID)
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+planUPID+"/status", map[string]any{
+		"status": "running", "upid": planUPID,
+	})
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+planUPID+"/log", []map[string]any{
+		{"n": 1, "t": "dry-run: would restart osd.0, osd.3"},
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--dry-run", "--wait-timeout", "1"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "still running")
+	require.Contains(t, err.Error(), planUPID)
+	require.NotContains(t, err.Error(), "restart",
+		"nothing was restarted by a --dry-run worker; the message must not claim one is in progress")
+}
+
 func TestNodeCeph_RestartBulk_NoTaskHandleIsAnError(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleJSON("POST /api2/json/nodes/pve1/ceph/restart-bulk", nil) // {"data": null}
