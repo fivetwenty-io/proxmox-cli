@@ -110,6 +110,7 @@ from roughly sixty down to ten, all of which are now closed:
 | Node Ceph | `pmx pve node ceph osd metadata <osdid>` | Detailed OSD runtime metadata, including backing devices |
 | Node Ceph | `pmx pve node ceph releases` | The Ceph releases the node's package sources offer, with available, default, and unsupported flags; answers without a configured Ceph cluster |
 | Node Ceph | `pmx pve node ceph restart-bulk` | Rolling restart of the node's OSDs one at a time, with --dry-run printing the worker's plan, --only-outdated, --resume, and --set-noout=false |
+| Cluster Ceph | `pmx pve cluster ceph restart-bulk` | Rolling restart of one Ceph daemon type (mon, mgr, mds, or osd) across the cluster, with --dry-run printing the worker's plan and --only-outdated for OSDs |
 | SDN | `pmx pve sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
 | SDN | `pmx pve sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
 | SDN | `pmx pve sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |

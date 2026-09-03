@@ -84,17 +84,23 @@ func TestCephFlags_SetRejectsBadValue(t *testing.T) {
 	require.False(t, called, "set must not issue a PUT for an invalid value")
 }
 
-// TestCephCommandTree verifies the ceph flags verb set is registered.
+// TestCephCommandTree verifies the ceph verb set, and the ceph flags verb set
+// beneath it, are registered.
 func TestCephCommandTree(t *testing.T) {
 	root := Group(&cli.Deps{})
 	ceph := childCommands(root)["ceph"]
 	require.NotNil(t, ceph, "cluster must have a ceph command")
 
-	flags := childCommands(ceph)["flags"]
+	verbs := childCommands(ceph)
+	for _, v := range []string{"flags", "metadata", "status", "restart-bulk"} {
+		require.Containsf(t, verbs, v, "ceph must have a %s command", v)
+	}
+
+	flags := verbs["flags"]
 	require.NotNil(t, flags, "ceph must have a flags command")
 
-	verbs := childCommands(flags)
+	flagVerbs := childCommands(flags)
 	for _, v := range []string{"list", "get", "set"} {
-		require.Containsf(t, verbs, v, "ceph flags must have a %s command", v)
+		require.Containsf(t, flagVerbs, v, "ceph flags must have a %s command", v)
 	}
 }
