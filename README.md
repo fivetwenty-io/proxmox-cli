@@ -713,6 +713,7 @@ Everything else works exactly like the PVE side: the same output formats,
 | `verify` | Verification jobs and one-shot runs | `run`, `job` (CRUD + `run`) |
 | `sync` | Sync jobs and one-shot pull/push | `ls`, `job` (CRUD + `run`), `pull`, `push` |
 | `remote` | Remote PBS instances for sync | `ls`, `show`, `add`, `update`, `delete`, `scan` |
+| `s3` | S3 endpoint configurations for S3-backed datastores | `ls`, `show`, `add`, `update`, `delete`, `buckets` |
 | `traffic` | Traffic-control rules | `ls`, `show`, `add`, `update`, `delete`, `current` |
 | `node` | Node administration | `ls`, `status`, `reboot`, `shutdown`, `rrd`, `report`, `syslog`, `journal`, `dns`, `time`, `config`, `subscription`, `identity`, `tasks`, `services`, `apt`, `disks`, `network`, `certificates` |
 | `user` | Users and API tokens | `ls`, `show`, `add`, `update`, `delete`, `unlock-tfa`, `passwd`, `token` |

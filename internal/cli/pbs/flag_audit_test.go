@@ -26,6 +26,7 @@ func TestPBS_AuditCommandTree(t *testing.T) {
 		"verify":    {"run", "job"},
 		"sync":      {"ls", "job", "pull", "push"},
 		"remote":    {"ls", "show", "add", "update", "delete", "scan"},
+		"s3":        {"ls", "show", "add", "update", "delete", "buckets"},
 		"traffic":   {"ls", "show", "add", "update", "delete", "current"},
 		"status":    {"datastore-usage"},
 		"node": {

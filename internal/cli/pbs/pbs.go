@@ -48,7 +48,7 @@ func ChildFactories() []cli.GroupFactory {
 	return []cli.GroupFactory{
 		wrap(newDatastoreCmd), wrap(newSnapshotCmd), wrap(newGroupCmd),
 		wrap(newPruneCmd), wrap(newGcCmd), wrap(newVerifyCmd), wrap(newSyncCmd),
-		wrap(newRemoteCmd), wrap(newTrafficCmd), wrap(newNodeCmd), wrap(newUserCmd),
+		wrap(newRemoteCmd), wrap(newS3Cmd), wrap(newTrafficCmd), wrap(newNodeCmd), wrap(newUserCmd),
 		wrap(newACLCmd), wrap(newRoleCmd), wrap(newPermissionCmd), wrap(newRealmCmd),
 		wrap(newMetricsCmd), wrap(newNotificationCmd), wrap(newAcmeCmd), wrap(newTapeCmd),
 		wrap(newEncryptionKeyCmd), wrap(newStatusCmd),
