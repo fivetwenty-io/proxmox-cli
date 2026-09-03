@@ -1,0 +1,7 @@
+[
+  {"available": 0, "is-default": 0, "release": "octopus", "unsupported": 1, "version": "15.2"},
+  {"available": 0, "is-default": 0, "release": "pacific", "unsupported": 1, "version": "16.2"},
+  {"available": 0, "is-default": 0, "release": "quincy", "unsupported": 1, "version": "17.2"},
+  {"available": 1, "is-default": 0, "release": "reef", "unsupported": 0, "version": "18.2"},
+  {"available": 1, "is-default": 1, "release": "squid", "unsupported": 0, "version": "19.2"}
+]

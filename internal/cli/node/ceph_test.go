@@ -987,6 +987,24 @@ func TestNodeCeph_Restart_RequiresYes(t *testing.T) {
 	require.False(t, called)
 }
 
+func TestNodeCeph_Releases(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordOn(f, "GET /api2/json/nodes/pve1/ceph/releases", &rec, []any{
+		map[string]any{"available": 0, "is-default": 0, "release": "reef", "unsupported": 0, "version": "18.2"},
+		map[string]any{"available": 1, "is-default": 1, "release": "squid", "unsupported": 0, "version": "19.2"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "releases"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "GET", rec.method)
+	require.Contains(t, buf.String(), "RELEASE")
+	require.Contains(t, buf.String(), "squid")
+	require.Contains(t, buf.String(), "reef")
+}
+
 // ---- node scoping + command tree -------------------------------------------
 
 func TestNodeCeph_RequiresNode(t *testing.T) {
@@ -1021,7 +1039,7 @@ func TestNodeCeph_CommandTree(t *testing.T) {
 
 	for _, verb := range []string{
 		"status", "cmd-safety", "cfg", "osd", "pool", "mon", "mds", "mgr", "fs",
-		"init", "start", "stop", "restart",
+		"init", "start", "stop", "restart", "releases",
 	} {
 		require.NotNil(t, find(ceph, verb), "ceph must expose %q", verb)
 	}

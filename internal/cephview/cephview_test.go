@@ -358,3 +358,36 @@ func TestDaemonList_EmptyListRendersAnEmptyTable(t *testing.T) {
 	assert.Equal(t, mgrHeaders, res.Headers)
 	assert.Empty(t, res.Rows)
 }
+
+// TestReleases_OneRowPerRelease covers the Ceph release catalogue, where the
+// availability flags arrived as 0/1 integers on a live node.
+func TestReleases_OneRowPerRelease(t *testing.T) {
+	res, err := Releases(captured(t, "releases.json"))
+	require.NoError(t, err)
+
+	assert.Equal(t, releasesHeaders, res.Headers)
+	require.Len(t, res.Rows, 5)
+	assert.Equal(t, []string{"octopus", "15.2", "no", "no", "yes"}, res.Rows[0])
+	assert.Equal(t, []string{"reef", "18.2", "yes", "no", "no"}, res.Rows[3])
+	assert.Equal(t, []string{"squid", "19.2", "yes", "yes", "no"}, res.Rows[4])
+	assert.NotNil(t, res.Raw)
+}
+
+// TestReleases_AcceptsBooleanLiterals covers the apidoc's documented shape,
+// where the flags are JSON booleans rather than the 0/1 a live node sends.
+func TestReleases_AcceptsBooleanLiterals(t *testing.T) {
+	res, err := Releases(json.RawMessage(
+		`[{"release":"squid","version":"19.2","available":true,"is-default":true,"unsupported":false}]`))
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	assert.Equal(t, []string{"squid", "19.2", "yes", "yes", "no"}, res.Rows[0])
+}
+
+// TestReleases_EmptyListRendersAnEmptyTable covers a node whose package
+// sources report no Ceph releases at all.
+func TestReleases_EmptyListRendersAnEmptyTable(t *testing.T) {
+	res, err := Releases(json.RawMessage(`[]`))
+	require.NoError(t, err)
+	assert.Equal(t, releasesHeaders, res.Headers)
+	assert.Empty(t, res.Rows)
+}

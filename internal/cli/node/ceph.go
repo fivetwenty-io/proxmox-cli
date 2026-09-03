@@ -92,6 +92,7 @@ func newCephCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newCephStatusCmd(),
+		newCephReleasesCmd(),
 		newCephCmdSafetyCmd(),
 		newCephCfgCmd(),
 		newCephLogCmd(),
@@ -128,6 +129,35 @@ func newCephStatusCmd() *cobra.Command {
 				return fmt.Errorf("get Ceph status on node %q: %w", deps.Node, err)
 			}
 			return renderCephView(cmd, deps, cephview.Status, resp, "Ceph status")
+		},
+	}
+}
+
+// newCephReleasesCmd builds `pmx pve node ceph releases`
+// (GET /nodes/{node}/ceph/releases): the Ceph releases this node's package
+// sources offer, with availability, default, and support flags.
+func newCephReleasesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "releases",
+		Short: "List the Ceph releases available to install on the node",
+		Long: "List the Ceph releases the node's package sources know about (GET " +
+			"/nodes/{node}/ceph/releases). AVAILABLE says whether the release has packages " +
+			"for this node's architecture and Proxmox VE version, DEFAULT marks the release " +
+			"recommended for new installations, and UNSUPPORTED marks a release past support. " +
+			"Read-only; does not require a configured Ceph cluster.",
+		Example: `  pmx pve node ceph releases
+  pmx pve node ceph releases -o json`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			resp, err := deps.API.Nodes.ListCephReleases(cmd.Context(), deps.Node)
+			if err != nil {
+				return fmt.Errorf("list ceph releases on node %q: %w", deps.Node, err)
+			}
+			return renderCephView(cmd, deps, cephview.Releases, resp, "ceph releases")
 		},
 	}
 }
