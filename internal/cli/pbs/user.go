@@ -242,7 +242,7 @@ func newUserUpdateCmd() *cobra.Command {
 			userid := args[0]
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update user %q: no changes requested: pass at least one flag", userid)
 			}
 

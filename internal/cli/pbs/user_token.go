@@ -218,7 +218,7 @@ func newUserTokenUpdateCmd() *cobra.Command {
 			userid, tokenName := args[0], args[1]
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update token %q for user %q: no changes requested: pass at least one flag", tokenName, userid)
 			}
 

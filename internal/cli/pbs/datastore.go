@@ -453,7 +453,7 @@ func newDatastoreUpdateCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update datastore %q: no changes requested: pass at least one flag", name)
 			}
 
@@ -700,10 +700,25 @@ func newDatastoreRrdCmd() *cobra.Command {
 
 // --- helpers -----------------------------------------------------------------
 
-// anyFlagChanged reports whether at least one flag on fl was explicitly set.
-func anyFlagChanged(fl *pflag.FlagSet) bool {
+// anyFlagChanged reports whether at least one of the command's own flags was
+// explicitly set. Inherited persistent flags such as --output or --context are
+// how the operator addresses the command, not a requested change, so they are
+// excluded; without that, `update <id> -o json` would send an empty PUT.
+//
+// LocalNonPersistentFlags returns a freshly built FlagSet whose flags were
+// added by reference through AddFlag rather than parsed through this set
+// directly, so pflag never populates its internal "actual" map and Visit
+// (which walks that map) reports nothing. We walk every flag with VisitAll
+// and read the Changed field on the flag itself instead, since Changed lives
+// on the shared *pflag.Flag and reflects the real parse regardless of which
+// FlagSet is used to look at it.
+func anyFlagChanged(cmd *cobra.Command) bool {
 	changed := false
-	fl.Visit(func(*pflag.Flag) { changed = true })
+	cmd.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed {
+			changed = true
+		}
+	})
 	return changed
 }
 

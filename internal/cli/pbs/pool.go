@@ -284,7 +284,7 @@ func newTapePoolUpdateCmd() *cobra.Command {
 				return fmt.Errorf("media pool name must not be empty")
 			}
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update tape media pool %q: no changes requested: pass at least one flag", name)
 			}
 

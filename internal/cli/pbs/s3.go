@@ -406,7 +406,7 @@ func newS3UpdateCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			id := args[0]
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update s3 endpoint %q: no changes requested: pass at least one flag", id)
 			}
 			if cmd.Flags().Changed("secret-key") && sf.secretKey == "" {

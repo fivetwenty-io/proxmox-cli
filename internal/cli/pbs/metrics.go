@@ -329,7 +329,7 @@ func newMetricsInfluxdbHTTPUpdateCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update influxdb-http metric server %q: no changes requested: pass at least one flag", name)
 			}
 
@@ -669,7 +669,7 @@ func newMetricsInfluxdbUDPUpdateCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update influxdb-udp metric server %q: no changes requested: pass at least one flag", name)
 			}
 

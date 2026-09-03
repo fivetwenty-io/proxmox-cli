@@ -38,6 +38,23 @@ func run(deps *cli.Deps, buf *bytes.Buffer, sub *cobra.Command, args ...string) 
 	return cmd.Execute()
 }
 
+// runWithParent behaves like run, except the parent command it builds carries
+// a persistent --output/-o flag, the way the real "pmx" root does. Tests use
+// it to confirm that a persistent flag inherited from the root is never
+// mistaken for a requested change on the sub-command.
+func runWithParent(deps *cli.Deps, buf *bytes.Buffer, sub *cobra.Command, args ...string) error {
+	var output string
+	cmd := &cobra.Command{Use: "pbs"}
+	cmd.PersistentFlags().StringVarP(&output, "output", "o", "", "")
+	cmd.AddCommand(sub)
+	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs(args)
+
+	return cmd.Execute()
+}
+
 // newFakeClient returns a FakePBS and a constructed PBSClient pointing at it.
 func newFakeClient(t *testing.T) (*testhelper.FakePBS, *apiclient.PBSClient) {
 	t.Helper()

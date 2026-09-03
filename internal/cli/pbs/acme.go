@@ -248,7 +248,7 @@ func newAcmeAccountUpdateCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update acme account %q: no changes requested: pass --contact", name)
 			}
 
@@ -548,7 +548,7 @@ func newAcmePluginUpdateCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update acme plugin %q: no changes requested: pass at least one flag", id)
 			}
 

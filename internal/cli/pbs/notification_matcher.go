@@ -288,7 +288,7 @@ func newNotifMatcherUpdateCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update notification matcher %q: no changes requested: pass at least one flag", name)
 			}
 

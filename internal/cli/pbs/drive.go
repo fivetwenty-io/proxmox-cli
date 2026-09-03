@@ -221,7 +221,7 @@ func newTapeDriveUpdateCmd() *cobra.Command {
 			name := args[0]
 			fl := cmd.Flags()
 
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update tape drive %q: no changes requested: pass at least one flag", name)
 			}
 

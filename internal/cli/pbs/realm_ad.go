@@ -360,7 +360,7 @@ func newRealmAdUpdateCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			realm := args[0]
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update AD realm %q: no changes requested: pass at least one flag", realm)
 			}
 

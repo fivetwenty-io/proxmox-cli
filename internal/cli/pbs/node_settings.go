@@ -73,7 +73,7 @@ func newNodeDNSUpdateCmd(nf *nodeFlags) *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update dns on node %q: no changes requested: pass at least one flag", nf.node)
 			}
 
@@ -280,7 +280,7 @@ func newNodeConfigUpdateCmd(nf *nodeFlags) *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			fl := cmd.Flags()
 
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update config on node %q: no changes requested: pass at least one flag", nf.node)
 			}
 

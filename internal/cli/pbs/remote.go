@@ -285,7 +285,7 @@ func newRemoteUpdateCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 			name := args[0]
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update remote %q: no changes requested: pass at least one flag", name)
 			}
 

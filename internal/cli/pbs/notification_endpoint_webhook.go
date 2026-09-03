@@ -293,7 +293,7 @@ func newNotifEndpointWebhookUpdateCmd() *cobra.Command {
 			}
 
 			fl := cmd.Flags()
-			if !anyFlagChanged(fl) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update webhook endpoint %q: no changes requested: pass at least one flag", name)
 			}
 

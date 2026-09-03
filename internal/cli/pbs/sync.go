@@ -615,7 +615,7 @@ func newSyncJobUpdateCmd() *cobra.Command {
 				return fmt.Errorf("job id must not be empty")
 			}
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update sync job %q: no changes requested: pass at least one flag", id)
 			}
 

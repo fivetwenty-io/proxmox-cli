@@ -82,7 +82,7 @@ func newRealmPbsUpdateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 
-			if !anyFlagChanged(cmd.Flags()) {
+			if !anyFlagChanged(cmd) {
 				return fmt.Errorf("update PBS realm: no changes requested: pass at least one flag")
 			}
 
