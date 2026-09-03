@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -73,58 +72,18 @@ func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 	return renderCephTaskWait(cmd, deps, upid, doneMsg, nil)
 }
 
-// renderCephUPID renders the bare task handle for --async: the same shape
-// every write verb prints when it returns before waiting, shared so the
-// task-waiting and dry-run renderers cannot drift apart on it.
-func renderCephUPID(cmd *cobra.Command, deps *cli.Deps, upid string) error {
-	return deps.Out.Render(cmd.OutOrStdout(),
-		output.Result{
-			Single:  map[string]string{"upid": upid},
-			Raw:     map[string]string{"upid": upid},
-			Message: upid,
-		}, deps.Format)
-}
-
 // renderCephTaskWait renders a Ceph worker identified by upid: the UPID under
 // --async, or doneMsg once the task finishes. opts bounds the wait; nil means
 // the SDK default, which is far too short for a rolling restart, so the bulk
 // verb passes an operator-controlled bound.
 func renderCephTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
 	if deps.Async {
-		return renderCephUPID(cmd, deps, upid)
+		return cli.RenderUPID(cmd, deps, upid)
 	}
 	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts); err != nil {
 		return fmt.Errorf("ceph operation on node %q: %w", deps.Node, err)
 	}
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
-}
-
-// renderCephDryRun waits for a dry-run worker and prints its log, which is
-// where the API writes the plan it would have executed and, when it refuses,
-// the reason. The log is fetched whether or not the worker succeeded, so a
-// failed health gate still shows its message, and the wait error is returned
-// afterwards. --async prints the UPID instead, and the log is one
-// `pmx pve node task log` away.
-func renderCephDryRun(cmd *cobra.Command, deps *cli.Deps, upid string, opts *tasks.WaitOptions) error {
-	if deps.Async {
-		return renderCephUPID(cmd, deps, upid)
-	}
-	waitErr := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts)
-	if waitErr != nil {
-		waitErr = cli.RollingWaitError(fmt.Errorf("ceph dry run on node %q: %w", deps.Node, waitErr), opts, upid)
-	}
-	parsed, err := tasks.ParseUPID(upid)
-	if err != nil {
-		return errors.Join(fmt.Errorf("ceph dry run on node %q: %w", deps.Node, err), waitErr)
-	}
-	res, err := cli.TaskLogResult(cmd.Context(), deps, parsed.Node, upid, nil)
-	if err != nil {
-		return errors.Join(err, waitErr)
-	}
-	if err := deps.Out.Render(cmd.OutOrStdout(), res, deps.Format); err != nil {
-		return errors.Join(err, waitErr)
-	}
-	return waitErr
 }
 
 func newCephCmd() *cobra.Command {
@@ -696,7 +655,7 @@ func newCephRestartBulkCmd() *cobra.Command {
 			}
 			opts := cli.WaitOptionsFor(waitTimeout)
 			if dryRun {
-				return renderCephDryRun(cmd, deps, upid, opts)
+				return cli.RenderDryRunLog(cmd, deps, upid, opts, fmt.Sprintf("ceph dry run on node %q", deps.Node))
 			}
 			done := fmt.Sprintf("Ceph OSDs on node %q restarted.", deps.Node)
 			if err := renderCephTaskWait(cmd, deps, upid, done, opts); err != nil {

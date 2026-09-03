@@ -47,13 +47,19 @@ func TestClusterCephRestartBulk_RejectsUnknownServiceType(t *testing.T) {
 }
 
 func TestClusterCephRestartBulk_RefusesWithoutYes(t *testing.T) {
-	_, ac := newFakeClient(t)
+	f, ac := newFakeClient(t)
+	called := false
+	f.HandleFunc("POST /api2/json/cluster/ceph/restart-bulk", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		testhelper.WriteData(w, cephBulkUPID)
+	})
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
 	var buf bytes.Buffer
 	err := run(deps, &buf, "ceph", "restart-bulk", "--service-type", "mon")
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"refusing to rolling-restart cluster-wide Ceph mon daemons without confirmation")
+	require.False(t, called, "restart-bulk must not issue a POST without --yes")
 }
 
 func TestClusterCephRestartBulk_ForwardsFlagsAndWaits(t *testing.T) {
@@ -127,6 +133,25 @@ func TestClusterCephRestartBulk_DryRunPrintsTaskLog(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, form, "dry-run=1")
 	require.Contains(t, buf.String(), "mon.pve1, mon.pve2, mon.pve3")
+}
+
+func TestClusterCephRestartBulk_DryRunAsyncPrintsUPIDWithoutFetchingTheLog(t *testing.T) {
+	f, ac := newFakeClient(t)
+	var form string
+	recordCephBulk(f, &form)
+	logFetched := false
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/log", func(w http.ResponseWriter, _ *http.Request) {
+		logFetched = true
+		testhelper.WriteData(w, []map[string]any{})
+	})
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain, Async: true}
+
+	var buf bytes.Buffer
+	err := run(deps, &buf, "ceph", "restart-bulk", "--service-type", "mon", "--dry-run")
+	require.NoError(t, err)
+	require.Contains(t, form, "dry-run=1")
+	require.Contains(t, buf.String(), cephBulkUPID)
+	require.False(t, logFetched, "--dry-run --async must return before fetching the log")
 }
 
 func TestClusterCephRestartBulk_FailedDryRunStillPrintsTheLog(t *testing.T) {

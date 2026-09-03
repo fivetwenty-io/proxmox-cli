@@ -69,25 +69,13 @@ func renderBulkTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 	return renderBulkTaskWait(cmd, deps, upid, doneMsg, nil)
 }
 
-// renderClusterUPID renders the bare task handle for --async: the same shape
-// every write verb prints when it returns before waiting, shared so the
-// task-waiting and dry-run renderers cannot drift apart on it.
-func renderClusterUPID(cmd *cobra.Command, deps *cli.Deps, upid string) error {
-	return deps.Out.Render(cmd.OutOrStdout(),
-		output.Result{
-			Single:  map[string]string{"upid": upid},
-			Raw:     map[string]string{"upid": upid},
-			Message: upid,
-		}, deps.Format)
-}
-
 // renderBulkTaskWait renders a cluster worker identified by upid: the UPID
 // under --async, or doneMsg once the task finishes. opts bounds the wait; nil
 // means the SDK default, which the guest bulk actions accept and the Ceph
 // rolling restart replaces with an operator-controlled bound.
 func renderBulkTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
 	if deps.Async {
-		return renderClusterUPID(cmd, deps, upid)
+		return cli.RenderUPID(cmd, deps, upid)
 	}
 	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts); err != nil {
 		return fmt.Errorf("bulk action: %w", err)

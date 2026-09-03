@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
-	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
@@ -27,7 +25,8 @@ func newCephCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ceph",
 		Short: "Manage cluster-wide Ceph settings and rolling daemon restarts",
-		Long:  "Manage cluster-wide Ceph settings. Requires a configured Ceph cluster.",
+		Long: "Manage cluster-wide Ceph settings: OSD flags, status and per-node daemon metadata, " +
+			"and a rolling restart of one daemon type across the cluster. Requires a configured Ceph cluster.",
 	}
 	cmd.AddCommand(
 		newCephFlagsCmd(),
@@ -342,7 +341,7 @@ func newCephRestartBulkCmd() *cobra.Command {
 			}
 			opts := cli.WaitOptionsFor(waitTimeout)
 			if dryRun {
-				return renderCephBulkDryRun(cmd, deps, upid, opts)
+				return cli.RenderDryRunLog(cmd, deps, upid, opts, "ceph rolling restart dry run")
 			}
 			done := fmt.Sprintf("Ceph %s daemons restarted across the cluster.", serviceType)
 			if err := renderBulkTaskWait(cmd, deps, upid, done, opts); err != nil {
@@ -367,30 +366,4 @@ func newCephRestartBulkCmd() *cobra.Command {
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	cli.MustMarkRequired(cmd, "service-type")
 	return cmd
-}
-
-// renderCephBulkDryRun waits for a dry-run worker and prints its log, which
-// is where the API writes the plan and, when it refuses, the reason. The log
-// is fetched whether or not the worker succeeded, and the wait error is
-// returned afterwards. --async prints the UPID instead.
-func renderCephBulkDryRun(cmd *cobra.Command, deps *cli.Deps, upid string, opts *tasks.WaitOptions) error {
-	if deps.Async {
-		return renderClusterUPID(cmd, deps, upid)
-	}
-	waitErr := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts)
-	if waitErr != nil {
-		waitErr = cli.RollingWaitError(fmt.Errorf("ceph rolling restart dry run: %w", waitErr), opts, upid)
-	}
-	parsed, err := tasks.ParseUPID(upid)
-	if err != nil {
-		return errors.Join(fmt.Errorf("ceph rolling restart dry run: %w", err), waitErr)
-	}
-	res, err := cli.TaskLogResult(cmd.Context(), deps, parsed.Node, upid, nil)
-	if err != nil {
-		return errors.Join(err, waitErr)
-	}
-	if err := deps.Out.Render(cmd.OutOrStdout(), res, deps.Format); err != nil {
-		return errors.Join(err, waitErr)
-	}
-	return waitErr
 }
