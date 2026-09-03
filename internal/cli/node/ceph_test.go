@@ -1039,7 +1039,7 @@ func TestNodeCeph_CommandTree(t *testing.T) {
 
 	for _, verb := range []string{
 		"status", "cmd-safety", "cfg", "osd", "pool", "mon", "mds", "mgr", "fs",
-		"init", "start", "stop", "restart", "releases",
+		"init", "start", "stop", "restart", "releases", "restart-bulk",
 	} {
 		require.NotNil(t, find(ceph, verb), "ceph must expose %q", verb)
 	}
@@ -1051,4 +1051,197 @@ func TestNodeCeph_CommandTree(t *testing.T) {
 	for _, verb := range []string{"list", "get", "status", "create", "set", "delete"} {
 		require.NotNil(t, find(pool, verb), "ceph pool must expose %q", verb)
 	}
+}
+
+const cephBulkUPID = "UPID:pve1:00001234:00000ABC:66D0F2A0:cephrestartbulk:osd:root@pam:"
+
+func TestNodeCeph_RestartBulk_RefusesWithoutYes(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"refusing to rolling-restart Ceph OSDs on node \"pve1\" without confirmation")
+}
+
+func TestNodeCeph_RestartBulk_RejectsNonOSDServiceType(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk",
+		"--service-type", "mon", "--yes"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid --service-type")
+}
+
+func TestNodeCeph_RestartBulk_ForwardsFlagsAndWaits(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+	cephOK(f, cephBulkUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk",
+		"--yes", "--force", "--only-outdated", "--set-noout=false", "--timeout", "900"))
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, "POST", rec.method)
+	require.Contains(t, rec.query, "service-type=osd")
+	require.Contains(t, rec.query, "force=1")
+	require.Contains(t, rec.query, "only-outdated=1")
+	require.Contains(t, rec.query, "set-noout=0")
+	require.Contains(t, rec.query, "timeout=900")
+	require.NotContains(t, rec.query, "resume")
+	require.NotContains(t, rec.query, "dry-run")
+	require.Contains(t, buf.String(), "restarted")
+}
+
+func TestNodeCeph_RestartBulk_ResumeForwardsResume(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+	cephOK(f, cephBulkUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--resume", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "resume=1")
+	require.NotContains(t, rec.query, "only-outdated", "the saved plan is replayed; nothing else is sent")
+	require.NotContains(t, rec.query, "set-noout")
+	require.Contains(t, buf.String(), "restarted")
+}
+
+func TestNodeCeph_RestartBulk_DefaultSetNooutIsNotSent(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+	cephOK(f, cephBulkUPID)
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.NotContains(t, rec.query, "set-noout", "server default must not be overridden by the flag default")
+	require.NotContains(t, rec.query, "timeout=")
+}
+
+func TestNodeCeph_RestartBulk_AsyncPrintsUPID(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--async", "--node", "pve1", "node", "ceph", "restart-bulk", "--yes"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), cephBulkUPID)
+}
+
+func TestNodeCeph_RestartBulk_DryRunNeedsNoYesAndPrintsTheTaskLog(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+	cephOK(f, cephBulkUPID)
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/log", []map[string]any{
+		{"n": 1, "t": "dry-run: would restart osd.0, osd.3"},
+		{"n": 2, "t": "TASK OK"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--dry-run"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, rec.query, "dry-run=1")
+	require.Contains(t, buf.String(), "would restart osd.0, osd.3")
+}
+
+func TestNodeCeph_RestartBulk_FailedDryRunStillPrintsTheLog(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "cluster is not healthy (HEALTH_WARN: PG_DEGRADED)", "upid": cephBulkUPID,
+	})
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/log", []map[string]any{
+		{"n": 1, "t": "HEALTH_WARN: PG_DEGRADED; refusing to plan without --force"},
+		{"n": 2, "t": "TASK ERROR: cluster is not healthy (HEALTH_WARN: PG_DEGRADED)"},
+	})
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--dry-run"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ceph dry run on node \"pve1\"")
+	require.Contains(t, buf.String(), "refusing to plan without --force", "the log is the point of a dry run")
+}
+
+func TestNodeCeph_RestartBulk_NoTaskHandleIsAnError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("POST /api2/json/nodes/pve1/ceph/restart-bulk", nil) // {"data": null}
+
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "server returned no task handle")
+	require.NotContains(t, buf.String(), "Ceph OSDs on node \"pve1\" restarted.")
+}
+
+func TestNodeCeph_RestartBulk_WaitTimeoutSaysTheRollContinues(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec recordedRequest
+	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", map[string]any{
+		"status": "running", "upid": cephBulkUPID,
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes", "--wait-timeout", "1"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stopped waiting after 1s")
+	require.Contains(t, err.Error(), "still running")
+	require.Contains(t, err.Error(), cephBulkUPID)
+}
+
+func TestNodeCeph_RestartBulk_RejectsNegativeWaitTimeout(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes", "--wait-timeout=-5"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid --wait-timeout")
+}
+
+func TestNodeCeph_RestartBulk_RejectsTimeoutOutOfRange(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes", "--timeout", "5"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid --timeout 5: want 30 to 1800 seconds")
+}
+
+func TestNodeCeph_RestartBulk_SurfacesAPIError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/ceph/restart-bulk", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteError(w, http.StatusInternalServerError, "HEALTH_ERR")
+	})
+
+	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes"))
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rolling-restart ceph osds on node \"pve1\"")
+	require.Contains(t, err.Error(), "HEALTH_ERR")
 }

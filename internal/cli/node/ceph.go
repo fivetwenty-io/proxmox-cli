@@ -3,11 +3,13 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
@@ -68,6 +70,14 @@ func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 	if err != nil {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
 	}
+	return renderCephTaskWait(cmd, deps, upid, doneMsg, nil)
+}
+
+// renderCephTaskWait renders a Ceph worker identified by upid: the UPID under
+// --async, or doneMsg once the task finishes. opts bounds the wait; nil means
+// the SDK default, which is far too short for a rolling restart, so the bulk
+// verb passes an operator-controlled bound.
+func renderCephTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
 	if deps.Async {
 		return deps.Out.Render(cmd.OutOrStdout(),
 			output.Result{
@@ -76,10 +86,43 @@ func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 				Message: upid,
 			}, deps.Format)
 	}
-	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, nil); err != nil {
+	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts); err != nil {
 		return fmt.Errorf("ceph operation on node %q: %w", deps.Node, err)
 	}
 	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
+}
+
+// renderCephDryRun waits for a dry-run worker and prints its log, which is
+// where the API writes the plan it would have executed and, when it refuses,
+// the reason. The log is fetched whether or not the worker succeeded, so a
+// failed health gate still shows its message, and the wait error is returned
+// afterwards. --async prints the UPID instead, and the log is one
+// `pmx pve node task log` away.
+func renderCephDryRun(cmd *cobra.Command, deps *cli.Deps, upid string, opts *tasks.WaitOptions) error {
+	if deps.Async {
+		return deps.Out.Render(cmd.OutOrStdout(),
+			output.Result{
+				Single:  map[string]string{"upid": upid},
+				Raw:     map[string]string{"upid": upid},
+				Message: upid,
+			}, deps.Format)
+	}
+	waitErr := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts)
+	if waitErr != nil {
+		waitErr = cli.RollingWaitError(fmt.Errorf("ceph dry run on node %q: %w", deps.Node, waitErr), opts, upid)
+	}
+	parsed, err := tasks.ParseUPID(upid)
+	if err != nil {
+		return errors.Join(fmt.Errorf("ceph dry run on node %q: %w", deps.Node, err), waitErr)
+	}
+	res, err := cli.TaskLogResult(cmd.Context(), deps, parsed.Node, upid, nil)
+	if err != nil {
+		return errors.Join(err, waitErr)
+	}
+	if err := deps.Out.Render(cmd.OutOrStdout(), res, deps.Format); err != nil {
+		return errors.Join(err, waitErr)
+	}
+	return waitErr
 }
 
 func newCephCmd() *cobra.Command {
@@ -108,6 +151,7 @@ func newCephCmd() *cobra.Command {
 		newCephStartCmd(),
 		newCephStopCmd(),
 		newCephRestartCmd(),
+		newCephRestartBulkCmd(),
 	)
 	return cmd
 }
@@ -551,4 +595,131 @@ func newCephRestartCmd() *cobra.Command {
 		func(deps *cli.Deps, ctx context.Context, service *string) (*json.RawMessage, error) {
 			return deps.API.Nodes.CreateCephRestart(ctx, deps.Node, &nodes.CreateCephRestartParams{Service: service})
 		})
+}
+
+// newCephRestartBulkCmd builds `pmx pve node ceph restart-bulk`
+// (POST /nodes/{node}/ceph/restart-bulk): a rolling restart of the node's
+// OSDs, one at a time, waiting for each to come back and for recovery to
+// quiesce before moving on. The node is resolved like every other node ceph
+// write verb (--node, $PMX_NODE, or the context default) and --yes gates it.
+func newCephRestartBulkCmd() *cobra.Command {
+	var (
+		serviceType  string
+		dryRun       bool
+		force        bool
+		onlyOutdated bool
+		resume       bool
+		setNoout     bool
+		timeout      int64
+		waitTimeout  int64
+		yes          bool
+	)
+	cmd := &cobra.Command{
+		Use:   "restart-bulk",
+		Short: "Rolling-restart the node's Ceph OSDs one at a time (destructive)",
+		Long: "Restart the resolved node's Ceph OSDs one at a time (POST /nodes/{node}/ceph/restart-bulk), " +
+			"waiting for each OSD to come back up and for recovery to quiesce before the next. Only OSDs " +
+			"can be rolling-restarted per node; use 'pmx pve cluster ceph restart-bulk' for monitors, " +
+			"managers, metadata servers, or every OSD in the cluster.\n\n" +
+			"The server sets the noout flag on each targeted OSD for the duration of the run and clears it " +
+			"afterwards; pass --set-noout=false to leave the flag alone. --only-outdated restarts only OSDs " +
+			"whose running version differs from the installed ceph-osd binary, for a post-upgrade roll. " +
+			"--resume continues an aborted run from the checkpoint stored in Ceph's config-key store; " +
+			"--resume replays the saved plan, so --set-noout and --only-outdated are ignored when resuming. " +
+			"--force proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS; " +
+			"HEALTH_ERR is always fatal.\n\n" +
+			"--dry-run logs the plan (which OSDs, in what order) to the worker task without restarting " +
+			"anything, and this command prints that log even when the worker refuses; it does not require " +
+			"--yes. Every other invocation refuses to run without --yes/-y.\n\n" +
+			"--timeout is the server's per-OSD bound, 30 to 1800 seconds (default 600). --wait-timeout is " +
+			"this command's bound on waiting for the whole task: 0, the default, waits until the task ends; " +
+			"a positive value stops waiting after that many seconds while the server keeps running the " +
+			"roll, and the error names the task to follow. The global --async flag prints the task UPID " +
+			"and returns immediately instead.",
+		Example: `  pmx pve node ceph restart-bulk --dry-run
+  pmx pve node ceph restart-bulk --yes
+  pmx pve node ceph restart-bulk --only-outdated --yes
+  pmx pve node ceph restart-bulk --resume --yes
+  pmx pve node ceph restart-bulk --timeout 900 --wait-timeout 14400 --yes`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			deps := cli.GetDeps(cmd)
+			if err := requireNode(deps); err != nil {
+				return err
+			}
+			fl := cmd.Flags()
+			if serviceType != "osd" {
+				return fmt.Errorf("invalid --service-type %q: only osd can be rolling-restarted per node "+
+					"(use 'pmx pve cluster ceph restart-bulk' for mon, mgr, or mds)", serviceType)
+			}
+			if waitTimeout < 0 {
+				return fmt.Errorf("invalid --wait-timeout %d: want 0 (wait until the task ends) or a positive "+
+					"number of seconds", waitTimeout)
+			}
+			if fl.Changed("timeout") && (timeout < 30 || timeout > 1800) {
+				return fmt.Errorf("invalid --timeout %d: want 30 to 1800 seconds", timeout)
+			}
+			if !dryRun {
+				if err := requireSystemYes(deps.Node, yes, "rolling-restart Ceph OSDs"); err != nil {
+					return err
+				}
+			}
+			params := &nodes.CreateCephRestartBulkParams{ServiceType: serviceType}
+			if fl.Changed("dry-run") {
+				params.DryRun = &dryRun
+			}
+			if fl.Changed("force") {
+				params.Force = &force
+			}
+			if fl.Changed("only-outdated") {
+				params.OnlyOutdated = &onlyOutdated
+			}
+			if fl.Changed("resume") {
+				params.Resume = &resume
+			}
+			if fl.Changed("set-noout") {
+				params.SetNoout = &setNoout
+			}
+			if fl.Changed("timeout") {
+				params.Timeout = &timeout
+			}
+			resp, err := deps.API.Nodes.CreateCephRestartBulk(cmd.Context(), deps.Node, params)
+			if err != nil {
+				return fmt.Errorf("rolling-restart ceph osds on node %q: %w", deps.Node, err)
+			}
+			upid, err := apiclient.UPIDFromRaw(rawOrNil(resp))
+			if err != nil {
+				return fmt.Errorf("rolling-restart ceph osds on node %q: server returned no task handle: %w",
+					deps.Node, err)
+			}
+			opts := cli.WaitOptionsFor(waitTimeout)
+			if dryRun {
+				return renderCephDryRun(cmd, deps, upid, opts)
+			}
+			done := fmt.Sprintf("Ceph OSDs on node %q restarted.", deps.Node)
+			if err := renderCephTaskWait(cmd, deps, upid, done, opts); err != nil {
+				return cli.RollingWaitError(err, opts, upid)
+			}
+			return nil
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&serviceType, "service-type", "osd", "Ceph daemon type to restart; only osd is valid per node")
+	f.BoolVar(&dryRun, "dry-run", false, "log the plan to the task without restarting anything, then print it")
+	f.BoolVar(&force, "force", false,
+		"proceed past a HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS (HEALTH_ERR is fatal)")
+	f.BoolVar(&onlyOutdated, "only-outdated", false,
+		"restart only OSDs whose running version differs from the installed ceph-osd binary (ignored with --resume)")
+	f.BoolVar(&resume, "resume", false,
+		"resume an aborted run from its checkpoint in Ceph's config-key store, replaying the saved plan")
+	f.BoolVar(&setNoout, "set-noout", true,
+		"set noout on each targeted OSD for the run and clear it afterwards (server default: true; ignored with "+
+			"--resume)")
+	f.Int64Var(&timeout, "timeout", 0,
+		"per-OSD seconds to wait for it to come back up and for recovery to quiesce, 30 to 1800 (server default: 600)")
+	f.Int64Var(&waitTimeout, "wait-timeout", 0,
+		"seconds to wait for the whole task: 0 waits until it ends; N stops waiting after N seconds while the "+
+			"server keeps running the roll")
+	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
+	return cmd
 }

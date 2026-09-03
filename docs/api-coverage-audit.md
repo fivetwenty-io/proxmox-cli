@@ -109,6 +109,7 @@ from roughly sixty down to ten, all of which are now closed:
 | Node Ceph | `pmx pve node ceph osd lv-info <osdid>` | LVM logical-volume detail (name, path, size, UUID, volume group) backing an OSD |
 | Node Ceph | `pmx pve node ceph osd metadata <osdid>` | Detailed OSD runtime metadata, including backing devices |
 | Node Ceph | `pmx pve node ceph releases` | The Ceph releases the node's package sources offer, with available, default, and unsupported flags; answers without a configured Ceph cluster |
+| Node Ceph | `pmx pve node ceph restart-bulk` | Rolling restart of the node's OSDs one at a time, with --dry-run printing the worker's plan, --only-outdated, --resume, and --set-noout=false |
 | SDN | `pmx pve sdn zone show <zone>` | Cluster-config single-item zone detail, distinct from the per-node runtime `sdn status zones get` |
 | SDN | `pmx pve sdn vnet show <vnet>` | Cluster-config single-item VNet detail |
 | SDN | `pmx pve sdn subnet show <vnet> <subnet>` | Cluster-config single-item subnet detail |
