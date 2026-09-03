@@ -502,6 +502,13 @@ def run(ctx: Ctx) -> None:
         "pmx pve cluster ceph flags set-all --noout=true --norebalance=true",
         isolation=False, live_covered=False,
     )
+    ctx.defer(
+        "ceph restart-bulk",
+        "rolling-restarts a daemon class across the whole Ceph cluster; the dry-run plan is exercised by unit tests; "
+        "not exercised live",
+        "pmx pve cluster ceph restart-bulk --service-type osd --dry-run --yes",
+        isolation=False, live_covered=False,
+    )
 
     # Cluster firewall: static metadata catalogs — macro list and reference list.
     # Both are always present (macros are built-in; refs reflects the current

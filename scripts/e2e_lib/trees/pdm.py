@@ -305,6 +305,8 @@ def _node(ctx: Ctx) -> None:
                   validate=is_list)
         ctx.check("node journal", "pdm", "node", "journal", node,
                   "--lastentries", "5")
+        ctx.check("node journal structured", "pdm", "node", "journal", node,
+                  "--structured", "--lastentries", "20", validate=is_list)
         # rrddata is one of the ticket-only endpoints on this host.
         ctx.check("node rrddata", "pdm", "node", "rrddata", node,
                   "--timeframe", "hour", skip_on=TICKET_ONLY)

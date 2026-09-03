@@ -76,6 +76,8 @@ EMPTY_COLUMN_ALLOWLIST: dict[str, set[str]] = {
     "pbs user ls": {"EXPIRE", "FIRSTNAME", "LASTNAME", "EMAIL"},
     # The PBS disk endpoint reports a model but no separate vendor.
     "pbs node disks ls": {"VENDOR"},
+    # Port and region are optional on an S3 endpoint; the lab endpoints leave both unset.
+    "pbs s3 ls": {"PORT", "REGION"},
     # Every remote SDN zone in the lab is `simple`, so the vxlan and
     # controller columns have nothing to carry.
     "pdm sdn vnet ls": {"STATE"},
@@ -130,7 +132,7 @@ READ_VERBS = frozenset({
     # set before adding, because a token here also decides whether a check may
     # be re-run.
     "pending", "bridges", "ip-vrf", "mac-vrf", "interfaces", "neighbors",
-    "routes",
+    "routes", "releases", "buckets",
 })
 
 
@@ -262,11 +264,11 @@ def allowlisted(command: str) -> set[str]:
 def normalize_header(name: str) -> str:
     """A header reduced to what survives both rendering and shortening.
 
-    The renderer spaces a header out on its separators ("WEB-URL" is laid out
-    as "WEB - URL") and may shorten it with an ellipsis, so an allowlist
-    written against the rendered text would be unreadable and would break
-    whenever a column changes width. Both sides are normalised to the bare
-    letters and digits instead.
+    The renderer may shorten a header with an ellipsis, so an allowlist
+    written against the rendered text would break whenever a column changes
+    width. Both sides are normalised to the bare letters and digits instead,
+    which also keeps the allowlist indifferent to a header's separators
+    (e.g. "WEB-URL").
     """
     return "".join(c for c in name.upper() if c.isalnum())
 

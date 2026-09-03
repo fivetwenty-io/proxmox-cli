@@ -281,6 +281,8 @@ def run(ctx: Ctx) -> None:
         ctx.check("hosts get", "pve", "node", "hosts", "get", node=n, fmt="")
         # The journal and report can be large; --lastentries bounds the journal.
         ctx.check("journal", "pve", "node", "journal", "--lastentries", "20", node=n, fmt="")
+        ctx.check("journal structured", "pve", "node", "journal", "--structured", "--lastentries", "20",
+                  node=n, validate=is_list)
         ctx.check("syslog", "pve", "node", "syslog", "--limit", "20", node=n, validate=is_list)
         ctx.check("report", "pve", "node", "report", node=n, fmt="")
         ctx.check("subscription get", "pve", "node", "subscription", "get", node=n, validate=is_object)
@@ -364,6 +366,9 @@ def run(ctx: Ctx) -> None:
         # recording failures. Every create/delete/init and service-control verb
         # is cluster-destructive and is parsed-and-deferred below, never run
         # live.
+        # ceph releases reads the apt repository state, so it answers on a node
+        # with no configured Ceph cluster; check it before the Ceph probe.
+        ctx.check("ceph releases", "pve", "node", "ceph", "releases", node=n, validate=is_list)
         ceph_status = ctx.run("pve", "node", "ceph", "status", node=n)
         ceph_err = (ceph_status.stderr or ceph_status.stdout).lower()
         ceph_absent = ceph_status.rc != 0 and any(
@@ -864,6 +869,12 @@ def run(ctx: Ctx) -> None:
         "ceph init",
         "initializes a Ceph cluster configuration on the node — cluster-wide and destructive; not exercised live",
         "pmx pve node ceph init --node <node> --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph restart-bulk",
+        "rolling-restarts every Ceph OSD on the node; the dry-run plan is exercised by unit tests; not exercised live",
+        "pmx pve node ceph restart-bulk --node <node> --dry-run --yes",
         isolation=False, live_covered=False,
     )
     ctx.defer(

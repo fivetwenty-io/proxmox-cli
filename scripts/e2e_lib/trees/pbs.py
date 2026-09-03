@@ -257,6 +257,29 @@ def _jobs(ctx: Ctx) -> None:
                          "remote scan namespaces"):
                 ctx.skip(miss, "no remote configured")
 
+        endpoints = ctx.check("s3 ls", "pbs", "s3", "ls", validate=is_list)
+        s3id = _pick(_rows(endpoints), "id")
+        if s3id:
+            ctx.check("s3 show", "pbs", "s3", "show", s3id)
+            # listing buckets and the sanity check both contact the object
+            # store from the PBS host; probe reachability first.
+            bucket_probe = ctx.run("pbs", "s3", "buckets", s3id)
+            if bucket_probe.rc == 0:
+                buckets = ctx.check("s3 buckets", "pbs", "s3", "buckets", s3id, validate=is_list)
+                # the JSON body is a plain array of bucket names
+                names = [b for b in _rows(buckets) if isinstance(b, str)]
+                bucket = names[0] if names else _pick(_rows(buckets), "name")
+                if bucket:
+                    ctx.check("s3 check", "pbs", "s3", "check", s3id, "--bucket", bucket)
+                else:
+                    ctx.skip("s3 check", "endpoint reports no buckets")
+            else:
+                ctx.skip("s3 buckets", f"object store not reachable: {_tail(bucket_probe)}")
+                ctx.skip("s3 check", f"object store not reachable: {_tail(bucket_probe)}")
+        else:
+            for miss in ("s3 show", "s3 buckets", "s3 check"):
+                ctx.skip(miss, "no s3 endpoint configured")
+
         traffic = ctx.check("traffic ls", "pbs", "traffic", "ls", validate=is_list)
         ctx.check("traffic current", "pbs", "traffic", "current", validate=is_list)
         tname = _pick(_rows(traffic), "name")
@@ -451,6 +474,8 @@ def _node(ctx: Ctx) -> None:
         ctx.check("node report", "pbs", "node", "report", fmt="plain")
         ctx.check("node syslog", "pbs", "node", "syslog")
         ctx.check("node journal", "pbs", "node", "journal", fmt="plain")
+        ctx.check("node journal structured", "pbs", "node", "journal", "--structured", "--lastentries", "20",
+                  validate=is_list)
         ctx.check("node identity", "pbs", "node", "identity", fmt="plain")
         ctx.check("node rrd", "pbs", "node", "rrd", "--timeframe", "day")
         ctx.check("node dns show", "pbs", "node", "dns", "show")
@@ -653,6 +678,36 @@ def _defers(ctx: Ctx) -> None:
               "pmx pbs datastore update pmx-cli-ds --gc-schedule daily")
     ctx.defer("datastore delete", "removes a datastore definition; covered by unit tests",
               "pmx pbs datastore delete pmx-cli-ds --yes")
+    ctx.defer(
+        "s3 add",
+        "creates an S3 endpoint configuration; covered by unit tests",
+        "pmx pbs s3 add pmx-cli-s3 --endpoint s3.example.com --access-key AK --secret-key SK",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "s3 update",
+        "modifies an S3 endpoint configuration; covered by unit tests",
+        "pmx pbs s3 update pmx-cli-s3 --region us-east-1",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "s3 delete",
+        "removes an S3 endpoint configuration; covered by unit tests",
+        "pmx pbs s3 delete pmx-cli-s3 --yes",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "s3 reset-counters",
+        "zeroes server-side request counters; covered by unit tests",
+        "pmx pbs s3 reset-counters pmx-cli-s3 --bucket pbs-backups",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "datastore s3-refresh",
+        "rebuilds an S3-backed datastore cache from the bucket (long, IO-heavy); covered by unit tests",
+        "pmx pbs datastore s3-refresh main",
+        isolation=False, live_covered=False,
+    )
     ctx.defer("gc run", "runs garbage collection, which deletes unreferenced chunks; covered by unit tests",
               "pmx pbs gc run --store main")
     ctx.defer("prune run", "prunes snapshots by retention policy (deletes data); covered by unit tests",
