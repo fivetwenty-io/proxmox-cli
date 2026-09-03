@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7
-	github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.9.2
+	github.com/fivetwenty-io/proxmox-apiclient-go/v3 v3.10.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/spf13/cobra v1.10.2
