@@ -14,6 +14,18 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
+// TestClusterBulk_EveryVerbDescribesItsWait pins the wait contract onto each
+// guest bulk verb's own help. The tree-wide wait-bound guard only checks a
+// verb that mentions --async, so a verb whose help dropped the whole wait
+// sentence would slip past it. This test closes that gap for the four verbs
+// that wait.
+func TestClusterBulk_EveryVerbDescribesItsWait(t *testing.T) {
+	for _, c := range newBulkCmd().Commands() {
+		require.Contains(t, c.Long, "--async", "%s does not describe its wait", c.Name())
+		require.Contains(t, c.Long, cli.WaitBoundHelp, "%s does not name the wait bound", c.Name())
+	}
+}
+
 // TestClusterBulk_StartForwardsFields verifies `pmx pve cluster bulk start` posts the
 // VMID list and changed optional flags and omits unset ones.
 func TestClusterBulk_StartForwardsFields(t *testing.T) {

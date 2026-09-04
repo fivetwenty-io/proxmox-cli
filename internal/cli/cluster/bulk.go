@@ -40,6 +40,14 @@ func newBulkCmd() *cobra.Command {
 	return cmd
 }
 
+// bulkWaitHelp is the wait contract every guest bulk verb appends to its Long
+// text. The group's help says the actions run as tasks, but an operator who
+// reads only the verb's own help, which is what `--help` on the verb shows,
+// still needs to learn that the command waits, how to skip the wait, and how
+// to bound it. The wait-bound help guard checks the last part.
+const bulkWaitHelp = "The action runs as a cluster task and the command blocks until it completes; " +
+	"pass --async to print the task UPID immediately instead of waiting. " + cli.WaitBoundHelp
+
 // parseVMIDs splits a comma-separated list of VMIDs into int64 values. Empty
 // fields are ignored so trailing commas and spacing do not cause errors.
 func parseVMIDs(s string) ([]int64, error) {
@@ -98,7 +106,7 @@ func newBulkStartCmd() *cobra.Command {
 		Use:   "start",
 		Short: "Start guests across the cluster",
 		Long: "Start every guest in the cluster, or only those listed in --vmids. " +
-			"Requires --yes because it affects all guests by default.",
+			"Requires --yes because it affects all guests by default. " + bulkWaitHelp,
 		Example: `  pmx pve cluster bulk start --yes
   pmx pve cluster bulk start --vmids 100,101,102 --yes`,
 		Args: cobra.NoArgs,
@@ -149,7 +157,7 @@ func newBulkShutdownCmd() *cobra.Command {
 		Use:   "shutdown",
 		Short: "Shut down guests across the cluster",
 		Long: "Gracefully shut down every guest in the cluster, or only those listed in " +
-			"--vmids. Requires --yes because it affects all guests by default.",
+			"--vmids. Requires --yes because it affects all guests by default. " + bulkWaitHelp,
 		Example: `  pmx pve cluster bulk shutdown --yes
   pmx pve cluster bulk shutdown --vmids 100,101 --force-stop --yes`,
 		Args: cobra.NoArgs,
@@ -205,7 +213,7 @@ func newBulkSuspendCmd() *cobra.Command {
 		Short: "Suspend guests across the cluster",
 		Long: "Suspend every guest in the cluster, or only those listed in --vmids. " +
 			"With --to-disk the guests are suspended to disk and resumed on next start. " +
-			"Requires --yes because it affects all guests by default.",
+			"Requires --yes because it affects all guests by default. " + bulkWaitHelp,
 		Example: `  pmx pve cluster bulk suspend --yes
   pmx pve cluster bulk suspend --vmids 100,101 --to-disk --yes`,
 		Args: cobra.NoArgs,
@@ -262,7 +270,7 @@ func newBulkMigrateCmd() *cobra.Command {
 		Short: "Migrate guests across the cluster",
 		Long: "Migrate every guest in the cluster to --target-node, or only those listed " +
 			"in --vmids. With --online VMs are live-migrated and containers are restart-" +
-			"migrated. Requires --yes because it affects all guests by default.",
+			"migrated. Requires --yes because it affects all guests by default. " + bulkWaitHelp,
 		Example: `  pmx pve cluster bulk migrate --target-node pve2 --yes
   pmx pve cluster bulk migrate --vmids 100,101 --target-node pve2 --online --yes`,
 		Args: cobra.NoArgs,
