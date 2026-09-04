@@ -77,12 +77,7 @@ func finishAsync(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, msg st
 	}
 
 	if deps.Async {
-		return deps.Out.Render(cmd.OutOrStdout(),
-			output.Result{
-				Single:  map[string]string{"upid": upid},
-				Raw:     map[string]string{"upid": upid},
-				Message: upid,
-			}, deps.Format)
+		return cli.RenderUPID(cmd, deps, upid)
 	}
 
 	waitErr := apiclient.WaitPBSTask(cmd.Context(), deps.PBS, upid, nil)
