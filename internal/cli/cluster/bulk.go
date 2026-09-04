@@ -76,7 +76,7 @@ func renderBulkTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 // adds is the "bulk action" prefix around that failure.
 //
 // The opts argument bounds the wait. The guest bulk actions all pass nil,
-// which means the operator's --wait-timeout and waits until the task ends
+// so the operator's --wait-timeout applies and the wait runs until the task ends
 // unless the operator asked for a shorter bound. The cluster-wide Ceph rolling
 // restart wants a different error prefix, so it calls cli.RenderTaskWait
 // itself with opts it builds from that same flag.

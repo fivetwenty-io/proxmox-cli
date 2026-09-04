@@ -79,7 +79,7 @@ func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 // is the "ceph operation on node" prefix around that failure.
 //
 // The opts argument bounds the wait. Every ordinary Ceph verb passes nil,
-// which means the operator's --wait-timeout and waits until the task ends
+// so the operator's --wait-timeout applies and the wait runs until the task ends
 // unless the operator asked for a shorter bound. The rolling restart builds
 // its own opts from that same flag, because it has to name the bound again in
 // the deadline message it writes when the wait runs out.
