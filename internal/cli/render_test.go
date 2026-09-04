@@ -35,6 +35,59 @@ func TestRenderUPID_PrintsTheHandle(t *testing.T) {
 	require.Contains(t, buf.String(), renderTestUPID)
 }
 
+// TestRenderTaskWait_AsyncPrintsTheUPIDWithoutPolling covers the --async
+// short circuit: it must return before ever asking for the task's status.
+func TestRenderTaskWait_AsyncPrintsTheUPIDWithoutPolling(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	statusFetched := false
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+renderTestUPID+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		statusFetched = true
+		testhelper.WriteData(w, map[string]any{"status": "stopped", "exitstatus": "OK", "upid": renderTestUPID})
+	})
+	ac := newCLITestClient(t, f)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain, Async: true}
+
+	var buf bytes.Buffer
+	err := cli.RenderTaskWait(renderTestCmd(&buf), deps, renderTestUPID, "the task is done", nil)
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), renderTestUPID)
+	require.False(t, statusFetched, "async must return before polling task status")
+}
+
+// TestRenderTaskWait_SuccessPrintsTheDoneMessage covers the ordinary wait
+// path: the task finishes OK, and doneMsg, not the UPID, reaches the buffer.
+func TestRenderTaskWait_SuccessPrintsTheDoneMessage(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+renderTestUPID+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "OK", "upid": renderTestUPID,
+	})
+	ac := newCLITestClient(t, f)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	err := cli.RenderTaskWait(renderTestCmd(&buf), deps, renderTestUPID, "the task is done", cli.WaitOptionsFor(5))
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "the task is done")
+	require.NotContains(t, buf.String(), renderTestUPID)
+}
+
+// TestRenderTaskWait_FailedTaskReturnsTheErrorAndPrintsNothing covers a task
+// that finishes with a failure: the wait error is returned unwrapped for the
+// caller to prefix, and nothing, not even doneMsg, is rendered.
+func TestRenderTaskWait_FailedTaskReturnsTheErrorAndPrintsNothing(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+renderTestUPID+"/status", map[string]any{
+		"status": "stopped", "exitstatus": "cluster is not healthy (HEALTH_WARN: MON_DOWN)", "upid": renderTestUPID,
+	})
+	ac := newCLITestClient(t, f)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	err := cli.RenderTaskWait(renderTestCmd(&buf), deps, renderTestUPID, "the task is done", cli.WaitOptionsFor(5))
+	require.Error(t, err)
+	require.Empty(t, buf.String())
+}
+
 // TestRenderDryRunLog_AsyncPrintsUPIDWithoutFetchingTheLog covers the --async
 // short circuit: it must return before ever asking for the task's status or
 // its log.

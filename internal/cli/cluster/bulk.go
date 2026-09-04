@@ -74,13 +74,10 @@ func renderBulkTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 // means the SDK default, which the guest bulk actions accept and the Ceph
 // rolling restart replaces with an operator-controlled bound.
 func renderBulkTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
-	if deps.Async {
-		return cli.RenderUPID(cmd, deps, upid)
-	}
-	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts); err != nil {
+	if err := cli.RenderTaskWait(cmd, deps, upid, doneMsg, opts); err != nil {
 		return fmt.Errorf("bulk action: %w", err)
 	}
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
+	return nil
 }
 
 func newBulkStartCmd() *cobra.Command {

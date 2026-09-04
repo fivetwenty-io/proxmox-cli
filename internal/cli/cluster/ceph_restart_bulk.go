@@ -97,7 +97,7 @@ func newCephRestartBulkCmd() *cobra.Command {
 				return cli.RenderDryRunLog(cmd, deps, upid, opts, "ceph rolling restart dry run")
 			}
 			done := fmt.Sprintf("Ceph %s daemons restarted across the cluster.", serviceType)
-			if err := renderBulkTaskWait(cmd, deps, upid, done, opts); err != nil {
+			if err := cli.RenderTaskWait(cmd, deps, upid, done, opts); err != nil {
 				return cli.RollingWaitError(
 					fmt.Errorf("rolling-restart ceph %s daemons: %w", serviceType, err), opts, upid)
 			}

@@ -200,6 +200,8 @@ func TestClusterCephRestartBulk_WaitTimeoutSaysTheRollContinues(t *testing.T) {
 	require.Contains(t, err.Error(), "stopped waiting after 1s")
 	require.Contains(t, err.Error(), "still running")
 	require.Contains(t, err.Error(), cephBulkUPID)
+	require.NotContains(t, err.Error(), "bulk action",
+		"restart-bulk calls cli.RenderTaskWait directly, not the bulk-action renderer")
 }
 
 func TestClusterCephRestartBulk_SurfacesAPIError(t *testing.T) {

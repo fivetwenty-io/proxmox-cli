@@ -77,13 +77,10 @@ func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 // the SDK default, which is far too short for a rolling restart, so the bulk
 // verb passes an operator-controlled bound.
 func renderCephTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
-	if deps.Async {
-		return cli.RenderUPID(cmd, deps, upid)
-	}
-	if err := apiclient.WaitTask(cmd.Context(), deps.API, upid, opts); err != nil {
+	if err := cli.RenderTaskWait(cmd, deps, upid, doneMsg, opts); err != nil {
 		return fmt.Errorf("ceph operation on node %q: %w", deps.Node, err)
 	}
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
+	return nil
 }
 
 func newCephCmd() *cobra.Command {
