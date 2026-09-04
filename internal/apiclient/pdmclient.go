@@ -3,6 +3,7 @@ package apiclient
 import (
 	"log/slog"
 
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm"
 	pdmaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pdm/access"
@@ -83,6 +84,14 @@ type PDMClient struct {
 
 	// Version is the /version namespace service.
 	Version pdmversion.Service
+
+	// Tasks is the task-wait helper service, the library's PVE one bound to
+	// the PDM raw client. PDM answers the same task-status route with the
+	// same shape. The wait funnel reads it from here rather than building
+	// it, so a test can stand in a recorder and see the options the funnel
+	// hands the SDK. The constructor always sets it, and the funnel assumes
+	// it is set.
+	Tasks tasks.Service
 }
 
 // NewPDMClient constructs a PDMClient from a pre-built pve.Options.
@@ -111,6 +120,7 @@ func NewPDMClient(opts pve.Options) (*PDMClient, error) {
 		Sdn:           pdmsdn.New(raw),
 		Subscriptions: pdmsubscriptions.New(raw),
 		Version:       pdmversion.New(raw),
+		Tasks:         tasks.New(raw),
 	}, nil
 }
 

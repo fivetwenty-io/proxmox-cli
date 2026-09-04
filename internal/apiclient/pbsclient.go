@@ -3,6 +3,7 @@ package apiclient
 import (
 	"log/slog"
 
+	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs"
 	pbsaccess "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/pbs/access"
@@ -63,6 +64,14 @@ type PBSClient struct {
 
 	// Push is the /push namespace service (sync jobs, push direction).
 	Push pbspush.Service
+
+	// Tasks is the task-wait helper service, the library's PVE one bound to
+	// the PBS raw client. PBS answers the same task-status route with the
+	// same shape. The wait funnel reads it from here rather than building
+	// it, so a test can stand in a recorder and see the options the funnel
+	// hands the SDK. The constructor always sets it, and the funnel assumes
+	// it is set.
+	Tasks tasks.Service
 }
 
 // NewPBSClient constructs a PBSClient from a pre-built pve.Options.
@@ -88,6 +97,7 @@ func NewPBSClient(opts pve.Options) (*PBSClient, error) {
 		Ping:    pbsping.New(raw),
 		Pull:    pbspull.New(raw),
 		Push:    pbspush.New(raw),
+		Tasks:   tasks.New(raw),
 	}, nil
 }
 

@@ -58,7 +58,7 @@ func WaitPBSTask(ctx context.Context, pc *PBSClient, upid string, opts *tasks.Wa
 
 	opts = waitOptionsOrDefault(opts)
 
-	status, err := tasks.New(pc.Raw).Wait(ctx, node, upid, opts)
+	status, err := pc.Tasks.Wait(ctx, node, upid, opts)
 	if err != nil {
 		return fmt.Errorf("wait task %s: %w", upid, err)
 	}

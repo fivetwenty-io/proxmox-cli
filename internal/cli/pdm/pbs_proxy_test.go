@@ -13,6 +13,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // TestPbsRemoteLs_SortsById asserts that `pbs remote ls` sorts entries by
@@ -249,37 +250,51 @@ func TestFinishRemoteAsync_RejectsNonUPIDResponse(t *testing.T) {
 // PDM proxy verbs to --wait-timeout. Those verbs poll the managed remote's
 // own task endpoint rather than one of the three wait funnels, so nothing
 // else makes them honour the operator's bound, and they carried a hardcoded
-// five minutes of their own before.
-//
-// Only elapsed time separates the operator's bound from a hardcoded one, so
-// the test lets a real one-second bound expire against a poller that never
-// stops reporting "running". testhelper.ExpiringContext would end the wait
-// faster, but it ends it whatever the bound is, so it cannot tell the two
-// apart. The watchdog turns a regression into a failure in seconds rather
-// than a wait for the old five minutes.
+// five minutes before this. The poller is handed the bounded context, so the
+// test reads the deadline off it and finishes the task on the first poll
+// rather than waiting for the bound to expire.
 func TestWaitRemoteTask_UsesTheOperatorsWaitTimeout(t *testing.T) {
 	t.Cleanup(func() { apiclient.SetDefaultWaitTimeout(0) })
-	apiclient.SetDefaultWaitTimeout(1)
+	// A bound no default could be mistaken for: neither the SDK's 300 s nor
+	// the one-week unbounded sentinel.
+	const operatorBound = 1234 * time.Second
+	apiclient.SetDefaultWaitTimeout(int64(operatorBound / time.Second))
 
-	// The poll itself takes a moment, which puts the loop's next poll safely
-	// behind the one-second deadline so the wait always ends on the deadline
-	// rather than racing it.
+	// The poller receives the bounded context, so it can read the deadline
+	// off it and end the wait at once by reporting a finished task.
+	var deadline time.Time
+	var bounded bool
+	poll := func(ctx context.Context, _, _ string) (*remoteTaskStatus, error) {
+		deadline, bounded = ctx.Deadline()
+
+		return &remoteTaskStatus{Status: "stopped"}, nil
+	}
+
+	require.NoError(t, waitRemoteTask(context.Background(), "PBS", "backup1", validUPID, poll))
+	require.True(t, bounded, "the poll context carries no deadline, so the wait would run forever")
+
+	// The deadline was set before the poll ran, so what is left of it now is
+	// a little under the bound, never over.
+	remaining := time.Until(deadline)
+	require.LessOrEqual(t, remaining, operatorBound)
+	require.Greater(t, remaining, operatorBound-time.Minute,
+		"the deadline is not the operator's bound, so it came from somewhere else")
+}
+
+// TestWaitRemoteTask_ExpiredBoundNamesTheRemote covers the branch that turns
+// an expired bound into an error. The expiring context ends the wait from
+// the outside on the first poll, so the poller never sleeps and the test
+// never waits for a real bound.
+func TestWaitRemoteTask_ExpiredBoundNamesTheRemote(t *testing.T) {
+	ctx, expire := testhelper.ExpiringContext(context.Background())
 	poll := func(_ context.Context, _, _ string) (*remoteTaskStatus, error) {
-		time.Sleep(50 * time.Millisecond)
+		expire()
 
 		return &remoteTaskStatus{Status: "running"}, nil
 	}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- waitRemoteTask(context.Background(), "PBS", "backup1", validUPID, poll)
-	}()
-
-	select {
-	case err := <-done:
-		require.ErrorIs(t, err, context.DeadlineExceeded)
-		require.ErrorContains(t, err, "backup1")
-	case <-time.After(20 * time.Second):
-		t.Fatal("the remote-task wait ignored the operator's one-second bound")
-	}
+	err := waitRemoteTask(ctx, "PBS", "backup1", validUPID, poll)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorContains(t, err, "backup1")
+	require.ErrorContains(t, err, validUPID)
 }
