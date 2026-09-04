@@ -55,21 +55,24 @@ func TestExtractPMXFlags_ConfigInsecureDebugAllForms(t *testing.T) {
 	require.Equal(t, []string{"src", "dst"}, rest)
 }
 
-// Every root persistent flag must be extractable here. One that is missing is
+// Every root persistent flag must be extractable here, and each row has to
+// agree with the flag about whether it takes a value. One that is missing is
 // handed to rsync(1) verbatim — `pmx --no-log rsync src dst` then dies with
-// "rsync: --no-log: unknown option" and nothing points back at pmx. The short
-// forms are deliberately excluded: rsync owns -o, -v, and -t.
+// "rsync: --no-log: unknown option" and nothing points back at pmx. One whose
+// takesValue is wrong fails later and more obscurely, either by feeding the
+// literal "true" to a numeric flag or by swallowing the next argv token. The
+// short forms are deliberately excluded: rsync owns -o, -v, and -t.
 func TestExtractPMXFlags_CoversEveryRootPersistentFlag(t *testing.T) {
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
 
-	extractable := map[string]bool{}
-	for _, spec := range pmxFlagTable {
-		if spec.target != "root" {
+	extractable := map[string]*pmxFlagSpec{}
+	for i := range pmxFlagTable {
+		if pmxFlagTable[i].target != "root" {
 			continue
 		}
-		for _, n := range spec.names {
-			extractable[strings.TrimLeft(n, "-")] = true
+		for _, n := range pmxFlagTable[i].names {
+			extractable[strings.TrimLeft(n, "-")] = &pmxFlagTable[i]
 		}
 	}
 
@@ -78,9 +81,16 @@ func TestExtractPMXFlags_CoversEveryRootPersistentFlag(t *testing.T) {
 		if f.Name == "help" || f.Name == "version" {
 			return
 		}
-		require.True(t, extractable[f.Name],
+		spec := extractable[f.Name]
+		require.NotNil(t, spec,
 			"root persistent flag --%s is not in pmxFlagTable; `pmx --%s rsync ...` "+
 				"would pass it to rsync(1)", f.Name, f.Name)
+
+		// Only a boolean flag may be extracted without consuming the token
+		// after it; everything else needs its value.
+		require.Equal(t, f.Value.Type() != "bool", spec.takesValue,
+			"pmxFlagTable row for --%s has takesValue %t, but the flag is a %s",
+			f.Name, spec.takesValue, f.Value.Type())
 	})
 }
 

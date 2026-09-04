@@ -246,7 +246,10 @@ func newTaskWaitCmd() *cobra.Command {
 		Short: "Wait for a task to complete",
 		Long: "Poll a task by its UPID until it finishes or --timeout elapses, then report " +
 			"its final status. The node is parsed from the UPID, so no positional node is " +
-			"required.",
+			"required.\n\n" +
+			"This command watches a task somebody else started, so it bounds the wait with its " +
+			"own --timeout, which defaults to 300 seconds. The global --wait-timeout flag bounds " +
+			"the verbs that start a task and wait for it, and it does not apply here.",
 		Example: `  pmx pve node task wait UPID:pve1:00001234:...
   pmx pve node task wait UPID:pve1:00001234:... --timeout 600`,
 		Args: cobra.ExactArgs(1),

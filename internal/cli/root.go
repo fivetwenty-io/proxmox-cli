@@ -71,10 +71,10 @@ type Deps struct {
 	// Async controls whether lifecycle commands block on task completion.
 	Async bool
 
-	// WaitTimeout is the resolved --wait-timeout flag value in seconds: how
-	// long a command waits for a task it started before it gives up and names
-	// the task for the operator to follow. Zero, the default, waits until the
-	// task ends. The same value is handed to apiclient.SetDefaultWaitTimeout,
+	// WaitTimeout is the resolved --wait-timeout flag value in seconds. It says
+	// how long a command waits for a task it started before it gives up and
+	// names the task for the operator to follow. Zero, the default, waits until
+	// the task ends. The same value is handed to apiclient.SetDefaultWaitTimeout,
 	// so a command only needs to read this field when it builds its own wait
 	// options rather than letting the wait funnels apply the policy.
 	WaitTimeout int64
@@ -491,12 +491,6 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		cmd.Flags().Changed("warnings-as-errors"), pf.warningsAsErrors,
 		"PMX_WARNINGS_AS_ERRORS", cfg.WarningsAsErrors))
 
-	// How long a command waits for a task it started, for the same reason and
-	// in the same place: the three wait funnels sit far below this hook, and
-	// every task-producing verb of every product reaches one of them without
-	// carrying a bound of its own.
-	apiclient.SetDefaultWaitTimeout(pf.waitTimeout)
-
 	// A shell-completion request is a keystroke, not an operation: it mutates
 	// nothing, and cobra dispatches it through this same PersistentPreRunE.
 	// Logging it opened a file per tab press under a "__complete" directory,
@@ -578,6 +572,13 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 			"invalid --wait-timeout %d: want 0 (wait until the task ends) or a positive number of seconds",
 			pf.waitTimeout)
 	}
+
+	// Now that the bound is known to make sense, record how long a command may
+	// wait for a task it starts. It is process-wide state for the same reason
+	// the warning policy above is, since the three wait funnels sit far below
+	// this hook and every task-producing verb of every product reaches one of
+	// them without carrying a bound of its own.
+	apiclient.SetDefaultWaitTimeout(pf.waitTimeout)
 
 	// Commands that set Annotations["noClient"]="true" skip API client build.
 	// This applies to: version (build-info only), context group verbs.

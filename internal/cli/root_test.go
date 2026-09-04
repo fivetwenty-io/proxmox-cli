@@ -91,6 +91,7 @@ func TestWaitTimeout_RejectsNegative(t *testing.T) {
 	t.Setenv("PMX_OUTPUT", "table")
 	t.Setenv("PMX_NODE", "")
 	t.Setenv("PMX_CONTEXT", "")
+	t.Cleanup(func() { apiclient.SetDefaultWaitTimeout(0) })
 
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()

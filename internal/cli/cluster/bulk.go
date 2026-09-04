@@ -69,10 +69,17 @@ func renderBulkTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 	return renderBulkTaskWait(cmd, deps, upid, doneMsg, nil)
 }
 
-// renderBulkTaskWait renders a cluster worker identified by upid: the UPID
-// under --async, or doneMsg once the task finishes. opts bounds the wait; nil
-// means the SDK default, which the guest bulk actions accept and the Ceph
-// rolling restart replaces with an operator-controlled bound.
+// renderBulkTaskWait waits for the cluster worker identified by upid and marks
+// any error the wait produces as a bulk action. The waiting and the rendering
+// are cli.RenderTaskWait's, so under --async this prints the UPID and returns,
+// and otherwise it prints doneMsg once the task finishes. All this function
+// adds is the "bulk action" prefix around that failure.
+//
+// The opts argument bounds the wait. The guest bulk actions all pass nil,
+// which means the operator's --wait-timeout and waits until the task ends
+// unless the operator asked for a shorter bound. The cluster-wide Ceph rolling
+// restart wants a different error prefix, so it calls cli.RenderTaskWait
+// itself with opts it builds from that same flag.
 func renderBulkTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
 	if err := cli.RenderTaskWait(cmd, deps, upid, doneMsg, opts); err != nil {
 		return fmt.Errorf("bulk action: %w", err)

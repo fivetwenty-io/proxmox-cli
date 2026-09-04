@@ -72,10 +72,17 @@ func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, don
 	return renderCephTaskWait(cmd, deps, upid, doneMsg, nil)
 }
 
-// renderCephTaskWait renders a Ceph worker identified by upid: the UPID under
-// --async, or doneMsg once the task finishes. opts bounds the wait; nil means
-// the SDK default, which is far too short for a rolling restart, so the bulk
-// verb passes an operator-controlled bound.
+// renderCephTaskWait waits for the Ceph worker identified by upid and names
+// the node in any error the wait produces. The waiting and the rendering are
+// cli.RenderTaskWait's, so under --async this prints the UPID and returns, and
+// otherwise it prints doneMsg once the task finishes. All this function adds
+// is the "ceph operation on node" prefix around that failure.
+//
+// The opts argument bounds the wait. Every ordinary Ceph verb passes nil,
+// which means the operator's --wait-timeout and waits until the task ends
+// unless the operator asked for a shorter bound. The rolling restart builds
+// its own opts from that same flag, because it has to name the bound again in
+// the deadline message it writes when the wait runs out.
 func renderCephTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
 	if err := cli.RenderTaskWait(cmd, deps, upid, doneMsg, opts); err != nil {
 		return fmt.Errorf("ceph operation on node %q: %w", deps.Node, err)

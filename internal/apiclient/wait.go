@@ -16,8 +16,8 @@ const UnboundedWaitSeconds = 7 * 24 * 3600
 // funnels when a caller passes nil options. Zero means unbounded.
 //
 // It is process-wide state set once from the root command's flag resolution,
-// for the same reason warningsAreErrors is: the alternative is threading a
-// policy value through every task-producing call site, and none of them has
+// for the same reason warningsAreErrors is. The alternative would be to thread
+// a policy value through every task-producing call site, and none of them has
 // any interest in it.
 var defaultWaitTimeout atomic.Int64
 

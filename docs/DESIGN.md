@@ -258,21 +258,11 @@ the `~/.pmx/logs/.last-prune` sentinel's mtime.
 
 ## Asynchronous tasks
 
-Commands that trigger a background task (VM/CT lifecycle, snapshots, storage
-operations, and every task-producing PBS and PDM verb) block by default until
-the task reaches a terminal state, then exit with the appropriate semantic exit
-code. Waiting until the task ends is spelled as a one-week ceiling rather than
-as no ceiling at all, because the SDK reads a non-positive bound as a request
-for its own 300 s default, which a Ceph rolling restart outlives by hours.
+Commands that trigger a background task (VM/CT lifecycle, snapshots, storage operations, and every task-producing PBS and PDM verb) block by default until the task reaches a terminal state, then exit with the appropriate semantic exit code. Waiting until the task ends is spelled as a one-week ceiling rather than as no ceiling at all, because the SDK reads a non-positive bound as a request for its own 300 s default, which a Ceph rolling restart outlives by hours.
 
-Pass `--async` to return the task UPID immediately instead, or `--wait-timeout
-N` to stop waiting after N seconds while the server keeps running the task; the
-error names the task so the operator can follow it. The bound is process-wide
-policy rather than a per-command flag: the root command resolves it once and
-hands it to `apiclient.SetDefaultWaitTimeout`, and the three wait funnels
-(`WaitTask`, `WaitPBSTask`, and `WaitPDMTask`) read it whenever a caller passes
-no policy of its own. A command that does hold a bound in hand, such as either
-Ceph rolling restart, builds its options from `Deps.WaitTimeout` instead.
+Pass `--async` to return the task UPID immediately instead, or `--wait-timeout N` to stop waiting after N seconds while the server keeps running the task. The error then names the task so the operator can follow it. The bound is process-wide policy rather than a per-command flag. The root command resolves it once and hands it to `apiclient.SetDefaultWaitTimeout`, and the three wait funnels (`WaitTask`, `WaitPBSTask`, and `WaitPDMTask`) read it whenever a caller passes no policy of its own. A command that does hold a bound in hand, such as either Ceph rolling restart, builds its options from `Deps.WaitTimeout` instead.
+
+Two commands are outside all of this. `pmx pve task wait` and `pmx pve node task wait` watch a task somebody else started rather than starting one, so each carries its own `--timeout` (300 seconds by default), calls the SDK directly rather than through a funnel, and ignores the global flag. Their help text says so.
 
 ## Semantic exit codes
 
