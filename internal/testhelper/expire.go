@@ -7,7 +7,10 @@ import (
 
 // expiringCtx is a context.Context whose Done channel closes only when its
 // owner asks it to, not on any timer. Everything else, including Deadline
-// and Value, comes from the embedded parent.
+// and Value, comes from the embedded parent. The parent must be one that
+// never cancels on its own, such as context.Background, because Done does
+// not watch the parent's channel; a parent that cancelled first would leave
+// Err non-nil while Done stayed open.
 type expiringCtx struct {
 	context.Context
 	done chan struct{}
