@@ -29,6 +29,11 @@ type pmxFlagSpec struct {
 	// takesValue is true when the flag consumes a following value (either
 	// "--flag value" or "--flag=value"); false for boolean flags.
 	takesValue bool
+	// negativeOK is true when a value starting with '-' may be a negative
+	// integer the flag's own validation should see, rather than a misplaced
+	// rsync flag. Only --wait-timeout sets it, so that `-c -8` and
+	// `--ssh-port -5` still trip the misplaced-flag guard.
+	negativeOK bool
 	// target is "root" or "ssh", selecting which map in pmxFlagValues the
 	// extracted value is stored under.
 	target string
@@ -64,7 +69,7 @@ var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"--trace"}, takesValue: false, target: "root", dest: "trace"},
 	{names: []string{"--verbose"}, takesValue: false, target: "root", dest: "verbose"},
 	{names: []string{"--async"}, takesValue: false, target: "root", dest: "async"},
-	{names: []string{"--wait-timeout"}, takesValue: true, target: "root", dest: "wait-timeout"},
+	{names: []string{"--wait-timeout"}, takesValue: true, negativeOK: true, target: "root", dest: "wait-timeout"},
 	{names: []string{"--warnings-as-errors"}, takesValue: false, target: "root",
 		dest: "warnings-as-errors"},
 	{names: []string{"--wide"}, takesValue: false, target: "root", dest: "wide"},
@@ -130,8 +135,12 @@ func extractPMXFlags(args []string) (pmxFlagValues, []string, error) {
 		// -av ...` meaning rsync's -a/-v, not a context literally named
 		// "-av"), which would otherwise surface only as a baffling later
 		// error (e.g. `context "-av" not found`). Reject it here with a
-		// message that names the actual mistake.
-		if spec.takesValue && strings.HasPrefix(value, "-") {
+		// message that names the actual mistake. A negative integer for a
+		// flag that allows one is the exception, because the root has its
+		// own answer for `--wait-timeout -5`, which the generic message
+		// would hide.
+		misplaced := spec.takesValue && strings.HasPrefix(value, "-")
+		if misplaced && (!spec.negativeOK || !isInteger(value)) {
 			return pmxFlagValues{}, nil, valueLooksLikeFlagError(name, value)
 		}
 
@@ -145,6 +154,15 @@ func extractPMXFlags(args []string) (pmxFlagValues, []string, error) {
 	}
 
 	return vals, args[i:], nil
+}
+
+// isInteger reports whether value parses as a base-10 integer, which is how
+// a negative flag value such as "-5" is told apart from a misplaced flag such
+// as "-av". Only integers qualify, so "-5.5" still trips the guard rather
+// than failing later inside the flag's own parser.
+func isInteger(value string) bool {
+	_, err := strconv.ParseInt(value, 10, 64)
+	return err == nil
 }
 
 // valueLooksLikeFlagError builds the error extractPMXFlags returns when a

@@ -437,3 +437,35 @@ func TestFindHostSplit(t *testing.T) {
 		})
 	}
 }
+
+// A negative number after a value-taking flag is a value, not a misplaced
+// rsync flag: no rsync option looks like "-5", and the root's own validation
+// of --wait-timeout is the message the operator should see for it.
+func TestExtractPMXFlags_NegativeNumberIsAValueNotAFlag(t *testing.T) {
+	for _, args := range [][]string{{"--wait-timeout=-5"}, {"--wait-timeout", "-5"}} {
+		vals, rest, err := extractPMXFlags(args)
+		require.NoError(t, err, "%v", args)
+		require.Equal(t, "-5", vals.Root["wait-timeout"])
+		require.Empty(t, rest)
+	}
+}
+
+func TestExtractPMXFlags_NonIntegerValueStillLooksLikeAFlag(t *testing.T) {
+	for _, value := range []string{"-av", "-5.5", "-1e3", "-Inf"} {
+		_, _, err := extractPMXFlags([]string{"--wait-timeout", value})
+		require.Error(t, err, value)
+		require.Contains(t, err.Error(), "--wait-timeout")
+		require.Contains(t, err.Error(), `"`+value+`"`)
+	}
+}
+
+// The exception belongs to --wait-timeout alone. rsync really has a -8
+// option, and a negative port is not something ssh should be the one to
+// reject, so the other value-taking flags keep the misplaced-flag guard.
+func TestExtractPMXFlags_NegativeNumberIsStillAFlagForOtherFlags(t *testing.T) {
+	for _, args := range [][]string{{"-c", "-8"}, {"--ssh-port", "-5"}, {"--node", "-1"}} {
+		_, _, err := extractPMXFlags(args)
+		require.Error(t, err, "%v", args)
+		require.Contains(t, err.Error(), args[0])
+	}
+}

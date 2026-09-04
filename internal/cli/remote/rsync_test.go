@@ -408,3 +408,26 @@ func TestRsync_APIErrorSurfacesWhenConfigMissing(t *testing.T) {
 	require.Error(t, err)
 	require.Empty(t, runner.Calls)
 }
+
+// TestRsync_NegativeWaitTimeoutGetsTheRootsValidationMessage checks that the
+// front-extraction hands a negative --wait-timeout through to the root, whose
+// validation names the flag and what it accepts, instead of stopping at the
+// misplaced-flag guard with a message about a value that "looks like a flag".
+func TestRsync_NegativeWaitTimeoutGetsTheRootsValidationMessage(t *testing.T) {
+	alpha := testhelper.NewFakePVE(t)
+	alpha.HandleJSON("GET /api2/json/cluster/status", []any{
+		map[string]any{"type": "node", "name": "pve1", "ip": "10.0.0.1", "online": 1},
+	})
+	cfgPath := writeFakeConfigMulti(t, "alpha", map[string]*testhelper.FakePVE{"alpha": alpha})
+	runner := exec.Fake()
+	root, _, prefix := newRemoteRoot(t, cfgPath, runner)
+
+	for _, form := range [][]string{{"--wait-timeout=-5"}, {"--wait-timeout", "-5"}} {
+		root.SetArgs(append(append(append([]string{}, prefix...), "rsync"), append(form, "pve1:/etc", "./dst")...))
+		err := root.Execute()
+		require.Error(t, err, "%v", form)
+		require.Contains(t, err.Error(), "invalid --wait-timeout -5")
+		require.NotContains(t, err.Error(), "expects a value")
+	}
+	require.Empty(t, runner.Calls, "rsync must not run under a rejected wait bound")
+}
