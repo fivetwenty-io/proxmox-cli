@@ -100,7 +100,7 @@ func newOciPullCmd() *cobra.Command {
 		Long: "Download an OCI container image from a registry into the given storage " +
 			"on the resolved node. This writes a new image artifact to the storage " +
 			"and requires --yes. The operation runs as a background task; use --async " +
-			"to return the task UPID immediately.",
+			"to return the task UPID immediately. " + cli.WaitBoundHelp,
 		Example: `  pmx pve node oci pull local-lvm --reference docker.io/library/alpine:latest --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

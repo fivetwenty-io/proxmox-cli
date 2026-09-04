@@ -52,7 +52,7 @@ func newSnapshotCreateCmd() *cobra.Command {
 		Short: "Create a snapshot of a container",
 		Long: "Create a new named snapshot of the container's disks. Submits a PVE task and " +
 			"blocks until it completes; pass --async or the global --async flag to print the " +
-			"task UPID immediately instead of waiting.",
+			"task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc snapshot create 200 pre-upgrade
   pmx pve lxc snapshot create web1 pre-upgrade --description "before kernel update"`,
 		Args: cobra.ExactArgs(2),
@@ -98,7 +98,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 		Long: "Permanently delete a named snapshot. Pass --yes to confirm the deletion, and " +
 			"--force to remove it from the config even if removing its disk snapshots fails. " +
 			"Submits a PVE task and blocks until it completes; pass --async or the global " +
-			"--async flag to print the task UPID immediately instead of waiting.",
+			"--async flag to print the task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc snapshot delete 200 pre-upgrade --yes
   pmx pve lxc snapshot delete web1 pre-upgrade --yes --force`,
 		Args: cobra.ExactArgs(2),
@@ -150,7 +150,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 			"confirm. Pass --start to bring the container up as soon as the rollback " +
 			"succeeds.\n\n" +
 			"The command submits a PVE task and blocks until it completes; --async, or the " +
-			"global --async flag, prints the task UPID and returns immediately.",
+			"global --async flag, prints the task UPID and returns immediately. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc snapshot rollback 200 pre-upgrade --yes
   pmx pve lxc snapshot rollback web1 pre-upgrade --yes --start`,
 		Args: cobra.ExactArgs(2),

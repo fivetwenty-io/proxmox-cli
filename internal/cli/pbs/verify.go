@@ -54,7 +54,7 @@ func newVerifyRunCmd() *cobra.Command {
 			"/admin/datastore/{store}/verify), optionally scoped to a namespace " +
 			"(--ns) or a single snapshot (--backup-type/--backup-id/--backup-time). " +
 			"Runs as an asynchronous task; the command blocks until it finishes " +
-			"unless --async is set.",
+			"unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs verify run --store tank",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -567,8 +567,9 @@ func newVerifyJobRunCmd() *cobra.Command {
 			"/admin/verify/{id}/run). This endpoint reports only success or " +
 			"failure, not a task UPID, so the command always completes " +
 			"synchronously and --async has no effect here.",
-		Example: "  pmx pbs verify job run weekly-verify",
-		Args:    cobra.ExactArgs(1),
+		Example:     "  pmx pbs verify job run weekly-verify",
+		Annotations: map[string]string{cli.AnnotationNoWaitBound: "true"},
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

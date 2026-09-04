@@ -135,7 +135,7 @@ func newPruneRunCmd() *cobra.Command {
 			"/admin/datastore/{store}/prune-datastore): remove backup snapshots " +
 			"that fall outside the --keep-* retention window across every group " +
 			"under --ns, or the whole datastore. Runs as an asynchronous task; " +
-			"the command blocks until it finishes unless --async is set.",
+			"the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs prune run --store tank --keep-daily 7",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -211,8 +211,9 @@ func newPruneSimulateCmd() *cobra.Command {
 			"given --keep-* retention window. This always runs as a dry run; " +
 			"nothing is deleted, and there is no --async flag since the API " +
 			"returns the plan synchronously.",
-		Example: "  pmx pbs prune simulate vm/100 --store tank --keep-daily 7",
-		Args:    cobra.ExactArgs(1),
+		Example:     "  pmx pbs prune simulate vm/100 --store tank --keep-daily 7",
+		Annotations: map[string]string{cli.AnnotationNoWaitBound: "true"},
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			if store == "" {
@@ -717,8 +718,9 @@ func newPruneJobRunCmd() *cobra.Command {
 		Long: "Immediately run a configured prune job (POST /admin/prune/{id}/run). " +
 			"This endpoint reports only success or failure, not a task UPID, so the " +
 			"command always completes synchronously and --async has no effect here.",
-		Example: "  pmx pbs prune job run daily-prune",
-		Args:    cobra.ExactArgs(1),
+		Example:     "  pmx pbs prune job run daily-prune",
+		Annotations: map[string]string{cli.AnnotationNoWaitBound: "true"},
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps := cli.GetDeps(cmd)
 			id := args[0]

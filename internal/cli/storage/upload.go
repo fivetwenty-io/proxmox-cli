@@ -48,7 +48,7 @@ func newUploadCmd() *cobra.Command {
 			"overrides it. Pass --checksum and --checksum-algorithm to have the upload " +
 			"verified.\n\n" +
 			"The upload runs as an asynchronous task, and the command blocks until it " +
-			"finishes unless --async is set.\n\n" +
+			"finishes unless --async is set. " + cli.WaitBoundHelp + "\n\n" +
 			"--content snippets works differently. PVE's upload endpoint accepts only iso, " +
 			"vztmpl, and import; snippets have been a gap for years (Proxmox Bugzilla #2208, " +
 			"https://bugzilla.proxmox.com/show_bug.cgi?id=2208). So the file goes over SSH " +

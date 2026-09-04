@@ -24,7 +24,7 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Destroy a VM and its configuration",
 		Long: "Permanently destroy a VM: its configuration and, unless it fails to remove, its " +
 			"disks. Refuses to run without --yes/-y. Submits a PVE task and blocks until it " +
-			"completes; pass --async to print the task UPID immediately instead of waiting.",
+			"completes; pass --async to print the task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu delete 100 --yes
   pmx pve qemu delete web1 --yes --purge`,
 		Args: cobra.ExactArgs(1),

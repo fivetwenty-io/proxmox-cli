@@ -32,7 +32,7 @@ func newTapeRestoreCmd() *cobra.Command {
 		Long: "Restore data from a media set into one or more datastores (POST " +
 			"/tape/restore). Namespaces are automatically created if necessary. --drive, " +
 			"--media-set, and --store are required. Runs as an asynchronous task; the " +
-			"command blocks until it finishes unless --async is set.",
+			"command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pbs tape restore --drive drive0 --media-set MEDIA-SET-UUID \
   --store tank`,
 		Args: cobra.NoArgs,

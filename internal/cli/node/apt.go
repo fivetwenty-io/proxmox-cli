@@ -192,7 +192,7 @@ func newAptUpdateCmd() *cobra.Command {
 		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Refresh the package database on the resolved node (equivalent to " +
 			"`apt-get update`). The command blocks until the refresh task finishes " +
-			"unless --async is set.",
+			"unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve node apt update`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

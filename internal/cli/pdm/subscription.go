@@ -770,7 +770,7 @@ func newSubscriptionApplyPendingCmd() *cobra.Command {
 			"confirm.\n\n" +
 			"When there is something to apply, an asynchronous worker task starts and the " +
 			"command blocks until it completes; the persistent --async flag returns the UPID " +
-			"immediately instead.",
+			"immediately instead. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm subscription apply-pending --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

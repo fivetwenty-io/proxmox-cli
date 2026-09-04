@@ -536,7 +536,7 @@ func newTapeJobRunCmd() *cobra.Command {
 		Short: "Manually trigger a scheduled tape backup job",
 		Long: "Immediately run a configured tape backup job (POST /tape/backup/{id}). " +
 			"Runs as an asynchronous task; the command blocks until it finishes unless " +
-			"--async is set. If the server reports no UPID for this run (some PBS " +
+			"--async is set. " + cli.WaitBoundHelp + " If the server reports no UPID for this run (some PBS " +
 			"versions document this endpoint as returning null), a plain success " +
 			"message is printed instead.",
 		Example: "  pmx pbs tape job run weekly-tape",

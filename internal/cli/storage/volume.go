@@ -315,7 +315,7 @@ func newVolumeCopyCmd() *cobra.Command {
 		Short: "Copy a volume to another volume",
 		Long: "Copy a volume to a new target volume, optionally on a different node. " +
 			"The copy runs as an asynchronous task; the command blocks until it finishes " +
-			"unless --async is set. The source node is a node carrying the source volume's " +
+			"unless --async is set. " + cli.WaitBoundHelp + " The source node is a node carrying the source volume's " +
 			"storage, resolved from the cluster unless --node is passed explicitly.",
 		Example: `  pmx pve storage volume copy local:backup/vzdump-qemu-100-2026_01_01.vma.zst \
   --target-volume local-lvm:backup/copy.vma.zst`,

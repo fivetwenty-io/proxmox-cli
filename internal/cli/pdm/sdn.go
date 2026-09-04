@@ -262,7 +262,7 @@ func newSdnVnetAddCmd() *cobra.Command {
 			"Each --remote entry is `<remote>=<zone>`, pairing a remote with the zone the " +
 			"VNet should be created in on that remote.\n\n" +
 			"Creation runs as an asynchronous task, and the command blocks until it " +
-			"completes; the persistent --async flag returns the UPID immediately instead.",
+			"completes; the persistent --async flag returns the UPID immediately instead. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm sdn vnet add vnet1 --remote pve-main=zone1 --remote pve-secondary=zone1",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -443,7 +443,7 @@ func newSdnZoneAddCmd() *cobra.Command {
 			"types that use a controller need the second form, which in practice means evpn; " +
 			"simple, vlan, vxlan, and qinq zones leave it off.\n\n" +
 			"Creation runs as an asynchronous task, and the command blocks until it " +
-			"completes; the persistent --async flag returns the UPID immediately instead.",
+			"completes; the persistent --async flag returns the UPID immediately instead. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm sdn zone add zone1 --remote pve-main --remote pve-secondary",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

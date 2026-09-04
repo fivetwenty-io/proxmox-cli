@@ -45,7 +45,7 @@ func newStartCmd() *cobra.Command {
 		Short: "Start a container",
 		Long: "Start a stopped container. Resolves the target by numeric vmid or name. " +
 			"Submits a PVE task and blocks until it completes; pass the global --async flag " +
-			"to print the task UPID immediately instead of waiting.",
+			"to print the task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc start 200
   pmx pve lxc start web1 --async`,
 		Args: cobra.ExactArgs(1),
@@ -86,7 +86,7 @@ func newStopCmd() *cobra.Command {
 		Long: "Immediately power off a running container without asking it to shut down " +
 			"cleanly, similar to pulling the power. Prefer 'lxc shutdown' for a graceful " +
 			"stop. Submits a PVE task and blocks until it completes; pass the global --async " +
-			"flag to print the task UPID immediately instead of waiting.",
+			"flag to print the task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc stop 200
   pmx pve lxc stop web1`,
 		Args: cobra.ExactArgs(1),
@@ -127,7 +127,7 @@ func newRebootCmd() *cobra.Command {
 		Long: "Shut the container down and immediately start it again. --timeout bounds how " +
 			"long to wait for the shutdown before the reboot proceeds. Submits a PVE task and " +
 			"blocks until it completes; pass the global --async flag to print the task UPID " +
-			"immediately instead of waiting.",
+			"immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc reboot 200
   pmx pve lxc reboot web1 --timeout 60`,
 		Args: cobra.ExactArgs(1),
@@ -164,7 +164,7 @@ func newShutdownCmd() *cobra.Command {
 		Long: "Ask the container to power off cleanly. Pass --force-stop to hard-stop it if " +
 			"it has not shut down within --timeout seconds. Submits a PVE task and blocks " +
 			"until it completes; pass the global --async flag to print the task UPID " +
-			"immediately instead of waiting.",
+			"immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc shutdown 200
   pmx pve lxc shutdown web1 --timeout 60 --force-stop`,
 		Args: cobra.ExactArgs(1),
@@ -205,7 +205,7 @@ func newSuspendCmd() *cobra.Command {
 		Long: "Pause the container's execution, keeping its process state so it can be " +
 			"resumed later with 'lxc resume'. Submits a PVE task and blocks until it " +
 			"completes; pass the global --async flag to print the task UPID immediately " +
-			"instead of waiting.",
+			"instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc suspend 200
   pmx pve lxc suspend web1`,
 		Args: cobra.ExactArgs(1),
@@ -233,7 +233,7 @@ func newResumeCmd() *cobra.Command {
 		Short: "Resume a suspended container",
 		Long: "Resume a container previously suspended with 'lxc suspend'. Submits a PVE " +
 			"task and blocks until it completes; pass the global --async flag to print the " +
-			"task UPID immediately instead of waiting.",
+			"task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc resume 200
   pmx pve lxc resume web1`,
 		Args: cobra.ExactArgs(1),
@@ -268,7 +268,7 @@ func newDeleteCmd() *cobra.Command {
 			"                                 VMID that the config no longer\n" +
 			"                                 references\n\n" +
 			"The command submits a PVE task and blocks until it completes; the global " +
-			"--async flag prints the task UPID and returns immediately.",
+			"--async flag prints the task UPID and returns immediately. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc delete 200 --yes
   pmx pve lxc delete web1 --yes --purge`,
 		Args: cobra.ExactArgs(1),

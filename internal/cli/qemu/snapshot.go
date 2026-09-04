@@ -107,7 +107,7 @@ func newSnapshotCreateCmd() *cobra.Command {
 		Long: "Create a new named snapshot of the VM's disks. Pass --vmstate to also include " +
 			"the VM's RAM state, allowing a later rollback to resume execution instead of " +
 			"just restoring disk contents. Submits a PVE task and blocks until it completes; " +
-			"pass --async to print the task UPID immediately instead of waiting.",
+			"pass --async to print the task UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu snapshot create 100 pre-upgrade
   pmx pve qemu snapshot create web1 pre-upgrade --description "before kernel update" --vmstate`,
 		Args: cobra.ExactArgs(2),
@@ -158,7 +158,7 @@ func newSnapshotDeleteCmd() *cobra.Command {
 		Long: "Permanently delete a named snapshot. Refuses to run without --yes/-y; pass " +
 			"--force to remove it from the config even if removing its disk snapshots fails. " +
 			"Submits a PVE task and blocks until it completes; pass --async to print the task " +
-			"UPID immediately instead of waiting.",
+			"UPID immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu snapshot delete 100 pre-upgrade --yes
   pmx pve qemu snapshot delete web1 pre-upgrade --yes --force`,
 		Args: cobra.ExactArgs(2),
@@ -303,7 +303,7 @@ func newSnapshotRollbackCmd() *cobra.Command {
 			"Everything written since that snapshot is discarded, so --yes is required to " +
 			"confirm. Pass --start to bring the VM up as soon as the rollback succeeds.\n\n" +
 			"The command submits a PVE task and blocks until it completes; --async prints " +
-			"the task UPID and returns immediately.",
+			"the task UPID and returns immediately. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu snapshot rollback 100 pre-upgrade --yes
   pmx pve qemu snapshot rollback web1 pre-upgrade --yes --start`,
 		Args: cobra.ExactArgs(2),

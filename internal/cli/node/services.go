@@ -223,7 +223,7 @@ func newServiceActionCmd(verb, pastTense, short, long, example string, action se
 	cmd := &cobra.Command{
 		Use:     fmt.Sprintf("%s <node> <svc>", verb),
 		Short:   short,
-		Long:    long,
+		Long:    long + " " + cli.WaitBoundHelp,
 		Example: example,
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {

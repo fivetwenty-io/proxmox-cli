@@ -488,7 +488,7 @@ func newCephCtlCmd(use, short, long, example, action string,
 	cmd := &cobra.Command{
 		Use:     use,
 		Short:   short,
-		Long:    long,
+		Long:    long + " " + cli.WaitBoundHelp,
 		Example: example,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

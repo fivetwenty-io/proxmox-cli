@@ -36,7 +36,8 @@ func newMigrateCmd() *cobra.Command {
 			"explicitly.\n\n" +
 			"Containers cannot be live-migrated while running. Pass --restart to move one " +
 			"anyway, at the cost of a brief restart on the target node.\n\n" +
-			"The command blocks until the migration task finishes, unless --async is set.\n\n" +
+			"The command blocks until the migration task finishes, unless --async is set. " +
+			cli.WaitBoundHelp + "\n\n" +
 			"For a feasibility check beforehand, run " +
 			"`pmx pve lxc migrate check <vmid|name>`.",
 		Example: `  pmx pve lxc migrate 200 --target-node pve2

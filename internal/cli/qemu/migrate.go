@@ -90,7 +90,7 @@ func newMigrateCmd() *cobra.Command {
 			"source node is detected from the cluster, and --node pins it explicitly.\n\n" +
 			"A running VM needs --online for a live migration. Without it, PVE refuses to " +
 			"move a running VM unless --force is also set.\n\n" +
-			"The command blocks until the migration task finishes, unless --async is set.",
+			"The command blocks until the migration task finishes, unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu migrate 100 --target-node pve2
   pmx pve qemu migrate 100 --target-node pve2 --online`,
 		Args: cobra.ExactArgs(1),

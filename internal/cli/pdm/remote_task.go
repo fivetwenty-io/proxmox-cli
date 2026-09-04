@@ -240,7 +240,7 @@ func newRemoteTaskRefreshCmd() *cobra.Command {
 			"Without --remote, every remote the caller has permission for is refreshed. " +
 			"Pass one or more --remote flags to narrow that to specific remotes.\n\n" +
 			"The refresh runs as an asynchronous task, and the command blocks until it " +
-			"completes; the persistent --async flag returns the UPID immediately instead.",
+			"completes; the persistent --async flag returns the UPID immediately instead. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm remote task refresh --remote pve-main",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -407,7 +407,7 @@ func newRemoteUpdatesRefreshCmd() *cobra.Command {
 		Long: "Refresh the available-package update summary PDM caches for every " +
 			"managed remote (POST /remotes/updates/refresh). This is an asynchronous " +
 			"task: by default the command blocks until it completes; pass --async " +
-			"(persistent flag) to return the UPID immediately instead.",
+			"(persistent flag) to return the UPID immediately instead. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm remote updates refresh",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

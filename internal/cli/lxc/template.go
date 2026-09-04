@@ -95,7 +95,7 @@ func newTemplateDownloadCmd() *cobra.Command {
 		Long: "Download a template identifier (as listed by 'lxc template list') to the " +
 			"given storage on the resolved node. Submits a PVE task and blocks until it " +
 			"completes; pass --async or the global --async flag to print the task UPID " +
-			"immediately instead of waiting.",
+			"immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc template download local debian-12-standard_12.7-1_amd64.tar.zst`,
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {

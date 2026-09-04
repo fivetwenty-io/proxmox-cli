@@ -104,7 +104,7 @@ func newDiskMoveCmd() *cobra.Command {
 		Use:   "move <vmid|name>",
 		Short: "Relocate an LXC container volume",
 		Long: "Move an attached volume to a different storage, or reassign it to another " +
-			"container. The command blocks until the move task completes unless --async is set.",
+			"container. The command blocks until the move task completes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc disk move 200 --volume rootfs --storage local-lvm
   pmx pve lxc disk move 200 --volume mp0 --target-vmid 201 --delete`,
 		Args: cobra.ExactArgs(1),

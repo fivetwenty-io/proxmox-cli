@@ -35,7 +35,7 @@ func newCloneCmd() *cobra.Command {
 		Long: "Clone an existing LXC container or template to a new container. " +
 			"By default a linked clone is created when the source is a template; " +
 			"pass --full to force a full disk copy. " +
-			"The command blocks until the clone task completes unless --async is set.",
+			"The command blocks until the clone task completes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc clone 200 --newid 201
   pmx pve lxc clone 200 --newid 201 --full --storage local-lvm --async`,
 		Args: cobra.ExactArgs(1),

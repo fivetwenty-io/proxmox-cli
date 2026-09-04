@@ -207,7 +207,7 @@ func newNodeDisksInitgptCmd(nf *nodeFlags) *cobra.Command {
 		Use:   "initgpt",
 		Short: "Initialize an empty disk with a GPT partition table",
 		Long: "Initialize an empty disk with a GPT partition table. Runs as an asynchronous " +
-			"task; the command blocks until it finishes unless --async is set.",
+			"task; the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs node disks initgpt --disk sdb",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -251,7 +251,7 @@ func newNodeDisksWipeCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Wipe a disk, destroying its data",
 		Long: "Erase the partition table and filesystem signatures on a disk, destroying its " +
 			"data. Runs as an asynchronous task; the command blocks until it finishes unless " +
-			"--async is set. This is destructive: pass --yes/-y to confirm.",
+			"--async is set. " + cli.WaitBoundHelp + " This is destructive: pass --yes/-y to confirm.",
 		Example: "  pmx pbs node disks wipe --disk sdb1 --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -350,7 +350,7 @@ func newNodeDisksDirectoryCreateCmd(nf *nodeFlags) *cobra.Command {
 		Use:   "create <name>",
 		Short: "Create a filesystem on an unused disk and mount it",
 		Long: "Create a filesystem on --disk and mount it under /mnt/datastore/<name>. Runs as " +
-			"an asynchronous task; the command blocks until it finishes unless --async is set.",
+			"an asynchronous task; the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs node disks directory create tank --disk sdb",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -408,7 +408,7 @@ func newNodeDisksDirectoryDeleteCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Remove a directory-backed datastore mount unit",
 		Long: "Unmount and remove a filesystem mounted under /mnt/datastore/<name>. Runs as an " +
 			"asynchronous task; the command blocks until it finishes unless --async is set. " +
-			"This is destructive: pass --yes/-y to confirm.",
+			cli.WaitBoundHelp + " This is destructive: pass --yes/-y to confirm.",
 		Example: "  pmx pbs node disks directory delete tank --yes",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -531,7 +531,7 @@ func newNodeDisksZfsCreateCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Create a new ZFS pool and mount it",
 		Long: "Create a new ZFS pool from --devices at --raidlevel, mounted under " +
 			"/mnt/datastore/<name>. Runs as an asynchronous task; the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs node disks zfs create tank --devices sdb,sdc --raidlevel mirror",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

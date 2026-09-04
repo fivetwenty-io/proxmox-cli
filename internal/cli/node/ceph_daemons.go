@@ -89,7 +89,7 @@ func newCephMonDeleteCmd() *cobra.Command {
 		Long: "Destroy the Ceph monitor (MON) daemon with the given id on the resolved node. " +
 			"Refuses to run without --yes/-y. Submits a worker task and blocks until it " +
 			"completes; pass the global --async flag to print the task UPID immediately " +
-			"instead of waiting.",
+			"instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve node ceph mon delete pve1 --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -190,7 +190,7 @@ func newCephMdsDeleteCmd() *cobra.Command {
 		Long: "Destroy the Ceph metadata server (MDS) daemon with the given name on the " +
 			"resolved node. Refuses to run without --yes/-y. Submits a worker task and " +
 			"blocks until it completes; pass the global --async flag to print the task UPID " +
-			"immediately instead of waiting.",
+			"immediately instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve node ceph mds delete pve1 --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -282,7 +282,7 @@ func newCephMgrDeleteCmd() *cobra.Command {
 		Long: "Destroy the Ceph manager (MGR) daemon with the given id on the resolved node. " +
 			"Refuses to run without --yes/-y. Submits a worker task and blocks until it " +
 			"completes; pass the global --async flag to print the task UPID immediately " +
-			"instead of waiting.",
+			"instead of waiting. " + cli.WaitBoundHelp,
 		Example: `  pmx pve node ceph mgr delete pve1 --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

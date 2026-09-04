@@ -36,7 +36,7 @@ func newDownloadURLCmd() *cobra.Command {
 			"  --compression              decompress it on arrival\n" +
 			"  --no-verify-certificates   skip TLS verification of the source\n\n" +
 			"The download runs as an asynchronous task, and the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve storage download-url local-lvm --url https://example.com/image.iso --filename image.iso
   pmx pve storage download-url local-lvm --url https://example.com/image.iso --filename image.iso --async`,
 		Args: cobra.ExactArgs(1),

@@ -39,7 +39,7 @@ func newTemplateCmd() *cobra.Command {
 			"With --disk, only the named disk becomes a base image.\n\n" +
 			"Depending on the PVE version, conversion either completes synchronously or runs " +
 			"as a background task. In the latter case the command blocks until it finishes, " +
-			"unless --async is passed.",
+			"unless --async is passed. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu template 100 --yes
   pmx pve qemu template golden-image --yes --disk scsi0`,
 		Args: cobra.ExactArgs(1),

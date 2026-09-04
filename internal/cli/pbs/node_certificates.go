@@ -125,7 +125,7 @@ func newNodeCertificatesAcmeOrderCmd(nf *nodeFlags) *cobra.Command {
 		Short: "Order a new ACME certificate for the node",
 		Long: "Request a new ACME (Let's Encrypt) certificate for the node and install it. " +
 			"Runs as an asynchronous task; the command blocks until it finishes unless --async " +
-			"is set.",
+			"is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs node certificates acme order --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -176,7 +176,7 @@ func newNodeCertificatesAcmeRenewCmd(nf *nodeFlags) *cobra.Command {
 		Long: "Renew the ACME (Let's Encrypt) certificate for the node. By default PBS only " +
 			"renews when expiry is within its renewal lead time; pass --force to renew " +
 			"regardless. Runs as an asynchronous task; the command blocks until it finishes " +
-			"unless --async is set.",
+			"unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs node certificates acme renew --yes",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

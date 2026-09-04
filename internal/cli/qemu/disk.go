@@ -235,7 +235,7 @@ func newDiskMoveCmd() *cobra.Command {
 		Use:   "move <vmid|name>",
 		Short: "Relocate a QEMU virtual machine disk",
 		Long: "Move an attached disk to a different storage, or reassign it to another " +
-			"VM. The command blocks until the move task completes unless --async is set.",
+			"VM. The command blocks until the move task completes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu disk move 100 --disk scsi0 --storage local-lvm
   pmx pve qemu disk move 100 --disk scsi0 --target-vmid 101`,
 		Args: cobra.ExactArgs(1),

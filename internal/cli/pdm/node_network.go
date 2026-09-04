@@ -489,7 +489,7 @@ func newNodeNetworkApplyCmd() *cobra.Command {
 		Short: "Reload the network configuration, activating staged changes",
 		Long: "Reload the network configuration (requires ifupdown2), activating every " +
 			"staged change. Runs as an asynchronous task; the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm node network apply pdm-01",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -22,7 +22,7 @@ func newLifecycleCmd(
 	cmd := &cobra.Command{
 		Use:     use + " <vmid|name>",
 		Short:   short,
-		Long:    long,
+		Long:    long + " " + cli.WaitBoundHelp,
 		Example: example,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -64,7 +64,7 @@ func newTapeDriveOpLoadMediaCmd() *cobra.Command {
 		Long: "Load a specific piece of media into a drive, locating it by its " +
 			"label text/barcode (POST /tape/drive/{drive}/load-media). --label-text " +
 			"is required. Runs as an asynchronous task; the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive load-media tape0 --label-text vol001",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -145,7 +145,7 @@ func newTapeDriveOpUnloadCmd() *cobra.Command {
 			"(POST /tape/drive/{drive}/unload). --slot targets a specific slot; " +
 			"omit it to return the media to the slot it was loaded from. Runs as " +
 			"an asynchronous task; the command blocks until it finishes unless " +
-			"--async is set.",
+			"--async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive unload tape0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -187,7 +187,7 @@ func newTapeDriveOpEjectCmd() *cobra.Command {
 		Short: "Eject a drive's current media",
 		Long: "Eject the media currently loaded in a drive (POST " +
 			"/tape/drive/{drive}/eject-media). Runs as an asynchronous task; the " +
-			"command blocks until it finishes unless --async is set.",
+			"command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive eject tape0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -223,7 +223,7 @@ func newTapeDriveOpRewindCmd() *cobra.Command {
 		Short: "Rewind a drive's current media",
 		Long: "Rewind the media currently loaded in a drive to the start (POST " +
 			"/tape/drive/{drive}/rewind). Runs as an asynchronous task; the command " +
-			"blocks until it finishes unless --async is set.",
+			"blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive rewind tape0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -259,7 +259,7 @@ func newTapeDriveOpCleanCmd() *cobra.Command {
 		Short: "Run a drive's cleaning cycle",
 		Long: "Run the cleaning cycle on a drive using a loaded cleaning cartridge " +
 			"(PUT /tape/drive/{drive}/clean). Runs as an asynchronous task; the " +
-			"command blocks until it finishes unless --async is set.",
+			"command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive clean tape0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -307,7 +307,7 @@ func newTapeDriveOpFormatCmd() *cobra.Command {
 			"Every option is optional, and only the ones you set explicitly are " +
 			"forwarded.\n\n" +
 			"The format runs as an asynchronous task, and the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pbs tape drive format tape0 --yes
   pmx pbs tape drive format tape0 --label-text vol001 --yes`,
 		Args: cobra.ExactArgs(1),
@@ -374,7 +374,7 @@ func newTapeDriveOpLabelCmd() *cobra.Command {
 			"(POST /tape/drive/{drive}/label-media). --label-text is required; " +
 			"--pool optionally assigns the media to a pool. Runs as an " +
 			"asynchronous task; the command blocks until it finishes unless " +
-			"--async is set.",
+			"--async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive label tape0 --label-text vol001 --pool weekly",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -423,7 +423,7 @@ func newTapeDriveOpBarcodeLabelCmd() *cobra.Command {
 			"write it as the media label (POST " +
 			"/tape/drive/{drive}/barcode-label-media). --pool optionally assigns " +
 			"the media to a pool. Runs as an asynchronous task; the command " +
-			"blocks until it finishes unless --async is set.",
+			"blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive barcode-label tape0 --pool weekly",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -472,7 +472,7 @@ func newTapeDriveOpCatalogCmd() *cobra.Command {
 		Long: "(Re)build the catalog for the media currently loaded in a drive " +
 			"(POST /tape/drive/{drive}/catalog). Every option is optional and " +
 			"only forwarded when explicitly set. Runs as an asynchronous task; " +
-			"the command blocks until it finishes unless --async is set.",
+			"the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive catalog tape0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -599,7 +599,7 @@ func newTapeDriveOpUpdateInventoryCmd() *cobra.Command {
 			"slots via this drive (PUT /tape/drive/{drive}/inventory). Every " +
 			"option is optional and only forwarded when explicitly set. Runs as " +
 			"an asynchronous task; the command blocks until it finishes unless " +
-			"--async is set.",
+			"--async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs tape drive update-inventory tape0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

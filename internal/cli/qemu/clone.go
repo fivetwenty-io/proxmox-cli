@@ -37,7 +37,7 @@ func newCloneCmd() *cobra.Command {
 		Long: "Clone an existing QEMU VM or template to a new VM. " +
 			"By default a linked clone is created when the source is a template; " +
 			"pass --full to force a full disk copy. " +
-			"The command blocks until the clone task completes unless --async is set.",
+			"The command blocks until the clone task completes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve qemu clone 100 --newid 101 --name web-clone
   pmx pve qemu clone 100 --newid 101 --full --storage local-lvm`,
 		Args: cobra.ExactArgs(1),

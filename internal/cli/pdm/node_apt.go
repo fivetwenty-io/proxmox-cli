@@ -110,7 +110,7 @@ func newNodeAptUpdateDatabaseCmd() *cobra.Command {
 		Short: "Refresh the node's APT package index",
 		Long: "Refresh the local APT package database from the configured repositories " +
 			"(POST /nodes/{node}/apt/update). Runs as an asynchronous task; the command " +
-			"blocks until it finishes unless --async is set.",
+			"blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm node apt update-database pdm-01",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

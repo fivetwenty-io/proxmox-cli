@@ -36,7 +36,7 @@ func newTapeBackupCmd() *cobra.Command {
 		Long: "Run a one-shot tape backup (POST /tape/backup): copy a datastore's backup " +
 			"snapshots to a tape media pool via the given drive. --drive, --pool, and " +
 			"--store are required. Runs as an asynchronous task; the command blocks until " +
-			"it finishes unless --async is set.",
+			"it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pbs tape backup --drive tape0 --pool weekly --store tank
   pmx pbs tape backup --drive tape0 --pool weekly --store tank --latest-only --eject-media`,
 		Args: cobra.NoArgs,

@@ -85,7 +85,7 @@ func newAptTemplatesDownloadCmd() *cobra.Command {
 		Short: "Download an appliance template to a storage",
 		Long: "Download the template named by --template to the storage named by " +
 			"--storage. The command blocks until the download task finishes unless " +
-			"--async is set.",
+			"--async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve node apt templates download --storage local --template debian-12-standard`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

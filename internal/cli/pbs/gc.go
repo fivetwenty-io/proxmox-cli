@@ -126,7 +126,7 @@ func newGcRunCmd() *cobra.Command {
 		Long: "Start garbage collection on a datastore, reclaiming disk space " +
 			"from chunks no longer referenced by any backup snapshot (POST " +
 			"/admin/datastore/{store}/gc). Runs as an asynchronous task; the " +
-			"command blocks until it finishes unless --async is set.",
+			"command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs gc run --store tank",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

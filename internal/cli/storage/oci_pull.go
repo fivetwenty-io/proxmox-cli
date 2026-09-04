@@ -28,7 +28,7 @@ func newOciPullCmd() *cobra.Command {
 			"registry and store it on the given storage " +
 			"(POST /nodes/{node}/storage/{storage}/oci-registry-pull). " +
 			"The pull runs as an asynchronous task and the command blocks until it finishes " +
-			"unless --async is set.",
+			"unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve storage oci-pull local --reference docker.io/library/alpine:latest`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

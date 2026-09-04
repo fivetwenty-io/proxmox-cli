@@ -75,8 +75,8 @@ func newVzdumpCmd() *cobra.Command {
 		Short: "Create an on-demand backup of one or more guests",
 		Long: "Run vzdump on the resolved node to back up the guests selected by --vmid, " +
 			"--pool, or --all to the given --storage. The command blocks until the backup " +
-			"task finishes unless --async is set. Use the sub-commands defaults and " +
-			"extract-config to inspect vzdump configuration.",
+			"task finishes unless --async is set. " + cli.WaitBoundHelp + " Use the sub-commands " +
+			"defaults and extract-config to inspect vzdump configuration.",
 		Example: `  pmx pve node vzdump --vmid 100 --storage local
   pmx pve node vzdump --all --storage local --mode snapshot
   pmx pve node vzdump --vmid 100 --storage local --notes-template "{{guestname}}"

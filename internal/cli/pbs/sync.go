@@ -698,7 +698,7 @@ func newSyncJobRunCmd() *cobra.Command {
 		Short: "Manually trigger a scheduled sync job",
 		Long: "Immediately run a configured sync job (POST /admin/sync/{id}/run). " +
 			"Runs as an asynchronous task; the command blocks until it finishes " +
-			"unless --async is set.",
+			"unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs sync job run offsite-pull",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -765,7 +765,7 @@ func newSyncPullCmd() *cobra.Command {
 			"remote datastore into a local one. --remote-store and --store are " +
 			"required; omitting --remote pulls from another datastore on this " +
 			"server. Runs as an asynchronous task; the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pbs sync pull --remote pbs-main --remote-store tank --store tank`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -913,7 +913,7 @@ func newSyncPushCmd() *cobra.Command {
 		Long: "Run a one-shot push sync (POST /push): copy backup snapshots from a " +
 			"local datastore to a remote one. --remote, --remote-store, and --store " +
 			"are required. Runs as an asynchronous task; the command blocks until it " +
-			"finishes unless --async is set.",
+			"finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pbs sync push --remote pbs-main --remote-store tank --store tank`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

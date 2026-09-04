@@ -112,7 +112,7 @@ func newRealmSyncCmd() *cobra.Command {
 		Short: "Synchronize a realm's users from its directory service",
 		Long: "Synchronize the users of an LDAP/AD/OpenID realm from its backing " +
 			"directory service (POST /access/domains/{realm}/sync). Runs as an " +
-			"asynchronous task; the command blocks until it finishes unless --async is set.",
+			"asynchronous task; the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm realm sync company --dry-run",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -113,7 +113,7 @@ func newPbsNodeAptUpdateDatabaseCmd() *cobra.Command {
 		Long: "Refresh the local APT package database from the configured repositories " +
 			"on a PBS remote's node (POST /pbs/remotes/{remote}/nodes/{node}/apt/update). " +
 			"Runs as an asynchronous task on the remote; the command blocks until it " +
-			"finishes unless --async (persistent flag) is set.",
+			"finishes unless --async (persistent flag) is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pdm pbs node apt update-database pbs-main pbs1",
 		Args:    cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {

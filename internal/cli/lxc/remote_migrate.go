@@ -41,7 +41,7 @@ func newRemoteMigrateCmd() *cobra.Command {
 			"This crosses a cluster boundary, so --yes is required to confirm. Without " +
 			"--delete, which is the default, a stopped copy stays behind on the source " +
 			"cluster; with it, the source copy goes away and the move cannot be undone.\n\n" +
-			"The command blocks until the task completes, unless --async is set.",
+			"The command blocks until the task completes, unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve lxc remote-migrate 200 --target-endpoint https://remote:8006 \
   --target-storage local-lvm --target-bridge vmbr0 --yes`,
 		Args: cobra.ExactArgs(1),

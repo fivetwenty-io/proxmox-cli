@@ -94,7 +94,7 @@ func newAplinfoDownloadCmd() *cobra.Command {
 		Short: "Download an appliance template to a storage",
 		Long: "Instruct the resolved node to download the named appliance template to " +
 			"the given storage (POST /nodes/{node}/aplinfo). The download runs as an " +
-			"asynchronous task and the command blocks until it finishes unless --async is set.",
+			"asynchronous task and the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pve storage aplinfo download --storage local --template debian-12-standard`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

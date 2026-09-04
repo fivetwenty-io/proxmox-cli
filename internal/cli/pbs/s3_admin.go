@@ -103,7 +103,7 @@ func newDatastoreS3RefreshCmd() *cobra.Command {
 		Short: "Refresh an S3-backed datastore's local cache from the object store",
 		Long: "Rebuild the local cache of an S3-backed datastore from the contents of " +
 			"its bucket (PUT /admin/datastore/{store}/s3-refresh). The server runs " +
-			"this as a task; the command blocks until it finishes unless --async is set.",
+			"this as a task; the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs datastore s3-refresh main",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

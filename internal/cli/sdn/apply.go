@@ -31,8 +31,8 @@ func newApplyCmd() *cobra.Command {
 			"The reload touches every node in the cluster, so preview what is pending first " +
 			"with `pmx pve sdn dry-run`.\n\n" +
 			"The command submits a PVE task and blocks until it completes; --async prints " +
-			"the task UPID and returns immediately. Some PVE versions return no task at all " +
-			"and report the reload as applied on the spot.",
+			"the task UPID and returns immediately. " + cli.WaitBoundHelp + " Some PVE versions " +
+			"return no task at all and report the reload as applied on the spot.",
 		Example: `  pmx pve sdn dry-run
   pmx pve sdn apply
   pmx pve sdn apply --async`,

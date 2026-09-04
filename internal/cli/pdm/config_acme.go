@@ -205,7 +205,7 @@ func newConfigAcmeAccountAddCmd() *cobra.Command {
 			"Pass --tos-url to signal agreement with the CA's Terms of Service; read them " +
 			"first with `pmx pdm config acme tos show`.\n\n" +
 			"Registration runs as an asynchronous task, and the command blocks until it " +
-			"finishes unless the persistent --async flag is set.",
+			"finishes unless the persistent --async flag is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pdm config acme account add default --contact admin@example.com`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -263,7 +263,7 @@ func newConfigAcmeAccountUpdateCmd() *cobra.Command {
 		Short: "Update an ACME account's contact addresses",
 		Long: "Update the contact email addresses registered with an ACME account (PUT " +
 			"/config/acme/account/{name}). Runs as an asynchronous task; the command " +
-			"blocks until it finishes unless --async (persistent flag) is set.",
+			"blocks until it finishes unless --async (persistent flag) is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pdm config acme account update default --contact admin@example.com`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -312,7 +312,7 @@ func newConfigAcmeAccountDeleteCmd() *cobra.Command {
 			"--force drops the local configuration even when the provider refuses the " +
 			"deactivation request.\n\n" +
 			"Deactivation runs as an asynchronous task, and the command blocks until it " +
-			"finishes unless the persistent --async flag is set.",
+			"finishes unless the persistent --async flag is set. " + cli.WaitBoundHelp,
 		Example: `  pmx pdm config acme account delete default --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

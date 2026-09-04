@@ -106,7 +106,7 @@ func newNodeAptUpdateCmd(nf *nodeFlags) *cobra.Command {
 		// a "set" alias would misdescribe the command.
 		Annotations: map[string]string{cli.AnnotationNoVerbAlias: "true"},
 		Long: "Refresh the local APT package database from the configured repositories. " +
-			"Runs as an asynchronous task; the command blocks until it finishes unless --async is set.",
+			"Runs as an asynchronous task; the command blocks until it finishes unless --async is set. " + cli.WaitBoundHelp,
 		Example: "  pmx pbs node apt update",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
