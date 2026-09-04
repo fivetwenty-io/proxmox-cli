@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
-	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
@@ -63,28 +62,16 @@ func renderCephView(cmd *cobra.Command, deps *cli.Deps,
 // renderCephTask renders the asynchronous task started by a Ceph operation. The
 // write endpoints return a worker UPID; honour --async and otherwise block on
 // the task, but tolerate a non-UPID or empty body by falling back to a plain
-// success message.
+// success message. The waiting and the rendering are cli.RenderTaskWait's, and
+// all this adds is the "ceph operation on node" prefix around a failed wait.
+// The nil wait options hand the wait to the operator's --wait-timeout, so it
+// runs until the task ends unless they asked for a shorter bound.
 func renderCephTask(cmd *cobra.Command, deps *cli.Deps, raw json.RawMessage, doneMsg string) error {
 	upid, err := apiclient.UPIDFromRaw(raw)
 	if err != nil {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: doneMsg}, deps.Format)
 	}
-	return renderCephTaskWait(cmd, deps, upid, doneMsg, nil)
-}
-
-// renderCephTaskWait waits for the Ceph worker identified by upid and names
-// the node in any error the wait produces. The waiting and the rendering are
-// cli.RenderTaskWait's, so under --async this prints the UPID and returns, and
-// otherwise it prints doneMsg once the task finishes. All this function adds
-// is the "ceph operation on node" prefix around that failure.
-//
-// The opts argument bounds the wait. Every ordinary Ceph verb passes nil,
-// so the operator's --wait-timeout applies and the wait runs until the task ends
-// unless the operator asked for a shorter bound. The rolling restart builds
-// its own opts from that same flag, because it has to name the bound again in
-// the deadline message it writes when the wait runs out.
-func renderCephTaskWait(cmd *cobra.Command, deps *cli.Deps, upid, doneMsg string, opts *tasks.WaitOptions) error {
-	if err := cli.RenderTaskWait(cmd, deps, upid, doneMsg, opts); err != nil {
+	if err := cli.RenderTaskWait(cmd, deps, upid, doneMsg, nil); err != nil {
 		return fmt.Errorf("ceph operation on node %q: %w", deps.Node, err)
 	}
 	return nil
@@ -659,8 +646,13 @@ func newCephRestartBulkCmd() *cobra.Command {
 				return cli.RenderDryRunLog(cmd, deps, upid, opts, fmt.Sprintf("ceph dry run on node %q", deps.Node))
 			}
 			done := fmt.Sprintf("Ceph OSDs on node %q restarted.", deps.Node)
-			if err := renderCephTaskWait(cmd, deps, upid, done, opts); err != nil {
-				return cli.RollingWaitError(err, opts, upid)
+			// The wait failure carries the same operation prefix as the
+			// submit failures above, and the same shape as the cluster-wide
+			// sibling's, rather than the generic "ceph operation on node"
+			// that the per-daemon verbs share.
+			if err := cli.RenderTaskWait(cmd, deps, upid, done, opts); err != nil {
+				return cli.RollingWaitError(
+					fmt.Errorf("rolling-restart ceph osds on node %q: %w", deps.Node, err), opts, upid)
 			}
 			return nil
 		},

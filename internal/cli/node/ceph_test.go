@@ -1255,6 +1255,10 @@ func TestNodeCeph_RestartBulk_WaitTimeoutSaysTheRollContinues(t *testing.T) {
 	require.Contains(t, err.Error(), "stopped waiting after 1s")
 	require.Contains(t, err.Error(), "still running")
 	require.Contains(t, err.Error(), cephBulkUPID)
+	require.Contains(t, err.Error(), "rolling-restart ceph osds on node \"pve1\"",
+		"the wait failure carries the same operation prefix as a submit failure")
+	require.NotContains(t, err.Error(), "ceph operation on node",
+		"restart-bulk names its operation itself rather than through the per-daemon renderer")
 }
 
 func TestNodeCeph_RestartBulk_RejectsNegativeWaitTimeout(t *testing.T) {
