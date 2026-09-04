@@ -258,10 +258,21 @@ the `~/.pmx/logs/.last-prune` sentinel's mtime.
 
 ## Asynchronous tasks
 
-Commands that trigger PVE background tasks (VM/CT lifecycle, snapshots,
-storage operations) block by default until the task reaches a terminal state,
-then exit with the appropriate semantic exit code. Pass `--async` to return the
-task UPID immediately instead.
+Commands that trigger a background task (VM/CT lifecycle, snapshots, storage
+operations, and every task-producing PBS and PDM verb) block by default until
+the task reaches a terminal state, then exit with the appropriate semantic exit
+code. Waiting until the task ends is spelled as a one-week ceiling rather than
+as no ceiling at all, because the SDK reads a non-positive bound as a request
+for its own 300 s default, which a Ceph rolling restart outlives by hours.
+
+Pass `--async` to return the task UPID immediately instead, or `--wait-timeout
+N` to stop waiting after N seconds while the server keeps running the task; the
+error names the task so the operator can follow it. The bound is process-wide
+policy rather than a per-command flag: the root command resolves it once and
+hands it to `apiclient.SetDefaultWaitTimeout`, and the three wait funnels
+(`WaitTask`, `WaitPBSTask`, and `WaitPDMTask`) read it whenever a caller passes
+no policy of its own. A command that does hold a bound in hand, such as either
+Ceph rolling restart, builds its options from `Deps.WaitTimeout` instead.
 
 ## Semantic exit codes
 

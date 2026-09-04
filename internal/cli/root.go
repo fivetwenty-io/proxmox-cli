@@ -71,6 +71,14 @@ type Deps struct {
 	// Async controls whether lifecycle commands block on task completion.
 	Async bool
 
+	// WaitTimeout is the resolved --wait-timeout flag value in seconds: how
+	// long a command waits for a task it started before it gives up and names
+	// the task for the operator to follow. Zero, the default, waits until the
+	// task ends. The same value is handed to apiclient.SetDefaultWaitTimeout,
+	// so a command only needs to read this field when it builds its own wait
+	// options rather than letting the wait funnels apply the policy.
+	WaitTimeout int64
+
 	// Log is the slog.Logger for this invocation.
 	Log *slog.Logger
 
@@ -225,6 +233,9 @@ type persistentFlags struct {
 	noLog    bool
 	async    bool
 	insecure bool
+	// waitTimeout bounds how long a command waits for a task it started.
+	// Zero waits until the task ends.
+	waitTimeout int64
 	// wide disables the table layout budget, so columns keep their natural
 	// width. The per-cell cap still applies.
 	wide bool
@@ -358,6 +369,9 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 	root.PersistentFlags().BoolVar(&pf.trace, "trace", false, "enable trace (debug-level) logging")
 	root.PersistentFlags().BoolVar(&pf.noLog, "no-log", false, "suppress JSONL log file creation")
 	root.PersistentFlags().BoolVar(&pf.async, "async", false, "return task UPID immediately without waiting")
+	root.PersistentFlags().Int64Var(&pf.waitTimeout, "wait-timeout", 0,
+		"seconds to wait for a task to finish: 0 waits until it ends; N stops waiting after N seconds "+
+			"while the server keeps running it")
 	root.PersistentFlags().BoolVar(&pf.insecure, "insecure", false, "disable TLS certificate verification")
 	root.PersistentFlags().BoolVar(&pf.warningsAsErrors, "warnings-as-errors", false,
 		"treat a task that finishes with warnings as a failure (exit 8)")
@@ -477,6 +491,12 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		cmd.Flags().Changed("warnings-as-errors"), pf.warningsAsErrors,
 		"PMX_WARNINGS_AS_ERRORS", cfg.WarningsAsErrors))
 
+	// How long a command waits for a task it started, for the same reason and
+	// in the same place: the three wait funnels sit far below this hook, and
+	// every task-producing verb of every product reaches one of them without
+	// carrying a bound of its own.
+	apiclient.SetDefaultWaitTimeout(pf.waitTimeout)
+
 	// A shell-completion request is a keystroke, not an operation: it mutates
 	// nothing, and cobra dispatches it through this same PersistentPreRunE.
 	// Logging it opened a file per tab press under a "__complete" directory,
@@ -538,6 +558,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		Runner:       exec.Real(),
 		Insecure:     pf.insecure,
 		CtxName:      ctxName,
+		WaitTimeout:  pf.waitTimeout,
 	}
 
 	// Stash deps NOW, before any client construction can fail: Execute's
@@ -547,6 +568,16 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	// below errors out. deps is a pointer, so the client/context fields
 	// filled in further down remain visible to those hooks.
 	setDeps(cmd, deps)
+
+	// Reject a nonsensical wait bound here rather than in each of the hundred
+	// or so verbs that can start a task. This runs before the noClient early
+	// return below, so every command answers the same way, and it runs before
+	// any client is built, so a bad flag costs no connection.
+	if pf.waitTimeout < 0 {
+		return logCloser, fmt.Errorf(
+			"invalid --wait-timeout %d: want 0 (wait until the task ends) or a positive number of seconds",
+			pf.waitTimeout)
+	}
 
 	// Commands that set Annotations["noClient"]="true" skip API client build.
 	// This applies to: version (build-info only), context group verbs.

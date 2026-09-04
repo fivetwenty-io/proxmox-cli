@@ -9,6 +9,7 @@ import (
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/nodes"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
@@ -27,7 +28,7 @@ func TestWaitOptionsFor_NonPositiveMeansUnbounded(t *testing.T) {
 	for _, in := range []int64{0, -1} {
 		opts := cli.WaitOptionsFor(in)
 		require.NotNil(t, opts, "a nil would let the SDK fall back to its 300 s default")
-		require.Equal(t, 7*24*3600, opts.TimeoutSeconds)
+		require.Equal(t, apiclient.UnboundedWaitSeconds, opts.TimeoutSeconds)
 		require.Zero(t, opts.IntervalMillis)
 	}
 }

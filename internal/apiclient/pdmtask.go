@@ -49,8 +49,8 @@ func PDMUPIDNode(upid string) (string, error) {
 // state. The task-status endpoint (/nodes/{node}/tasks/{upid}/status) and its
 // status/exitstatus fields are identical between PVE and PDM, so polling is
 // delegated to the library's tasks service with the node parsed from the PDM
-// UPID. A nil opts is accepted and causes the service to use its default
-// timeout and polling interval.
+// UPID. A nil opts is accepted and means "use the operator's --wait-timeout",
+// which is unbounded by default.
 //
 // On success it returns nil; on task failure or context cancellation it
 // returns a descriptive error. A task that completed with warnings returns
@@ -60,6 +60,8 @@ func WaitPDMTask(ctx context.Context, pc *PDMClient, upid string, opts *tasks.Wa
 	if err != nil {
 		return err
 	}
+
+	opts = waitOptionsOrDefault(opts)
 
 	status, err := tasks.New(pc.Raw).Wait(ctx, node, upid, opts)
 	if err != nil {

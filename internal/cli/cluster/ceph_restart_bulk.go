@@ -26,7 +26,6 @@ func newCephRestartBulkCmd() *cobra.Command {
 		force        bool
 		onlyOutdated bool
 		timeout      int64
-		waitTimeout  int64
 		yes          bool
 	)
 	cmd := &cobra.Command{
@@ -44,10 +43,11 @@ func newCephRestartBulkCmd() *cobra.Command {
 			"anything, and this command prints that log even when the worker refuses; it does not require " +
 			"--yes. Every other invocation refuses to run without --yes/-y.\n\n" +
 			"--timeout is the server's per-daemon bound, 30 to 1800 seconds (default 600); it also bounds " +
-			"the wait for daemons on remote nodes. --wait-timeout is this command's bound on waiting for " +
-			"the whole task: 0, the default, waits until the task ends; a positive value stops waiting " +
-			"after that many seconds while the server keeps running the roll, and the error names the " +
-			"task to follow. The global --async flag prints the task UPID and returns immediately instead.",
+			"the wait for daemons on remote nodes. The global --wait-timeout flag bounds how long this " +
+			"command waits for the whole task: 0, the default, waits until the task ends; a positive " +
+			"value stops waiting after that many seconds while the server keeps running the roll, and " +
+			"the error names the task to follow. The global --async flag prints the task UPID and " +
+			"returns immediately instead.",
 		Example: `  pmx pve cluster ceph restart-bulk --service-type mon --dry-run
   pmx pve cluster ceph restart-bulk --service-type mon --yes
   pmx pve cluster ceph restart-bulk --service-type osd --only-outdated --yes
@@ -62,10 +62,6 @@ func newCephRestartBulkCmd() *cobra.Command {
 			}
 			if onlyOutdated && serviceType != "osd" {
 				return fmt.Errorf("--only-outdated applies to --service-type osd only")
-			}
-			if waitTimeout < 0 {
-				return fmt.Errorf("invalid --wait-timeout %d: want 0 (wait until the task ends) or a positive "+
-					"number of seconds", waitTimeout)
 			}
 			if fl.Changed("timeout") && (timeout < 30 || timeout > 1800) {
 				return fmt.Errorf("invalid --timeout %d: want 30 to 1800 seconds", timeout)
@@ -96,7 +92,7 @@ func newCephRestartBulkCmd() *cobra.Command {
 				return fmt.Errorf("rolling-restart ceph %s daemons: server returned no task handle: %w",
 					serviceType, err)
 			}
-			opts := cli.WaitOptionsFor(waitTimeout)
+			opts := cli.WaitOptionsFor(deps.WaitTimeout)
 			if dryRun {
 				return cli.RenderDryRunLog(cmd, deps, upid, opts, "ceph rolling restart dry run")
 			}
@@ -117,9 +113,6 @@ func newCephRestartBulkCmd() *cobra.Command {
 		"OSDs only: restart only OSDs whose running version differs from the installed ceph-osd binary")
 	f.Int64Var(&timeout, "timeout", 0,
 		"per-daemon seconds to wait for it to come back, 30 to 1800 (server default: 600)")
-	f.Int64Var(&waitTimeout, "wait-timeout", 0,
-		"seconds to wait for the whole task: 0 waits until it ends; N stops waiting after N seconds while the "+
-			"server keeps running the roll")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	cli.MustMarkRequired(cmd, "service-type")
 	return cmd

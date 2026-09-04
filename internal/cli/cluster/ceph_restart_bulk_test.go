@@ -97,15 +97,6 @@ func TestClusterCephRestartBulk_OnlyOutdatedRequiresOSD(t *testing.T) {
 	require.Contains(t, err.Error(), "--only-outdated")
 }
 
-func TestClusterCephRestartBulk_RejectsNegativeWaitTimeout(t *testing.T) {
-	_, ac := newFakeClient(t)
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
-	var buf bytes.Buffer
-	err := run(deps, &buf, "ceph", "restart-bulk", "--service-type", "mon", "--wait-timeout=-5", "--yes")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid --wait-timeout")
-}
-
 func TestClusterCephRestartBulk_RejectsTimeoutOutOfRange(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
@@ -201,10 +192,10 @@ func TestClusterCephRestartBulk_WaitTimeoutSaysTheRollContinues(t *testing.T) {
 	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", map[string]any{
 		"status": "running", "upid": cephBulkUPID,
 	})
-	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain, WaitTimeout: 1}
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, "ceph", "restart-bulk", "--service-type", "mon", "--wait-timeout", "1", "--yes")
+	err := run(deps, &buf, "ceph", "restart-bulk", "--service-type", "mon", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stopped waiting after 1s")
 	require.Contains(t, err.Error(), "still running")

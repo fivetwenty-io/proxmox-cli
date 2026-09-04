@@ -52,13 +52,15 @@ func UPIDFromRaw(raw json.RawMessage) (string, error) {
 }
 
 // WaitTask blocks until the Proxmox task identified by upid reaches a terminal
-// state, delegating to ac.Tasks.WaitForUPID. A nil opts is accepted and causes
-// the service to use its default timeout and polling interval.
+// state, delegating to ac.Tasks.WaitForUPID. A nil opts is accepted and means
+// "use the operator's --wait-timeout", which is unbounded by default.
 //
 // On success it returns nil; on task failure or context cancellation it returns
 // a descriptive error. A task that completed with warnings returns nil — the
 // task did finish — but reports the warning via taskWarned.
 func WaitTask(ctx context.Context, ac *APIClient, upid string, opts *tasks.WaitOptions) error {
+	opts = waitOptionsOrDefault(opts)
+
 	status, err := ac.Tasks.WaitForUPID(ctx, upid, opts)
 	if err != nil {
 		return fmt.Errorf("wait task %s: %w", upid, err)

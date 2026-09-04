@@ -64,6 +64,7 @@ var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"--trace"}, takesValue: false, target: "root", dest: "trace"},
 	{names: []string{"--verbose"}, takesValue: false, target: "root", dest: "verbose"},
 	{names: []string{"--async"}, takesValue: false, target: "root", dest: "async"},
+	{names: []string{"--wait-timeout"}, takesValue: true, target: "root", dest: "wait-timeout"},
 	{names: []string{"--warnings-as-errors"}, takesValue: false, target: "root",
 		dest: "warnings-as-errors"},
 	{names: []string{"--wide"}, takesValue: false, target: "root", dest: "wide"},

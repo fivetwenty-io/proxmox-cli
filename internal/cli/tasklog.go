@@ -10,26 +10,18 @@ import (
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
-// unboundedWaitSeconds is the bound WaitOptionsFor uses when the caller asks
-// for no bound. The SDK ignores a non-positive TimeoutSeconds and falls back
-// to its 300 s default, so "unbounded" has to be spelled as a number that no
-// realistic worker outlives; a week is that number.
-const unboundedWaitSeconds = 7 * 24 * 3600
-
 // WaitOptionsFor returns a task-wait policy bounded by timeoutSeconds while
 // leaving the polling cadence at the SDK default. A non-positive value means
-// "wait as long as the task takes" and yields a one-week bound, because a
-// nil policy or a zero TimeoutSeconds would make the SDK apply its 300 s
-// default, which a Ceph rolling restart outlives by hours. The bound belongs
-// to the operator (--wait-timeout), not the SDK.
+// "wait as long as the task takes". The policy itself lives in the apiclient
+// package, because the wait funnels there apply the same rule to every caller
+// that passes no options of its own; this is the spelling the command layer
+// uses when it holds a bound in hand.
 func WaitOptionsFor(timeoutSeconds int64) *tasks.WaitOptions {
-	if timeoutSeconds <= 0 {
-		return &tasks.WaitOptions{TimeoutSeconds: unboundedWaitSeconds}
-	}
-	return &tasks.WaitOptions{TimeoutSeconds: int(timeoutSeconds)}
+	return apiclient.WaitOptionsFor(timeoutSeconds)
 }
 
 // TaskLogLine is one line of GET /nodes/{node}/tasks/{upid}/log.

@@ -76,6 +76,80 @@ func TestRootFlags_Defaults(t *testing.T) {
 		require.NotNil(t, f, "flag %s must exist", name)
 		require.Equal(t, "false", f.DefValue, "flag %s default must be false", name)
 	}
+
+	// --wait-timeout defaults to 0, which waits until the task ends.
+	waitFlag := flags.Lookup("wait-timeout")
+	require.NotNil(t, waitFlag, "--wait-timeout flag must exist")
+	require.Equal(t, "0", waitFlag.DefValue)
+}
+
+// TestWaitTimeout_RejectsNegative verifies that the root rejects a negative
+// --wait-timeout before it builds any client, so that every task-producing
+// verb of every product answers a nonsensical bound the same way.
+func TestWaitTimeout_RejectsNegative(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	var capturedDeps *cli.Deps
+	cmd := buildInspectCmd(&capturedDeps)
+	cmd.Annotations = map[string]string{"noClient": "true"}
+	root.AddCommand(cmd)
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	root.SetArgs([]string{
+		"--config", filepath.Join(tmpDir, "config.yml"),
+		"--wait-timeout=-5",
+		"inspect",
+	})
+
+	err := root.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"invalid --wait-timeout -5: want 0 (wait until the task ends) or a positive number of seconds")
+	require.Nil(t, capturedDeps, "the command must not run with a nonsensical wait bound")
+}
+
+// TestWaitTimeout_ReachesDeps verifies that the resolved --wait-timeout is
+// visible to commands that build their own wait options, such as the two Ceph
+// restart-bulk verbs.
+func TestWaitTimeout_ReachesDeps(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Cleanup(func() { apiclient.SetDefaultWaitTimeout(0) })
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	var capturedDeps *cli.Deps
+	cmd := buildInspectCmd(&capturedDeps)
+	cmd.Annotations = map[string]string{"noClient": "true"}
+	root.AddCommand(cmd)
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	root.SetArgs([]string{
+		"--config", filepath.Join(tmpDir, "config.yml"),
+		"--wait-timeout", "30",
+		"inspect",
+	})
+
+	require.NoError(t, root.Execute())
+	require.NotNil(t, capturedDeps)
+	require.Equal(t, int64(30), capturedDeps.WaitTimeout)
 }
 
 // TestPersistentPreRunE_Insecure_WarnsOnStderr verifies that resolving an

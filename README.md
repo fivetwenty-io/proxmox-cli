@@ -20,7 +20,9 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
   `yaml` (JSON/YAML preserve native API types).
 
 - Block-by-default on asynchronous tasks (VM/CT lifecycle, snapshots, services),
-  with `--async` to return the task UPID immediately.
+  with `--async` to return the task UPID immediately and `--wait-timeout` to
+  stop waiting after a number of seconds while the server keeps running the
+  task.
 
 - Node administration over SSH and rsync, plus an interactive shell and remote
   exec.
@@ -701,7 +703,8 @@ type, the SSH path can be retired in favor of the normal upload endpoint.
 active context (or `--context`) to have `product: pbs`; PVE commands reject PBS
 contexts and vice versa, so a mixed fleet is a matter of switching contexts.
 Everything else works exactly like the PVE side: the same output formats,
-`--async` on task-producing verbs, JSONL logging, and exit codes.
+`--async` and `--wait-timeout` on task-producing verbs, JSONL logging, and exit
+codes.
 
 | Group | Purpose | Sub-commands |
 |-------|---------|--------------|
@@ -760,8 +763,8 @@ pmx -c backup api get /admin/datastore/tank/status
 API. It requires the active context (or `--context`) to have `product: pdm`;
 PVE and PBS commands reject PDM contexts and vice versa, so a mixed fleet is a
 matter of switching contexts. Everything else works exactly like the PVE and
-PBS sides: the same output formats, `--async` on task-producing verbs, JSONL
-logging, and exit codes.
+PBS sides: the same output formats, `--async` and `--wait-timeout` on
+task-producing verbs, JSONL logging, and exit codes.
 
 A Proxmox Datacenter Manager instance itself manages a fleet of PVE and PBS
 remotes. The `pdm pve` and `pdm pbs` groups proxy operations against those
