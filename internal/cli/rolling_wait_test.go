@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/tasks"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 )
 
 func TestRollingWaitError_DeadlineNamesTheTaskAndTheBound(t *testing.T) {
@@ -52,6 +54,28 @@ func TestRollingWaitError_UnboundedWaitSaysSevenDays(t *testing.T) {
 	require.Error(t, got)
 	require.Contains(t, got.Error(), "stopped waiting after 7 days")
 	require.NotContains(t, got.Error(), "604800")
+}
+
+// TestRollingWaitError_NilOptsReadsTheOperatorsBound covers the caller that
+// carries no policy of its own, which is what RenderDryRunLog forwards when
+// its own caller passed nil. The wait funnels resolve that nil against the
+// operator's --wait-timeout, so the message has to resolve it the same way
+// rather than reporting a bound of zero seconds.
+func TestRollingWaitError_NilOptsReadsTheOperatorsBound(t *testing.T) {
+	t.Cleanup(func() { apiclient.SetDefaultWaitTimeout(0) })
+
+	upid := "UPID:pve1:00001234:00000ABC:66D0F2A0:cephrestartbulk:osd:root@pam:"
+	err := fmt.Errorf("wait task %s: task polling canceled: %w", upid, context.DeadlineExceeded)
+
+	apiclient.SetDefaultWaitTimeout(0)
+	got := RollingWaitError(err, nil, upid)
+	require.Error(t, got)
+	require.Contains(t, got.Error(), "stopped waiting after 7 days")
+	require.NotContains(t, got.Error(), "after 0s")
+
+	apiclient.SetDefaultWaitTimeout(90)
+	got = RollingWaitError(err, nil, upid)
+	require.Contains(t, got.Error(), "stopped waiting after 90s")
 }
 
 func TestRollingWaitError_OtherErrorsPassThrough(t *testing.T) {

@@ -153,6 +153,46 @@ func TestWaitTimeout_ReachesDeps(t *testing.T) {
 	require.Equal(t, int64(30), capturedDeps.WaitTimeout)
 }
 
+// TestWaitTimeout_ReachesTheProcessWidePolicy verifies the other half of the
+// wire. Deps carries the bound to the commands that build their own wait
+// options, and apiclient's process-wide policy carries it to every caller
+// that passes nil options instead, which is most of them. Reading the policy
+// back after Execute is what pins the SetDefaultWaitTimeout call in
+// persistentPreRunE, because a command that never looks at Deps.WaitTimeout
+// still has to honour the operator's bound.
+func TestWaitTimeout_ReachesTheProcessWidePolicy(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Cleanup(func() { apiclient.SetDefaultWaitTimeout(0) })
+
+	require.Zero(t, apiclient.DefaultWaitTimeout(), "the policy starts unbounded")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	var capturedDeps *cli.Deps
+	cmd := buildInspectCmd(&capturedDeps)
+	cmd.Annotations = map[string]string{"noClient": "true"}
+	root.AddCommand(cmd)
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+
+	root.SetArgs([]string{
+		"--config", filepath.Join(tmpDir, "config.yml"),
+		"--wait-timeout", "45",
+		"inspect",
+	})
+
+	require.NoError(t, root.Execute())
+	require.Equal(t, int64(45), apiclient.DefaultWaitTimeout(),
+		"the flag must reach the policy every nil-options wait reads, not only Deps")
+}
+
 // TestPersistentPreRunE_Insecure_WarnsOnStderr verifies that resolving an
 // insecure (TLS-verification-disabled) connection emits a stderr warning.
 func TestPersistentPreRunE_Insecure_WarnsOnStderr(t *testing.T) {

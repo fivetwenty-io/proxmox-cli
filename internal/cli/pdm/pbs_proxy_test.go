@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 )
 
@@ -241,4 +243,43 @@ func TestFinishRemoteAsync_RejectsNonUPIDResponse(t *testing.T) {
 
 	err := finishRemoteAsync(cmd, deps, "backup1", invalidMsg, "Test message")
 	require.Error(t, err)
+}
+
+// TestWaitRemoteTask_UsesTheOperatorsWaitTimeout pins the bound on the ten
+// PDM proxy verbs to --wait-timeout. Those verbs poll the managed remote's
+// own task endpoint rather than one of the three wait funnels, so nothing
+// else makes them honour the operator's bound, and they carried a hardcoded
+// five minutes of their own before.
+//
+// Only elapsed time separates the operator's bound from a hardcoded one, so
+// the test lets a real one-second bound expire against a poller that never
+// stops reporting "running". testhelper.ExpiringContext would end the wait
+// faster, but it ends it whatever the bound is, so it cannot tell the two
+// apart. The watchdog turns a regression into a failure in seconds rather
+// than a wait for the old five minutes.
+func TestWaitRemoteTask_UsesTheOperatorsWaitTimeout(t *testing.T) {
+	t.Cleanup(func() { apiclient.SetDefaultWaitTimeout(0) })
+	apiclient.SetDefaultWaitTimeout(1)
+
+	// The poll itself takes a moment, which puts the loop's next poll safely
+	// behind the one-second deadline so the wait always ends on the deadline
+	// rather than racing it.
+	poll := func(_ context.Context, _, _ string) (*remoteTaskStatus, error) {
+		time.Sleep(50 * time.Millisecond)
+
+		return &remoteTaskStatus{Status: "running"}, nil
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- waitRemoteTask(context.Background(), "PBS", "backup1", validUPID, poll)
+	}()
+
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		require.ErrorContains(t, err, "backup1")
+	case <-time.After(20 * time.Second):
+		t.Fatal("the remote-task wait ignored the operator's one-second bound")
+	}
 }

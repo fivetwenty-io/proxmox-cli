@@ -396,21 +396,23 @@ func newPbsRrddataCmd() *cobra.Command {
 	return cmd
 }
 
-// remoteTaskWaitTimeoutSeconds and remoteTaskWaitIntervalMillis mirror the
-// vendored library's tasks.Wait defaults (internal/constants package,
-// v3.6.0: DefaultTaskTimeoutSeconds=300, TaskIntervalMillis=1000, no
-// backoff/jitter — pkg/api/tasks/tasks.go:160-192). finishRemoteTaskAsync
-// cannot reuse tasks.Wait/WaitPDMTask directly: those always poll PDM's own
-// /nodes/{node}/tasks/{upid}/status, but a remote-hosted task (`pbs node apt
-// update-database`, `pve node apt update-database`, etc.) runs on the
-// managed remote and is only visible through that product's own
-// ListRemotesTasksStatus (/pbs/remotes/{remote}/tasks/{upid}/status or
-// /pve/remotes/{remote}/tasks/{upid}/status) — PDM's local node-task
-// endpoint knows nothing about it.
-const (
-	remoteTaskWaitTimeoutSeconds = 300
-	remoteTaskWaitIntervalMillis = 1000
-)
+// remoteTaskWaitIntervalMillis mirrors the vendored library's tasks.Wait
+// polling cadence (internal/constants package, TaskIntervalMillis=1000, with
+// no backoff and no jitter, pkg/api/tasks/tasks.go). The bound on the wait
+// itself is not mirrored, because it belongs to the operator. waitRemoteTask
+// reads it from the process-wide --wait-timeout policy, so these verbs stop
+// waiting when every other task-producing verb of every product does.
+//
+// finishRemoteTaskAsync cannot reuse tasks.Wait or WaitPDMTask directly,
+// which is why the loop is written out here at all. Those always poll PDM's
+// own /nodes/{node}/tasks/{upid}/status, but a remote-hosted task, such as
+// the one `pbs node apt update-database` or `pve node apt update-database`
+// starts, runs on the managed remote and is only visible through that
+// product's own ListRemotesTasksStatus, either
+// /pbs/remotes/{remote}/tasks/{upid}/status or
+// /pve/remotes/{remote}/tasks/{upid}/status. PDM's local node-task endpoint
+// knows nothing about it.
+const remoteTaskWaitIntervalMillis = 1000
 
 // remoteTaskStatus is the minimal common shape of a remote task's status,
 // shared by the PBS and PVE remote-task status endpoints.
@@ -486,12 +488,7 @@ func finishRemoteTaskAsync(
 	}
 
 	if deps.Async {
-		return deps.Out.Render(cmd.OutOrStdout(),
-			output.Result{
-				Single:  map[string]string{"upid": upid},
-				Raw:     map[string]string{"upid": upid},
-				Message: upid,
-			}, deps.Format)
+		return cli.RenderUPID(cmd, deps, upid)
 	}
 
 	err = waitRemoteTask(cmd.Context(), product, remote, upid, poll)
@@ -504,16 +501,24 @@ func finishRemoteTaskAsync(
 
 // waitRemoteTask polls poll for upid on remote until it reaches a terminal
 // state (Status != "running") or the timeout elapses, mirroring the
-// vendored tasks.Wait poll loop: an immediate first check before any sleep,
-// then fixed-interval polling (pkg/api/tasks/tasks.go, v3.6.0). It returns
-// an error if the task exits with a set Exitstatus that is neither empty,
-// "OK"/"ok", nor a "WARNINGS: " status — the same success criteria the
-// vendored tasks.go's isSuccessExitStatus applies (s == "OK" || s == "ok" ||
-// s == ""). The pre-unification PBS-only check omitted the lowercase "ok"
-// case (ledgered from Task 14's review); unifying here fixes it for both
-// products.
+// vendored tasks.Wait poll loop, which checks once before it sleeps and then
+// polls at a fixed interval (pkg/api/tasks/tasks.go). It returns an error if
+// the task exits with a set Exitstatus that is neither empty, "OK", "ok",
+// nor a "WARNINGS: " status, which are the same success criteria the
+// vendored tasks.go's isSuccessExitStatus applies. The pre-unification
+// PBS-only check omitted the lowercase "ok" case, and unifying here fixes it
+// for both products.
+//
+// The bound comes from the operator's --wait-timeout, read back through
+// apiclient.WaitOptionsFor so that a zero means the same one-week ceiling
+// here as it does in the three wait funnels. These verbs cannot go through a
+// funnel, because the task lives on the managed remote, but an operator has
+// no way of knowing that and the flag is documented as bounding every
+// task-producing verb.
 func waitRemoteTask(ctx context.Context, product, remote, upid string, poll remoteTaskStatusFunc) error {
-	ctx, cancel := context.WithTimeout(ctx, remoteTaskWaitTimeoutSeconds*time.Second)
+	bound := apiclient.WaitOptionsFor(apiclient.DefaultWaitTimeout()).TimeoutSeconds
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(bound)*time.Second)
 	defer cancel()
 
 	interval := time.Duration(remoteTaskWaitIntervalMillis) * time.Millisecond

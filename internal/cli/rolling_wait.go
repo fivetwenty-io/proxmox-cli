@@ -24,12 +24,17 @@ func RollingWaitError(err error, opts *tasks.WaitOptions, upid string) error {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
-	secs := 0
-	if opts != nil {
-		secs = opts.TimeoutSeconds
+	// A nil opts is what a caller with no policy of its own hands the wait
+	// funnels, and they read the operator's --wait-timeout for it. Resolving
+	// it the same way here keeps the number in the message equal to the bound
+	// that actually expired, rather than printing "0s" for a wait that was
+	// unbounded.
+	if opts == nil {
+		opts = apiclient.WaitOptionsFor(apiclient.DefaultWaitTimeout())
 	}
+
 	return fmt.Errorf("stopped waiting after %s; the task is still running on the server: "+
-		"follow it with 'pmx pve task wait %s': %w", waitBoundText(secs), upid, err)
+		"follow it with 'pmx pve task wait %s': %w", waitBoundText(opts.TimeoutSeconds), upid, err)
 }
 
 // waitBoundText names the bound in the deadline message. The unbounded wait is

@@ -26,6 +26,13 @@ var defaultWaitTimeout atomic.Int64
 // before any task runs.
 func SetDefaultWaitTimeout(seconds int64) { defaultWaitTimeout.Store(seconds) }
 
+// DefaultWaitTimeout reports the operator's --wait-timeout in seconds, where
+// zero still means unbounded. It exists for the callers that cannot go
+// through a wait funnel, such as the PDM proxy verbs that poll a managed
+// remote's own task endpoint, and for the tests that check the flag reaches
+// the process-wide policy rather than stopping at Deps.
+func DefaultWaitTimeout() int64 { return defaultWaitTimeout.Load() }
+
 // WaitOptionsFor returns a task-wait policy bounded by timeoutSeconds while
 // leaving the polling cadence at the SDK default. A non-positive value means
 // "wait as long as the task takes" and yields UnboundedWaitSeconds, because a
