@@ -33,7 +33,7 @@ func TestClusterCephRestartBulk_HelpNamesTheServerRefusal(t *testing.T) {
 	var buf bytes.Buffer
 	err := run(deps, &buf, "ceph", "restart-bulk", "--help")
 	require.NoError(t, err)
-	require.Contains(t, buf.String(), "refuses")
+	require.Contains(t, buf.String(), "ceph-osd version cannot be read")
 }
 
 func TestClusterCephRestartBulk_RequiresServiceType(t *testing.T) {

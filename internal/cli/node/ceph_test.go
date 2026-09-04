@@ -1062,7 +1062,8 @@ func TestNodeCeph_RestartBulk_HelpNamesTheServerRefusals(t *testing.T) {
 
 	err := root.Execute()
 	require.NoError(t, err)
-	require.Contains(t, buf.String(), "refuses")
+	require.Contains(t, buf.String(), "checkpoint from an aborted run")
+	require.Contains(t, buf.String(), "ceph-osd version cannot be read")
 }
 
 func TestNodeCeph_RestartBulk_RefusesWithoutYes(t *testing.T) {
