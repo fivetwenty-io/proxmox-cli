@@ -587,7 +587,9 @@ func newCephRestartBulkCmd() *cobra.Command {
 			"whose running version differs from the installed ceph-osd binary, for a post-upgrade roll. " +
 			"--resume continues an aborted run from the checkpoint stored in Ceph's config-key store; " +
 			"--resume replays the saved plan, so --set-noout and --only-outdated are ignored when resuming. " +
-			"--force proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS; " +
+			"Without --resume the server refuses to start while a checkpoint from an aborted run exists, " +
+			"and --only-outdated refuses when the installed ceph-osd version cannot be read. --force " +
+			"proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS; " +
 			"HEALTH_ERR is always fatal.\n\n" +
 			"--dry-run logs the plan (which OSDs, in what order) to the worker task without restarting " +
 			"anything, and this command prints that log even when the worker refuses; it does not require " +

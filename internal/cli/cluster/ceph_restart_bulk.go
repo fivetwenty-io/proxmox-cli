@@ -36,9 +36,10 @@ func newCephRestartBulkCmd() *cobra.Command {
 			"/cluster/ceph/restart-bulk), waiting for each to come back and for the cluster to settle " +
 			"before the next. --service-type selects mon, mgr, mds, or osd and is required.\n\n" +
 			"--only-outdated applies to OSDs only and restarts just those whose running version differs " +
-			"from the ceph-osd binary installed on their host, for a post-upgrade roll. --force proceeds " +
-			"past HEALTH_WARN with non-benign checks such as PG_DEGRADED, SLOW_OPS, or MON_DOWN; HEALTH_ERR " +
-			"is always fatal.\n\n" +
+			"from the ceph-osd binary installed on their host, for a post-upgrade roll. The server refuses " +
+			"--only-outdated on any node where the installed ceph-osd version cannot be read. --force " +
+			"proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED, SLOW_OPS, or MON_DOWN; " +
+			"HEALTH_ERR is always fatal.\n\n" +
 			"--dry-run logs the plan (which daemons, in what order) to the worker task without restarting " +
 			"anything, and this command prints that log even when the worker refuses; it does not require " +
 			"--yes. Every other invocation refuses to run without --yes/-y.\n\n" +

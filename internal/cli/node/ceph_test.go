@@ -1055,6 +1055,16 @@ func TestNodeCeph_CommandTree(t *testing.T) {
 
 const cephBulkUPID = "UPID:pve1:00001234:00000ABC:66D0F2A0:cephrestartbulk:osd:root@pam:"
 
+func TestNodeCeph_RestartBulk_HelpNamesTheServerRefusals(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "ceph", "restart-bulk", "--help"))
+
+	err := root.Execute()
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "refuses")
+}
+
 func TestNodeCeph_RestartBulk_RefusesWithoutYes(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())

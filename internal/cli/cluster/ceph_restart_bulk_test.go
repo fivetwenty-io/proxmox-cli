@@ -28,6 +28,14 @@ func recordCephBulk(f *testhelper.FakePVE, form *string) {
 	})
 }
 
+func TestClusterCephRestartBulk_HelpNamesTheServerRefusal(t *testing.T) {
+	deps := &cli.Deps{API: nil, Out: output.New(), Format: output.FormatPlain}
+	var buf bytes.Buffer
+	err := run(deps, &buf, "ceph", "restart-bulk", "--help")
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "refuses")
+}
+
 func TestClusterCephRestartBulk_RequiresServiceType(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
