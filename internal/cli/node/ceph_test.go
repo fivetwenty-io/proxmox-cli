@@ -1,6 +1,7 @@
 package node_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -1203,8 +1204,10 @@ func TestNodeCeph_RestartBulk_DryRunWaitTimeoutStaysNeutral(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
 	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, planUPID)
-	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+planUPID+"/status", map[string]any{
-		"status": "running", "upid": planUPID,
+	ctx, expire := testhelper.ExpiringContext(context.Background())
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+planUPID+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "running", "upid": planUPID})
+		expire()
 	})
 	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+planUPID+"/log", []map[string]any{
 		{"n": 1, "t": "dry-run: would restart osd.0, osd.3"},
@@ -1213,7 +1216,7 @@ func TestNodeCeph_RestartBulk_DryRunWaitTimeoutStaysNeutral(t *testing.T) {
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
 	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--dry-run", "--wait-timeout", "1"))
 
-	err := root.Execute()
+	err := root.ExecuteContext(ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "still running")
 	require.Contains(t, err.Error(), planUPID)
@@ -1238,14 +1241,16 @@ func TestNodeCeph_RestartBulk_WaitTimeoutSaysTheRollContinues(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
 	recordForm(f, "POST /api2/json/nodes/pve1/ceph/restart-bulk", &rec, cephBulkUPID)
-	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", map[string]any{
-		"status": "running", "upid": cephBulkUPID,
+	ctx, expire := testhelper.ExpiringContext(context.Background())
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "running", "upid": cephBulkUPID})
+		expire()
 	})
 
 	root, _, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
 	root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "restart-bulk", "--yes", "--wait-timeout", "1"))
 
-	err := root.Execute()
+	err := root.ExecuteContext(ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stopped waiting after 1s")
 	require.Contains(t, err.Error(), "still running")

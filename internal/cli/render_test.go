@@ -149,3 +149,24 @@ func TestRenderDryRunLog_FailedWaitStillRendersTheLogAndReturnsTheJoinedError(t 
 	require.Contains(t, buf.String(), "refusing to plan without --force",
 		"the log is the point of a dry run even when the worker refuses")
 }
+
+// TestRenderDryRunLog_UnparsableUPIDReportsBothErrors covers a UPID the
+// server never issued: WaitTask fails on it before any HTTP request, and the
+// caller's own tasks.ParseUPID call fails the same way, so the returned
+// error must carry both failures and nothing must be rendered or fetched.
+func TestRenderDryRunLog_UnparsableUPIDReportsBothErrors(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("/", func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request for an unparsable UPID: %s %s", r.Method, r.URL.Path)
+	})
+	ac := newCLITestClient(t, f)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatTable}
+
+	var buf bytes.Buffer
+	err := cli.RenderDryRunLog(renderTestCmd(&buf), deps, "not-a-upid", nil, "test dry run")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "test dry run")
+	require.Contains(t, err.Error(), "unexpected field count",
+		"the joined error must mention why the UPID itself would not parse")
+	require.Empty(t, buf.String(), "nothing can be rendered for a UPID that was never a task")
+}

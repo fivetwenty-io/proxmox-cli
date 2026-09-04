@@ -21,8 +21,16 @@ import (
 // run builds the cluster group command, injects deps via context, captures
 // output in buf, and executes it with the supplied args.
 func run(deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
+	return runCtx(context.Background(), deps, buf, args...)
+}
+
+// runCtx is run with the base context supplied by the caller instead of a
+// bare context.Background(), so a test can hand it a context that reports
+// itself done on demand (see testhelper.ExpiringContext) and end a wait
+// without sleeping through its bound.
+func runCtx(ctx context.Context, deps *cli.Deps, buf *bytes.Buffer, args ...string) error {
 	cmd := Group(&cli.Deps{})
-	cmd.SetContext(cli.WithDeps(context.Background(), deps))
+	cmd.SetContext(cli.WithDeps(ctx, deps))
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 	cmd.SetArgs(args)

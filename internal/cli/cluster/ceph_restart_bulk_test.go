@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"testing"
 
@@ -189,13 +190,15 @@ func TestClusterCephRestartBulk_WaitTimeoutSaysTheRollContinues(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var form string
 	recordCephBulk(f, &form)
-	f.HandleJSON("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", map[string]any{
-		"status": "running", "upid": cephBulkUPID,
+	ctx, expire := testhelper.ExpiringContext(context.Background())
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+cephBulkUPID+"/status", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{"status": "running", "upid": cephBulkUPID})
+		expire()
 	})
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain, WaitTimeout: 1}
 
 	var buf bytes.Buffer
-	err := run(deps, &buf, "ceph", "restart-bulk", "--service-type", "mon", "--yes")
+	err := runCtx(ctx, deps, &buf, "ceph", "restart-bulk", "--service-type", "mon", "--yes")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stopped waiting after 1s")
 	require.Contains(t, err.Error(), "still running")
