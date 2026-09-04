@@ -40,10 +40,11 @@ func TestRenderUPID_PrintsTheHandle(t *testing.T) {
 func TestRenderTaskWait_AsyncPrintsTheUPIDWithoutPolling(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	statusFetched := false
-	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+renderTestUPID+"/status", func(w http.ResponseWriter, _ *http.Request) {
-		statusFetched = true
-		testhelper.WriteData(w, map[string]any{"status": "stopped", "exitstatus": "OK", "upid": renderTestUPID})
-	})
+	f.HandleFunc("GET /api2/json/nodes/pve1/tasks/"+renderTestUPID+"/status",
+		func(w http.ResponseWriter, _ *http.Request) {
+			statusFetched = true
+			testhelper.WriteData(w, map[string]any{"status": "stopped", "exitstatus": "OK", "upid": renderTestUPID})
+		})
 	ac := newCLITestClient(t, f)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain, Async: true}
 
