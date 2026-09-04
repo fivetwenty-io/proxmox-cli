@@ -40,6 +40,20 @@ func TestRollingWaitError_WordingIsNeutralAboutWhatTheTaskDoes(t *testing.T) {
 		"a --dry-run worker only logs a plan and never restarts anything")
 }
 
+// TestRollingWaitError_UnboundedWaitSaysSevenDays covers the operator's
+// choice of no bound (--wait-timeout 0, WaitOptionsFor's default): the
+// deadline message must read as a human duration, not the raw seconds the
+// SDK needs internally.
+func TestRollingWaitError_UnboundedWaitSaysSevenDays(t *testing.T) {
+	upid := "UPID:pve1:00001234:00000ABC:66D0F2A0:cephrestartbulk:osd:root@pam:"
+	err := fmt.Errorf("wait task %s: task polling canceled: %w", upid, context.DeadlineExceeded)
+
+	got := RollingWaitError(err, WaitOptionsFor(0), upid)
+	require.Error(t, got)
+	require.Contains(t, got.Error(), "stopped waiting after 7 days")
+	require.NotContains(t, got.Error(), "604800")
+}
+
 func TestRollingWaitError_OtherErrorsPassThrough(t *testing.T) {
 	err := errors.New("task failed: TASK ERROR")
 	got := RollingWaitError(err, &tasks.WaitOptions{TimeoutSeconds: 90}, "UPID:x")

@@ -28,8 +28,18 @@ func RollingWaitError(err error, opts *tasks.WaitOptions, upid string) error {
 	if opts != nil {
 		secs = opts.TimeoutSeconds
 	}
-	return fmt.Errorf("stopped waiting after %ds; the task is still running on the server: "+
-		"follow it with 'pmx pve task wait %s': %w", secs, upid, err)
+	return fmt.Errorf("stopped waiting after %s; the task is still running on the server: "+
+		"follow it with 'pmx pve task wait %s': %w", waitBoundText(secs), upid, err)
+}
+
+// waitBoundText names the bound in the deadline message. The unbounded wait is
+// spelled as a number of seconds only because the SDK needs one; the operator
+// asked for no bound, so they read "7 days", not "604800s".
+func waitBoundText(secs int) string {
+	if secs == apiclient.UnboundedWaitSeconds {
+		return "7 days"
+	}
+	return fmt.Sprintf("%ds", secs)
 }
 
 // RenderUPID renders the bare task handle for --async: the same shape every
