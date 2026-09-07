@@ -82,6 +82,13 @@ jobs:
       - name: Man generation smoke
         run: go run ./cmd/docgen -out "${RUNNER_TEMP}/man" -version dev -date 1970-01-01
 
+      # The release workflow injects the Homebrew install steps into the cask
+      # GoReleaser generates, anchored on that cask's `binary` stanza. If the
+      # anchor or the stanzas ever stop matching, the failure belongs here and
+      # not in the middle of a release.
+      - name: Cask install steps
+        run: python3 scripts/cask-steps --self-test
+
       # docs/test-coverage-matrix.md is generated from the built command tree
       # and the e2e tree definitions, so a new leaf that nobody classified
       # silently makes it stale. Regenerating here catches that at review time.

@@ -90,15 +90,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pushes the Homebrew cask formula to fivetwenty-io/homebrew-tap;
-          # the default GITHUB_TOKEN cannot write to another repo. Optional —
-          # homebrew_casks.skip_upload degrades gracefully when this secret
-          # is unset (an empty env value evaluates falsy in the goreleaser
-          # template, so the tap push is skipped rather than failing).
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           # Apple code signing + notarization for the darwin binaries.
           # Optional — notarize.macos.enabled degrades gracefully when
-          # MACOS_SIGN_P12 is unset, same pattern as the tap token above.
+          # MACOS_SIGN_P12 is unset, the same way the cask push below skips
+          # itself without the tap token.
           # MACOS_SIGN_P12: base64 of the Developer ID Application .p12
           # (cert + key + Apple chain); MACOS_NOTARY_KEY: base64 of the
           # App Store Connect API .p8 key.
@@ -107,6 +102,58 @@ jobs:
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+
+      # GoReleaser generates the cask but does not push it (skip_upload is
+      # always on), because its `hooks:` emit the `postflight` stanzas that
+      # Homebrew 6 deprecated and its template cannot emit the declarative
+      # replacements — see the note in .goreleaser.yaml. So the install steps
+      # go in here and this job pushes the finished cask to the tap. The push
+      # is skipped without the tap secret, which is what a fork gets.
+      - name: Publish Homebrew cask
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "HOMEBREW_TAP_GITHUB_TOKEN is unset; skipping the tap push"
+            exit 0
+          fi
+
+          cask=dist/homebrew/Casks/pmx.rb
+          python3 scripts/cask-steps "${cask}"
+
+          # The clone's config holds the token, and this runner is persistent,
+          # so the checkout goes away whichever way this step ends.
+          tap="${RUNNER_TEMP}/homebrew-tap"
+          rm -rf "${tap}"
+          trap 'rm -rf "${tap}"' EXIT
+          git clone \
+            "https://x-access-token:${TAP_TOKEN}@github.com/fivetwenty-io/homebrew-tap.git" \
+            "${tap}"
+          cp "${cask}" "${tap}/Casks/pmx.rb"
+
+          cd "${tap}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- Casks/pmx.rb; then
+            echo "tap cask already matches this release"
+            exit 0
+          fi
+          git add Casks/pmx.rb
+          git commit -m "Brew cask update for pmx version ${GITHUB_REF_NAME}"
+
+          # Other projects publish to this same tap, so a push can lose a race
+          # with one of them. Rebase onto whatever landed and try again.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed the cask on attempt ${attempt}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: push rejected, rebasing on the tap"
+            git pull --rebase
+          done
+          echo "could not push the cask to the tap" >&2
+          exit 1
 
       # The cask push degrades gracefully when HOMEBREW_TAP_GITHUB_TOKEN is
       # unset, which also makes it silent: a vanished or broken secret would

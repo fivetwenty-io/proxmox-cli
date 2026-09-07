@@ -210,99 +210,48 @@ notarize:
 # NOTE: `brews:` is hard-deprecated as of the installed goreleaser (v2.17,
 # deprecated since v2.10/hard since v2.16) — `goreleaser check` fails on it.
 # `homebrew_casks:` is the maintained replacement; see
-# https://goreleaser.com/deprecations#brews. Casks don't have a Formula-style
-# `install` script, so the pve/pbs/pdm persona aliases are created/removed via
-# postflight/uninstall hooks instead of `bin.install_symlink`.
+# https://goreleaser.com/deprecations#brews.
+#
+# GoReleaser generates the cask here but never publishes it: `skip_upload` is
+# always on, and the release workflow injects the install steps with
+# `scripts/cask-steps` and pushes the result to the tap itself. The reason is
+# that Homebrew 6 deprecated the `postflight` and `uninstall_postflight`
+# blocks that goreleaser's `hooks:` emit — every `brew` command touching the
+# cask prints a warning about them — and goreleaser's cask template cannot
+# emit the declarative `postflight_steps`/`uninstall_postflight_steps` that
+# replace them. See https://github.com/goreleaser/goreleaser/issues/6870; when
+# that lands, move the steps back into `hooks:` and delete the script.
 homebrew_casks:
   - name: pmx
     ids:
       - pmx
+    # Required: goreleaser skips cask generation outright when the repository
+    # name is empty, so this has to stay even though the workflow owns the
+    # push. There is no `token:` any more, because goreleaser templates this
+    # ref while it generates, and a literal
+    # `{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}` would then break every local
+    # `goreleaser release --snapshot` run with the secret unset.
     repository:
       owner: fivetwenty-io
       name: homebrew-tap
-      # goreleaser accepts ONLY the literal `{{ .Env.VAR_NAME }}` form here —
-      # no envOrDefault, no `index .Env`, no other interpolation. The
-      # skip_upload guard below covers releases without the tap secret.
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Casks
     homepage: https://github.com/fivetwenty-io/proxmox-cli
     description: Proxmox command-line interface (VE / PBS / PDM)
-    # Skip pushing the cask whenever the tap token is not configured, so a
-    # release without the HOMEBREW_TAP_GITHUB_TOKEN secret still succeeds
-    # (`index .Env` is nil-safe under missingkey=error, unlike direct access).
-    skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
+    # Always. The cask that goreleaser writes is missing the install steps,
+    # so publishing it here would ship a cask with no persona aliases and no
+    # man pages. The workflow pushes the injected file instead.
+    skip_upload: "true"
     binaries:
       - pmx
-    # NB: no `manpages:` stanza on purpose. goreleaser expands its globs into
-    # one cask `manpage` artifact per file (~3k for pmx), and Homebrew Cask
-    # prints an ohai line per artifact on every link AND unlink — thousands
-    # of "Linking/Unlinking Manpage" lines on each install/upgrade. The
-    # postflight hook below bulk-symlinks the staged share/man tree silently
-    # instead, and the uninstall hook sweeps the links back out.
-    # goreleaser's cask `completions:` stanza takes exactly one file per
-    # shell (a single path, not a list), so the pve/pbs/pdm persona
-    # completions cannot be attached via the stanza — the pmx completions
-    # ship through it, and the persona completions are symlinked by the
-    # same postflight hook that creates the persona bin aliases.
-    completions:
-      bash: share/bash-completion/completions/pmx.bash
-      zsh: share/zsh/site-functions/_pmx
-      fish: share/fish/vendor_completions.d/pmx.fish
-    hooks:
-      post:
-        install: |
-          %w[pve pbs pdm].each do |persona|
-            link = HOMEBREW_PREFIX/"bin"/persona
-            link.delete if link.symlink? || link.exist?
-            link.make_symlink("pmx")
-          end
-          # Bulk-link man pages and persona completions from the staged
-          # cask content. Everything links into HOMEBREW_PREFIX in one quiet
-          # pass; the uninstall hook removes any symlink in these dirs that
-          # points back into this cask's Caskroom.
-          %w[
-            share/man/man1
-            share/man/man5
-            share/bash-completion/completions
-            share/zsh/site-functions
-            share/fish/vendor_completions.d
-          ].each do |reldir|
-            src = staged_path/reldir
-            next unless src.directory?
-
-            dst = HOMEBREW_PREFIX/reldir
-            dst.mkpath
-            src.children.each do |file|
-              # pmx completions are already linked by the `completions:`
-              # artifact stanza; skip them so the two mechanisms don't fight.
-              next if %w[pmx.bash _pmx pmx.fish].include?(file.basename.to_s)
-
-              link = dst/file.basename
-              link.delete if link.symlink? || link.exist?
-              link.make_symlink(file)
-            end
-          end
-        uninstall: |
-          %w[pve pbs pdm].each do |persona|
-            link = HOMEBREW_PREFIX/"bin"/persona
-            link.delete if link.symlink?
-          end
-          %w[
-            share/man/man1
-            share/man/man5
-            share/bash-completion/completions
-            share/zsh/site-functions
-            share/fish/vendor_completions.d
-          ].each do |reldir|
-            dir = HOMEBREW_PREFIX/reldir
-            next unless dir.directory?
-
-            dir.children.each do |link|
-              next unless link.symlink?
-
-              link.delete if link.readlink.to_s.include?("/Caskroom/pmx/")
-            end
-          end
+    # NB: no `manpages:` or `completions:` stanzas on purpose. GoReleaser
+    # expands its manpage globs into one cask `manpage` artifact per file
+    # (~3k for pmx), and Homebrew Cask prints an ohai line per artifact on
+    # every link AND unlink — thousands of "Linking/Unlinking Manpage" lines
+    # on each install and upgrade. Its `completions:` stanza takes exactly one
+    # file per shell, so the pve/pbs/pdm completions could never ship through
+    # it either. The injected `postflight_steps` bulk-symlink the whole staged
+    # share/ tree in silence, and `uninstall_postflight_steps` sweep those
+    # links back out.
 
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
