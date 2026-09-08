@@ -451,3 +451,99 @@ func TestRenderer_AllFormats_NoError(t *testing.T) {
 		})
 	}
 }
+
+// ---- YAML: raw JSON payloads ------------------------------------------------
+//
+// Many commands hand the renderer the SDK's untouched json.RawMessage (or a
+// pointer to one, a slice of them, or a struct carrying one). goccy/go-yaml
+// sees []byte and emits a sequence of integers, so `-o yaml` must re-encode
+// the value as the document `-o json` would print.
+
+func TestRenderer_YAML_RawMessageIsDecoded(t *testing.T) {
+	t.Parallel()
+	raw := json.RawMessage(`{"/sdn/zones/provo/vlan54":{"VM.Audit":1,"SDN.Use":1},"/":{"Sys.Audit":1}}`)
+
+	for name, v := range map[string]any{
+		"value":   raw,
+		"pointer": &raw,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			require.NoError(t, output.New().Render(&buf, output.Result{Raw: v}, output.FormatYAML))
+			out := buf.String()
+			require.NotContains(t, out, "- 123", "must not dump the bytes: %s", out)
+
+			var parsed map[string]map[string]int
+			require.NoError(t, yaml.Unmarshal(buf.Bytes(), &parsed), "got: %s", out)
+			require.Equal(t, 1, parsed["/sdn/zones/provo/vlan54"]["VM.Audit"])
+			require.Equal(t, 1, parsed["/"]["Sys.Audit"])
+		})
+	}
+}
+
+func TestRenderer_YAML_RawMessageSliceIsDecoded(t *testing.T) {
+	t.Parallel()
+	raws := []json.RawMessage{
+		json.RawMessage(`{"vmid":100,"name":"alpha"}`),
+		json.RawMessage(`{"vmid":101,"name":"beta"}`),
+	}
+	var buf bytes.Buffer
+	require.NoError(t, output.New().Render(&buf, output.Result{Raw: raws}, output.FormatYAML))
+
+	var parsed []map[string]any
+	require.NoError(t, yaml.Unmarshal(buf.Bytes(), &parsed), "got: %s", buf.String())
+	require.Len(t, parsed, 2)
+	require.Equal(t, "beta", parsed[1]["name"])
+	require.EqualValues(t, 101, parsed[1]["vmid"])
+}
+
+func TestRenderer_YAML_RawMessageFieldInStructIsDecoded(t *testing.T) {
+	t.Parallel()
+	type entry struct {
+		Node string          `json:"node"`
+		UID  json.RawMessage `json:"uid"`
+	}
+	var buf bytes.Buffer
+	require.NoError(t, output.New().Render(&buf,
+		output.Result{Raw: []entry{{Node: "pve-0", UID: json.RawMessage(`"root@pam"`)}}},
+		output.FormatYAML))
+	out := buf.String()
+	require.Contains(t, out, "uid: root@pam", "got: %s", out)
+}
+
+// TestRenderer_YAML_ScalarsMatchJSON pins the scalar rendering: integers stay
+// integers (not 1.0 and not "1"), floats stay floats, and strings that look
+// like numbers stay quoted strings.
+func TestRenderer_YAML_ScalarsMatchJSON(t *testing.T) {
+	t.Parallel()
+	raw := json.RawMessage(`{"int":1,"big":12345678901234,"float":1.5,"str":"1","neg":-3,"nil":null,"ok":true}`)
+	var buf bytes.Buffer
+	require.NoError(t, output.New().Render(&buf, output.Result{Raw: raw}, output.FormatYAML))
+	out := buf.String()
+	require.Contains(t, out, "int: 1\n", "got: %s", out)
+	require.Contains(t, out, "big: 12345678901234\n", "got: %s", out)
+	require.Contains(t, out, "float: 1.5\n", "got: %s", out)
+	require.Contains(t, out, `str: "1"`, "got: %s", out)
+	require.Contains(t, out, "neg: -3\n", "got: %s", out)
+	require.Contains(t, out, "nil: null\n", "got: %s", out)
+	require.Contains(t, out, "ok: true\n", "got: %s", out)
+}
+
+// TestRenderer_YAML_RawKeyOrderMatchesJSON: the YAML document lists keys in the
+// same order the JSON document does (server order for raw payloads, field
+// order for structs), so the two formats stay a syntax swap apart.
+func TestRenderer_YAML_RawKeyOrderMatchesJSON(t *testing.T) {
+	t.Parallel()
+	raw := json.RawMessage(`{"zeta":1,"alpha":{"two":2,"one":3},"mid":[]}`)
+	var buf bytes.Buffer
+	require.NoError(t, output.New().Render(&buf, output.Result{Raw: raw}, output.FormatYAML))
+	require.Equal(t, "zeta: 1\nalpha:\n  two: 2\n  one: 3\nmid: []\n", buf.String())
+}
+
+func TestRenderer_YAML_InvalidRawMessageErrors(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	err := output.New().Render(&buf, output.Result{Raw: json.RawMessage(`{not json`)}, output.FormatYAML)
+	require.Error(t, err)
+}

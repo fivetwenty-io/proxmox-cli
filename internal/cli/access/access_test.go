@@ -879,3 +879,22 @@ func TestAccess_UserList_JSON(t *testing.T) {
 	require.NoError(t, run(deps, &buf, "user", "list"))
 	require.Contains(t, buf.String(), `"userid": "root@pam"`)
 }
+
+// TestAccess_Permissions_YAML guards the raw-payload path: the SDK returns the
+// permissions tree as json.RawMessage, and `-o yaml` must render it as a map,
+// not as the bytes of the JSON document.
+func TestAccess_Permissions_YAML(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/access/permissions", map[string]any{
+		"/sdn/zones/provo/vlan54": map[string]any{"VM.Audit": 1, "SDN.Use": 1},
+	})
+
+	deps := newDeps(t, f, output.FormatYAML)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "permissions", "--path", "/sdn/zones/provo/vlan54"))
+
+	out := buf.String()
+	require.NotContains(t, out, "- 123", "yaml dumped the raw bytes: %s", out)
+	require.Contains(t, out, "/sdn/zones/provo/vlan54:", "got: %s", out)
+	require.Contains(t, out, "SDN.Use: 1", "got: %s", out)
+}
