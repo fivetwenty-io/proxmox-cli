@@ -1,6 +1,8 @@
 package output
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -72,4 +74,62 @@ func TestCell_SingularCountReadsAsEnglish(t *testing.T) {
 	long := strings.Repeat("x", 200)
 	assert.Equal(t, "[1 item]", Cell([]any{long}))
 	assert.Equal(t, "k={1 field}", Cell(map[string]any{"k": map[string]any{"k2": long}}))
+}
+
+// structWithJSONTags is a stand-in for a value that reaches Cell without
+// having passed through map[string]any first, such as a hand-built report
+// row.
+type structWithJSONTags struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// TestCell_DefaultArmMarshalsUnhandledTypes covers every value shape that
+// reaches summarize's default case: today that is a json.RawMessage passed
+// straight through, or a struct that never went through map[string]any. Each
+// one must render as compact JSON text, with a JSON string unquoted, rather
+// than as Go's %v formatting, which prints a RawMessage as a byte list and a
+// struct as "{fieldOrder}" with no field names.
+func TestCell_DefaultArmMarshalsUnhandledTypes(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{
+			name: "raw message holding an object",
+			in:   json.RawMessage(`{"status":"online","vmid":100}`),
+			want: `{"status":"online","vmid":100}`,
+		},
+		{
+			name: "raw message holding a quoted string",
+			in:   json.RawMessage(`"online"`),
+			want: "online",
+		},
+		{
+			name: "raw message holding a number",
+			in:   json.RawMessage(`8006`),
+			want: "8006",
+		},
+		{
+			name: "struct with json tags",
+			in:   structWithJSONTags{Name: "pve1", Count: 3},
+			want: `{"name":"pve1","count":3}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, Cell(tc.in))
+		})
+	}
+}
+
+// TestCell_DefaultArmFallsBackToPercentVOnMarshalFailure covers the one path
+// jsonCell cannot turn into JSON text: a value encoding/json refuses to
+// marshal, such as a channel. That value still renders as something, via
+// Go's %v formatting, rather than panicking or emitting nothing.
+func TestCell_DefaultArmFallsBackToPercentVOnMarshalFailure(t *testing.T) {
+	ch := make(chan int)
+	assert.Equal(t, fmt.Sprintf("%v", ch), Cell(ch))
 }

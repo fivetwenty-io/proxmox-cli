@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,7 +26,12 @@ const nestedSummaryDepth = 2
 // encoding/json. A nested value is summarised rather than marshalled: a small
 // object spells out its fields as "k=v", a small array lists its elements,
 // and anything larger or deeper is described by its shape. The full value
-// stays available through -o json and -o yaml.
+// stays available through -o json and -o yaml. Every current caller decodes
+// its payload into map[string]any, so those five cases cover it; a value of
+// any other type, such as a json.RawMessage or a struct that never passed
+// through map[string]any, falls to a default arm that marshals it to compact
+// JSON text, unquotes it first if that text is itself a JSON string, and
+// only drops to Go's %v formatting if marshalling the value fails.
 func Cell(v any) string {
 	return summarize(v, 0)
 }
@@ -54,8 +60,28 @@ func summarize(v any, depth int) string {
 	case []any:
 		return arrayCell(t, depth)
 	default:
-		return fmt.Sprintf("%v", t)
+		return jsonCell(t)
 	}
+}
+
+// jsonCell renders a value that fell through summarize's typed cases,
+// such as a json.RawMessage or a struct with json tags, by marshalling it
+// to compact JSON text. A value whose JSON encoding is itself a quoted
+// string renders unquoted, so a RawMessage holding "online" reads as online
+// rather than "online". Marshalling failure, which only a channel, a func,
+// or a cyclic value can cause, falls back to Go's %v formatting of the
+// original value.
+func jsonCell(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		return s
+	}
+	return string(b)
 }
 
 // objectCell renders a nested object as "k=v k=v" when that is short enough,
