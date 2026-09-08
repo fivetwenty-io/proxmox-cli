@@ -71,7 +71,7 @@ func newMetricsCmd() *cobra.Command {
 				for i, h := range headers {
 					key := colKey(h)
 					if v, ok := dp[key]; ok && v != nil {
-						row[i] = fmt.Sprintf("%v", v)
+						row[i] = cli.StringifyValue(v)
 					} else {
 						row[i] = "-"
 					}

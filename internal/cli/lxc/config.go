@@ -516,7 +516,7 @@ func structToStringMap(v any) (map[string]string, error) {
 		if val == nil {
 			continue
 		}
-		s := fmt.Sprintf("%v", val)
+		s := cli.StringifyValue(val)
 		if s == "" {
 			continue
 		}

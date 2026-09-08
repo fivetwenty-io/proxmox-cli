@@ -268,7 +268,7 @@ func newSnapshotShowCmd() *cobra.Command {
 			single := make(map[string]string, len(decoded))
 			for k, v := range decoded {
 				if v != nil {
-					single[k] = fmt.Sprintf("%v", v)
+					single[k] = cli.StringifyValue(v)
 				}
 			}
 

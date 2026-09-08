@@ -3,6 +3,7 @@ package lxc
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -145,8 +146,7 @@ func newMigrateCheckCmd() *cobra.Command {
 				single["dependent-ha-resources"] = strings.Join(resp.DependentHaResources, ", ")
 			}
 			if len(resp.NotAllowedNodes) > 0 {
-				raw, _ := json.Marshal(resp.NotAllowedNodes)
-				single["not-allowed-nodes"] = string(raw)
+				single["not-allowed-nodes"] = formatNotAllowedNodes(resp.NotAllowedNodes)
 			}
 
 			res := output.Result{Single: single, Raw: resp}
@@ -156,4 +156,35 @@ func newMigrateCheckCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&target, "target-node", "", "filter results for this specific target node")
 	return cmd
+}
+
+// formatNotAllowedNodes renders the not-allowed-nodes payload as a
+// comma-joined list, the same shape allowed-nodes already uses, instead of
+// as raw JSON text. PVE sends this field two ways: a plain array of node
+// names, or an object keyed by node name whose value is the reason (or a
+// structured reason, e.g. unavailable storages) that node is blocked. Either
+// shape decodes into a stable, deterministically-ordered line here; a
+// payload matching neither (a future API shape) falls back to the raw JSON
+// text rather than dropping the field.
+func formatNotAllowedNodes(raw json.RawMessage) string {
+	var names []string
+	if err := json.Unmarshal(raw, &names); err == nil {
+		return strings.Join(names, ", ")
+	}
+
+	var byNode map[string]any
+	if err := json.Unmarshal(raw, &byNode); err == nil {
+		keys := make([]string, 0, len(byNode))
+		for k := range byNode {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, k+": "+output.Cell(byNode[k]))
+		}
+		return strings.Join(parts, ", ")
+	}
+
+	return string(raw)
 }

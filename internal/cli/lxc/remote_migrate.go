@@ -2,6 +2,7 @@ package lxc
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -111,8 +112,18 @@ func newRemoteMigrateCmd() *cobra.Command {
 					return emitTask(cmd, deps, raw,
 						fmt.Sprintf("Container %s remote migration started.", vmid))
 				}
-				// Non-UPID response: render whatever came back.
-				res := output.Result{Raw: *resp}
+				// Non-UPID response: PVE can answer remote-migrate with a plain
+				// message instead of a task UPID (e.g. a validation refusal).
+				// -o table and -o plain only read Message, not Raw, so without
+				// one they would print nothing even though the server replied.
+				// The payload is often a JSON-quoted string; unwrap it first so
+				// the surrounding quotes and any escapes do not show up in the
+				// printed text. Raw keeps the untouched payload for -o json/-o yaml.
+				msg := cli.RawScalarText(raw)
+				if msg == "" {
+					msg = strings.TrimSpace(string(raw))
+				}
+				res := output.Result{Raw: *resp, Message: msg}
 				return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 			}
 

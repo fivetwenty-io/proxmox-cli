@@ -115,6 +115,37 @@ func TestLxcConsole_Spice(t *testing.T) {
 	require.Contains(t, buf.String(), "secret")
 }
 
+// TestLxcConsole_LargeNumberAndNestedValue pins the fix for
+// structToStringMap, shared by config, console, and firewall rendering: a
+// decoded JSON number above six digits used to print in exponent notation
+// via fmt's %v, and a nested object used to print in Go map syntax with
+// unstable key order. Both fields now render through cli.StringifyValue: the
+// number as a plain integer, the nested object as compact JSON.
+func TestLxcConsole_LargeNumberAndNestedValue(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/vncproxy", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, map[string]any{
+			"ticket": "PVEVNC:ABCDEF",
+			"port":   5900,
+			"upid":   536870912,
+			"cert-info": map[string]any{
+				"fingerprint": "AA:BB:CC",
+				"subject":     "CN=pve1",
+			},
+		})
+	})
+	deps := newDeps(t, f, output.FormatTable, "pve1", false)
+	var buf bytes.Buffer
+	run := newTestCmd(t, deps, &buf, "console", "101")
+	require.NoError(t, run())
+
+	out := buf.String()
+	require.Contains(t, out, "536870912")
+	require.NotContains(t, out, "e+08")
+	require.NotContains(t, out, "map[")
+	require.Contains(t, out, "fingerprint")
+}
+
 func TestLxcConsole_UnexpectedShape(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	f.HandleFunc("POST /api2/json/nodes/pve1/lxc/101/vncproxy", func(w http.ResponseWriter, r *http.Request) {
