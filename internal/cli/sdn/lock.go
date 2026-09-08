@@ -47,7 +47,7 @@ func newLockAcquireCmd() *cobra.Command {
 			}
 			res := output.Result{Raw: resp}
 			if resp != nil && len(*resp) > 0 {
-				res.Message = fmt.Sprintf("SDN lock acquired. Token: %s", string(*resp))
+				res.Message = fmt.Sprintf("SDN lock acquired. Token: %s", cli.RawScalarText(*resp))
 			} else {
 				res.Message = "SDN lock acquired."
 			}

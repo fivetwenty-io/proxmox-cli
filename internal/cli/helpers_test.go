@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -133,6 +134,41 @@ func TestStringifyValue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, cli.StringifyValue(tc.in))
+		})
+	}
+}
+
+// TestRawScalarText covers every RawMessage shape the PVE API sends back for
+// a scalar field: a quoted JSON string (unwrapped, no quotes, embedded
+// newlines preserved as real newlines), a bare number or bool (passed through
+// as-is), and the empty/null cases (rendered as "" rather than the literal
+// "null").
+func TestRawScalarText(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   json.RawMessage
+		want string
+	}{
+		{name: "nil", in: nil, want: ""},
+		{name: "empty", in: json.RawMessage(""), want: ""},
+		{name: "null", in: json.RawMessage("null"), want: ""},
+		{name: "quoted string", in: json.RawMessage(`"tok-abc123"`), want: "tok-abc123"},
+		{
+			name: "quoted string with embedded newlines",
+			in:   json.RawMessage(`"cores: 2\nmemory: 2048\n"`),
+			want: "cores: 2\nmemory: 2048\n",
+		},
+		{name: "empty quoted string", in: json.RawMessage(`""`), want: ""},
+		{name: "integer", in: json.RawMessage("10"), want: "10"},
+		{name: "float", in: json.RawMessage("2.5"), want: "2.5"},
+		{name: "bool true", in: json.RawMessage("true"), want: "true"},
+		{name: "bool false", in: json.RawMessage("false"), want: "false"},
+		// Not valid JSON at all (defensive: never observed from PVE, but the
+		// helper must not panic and must fall back to the raw bytes).
+		{name: "malformed", in: json.RawMessage("not-json"), want: "not-json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, cli.RawScalarText(tc.in))
 		})
 	}
 }

@@ -406,7 +406,7 @@ func newConfigApiversionCmd() *cobra.Command {
 			}
 			msg := ""
 			if resp != nil {
-				msg = string(*resp)
+				msg = cli.RawScalarText(*resp)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: msg, Raw: resp}, deps.Format)

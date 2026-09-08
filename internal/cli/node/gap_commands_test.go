@@ -2,6 +2,7 @@ package node_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -558,6 +559,9 @@ func TestNodeVzdumpDefaults_APIError(t *testing.T) {
 func TestNodeVzdumpExtractConfig_Success(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec recordedRequest
+	// The endpoint answers with the guest config as one JSON string carrying
+	// literal \n escapes; the CLI must unwrap it so the config prints as real
+	// lines, not one line with visible \n escapes and surrounding quotes.
 	recordOn(f, "GET /api2/json/nodes/pve1/vzdump/extractconfig", &rec, "cores: 2\nmemory: 2048\n")
 
 	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
@@ -568,7 +572,13 @@ func TestNodeVzdumpExtractConfig_Success(t *testing.T) {
 	require.Equal(t, "GET", rec.method)
 	require.Equal(t, "/api2/json/nodes/pve1/vzdump/extractconfig", rec.path)
 	require.Contains(t, rec.query, "volume=")
-	_ = buf.String() // output rendered
+
+	out := buf.String()
+	require.NotContains(t, out, `"cores`, "config text must not be wrapped in JSON quotes")
+	require.NotContains(t, out, `\n`, "config text must not carry literal \\n escapes")
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	require.Contains(t, lines, "cores: 2")
+	require.Contains(t, lines, "memory: 2048")
 }
 
 // TestNodeVzdumpExtractConfig_AutoResolvesNode verifies that without --node

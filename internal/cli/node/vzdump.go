@@ -329,8 +329,11 @@ func newVzdumpExtractConfigCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("extract config from volume %q on node %q: %w", volume, node, err)
 			}
+			// The endpoint returns the guest config embedded in the archive as a
+			// single JSON string; unwrap it so the config prints as real lines
+			// instead of one line with literal \n escapes and surrounding quotes.
 			return deps.Out.Render(cmd.OutOrStdout(),
-				output.Result{Message: string(rawOrNil(resp)), Raw: resp}, deps.Format)
+				output.Result{Message: cli.RawScalarText(rawOrNil(resp)), Raw: resp}, deps.Format)
 		},
 	}
 	cmd.Flags().StringVar(&volume, "volume", "", "storage volume identifier of the backup archive (required)")

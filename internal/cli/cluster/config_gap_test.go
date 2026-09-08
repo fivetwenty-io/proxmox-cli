@@ -33,6 +33,37 @@ func TestConfigApiversion_Success(t *testing.T) {
 	require.Equal(t, "/api2/json/cluster/config/apiversion", gotPath)
 }
 
+// TestConfigApiversion_RendersNumber verifies the message body renders the
+// bare number PVE sends today, with no quotes and no trailing artifacts.
+func TestConfigApiversion_RendersNumber(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/config/apiversion", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, 10)
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "apiversion"))
+	require.Equal(t, "10\n", buf.String())
+}
+
+// TestConfigApiversion_RendersString verifies the message body unwraps a
+// string response the same way, in case the field ever becomes a string: no
+// surrounding JSON quotes reach the operator.
+func TestConfigApiversion_RendersString(t *testing.T) {
+	f, ac := newFakeClient(t)
+	f.HandleFunc("GET /api2/json/cluster/config/apiversion", func(w http.ResponseWriter, _ *http.Request) {
+		testhelper.WriteData(w, "10")
+	})
+
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "config", "apiversion"))
+	require.Equal(t, "10\n", buf.String())
+}
+
 // TestConfigApiversion_ServerError verifies a server error surfaces correctly.
 func TestConfigApiversion_ServerError(t *testing.T) {
 	f, ac := newFakeClient(t)

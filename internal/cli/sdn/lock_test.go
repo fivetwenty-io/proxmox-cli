@@ -24,6 +24,21 @@ func TestLockAcquire(t *testing.T) {
 	require.Equal(t, "/api2/json/cluster/sdn/lock", rec[0].path)
 }
 
+// TestLockAcquire_TokenUnquoted verifies the acquired token is unwrapped from
+// its JSON string encoding: the message must read the bare token, not the
+// token wrapped in double quotes, since an operator pastes this straight into
+// --lock-token on another command.
+func TestLockAcquire_TokenUnquoted(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "POST /api2/json/cluster/sdn/lock", "tok-abc123", 200)
+
+	out, err := run(t, f, "", "lock", "acquire")
+	require.NoError(t, err)
+	require.Contains(t, out, "Token: tok-abc123")
+	require.NotContains(t, out, `Token: "tok-abc123"`)
+}
+
 func TestLockAcquireAllowPending(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	var rec []recordedRequest

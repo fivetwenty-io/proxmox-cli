@@ -74,3 +74,26 @@ func StringifyValue(v any) string {
 		return string(b)
 	}
 }
+
+// RawScalarText renders a raw JSON scalar response as plain text for a
+// user-facing message. Several PVE endpoints return a bare JSON string (a
+// lock token, an extracted guest config, a changelog, a system report); put
+// straight into a message with string(raw), the surrounding double quotes
+// and any literal \n escapes reach the operator instead of the text they
+// wrap. RawScalarText unmarshals raw as a JSON string first and returns the
+// unwrapped value; when raw is not a JSON string (a number, a bool, or any
+// other scalar PVE might send), it returns the raw text unchanged since
+// those already render correctly as-is. Empty input and JSON null both
+// render as "" rather than the literal string "null".
+func RawScalarText(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	if raw[0] == '"' {
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			return s
+		}
+	}
+	return string(raw)
+}
