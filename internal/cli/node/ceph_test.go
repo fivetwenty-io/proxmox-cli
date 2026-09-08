@@ -3,6 +3,7 @@ package node_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -1294,4 +1295,30 @@ func TestNodeCeph_RestartBulk_SurfacesAPIError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rolling-restart ceph osds on node \"pve1\"")
 	require.Contains(t, err.Error(), "HEALTH_ERR")
+}
+
+// TestNodeCeph_CfgRaw_ScalarBodyRendersAsJSON covers renderRawMessage's last
+// resort: a body that is neither object, array, nor string (Ceph answers a
+// bare number for some raw endpoints) must still reach -o json as that value
+// and -o yaml as a scalar, never as base64 or a list of byte codes.
+func TestNodeCeph_CfgRaw_ScalarBodyRendersAsJSON(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleJSON("GET /api2/json/nodes/pve1/ceph/cfg/raw", 42)
+
+	for _, tc := range []struct {
+		format output.Format
+		want   string
+	}{
+		{output.FormatJSON, "42"},
+		{output.FormatYAML, "42"},
+		{output.FormatTable, "42"},
+	} {
+		t.Run(string(tc.format), func(t *testing.T) {
+			root, buf, prefix := newNodeRoot(t, f, tc.format, exec.Fake())
+			root.SetArgs(append(prefix, "--node", "pve1", "node", "ceph", "cfg", "raw"))
+			require.NoError(t, root.Execute())
+			lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+			require.Equal(t, tc.want, lines[len(lines)-1], "full output: %s", buf.String())
+		})
+	}
 }

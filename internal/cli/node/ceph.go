@@ -17,7 +17,7 @@ import (
 
 // renderRawMessage renders a *json.RawMessage response by inspecting the JSON
 // shape at runtime: object → Single key/value map, array → scan table,
-// string → Message text, other → Message with raw bytes.
+// string → Message text, other scalar → Message text with the JSON value as Raw.
 func renderRawMessage(cmd *cobra.Command, deps *cli.Deps, resp *json.RawMessage) error {
 	if resp == nil {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{}, deps.Format)
@@ -42,8 +42,14 @@ func renderRawMessage(cmd *cobra.Command, deps *cli.Deps, resp *json.RawMessage)
 	if json.Unmarshal(raw, &s) == nil {
 		return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: s, Raw: s}, deps.Format)
 	}
-	// Fallback: render raw bytes as-is.
-	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: string(raw), Raw: raw}, deps.Format)
+	// Fallback: a bare number, boolean, or null. Keep valid JSON as
+	// json.RawMessage so -o json prints the value itself rather than the
+	// base64 that encoding/json makes of a []byte; anything else is text.
+	if json.Valid(raw) {
+		return deps.Out.Render(cmd.OutOrStdout(),
+			output.Result{Message: string(raw), Raw: json.RawMessage(raw)}, deps.Format)
+	}
+	return deps.Out.Render(cmd.OutOrStdout(), output.Result{Message: string(raw), Raw: string(raw)}, deps.Format)
 }
 
 // renderCephView renders a Ceph payload through one of the curated views in
