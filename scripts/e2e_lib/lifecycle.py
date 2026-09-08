@@ -184,9 +184,11 @@ class Runner:
         return dict(os.environ, COLUMNS=str(render.BUDGET))
 
     def pmx(self, *args: str, json_out: bool = False, node: bool = True,
-            stdin: str | None = None) -> Cmd:
+            stdin: str | None = None, fmt: str | None = None) -> Cmd:
         argv = [self.binary, "--context", self.context, "--no-log"]
-        if json_out:
+        if fmt:
+            argv += ["-o", fmt]
+        elif json_out:
             argv += ["-o", "json"]
         if node and self.node:
             argv += ["--node", self.node]
@@ -200,9 +202,12 @@ class Runner:
 
     # Run the binary with an explicit argv (no --context/--node injection), used
     # by steps that drive a scratch `--config` file or a non-default --context.
-    def pmx_raw(self, *args: str, json_out: bool = False) -> Cmd:
+    def pmx_raw(self, *args: str, json_out: bool = False,
+                fmt: str | None = None) -> Cmd:
         argv = [self.binary, "--no-log"]
-        if json_out:
+        if fmt:
+            argv += ["-o", fmt]
+        elif json_out:
             argv += ["-o", "json"]
         argv += list(args)
         try:
@@ -237,9 +242,14 @@ class Runner:
     # creating it; all that was missing was looking at what came out.
     #
     # The read-back steps assert on parsed JSON, so most ask for `-o json` and
-    # their own output is not a rendering at all. `rerun` produces the same
-    # command as a table when that is the case; when the step already rendered
-    # one, its output is used as it stands.
+    # their own output is not a rendering at all. `rerun(fmt)` produces the
+    # same command in another format: as a table when the step asked for
+    # json, and as json when it rendered a table. The step's own output is
+    # used as it stands whenever it is already in the format wanted.
+    #
+    # The same read is then rendered once more as yaml and compared with the
+    # json document, because the two are one document in two syntaxes and a
+    # divergence is a renderer defect (see render.yaml_mismatch).
     #
     # The gate is the step's own declared verb, not the command path: a path
     # carries its arguments, and `is_read_only` matches any token in it, which
@@ -247,19 +257,25 @@ class Runner:
     # "subscription" and re-run a mutation. The verb is the leaf's own, so its
     # last word is the real one.
     def _audit(self, verb: str, args: tuple[str, ...], res: Cmd,
-               json_out: bool, rerun: Callable[[], Cmd]) -> None:
+               json_out: bool, rerun: Callable[[str], Cmd]) -> None:
         if res.rc != 0 or verb.split()[-1] not in render.READ_VERBS:
             return
-        out = res.out
-        if json_out:
-            table = rerun()
-            if table.rc != 0:
-                return
-            out = table.out
         leaf = render.command_path(args)
-        if not leaf or not out.strip():
+        if not leaf:
             return
-        found = render.audit(leaf, out)
+        table = res if not json_out else rerun("table")
+        if table.rc == 0 and table.out.strip():
+            found = render.audit(leaf, table.out)
+            if found:
+                print(RED(f"      render: {found}"))
+                self.render_defects.append((leaf, found))
+        doc = res if json_out else rerun("json")
+        if doc.rc != 0 or not doc.out.strip():
+            return
+        as_yaml = rerun("yaml")
+        if as_yaml.rc != 0 or not as_yaml.out.strip():
+            return
+        found = render.yaml_mismatch(doc.out, as_yaml.out)
         if found:
             print(RED(f"      render: {found}"))
             self.render_defects.append((leaf, found))
@@ -273,7 +289,7 @@ class Runner:
         res = self._record(guest, verb, label,
                            self.pmx(*args, json_out=json_out, node=node, stdin=stdin))
         self._audit(verb, args, res, json_out,
-                    lambda: self.pmx(*args, node=node, stdin=stdin))
+                    lambda fmt: self.pmx(*args, node=node, stdin=stdin, fmt=fmt))
         return res
 
     # Like step(), but runs the binary verbatim (no --context/--node), for verbs
@@ -281,7 +297,8 @@ class Runner:
     def step_raw(self, guest: str, verb: str, label: str, *args: str,
                  json_out: bool = False) -> Cmd:
         res = self._record(guest, verb, label, self.pmx_raw(*args, json_out=json_out))
-        self._audit(verb, args, res, json_out, lambda: self.pmx_raw(*args))
+        self._audit(verb, args, res, json_out,
+                    lambda fmt: self.pmx_raw(*args, fmt=fmt))
         return res
 
     # A soft, coverage-recorded step for verbs whose completion depends on the
@@ -293,7 +310,7 @@ class Runner:
         res = self.pmx(*args)
         ok = self._record_soft(guest, verb, label, res, skip_markers, skip_reason)
         if ok:
-            self._audit(verb, args, res, False, lambda: res)
+            self._audit(verb, args, res, False, lambda fmt: self.pmx(*args, fmt=fmt))
         return ok
 
     # soft_step's counterpart for verbs driven against a scratch `--config`
@@ -303,7 +320,7 @@ class Runner:
         res = self.pmx_raw(*args)
         ok = self._record_soft(guest, verb, label, res, skip_markers, skip_reason)
         if ok:
-            self._audit(verb, args, res, False, lambda: res)
+            self._audit(verb, args, res, False, lambda fmt: self.pmx_raw(*args, fmt=fmt))
         return ok
 
     def _record_soft(self, guest: str, verb: str, label: str, res: Cmd,

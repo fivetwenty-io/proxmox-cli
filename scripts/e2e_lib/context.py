@@ -121,8 +121,11 @@ class Ctx:
 
         A passing check is re-run once as a table and audited for the two
         rendering defects `-o json` cannot show: a line wider than the pinned
-        budget, and a column blank in every row. Pass `audit_render=False` for
-        a check whose second invocation would not be free of side effects.
+        budget, and a column blank in every row. A json check is then re-run
+        once more as yaml and the two documents compared, since the two are
+        one document in two syntaxes and a divergence is a renderer defect.
+        Pass `audit_render=False` for a check whose repeat invocations would
+        not be free of side effects.
         """
         start = time.monotonic()
         res = self.run(*args, node=node, fmt=fmt, with_context=with_context)
@@ -154,6 +157,12 @@ class Ctx:
             if err:
                 status = Status.FAIL
                 detail = err
+        if status is Status.PASS and audit_render and fmt == "json":
+            err = self.audit_yaml(*args, json_out=res.stdout, node=node,
+                                  with_context=with_context)
+            if err:
+                status = Status.FAIL
+                detail = err
 
         self.results.append(
             Result(self.tree, name, status, command=cmd, detail=detail, duration_s=dur)
@@ -178,6 +187,22 @@ class Ctx:
             return ""
         return render.audit(leaf, res.stdout)
 
+    def audit_yaml(self, *args: str, json_out: str, node: str | None = None,
+                   with_context: bool = True) -> str:
+        """Render args as yaml and return how it diverges from json_out, or "".
+
+        Gated and tolerant the same way audit_render is: only a read-only
+        command path is re-run, and a non-zero exit or empty output is the
+        json check's business, not this one's.
+        """
+        leaf = self.leaf(args)
+        if not render.is_read_only(leaf) or not json_out.strip():
+            return ""
+        res = self.run(*args, node=node, fmt="yaml", with_context=with_context)
+        if res.rc != 0 or not res.stdout.strip():
+            return ""
+        return render.yaml_mismatch(json_out, res.stdout)
+
     @staticmethod
     def leaf(args: tuple[str, ...] | list[str]) -> str:
         """The command path of args, flags and their values dropped.
@@ -194,11 +219,13 @@ class Ctx:
         """Assert a read command renders cleanly in every `-o` format.
 
         Records one PASS only if `table`, `plain`, `json`, and `yaml` each exit 0
-        with non-empty output; otherwise FAIL naming the offending format. This
-        catches renderer regressions the json-only sweep cannot see.
+        with non-empty output, and the json and yaml renderings are the same
+        document; otherwise FAIL naming the offending format. This catches
+        renderer regressions the json-only sweep cannot see.
         """
         start = time.monotonic()
         bad = ""
+        docs: dict[str, str] = {}
         for fmt in ("table", "plain", "json", "yaml"):
             res = self.run(*args, node=node, fmt=fmt)
             if res.rc != 0:
@@ -207,10 +234,13 @@ class Ctx:
             if not res.stdout.strip():
                 bad = f"{fmt}: empty output"
                 break
+            docs[fmt] = res.stdout
             if fmt == "table":
                 bad = render.audit(self.leaf(args), res.stdout)
                 if bad:
                     break
+        if not bad:
+            bad = render.yaml_mismatch(docs["json"], docs["yaml"])
         dur = time.monotonic() - start
         cmd = self.pretty([self.env.binary, *args]) + " (×4 formats)"
         status = Status.PASS if not bad else Status.FAIL

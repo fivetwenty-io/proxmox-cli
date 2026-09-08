@@ -32,6 +32,8 @@ Placeholder cells
 
 from __future__ import annotations
 
+import json
+
 # BUDGET is the terminal width the sweep pins through $COLUMNS. Pinning it
 # makes the width assertion reproducible without a pty: pmx prefers $COLUMNS
 # over the tty size precisely so a sweep can do this.
@@ -345,3 +347,149 @@ def audit(command: str, out: str) -> str:
     """Both audits over one table rendering. Returns "" when it is clean."""
     return (width_violation(out) or placeholder_cells(out)
             or empty_columns(command, out))
+
+
+# ---------------------------------------------------------------------------
+# JSON versus YAML
+#
+# The two structured formats are one document in two syntaxes: renderYAML and
+# renderJSON in internal/output take the same Result fields in the same
+# priority, and the YAML side re-encodes Result.Raw through JSON so that
+# holds for raw SDK payloads too. That equivalence went unasserted, and
+# `pmx pve access permissions -o yaml` shipped printing the ASCII codes of the
+# JSON document as a list of integers (go-yaml renders a []byte that way, and
+# json.RawMessage is one). Comparing the two renderings on every read-only
+# check is what catches the next such divergence, wherever it lands.
+#
+# The two renderings come from two invocations seconds apart, so their values
+# are not comparable: a list comes back from PVE in a different order each
+# time, and a counter such as disk usage or uptime moves between the calls.
+# What the renderer owns is the shape, so that is what is compared: the kind
+# of value (object, array, scalar) at every path, with an array's items
+# folded into one shape by unioning their keys. A scalar that comes back as
+# an array of integers, or an object that comes back as an array, is the
+# defect; scalar values and their fidelity are pinned by the Go tests in
+# internal/output, which see one Result rendered both ways.
+#
+# YAML is loaded with PyYAML's BaseLoader, which keeps every scalar a string,
+# so YAML 1.1's ideas about "yes", "0755", or a timestamp never bend a scalar
+# into something else. PyYAML is a declared dependency of the entry scripts;
+# without it the byte-list signature is still asserted, so the check
+# degrades rather than disappears.
+# ---------------------------------------------------------------------------
+
+
+def byte_sequence(out: str) -> bool:
+    """Whether out is a YAML document that is one flat list of byte codes.
+
+    The signature is a top-level block sequence whose items are all bare
+    integers and whose first item is "{" or "[": a JSON document that reached
+    go-yaml as []byte. A legitimate list of integers never starts with 123 or
+    91 by accident often enough to matter, and the structural comparison
+    covers that case exactly when PyYAML is present.
+    """
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return False
+    items = []
+    for ln in lines:
+        if not ln.startswith("- ") or not ln[2:].strip().isdigit():
+            return False
+        items.append(int(ln[2:].strip()))
+    return items[0] in (ord("{"), ord("["))
+
+
+_MISSING = object()
+
+
+def _load_yaml(text: str):
+    """The YAML document with every scalar a string, or _MISSING without PyYAML."""
+    try:
+        import yaml  # type: ignore[import-not-found]
+    except ImportError:
+        return _MISSING
+    return yaml.load(text, Loader=yaml.BaseLoader)
+
+
+# A shape is one of:
+#   ("object", {key: shape})
+#   ("array", shape | None)     None for an empty array, which matches any
+#   ("scalar",)
+# and an array's items are folded into one shape by `_merge`.
+
+
+def shape(v) -> tuple:
+    """The shape of a parsed document: kinds at every path, values dropped."""
+    if isinstance(v, dict):
+        return ("object", {k: shape(x) for k, x in v.items()})
+    if isinstance(v, list):
+        merged = None
+        for item in v:
+            merged = _merge(merged, shape(item))
+        return ("array", merged)
+    return ("scalar",)
+
+
+def _merge(a, b):
+    """One shape covering both a and b, for an array's items."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    if a[0] != b[0]:
+        return ("mixed",)
+    if a[0] == "object":
+        keys = dict(a[1])
+        for k, sub in b[1].items():
+            keys[k] = _merge(keys.get(k), sub)
+        return ("object", keys)
+    if a[0] == "array":
+        return ("array", _merge(a[1], b[1]))
+    return a
+
+
+def _first_diff(j: tuple, y: tuple, path: str) -> str:
+    """The first path at which shapes j (json) and y (yaml) differ; else ""."""
+    if j[0] != y[0]:
+        return f"{path}: json {j[0]}, yaml {y[0]}"
+    if j[0] == "object":
+        missing = [k for k in j[1] if k not in y[1]]
+        extra = [k for k in y[1] if k not in j[1]]
+        if missing or extra:
+            return (f"{path}: keys differ (json only: {missing or '-'}, "
+                    f"yaml only: {extra or '-'})")
+        for k, sub in j[1].items():
+            d = _first_diff(sub, y[1][k], f"{path}.{k}")
+            if d:
+                return d
+        return ""
+    if j[0] == "array":
+        if j[1] is None or y[1] is None:
+            return ""
+        return _first_diff(j[1], y[1], f"{path}[]")
+    return ""
+
+
+def yaml_mismatch(json_out: str, yaml_out: str) -> str:
+    """How the yaml rendering's shape diverges from the json one's; else "".
+
+    Both renderings are of the same command. A yaml document that is a flat
+    list of byte codes is named as such, since that is the shape the bug
+    takes; anything else is reported as the first path whose kind or key set
+    differs, with the remedy the renderer owner needs.
+    """
+    if byte_sequence(yaml_out):
+        return ("yaml rendered the JSON document as a list of byte codes "
+                "(a []byte reached go-yaml; route Result.Raw through "
+                "yamlValueFromJSON in internal/output/yaml.go)")
+    try:
+        j = json.loads(json_out)
+    except json.JSONDecodeError as exc:
+        return f"json output does not parse: {exc}"
+    y = _load_yaml(yaml_out)
+    if y is _MISSING:
+        return ""
+    d = _first_diff(shape(j), shape(y), "$")
+    if not d:
+        return ""
+    return f"yaml differs from json at {d} (renderYAML and renderJSON must emit one document)"

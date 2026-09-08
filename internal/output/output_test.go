@@ -547,3 +547,48 @@ func TestRenderer_YAML_InvalidRawMessageErrors(t *testing.T) {
 	err := output.New().Render(&buf, output.Result{Raw: json.RawMessage(`{not json`)}, output.FormatYAML)
 	require.Error(t, err)
 }
+
+// TestRenderer_JSONAndYAMLAreOneDocument pins the contract the e2e harness
+// asserts live (scripts/e2e_lib/render.py yaml_mismatch): for every Result
+// shape, parsing the YAML rendering yields the same document as parsing the
+// JSON rendering. A divergence in either renderer fails here before it needs
+// a lab to find.
+func TestRenderer_JSONAndYAMLAreOneDocument(t *testing.T) {
+	t.Parallel()
+	type entry struct {
+		Node string          `json:"node"`
+		UID  json.RawMessage `json:"uid"`
+		Load float64         `json:"load"`
+	}
+	raw := json.RawMessage(`{"/":{"Sys.Audit":1},"list":[1,2.5,"x",null,true],"nested":{"a":{"b":[]}}}`)
+	shapes := map[string]output.Result{
+		"raw message":         {Raw: raw},
+		"raw message pointer": {Raw: &raw},
+		"raw message slice":   {Raw: []json.RawMessage{raw, json.RawMessage(`[]`)}},
+		"struct with raw":     {Raw: []entry{{Node: "pve-0", UID: json.RawMessage(`"186"`), Load: 0.5}}},
+		"map":                 {Raw: map[string]any{"z": 1, "a": []string{"p", "q"}}},
+		"single":              {Single: map[string]string{"id": "42", "name": "vm"}},
+		"table":               {Headers: []string{"A", "B"}, Rows: [][]string{{"1", "2"}}},
+		"message":             {Message: "done"},
+		"empty":               {},
+		"empty list":          {Headers: []string{"A"}, Rows: [][]string{}, Raw: []map[string]any{}},
+	}
+	for name, res := range shapes {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var jbuf, ybuf bytes.Buffer
+			require.NoError(t, output.New().Render(&jbuf, res, output.FormatJSON))
+			require.NoError(t, output.New().Render(&ybuf, res, output.FormatYAML))
+
+			var fromJSON, fromYAML any
+			require.NoError(t, json.Unmarshal(jbuf.Bytes(), &fromJSON))
+			require.NoError(t, yaml.Unmarshal(ybuf.Bytes(), &fromYAML), "yaml: %s", ybuf.String())
+			// Normalise both through JSON so map/number representations agree.
+			jn, err := json.Marshal(fromJSON)
+			require.NoError(t, err)
+			yn, err := json.Marshal(fromYAML)
+			require.NoError(t, err)
+			require.JSONEq(t, string(jn), string(yn), "json:\n%s\nyaml:\n%s", jbuf.String(), ybuf.String())
+		})
+	}
+}
