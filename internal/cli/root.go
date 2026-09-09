@@ -995,6 +995,16 @@ func buildContextOptions(
 		insecure,
 		ctx.TLS.Fingerprint,
 	)
+	if ctx.TLS.CACert != "" && !insecure {
+		// A declared CA bundle replaces system roots and enables hostname
+		// verification. Explicit fingerprint or TOFU policies retain their
+		// existing precedence over CA verification in the SDK.
+		opts.SSLOptions = &pve.SSLOptions{
+			VerifyMode:     pve.SSLVerifyPeer,
+			VerifyHostname: true,
+			CACert:         ctx.TLS.CACert,
+		}
+	}
 
 	opts = ApplyTOFUOptions(
 		opts,
