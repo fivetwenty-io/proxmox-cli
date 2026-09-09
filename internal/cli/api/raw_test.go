@@ -230,6 +230,21 @@ func TestAPIRawGet_PBS_NullResponse(t *testing.T) {
 	require.Contains(t, buf.String(), "no data returned")
 }
 
+func TestAPIRawGet_NullMachineOutput(t *testing.T) {
+	for _, format := range []output.Format{output.FormatJSON, output.FormatYAML} {
+		t.Run(string(format), func(t *testing.T) {
+			f, pc := newFakePBSClient(t)
+			f.HandleFunc("GET /api2/json/nulldata", func(w http.ResponseWriter, _ *http.Request) {
+				testhelper.WriteData(w, nil)
+			})
+			var buf bytes.Buffer
+			err := rawRun(pbsDepsFor(t, pc, format), &buf, newRawGetCmd(), "get", "/nulldata")
+			require.NoError(t, err)
+			require.Equal(t, "null\n", buf.String())
+		})
+	}
+}
+
 func TestAPIRawGet_PBS_DataFlagsSentAsQueryParams(t *testing.T) {
 	f, pc := newFakePBSClient(t)
 	deps := pbsDepsFor(t, pc, output.FormatTable)

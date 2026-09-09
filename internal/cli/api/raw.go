@@ -257,7 +257,7 @@ func rawRender(cmd *cobra.Command, deps *cli.Deps, method, path string, data any
 func rawResult(method, path string, data any) output.Result {
 	switch v := data.(type) {
 	case nil:
-		return output.Result{Message: fmt.Sprintf("%s %s: OK (no data returned).", method, path)}
+		return output.Result{Message: fmt.Sprintf("%s %s: OK (no data returned).", method, path), Raw: json.RawMessage("null")}
 	case map[string]any:
 		return output.Result{Single: rawObjectToSingle(v), Raw: v}
 	case []any:
