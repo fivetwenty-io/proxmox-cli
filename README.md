@@ -8,6 +8,10 @@ Server, and Proxmox Datacenter Manager APIs, built on
 password tickets, blocks on long-running tasks by default, and renders every
 command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
 
+Read FiveTwenty's [announcement introducing pmx](https://fivetwenty.io/insights/introducing-proxmox-cli-pmx-pve-pbs-pdm/)
+for the background and a tour of the CLI. The [Proxmox CLI insights](https://fivetwenty.io/insights/proxmox/cli/)
+collect all published feature guides and operational walkthroughs.
+
 ## Features
 
 - Multiple named contexts in `~/.config/pmx/config.yml`, switchable per command
@@ -42,6 +46,9 @@ command as a table (Unicode or ASCII borders), plain text, JSON, or YAML.
   straight onto the root (see [Personas](#personas)).
 
 - JSONL audit logs written to `~/.pmx/logs/`, with secrets redacted.
+
+- Config-driven nested Proxmox VE labs with `pmx lab`, including networking,
+  storage, and scoped access (see [Lab environments](#lab-environments-pmx-lab)).
 
 - Semantic exit codes (0–7) for scripting.
 
@@ -382,6 +389,9 @@ Server, or Proxmox Datacenter Manager. All verbs operate on the local config
 and never contact a Proxmox API, except `validate --connect`, which probes
 the configured endpoint live.
 
+For a walkthrough of endpoint naming, context selection, credentials, and
+reachability checks, see [Managing Proxmox Endpoints With pmx Contexts](https://fivetwenty.io/insights/managing-pmx-contexts/).
+
 ```bash
 # Add a context. (Or paste the full token id: --token-id 'root@pam!automation')
 pmx context add lab \
@@ -695,6 +705,10 @@ Everything else works exactly like the PVE side: the same output formats,
 `--async` and `--wait-timeout` on task-producing verbs, JSONL logging, and exit
 codes.
 
+For a worked backup maintenance workflow, see [Inspecting And Maintaining
+Proxmox Backup Server Backups With pmx](https://fivetwenty.io/insights/managing-pbs-backups-with-pmx/),
+which covers inventory, verification, retention, garbage collection, and sync.
+
 | Group | Purpose | Sub-commands |
 |-------|---------|--------------|
 | `datastore` | Datastore configuration and usage | `ls`, `show`, `create`, `update`, `delete`, `status`, `usage`, `rrd`, `s3-refresh` |
@@ -754,6 +768,11 @@ PVE and PBS commands reject PDM contexts and vice versa, so a mixed fleet is a
 matter of switching contexts. Everything else works exactly like the PVE and
 PBS sides: the same output formats, `--async` and `--wait-timeout` on
 task-producing verbs, JSONL logging, and exit codes.
+
+See [Working With Proxmox Datacenter Manager Through pmx](https://fivetwenty.io/insights/working-with-pdm-through-pmx/)
+for remote registration, fleet inspection, and proxied operations. For a BOSH
+use case, [Watching A BOSH Estate Through PDM](https://fivetwenty.io/insights/watching-a-bosh-estate-through-pdm/)
+shows how to inspect the clusters and guests a Director manages.
 
 A Proxmox Datacenter Manager instance itself manages a fleet of PVE and PBS
 remotes. The `pdm pve` and `pdm pbs` groups proxy operations against those
@@ -1013,6 +1032,26 @@ is only available when the binary runs as `pmx`
 (or an unrecognized `argv[0]`); it is not hoisted onto the `pve`, `pbs`,
 or `pdm` persona roots the way `pve`'s own groups are (see
 [Personas](#personas)).
+
+### Spinning up labs
+
+To build a lab with `pmx lab`, start with [Building Repeatable, Isolated
+Proxmox VE Labs With pmx](https://fivetwenty.io/insights/spinning-up-pve-labs-with-pmx/).
+It walks through prerequisites, configuration, previewing the creation plan,
+network activation, access grants, and teardown.
+
+The [Proxmox Labs articles](https://fivetwenty.io/insights/proxmox/labs/)
+collect the guides for different lab scenarios. Choose the setup you want to
+practice:
+
+| Scenario | Guide |
+|----------|-------|
+| Test recovery after a node fails | [Three-node HA lab](https://fivetwenty.io/insights/three-node-pve-ha-cluster-with-pmx/) |
+| Add Ceph RBD and CephFS storage | [Ceph-backed three-node lab](https://fivetwenty.io/insights/ceph-backed-pve-lab-with-pmx/) |
+| Add and verify shared NFS storage | [NFS shared-storage lab](https://fivetwenty.io/insights/nfs-shared-storage-pve-lab-with-pmx/) |
+| Work across two independent clusters | [Two clusters on one lab host](https://fivetwenty.io/insights/two-cluster-pve-lab-with-pmx/) |
+
+### Lab configuration
 
 Labs are config-driven, resolved from three keys in `~/.config/pmx/config.yml`:
 an inline `labs:` map, an `include:` list of glob patterns, and a `labs_dir:`
