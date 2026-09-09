@@ -45,7 +45,6 @@ type vnetRuleFlags struct {
 	comment  string
 	icmpType string
 	enable   int64
-	pos      int64
 	moveto   int64
 	del      string
 	digest   string
@@ -59,7 +58,7 @@ var vnetRuleSetFlagNames = []string{
 }
 
 // register binds the shared rule attribute flags onto cmd.
-func (f *vnetRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDelete bool) {
+func (f *vnetRuleFlags) register(cmd *cobra.Command, withMoveto, withDelete bool) {
 	fl := cmd.Flags()
 	fl.StringVar(&f.ruleType, "type", "", "rule direction: in, out, or forward")
 	fl.StringVar(&f.action, "action", "", "ACCEPT, DROP, REJECT, or a security group name")
@@ -74,9 +73,6 @@ func (f *vnetRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDe
 	fl.StringVar(&f.comment, "comment", "", "descriptive comment")
 	fl.StringVar(&f.icmpType, "icmp-type", "", "icmp-type (only valid if proto is icmp or icmpv6)")
 	fl.Int64Var(&f.enable, "enable", 1, "1 to enable the rule, 0 to disable it")
-	if withPos {
-		fl.Int64Var(&f.pos, "pos", 0, "insert the rule at this position")
-	}
 	if withMoveto {
 		fl.Int64Var(&f.moveto, "moveto", 0, "move the rule to this position (other arguments ignored)")
 	}
@@ -86,7 +82,7 @@ func (f *vnetRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDe
 	fl.StringVar(&f.digest, "digest", "", "digest guarding against concurrent modification")
 }
 
-// applyCreate forwards changed flags onto a create params struct.
+// applyCreate forwards changed fields and the enabled default to create parameters.
 func (f *vnetRuleFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnVnetsFirewallRulesParams) {
 	c := fl.Flags()
 	if c.Changed("source") {
@@ -119,12 +115,8 @@ func (f *vnetRuleFlags) applyCreate(fl *cobra.Command, p *cluster.CreateSdnVnets
 	if c.Changed("icmp-type") {
 		p.IcmpType = new(f.icmpType)
 	}
-	if c.Changed("enable") {
-		p.Enable = new(f.enable)
-	}
-	if c.Changed("pos") {
-		p.Pos = new(f.pos)
-	}
+	// PVE disables rules when enable is omitted; send the advertised create default.
+	p.Enable = new(f.enable)
 	if c.Changed("digest") {
 		p.Digest = new(f.digest)
 	}
@@ -288,10 +280,10 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 	var f vnetRuleFlags
 	cmd := &cobra.Command{
 		Use:   "create <vnet>",
-		Short: "Append a rule to a vnet's firewall",
+		Short: "Insert a rule into a vnet's firewall",
 		Long: "Create a new vnet firewall rule. --type (in|out|forward) and --action " +
 			"(ACCEPT|DROP|REJECT or a security group name) are required. The change " +
-			"is staged until `pmx pve sdn apply`.",
+			"is staged until `pmx pve sdn apply`. New rules are inserted at position 0.",
 		Example: `  pmx pve sdn vnet firewall rules create vnet1 --type in --action ACCEPT
   pmx pve sdn vnet firewall rules create vnet1 --type in --action ACCEPT --source 10.0.0.0/24 --dport 22`,
 		Args: cobra.ExactArgs(1),
@@ -308,7 +300,7 @@ func newVnetFirewallRulesCreateCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-	f.register(cmd, true, false, false)
+	f.register(cmd, false, false)
 	cli.MustMarkRequired(cmd, "type")
 	cli.MustMarkRequired(cmd, "action")
 	return cmd
@@ -340,7 +332,7 @@ func newVnetFirewallRulesSetCmd() *cobra.Command {
 			return deps.Out.Render(cmd.OutOrStdout(), res, deps.Format)
 		},
 	}
-	f.register(cmd, false, true, true)
+	f.register(cmd, true, true)
 	return cmd
 }
 

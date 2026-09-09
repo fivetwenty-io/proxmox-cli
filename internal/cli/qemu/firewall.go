@@ -206,8 +206,7 @@ func newFirewallRulesCmd() *cobra.Command {
 		Use:   "rules",
 		Short: "Manage per-VM firewall rules",
 		Long: "List, inspect, create, update, and delete the ordered firewall rules of a VM. " +
-			"Rules are identified by their numeric position (--pos on create, positional " +
-			"<pos> elsewhere).",
+			"New rules are inserted at position 0. Existing rules are identified by <pos>.",
 	}
 	cmd.AddCommand(
 		newFirewallRulesListCmd(),
@@ -317,13 +316,12 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 		logLevel string
 		comment  string
 		enable   int64
-		pos      int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vmid|name>",
-		Short: "Append a firewall rule to a VM",
+		Short: "Insert a VM firewall rule",
 		Long: "Create a new firewall rule. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required.",
+			"(ACCEPT|DROP|REJECT or a security group name) are required. New rules are inserted at position 0.",
 		Example: `  pmx pve qemu firewall rules create 100 --type in --action ACCEPT --source 10.0.0.0/24 --dport 22`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -368,12 +366,8 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 			if fl.Changed("comment") {
 				params.Comment = new(comment)
 			}
-			if fl.Changed("enable") {
-				params.Enable = new(enable)
-			}
-			if fl.Changed("pos") {
-				params.Pos = new(pos)
-			}
+			// PVE disables rules when enable is omitted; send the advertised create default.
+			params.Enable = new(enable)
 
 			if err := deps.API.Nodes.CreateQemuFirewallRules(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("create firewall rule for VM %s on node %q: %w", vmid, node, err)
@@ -395,7 +389,6 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&logLevel, "log", "", "log level: emerg, alert, crit, err, warning, notice, info, debug, or nolog")
 	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
 	cmd.Flags().Int64Var(&enable, "enable", 1, "1 to enable the rule, 0 to disable it")
-	cmd.Flags().Int64Var(&pos, "pos", 0, "insert the rule at this position")
 	return cmd
 }
 

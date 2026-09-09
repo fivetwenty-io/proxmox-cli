@@ -84,11 +84,11 @@ func decodeRuleList(raws []json.RawMessage) ([]string, [][]string, []fwRuleEntry
 type clusterRuleFlags struct {
 	action, ruleType, source, dest, proto, dport, sport, iface, macro, logLevel, comment string
 	icmpType, digest                                                                     string
-	enable, pos, moveto                                                                  int64
+	enable, moveto                                                                       int64
 	del                                                                                  string
 }
 
-func (f *clusterRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDelete bool) {
+func (f *clusterRuleFlags) register(cmd *cobra.Command, withMoveto, withDelete bool) {
 	cmd.Flags().StringVar(&f.ruleType, "type", "", "rule direction: in, out, or group")
 	cmd.Flags().StringVar(&f.action, "action", "", "ACCEPT, DROP, REJECT, or a security group name")
 	cmd.Flags().StringVar(&f.source, "source", "", "restrict source address, IP set (+name), or alias")
@@ -105,9 +105,6 @@ func (f *clusterRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, wit
 	cmd.Flags().StringVar(&f.digest, "digest", "",
 		"reject the change unless the current config matches this SHA-1 digest")
 	cmd.Flags().Int64Var(&f.enable, "enable", 1, "1 to enable the rule, 0 to disable it")
-	if withPos {
-		cmd.Flags().Int64Var(&f.pos, "pos", 0, "insert the rule at this position")
-	}
 	if withMoveto {
 		cmd.Flags().Int64Var(&f.moveto, "moveto", 0, "move the rule to this position (other arguments ignored)")
 	}
@@ -198,10 +195,9 @@ func newClusterFirewallRulesCreateCmd() *cobra.Command {
 	var f clusterRuleFlags
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Append a rule to the cluster firewall",
+		Short: "Insert a rule into the cluster firewall",
 		Long: "Create a new cluster firewall rule. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required. Use --pos to " +
-			"insert the rule at a specific position instead of appending it.",
+			"(ACCEPT|DROP|REJECT or a security group name) are required. New rules are inserted at position 0.",
 		Example: `  pmx pve cluster firewall rules create --type in --action ACCEPT --proto tcp --dport 22
   pmx pve cluster firewall rules create --type in --action DROP --source 10.0.0.0/8`,
 		Args: cobra.NoArgs,
@@ -224,7 +220,7 @@ func newClusterFirewallRulesCreateCmd() *cobra.Command {
 				output.Result{Message: "Cluster firewall rule added."}, deps.Format)
 		},
 	}
-	f.register(cmd, true, false, false)
+	f.register(cmd, false, false)
 	return cmd
 }
 
@@ -263,12 +259,8 @@ func applyRuleCreateFlags(cmd *cobra.Command, f *clusterRuleFlags, params *pvecl
 	if fl.Changed("digest") {
 		params.Digest = &f.digest
 	}
-	if fl.Changed("enable") {
-		params.Enable = &f.enable
-	}
-	if fl.Changed("pos") {
-		params.Pos = &f.pos
-	}
+	// PVE disables rules when enable is omitted; send the advertised create default.
+	params.Enable = &f.enable
 }
 
 func newClusterFirewallRulesUpdateCmd() *cobra.Command {
@@ -296,7 +288,7 @@ func newClusterFirewallRulesUpdateCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Cluster firewall rule %s updated.", pos)}, deps.Format)
 		},
 	}
-	f.register(cmd, false, true, true)
+	f.register(cmd, true, true)
 	return cmd
 }
 
@@ -560,10 +552,9 @@ func newClusterFirewallGroupRuleAddCmd() *cobra.Command {
 	var f clusterRuleFlags
 	cmd := &cobra.Command{
 		Use:   "rule-add <group>",
-		Short: "Append a rule to a security group",
+		Short: "Insert a rule into a security group",
 		Long: "Add a rule to a security group. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required. Use --pos to " +
-			"insert the rule at a specific position instead of appending it.",
+			"(ACCEPT|DROP|REJECT or a security group name) are required. New rules are inserted at position 0.",
 		Example: `  pmx pve cluster firewall group rule-add webservers --type in --action ACCEPT --proto tcp --dport 443`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -586,7 +577,7 @@ func newClusterFirewallGroupRuleAddCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Rule added to security group %s.", group)}, deps.Format)
 		},
 	}
-	f.register(cmd, true, false, false)
+	f.register(cmd, false, false)
 	return cmd
 }
 
@@ -625,12 +616,8 @@ func applyGroupRuleAddFlags(cmd *cobra.Command, f *clusterRuleFlags, params *pve
 	if fl.Changed("digest") {
 		params.Digest = &f.digest
 	}
-	if fl.Changed("enable") {
-		params.Enable = &f.enable
-	}
-	if fl.Changed("pos") {
-		params.Pos = &f.pos
-	}
+	// PVE disables rules when enable is omitted; send the advertised create default.
+	params.Enable = &f.enable
 }
 
 func newClusterFirewallGroupRuleUpdateCmd() *cobra.Command {
@@ -658,7 +645,7 @@ func newClusterFirewallGroupRuleUpdateCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Rule %s in security group %s updated.", pos, group)}, deps.Format)
 		},
 	}
-	f.register(cmd, false, true, true)
+	f.register(cmd, true, true)
 	return cmd
 }
 

@@ -292,13 +292,12 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 		icmpType string
 		comment  string
 		enable   int64
-		pos      int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create <vmid|name>",
-		Short: "Append a firewall rule to a container",
+		Short: "Insert a container firewall rule",
 		Long: "Create a new firewall rule. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required.",
+			"(ACCEPT|DROP|REJECT or a security group name) are required. New rules are inserted at position 0.",
 		Example: `  pmx pve lxc firewall rules create 200 --type in --action ACCEPT --source 10.0.0.0/8
   pmx pve lxc firewall rules create 200 --type in --action DROP --dport 22`,
 		Args: cobra.ExactArgs(1),
@@ -347,12 +346,8 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 			if fl.Changed("comment") {
 				params.Comment = &comment
 			}
-			if fl.Changed("enable") {
-				params.Enable = &enable
-			}
-			if fl.Changed("pos") {
-				params.Pos = &pos
-			}
+			// PVE disables rules when enable is omitted; send the advertised create default.
+			params.Enable = &enable
 
 			if err := deps.API.Nodes.CreateLxcFirewallRules(cmd.Context(), node, vmid, params); err != nil {
 				return fmt.Errorf("create firewall rule for container %s on node %q: %w", vmid, node, err)
@@ -375,7 +370,6 @@ func newFirewallRulesCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&icmpType, "icmp-type", "", "ICMP type, valid only when proto is icmp or icmpv6")
 	cmd.Flags().StringVar(&comment, "comment", "", "descriptive comment")
 	cmd.Flags().Int64Var(&enable, "enable", 1, "1 to enable the rule, 0 to disable it")
-	cmd.Flags().Int64Var(&pos, "pos", 0, "insert the rule at this position")
 	return cmd
 }
 

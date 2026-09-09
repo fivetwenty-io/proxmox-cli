@@ -157,11 +157,11 @@ type nodeRuleFlags struct {
 	action, ruleType, source, dest, proto, dport, sport string
 	iface, macro, logLevel, icmpType, comment           string
 	digest                                              string
-	enable, pos, moveto                                 int64
+	enable, moveto                                      int64
 	del                                                 string
 }
 
-func (f *nodeRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDelete bool) {
+func (f *nodeRuleFlags) register(cmd *cobra.Command, withMoveto, withDelete bool) {
 	cmd.Flags().StringVar(&f.ruleType, "type", "", "rule direction: in, out, or group")
 	cmd.Flags().StringVar(&f.action, "action", "", "ACCEPT, DROP, REJECT, or a security group name")
 	cmd.Flags().StringVar(&f.source, "source", "", "restrict source address, IP set (+name), or alias")
@@ -177,9 +177,6 @@ func (f *nodeRuleFlags) register(cmd *cobra.Command, withPos, withMoveto, withDe
 	cmd.Flags().Int64Var(&f.enable, "enable", 1, "1 to enable the rule, 0 to disable it")
 	cmd.Flags().StringVar(&f.digest, "digest", "",
 		"SHA1 digest of the current rules to guard against concurrent edits")
-	if withPos {
-		cmd.Flags().Int64Var(&f.pos, "pos", 0, "insert the rule at this position")
-	}
 	if withMoveto {
 		cmd.Flags().Int64Var(&f.moveto, "moveto", 0, "move the rule to this position (other arguments ignored)")
 	}
@@ -271,9 +268,9 @@ func newNodeFirewallRulesCreateCmd() *cobra.Command {
 	var f nodeRuleFlags
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Append a rule to the host firewall",
+		Short: "Insert a rule into the host firewall",
 		Long: "Create a new host firewall rule. --type (in|out|group) and --action " +
-			"(ACCEPT|DROP|REJECT or a security group name) are required.",
+			"(ACCEPT|DROP|REJECT or a security group name) are required. New rules are inserted at position 0.",
 		Example: `  pmx pve node firewall rules create --type in --action ACCEPT --source 10.0.0.0/24 --dport 22`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -298,7 +295,7 @@ func newNodeFirewallRulesCreateCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Firewall rule added on node %q.", deps.Node)}, deps.Format)
 		},
 	}
-	f.register(cmd, true, false, false)
+	f.register(cmd, false, false)
 	return cmd
 }
 
@@ -334,14 +331,10 @@ func applyNodeRuleCreateFlags(cmd *cobra.Command, f *nodeRuleFlags, params *node
 	if fl.Changed("comment") {
 		params.Comment = &f.comment
 	}
-	if fl.Changed("enable") {
-		params.Enable = &f.enable
-	}
+	// PVE disables rules when enable is omitted; send the advertised create default.
+	params.Enable = &f.enable
 	if fl.Changed("digest") {
 		params.Digest = &f.digest
-	}
-	if fl.Changed("pos") {
-		params.Pos = &f.pos
 	}
 }
 
@@ -373,7 +366,7 @@ func newNodeFirewallRulesUpdateCmd() *cobra.Command {
 				output.Result{Message: fmt.Sprintf("Firewall rule %s updated on node %q.", pos, deps.Node)}, deps.Format)
 		},
 	}
-	f.register(cmd, false, true, true)
+	f.register(cmd, true, true)
 	return cmd
 }
 
