@@ -533,6 +533,20 @@ func (sf *storageFlags) applyUpdate(cmd *cobra.Command, p *clusterstorage.Update
 	str("digest", &sf.digest, &p.Digest)
 }
 
+// normalizeNFSShared preserves NFS's intrinsic shared property without sending
+// a field that its plugin does not accept. Other storage types retain their
+// explicitly supplied value and normal API validation.
+func normalizeNFSShared(storageType string, shared **bool) error {
+	if storageType != "nfs" || *shared == nil {
+		return nil
+	}
+	if !**shared {
+		return fmt.Errorf("NFS storage is inherently shared; --shared=false is not supported")
+	}
+	*shared = nil
+	return nil
+}
+
 // newCreateCmd builds `pmx pve storage create`.
 func newCreateCmd() *cobra.Command {
 	var (
@@ -560,6 +574,9 @@ func newCreateCmd() *cobra.Command {
 				Type:    stType,
 			}
 			sf.applyCreate(cmd, params)
+			if err := normalizeNFSShared(stType, &params.Shared); err != nil {
+				return err
+			}
 
 			if _, err := deps.API.ClusterStorage.CreateStorage(cmd.Context(), params); err != nil {
 				return err
@@ -600,6 +617,21 @@ func newSetCmd() *cobra.Command {
 			storageID := args[0]
 			params := &clusterstorage.UpdateStorageParams{}
 			sf.applyUpdate(cmd, params)
+			if params.Shared != nil {
+				response, err := deps.API.ClusterStorage.GetStorage(cmd.Context(), storageID)
+				if err != nil {
+					return err
+				}
+				var definition struct {
+					Type string `json:"type"`
+				}
+				if response == nil || json.Unmarshal(*response, &definition) != nil || definition.Type == "" {
+					return fmt.Errorf("storage type unavailable; shared setting was not changed")
+				}
+				if err := normalizeNFSShared(definition.Type, &params.Shared); err != nil {
+					return err
+				}
+			}
 
 			if _, err := deps.API.ClusterStorage.UpdateStorage(cmd.Context(), storageID, params); err != nil {
 				return err
