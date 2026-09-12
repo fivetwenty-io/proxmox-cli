@@ -181,15 +181,7 @@ release). Exit status is 0 when all validated contexts pass, 1 when any fail.
 Password login persists a live session (ticket + CSRF + expiry) back into the
 context entry; `pmx auth logout` invalidates and removes it.
 
-Known limitation for local development builds on macOS: keychain item ACLs bind
-to the binary's signing identity, and an ad-hoc-signed local build gets a new
-identity on every rebuild, so items stored by the previous build surface as
-"item could not be found" to the next one. Installed, consistently-signed
-binaries (the released Homebrew/pkg builds are Developer ID-signed) are
-unaffected. Recovery is `pmx lab context sync <name>`, which rotates the token
-and rewrites the keychain item; the store path purges every existing item for
-the (service, account) pair before adding, so repeated recoveries never
-accumulate duplicate entries.
+Known limitation for local development builds on macOS, as originally recorded: items stored by a previous build surfaced as "item could not be found" to the next one, and this was attributed to keychain ACLs binding to the binary's signing identity. Measurement has since shown that the items pmx stores carry a decrypt ACL trusting `/usr/bin/security`, the reader pmx execs, and not pmx itself, so a changed pmx signature does not lock a build out. `security(1)` reports "could not be found" both when the item is absent and when the process cannot see the login keychain at all, which happens under a sandbox that denies keychain access or when `HOME` is not the login user's home. `pmx` now names that condition in the lookup error and refuses to store in that state instead of hanging on an authorization dialog. Recovery for a genuinely missing item is `pmx lab context sync <name>`, which rotates the token and rewrites the keychain item; the store path purges every existing item for the (service, account) pair before adding, so repeated recoveries never accumulate duplicate entries.
 
 ## Dependency wiring
 

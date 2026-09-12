@@ -4,6 +4,7 @@ package config
 
 import (
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -59,10 +60,9 @@ func TestStoreKeychainSecret_FeedsSecretOnStdinNotArgv(t *testing.T) {
 }
 
 // TestStoreKeychainSecret_KeepsSecurityAsTheTrustedReader pins the absence of
-// a -T flag on the add line. security(1) treats -T as a replacement for the
-// default trusted-application list, not an addition to it, so naming any
-// binary there removes /usr/bin/security — the very binary keychainLookup
-// execs to read the value back. Measured on macOS 25.6: an item added with
+// a -T flag on the add line. Any -T suppresses security(1)'s default trusted
+// application, /usr/bin/security — the very binary keychainLookup execs to
+// read the value back. Measured on macOS 26.6: an item added with
 // -T <other binary> dumps a decrypt ACL listing only that binary, and a
 // subsequent `security find-generic-password -w` blocks on an interactive
 // authorization dialog instead of returning the secret.
@@ -74,9 +74,11 @@ func TestStoreKeychainSecret_KeepsSecurityAsTheTrustedReader(t *testing.T) {
 
 	require.NoError(t, StoreKeychainSecret("pmx-lab-demo", "pmx@pve!pmx", "s3cr3t-value"))
 
-	assert.Contains(t, gotStdin, "add-generic-password")
-	assert.NotContains(t, gotStdin, " -T ",
-		"-T replaces the default trusted-app list and would lock /usr/bin/security "+
+	// The add line is fully deterministic, so pin it whole: flag set, token
+	// order, single-line shape, and the absence of -T or -A in any spelling.
+	assert.Equal(t, "add-generic-password -U -s pmx-lab-demo -a pmx@pve!pmx -w s3cr3t-value\n", gotStdin)
+	assert.NotRegexp(t, `(?m)\s-[TA]\b`, gotStdin,
+		"-T and -A replace the default trusted-app list and would lock /usr/bin/security "+
 			"out of the item, making every later lookup prompt")
 }
 
@@ -132,7 +134,10 @@ func TestStoreKeychainSecret_RejectsBackslashSecret(t *testing.T) {
 func TestStoreKeychainSecret_SurfacesAddError(t *testing.T) {
 	orig := keychainRun
 	keychainRun = func(_ string, args ...string) (string, error) {
-		if args[0] == "delete-generic-password" {
+		switch args[0] {
+		case "default-keychain":
+			return "", nil
+		case "delete-generic-password":
 			return notFoundStderr, errors.New("exit 44")
 		}
 		return "some security failure", errors.New("exit 1")
@@ -146,7 +151,10 @@ func TestStoreKeychainSecret_SurfacesAddError(t *testing.T) {
 
 func TestStoreKeychainSecret_SurfacesPurgeError(t *testing.T) {
 	orig := keychainRun
-	keychainRun = func(string, ...string) (string, error) {
+	keychainRun = func(_ string, args ...string) (string, error) {
+		if args[0] == "default-keychain" {
+			return "", nil
+		}
 		return "keychain is locked", errors.New("exit 1")
 	}
 	defer func() { keychainRun = orig }()
@@ -159,8 +167,8 @@ func TestStoreKeychainSecret_SurfacesPurgeError(t *testing.T) {
 
 // TestStoreKeychainSecret_PurgesDuplicatesBeforeAdd verifies the store path
 // deletes every existing (service, account) item — two duplicates here — before
-// the single add, so ACL-orphaned items from earlier binary signatures cannot
-// accumulate or shadow the fresh value.
+// the single add, so leftover items from earlier stores cannot accumulate or
+// shadow the fresh value.
 func TestStoreKeychainSecret_PurgesDuplicatesBeforeAdd(t *testing.T) {
 	var calls []string
 	deletes := 0
@@ -180,8 +188,101 @@ func TestStoreKeychainSecret_PurgesDuplicatesBeforeAdd(t *testing.T) {
 
 	require.NoError(t, StoreKeychainSecret("svc", "acct", "fresh-secret"))
 	require.Equal(t, []string{
-		"delete-generic-password", "delete-generic-password", "delete-generic-password", "-i",
-	}, calls, "must delete until not-found, then add exactly once")
+		"default-keychain", "delete-generic-password", "delete-generic-password", "delete-generic-password", "-i",
+	}, calls, "must confirm the keychain is visible, delete until not-found, then add exactly once")
+}
+
+// TestStoreKeychainSecret_FailsFastWhenKeychainNotVisible pins the guard for
+// the case a sandboxed or re-homed process hits: with no reachable keychain the
+// purge would report not-found and succeed vacuously, and the add would then
+// block on an authorization dialog the process cannot show. The store must
+// stop before either, and must say why.
+func TestStoreKeychainSecret_FailsFastWhenKeychainNotVisible(t *testing.T) {
+	var calls []string
+	orig := keychainRun
+	keychainRun = func(_ string, args ...string) (string, error) {
+		calls = append(calls, args[0])
+		if args[0] == "default-keychain" {
+			return "SecKeychainCopyDomainDefault user: A default keychain could not be found.", errors.New("exit 1")
+		}
+		return "", nil
+	}
+	defer func() { keychainRun = orig }()
+
+	err := StoreKeychainSecret("svc", "acct", "fresh-secret")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), keychainNotVisibleMsg)
+	assert.Equal(t, []string{"default-keychain"}, calls, "must not purge or add when no keychain is visible")
+}
+
+// notFoundExit mimics security(1)'s exit for a missing item: a non-zero exit
+// with the not-found text on stderr.
+func notFoundExit() error {
+	return &exec.ExitError{Stderr: []byte(notFoundStderr + "\n")}
+}
+
+func TestKeychainLookup_NotFoundOnVisibleKeychainGetsNoHint(t *testing.T) {
+	origOut, origRun := keychainOutput, keychainRun
+	keychainOutput = func(...string) ([]byte, error) { return nil, notFoundExit() }
+	keychainRun = func(_ string, args ...string) (string, error) {
+		require.Equal(t, "default-keychain", args[0])
+		return "", nil
+	}
+	defer func() { keychainOutput, keychainRun = origOut, origRun }()
+
+	_, err := keychainLookup("svc/acct")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "could not be found")
+	assert.NotContains(t, err.Error(), keychainNotVisibleMsg,
+		"a genuine not-found on a reachable keychain must read exactly as before")
+}
+
+// TestKeychainLookup_NotFoundOnInvisibleKeychainExplains covers the symptom the
+// original report described as the item being "absent" from a new process:
+// security(1) prints the same not-found text when it cannot reach any keychain,
+// so the error must name the real cause.
+func TestKeychainLookup_NotFoundOnInvisibleKeychainExplains(t *testing.T) {
+	origOut, origRun := keychainOutput, keychainRun
+	keychainOutput = func(...string) ([]byte, error) { return nil, notFoundExit() }
+	keychainRun = func(_ string, args ...string) (string, error) {
+		require.Equal(t, "default-keychain", args[0])
+		return "SecKeychainCopyDomainDefault user: A default keychain could not be found.", errors.New("exit 1")
+	}
+	defer func() { keychainOutput, keychainRun = origOut, origRun }()
+
+	_, err := keychainLookup("svc/acct")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "could not be found")
+	assert.Contains(t, err.Error(), keychainNotVisibleMsg)
+}
+
+func TestKeychainLookup_OtherFailuresSkipTheVisibilityProbe(t *testing.T) {
+	origOut, origRun := keychainOutput, keychainRun
+	keychainOutput = func(...string) ([]byte, error) {
+		return nil, &exec.ExitError{Stderr: []byte("User interaction is not allowed.\n")}
+	}
+	keychainRun = func(string, ...string) (string, error) {
+		t.Fatal("visibility probe must only run for a not-found result")
+		return "", nil
+	}
+	defer func() { keychainOutput, keychainRun = origOut, origRun }()
+
+	_, err := keychainLookup("svc/acct")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "User interaction is not allowed")
+}
+
+func TestKeychainLookup_SuccessTrimsTrailingNewline(t *testing.T) {
+	origOut := keychainOutput
+	keychainOutput = func(args ...string) ([]byte, error) {
+		assert.Equal(t, []string{"find-generic-password", "-s", "svc", "-a", "acct", "-w"}, args)
+		return []byte("s3cr3t\n"), nil
+	}
+	defer func() { keychainOutput = origOut }()
+
+	got, err := keychainLookup("svc/acct")
+	require.NoError(t, err)
+	assert.Equal(t, "s3cr3t", got)
 }
 
 func TestDeleteKeychainSecret_NotFoundIsSuccess(t *testing.T) {
