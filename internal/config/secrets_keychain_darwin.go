@@ -143,6 +143,18 @@ func StoreKeychainSecret(service, account, secret string) error {
 		return fmt.Errorf("keychain store: clear existing items: %w", err)
 	}
 	// -U stays as a guard against a concurrent add between the purge and here.
+	//
+	// The add deliberately carries no -T. It is tempting to add -T <pmx binary>
+	// so the item names this tool as its trusted reader, but -T replaces the
+	// default trusted-application list rather than extending it, and the
+	// default entry is the one that matters. An add with no -T leaves the
+	// item's decrypt ACL trusting /usr/bin/security, which is precisely the
+	// binary keychainLookup execs to read the secret back, so lookups succeed
+	// without a prompt. Naming pmx instead drops /usr/bin/security from that
+	// list, and every later lookup blocks on an interactive authorization
+	// dialog. Trusting pmx by path would also re-orphan items across local
+	// rebuilds, because the ACL records the binary's code identity and an
+	// ad-hoc signature mints a fresh one on each build.
 	line := fmt.Sprintf("add-generic-password -U -s %s -a %s -w %s\n", service, account, secret)
 	if stderr, err := keychainRun(line, "-i"); err != nil {
 		return fmt.Errorf("keychain store for service %q account %q failed: %s: %w",

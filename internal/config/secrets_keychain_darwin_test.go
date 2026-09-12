@@ -58,6 +58,28 @@ func TestStoreKeychainSecret_FeedsSecretOnStdinNotArgv(t *testing.T) {
 	}
 }
 
+// TestStoreKeychainSecret_KeepsSecurityAsTheTrustedReader pins the absence of
+// a -T flag on the add line. security(1) treats -T as a replacement for the
+// default trusted-application list, not an addition to it, so naming any
+// binary there removes /usr/bin/security — the very binary keychainLookup
+// execs to read the value back. Measured on macOS 25.6: an item added with
+// -T <other binary> dumps a decrypt ACL listing only that binary, and a
+// subsequent `security find-generic-password -w` blocks on an interactive
+// authorization dialog instead of returning the secret.
+func TestStoreKeychainSecret_KeepsSecurityAsTheTrustedReader(t *testing.T) {
+	var gotStdin string
+	orig := keychainRun
+	keychainRun = fakeEmptyKeychain(nil, &gotStdin, nil)
+	defer func() { keychainRun = orig }()
+
+	require.NoError(t, StoreKeychainSecret("pmx-lab-demo", "pmx@pve!pmx", "s3cr3t-value"))
+
+	assert.Contains(t, gotStdin, "add-generic-password")
+	assert.NotContains(t, gotStdin, " -T ",
+		"-T replaces the default trusted-app list and would lock /usr/bin/security "+
+			"out of the item, making every later lookup prompt")
+}
+
 func TestStoreKeychainSecret_RejectsEmptyServiceOrAccount(t *testing.T) {
 	require.Error(t, StoreKeychainSecret("", "acct", "x"))
 	require.Error(t, StoreKeychainSecret("svc", "", "x"))
