@@ -561,6 +561,20 @@ type LabStorage struct {
 	// historical scripts/60-nfs-service --lab-quota default) instead.
 	NFSQuotaGB int `yaml:"nfs_quota_gb,omitempty" json:"nfs_quota_gb,omitempty"`
 
+	// NFSExtraDatasets names extra leaf datasets, beyond the fixed
+	// images+backup pair, that the lab repo's scripts/60-nfs-service creates
+	// and exports under this lab's NFS parent dataset
+	// (tank/nfs/labs/<lab>/<leaf>). It is a space-separated scalar rather
+	// than a YAML list because that script's yaml_get awk fallback parser
+	// reads scalars only. `pmx` itself IGNORES this field entirely: `pmx lab
+	// nfs attach` names only the owner dataset, images, backup, and the
+	// shared ISO tree, and it never runs recursively, so extra leaves are
+	// neither created nor disturbed by it. The field exists solely so that
+	// goccy's yaml.Strict() decode of labs.d does not reject the key.
+	// Validation (leaf-name shape, the images/backup collision, and the
+	// export-alias refusal) lives in 60-nfs-service, not here.
+	NFSExtraDatasets string `yaml:"nfs_extra_datasets,omitempty" json:"nfs_extra_datasets,omitempty"`
+
 	// NFSExport names ANOTHER lab whose NFS export tree this lab mounts
 	// instead of owning its own: a shared-export alias, for two (or more)
 	// clusters that should mimic a client environment where one export tree

@@ -123,6 +123,7 @@ func LabFileTemplate(lab *Lab) []byte {
 	fmt.Fprintf(&b, "  ssd: %t\n", lab.Storage.SSD)
 	appendLabOSDDisksBlock(&b, lab.Storage.OSDDisks)
 	appendLabNFSQuotaLine(&b, lab.Storage.NFSQuotaGB)
+	appendLabNFSExtraDatasetsLine(&b, lab.Storage.NFSExtraDatasets)
 	fmt.Fprint(&b, "\n")
 
 	appendLabTopologyBlock(&b, lab.Topology)
@@ -166,6 +167,22 @@ func appendLabNFSQuotaLine(b *strings.Builder, nfsQuotaGB int) {
 	fmt.Fprint(b, "  # (tank/nfs/labs/<lab>). Omitted means the default (200G).\n")
 	if nfsQuotaGB > 0 {
 		fmt.Fprintf(b, "  nfs_quota_gb: %d\n", nfsQuotaGB)
+	}
+}
+
+// appendLabNFSExtraDatasetsLine documents storage.nfs_extra_datasets with a
+// short comment, unconditionally, then renders the key only when set — the
+// same comment-always/key-only-when-set convention appendLabNFSQuotaLine
+// uses. Without this the key would be dropped whenever a lab file is
+// rewritten, and the lab repo's scripts/60-nfs-service would quietly stop
+// creating and exporting the leaves it names.
+func appendLabNFSExtraDatasetsLine(b *strings.Builder, extra string) {
+	fmt.Fprint(b, "  # nfs_extra_datasets: extra leaf datasets the lab repo's\n")
+	fmt.Fprint(b, "  # scripts/60-nfs-service creates and exports under this lab's NFS\n")
+	fmt.Fprint(b, "  # parent dataset, beyond the fixed images+backup pair. Space\n")
+	fmt.Fprint(b, "  # separated scalar, not a list; pmx itself ignores it.\n")
+	if extra != "" {
+		fmt.Fprintf(b, "  nfs_extra_datasets: %s\n", yamlQuote(extra))
 	}
 }
 

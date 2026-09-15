@@ -465,3 +465,28 @@ func TestResolveLabs_OSDDisksSizeMissing_Errors(t *testing.T) {
 	require.ErrorContains(t, err, "ceph")
 	require.ErrorContains(t, err, "osd_disks.size_gb")
 }
+
+// TestResolveLabs_NFSExtraDatasets_Parses guards the strict decode. Every
+// labs.d file goes through yaml.Strict(), so a key without a matching field
+// fails the whole load and takes every pmx lab command down with it. The lab
+// repo's scripts/60-nfs-service reads storage.nfs_extra_datasets as a
+// space-separated scalar; pmx only has to accept and carry it.
+func TestResolveLabs_NFSExtraDatasets_Parses(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, "config.yml", 0o600)
+
+	labsDir := filepath.Join(dir, "labs.d")
+	require.NoError(t, os.MkdirAll(labsDir, 0o700))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(labsDir, "wayneeseguin.yaml"),
+		[]byte("mode: nested\nstorage:\n  nfs_quota_gb: 300\n  nfs_extra_datasets: \"agents\"\n"),
+		0o600,
+	))
+
+	cfg := &config.Config{LabsDir: "labs.d"}
+
+	labs, err := config.ResolveLabs(cfg, configPath)
+	require.NoError(t, err)
+	require.Equal(t, "agents", labs["wayneeseguin"].Storage.NFSExtraDatasets)
+	require.Equal(t, 300, config.EffectiveNFSQuotaGB(labs["wayneeseguin"]))
+}

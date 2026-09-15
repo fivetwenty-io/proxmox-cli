@@ -313,3 +313,43 @@ func TestLabFileTemplate_HeaderCommentSurvivesOnDisk(t *testing.T) {
 	require.Contains(t, string(data), "# Lab environment: wayne.")
 	require.True(t, strings.Contains(string(data), "\n#"), "expected at least one comment line in written file")
 }
+
+// TestLabFileTemplate_NFSExtraDatasets_RenderedOnlyWhenSet mirrors the
+// comment-always/key-only-when-set convention the other optional storage
+// keys follow.
+func TestLabFileTemplate_NFSExtraDatasets_RenderedOnlyWhenSet(t *testing.T) {
+	lab := fullLab()
+	lab.Storage.NFSExtraDatasets = ""
+	out := string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "# nfs_extra_datasets:")
+	require.NotContains(t, out, "\n  nfs_extra_datasets:")
+
+	lab.Storage.NFSExtraDatasets = "agents"
+	out = string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "\n  nfs_extra_datasets: \"agents\"\n")
+}
+
+// TestWriteLabFile_NFSKeysRoundTripThroughResolveLabs proves the two NFS
+// storage keys survive a write-then-resolve cycle. Without the emitter,
+// rewriting a lab file would silently drop nfs_extra_datasets, and the lab
+// repo's scripts/60-nfs-service would stop creating the leaves it names.
+func TestWriteLabFile_NFSKeysRoundTripThroughResolveLabs(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := writeConfigFile(t, configDir, "config.yml", 0o600)
+
+	want := fullLab()
+	want.Storage.NFSQuotaGB = 300
+	want.Storage.NFSExtraDatasets = "agents"
+
+	_, err := config.WriteLabFile(filepath.Join(configDir, "labs.d"), want, false)
+	require.NoError(t, err)
+
+	labs, err := config.ResolveLabs(&config.Config{LabsDir: "labs.d"}, configPath)
+	require.NoError(t, err)
+
+	got := labs["wayne"]
+	require.NotNil(t, got)
+	require.Equal(t, 300, got.Storage.NFSQuotaGB)
+	require.Equal(t, "agents", got.Storage.NFSExtraDatasets)
+	require.Equal(t, want, got)
+}
