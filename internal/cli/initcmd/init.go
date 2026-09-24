@@ -29,7 +29,8 @@ func NewCommand() *cobra.Command {
 			"There is one sub-command so far. `init config` writes a fully-commented " +
 			"config.yml template to the resolved config path, ~/.config/pmx/config.yml by " +
 			"default, documenting every context field: host, port, protocol, realm, auth " +
-			"type, the token or password secret, and the TLS options.\n\n" +
+			"type, the token or password secret, the TLS options, the ssh and " +
+			"jump-host settings, the proxy, and the timeouts.\n\n" +
 			"This works entirely on the local filesystem and never contacts a Proxmox " +
 			"API.\n\n" +
 			"Once you have edited the generated template, add contexts with " +
@@ -86,6 +87,26 @@ contexts:
       insecure: false        # true disables certificate verification (lab only)
       fingerprint: ""        # pin a hex SHA-256 cert fingerprint instead
       ca-cert: ""            # path to a PEM CA bundle for custom trust
+
+    # The ssh, proxy, and timeout blocks below are optional. An absent key
+    # means the built-in default, so uncomment only what a context needs.
+    #
+    # ssh:
+    #   user: root           # node login user for ` + "`pmx ssh`" + ` and ` + "`pmx rsync`" + `
+    #   port: 22             # node ssh port for ` + "`pmx ssh`" + ` and ` + "`pmx rsync`" + `
+    #   identity: ""         # path to a private key; empty uses ssh's own key discovery
+    #   jump: ""             # bastion as [user@]host[:port]; tunnels ssh AND the API connection
+    #
+    # proxy:
+    #   url: ""              # socks5://, socks5h://, or http://, without credentials; empty connects direct
+    #   username: ""         # username presented to the proxy
+    #   password: ${PMX_PROXY_PASSWORD}  # or keychain:path; same rules as auth.secret
+    #   from-env: false      # true honours $HTTPS_PROXY (or $HTTP_PROXY) and $NO_PROXY
+    #
+    # timeout:
+    #   connect: 5s          # TCP connection setup
+    #   tls-handshake: 10s   # TLS handshake once the peer answers
+    #   request: 30s         # each attempt of one API request, including an upload's body
 `
 
 // newConfigCmd builds `pmx init config`, which writes the commented template to

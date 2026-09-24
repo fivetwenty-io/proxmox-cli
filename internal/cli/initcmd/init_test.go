@@ -102,3 +102,63 @@ func TestInit_NoArgsShowsHelp(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "Write a config.yml template")
 }
+
+// TestInitConfig_SSHProxyTimeoutBlocksDocumentedNotSet pins the ssh, proxy,
+// and timeout blocks the template appends after tls: they stay commented
+// out, they parse, config.UnknownKeys recognises every field inside them,
+// and a context loaded from the file resolves as if the blocks were absent
+// entirely.
+func TestInitConfig_SSHProxyTimeoutBlocksDocumentedNotSet(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pmx", "config.yml")
+
+	_, err := run(t, path, "config")
+	require.NoError(t, err)
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	text := string(raw)
+
+	// The three blocks are commented out, not live settings. NotRegexp anchors
+	// on a line that starts (after leading whitespace) with the bare key, so
+	// an uncommented "    ssh:" line under a context would be caught even
+	// though it never appears at column 0.
+	require.Contains(t, text, "# ssh:")
+	require.Contains(t, text, "# proxy:")
+	require.Contains(t, text, "# timeout:")
+	require.NotRegexp(t, `(?m)^\s*ssh:`, text)
+	require.NotRegexp(t, `(?m)^\s*proxy:`, text)
+	require.NotRegexp(t, `(?m)^\s*timeout:`, text)
+	require.Contains(t, text, "An absent key")
+	require.Contains(t, text, "means the built-in default")
+
+	// The long description on `pmx init` names every field pmx init config
+	// documents, including the three blocks appended here.
+	require.Contains(t, initcmd.NewCommand().Long,
+		"the TLS options, the ssh and jump-host settings, the proxy, and the timeouts.")
+
+	// The proxy password line is a reference, not a literal secret.
+	require.Contains(t, text, "#   password: ${PMX_PROXY_PASSWORD}")
+
+	// The rendered file parses as YAML and config.UnknownKeys finds no
+	// unrecognized keys, commented-out or otherwise.
+	keys, err := config.UnknownKeys(path)
+	require.NoError(t, err)
+	require.Empty(t, keys)
+
+	// A context loaded from the template carries none of the three blocks,
+	// and resolving it reports every timeout as defaulted, not set.
+	cfg, err := config.Load(path)
+	require.NoError(t, err)
+
+	ctx := cfg.Contexts["lab"]
+	require.NotNil(t, ctx)
+	require.Equal(t, config.SSHBlock{}, ctx.SSH)
+	require.Nil(t, ctx.Proxy.FromEnv)
+	require.Equal(t, config.TimeoutBlock{}, ctx.Timeout)
+
+	conn, err := cli.ResolveConnection("lab", ctx, cli.ConnectionOverrides{})
+	require.NoError(t, err)
+	require.False(t, conn.TimeoutsSet.Connect)
+	require.False(t, conn.TimeoutsSet.TLSHandshake)
+	require.False(t, conn.TimeoutsSet.Request)
+}
