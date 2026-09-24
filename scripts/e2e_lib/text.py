@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-NOISE_PREFIXES = ("WARN:", "WARNING:", "warn:", "warning:")
+NOISE_PREFIXES = ("WARN:", "WARNING:", "warn:", "warning:", "note:", "NOTE:")
 # A bare `(code: 0)` trailer says nothing. The same trailer WITH an `errors:`
 # payload — `(code: 0, errors: zone: zone is not an EVPN zone)` — is where PVE
 # puts its precise complaint, so it must survive: dropping it would take the

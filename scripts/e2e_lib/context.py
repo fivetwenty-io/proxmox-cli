@@ -8,13 +8,13 @@ threads without sharing mutable state.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
 from . import render
+from .childenv import child_env
 from .model import Deferred, Result, Status
 from .text import reason_of
 
@@ -72,10 +72,12 @@ class Ctx:
         if node:
             argv += ["--node", node]
         argv += list(args)
-        # Pin the terminal width so table rendering is reproducible off a tty:
-        # pmx prefers $COLUMNS over the tty size for exactly this reason, and
-        # the render audit asserts against that budget.
-        env = dict(os.environ, COLUMNS=str(render.BUDGET))
+        # child_env() pins $COLUMNS (pmx prefers it over the tty size, so
+        # this is what makes table rendering reproducible off a tty and lets
+        # the render audit assert against a known budget) and drops every
+        # inherited PMX_API_* so a developer's exported override can never
+        # steer this invocation.
+        env = child_env()
         try:
             proc = subprocess.run(
                 argv,

@@ -10,6 +10,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 
+from .childenv import child_env
 from .context import Ctx, Env
 from .model import Isolation, Status, TreeReport
 from .trees import TREES
@@ -69,7 +70,11 @@ def find_binary(explicit: str | None, build: bool) -> str:
 
 def _probe_json(binary: str, target: str, *args: str) -> tuple[int, object | None, str]:
     argv = [binary, "--context", target, "--no-log", "-o", "json", *args]
-    proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+    # child_env() drops every inherited PMX_API_*, so a developer's exported
+    # override can never point this up-front `context ls` / `pve node list`
+    # discovery at a connection the operator never asked to probe.
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=60,
+                          env=child_env())
     if proc.returncode != 0:
         return proc.returncode, None, proc.stderr.strip() or proc.stdout.strip()
     try:

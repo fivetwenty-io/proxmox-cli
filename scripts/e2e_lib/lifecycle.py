@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import render
+from .childenv import child_env
 from .model import Isolation
 from .runner import (
     BOLD,
@@ -177,11 +178,14 @@ class Runner:
     def _env(self) -> dict[str, str]:
         """The child environment, with the terminal width pinned.
 
-        pmx prefers $COLUMNS over the tty size, so pinning it is what makes a
-        table rendering reproducible off a tty and lets the render audit assert
-        against a known budget. The read-only sweep pins the same one.
+        child_env() pins $COLUMNS the same way the read-only sweep does (pmx
+        prefers it over the tty size, so this is what makes table rendering
+        reproducible off a tty and lets the render audit assert against a
+        known budget) and drops every inherited PMX_API_*, so a developer's
+        exported override can never steer this run — the destructive suites
+        included.
         """
-        return dict(os.environ, COLUMNS=str(render.BUDGET))
+        return child_env()
 
     def pmx(self, *args: str, json_out: bool = False, node: bool = True,
             stdin: str | None = None, fmt: str | None = None) -> Cmd:

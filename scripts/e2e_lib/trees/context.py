@@ -6,6 +6,10 @@ throughout so the real config and configured context are never touched.
 
 Verbs covered: add, ls, show, select (by name), select '-' (previous alias),
 previous, copy, rename, update, validate, rm (non-active), rm-active guard.
+Also covers the ssh-jump/proxy/timeout-connect flags on add: a round-trip
+through show, the proxy-password inline-literal warning and its redaction,
+validate against a context carrying those flags, and add's rejection of a
+non-socks5/http proxy scheme.
 
 Deferred: edit (requires $EDITOR / TTY interaction).
 """
@@ -117,6 +121,53 @@ def _scratch_context_checks(ctx: Ctx) -> None:
         ):
             return None
         return f"context {probe!r} still listed after rm"
+
+    proxy_probe = "pmx-cli-ctx-proxy"
+    proxy_warn_probe = "pmx-cli-ctx-proxy-warn"
+    badproxy = "pmx-cli-ctx-badproxy"
+
+    def proxy_fields_ok(res: CmdResult) -> str | None:
+        data = res.json()
+        want = {
+            "jump": "admin@bastion:22",
+            "proxy": "socks5h://127.0.0.1:1080",
+            "timeout_connect": "7s",
+        }
+        mismatches = [
+            f"{field}: got {data.get(field)!r} want {expect!r}"
+            for field, expect in want.items() if data.get(field) != expect
+        ]
+        if mismatches:
+            return "jump/proxy/timeout-connect not persisted: " + "; ".join(mismatches)
+        return None
+
+    def warns_inline_proxy_password(res: CmdResult) -> str | None:
+        if "--proxy-password looks like an inline literal" not in res.stderr:
+            return f"stderr missing inline-literal warning: {res.stderr[:200]!r}"
+        return None
+
+    def proxy_password_redacted(res: CmdResult) -> str | None:
+        data = res.json()
+        if data.get("proxy_password") != "***":
+            return f"proxy_password not redacted in show output: {data.get('proxy_password')!r}"
+        return None
+
+    def proxy_probe_validate_ok(res: CmdResult) -> str | None:
+        data = res.json()
+        if isinstance(data, list) and any(
+            isinstance(v, dict) and v.get("name") == proxy_probe and v.get("status") == "OK"
+            for v in data
+        ):
+            return None
+        return f"validate did not report status OK for {proxy_probe!r}"
+
+    def badproxy_absent(res: CmdResult) -> str | None:
+        data = res.json()
+        if isinstance(data, list) and not any(
+            isinstance(t, dict) and t.get("name") == badproxy for t in data
+        ):
+            return None
+        return f"context {badproxy!r} listed after a rejected add"
 
     scratch_dir = tempfile.mkdtemp(prefix="pmx-cli-e2e-ctx-")
     cfg = os.path.join(scratch_dir, "config.yml")
@@ -241,6 +292,65 @@ def _scratch_context_checks(ctx: Ctx) -> None:
         ctx.expect_fail(
             "context rm (active guard)", "--config", cfg, "context", "rm", probe2,
             "--yes", must_contain="active context", with_context=False,
+        )
+
+        # -- ssh-jump / proxy-url / timeout-connect round-trip through show ----
+        ctx.check(
+            "context add (ssh-jump, proxy, timeout-connect)", "--config", cfg,
+            "context", "add", proxy_probe,
+            "--host", "127.0.0.1", "--username", "root@pam",
+            "--token-id", "e2e", "--secret", "00000000-0000-0000-0000-000000000000",
+            "--insecure", "--ssh-jump", "admin@bastion:22",
+            "--proxy-url", "socks5h://127.0.0.1:1080", "--timeout-connect", "7s",
+            with_context=False, fmt="",
+        )
+        ctx.check(
+            "context show (jump/proxy/timeout-connect persisted)", "--config", cfg,
+            "context", "show", proxy_probe,
+            with_context=False, validate=proxy_fields_ok,
+        )
+
+        # -- proxy-password inline literal warns but does not block the add ----
+        # Both --proxy-url and --proxy-username are required alongside the
+        # literal --proxy-password, or add would fail validation before it
+        # ever reached the warning, and the warning would go untested on a
+        # successful add.
+        ctx.check(
+            "context add (proxy-password inline literal warns)", "--config", cfg,
+            "context", "add", proxy_warn_probe,
+            "--host", "127.0.0.1", "--username", "root@pam",
+            "--token-id", "e2e", "--secret", "00000000-0000-0000-0000-000000000000",
+            "--insecure", "--proxy-url", "socks5h://127.0.0.1:1080",
+            "--proxy-username", "pmx", "--proxy-password", "hunter2",
+            with_context=False, fmt="", validate=warns_inline_proxy_password,
+        )
+        ctx.check(
+            "context show (proxy-password redacted)", "--config", cfg,
+            "context", "show", proxy_warn_probe,
+            with_context=False, validate=proxy_password_redacted,
+        )
+
+        # -- validate reports OK for a context carrying jump/proxy/timeout -----
+        ctx.check(
+            "context validate (jump/proxy context)", "--config", cfg,
+            "context", "validate", proxy_probe,
+            with_context=False, validate=proxy_probe_validate_ok,
+        )
+
+        # -- add rejects a non-socks5/http proxy scheme before it ever saves ---
+        # The token flags matter: add defaults --auth-type to token and would
+        # otherwise fail on the missing --token-id before it reached the
+        # proxy-scheme rule.
+        ctx.expect_fail(
+            "context add rejects ftp proxy", "--config", cfg, "context", "add",
+            badproxy, "--host", "h", "--username", "root@pam",
+            "--token-id", "e2e", "--secret", "00000000-0000-0000-0000-000000000000",
+            "--proxy-url", "ftp://nope", with_context=False,
+            must_contain="must use scheme socks5",
+        )
+        ctx.check(
+            "context ls (rejected proxy context absent)", "--config", cfg, "context", "ls",
+            with_context=False, validate=badproxy_absent,
         )
     finally:
         shutil.rmtree(scratch_dir, ignore_errors=True)
