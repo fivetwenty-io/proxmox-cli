@@ -11,8 +11,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -1310,7 +1312,7 @@ func RequireSubcommands(cmd *cobra.Command) {
 }
 
 // signalContext returns the root command context, cancelled by the first
-// SIGINT or SIGTERM, plus a stop function the caller defers.
+// SIGINT, SIGTERM, or SIGHUP, plus a stop function the caller defers.
 //
 // Cancelling rather than dying is what makes the cancellation handling the
 // tree already carries reachable: the task-wait poll, the lab SSH wait, and
@@ -1320,29 +1322,78 @@ func RequireSubcommands(cmd *cobra.Command) {
 // close on the interrupted path, instead of leaving an invocation record with
 // no matching exit record — indistinguishable from a crash.
 //
-// Only the first signal is absorbed. signal.Stop restores the default
-// disposition (no other handler is registered for these signals unless a
-// child is running, in which case internal/exec's shield deliberately holds
-// its own), so a second ^C terminates immediately and an operator whose
-// command is not unwinding fast enough is never trapped.
+// SIGHUP is caught because an ssh jump child runs in a session of its own and
+// no longer hears the terminal's hangup, so pmx has to end it. It is caught
+// only when pmx did not start with it ignored: signal.Notify would un-ignore
+// it, and a `nohup pmx ...`, or a pmx that a service manager or CI runner
+// starts with SIGHUP ignored, must still run to completion when the operator
+// logs out.
+//
+// Only the first signal is absorbed. The second always kills every jump
+// child's process group at once, restores the disposition pmx started with,
+// and delivers the same signal to pmx again, so an operator whose command is
+// not unwinding fast enough is never trapped and no jump child outlives pmx.
+// pmx then dies of that signal unless another handler still holds it, such
+// as internal/exec's shield while it relays signals to a shielded child, in
+// which case pmx keeps unwinding with the jump registry closed. The shield
+// then also relays the re-raised copy, so its child receives that second
+// signal once more than it would without this handler, which is harmless
+// for the ssh sessions the shield protects. On Windows,
+// where a signal cannot be delivered to pmx itself, it exits at once with
+// the generic failure status.
 func signalContext() (context.Context, func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	sigs := []os.Signal{os.Interrupt, syscall.SIGTERM}
+	if !signal.Ignored(syscall.SIGHUP) {
+		sigs = append(sigs, syscall.SIGHUP)
+	}
+
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, sigs...)
+
+	done := make(chan struct{})
 
 	go func() {
 		select {
 		case <-ch:
-			signal.Stop(ch)
 			cancel()
-		case <-ctx.Done():
+		case <-done:
+			return
+		}
+
+		select {
+		case sig := <-ch:
+			apiclient.KillJumps()
+			signal.Stop(ch)
+			redeliverSignal(sig)
+		case <-done:
 		}
 	}()
 
+	var once sync.Once
+
 	return ctx, func() {
-		signal.Stop(ch)
-		cancel()
+		once.Do(func() {
+			signal.Stop(ch)
+			close(done)
+			cancel()
+		})
+	}
+}
+
+// redeliverSignal sends sig to pmx again once its handler has been stopped,
+// so pmx dies of the signal the operator sent. There is deliberately no
+// os.Exit fallback on Unix, because that would orphan the shielded child the
+// exec runner exists to protect. Windows supports only a kill through
+// Process.Signal, so pmx exits there with the generic failure status.
+func redeliverSignal(sig os.Signal) {
+	if runtime.GOOS == "windows" {
+		os.Exit(exitcode.Generic)
+	}
+
+	if p, err := os.FindProcess(os.Getpid()); err == nil {
+		_ = p.Signal(sig)
 	}
 }
 
@@ -1356,6 +1407,10 @@ func signalContext() (context.Context, func()) {
 // root.Execute() returns, so that all log records written during RunE are
 // flushed and the fd is released only once the full command has completed.
 func Execute(persona string, factories []GroupFactory) error {
+	// jumpShutdownBound is how long established ssh jump children get to
+	// exit on end-of-file before their process groups are killed.
+	const jumpShutdownBound = 2 * time.Second
+
 	root, cleanup := NewRootCmd(persona)
 	defer cleanup()
 
@@ -1379,6 +1434,12 @@ func Execute(persona string, factories []GroupFactory) error {
 	// closed by the deferred cleanup above.
 	logInvocationExit(c, err)
 	maybeAutoPrune(c)
+
+	// Reap every ssh jump child before pmx exits: a background goroutine
+	// dies with the process, and main calls os.Exit as soon as this returns.
+	// It runs after the exit record, so the audited duration excludes the
+	// teardown, and before the error is printed, on both paths.
+	apiclient.ShutdownJumps(jumpShutdownBound)
 
 	if err != nil {
 		// A child process (ssh, rsync) that had our real stdout/stderr wired
