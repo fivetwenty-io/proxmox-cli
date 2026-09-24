@@ -95,7 +95,7 @@ func TestContextCopy_Happy(t *testing.T) {
 
 // TestContextCopy_PreservesTLSFields guards against a copy verb silently
 // dropping a TLSBlock field added after deepCopyContext was first written
-// (regression class: IMP-02b added Tofu and it must survive copy).
+// (Tofu is one such later field, and it must survive a copy).
 func TestContextCopy_PreservesTLSFields(t *testing.T) {
 	src := labContext()
 	src.TLS = config.TLSBlock{
@@ -231,6 +231,47 @@ func TestContextCopy_SameSrcDst(t *testing.T) {
 	err := runOpsCmd(cfg, p, &buf, "copy", "lab", "lab")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must differ")
+}
+
+// ---- add tests --------------------------------------------------------------
+
+// TestContextAdd_RejectsInvalidSSHPortAndJump verifies that an out-of-range
+// --ssh-port and an unparseable --ssh-jump are both refused before a context
+// is written, so `add` never persists a context that no ssh-based command
+// could then use.
+func TestContextAdd_RejectsInvalidSSHPortAndJump(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "badport",
+		"--host", "10.1.3.1",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--ssh-port", "99999",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ssh.port 99999 is out of range [1, 65535]")
+
+	updated := reloadCfg(t, path)
+	require.NotContains(t, updated.Contexts, "badport",
+		"an out-of-range --ssh-port must not write a context")
+
+	_, err = run(t, deps, "", "add", "badjump",
+		"--host", "10.1.3.2",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--ssh-jump", ",",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `ssh.jump "," is not valid: hop 1 is empty`)
+
+	updated = reloadCfg(t, path)
+	require.NotContains(t, updated.Contexts, "badjump",
+		"an unparseable --ssh-jump must not write a context")
 }
 
 // ---- edit tests -------------------------------------------------------------
@@ -395,6 +436,53 @@ func TestContextEdit_NoCurrentContextErrors(t *testing.T) {
 	err := runOpsCmd(cfg, p, &buf, "edit")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no current-context")
+}
+
+// TestContextEdit_RejectsInvalidSSHJump verifies that an edited context whose
+// ssh.jump no ssh-based command could use is rejected after the strict
+// decode, with the temp file preserved for recovery exactly as an invalid
+// YAML or a failed StrictValidateContext leaves it.
+func TestContextEdit_RejectsInvalidSSHJump(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake shell script not portable on Windows")
+	}
+
+	ctx := labContext()
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": ctx},
+	}
+	p := scratchConfig(t, cfg)
+
+	// Fake editor appends an ssh.jump chain no ssh-based command could use.
+	editorDir := t.TempDir()
+	editorPath := filepath.Join(editorDir, "bad-jump-editor.sh")
+	script := "#!/bin/sh\nprintf '\\nssh:\\n  jump: x;id\\n' >> \"$1\"\nexit 0\n"
+	require.NoError(t, os.WriteFile(editorPath, []byte(script), 0o755))
+	t.Setenv("EDITOR", editorPath)
+
+	var buf bytes.Buffer
+	err := runOpsCmd(cfg, p, &buf, "edit", "lab")
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		`ssh.jump "x;id" is not valid: hop 1: host "x;id" is not a hostname, IPv4 address, or bracketed IPv6 literal`)
+	// The path in the message is there whether or not the file survives, so
+	// the file itself is checked: it must still exist and hold the edit.
+	const preservedMarker = "temp file preserved at "
+	msg := err.Error()
+	idx := strings.Index(msg, preservedMarker)
+	require.GreaterOrEqual(t, idx, 0, "the error must name the preserved temp file")
+	tmpPath := strings.TrimSpace(msg[idx+len(preservedMarker):])
+	require.Contains(t, filepath.Base(tmpPath), ".pmx-context-")
+	t.Cleanup(func() { _ = os.Remove(tmpPath) })
+	require.FileExists(t, tmpPath, "the temp file must be preserved for recovery")
+	kept, readErr := os.ReadFile(tmpPath) //nolint:gosec // G304: path comes from the command's own error text
+	require.NoError(t, readErr)
+	require.Contains(t, string(kept), "jump: x;id")
+
+	loaded, err2 := config.Load(p)
+	require.NoError(t, err2)
+	require.Equal(t, "", loaded.Contexts["lab"].SSH.Jump, "a rejected edit must not persist")
 }
 
 // ---- edit --product tests -----------------------------------------------------

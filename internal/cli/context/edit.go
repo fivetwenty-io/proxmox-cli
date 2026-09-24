@@ -10,6 +10,7 @@ import (
 	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -174,6 +175,20 @@ func newEditCmd() *cobra.Command {
 					"edited context fails validation (%s); temp file preserved at %s",
 					strings.Join(strictErrs, "; "), tmpPath,
 				)
+			}
+			// StrictValidateContext does not check ssh.jump's syntax
+			// (internal/config cannot import internal/apiclient), so an edited
+			// chain that no ssh-based command could use is checked here,
+			// preserving the temp file exactly as an invalid YAML or a failed
+			// strict validation does above.
+			if updated.SSH.Jump != "" {
+				if err := apiclient.ValidateJumpChain(updated.SSH.Jump); err != nil {
+					removeOnExit = false
+					return fmt.Errorf(
+						"ssh.jump %q is not valid: %v; temp file preserved at %s",
+						updated.SSH.Jump, err, tmpPath,
+					)
+				}
 			}
 
 			// Merge back: name stays unchanged (edit modifies the body, not the key).

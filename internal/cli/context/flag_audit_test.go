@@ -19,7 +19,7 @@ import (
 // struct field (which in turn maps 1:1 to a yaml key via that field's yaml
 // tag), rather than checking a request body/query param.
 //
-// Flag inventory covered here: add (13 persisted-field flags + --select/
+// Flag inventory covered here: add (18 persisted-field flags + --select/
 // --force behavior flags), copy (--force, --select), rm (--force, --yes/-y),
 // validate (--all), ls (--product, a display filter — it narrows which
 // contexts are printed and never persists to config.yml, unlike add's and
@@ -50,9 +50,14 @@ func TestContextAudit_Add_AllFlags(t *testing.T) {
 		"--secret", "${CI_SECRET}",
 		"--insecure",
 		"--fingerprint", "AA:BB:CC:DD",
+		"--ca-cert", "/etc/ssl/audited-ca.pem",
 		"--tofu",
 		"--default-node", "node3",
 		"--default-output", "yaml",
+		"--ssh-user", "admin",
+		"--ssh-port", "2222",
+		"--ssh-identity", "/home/admin/.ssh/id_ed25519",
+		"--ssh-jump", "bastion.example.com",
 	)
 	require.NoError(t, err)
 
@@ -70,9 +75,14 @@ func TestContextAudit_Add_AllFlags(t *testing.T) {
 	require.Equal(t, "${CI_SECRET}", ctx.Auth.Secret)
 	require.True(t, ctx.TLS.Insecure)
 	require.Equal(t, "AA:BB:CC:DD", ctx.TLS.Fingerprint)
+	require.Equal(t, "/etc/ssl/audited-ca.pem", ctx.TLS.CACert)
 	require.True(t, ctx.TLS.Tofu, "--tofu must persist as tls.tofu: true")
 	require.Equal(t, "node3", ctx.DefaultNode)
 	require.Equal(t, "yaml", ctx.DefaultOutput)
+	require.Equal(t, "admin", ctx.SSH.User)
+	require.Equal(t, 2222, ctx.SSH.Port)
+	require.Equal(t, "/home/admin/.ssh/id_ed25519", ctx.SSH.Identity)
+	require.Equal(t, "bastion.example.com", ctx.SSH.Jump)
 }
 
 // TestContextAudit_Add_OmitsUnsetFlags verifies unset optional flags persist
@@ -98,6 +108,7 @@ func TestContextAudit_Add_OmitsUnsetFlags(t *testing.T) {
 
 	require.Equal(t, "root@pam", ctx.Auth.Username, "--username must persist as given")
 	require.Equal(t, "", ctx.TLS.Fingerprint, "unset --fingerprint must persist empty")
+	require.Equal(t, "", ctx.TLS.CACert, "unset --ca-cert must persist empty")
 	require.False(t, ctx.TLS.Insecure, "unset --insecure must default false")
 	require.False(t, ctx.TLS.Tofu, "unset --tofu must default false")
 	require.Equal(t, "", ctx.DefaultNode, "unset --default-node must persist empty")
@@ -105,6 +116,10 @@ func TestContextAudit_Add_OmitsUnsetFlags(t *testing.T) {
 	require.Equal(t, 8006, ctx.Port, "unset --port must default to 8006")
 	require.Equal(t, "https", ctx.Protocol, "unset --protocol must default to https")
 	require.Equal(t, "pam", ctx.Realm, "unset --realm must default to pam")
+	require.Equal(t, "", ctx.SSH.User, "unset --ssh-user must persist empty")
+	require.Equal(t, 0, ctx.SSH.Port, "unset --ssh-port must persist zero")
+	require.Equal(t, "", ctx.SSH.Identity, "unset --ssh-identity must persist empty")
+	require.Equal(t, "", ctx.SSH.Jump, "unset --ssh-jump must persist empty")
 }
 
 // TestContextAudit_Add_SelectFlag asserts --select promotes the new context

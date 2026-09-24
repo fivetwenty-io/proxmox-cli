@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -29,6 +30,10 @@ type updateFlags struct {
 	defaultNode   string
 	defaultOutput string
 	product       string
+	sshUser       string
+	sshPort       int
+	sshIdentity   string
+	sshJump       string
 }
 
 // updateFieldFlags lists every flag on `context update` that maps to a
@@ -37,7 +42,7 @@ type updateFlags struct {
 var updateFieldFlags = []string{
 	"host", "port", "protocol", "realm", "auth-type", "username", "token-id",
 	"secret", "insecure", "fingerprint", "ca-cert", "tofu", "default-node",
-	"default-output", "product",
+	"default-output", "product", "ssh-user", "ssh-port", "ssh-identity", "ssh-jump",
 }
 
 // newUpdateCmd builds `pmx context update [<name>]`: change individual fields
@@ -189,9 +194,33 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 				updated.TLS.Tofu = f.tofu
 			}
 
+			if flags.Changed("ssh-user") {
+				updated.SSH.User = f.sshUser
+			}
+			if flags.Changed("ssh-port") {
+				updated.SSH.Port = f.sshPort
+			}
+			if flags.Changed("ssh-identity") {
+				updated.SSH.Identity = f.sshIdentity
+			}
+			if flags.Changed("ssh-jump") {
+				updated.SSH.Jump = f.sshJump
+			}
+
 			// Same write-time rule set as add/edit/validate.
 			config.ApplyDefaults(&updated)
-			if strictErrs := config.StrictValidateContext(&updated); len(strictErrs) > 0 {
+			strictErrs := config.StrictValidateContext(&updated)
+			// StrictValidateContext checks ssh.port's range but not ssh.jump's
+			// syntax (internal/config cannot import internal/apiclient), so a
+			// changed --ssh-jump is checked here and its message joins the
+			// strict ones, so one run reports every problem under one prefix.
+			if flags.Changed("ssh-jump") && updated.SSH.Jump != "" {
+				if err := apiclient.ValidateJumpChain(updated.SSH.Jump); err != nil {
+					strictErrs = append(strictErrs,
+						fmt.Sprintf("ssh.jump %q is not valid: %v", updated.SSH.Jump, err))
+				}
+			}
+			if len(strictErrs) > 0 {
 				return fmt.Errorf("context %q fails validation after update: %s",
 					name, strings.Join(strictErrs, "; "))
 			}
@@ -222,6 +251,11 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 	cmd.Flags().StringVar(&f.caCert, "ca-cert", "", "path to a CA certificate (PEM) used to verify the server")
 	cmd.Flags().BoolVar(&f.tofu, "tofu", false,
 		"opt in to Trust-On-First-Use certificate pinning (TTY prompt on unknown cert; ignored with --insecure)")
+	cmd.Flags().StringVar(&f.sshUser, "ssh-user", "", "default SSH login user for pmx ssh/rsync")
+	cmd.Flags().IntVar(&f.sshPort, "ssh-port", 0, "default SSH port for pmx ssh/rsync")
+	cmd.Flags().StringVar(&f.sshIdentity, "ssh-identity", "", "path to the SSH private key used by pmx ssh/rsync")
+	cmd.Flags().StringVar(&f.sshJump, "ssh-jump", "",
+		"jump host for ssh, rsync, and the API connection, as [user@]host[:port] (comma-separated for a chain)")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "",
 		"default output format for this context: table|ascii|plain|json|yaml")

@@ -3,9 +3,11 @@ package context
 import (
 	"bytes"
 	"context"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -57,6 +59,10 @@ func TestContextUpdate_AllFieldFlags(t *testing.T) {
 		"--default-node", "node3",
 		"--default-output", "yaml",
 		"--product", "pbs",
+		"--ssh-user", "admin",
+		"--ssh-port", "2222",
+		"--ssh-identity", "/home/admin/.ssh/id_ed25519",
+		"--ssh-jump", "bastion.example.com",
 	)
 	require.NoError(t, err)
 
@@ -76,6 +82,106 @@ func TestContextUpdate_AllFieldFlags(t *testing.T) {
 	require.Equal(t, "node3", ctx.DefaultNode)
 	require.Equal(t, "yaml", ctx.DefaultOutput)
 	require.Equal(t, config.ProductPBS, ctx.Product)
+	require.Equal(t, "admin", ctx.SSH.User)
+	require.Equal(t, 2222, ctx.SSH.Port)
+	require.Equal(t, "/home/admin/.ssh/id_ed25519", ctx.SSH.Identity)
+	require.Equal(t, "bastion.example.com", ctx.SSH.Jump)
+}
+
+// TestContextUpdate_NewConnectionFields verifies each new ssh.* flag
+// persists independently, with every other field preserved, mirroring
+// TestContextUpdate_SingleField's one-flag-at-a-time style.
+func TestContextUpdate_NewConnectionFields(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "update", "lab", "--ssh-user", "admin")
+	require.NoError(t, err)
+	require.Equal(t, "admin", reloadCfg(t, path).Contexts["lab"].SSH.User)
+	require.Equal(t, "10.0.0.1", reloadCfg(t, path).Contexts["lab"].Host, "unrelated fields must be preserved")
+
+	_, err = run(t, deps, "", "update", "lab", "--ssh-port", "2222")
+	require.NoError(t, err)
+	require.Equal(t, 2222, reloadCfg(t, path).Contexts["lab"].SSH.Port)
+	require.Equal(t, "admin", reloadCfg(t, path).Contexts["lab"].SSH.User, "an earlier field must survive a later update")
+
+	_, err = run(t, deps, "", "update", "lab", "--ssh-identity", "/home/admin/.ssh/id_ed25519")
+	require.NoError(t, err)
+	require.Equal(t, "/home/admin/.ssh/id_ed25519", reloadCfg(t, path).Contexts["lab"].SSH.Identity)
+
+	_, err = run(t, deps, "", "update", "lab", "--ssh-jump", "bastion.example.com")
+	require.NoError(t, err)
+
+	final := reloadCfg(t, path).Contexts["lab"]
+	require.Equal(t, "admin", final.SSH.User)
+	require.Equal(t, 2222, final.SSH.Port)
+	require.Equal(t, "/home/admin/.ssh/id_ed25519", final.SSH.Identity)
+	require.Equal(t, "bastion.example.com", final.SSH.Jump)
+}
+
+// TestContextUpdate_NewFlagsCountAsFields verifies the new ssh-* flags count
+// toward updateFieldFlags, so a bare `--ssh-jump` alone does not trip the
+// "no fields to update" guard.
+func TestContextUpdate_NewFlagsCountAsFields(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "update", "lab", "--ssh-jump", "h")
+	require.NoError(t, err, "--ssh-jump alone must count as a field to update")
+	require.Equal(t, "h", reloadCfg(t, path).Contexts["lab"].SSH.Jump)
+}
+
+// TestContextUpdate_RejectsInvalidSSHJump verifies a chain no ssh-based
+// command could use is refused, with the file left unchanged.
+func TestContextUpdate_RejectsInvalidSSHJump(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	before, err := os.ReadFile(path) //nolint:gosec // G304: path is the test's own scratch config
+	require.NoError(t, err)
+
+	_, err = run(t, deps, "", "update", "lab", "--ssh-jump", "x;id")
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		`ssh.jump "x;id" is not valid: hop 1: host "x;id" is not a hostname, IPv4 address, or bracketed IPv6 literal`)
+
+	after, err := os.ReadFile(path) //nolint:gosec // G304: path is the test's own scratch config
+	require.NoError(t, err)
+	require.Equal(t, string(before), string(after), "a rejected --ssh-jump must leave the file unchanged")
+}
+
+// TestContextUpdate_InvalidSSHJumpJoinsStrictErrors verifies that when both
+// the strict rules and the ssh.jump syntax check fail, one run reports all of
+// them under the same "fails validation after update" prefix.
+func TestContextUpdate_InvalidSSHJumpJoinsStrictErrors(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "update", "lab", "--ssh-port", "99999", "--ssh-jump", ",")
+	require.Error(t, err)
+	require.Equal(t,
+		`context "lab" fails validation after update: ssh.port 99999 is out of range [1, 65535]; `+
+			`ssh.jump "," is not valid: hop 1 is empty`,
+		err.Error())
+}
+
+// TestContextSSHFieldFlags_HelpOmitsAPIJump pins that the three --ssh-* field
+// flags on add and update describe ssh and rsync only: none of them affects
+// the API connection's jump hop, so their help must not suggest it does.
+func TestContextSSHFieldFlags_HelpOmitsAPIJump(t *testing.T) {
+	for _, cmd := range []*cobra.Command{newAddCmd(), newUpdateCmd()} {
+		for _, name := range []string{"ssh-user", "ssh-port", "ssh-identity"} {
+			fl := cmd.Flags().Lookup(name)
+			require.NotNil(t, fl, "%s must define --%s", cmd.Name(), name)
+			usage := strings.ToLower(fl.Usage)
+			require.NotContains(t, usage, "api", "%s --%s help must not mention the API", cmd.Name(), name)
+			require.NotContains(t, usage, "jump", "%s --%s help must not mention a jump hop", cmd.Name(), name)
+		}
+	}
 }
 
 // TestContextUpdate_FullTokenIDAlsoSetsUsername verifies a pasted full

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -23,10 +24,15 @@ type addFlags struct {
 	secret        string
 	insecure      bool
 	fingerprint   string
+	caCert        string
 	tofu          bool
 	defaultNode   string
 	defaultOutput string
 	product       string
+	sshUser       string
+	sshPort       int
+	sshIdentity   string
+	sshJump       string
 	selectCtx     bool
 	force         bool
 }
@@ -136,6 +142,18 @@ unless --port is also given, its default API port.`,
 				return fmt.Errorf("--protocol must be \"https\" or \"http\", got %q", f.protocol)
 			}
 
+			// Validate ssh.port and ssh.jump before writing anything, so a bad
+			// --ssh-port or --ssh-jump never lands in a context that every
+			// ssh/rsync command would then reject.
+			if f.sshPort != 0 && (f.sshPort < 1 || f.sshPort > 65535) {
+				return fmt.Errorf("ssh.port %d is out of range [1, 65535]", f.sshPort)
+			}
+			if f.sshJump != "" {
+				if err := apiclient.ValidateJumpChain(f.sshJump); err != nil {
+					return fmt.Errorf("ssh.jump %q is not valid: %v", f.sshJump, err)
+				}
+			}
+
 			deps := cli.GetDeps(cmd)
 
 			cfg := deps.Cfg
@@ -179,7 +197,14 @@ unless --port is also given, its default API port.`,
 				TLS: config.TLSBlock{
 					Insecure:    f.insecure,
 					Fingerprint: f.fingerprint,
+					CACert:      f.caCert,
 					Tofu:        f.tofu,
+				},
+				SSH: config.SSHBlock{
+					User:     f.sshUser,
+					Port:     f.sshPort,
+					Identity: f.sshIdentity,
+					Jump:     f.sshJump,
 				},
 			}
 
@@ -223,8 +248,14 @@ unless --port is also given, its default API port.`,
 	cmd.Flags().StringVar(&f.secret, "secret", "", "token value or password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
 	cmd.Flags().BoolVar(&f.insecure, "insecure", false, "disable TLS certificate verification")
 	cmd.Flags().StringVar(&f.fingerprint, "fingerprint", "", "expected TLS certificate fingerprint (hex SHA-256)")
+	cmd.Flags().StringVar(&f.caCert, "ca-cert", "", "path to a CA certificate (PEM) used to verify the server")
 	cmd.Flags().BoolVar(&f.tofu, "tofu", false,
 		"opt in to Trust-On-First-Use certificate pinning (TTY prompt on unknown cert; ignored with --insecure)")
+	cmd.Flags().StringVar(&f.sshUser, "ssh-user", "", "default SSH login user for pmx ssh/rsync")
+	cmd.Flags().IntVar(&f.sshPort, "ssh-port", 0, "default SSH port for pmx ssh/rsync")
+	cmd.Flags().StringVar(&f.sshIdentity, "ssh-identity", "", "path to the SSH private key used by pmx ssh/rsync")
+	cmd.Flags().StringVar(&f.sshJump, "ssh-jump", "",
+		"jump host for ssh, rsync, and the API connection, as [user@]host[:port] (comma-separated for a chain)")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
 	cmd.Flags().StringVar(&f.product, "product", config.ProductPVE,
