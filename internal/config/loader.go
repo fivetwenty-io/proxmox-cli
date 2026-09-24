@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
@@ -288,7 +289,9 @@ var validProxySchemes = map[string]bool{
 // message rather than also reporting "proxy.password is set without
 // proxy.username", which requires proxy.url to be set to mean anything.
 // When proxy.url is set, the from-env conflict is checked first, then the
-// URL itself, then the password-without-username rule.
+// URL itself, meaning its parse, scheme, host, port range through
+// ProxyPortMessage, and embedded userinfo, then the
+// password-without-username rule.
 func ValidateProxyBlock(p *ProxyBlock) []string {
 	if p == nil {
 		return nil
@@ -324,6 +327,9 @@ func ValidateProxyBlock(p *ProxyBlock) []string {
 		if parsed.Hostname() == "" {
 			errs = append(errs, fmt.Sprintf("proxy.url %s must include a host", redactedURL))
 		}
+		if msg := ProxyPortMessage("proxy.url", redactedURL, parsed); msg != "" {
+			errs = append(errs, msg)
+		}
 		if parsed.User != nil {
 			errs = append(errs, fmt.Sprintf(
 				"proxy.url %s must not embed credentials; use proxy.username and proxy.password",
@@ -336,6 +342,27 @@ func ValidateProxyBlock(p *ProxyBlock) []string {
 	}
 
 	return errs
+}
+
+// ProxyPortMessage returns the message for a proxy URL whose explicit port
+// is outside 1 to 65535, and "" for a URL whose port is in range or absent.
+// url.Parse accepts any run of digits as a port, and a URL with no port
+// takes its scheme's default, so only an explicit port is checked. source
+// names where the URL came from, such as proxy.url or --api-proxy, and
+// shown is the URL as the message prints it, already passed through
+// redact.ProxyURL. It is the one rule every proxy URL check applies, so
+// `context validate` and the connection resolver cannot disagree on it.
+func ProxyPortMessage(source, shown string, u *url.URL) string {
+	raw := u.Port()
+	if raw == "" {
+		return ""
+	}
+
+	if port, err := strconv.Atoi(raw); err != nil || port < 1 || port > 65535 {
+		return fmt.Sprintf("%s %s must use a port from 1 to 65535", source, shown)
+	}
+
+	return ""
 }
 
 // maskProxyUserinfo renders a proxy URL that carries userinfo with the whole

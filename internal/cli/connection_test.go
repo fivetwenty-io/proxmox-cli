@@ -1952,6 +1952,31 @@ func TestConnection_SerialisedFields(t *testing.T) {
 	require.Equal(t, got, fromYAML)
 }
 
+// TestConnection_HandBuiltJumpIsMasked pins that every rendering of a
+// Connection masks a misused jump password, even for a Connection built by
+// hand rather than resolved, and that a valid chain still prints as written.
+func TestConnection_HandBuiltJumpIsMasked(t *testing.T) {
+	conn := cli.Connection{
+		ContextName: "lab", Host: "pve1", Port: 8006, Protocol: "https",
+		Jump: apiclient.JumpSpec{Chain: "ssh://admin:Zq9alpha,Xk7bravo@bastion"},
+	}
+
+	renderings := strings.Join([]string{
+		conn.String(), conn.GoString(), conn.Via(), logged(t, conn),
+		fmt.Sprintf("%v %+v %#v %s", conn, conn, conn, conn),
+		serialised(t, json.Marshal, conn), serialised(t, yaml.Marshal, conn),
+	}, "\n")
+
+	require.Contains(t, renderings, "jump ssh://admin:<redacted>@bastion")
+
+	for _, run := range []string{"Zq9alpha", "Xk7bravo"} {
+		require.NotContains(t, renderings, run)
+	}
+
+	conn.Jump.Chain = "edge:2222,admin@inner"
+	require.Equal(t, "jump edge:2222,admin@inner", conn.Via())
+}
+
 // logged renders conn through slog's JSON handler.
 func logged(t *testing.T, conn cli.Connection) string {
 	t.Helper()

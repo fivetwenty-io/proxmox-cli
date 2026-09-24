@@ -299,9 +299,9 @@ func ResolveConnection(name string, ctx *config.Context, ov ConnectionOverrides)
 //
 // Both protocols are compared in lower case. Only the strict validator
 // restricts a stored protocol to lower case, and the kit lowercases the
-// scheme when it builds its URL, so a hand-edited "HTTPS" is really https
-// and must be protected from a downgrade, arm the first-byte timer, and
-// select $HTTPS_PROXY exactly as "https" does.
+// scheme when it builds its URL, so the kit treats a hand-edited "HTTPS" as
+// https, and the resolver must protect it from a downgrade, arm the
+// first-byte timer, and select $HTTPS_PROXY exactly as "https" does.
 func resolveEndpoint(conn *Connection, name string, stored *config.Context, ov ConnectionOverrides) error {
 	storedProtocol := strings.ToLower(stored.Protocol)
 	ovProtocol := strings.ToLower(ov.Protocol)
@@ -459,8 +459,8 @@ func resolveTimeout(override time.Duration, source string, stored, def time.Dura
 // value must pass apiclient.ValidateJumpChain. Only a blank ssh.jump means
 // no bastion: an override that holds nothing but whitespace is not the
 // "none" sentinel, so it is validated and fails rather than silently
-// dropping the context's bastion. A rejected chain is quoted with any
-// user:password hop masked.
+// dropping the context's bastion. A rejected chain is quoted through
+// apiclient.RedactJumpChain.
 func resolveJump(conn *Connection, stored *config.Context, ov ConnectionOverrides) error {
 	chain, source := stored.SSH.Jump, sourceSSHJump
 	if ov.Jump != "" {
@@ -472,8 +472,8 @@ func resolveJump(conn *Connection, stored *config.Context, ov ConnectionOverride
 		return nil
 	}
 
-	if err := apiclient.ValidateJumpChain(chain); err != nil {
-		return fmt.Errorf("%s %q is not valid: %v", source, apiclient.RedactJumpChain(chain), err)
+	if err := apiclient.CheckJumpChain(source, chain); err != nil {
+		return err
 	}
 
 	conn.Jump = apiclient.JumpSpec{
@@ -514,17 +514,11 @@ func resolveProxy(conn *Connection, stored *config.Context, ov ConnectionOverrid
 		conn.ProxySource = "--" + flagAPIProxyFromEnv
 
 	case stored.Proxy.URL != "":
-		// ValidateProxyBlock has already accepted this URL, so it parses and
-		// carries no userinfo, but it does not check the port.
-		shown := redact.ProxyURL(stored.Proxy.URL)
-
+		// ValidateProxyBlock has already accepted this URL, so it parses,
+		// carries no userinfo, and has a port in range.
 		u, err := url.Parse(stored.Proxy.URL)
 		if err != nil {
-			return fmt.Errorf("%s %s is not a valid URL", sourceProxyURL, shown)
-		}
-
-		if err := checkProxyPort(sourceProxyURL, shown, u); err != nil {
-			return err
+			return fmt.Errorf("%s %s is not a valid URL", sourceProxyURL, redact.ProxyURL(stored.Proxy.URL))
 		}
 
 		conn.Proxy = apiclient.ProxySpec{
@@ -557,18 +551,13 @@ func resolveProxy(conn *Connection, stored *config.Context, ov ConnectionOverrid
 	return nil
 }
 
-// checkProxyPort reports a proxy URL whose explicit port is outside 1 to
-// 65535. url.Parse accepts any run of digits, and a URL with no port takes
-// its scheme's default, so only an explicit port is checked. shown is the
-// URL already passed through redact.ProxyURL.
+// checkProxyPort reports an override proxy URL whose explicit port is
+// outside 1 to 65535, by config.ProxyPortMessage, the rule the stored
+// proxy.url is held to. shown is the URL already passed through
+// redact.ProxyURL.
 func checkProxyPort(source, shown string, u *url.URL) error {
-	raw := u.Port()
-	if raw == "" {
-		return nil
-	}
-
-	if port, err := strconv.Atoi(raw); err != nil || port < 1 || port > 65535 {
-		return fmt.Errorf("%s %s must use a port from 1 to 65535", source, shown)
+	if msg := config.ProxyPortMessage(source, shown, u); msg != "" {
+		return errors.New(msg)
 	}
 
 	return nil
@@ -867,6 +856,13 @@ func (c Connection) hasJump() bool {
 	return strings.TrimSpace(c.Jump.Chain) != ""
 }
 
+// jumpHops renders the jump chain for Via and route. A resolved chain has
+// passed the validator and prints as written, and apiclient.RedactJumpChain
+// masks a hand-built Connection whose chain never did.
+func (c Connection) jumpHops() string {
+	return strings.TrimSpace(apiclient.RedactJumpChain(c.Jump.Chain))
+}
+
 // effectiveTLSHandshake is the transport's handshake bound. Through a jump
 // the dial returns as soon as ssh starts, so the bastion's connect, key
 // exchange, and authentication all run inside the handshake, and the bound
@@ -962,7 +958,7 @@ func (c Connection) Via() string {
 	var parts []string
 
 	if c.hasJump() {
-		parts = append(parts, "jump "+strings.TrimSpace(c.Jump.Chain))
+		parts = append(parts, "jump "+c.jumpHops())
 	}
 
 	switch {
@@ -1015,7 +1011,7 @@ func (c Connection) route() string {
 	var parts []string
 
 	if c.hasJump() {
-		parts = append(parts, "jump "+strings.TrimSpace(c.Jump.Chain))
+		parts = append(parts, "jump "+c.jumpHops())
 	}
 
 	switch {

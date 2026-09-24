@@ -91,11 +91,11 @@ type JumpSpec struct {
 
 // JumpError is a bastion failure with the fields a caller needs to explain
 // it. Error() has a fixed format, "ssh jump <Chain> -> <Addr>: <detail>",
-// where the detail is what Detail returns and the chain has any
-// user:password hop masked by RedactJumpChain. Stderr holds the most recent
-// standard-error line that contains "open failed:", then "; ", then ssh's
-// last standard-error line, and it holds the last line alone when no such
-// line exists or when that line is itself the last one. Each line has
+// where the detail is what Detail returns and the chain is masked by
+// RedactJumpChain. Stderr holds the most recent standard-error line that
+// contains "open failed:", then "; ", then ssh's last standard-error line,
+// and it holds the last line alone when no such line exists or when that
+// line is itself the last one. Each line has
 // already dropped its trailing carriage return, because ssh ends every log
 // line with "\r\n".
 type JumpError struct {
@@ -505,61 +505,155 @@ func ValidateJumpChain(chain string) error {
 	return err
 }
 
-// jumpRedacted replaces the password part of a hop's user.
-const jumpRedacted = "<redacted>"
-
-// RedactJumpChain returns chain with the password part of every
-// user:password hop replaced by "<redacted>", for quoting a chain in an
-// error. ssh hops carry no password syntax, so only a misused hop has one,
-// and it is masked from its first ":" up to its last "@", which is where
-// both the plain and the ssh:// form end their userinfo whatever the
-// password holds. A hop with no "@", or whose user holds no ":", is returned
-// unchanged.
-func RedactJumpChain(chain string) string {
-	hops := strings.Split(chain, ",")
-
-	for i, hop := range hops {
-		prefix, rest := "", hop
-		if after, isURI := strings.CutPrefix(strings.TrimLeft(hop, " \t"), "ssh://"); isURI {
-			prefix, rest = hop[:len(hop)-len(after)], after
-		}
-
-		at := strings.LastIndex(rest, "@")
-		if at < 0 {
-			continue
-		}
-
-		hops[i] = prefix + redactJumpUser(rest[:at]) + rest[at:]
+// CheckJumpChain runs ValidateJumpChain and, when the chain is rejected,
+// returns the error every caller prints: `<name> "<chain>" is not valid:
+// <reason>`, with the chain quoted through RedactJumpChain. name labels
+// where the chain came from, such as ssh.jump or --api-jump.
+func CheckJumpChain(name, chain string) error {
+	if err := ValidateJumpChain(chain); err != nil {
+		return fmt.Errorf("%s %q is not valid: %v", name, RedactJumpChain(chain), err)
 	}
 
-	return strings.Join(hops, ",")
+	return nil
 }
 
-// redactJumpUser masks everything after the first ":" of a hop's user.
-func redactJumpUser(user string) string {
-	if colon := strings.IndexByte(user, ':'); colon >= 0 {
-		return user[:colon+1] + jumpRedacted
+// jumpRedacted replaces the password part of a misused hop.
+const jumpRedacted = "<redacted>"
+
+// jumpEncodedColonRE matches a percent-encoded colon, including one encoded
+// more than once, such as "%253A", at the start of its input.
+var jumpEncodedColonRE = regexp.MustCompile(`^(?i)%(?:25)*3a`)
+
+// RedactJumpChain returns chain with the password of any misused
+// user:password hop replaced by "<redacted>", for quoting a chain in an
+// error.
+//
+// A chain that ValidateJumpChain accepts comes back unchanged. The user
+// allow-list admits no ":", so every colon in an accepted chain is a port
+// separator or part of an IPv6 literal, and ssh sees no password in it. An
+// operator who meant "u:22,x@h" as user u with password "22,x" has written
+// a chain ssh accepts as the two hops "u:22" and "x@h", which no rule can
+// tell from a real chain, so that chain is also returned as written.
+//
+// A rejected chain is masked by a deliberately wide rule, because a comma
+// inside a password splits it across hops before anything can tell a
+// password from a port. The mask starts after the first colon, or after the
+// first percent-encoded colon, that has an "@" somewhere after it in the
+// chain, and it runs to the last "@" in the chain. The colon of a hop's own
+// "ssh://" prefix does not count, but the parser reads "SSH://" as a plain
+// hop, so the colon in that one does. Everything between those two points
+// is masked, even when part of it is a port, a host, or a whole hop, so
+// that no reading of the chain can leave a password byte visible. A
+// rejected chain with no such colon, or with no "@", comes back unchanged.
+func RedactJumpChain(chain string) string {
+	if ValidateJumpChain(chain) == nil {
+		return chain
 	}
 
-	return user
+	return jumpPasswordSpan(chain).mask(0, chain)
+}
+
+// jumpSpan is the byte range [start, end) of a chain that RedactJumpChain
+// masks. It is set only when the chain has a password to mask, and it may
+// be empty, as for "u:@host", where the mask still marks the spot.
+type jumpSpan struct {
+	start, end int
+	set        bool
+}
+
+// jumpPasswordSpan finds the range RedactJumpChain masks in chain, by the
+// rule its comment states.
+func jumpPasswordSpan(chain string) jumpSpan {
+	last := strings.LastIndexByte(chain, '@')
+	if last < 0 {
+		return jumpSpan{}
+	}
+
+	schemeColon := -1
+
+	for i := range last {
+		if i == 0 || chain[i-1] == ',' {
+			body := i + len(chain[i:]) - len(strings.TrimLeft(chain[i:], " \t"))
+			schemeColon = -1
+
+			if strings.HasPrefix(chain[body:], "ssh://") {
+				schemeColon = body + len("ssh")
+			}
+		}
+
+		switch {
+		case chain[i] == ':' && i != schemeColon:
+			return jumpSpan{start: i + 1, end: last, set: true}
+		case chain[i] == '%':
+			if m := jumpEncodedColonRE.FindString(chain[i:]); m != "" {
+				return jumpSpan{start: i + len(m), end: last, set: true}
+			}
+		}
+	}
+
+	return jumpSpan{}
+}
+
+// mask returns s, which sits at byte offset off in the chain the span was
+// found in, with the part of it inside the span replaced by "<redacted>". A
+// value wholly inside the span comes back as "<redacted>" alone, and a
+// value the span misses comes back unchanged. An empty span marks a value
+// only when it falls within that value or at its end.
+func (m jumpSpan) mask(off int, s string) string {
+	if !m.set {
+		return s
+	}
+
+	lo, hi := m.start-off, m.end-off
+
+	if m.start == m.end {
+		if lo < 0 || lo > len(s) {
+			return s
+		}
+	} else if hi <= 0 || lo >= len(s) {
+		return s
+	}
+
+	lo, hi = max(lo, 0), min(hi, len(s))
+
+	return s[:lo] + jumpRedacted + s[hi:]
 }
 
 // parseJumpChain validates and normalises every hop of chain. Hops are
-// numbered from one in its messages.
+// numbered from one in its messages, and every value a message quotes is
+// masked by the same span RedactJumpChain would mask, so a reason never
+// holds a byte that the quoted chain hides.
 func parseJumpChain(chain string) ([]jumpHop, error) {
 	raw := strings.Split(chain, ",")
 	hops := make([]jumpHop, 0, len(raw))
+	span := jumpPasswordSpan(chain)
+	off := 0
 
 	for i, r := range raw {
-		h, err := parseJumpHop(i+1, r, i == len(raw)-1)
+		h, err := parseJumpHop(i+1, r, i == len(raw)-1, jumpQuoter{span: span, off: off})
 		if err != nil {
 			return nil, err
 		}
 
 		hops = append(hops, h)
+		off += len(r) + len(",")
 	}
 
 	return hops, nil
+}
+
+// jumpQuoter quotes a value from one hop for an error, masking the part of
+// it inside the chain's password span. off is the hop's byte offset in the
+// chain, and every value is passed with its own offset within the hop.
+type jumpQuoter struct {
+	span jumpSpan
+	off  int
+}
+
+// quote returns s, found at byte offset at within the hop, masked and
+// Go-quoted.
+func (q jumpQuoter) quote(at int, s string) string {
+	return strconv.Quote(q.span.mask(q.off+at, s))
 }
 
 // parseJumpHop validates one hop. A plain hop is split at its last @, as
@@ -567,7 +661,8 @@ func parseJumpChain(chain string) ([]jumpHop, error) {
 // parse_uri instead, splitting at its first @ and percent-decoding the user,
 // so the two forms accept exactly what OpenSSH's -J accepts. A bare IPv6
 // literal is accepted on the final plain hop only, where no port can follow.
-func parseJumpHop(n int, raw string, final bool) (jumpHop, error) {
+// q quotes every value a message names, at its offset within raw.
+func parseJumpHop(n int, raw string, final bool, q jumpQuoter) (jumpHop, error) {
 	hop := strings.Trim(raw, " \t")
 	if hop == "" {
 		return jumpHop{}, fmt.Errorf("hop %d is empty", n)
@@ -578,16 +673,20 @@ func parseJumpHop(n int, raw string, final bool) (jumpHop, error) {
 		hostport string
 	)
 
+	at := len(raw) - len(strings.TrimLeft(raw, " \t"))
+
 	if rest, isURI := strings.CutPrefix(hop, "ssh://"); isURI {
+		at += len("ssh://")
 		hostport = rest
 
 		if user, hp, found := strings.Cut(rest, "@"); found {
 			decoded, err := url.PathUnescape(user)
 			if err != nil || !jumpUserRE.MatchString(decoded) {
-				return jumpHop{}, fmt.Errorf("hop %d: user %q has a disallowed character", n, redactJumpUser(user))
+				return jumpHop{}, fmt.Errorf("hop %d: user %s has a disallowed character", n, q.quote(at, user))
 			}
 
 			h.user, hostport = decoded, hp
+			at += len(user) + len("@")
 		}
 
 		// OpenSSH's URI parser splits an unbracketed host at its first
@@ -596,17 +695,18 @@ func parseJumpHop(n int, raw string, final bool) (jumpHop, error) {
 	} else {
 		hostport = hop
 
-		if at := strings.LastIndex(hop, "@"); at >= 0 {
-			user := hop[:at]
+		if i := strings.LastIndex(hop, "@"); i >= 0 {
+			user := hop[:i]
 			if !jumpUserRE.MatchString(user) {
-				return jumpHop{}, fmt.Errorf("hop %d: user %q has a disallowed character", n, redactJumpUser(user))
+				return jumpHop{}, fmt.Errorf("hop %d: user %s has a disallowed character", n, q.quote(at, user))
 			}
 
-			h.user, hostport = user, hop[at+1:]
+			h.user, hostport = user, hop[i+1:]
+			at += i + len("@")
 		}
 	}
 
-	host, port, ipv6, err := splitJumpHostPort(n, hostport, final)
+	host, port, ipv6, err := splitJumpHostPort(n, hostport, final, q, at)
 	if err != nil {
 		return jumpHop{}, err
 	}
@@ -617,11 +717,16 @@ func parseJumpHop(n int, raw string, final bool) (jumpHop, error) {
 }
 
 // splitJumpHostPort splits host[:port], [ipv6][:port], or, when bareIPv6 is
-// true, a bare IPv6 literal, and validates both halves.
-func splitJumpHostPort(n int, hp string, bareIPv6 bool) (host, port string, ipv6 bool, err error) {
-	hostErr := fmt.Errorf("hop %d: host %q is not a hostname, IPv4 address, or bracketed IPv6 literal", n, hp)
+// true, a bare IPv6 literal, and validates both halves. hp sits at byte
+// offset at within the hop that q quotes for.
+func splitJumpHostPort(
+	n int, hp string, bareIPv6 bool, q jumpQuoter, at int,
+) (host, port string, ipv6 bool, err error) {
+	hostErr := fmt.Errorf("hop %d: host %s is not a hostname, IPv4 address, or bracketed IPv6 literal",
+		n, q.quote(at, hp))
 
 	hasPort := false
+	portAt := 0
 
 	switch {
 	case strings.HasPrefix(hp, "["):
@@ -635,7 +740,7 @@ func splitJumpHostPort(n int, hp string, bareIPv6 bool) (host, port string, ipv6
 		switch rest := hp[end+1:]; {
 		case rest == "":
 		case strings.HasPrefix(rest, ":"):
-			port, hasPort = rest[1:], true
+			port, hasPort, portAt = rest[1:], true, end+len("]:")
 		default:
 			return "", "", false, hostErr
 		}
@@ -649,19 +754,18 @@ func splitJumpHostPort(n int, hp string, bareIPv6 bool) (host, port string, ipv6
 
 	default:
 		host, port, hasPort = strings.Cut(hp, ":")
+		portAt = len(host) + len(":")
+
 		if !jumpHostRE.MatchString(host) {
 			return "", "", false, fmt.Errorf(
-				"hop %d: host %q is not a hostname, IPv4 address, or bracketed IPv6 literal", n, host)
+				"hop %d: host %s is not a hostname, IPv4 address, or bracketed IPv6 literal", n, q.quote(at, host))
 		}
 	}
 
 	if hasPort {
-		if !jumpPortRE.MatchString(port) {
-			return "", "", false, fmt.Errorf("hop %d: port %q is out of range [1, 65535]", n, port)
-		}
-
-		if p, _ := strconv.Atoi(port); p < 1 || p > 65535 {
-			return "", "", false, fmt.Errorf("hop %d: port %q is out of range [1, 65535]", n, port)
+		p, perr := strconv.Atoi(port)
+		if !jumpPortRE.MatchString(port) || perr != nil || p < 1 || p > 65535 {
+			return "", "", false, fmt.Errorf("hop %d: port %s is out of range [1, 65535]", n, q.quote(at+portAt, port))
 		}
 	}
 

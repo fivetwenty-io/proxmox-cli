@@ -1419,22 +1419,35 @@ func TestJumpError_QuotesARejectedChain(t *testing.T) {
 }
 
 // TestRedactJumpChain pins the masking of a misused user:password hop in
-// both hop forms, whatever the password holds, and that every other hop
-// comes back unchanged.
+// both hop forms, and that a chain the validator accepts, or one with no
+// password, comes back unchanged.
 func TestRedactJumpChain(t *testing.T) {
 	cases := map[string]string{
-		"u:s3cret@bastion":             "u:<redacted>@bastion",
-		"ssh://u:s3cret@bastion:2222":  "ssh://u:<redacted>@bastion:2222",
-		"u:s3@cret@bastion":            "u:<redacted>@bastion",
-		"ssh://u:s3@cret@bastion":      "ssh://u:<redacted>@bastion",
-		"ok@edge, u:pw@inner":          "ok@edge, u:<redacted>@inner",
-		" ssh://u:pw@inner":            " ssh://u:<redacted>@inner",
-		"bastion":                      "bastion",
-		"alice@corp.example@bastion":   "alice@corp.example@bastion",
-		"root@[2001:db8::1]:2222":      "root@[2001:db8::1]:2222",
-		"bastion:2222,2001:db8::1":     "bastion:2222,2001:db8::1",
-		"ssh://alice%40corp@bastion:1": "ssh://alice%40corp@bastion:1",
-		"":                             "",
+		"u:s3cret@bastion":              "u:<redacted>@bastion",
+		"ssh://u:s3cret@bastion:2222":   "ssh://u:<redacted>@bastion:2222",
+		"u:s3@cret@bastion":             "u:<redacted>@bastion",
+		"ssh://u:s3@cret@bastion":       "ssh://u:<redacted>@bastion",
+		"ok@edge, u:pw@inner":           "ok@edge, u:<redacted>@inner",
+		" ssh://u:pw@inner":             " ssh://u:<redacted>@inner",
+		"SSH://u:pw@inner":              "SSH:<redacted>@inner",
+		"u:@bastion":                    "u:<redacted>@bastion",
+		"admin:hunter,2@bastion":        "admin:<redacted>@bastion",
+		"ssh://admin:hunter,2@bastion":  "ssh://admin:<redacted>@bastion",
+		"bastion,ssh://u:se,cret@h":     "bastion,ssh://u:<redacted>@h",
+		"ssh://u%3Asecret@h":            "ssh://u%3A<redacted>@h",
+		"ssh://u%3asecret@h":            "ssh://u%3a<redacted>@h",
+		"ssh://u%253Asecret@h":          "ssh://u%253A<redacted>@h",
+		"ssh://u:pw@h/x@y":              "ssh://u:<redacted>@y",
+		"edge:22,admin:pw@inner":        "edge:<redacted>@inner",
+		"admin@corp:pw,x@bastion":       "admin@corp:<redacted>@bastion",
+		"bastion":                       "bastion",
+		"alice@corp.example@bastion":    "alice@corp.example@bastion",
+		"root@[2001:db8::1]:2222":       "root@[2001:db8::1]:2222",
+		"bastion:2222,2001:db8::1":      "bastion:2222,2001:db8::1",
+		"bastion:2222,admin@inner:2222": "bastion:2222,admin@inner:2222",
+		"ssh://alice%40corp@bastion:1":  "ssh://alice%40corp@bastion:1",
+		"x;id,bastion:22":               "x;id,bastion:22",
+		"":                              "",
 	}
 
 	for chain, want := range cases {
@@ -1442,21 +1455,82 @@ func TestRedactJumpChain(t *testing.T) {
 	}
 }
 
-// TestJumpChainErrors_NeverEchoAPassword proves neither the validator's
-// reason nor a dial's JumpError quotes the password of a misused
-// user:password hop.
+// misusedJumpChains are chains that carry a password ssh has no syntax for,
+// each mapped to the distinctive runs of its password. The shapes cover a
+// comma that splits the password across hops, a percent-encoded colon, an
+// "@" inside the password, a password that begins in a hop that also parses
+// as host:port, and a directory login in front of the colon.
+var misusedJumpChains = map[string][]string{
+	"ssh://admin:Zq9alpha@bastion":                   {"Zq9alpha"},
+	"admin:Zq9alpha,Xk7bravo@bastion":                {"Zq9alpha", "Xk7bravo"},
+	"ssh://admin:Zq9alpha,Xk7bravo@bastion":          {"Zq9alpha", "Xk7bravo"},
+	"bastion,ssh://u:Zq9alpha,Xk7bravo,Wm4charlie@h": {"Zq9alpha", "Xk7bravo", "Wm4charlie"},
+	"ssh://u%3AZq9alpha@h":                           {"Zq9alpha"},
+	"ssh://u%3aZq9alpha,Xk7bravo@h":                  {"Zq9alpha", "Xk7bravo"},
+	"ssh://u%253AZq9alpha@h":                         {"Zq9alpha"},
+	"u:Zq9alpha%3AXk7bravo@h":                        {"Zq9alpha", "Xk7bravo"},
+	"u:Zq9alpha@Xk7bravo@bastion":                    {"Zq9alpha", "Xk7bravo"},
+	"ssh://u:Zq9alpha@Xk7bravo,Wm4charlie@bastion":   {"Zq9alpha", "Xk7bravo", "Wm4charlie"},
+	"u:4242,Xk7b!Wm4c@h":                             {"4242", "Xk7b", "Wm4c"},
+	"admin@Zq9alpha:Xk7bravo@bastion":                {"Xk7bravo"},
+	"edge:22,admin:Zq9alpha,Xk7bravo@inner":          {"Zq9alpha", "Xk7bravo"},
+	"u:Zq9alpha,@h":                                  {"Zq9alpha"},
+	"u:Zq9alpha,,Xk7bravo@h":                         {"Zq9alpha", "Xk7bravo"},
+	"u:Zq9:alpha,Xk7bravo@h":                         {"Zq9", "alpha", "Xk7bravo"},
+	"SSH://u:Zq9alpha,Xk7bravo@h":                    {"Zq9alpha", "Xk7bravo"},
+	"ok@edge, u:Zq9alpha\nXk7bravo@inner":            {"Zq9alpha", "Xk7bravo"},
+}
+
+// TestJumpChainErrors_NeverEchoAPassword proves that no run of a misused
+// hop's password reaches the validator's reason, RedactJumpChain, or a
+// dial's JumpError, whatever the password holds.
 func TestJumpChainErrors_NeverEchoAPassword(t *testing.T) {
+	for chain, runs := range misusedJumpChains {
+		verr := ValidateJumpChain(chain)
+		require.Error(t, verr, chain)
+
+		_, derr := JumpDialContext(JumpSpec{Chain: chain, ConnectTimeout: time.Second})(
+			context.Background(), "tcp", testJumpAddr)
+		je := requireTerminal(t, derr)
+
+		for _, text := range []string{verr.Error(), RedactJumpChain(chain), je.Error()} {
+			for _, run := range runs {
+				assert.NotContains(t, text, run, "%q leaked through %q", chain, text)
+			}
+		}
+	}
+
 	for _, chain := range []string{"u:s3cret@bastion", "ssh://u:s3cret@bastion", "edge,u:s3@cret@bastion"} {
 		err := ValidateJumpChain(chain)
 		require.Error(t, err, chain)
-		assert.NotContains(t, err.Error(), "s3", chain)
 		assert.Contains(t, err.Error(), `user "u:<redacted>"`, chain)
 
 		_, err = JumpDialContext(JumpSpec{Chain: chain, ConnectTimeout: time.Second})(
 			context.Background(), "tcp", testJumpAddr)
 
 		je := requireTerminal(t, err)
-		assert.NotContains(t, je.Error(), "s3", chain)
 		assert.Contains(t, je.Error(), "u:<redacted>@bastion -> "+testJumpAddr, chain)
+	}
+}
+
+// TestValidateJumpChain_MasksQuotedValues pins the reasons for hop shapes
+// whose quoted value would otherwise hold password bytes: the value is
+// quoted with the password part masked, and a value wholly inside the
+// password quotes as "<redacted>".
+func TestValidateJumpChain_MasksQuotedValues(t *testing.T) {
+	cases := map[string]string{
+		"admin:hunter,2@bastion":    `hop 1: port "<redacted>" is out of range [1, 65535]`,
+		"bastion,ssh://u:se,cret@h": `hop 2: port "<redacted>" is out of range [1, 65535]`,
+		"ssh://u%3Asecret@h":        `hop 1: user "u%3A<redacted>" has a disallowed character`,
+		"u:4242,Xk7b!Wm4c@h":        `hop 2: user "<redacted>" has a disallowed character`,
+		"admin@corp:pw@bastion":     `hop 1: user "admin@corp:<redacted>" has a disallowed character`,
+		"u:a:b,c@h":                 `hop 1: host "u:<redacted>" is not a hostname, IPv4 address, or bracketed IPv6 literal`,
+		"edge:22,x!y@h":             `hop 2: user "<redacted>" has a disallowed character`,
+		"bastion:0":                 `hop 1: port "0" is out of range [1, 65535]`,
+		"x;id,bastion:22,admin@b":   `hop 1: host "x;id" is not a hostname, IPv4 address, or bracketed IPv6 literal`,
+	}
+
+	for chain, want := range cases {
+		require.EqualError(t, ValidateJumpChain(chain), want, chain)
 	}
 }

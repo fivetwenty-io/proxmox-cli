@@ -548,6 +548,36 @@ func TestStrictValidateContext_ProxyURL(t *testing.T) {
 	c.Proxy.URL = "socks5://[::1]:1080"
 	errs = config.StrictValidateContext(c)
 	require.Empty(t, errs)
+
+	// url.Parse accepts any run of digits as a port, so the range is checked
+	// here, with the same message the connection resolver prints for a
+	// --api-proxy or $PMX_API_PROXY override.
+	for _, raw := range []string{"socks5://proxy.example.com:0", "socks5://proxy.example.com:99999",
+		"http://[::1]:65536"} {
+		c = validProxyContext()
+		c.Proxy.URL = raw
+		errs = config.StrictValidateContext(c)
+		require.Equal(t, []string{"proxy.url " + raw + " must use a port from 1 to 65535"}, errs)
+		require.EqualError(t, config.ValidateContext(c), errs[0], "the lenient validator must agree")
+	}
+
+	// The message redacts a password like every other proxy.url message.
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://u:s3cret@proxy.example.com:0"
+	errs = config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.url socks5://u:<redacted>@proxy.example.com:0 must use a port from 1 to 65535")
+
+	for _, e := range errs {
+		require.NotContains(t, e, "s3cret")
+	}
+
+	// Passing cases: both ends of the range, and no port at all.
+	for _, raw := range []string{"socks5://proxy.example.com:1", "socks5://proxy.example.com:65535",
+		"socks5://proxy.example.com"} {
+		c = validProxyContext()
+		c.Proxy.URL = raw
+		require.Empty(t, config.StrictValidateContext(c), raw)
+	}
 }
 
 func TestStrictValidateContext_ProxyCredentialsNeedURL(t *testing.T) {
