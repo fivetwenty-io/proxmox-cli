@@ -61,6 +61,13 @@ func Load(path string) (*Config, error) {
 // Returns the resolved Context, its canonical name, and any error.
 // Applies default values: Product="pve", Port=8006 (8007 for Product="pbs", 8443 for Product="pdm"),
 // Protocol="https", Realm="pam".
+//
+// The returned Context is a deep copy made with CloneContext before the
+// defaults are applied, so resolving a context never writes those defaults
+// back into cfg.Contexts, and a later SaveForce of cfg does not store them.
+// SaveForce still writes the zero value of every field whose tag lacks
+// omitempty, such as "port: 0". A caller that needs to change the stored
+// context must write to cfg.Contexts[name] itself, not to the result.
 func ResolveContext(cfg *Config, nameOverride string) (*Context, string, error) {
 	if cfg == nil {
 		return nil, "", errors.New("config is nil")
@@ -91,14 +98,16 @@ func ResolveContext(cfg *Config, nameOverride string) (*Context, string, error) 
 		return nil, "", fmt.Errorf("context %q is nil in config", name)
 	}
 
-	// Apply defaults before validation.
-	applyDefaults(ctx)
+	// Apply defaults to a copy, then validate the copy, so the stored entry
+	// is never modified.
+	resolved := CloneContext(ctx)
+	applyDefaults(resolved)
 
-	if err := validateContext(ctx); err != nil {
+	if err := validateContext(resolved); err != nil {
 		return nil, "", fmt.Errorf("context %q: %w", name, err)
 	}
 
-	return ctx, name, nil
+	return resolved, name, nil
 }
 
 // ApplyDefaults is the exported form of applyDefaults.  CLI packages that
@@ -290,8 +299,8 @@ var validProxySchemes = map[string]bool{
 // proxy.username", which requires proxy.url to be set to mean anything.
 // When proxy.url is set, the from-env conflict is checked first, then the
 // URL itself, meaning its parse, scheme, host, port range through
-// ProxyPortMessage, and embedded userinfo, then the
-// password-without-username rule.
+// ProxyPortMessage, path, query, and fragment through ProxyPathMessage, and
+// embedded userinfo, then the password-without-username rule.
 func ValidateProxyBlock(p *ProxyBlock) []string {
 	if p == nil {
 		return nil
@@ -330,10 +339,19 @@ func ValidateProxyBlock(p *ProxyBlock) []string {
 		if msg := ProxyPortMessage("proxy.url", redactedURL, parsed); msg != "" {
 			errs = append(errs, msg)
 		}
+		// Userinfo is itself a defect here, and a bare username can be a
+		// credential, so a URL that carries any is shown with the whole
+		// userinfo masked, as the message that rejects it shows it.
+		shown := redactedURL
+		if parsed.User != nil {
+			shown = maskProxyUserinfo(parsed, redactedURL)
+		}
+		if msg := ProxyPathMessage("proxy.url", shown, parsed); msg != "" {
+			errs = append(errs, msg)
+		}
 		if parsed.User != nil {
 			errs = append(errs, fmt.Sprintf(
-				"proxy.url %s must not embed credentials; use proxy.username and proxy.password",
-				maskProxyUserinfo(parsed, redactedURL)))
+				"proxy.url %s must not embed credentials; use proxy.username and proxy.password", shown))
 		}
 	}
 
@@ -363,6 +381,28 @@ func ProxyPortMessage(source, shown string, u *url.URL) string {
 	}
 
 	return ""
+}
+
+// ProxyPathMessage returns the message for a proxy URL that carries a path
+// other than empty or "/", a query, or a fragment, and "" for one that
+// carries none of them. A proxy is named by its scheme, host, and port
+// alone, so anything after the authority is never sent anywhere; its usual
+// source is a password holding an unescaped "/", "?", or "#", which ends the
+// authority early. "socks5://pmx:4711/x@proxy:1080" parses as host "pmx" on
+// port 4711 with the rest of the password in the path, and a client built
+// from it would dial the wrong proxy, so the message says how to write such
+// a password. A bare trailing "?" counts as a query. A bare trailing "#"
+// does not count, because url.Parse keeps no trace of an empty fragment,
+// and it names nothing, so the host stays right. source and shown work as
+// they do for ProxyPortMessage, and this is likewise the one rule every
+// proxy URL check applies.
+func ProxyPathMessage(source, shown string, u *url.URL) string {
+	if (u.Path == "" || u.Path == "/") && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%s %s must not carry a path, a query, or a fragment; "+
+		"a password that contains a reserved character such as /, ?, or # must be percent-encoded", source, shown)
 }
 
 // maskProxyUserinfo renders a proxy URL that carries userinfo with the whole

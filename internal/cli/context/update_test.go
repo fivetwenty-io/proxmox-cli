@@ -355,6 +355,36 @@ func TestContextUpdate_ProxyFromEnvNeverWritesThroughStoredPointer(t *testing.T)
 		"a rejected update must never write through the stored proxy.from-env pointer")
 }
 
+// TestContextUpdate_RejectsProxyURLPathQueryFragment verifies a --proxy-url
+// whose password holds an unescaped "/", "?", or "#", which url.Parse would
+// read as host "pmx" on port 4711, is refused with the URL masked whole and
+// the file left unchanged.
+func TestContextUpdate_RejectsProxyURLPathQueryFragment(t *testing.T) {
+	for _, raw := range []string{
+		"socks5://pmx:4711/x@proxy:1080",
+		"socks5://pmx:4711?x@proxy:1080",
+		"socks5://pmx:4711#x@proxy:1080",
+	} {
+		seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+		path, cfg := makeConfig(t, seed)
+		deps := makeDeps(t, path, cfg)
+
+		before, err := os.ReadFile(path) //nolint:gosec // G304: path is the test's own scratch config
+		require.NoError(t, err)
+
+		out, err := run(t, deps, "", "update", "lab", "--proxy-url", raw)
+		require.EqualError(t, err, `context "lab" fails validation after update: `+
+			"proxy.url socks5://<redacted> must not carry a path, a query, or a fragment; "+
+			"a password that contains a reserved character such as /, ?, or # must be percent-encoded", raw)
+		require.NotContains(t, out, "4711", raw)
+		require.NotContains(t, err.Error(), "4711", raw)
+
+		after, err := os.ReadFile(path) //nolint:gosec // G304: path is the test's own scratch config
+		require.NoError(t, err)
+		require.Equal(t, string(before), string(after), "a rejected --proxy-url must leave the file unchanged")
+	}
+}
+
 // TestContextUpdate_RejectsInvalidSSHJump verifies a chain no ssh-based
 // command could use is refused, with the file left unchanged.
 func TestContextUpdate_RejectsInvalidSSHJump(t *testing.T) {

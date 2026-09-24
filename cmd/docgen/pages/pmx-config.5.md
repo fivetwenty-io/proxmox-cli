@@ -303,7 +303,9 @@ Each entry under **contexts** is a mapping with the following keys.
 : The proxy to send API requests through. pmx accepts three schemes, which are
   **socks5://**, **socks5h://**, and **http://**, and an **https://** proxy is
   not accepted in this release. The URL must include a host and must not carry
-  credentials, which belong in **proxy.username** and **proxy.password**.
+  credentials, which belong in **proxy.username** and **proxy.password**. It
+  names the proxy by scheme, host, and port alone, so it must not carry a path
+  other than a bare **/**, a query, or a fragment either.
   Unset by default, meaning a direct connection. An **http://** proxy carries
   an **https** connection through a CONNECT tunnel, so TLS still runs end to
   end between pmx and **host**. A **protocol: http** context has no TLS to
@@ -316,6 +318,9 @@ Each entry under **contexts** is a mapping with the following keys.
   - **proxy.url <url> must use scheme socks5, socks5h, or http**
   - **proxy.url <url> must include a host**
   - **proxy.url <url> must use a port from 1 to 65535**
+  - **proxy.url <url> must not carry a path, a query, or a fragment; a password
+    that contains a reserved character such as /, ?, or # must be
+    percent-encoded**
   - **proxy.url <url> must not embed credentials; use proxy.username and
     proxy.password**
   - **proxy.url and proxy.from-env are both set; use one or the other**
@@ -435,14 +440,17 @@ pmx context validate --connect prints a VIA column between REACHABLE and PRODUCT
   environment variable is **PMX_API_JUMP**.
 
 **--api-proxy**
-: Replaces **proxy.url**, with the same scheme, host, and port rules. The
+: Replaces **proxy.url**, with the same scheme, host, port, and path rules. The
   value **none** disables a configured proxy, including one that
   **proxy.from-env** selects. The flag must not carry credentials, which would
   show in the process list, so pmx refuses any userinfo in it, a bare user
   name included. An override URL never picks up the context's
   **proxy.username** and **proxy.password**, so a proxy that needs a password
   for one invocation takes it from the flag's environment variable,
-  **PMX_API_PROXY**, whose URL may carry a user name and password.
+  **PMX_API_PROXY**, whose URL may carry a user name and password. Any
+  reserved character in that password must be percent-encoded, such as
+  **%2F** for **/**. An unescaped **/**, **?**, or **#** ends the host early, so pmx
+  refuses the URL rather than dial the wrong proxy.
 
 **--api-proxy-from-env**
 : Turns **proxy.from-env** on for one invocation, and

@@ -341,6 +341,36 @@ func TestContextAdd_RejectsProxyURLCredentials(t *testing.T) {
 		"a --proxy-url carrying credentials must not write a context")
 }
 
+// TestContextAdd_RejectsProxyURLPathQueryFragment verifies a --proxy-url
+// whose password holds an unescaped "/", "?", or "#", which url.Parse would
+// read as host "pmx" on port 4711, is refused with the URL masked whole and
+// never written.
+func TestContextAdd_RejectsProxyURLPathQueryFragment(t *testing.T) {
+	for _, raw := range []string{
+		"socks5://pmx:4711/x@proxy:1080",
+		"socks5://pmx:4711?x@proxy:1080",
+		"socks5://pmx:4711#x@proxy:1080",
+	} {
+		path, cfg := makeConfig(t, &config.Config{})
+		deps := makeDeps(t, path, cfg)
+
+		out, err := run(t, deps, "", "add", "badpath",
+			"--host", "10.1.3.6",
+			"--username", "root@pam",
+			"--token-id", "e2e",
+			"--secret", "00000000-0000-0000-0000-000000000000",
+			"--proxy-url", raw,
+		)
+		require.EqualError(t, err, "proxy.url socks5://<redacted> must not carry a path, a query, or a fragment; "+
+			"a password that contains a reserved character such as /, ?, or # must be percent-encoded", raw)
+		require.NotContains(t, out, "4711", raw)
+		require.NotContains(t, err.Error(), "4711", raw)
+
+		require.NotContains(t, reloadCfg(t, path).Contexts, "badpath",
+			"a rejected --proxy-url must not write a context")
+	}
+}
+
 // TestContextAdd_WarnsOnInlineProxyPassword verifies --proxy-password emits
 // the same inline-literal warning as --secret, classifying with
 // config.IsSecretReference so a value such as "$uper$ecret" (which merely

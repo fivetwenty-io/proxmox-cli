@@ -232,7 +232,8 @@ type TimeoutsSet struct{ Connect, TLSHandshake, Request bool }
 //
 // It runs config.ValidateProxyBlock on the stored proxy block, and when that
 // reports any message it fails with the messages joined by "; ", so a
-// stored proxy.url that does not parse, or that carries userinfo, fails with
+// stored proxy.url that does not parse, or that carries userinfo, a path, a
+// query, or a fragment, fails with
 // exactly the texts that checker prints, already passed through
 // redact.ProxyURL, and no url.Parse error is ever wrapped. A malformed
 // stored timeout fails with config.ParseTimeout's text for its key.
@@ -521,7 +522,8 @@ func resolveProxy(conn *Connection, stored *config.Context, ov ConnectionOverrid
 
 	case stored.Proxy.URL != "":
 		// ValidateProxyBlock has already accepted this URL, so it parses,
-		// carries no userinfo, and has a port in range.
+		// carries no userinfo, path, query, or fragment, and has a port in
+		// range.
 		u, err := url.Parse(stored.Proxy.URL)
 		if err != nil {
 			return fmt.Errorf("%s %s is not a valid URL", sourceProxyURL, redact.ProxyURL(stored.Proxy.URL))
@@ -594,7 +596,8 @@ func firstByteTimeout(t apiclient.TimeoutSpec) time.Duration {
 }
 
 // saturatingAdd adds two non-negative durations and caps the result at the
-// largest duration instead of wrapping negative.
+// largest duration instead of wrapping negative. internal/cli/context keeps
+// a copy for its probe bound, and the two must change together.
 func saturatingAdd(a, b time.Duration) time.Duration {
 	if a > math.MaxInt64-b {
 		return math.MaxInt64
@@ -739,7 +742,10 @@ func checkFingerprint(source, fingerprint string) error {
 // parseOverrideProxy parses a proxy URL from --api-proxy or $PMX_API_PROXY
 // under the rules a stored proxy.url obeys, with the source in place of the
 // key, plus the port range the transport enforces, so a bad port fails
-// with its source named as early as OverridesFromCommand. The flag may
+// with its source named as early as OverridesFromCommand. A path, a query,
+// or a fragment fails by config.ProxyPathMessage, because in a proxy URL
+// one most often means a password whose unescaped "/", "?", or "#" moved
+// the host. The flag may
 // carry no userinfo at all, because the process list would show it, and
 // any "@" in it counts, since a stray one may open a password url.Parse did
 // not recognise. The environment may carry userinfo. Every URL in a message
@@ -772,6 +778,10 @@ func parseOverrideProxy(source, raw string) (*url.URL, error) {
 
 	if err := checkProxyPort(source, shown, u); err != nil {
 		msgs = append(msgs, err.Error())
+	}
+
+	if msg := config.ProxyPathMessage(source, shown, u); msg != "" {
+		msgs = append(msgs, msg)
 	}
 
 	if len(msgs) > 0 {
@@ -860,6 +870,24 @@ func (c Connection) jumpSpec() apiclient.JumpSpec {
 // hasJump reports whether c routes through an ssh bastion.
 func (c Connection) hasJump() bool {
 	return strings.TrimSpace(c.Jump.Chain) != ""
+}
+
+// usesProxy reports whether c's API traffic goes through a proxy: a proxy
+// URL, or proxy.from-env when the environment names a proxy for the API
+// URL. An environment value that does not parse counts as a proxy, as Via
+// reports it.
+func (c Connection) usesProxy() bool {
+	if c.Proxy.URL != nil {
+		return true
+	}
+
+	if !c.Proxy.FromEnv {
+		return false
+	}
+
+	u, err := c.environmentProxy()
+
+	return err != nil || u != nil
 }
 
 // jumpHops renders the jump chain for Via and route. A resolved chain has

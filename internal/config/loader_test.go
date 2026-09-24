@@ -580,6 +580,64 @@ func TestStrictValidateContext_ProxyURL(t *testing.T) {
 	}
 }
 
+// proxyPathHint is the tail every proxy URL path, query, or fragment message
+// carries after the source and the redacted URL.
+const proxyPathHint = " must not carry a path, a query, or a fragment; " +
+	"a password that contains a reserved character such as /, ?, or # must be percent-encoded"
+
+// TestStrictValidateContext_ProxyURLRejectsPathQueryFragment covers a
+// password whose unescaped "/", "?", or "#" ends the authority early, so
+// url.Parse reads "pmx" as the host and 4711 as the port and would build a
+// client against the wrong proxy. Every validation path must refuse it, with
+// the URL masked whole and the password nowhere in the text.
+func TestStrictValidateContext_ProxyURLRejectsPathQueryFragment(t *testing.T) {
+	for _, raw := range []string{
+		"socks5://pmx:4711/x@proxy:1080",
+		"socks5://pmx:4711?x@proxy:1080",
+		"socks5://pmx:4711#x@proxy:1080",
+	} {
+		want := "proxy.url socks5://<redacted>" + proxyPathHint
+
+		c := validProxyContext()
+		c.Proxy.URL = raw
+		errs := config.StrictValidateContext(c)
+		require.Equal(t, []string{want}, errs, raw)
+		require.NotContains(t, errs[0], "4711", raw)
+
+		err := config.ValidateContext(c)
+		require.EqualError(t, err, want, "the lenient validator must agree for %s", raw)
+		require.NotContains(t, err.Error(), "4711", raw)
+
+		cfg := &config.Config{CurrentContext: "proxied", Contexts: map[string]*config.Context{"proxied": c}}
+		_, _, err = config.ResolveContext(cfg, "")
+		require.Error(t, err, raw)
+		require.Contains(t, err.Error(), want, raw)
+		require.NotContains(t, err.Error(), "4711", raw)
+	}
+
+	// A path, a query, or a fragment with no credential in sight is refused
+	// too, with the URL shown as written.
+	for _, raw := range []string{
+		"socks5://proxy.example.com:1080/x",
+		"socks5://proxy.example.com:1080?x=1",
+		"socks5://proxy.example.com:1080?",
+		"socks5://proxy.example.com:1080#x",
+		"http://proxy.example.com:3128//",
+	} {
+		c := validProxyContext()
+		c.Proxy.URL = raw
+		require.Equal(t, []string{"proxy.url " + raw + proxyPathHint}, config.StrictValidateContext(c), raw)
+	}
+
+	// Passing cases: no path, or a bare "/".
+	for _, raw := range []string{"socks5://proxy.example.com:1080", "socks5://proxy.example.com:1080/",
+		"http://proxy.example.com/"} {
+		c := validProxyContext()
+		c.Proxy.URL = raw
+		require.Empty(t, config.StrictValidateContext(c), raw)
+	}
+}
+
 func TestStrictValidateContext_ProxyCredentialsNeedURL(t *testing.T) {
 	c := validProxyContext()
 	c.Proxy.Username = "pmx"
@@ -663,6 +721,7 @@ func TestStrictValidateContext_ProxyURLRejectsUserinfo(t *testing.T) {
 	c.Proxy.URL = "socks5://SEKRIT@proxy.example.com:1080/some/path?q=1#frag"
 	errs = config.StrictValidateContext(c)
 	require.Equal(t, []string{
+		"proxy.url socks5://<redacted>@proxy.example.com:1080/some/path?q=1#frag" + proxyPathHint,
 		"proxy.url socks5://<redacted>@proxy.example.com:1080/some/path?q=1#frag must not embed credentials; " +
 			"use proxy.username and proxy.password",
 	}, errs)
@@ -782,4 +841,56 @@ func TestValidateProxyBlock_NilPointer_ReturnsNil(t *testing.T) {
 
 func TestValidateTimeoutBlock_NilPointer_ReturnsNil(t *testing.T) {
 	require.Nil(t, config.ValidateTimeoutBlock(nil))
+}
+
+// TestResolveContext_DoesNotMutateConfig pins the rule that resolving a
+// context by name reads the stored entry and never writes to it. A
+// SaveForce after a resolve must store the context exactly as the operator
+// wrote it, so the defaults live only on the returned copy.
+func TestResolveContext_DoesNotMutateConfig(t *testing.T) {
+	fromEnv := true
+	stored := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{
+			Type:     "password",
+			Username: "root@pam",
+			Secret:   "${PMX_TEST_UNUSED}",
+			Session:  &config.Session{Ticket: "PVE:ticket", CSRF: "csrf", ExpiresAt: 42},
+		},
+		Proxy: config.ProxyBlock{FromEnv: &fromEnv},
+	}
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": stored},
+	}
+
+	require.Zero(t, stored.Port, "precondition: the stored port is unset")
+	require.Empty(t, stored.Protocol, "precondition: the stored protocol is unset")
+	require.Empty(t, stored.Realm, "precondition: the stored realm is unset")
+
+	before := config.CloneContext(cfg.Contexts["lab"])
+
+	resolved, name, err := config.ResolveContext(cfg, "lab")
+	require.NoError(t, err)
+	require.Equal(t, "lab", name)
+
+	require.Equal(t, before, cfg.Contexts["lab"], "the stored context must be deep-equal after a resolve")
+	require.Same(t, stored, cfg.Contexts["lab"], "the map must still hold the same pointer")
+	require.Zero(t, cfg.Contexts["lab"].Port, "the stored port must stay zero")
+	require.Empty(t, cfg.Contexts["lab"].Protocol, "the stored protocol must stay empty")
+	require.Empty(t, cfg.Contexts["lab"].Realm, "the stored realm must stay empty")
+	require.Empty(t, cfg.Contexts["lab"].Product, "the stored product must stay empty")
+
+	require.NotSame(t, stored, resolved, "the resolved context must be a copy")
+	require.Equal(t, 8006, resolved.Port)
+	require.Equal(t, "https", resolved.Protocol)
+	require.Equal(t, "pam", resolved.Realm)
+	require.Equal(t, config.ProductPVE, resolved.Product)
+
+	// The copy is deep: writing through its pointer fields cannot reach the
+	// stored entry either.
+	resolved.Auth.Session.Ticket = "changed"
+	*resolved.Proxy.FromEnv = false
+	require.Equal(t, "PVE:ticket", cfg.Contexts["lab"].Auth.Session.Ticket)
+	require.True(t, *cfg.Contexts["lab"].Proxy.FromEnv)
 }

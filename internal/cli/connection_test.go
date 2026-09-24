@@ -1631,6 +1631,80 @@ func TestOverridesFromCommand_RejectsMalformedProxy(t *testing.T) {
 	require.NotContains(t, err.Error(), "s3cret")
 }
 
+// proxyPathHint is the tail every proxy URL path, query, or fragment message
+// carries after the source and the redacted URL.
+const proxyPathHint = " must not carry a path, a query, or a fragment; " +
+	"a password that contains a reserved character such as /, ?, or # must be percent-encoded"
+
+// TestProxyURLRejectsPathQueryFragment proves a password whose unescaped
+// "/", "?", or "#" ends the authority early, so url.Parse reads "pmx:4711"
+// as the proxy's host and port, is refused from the flag, the environment,
+// and a stored proxy.url alike, with the password nowhere in the text.
+func TestProxyURLRejectsPathQueryFragment(t *testing.T) {
+	passwordForms := []string{
+		"socks5://pmx:4711/x@proxy:1080",
+		"socks5://pmx:4711?x@proxy:1080",
+		"socks5://pmx:4711#x@proxy:1080",
+	}
+
+	t.Run("the flag", func(t *testing.T) {
+		// The flag refuses any "@" before it looks at the path, so the
+		// password forms fail on credentials and the path rule is shown
+		// with URLs that carry none.
+		for _, raw := range passwordForms {
+			_, err := overridesFromArgs(t, "--api-proxy", raw)
+			require.EqualError(t, err, apiProxyCredentialsMessage, raw)
+			require.NotContains(t, err.Error(), "4711", raw)
+		}
+
+		for _, raw := range []string{"socks5://proxy:1080/x", "socks5://proxy:1080?x", "socks5://proxy:1080#x"} {
+			_, err := overridesFromArgs(t, "--api-proxy", raw)
+			require.EqualError(t, err, "--api-proxy "+raw+proxyPathHint, raw)
+
+			_, err = cli.ResolveConnection("lab", labContext(), cli.ConnectionOverrides{
+				Proxy: raw, ProxySource: "--api-proxy",
+			})
+			require.EqualError(t, err, "--api-proxy "+raw+proxyPathHint, raw)
+		}
+
+		for _, raw := range []string{"socks5://proxy:1080", "socks5://proxy:1080/"} {
+			_, err := overridesFromArgs(t, "--api-proxy", raw)
+			require.NoError(t, err, raw)
+		}
+	})
+
+	t.Run("the environment", func(t *testing.T) {
+		for _, raw := range passwordForms {
+			t.Setenv("PMX_API_PROXY", raw)
+
+			_, err := overridesFromArgs(t)
+			require.EqualError(t, err, "$PMX_API_PROXY socks5://<redacted>"+proxyPathHint, raw)
+			require.NotContains(t, err.Error(), "4711", raw)
+
+			_, err = cli.ResolveConnection("lab", labContext(), cli.ConnectionOverrides{
+				Proxy: raw, ProxySource: "$PMX_API_PROXY",
+			})
+			require.EqualError(t, err, "$PMX_API_PROXY socks5://<redacted>"+proxyPathHint, raw)
+			require.NotContains(t, err.Error(), "4711", raw)
+		}
+
+		t.Setenv("PMX_API_PROXY", "socks5://u:s3cret@proxy:1080/")
+
+		_, err := overridesFromArgs(t)
+		require.NoError(t, err)
+	})
+
+	t.Run("a stored proxy.url", func(t *testing.T) {
+		for _, raw := range passwordForms {
+			_, err := cli.ResolveConnection("lab",
+				withContext(func(c *config.Context) { c.Proxy = config.ProxyBlock{URL: raw} }),
+				cli.ConnectionOverrides{})
+			require.EqualError(t, err, `context "lab": proxy.url socks5://<redacted>`+proxyPathHint, raw)
+			require.NotContains(t, err.Error(), "4711", raw)
+		}
+	})
+}
+
 // TestOverridesFromCommand_InsecureFromRootPersistentFlag proves only the
 // root's persistent --insecure counts, never a leaf's local one.
 func TestOverridesFromCommand_InsecureFromRootPersistentFlag(t *testing.T) {
