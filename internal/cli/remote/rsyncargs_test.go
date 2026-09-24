@@ -1,13 +1,19 @@
 package remote
 
 import (
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
+	"github.com/fivetwenty-io/proxmox-cli/internal/config"
+	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // --- extractPMXFlags --------------------------------------------------------
@@ -215,6 +221,103 @@ func TestExtractPMXFlags_ConfigValueLooksLikeFlagGetsGenericError(t *testing.T) 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "--config")
 	require.Contains(t, err.Error(), `"--insecure"`)
+}
+
+// TestExtractPMXFlags_APIConnectionFlags proves that `pmx --api-endpoint h
+// rsync src dst` hands the flag to pmx rather than to rsync(1), and that
+// every one of the nine connection flags is extracted in both of its forms,
+// with the boolean one consuming no value.
+func TestExtractPMXFlags_APIConnectionFlags(t *testing.T) {
+	vals, rest, err := extractPMXFlags([]string{"--api-endpoint", "h", "src", "dst"})
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"api-endpoint": "h"}, vals.Root)
+	require.Empty(t, vals.SSH)
+	require.Equal(t, []string{"src", "dst"}, rest, "rsync must receive neither the flag nor its value")
+
+	values := map[string]string{
+		"api-endpoint":              "https://pve2:8006",
+		"api-jump":                  "admin@bastion:2222",
+		"api-proxy":                 "socks5h://proxy.test:1080",
+		"api-ca-cert":               "/etc/pmx/ca.pem",
+		"api-fingerprint":           "AA:BB",
+		"api-connect-timeout":       "5s",
+		"api-tls-handshake-timeout": "10s",
+		"api-request-timeout":       "30s",
+	}
+
+	for name, value := range values {
+		t.Run(name, func(t *testing.T) {
+			for _, args := range [][]string{
+				{"--" + name, value, "-avz", "src", "dst"},
+				{"--" + name + "=" + value, "-avz", "src", "dst"},
+			} {
+				vals, rest, err := extractPMXFlags(args)
+				require.NoError(t, err, "%v", args)
+				require.Equal(t, map[string]string{name: value}, vals.Root, "%v", args)
+				require.Equal(t, []string{"-avz", "src", "dst"}, rest, "%v", args)
+			}
+		})
+	}
+
+	t.Run("api-proxy-from-env", func(t *testing.T) {
+		vals, rest, err := extractPMXFlags([]string{"--api-proxy-from-env", "src", "dst"})
+		require.NoError(t, err)
+		require.Equal(t, map[string]string{"api-proxy-from-env": "true"}, vals.Root)
+		require.Equal(t, []string{"src", "dst"}, rest, "the boolean flag must not swallow the next operand")
+
+		vals, rest, err = extractPMXFlags([]string{"--api-proxy-from-env=false", "src", "dst"})
+		require.NoError(t, err)
+		require.Equal(t, map[string]string{"api-proxy-from-env": "false"}, vals.Root)
+		require.Equal(t, []string{"src", "dst"}, rest)
+	})
+
+	t.Run("a value that looks like an rsync flag is refused", func(t *testing.T) {
+		_, _, err := extractPMXFlags([]string{"--api-jump", "-avz", "src", "dst"})
+		require.EqualError(t, err, `--api-jump expects a value, got "-avz"`)
+	})
+}
+
+// TestRsync_APIEndpointFlagReachesTheRootNotRsync runs `pmx --api-endpoint
+// <addr> rsync ...` through the real root and proves that the value lands on
+// the root's persistent flag, where Deps.ConnectionOverrides reads it as
+// typed on the command line, and that rsync(1) never sees it. The endpoint
+// is the fake server's own address, so the invocation reaches the same
+// server whether or not the root's client honours the override.
+func TestRsync_APIEndpointFlagReachesTheRootNotRsync(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	cfgPath := writeFakeConfig(t, f, config.SSHBlock{})
+	runner := exec.Fake()
+	root, _, prefix := newRemoteRoot(t, cfgPath, runner)
+
+	var deps *cli.Deps
+	std := root.PersistentPreRunE
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if err := std(cmd, args); err != nil {
+			return err
+		}
+		deps = cli.GetDeps(cmd)
+		return nil
+	}
+
+	endpoint := f.Server.Listener.Addr().String()
+	root.SetArgs(append(prefix, "--api-endpoint", endpoint, "rsync", "-avz", "pve1:/etc", "./dst"))
+	require.NoError(t, root.Execute())
+
+	require.Len(t, runner.Calls, 1)
+	for _, arg := range runner.Calls[0].Args {
+		require.NotEqual(t, "--api-endpoint", arg, "rsync(1) must not receive pmx's flag")
+		require.NotEqual(t, endpoint, arg, "rsync(1) must not receive the flag's value")
+	}
+
+	require.NotNil(t, deps)
+	ov, err := deps.ConnectionOverrides()
+	require.NoError(t, err)
+	require.Equal(t, "--api-endpoint", ov.EndpointSource)
+
+	host, port, err := net.SplitHostPort(endpoint)
+	require.NoError(t, err)
+	require.Equal(t, host, ov.Host)
+	require.Equal(t, port, strconv.Itoa(ov.Port))
 }
 
 // --- classifyRsyncArgs / classifyOperand -----------------------------------

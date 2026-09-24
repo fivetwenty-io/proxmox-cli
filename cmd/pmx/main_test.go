@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // The package under test is three lines — persona selection from argv[0], and
@@ -16,6 +18,18 @@ import (
 // binary's process contract lives: what a shell sees when a command fails, and
 // which command surface a symlinked name exposes. Both are only observable by
 // running a real binary, so these tests build one.
+
+// TestMain clears the eight PMX_API_* variables before any test runs. Every
+// binary these tests start inherits this process's environment, so an
+// override exported in the operator's shell would otherwise change which
+// endpoint, proxy, bastion, or timeout the binary resolves.
+func TestMain(m *testing.M) {
+	restore := testhelper.UnsetAPIEnv()
+	code := m.Run()
+	restore()
+
+	os.Exit(code)
+}
 
 var (
 	buildOnce sync.Once

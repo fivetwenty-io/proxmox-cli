@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
@@ -28,6 +29,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	personapkg "github.com/fivetwenty-io/proxmox-cli/internal/persona"
 	"github.com/fivetwenty-io/proxmox-cli/internal/version"
 )
 
@@ -81,6 +83,617 @@ func TestRootFlags_Defaults(t *testing.T) {
 	waitFlag := flags.Lookup("wait-timeout")
 	require.NotNil(t, waitFlag, "--wait-timeout flag must exist")
 	require.Equal(t, "0", waitFlag.DefValue)
+
+	// The nine per-invocation connection overrides. The three timeouts are
+	// strings rather than pflag durations, so a malformed value reaches
+	// config.ParseTimeout's message instead of pflag's, and none of the nine
+	// takes a shorthand.
+	apiFlags := []struct{ name, typ, def string }{
+		{"api-endpoint", "string", ""},
+		{"api-jump", "string", ""},
+		{"api-proxy", "string", ""},
+		{"api-proxy-from-env", "bool", "false"},
+		{"api-ca-cert", "string", ""},
+		{"api-fingerprint", "string", ""},
+		{"api-connect-timeout", "string", ""},
+		{"api-tls-handshake-timeout", "string", ""},
+		{"api-request-timeout", "string", ""},
+	}
+	for _, want := range apiFlags {
+		f := flags.Lookup(want.name)
+		require.NotNil(t, f, "--%s flag must exist", want.name)
+		require.Equal(t, want.typ, f.Value.Type(), "--%s type", want.name)
+		require.Equal(t, want.def, f.DefValue, "--%s default", want.name)
+		require.Empty(t, f.Shorthand, "--%s must take no shorthand", want.name)
+		require.NotEmpty(t, f.Usage, "--%s must carry help text", want.name)
+	}
+
+	// Thirteen persistent flags before the connection overrides, twenty-two
+	// with them. cobra's own help and version flags are not persistent.
+	count := 0
+	flags.VisitAll(func(*pflag.Flag) { count++ })
+	require.Equal(t, 22, count, "the root must register exactly twenty-two persistent flags")
+}
+
+// TestDepsConn_PopulatedBeforeNoClientReturn proves that a noClient command,
+// which returns from persistentPreRunE before any client or context is
+// resolved, still reaches the connection overrides through its Deps, so the
+// auth and context groups can honour them.
+func TestDepsConn_PopulatedBeforeNoClientReturn(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_API_PROXY", "socks5h://proxy.test:1080")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+	root.SetContext(context.Background())
+
+	var capturedDeps *cli.Deps
+	cmd := buildInspectCmd(&capturedDeps)
+	cmd.Annotations = map[string]string{"noClient": "true"}
+	root.AddCommand(cmd)
+
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log", "inspect"})
+
+	require.NoError(t, root.Execute())
+	require.NotNil(t, capturedDeps)
+	require.Nil(t, capturedDeps.Ctx, "the command must have taken the noClient return")
+	require.NotNil(t, capturedDeps.Conn, "Conn must be assigned before the noClient return")
+
+	ov, err := capturedDeps.ConnectionOverrides()
+	require.NoError(t, err)
+	require.Equal(t, "socks5h://proxy.test:1080", ov.Proxy)
+	require.Equal(t, "$PMX_API_PROXY", ov.ProxySource)
+}
+
+// TestDeps_ConnectionOverridesNilSafe proves that a Deps built by hand, as
+// hundreds of tests and every group factory's placeholder do, yields no
+// overrides rather than a nil-function panic.
+func TestDeps_ConnectionOverridesNilSafe(t *testing.T) {
+	ov, err := (&cli.Deps{}).ConnectionOverrides()
+	require.NoError(t, err)
+	require.Equal(t, cli.ConnectionOverrides{}, ov)
+
+	var nilDeps *cli.Deps
+	ov, err = nilDeps.ConnectionOverrides()
+	require.NoError(t, err)
+	require.Equal(t, cli.ConnectionOverrides{}, ov)
+}
+
+// TestDeps_ConnectionOverridesCarriesRootInsecure proves that the root's
+// persistent --insecure reaches ConnectionOverrides.Insecure, and that a
+// command's own local --insecure, such as the one context add registers to
+// store tls.insecure, does not.
+func TestDeps_ConnectionOverridesCarriesRootInsecure(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	run := func(t *testing.T, localInsecure bool, args ...string) cli.ConnectionOverrides {
+		t.Helper()
+
+		root, cleanup := cli.NewRootCmd("pmx")
+		t.Cleanup(cleanup)
+		root.SetContext(context.Background())
+
+		var capturedDeps *cli.Deps
+		cmd := buildInspectCmd(&capturedDeps)
+		cmd.Annotations = map[string]string{"noClient": "true"}
+		if localInsecure {
+			cmd.Flags().Bool("insecure", false, "store tls.insecure")
+		}
+		root.AddCommand(cmd)
+
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&out)
+		root.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log"}, args...))
+
+		require.NoError(t, root.Execute())
+		require.NotNil(t, capturedDeps)
+
+		ov, err := capturedDeps.ConnectionOverrides()
+		require.NoError(t, err)
+
+		return ov
+	}
+
+	require.True(t, run(t, false, "--insecure", "inspect").Insecure, "a root --insecure must reach the overrides")
+	require.True(t, run(t, false, "inspect", "--insecure").Insecure,
+		"a root --insecure typed after the verb must reach the overrides")
+	require.False(t, run(t, false, "inspect").Insecure)
+	require.False(t, run(t, true, "inspect", "--insecure").Insecure,
+		"a command's local --insecure is not the root's and must not reach the overrides")
+}
+
+// TestRootCommand_OverridesFromCommandRejectsMalformed parses arguments with
+// the real root's flag set and calls OverridesFromCommand on the leaf, so the
+// registration the root ships is the one under test. Each malformed value
+// fails naming its flag, and a timeout without a unit fails with the
+// duration message rather than pflag's own parse error.
+func TestRootCommand_OverridesFromCommandRejectsMalformed(t *testing.T) {
+	parse := func(t *testing.T, args ...string) (cli.ConnectionOverrides, error) {
+		t.Helper()
+
+		root, cleanup := cli.NewRootCmd("pmx")
+		t.Cleanup(cleanup)
+		root.AddCommand(&cobra.Command{Use: "leaf", RunE: func(*cobra.Command, []string) error { return nil }})
+
+		leaf, rest, err := root.Find(append([]string{"leaf"}, args...))
+		require.NoError(t, err)
+		require.Equal(t, "leaf", leaf.Name())
+		require.NoError(t, leaf.ParseFlags(rest), "pflag itself must accept every value; the parse is ours")
+
+		return cli.OverridesFromCommand(leaf)
+	}
+
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"endpoint scheme", []string{"--api-endpoint", "ftp://pve1"},
+			`invalid --api-endpoint "ftp://pve1": scheme must be https or http`},
+		{"endpoint port", []string{"--api-endpoint", "pve1:99999"},
+			`invalid --api-endpoint "pve1:99999": port 99999 is out of range [1, 65535]`},
+		{"connect zero", []string{"--api-connect-timeout", "0s"},
+			"--api-connect-timeout must be greater than zero"},
+		{"connect negative", []string{"--api-connect-timeout=-1s"},
+			"--api-connect-timeout must be greater than zero"},
+		{"connect without a unit", []string{"--api-connect-timeout", "5"},
+			`--api-connect-timeout "5" is not a duration (e.g. 5s, 500ms)`},
+		{"handshake without a unit", []string{"--api-tls-handshake-timeout", "10"},
+			`--api-tls-handshake-timeout "10" is not a duration (e.g. 5s, 500ms)`},
+		{"request zero", []string{"--api-request-timeout", "0s"},
+			"--api-request-timeout must be greater than zero"},
+		{"fingerprint", []string{"--api-fingerprint", "garbage"},
+			`--api-fingerprint "garbage" must be a colon-separated hex SHA-256 (e.g. AA:BB:..., 32 pairs)`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parse(t, tc.args...)
+			require.EqualError(t, err, tc.want)
+			require.NotContains(t, err.Error(), "invalid argument", "pflag's own message must not surface")
+		})
+	}
+
+	t.Run("well-formed values parse", func(t *testing.T) {
+		ov, err := parse(t,
+			"--api-endpoint", "https://pve2:8443",
+			"--api-connect-timeout", "5s",
+			"--api-tls-handshake-timeout", "10s",
+			"--api-request-timeout", "1m",
+			"--api-fingerprint", strings.Repeat("AB:", 31)+"AB",
+		)
+		require.NoError(t, err)
+		require.Equal(t, "pve2", ov.Host)
+		require.Equal(t, 8443, ov.Port)
+		require.Equal(t, "https", ov.Protocol)
+		require.Equal(t, 5*time.Second, ov.Connect)
+		require.Equal(t, 10*time.Second, ov.TLSHandshake)
+		require.Equal(t, time.Minute, ov.Request)
+		require.Equal(t, "--api-fingerprint", ov.FingerprintSource)
+	})
+}
+
+// newPersonaRoot builds a persona's real command tree, with every group the
+// binary ships, writing both output streams to the returned buffers.
+func newPersonaRoot(t *testing.T, persona string) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+
+	root, cleanup := cli.NewRootCmd(persona)
+	t.Cleanup(cleanup)
+	root.SetContext(context.Background())
+
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+
+	// SetOut precedes AddGroups because cobra's completion sub-commands
+	// capture the writer when AddGroups creates them.
+	cli.AddGroups(root, &cli.Deps{}, personapkg.Factories(persona))
+
+	return root, &out, &errOut
+}
+
+// TestNoClient_RefusesAPIConnectionFlags proves that a noClient command,
+// which resolves no connection, refuses an --api-* flag rather than ignoring
+// it and exiting 0. On context add and context update the jump and proxy
+// flags point at the flag that stores the setting, and nothing is written.
+// The PMX_API_* variables stay silent on the same commands, and a completion
+// request carrying a flag never meets the refusal.
+func TestNoClient_RefusesAPIConnectionFlags(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	addArgs := func(cfgPath string) []string {
+		return []string{
+			"--config", cfgPath, "--no-log", "context", "add", "lab",
+			"--host", "pve1.example.test", "--username", "root@pam", "--token-id", "cli",
+			"--secret", "${PMX_TEST_TOKEN}",
+		}
+	}
+
+	// `pmx version` reports the server's version and builds a client, so the
+	// build-info leaf `pmx version client` is the noClient command here.
+	t.Run("version client names every flag it refuses", func(t *testing.T) {
+		for _, tc := range []struct{ flag, value string }{
+			{"--api-endpoint", "h"},
+			{"--api-jump", "b"},
+			{"--api-proxy", "socks5h://h:1080"},
+			{"--api-proxy-from-env", ""},
+			{"--api-ca-cert", "/ca.pem"},
+			{"--api-fingerprint", "garbage"},
+			{"--api-connect-timeout", "5s"},
+			{"--api-tls-handshake-timeout", "5s"},
+			{"--api-request-timeout", "5s"},
+		} {
+			root, out, _ := newPersonaRoot(t, "pmx")
+			args := []string{
+				"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log", "version", "client", tc.flag,
+			}
+			if tc.value != "" {
+				args = append(args, tc.value)
+			}
+			root.SetArgs(args)
+
+			err := root.Execute()
+			require.EqualError(t, err, tc.flag+" has no effect on pmx version client")
+			require.Empty(t, out.String(), "version client must not run")
+		}
+	})
+
+	t.Run("a command that builds a client is not refused", func(t *testing.T) {
+		root, _, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs([]string{
+			"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log", "version", "--api-endpoint", "h",
+		})
+
+		err := root.Execute()
+		require.Error(t, err, "with no context configured, pmx version must still fail")
+		require.NotContains(t, err.Error(), "has no effect")
+		require.Contains(t, err.Error(), "no context specified")
+	})
+
+	t.Run("context add refuses --api-jump and writes nothing", func(t *testing.T) {
+		cfgPath := filepath.Join(t.TempDir(), "config.yml")
+		root, out, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs(append(addArgs(cfgPath), "--api-jump", "b"))
+
+		err := root.Execute()
+		require.EqualError(t, err,
+			"--api-jump has no effect on pmx context add; use --ssh-jump to store a bastion")
+		require.Empty(t, out.String())
+
+		_, statErr := os.Stat(cfgPath)
+		require.ErrorIs(t, statErr, fs.ErrNotExist, "a refused context add must write no config")
+	})
+
+	t.Run("context add refuses --api-proxy with the stored equivalent", func(t *testing.T) {
+		cfgPath := filepath.Join(t.TempDir(), "config.yml")
+		root, _, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs(append(addArgs(cfgPath), "--api-proxy", "socks5h://h:1080"))
+
+		err := root.Execute()
+		require.EqualError(t, err,
+			"--api-proxy has no effect on pmx context add; use --proxy-url to store a proxy")
+
+		_, statErr := os.Stat(cfgPath)
+		require.ErrorIs(t, statErr, fs.ErrNotExist)
+	})
+
+	t.Run("context add points every flag at the flag that stores it", func(t *testing.T) {
+		for _, tc := range []struct{ flag, value, hint string }{
+			{"--api-endpoint", "h", "use --host, --port, and --protocol to store the endpoint"},
+			{"--api-proxy-from-env", "", "use --proxy-from-env to store the setting"},
+			{"--api-ca-cert", "/ca.pem", "use --ca-cert to store a CA certificate"},
+			{"--api-fingerprint", "garbage", "use --fingerprint to store a pin"},
+			{"--api-connect-timeout", "5s", "use --timeout-connect to store a timeout"},
+			{"--api-tls-handshake-timeout", "5s", "use --timeout-tls-handshake to store a timeout"},
+			{"--api-request-timeout", "5s", "use --timeout-request to store a timeout"},
+		} {
+			cfgPath := filepath.Join(t.TempDir(), "config.yml")
+			root, _, _ := newPersonaRoot(t, "pmx")
+			args := append(addArgs(cfgPath), tc.flag)
+			if tc.value != "" {
+				args = append(args, tc.value)
+			}
+			root.SetArgs(args)
+
+			require.EqualError(t, root.Execute(), tc.flag+" has no effect on pmx context add; "+tc.hint)
+
+			_, statErr := os.Stat(cfgPath)
+			require.ErrorIs(t, statErr, fs.ErrNotExist, "a refused context add must write no config")
+		}
+	})
+
+	t.Run("a mistyped verb reports the unknown command, not the flag", func(t *testing.T) {
+		cfgPath := writeTwoContextConfig(t)
+		root, _, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs([]string{"--config", cfgPath, "--no-log", "context", "udpate", "alpha", "--api-jump", "b"})
+
+		require.EqualError(t, root.Execute(), `unknown command "udpate" for "pmx context"`)
+	})
+
+	t.Run("a bare group command still refuses the flag", func(t *testing.T) {
+		cfgPath := writeTwoContextConfig(t)
+		root, out, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs([]string{"--config", cfgPath, "--no-log", "context", "--api-jump", "b"})
+
+		require.EqualError(t, root.Execute(), "--api-jump has no effect on pmx context")
+		require.Empty(t, out.String(), "the refused group must not print its help")
+	})
+
+	t.Run("help and completion accept the flags", func(t *testing.T) {
+		for _, args := range [][]string{
+			{"--api-endpoint", "h", "help", "context"},
+			{"help", "--api-jump", "b"},
+			{"completion", "bash", "--api-endpoint", "h"},
+			{"completion", "--api-proxy", "socks5h://h:1080"},
+		} {
+			root, out, _ := newPersonaRoot(t, "pmx")
+			root.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log"}, args...))
+
+			require.NoError(t, root.Execute(), "pmx %s", strings.Join(args, " "))
+			require.NotEmpty(t, out.String(), "pmx %s must print its text", strings.Join(args, " "))
+		}
+	})
+
+	t.Run("context update refuses --api-proxy and leaves the file alone", func(t *testing.T) {
+		cfgPath := writeTwoContextConfig(t)
+		before, err := os.ReadFile(cfgPath)
+		require.NoError(t, err)
+
+		root, out, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs([]string{
+			"--config", cfgPath, "--no-log", "context", "update", "alpha",
+			"--host", "moved.invalid", "--api-proxy", "socks5h://h:1080",
+		})
+
+		err = root.Execute()
+		require.EqualError(t, err,
+			"--api-proxy has no effect on pmx context update; use --proxy-url to store a proxy")
+		require.Empty(t, out.String())
+
+		after, err := os.ReadFile(cfgPath)
+		require.NoError(t, err)
+		require.Equal(t, string(before), string(after), "a refused context update must not touch the config")
+	})
+
+	t.Run("the hidden ctx alias carries the same hint", func(t *testing.T) {
+		cfgPath := writeTwoContextConfig(t)
+		root, _, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs([]string{"--config", cfgPath, "--no-log", "ctx", "update", "alpha", "--api-jump", "b"})
+
+		require.EqualError(t, root.Execute(),
+			"--api-jump has no effect on pmx ctx update; use --ssh-jump to store a bastion")
+	})
+
+	t.Run("PMX_API_JUMP on context add stays silent and succeeds", func(t *testing.T) {
+		t.Setenv("PMX_API_JUMP", "b")
+
+		cfgPath := filepath.Join(t.TempDir(), "config.yml")
+		root, out, errOut := newPersonaRoot(t, "pmx")
+		root.SetArgs(addArgs(cfgPath))
+
+		require.NoError(t, root.Execute())
+		require.Contains(t, out.String(), `Context "lab" added.`)
+		require.NotContains(t, errOut.String(), "has no effect")
+
+		cfg, err := config.Load(cfgPath)
+		require.NoError(t, err)
+		require.Contains(t, cfg.Contexts, "lab")
+		require.Empty(t, cfg.Contexts["lab"].SSH.Jump, "an exported variable must never be stored")
+	})
+
+	// "__complete" is never a noClient command, so the refusal could not fire
+	// for it even if persistentPreRunE ran the refusal first. This pins the
+	// completion output; the ordering itself is defensive and unobservable.
+	t.Run("a completion request carrying a flag is never refused", func(t *testing.T) {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+		root, out, errOut := newPersonaRoot(t, "pmx")
+		root.SetArgs([]string{"__complete", "context", "add", "lab", "--api-endpoint", "h", "--product", ""})
+
+		require.NoError(t, root.Execute())
+		require.Equal(t,
+			"pve\tProxmox VE\npbs\tProxmox Backup Server\npdm\tProxmox Datacenter Manager\n:4\n", out.String())
+		require.Equal(t, "Completion ended with directive: ShellCompDirectiveNoFileComp\n", errOut.String())
+	})
+}
+
+// TestClientCommand_RejectsMalformedOverridesBeforeResolving proves that a
+// command that builds a client parses the --api-* flags and the PMX_API_*
+// variables before it resolves a context, so a malformed value fails naming
+// its source instead of being ignored. No context is configured, so any
+// other outcome would surface as "no context specified".
+func TestClientCommand_RejectsMalformedOverridesBeforeResolving(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	run := func(t *testing.T, args ...string) error {
+		t.Helper()
+
+		root, out, _ := newPersonaRoot(t, "pmx")
+		root.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log", "version"},
+			args...))
+
+		err := root.Execute()
+		require.Empty(t, out.String(), "the command must not run")
+
+		return err
+	}
+
+	t.Run("a malformed flag", func(t *testing.T) {
+		require.EqualError(t, run(t, "--api-endpoint", "ftp://pve1"),
+			`invalid --api-endpoint "ftp://pve1": scheme must be https or http`)
+		require.EqualError(t, run(t, "--api-connect-timeout", "5"),
+			`--api-connect-timeout "5" is not a duration (e.g. 5s, 500ms)`)
+		require.EqualError(t, run(t, "--api-fingerprint", "garbage"),
+			`--api-fingerprint "garbage" must be a colon-separated hex SHA-256 (e.g. AA:BB:..., 32 pairs)`)
+	})
+
+	t.Run("a malformed variable", func(t *testing.T) {
+		t.Setenv("PMX_API_REQUEST_TIMEOUT", "0s")
+
+		require.EqualError(t, run(t), "$PMX_API_REQUEST_TIMEOUT must be greater than zero")
+	})
+
+	t.Run("well-formed values reach context resolution", func(t *testing.T) {
+		t.Setenv("PMX_API_PROXY", "socks5://192.0.2.1:9")
+
+		err := run(t, "--api-endpoint", "192.0.2.1:9", "--api-connect-timeout", "1s")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "no context specified")
+	})
+}
+
+// TestNoClient_UsesConnectionAnnotationAcceptsAPIFlags proves that a noClient
+// command that declares AnnotationUsesConnection receives the --api-* flags
+// through its Deps instead of refusing them, and that a malformed value
+// fails only when the command asks for the overrides, never in
+// persistentPreRunE.
+func TestNoClient_UsesConnectionAnnotationAcceptsAPIFlags(t *testing.T) {
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	run := func(t *testing.T, args ...string) *cli.Deps {
+		t.Helper()
+
+		root, cleanup := cli.NewRootCmd("pmx")
+		t.Cleanup(cleanup)
+		root.SetContext(context.Background())
+
+		var capturedDeps *cli.Deps
+		cmd := buildInspectCmd(&capturedDeps)
+		cmd.Annotations = map[string]string{"noClient": "true", cli.AnnotationUsesConnection: "true"}
+		root.AddCommand(cmd)
+
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&out)
+		root.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "config.yml"), "--no-log", "inspect"},
+			args...))
+
+		require.NoError(t, root.Execute())
+		require.NotNil(t, capturedDeps)
+
+		return capturedDeps
+	}
+
+	ov, err := run(t, "--api-endpoint", "pve9:9999", "--api-jump", "b").ConnectionOverrides()
+	require.NoError(t, err)
+	require.Equal(t, "pve9", ov.Host)
+	require.Equal(t, 9999, ov.Port)
+	require.Equal(t, "b", ov.Jump)
+	require.Equal(t, "--api-jump", ov.JumpSource)
+
+	_, err = run(t, "--api-endpoint", "ftp://pve1").ConnectionOverrides()
+	require.EqualError(t, err, `invalid --api-endpoint "ftp://pve1": scheme must be https or http`)
+}
+
+// captureStdio runs fn with os.Stdout and os.Stderr redirected to pipes and
+// returns what each received. Both pipes are drained concurrently, so fn can
+// write any amount to either without blocking.
+func captureStdio(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+
+	drain := func(r *os.File, dst *bytes.Buffer, done chan<- error) {
+		_, err := io.Copy(dst, r)
+		done <- errors.Join(err, r.Close())
+	}
+
+	outR, outW, err := os.Pipe()
+	require.NoError(t, err)
+	errR, errW, err := os.Pipe()
+	require.NoError(t, err)
+
+	var stdout, stderr bytes.Buffer
+	outDone, errDone := make(chan error, 1), make(chan error, 1)
+	go drain(outR, &stdout, outDone)
+	go drain(errR, &stderr, errDone)
+
+	origOut, origErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	func() {
+		defer func() { os.Stdout, os.Stderr = origOut, origErr }()
+		fn()
+	}()
+
+	require.NoError(t, outW.Close())
+	require.NoError(t, errW.Close())
+	require.NoError(t, <-outDone)
+	require.NoError(t, <-errDone)
+
+	return stdout.String(), stderr.String()
+}
+
+// TestComplete_ToleratesMalformedAPIEndpointEnv proves that a malformed
+// $PMX_API_ENDPOINT, exported in a shell long ago, never breaks tab
+// completion. The request runs through cli.Main, as the binary does, exits
+// 0, prints its completions, and puts nothing on standard error apart from
+// the directive trace cobra itself writes there for every completion
+// request, which completion scripts discard.
+func TestComplete_ToleratesMalformedAPIEndpointEnv(t *testing.T) {
+	t.Setenv("PMX_API_ENDPOINT", "ftp://pve1")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PMX_CONTEXT", "")
+
+	old := os.Args
+	os.Args = []string{"pmx", "__complete", "context", "add", "lab", "--product", ""}
+	defer func() { os.Args = old }()
+
+	var code int
+	stdout, stderr := captureStdio(t, func() {
+		code = cli.Main("pmx", personapkg.Factories("pmx"))
+	})
+
+	require.Equal(t, 0, code, "completion must exit 0; stderr: %s", stderr)
+	require.Equal(t,
+		"pve\tProxmox VE\npbs\tProxmox Backup Server\npdm\tProxmox Datacenter Manager\n:4\n", stdout)
+	require.Equal(t, "Completion ended with directive: ShellCompDirectiveNoFileComp\n", stderr,
+		"only cobra's own directive trace may reach standard error")
+}
+
+// TestHelp_ConnectionPrecedenceOnPersonaRootsOnly proves each persona root's
+// --help states the connection precedence exactly once, and that no other
+// command's help repeats it, which is what would happen if the line lived in
+// the usage template every command inherits.
+func TestHelp_ConnectionPrecedenceOnPersonaRootsOnly(t *testing.T) {
+	const line = "Connection settings resolve flag > environment variable > context config > built-in default."
+
+	for _, persona := range personapkg.Names() {
+		t.Run(persona, func(t *testing.T) {
+			root, out, _ := newPersonaRoot(t, persona)
+			root.SetArgs([]string{"--help"})
+			require.NoError(t, root.Execute())
+			require.Equal(t, 1, strings.Count(out.String(), line), "%s --help must state the precedence once", persona)
+
+			var offenders []string
+			var walk func(*cobra.Command)
+			walk = func(c *cobra.Command) {
+				for _, sub := range c.Commands() {
+					out.Reset()
+					require.NoError(t, sub.Help())
+					if strings.Contains(out.String(), line) {
+						offenders = append(offenders, sub.CommandPath())
+					}
+					walk(sub)
+				}
+			}
+			walk(root)
+
+			require.Empty(t, offenders, "only the persona root's help may state the connection precedence")
+		})
+	}
 }
 
 // TestWaitTimeout_RejectsNegative verifies that the root rejects a negative
@@ -509,6 +1122,11 @@ func TestAddGroups_GroupAppearsInHelp(t *testing.T) {
 // wraps, and the longest descriptions in this tree are well over 200 columns.
 func TestHelp_WrapsFlagUsagesToColumns(t *testing.T) {
 	t.Setenv("COLUMNS", "80")
+	// The --config default is the one token in the help that cannot wrap, and
+	// the widest flag name, --api-tls-handshake-timeout, sets how far every
+	// description is indented. A short config home keeps that token inside
+	// eighty columns whatever the home directory of the machine running this.
+	t.Setenv("XDG_CONFIG_HOME", "/cfg")
 
 	root, cleanup := cli.NewRootCmd("pmx")
 	defer cleanup()
@@ -525,6 +1143,36 @@ func TestHelp_WrapsFlagUsagesToColumns(t *testing.T) {
 	require.Contains(t, buf.String(), "--long-one")
 	for line := range strings.SplitSeq(buf.String(), "\n") {
 		require.LessOrEqual(t, len(line), 80, "help line exceeds $COLUMNS: %q", line)
+	}
+}
+
+// TestHelp_WrapsFlagUsagesWithARealisticConfigHome runs the same check with
+// a config home as long as a typical one. The --config default cannot wrap,
+// so its line alone may run past $COLUMNS, and only by that token: the line
+// without the path must still fit, and every other line must fit whole.
+func TestHelp_WrapsFlagUsagesWithARealisticConfigHome(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+
+	configHome := "/Users/firstname.lastname/.config"
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	configDefault := filepath.Join(configHome, "pmx", "config.yml")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	require.NoError(t, root.Usage())
+	require.Contains(t, buf.String(), configDefault)
+
+	for line := range strings.SplitSeq(buf.String(), "\n") {
+		if len(line) <= 80 {
+			continue
+		}
+
+		require.Contains(t, line, configDefault, "only the --config default may overflow: %q", line)
+		require.LessOrEqual(t, len(line)-len(configDefault), 80,
+			"the --config line overflows by more than its default: %q", line)
 	}
 }
 

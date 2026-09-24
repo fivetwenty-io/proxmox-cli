@@ -11,8 +11,9 @@ import (
 // `pmx rsync` argv by extractPMXFlags, split by where the caller must apply
 // them.
 type pmxFlagValues struct {
-	// Root holds values destined for cmd.Root().PersistentFlags().Set:
-	// "context", "config", "insecure", "debug".
+	// Root holds values destined for cmd.Root().PersistentFlags().Set, keyed
+	// by the root flag's name, such as "context", "insecure", or
+	// "api-endpoint".
 	Root map[string]string
 	// SSH holds values destined for the rsync command's own long-only
 	// --ssh-*/--no-strict flags via cmd.Flags().Set.
@@ -73,6 +74,18 @@ var pmxFlagTable = []pmxFlagSpec{
 	{names: []string{"--warnings-as-errors"}, takesValue: false, target: "root",
 		dest: "warnings-as-errors"},
 	{names: []string{"--wide"}, takesValue: false, target: "root", dest: "wide"},
+	// The nine per-invocation API connection overrides. None has a short
+	// form, and only --api-proxy-from-env is boolean.
+	{names: []string{"--api-endpoint"}, takesValue: true, target: "root", dest: "api-endpoint"},
+	{names: []string{"--api-jump"}, takesValue: true, target: "root", dest: "api-jump"},
+	{names: []string{"--api-proxy"}, takesValue: true, target: "root", dest: "api-proxy"},
+	{names: []string{"--api-proxy-from-env"}, takesValue: false, target: "root", dest: "api-proxy-from-env"},
+	{names: []string{"--api-ca-cert"}, takesValue: true, target: "root", dest: "api-ca-cert"},
+	{names: []string{"--api-fingerprint"}, takesValue: true, target: "root", dest: "api-fingerprint"},
+	{names: []string{"--api-connect-timeout"}, takesValue: true, target: "root", dest: "api-connect-timeout"},
+	{names: []string{"--api-tls-handshake-timeout"}, takesValue: true, target: "root",
+		dest: "api-tls-handshake-timeout"},
+	{names: []string{"--api-request-timeout"}, takesValue: true, target: "root", dest: "api-request-timeout"},
 	{names: []string{"--ssh-user"}, takesValue: true, target: "ssh", dest: "ssh-user"},
 	{names: []string{"--ssh-port"}, takesValue: true, target: "ssh", dest: "ssh-port"},
 	{names: []string{"--ssh-identity"}, takesValue: true, target: "ssh", dest: "ssh-identity"},

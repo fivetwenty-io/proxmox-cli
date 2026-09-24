@@ -136,6 +136,36 @@ type Deps struct {
 	// mirroring the merge PersistentPreRunE performs for normal commands
 	// (see the "insecure := pf.insecure || ctx.TLS.Insecure" line below).
 	Insecure bool
+
+	// Conn resolves this invocation's per-invocation connection overrides,
+	// meaning the nine --api-* root flags, the eight PMX_API_* variables, and
+	// the root's --insecure. persistentPreRunE assigns it before the noClient
+	// early return, as it does Insecure and CtxName, so the auth and context
+	// groups can reach the overrides too.
+	//
+	// It is a function rather than a value so that nothing parses the
+	// overrides until a command asks for them. A shell-completion request
+	// passes through persistentPreRunE before it reaches the target command's
+	// ValidArgsFunction, and an eager parse would let a malformed
+	// $PMX_API_ENDPOINT exported long ago fail every tab press. Parsed on
+	// demand, the same value fails only the command that tried to connect.
+	// The first call parses and every later call returns the same answer.
+	//
+	// Callers use ConnectionOverrides, which tolerates a nil Conn, rather
+	// than calling the field directly.
+	Conn func() (ConnectionOverrides, error)
+}
+
+// ConnectionOverrides returns this invocation's connection overrides by
+// calling Conn. It returns the zero value, which overrides nothing, and no
+// error when d or d.Conn is nil, which is the case for a Deps a test builds
+// by hand and for the placeholder Deps the group factories receive.
+func (d *Deps) ConnectionOverrides() (ConnectionOverrides, error) {
+	if d == nil || d.Conn == nil {
+		return ConnectionOverrides{}, nil
+	}
+
+	return d.Conn()
 }
 
 // GetDeps retrieves *Deps from cmd's context. It panics if called before
@@ -196,6 +226,60 @@ const ProductAnnotation = "product"
 // same way without needing the annotation, since their raw argv (flags
 // included) reaches PersistentPreRunE unparsed.
 const AnnotationPassthroughArgs = "passthroughArgs"
+
+// AnnotationUsesConnection is the cobra Annotations key a noClient command
+// sets to "true" to declare that it resolves an API connection of its own
+// and consumes the --api-* overrides through Deps.ConnectionOverrides, as
+// the auth verbs that dial and context validate do. persistentPreRunE
+// refuses a changed --api-* flag on every other noClient command, because
+// the flag would otherwise do nothing and exit 0.
+const AnnotationUsesConnection = "pmx-uses-connection"
+
+// annotationGroupOnly marks a grouping command whose only action is the RunE
+// RequireSubcommands installs, which prints help when it has no arguments
+// and reports an unknown command when it has some. The refusal of an unused
+// --api-* flag steps aside for such a command when it has arguments, so the
+// operator sees the unknown command rather than a complaint about the flag.
+const annotationGroupOnly = "pmx-group-only"
+
+// connectionFlagNames lists the nine --api-* root flags, without their
+// leading dashes, in the order RegisterConnectionFlags registers them. The
+// refusal of an unused flag walks it in this order, so the first flag the
+// help lists is the one it names.
+var connectionFlagNames = []string{
+	flagAPIEndpoint,
+	flagAPIJump,
+	flagAPIProxy,
+	flagAPIProxyFromEnv,
+	flagAPICACert,
+	flagAPIFingerprint,
+	flagAPIConnectTimeout,
+	flagAPITLSHandshakeTimeout,
+	flagAPIRequestTimeout,
+}
+
+// storedConnectionFlagHints names, for each --api-* flag, the context add
+// and context update flag that stores the same setting in a context. An
+// operator who passes an --api-* flag to either command most likely meant to
+// store the setting, so the refusal appends the matching hint on those two
+// commands only.
+var storedConnectionFlagHints = map[string]string{
+	flagAPIEndpoint:            "use --host, --port, and --protocol to store the endpoint",
+	flagAPIJump:                "use --ssh-jump to store a bastion",
+	flagAPIProxy:               "use --proxy-url to store a proxy",
+	flagAPIProxyFromEnv:        "use --proxy-from-env to store the setting",
+	flagAPICACert:              "use --ca-cert to store a CA certificate",
+	flagAPIFingerprint:         "use --fingerprint to store a pin",
+	flagAPIConnectTimeout:      "use --timeout-connect to store a timeout",
+	flagAPITLSHandshakeTimeout: "use --timeout-tls-handshake to store a timeout",
+	flagAPIRequestTimeout:      "use --timeout-request to store a timeout",
+}
+
+// connectionPrecedenceLine closes each persona root's long description, so
+// the root's --help states once, and only there, how every connection
+// setting resolves.
+const connectionPrecedenceLine = "Connection settings resolve flag > environment variable > context config > " +
+	"built-in default."
 
 // ProductFromContext is the ProductAnnotation value a shared command sets to
 // declare that its client should target whichever product the active context
@@ -349,6 +433,11 @@ It supports multiple named contexts, token and password authentication, and
 structured output in table, ascii, plain, JSON, and YAML formats.`
 	}
 
+	// Every persona's long description ends with the connection precedence.
+	// It lives here rather than in the usage template, because every
+	// sub-command inherits the template and would repeat the line.
+	root.Long += "\n\n" + connectionPrecedenceLine
+
 	// --- persistent flags ---
 	root.PersistentFlags().StringVar(&pf.config, "config",
 		config.DefaultPath(),
@@ -379,6 +468,11 @@ structured output in table, ascii, plain, JSON, and YAML formats.`
 		"treat a task that finishes with warnings as a failure (exit 8)")
 	root.PersistentFlags().BoolVar(&pf.wide, "wide", false,
 		"do not shorten table columns to fit the terminal")
+
+	// The nine --api-* connection overrides bind no field of pf, because
+	// OverridesFromCommand reads them off the parsed command, together with
+	// whether each one was changed and with their PMX_API_* mirrors.
+	RegisterConnectionFlags(root.PersistentFlags())
 
 	wrapFlagUsages(root)
 
@@ -443,7 +537,8 @@ func resolveOutputDefault() string {
 // It:
 //  1. Loads config from --config path.
 //  2. Initialises the slog logger via logx.Init.
-//  3. Skips client construction for commands annotated with Annotations["noClient"].
+//  3. Skips client construction for commands annotated with Annotations["noClient"],
+//     after refusing an --api-* flag such a command would ignore.
 //  4. Resolves the context and constructs the *apiclient.APIClient via BuildContextClient.
 //  5. Injects the logger into the client.
 //  6. Builds and stashes *Deps in cmd context.
@@ -555,6 +650,12 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		Insecure:     pf.insecure,
 		CtxName:      ctxName,
 		WaitTimeout:  pf.waitTimeout,
+		// Assigned here, before the noClient early return, and resolved only
+		// when a command asks, so nothing below can fail on a malformed
+		// override before a completion request returns.
+		Conn: sync.OnceValues(func() (ConnectionOverrides, error) {
+			return OverridesFromCommand(cmd)
+		}),
 	}
 
 	// Stash deps NOW, before any client construction can fail: Execute's
@@ -582,30 +683,58 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	// them without carrying a bound of its own.
 	apiclient.SetDefaultWaitTimeout(pf.waitTimeout)
 
+	// cobra's own hidden shell-completion dispatcher command ("__complete",
+	// aliased as "__completeNoDesc") skips everything below, and it returns
+	// first, before the refusal of an unused --api-* flag, so a completion
+	// request can never fail. The refusal could not fire for it anyway,
+	// because "__complete" is never a noClient command, so this ordering is
+	// defensive and no test can observe it.
+	//
+	// That command has DisableFlagParsing set by cobra itself (see
+	// completions.go). cobra runs THIS PersistentPreRunE for "__complete"
+	// itself, as the nearest parent with a PersistentPreRunE, before the
+	// dispatcher's own Run reaches the target command's ValidArgsFunction, so
+	// this invocation never sees the real --config/--context/--insecure the
+	// user typed and would resolve and build a client for the DEFAULT context
+	// instead. Building that client here is worse than merely wrong: if
+	// resolving the default context's secret errors for any reason (missing
+	// keychain entry, no context configured at all, ...), the error aborts
+	// "__complete" before its Run ever calls the target's ValidArgsFunction,
+	// so EVERY completion request would print an error and exit non-zero,
+	// which is exactly what ValidArgsFunction implementations (e.g.
+	// remote.completeNodeNames) are designed to never do. Skipping client
+	// construction here leaves that correctness to the target command's OWN
+	// flag parsing (which sees the real flag values) and its own
+	// ValidArgsFunction, which builds any client it needs itself via
+	// BuildContextClient. Deps.Conn, assigned above, is a lazy resolver for
+	// the same reason, so a malformed $PMX_API_ENDPOINT cannot fail a
+	// completion request either.
+	if cmd.Name() == cobra.ShellCompRequestCmd {
+		return logCloser, nil
+	}
+
+	// A noClient command that does not resolve a connection of its own would
+	// ignore an --api-* flag and exit 0, which on context add would store a
+	// context without the bastion or proxy the operator thought they gave it.
+	// Refuse the flag instead. The PMX_API_* variables stay silent here,
+	// because an exported variable is meant for the commands that dial.
+	if err := refuseUnusedConnectionFlags(cmd, args); err != nil {
+		return logCloser, err
+	}
+
 	// Commands that set Annotations["noClient"]="true" skip API client build.
 	// This applies to: version (build-info only), context group verbs.
-	//
-	// cobra's own hidden shell-completion dispatcher command ("__complete",
-	// aliased as "__completeNoDesc") is treated the same way, for a different
-	// reason: that command has DisableFlagParsing set by cobra itself (see
-	// completions.go), so THIS PersistentPreRunE invocation — which cobra
-	// runs for "__complete" itself, as the nearest parent with a
-	// PersistentPreRunE, before "__complete"'s own Run dispatches into the
-	// target command's ValidArgsFunction — never sees the real
-	// --config/--context/--insecure the user actually typed; it would
-	// resolve and build a client for the DEFAULT context instead. Building
-	// that client here is worse than merely wrong: if resolving the default
-	// context's secret errors for any reason (missing keychain entry, no
-	// context configured at all, ...), the error aborts "__complete" before
-	// its Run ever calls the target's ValidArgsFunction, so EVERY completion
-	// request would print an error and exit non-zero — exactly what
-	// ValidArgsFunction implementations (e.g. remote.completeNodeNames) are
-	// designed to never do. Skipping client construction here leaves that
-	// correctness to the target command's OWN flag parsing (which sees the
-	// real flag values) and its own ValidArgsFunction, which builds any
-	// client it needs itself via BuildContextClient.
-	if cmd.Annotations["noClient"] == "true" || cmd.Name() == cobra.ShellCompRequestCmd {
+	if cmd.Annotations["noClient"] == "true" {
 		return logCloser, nil
+	}
+
+	// Every command past this point dials, so parse the connection overrides
+	// now. A malformed --api-* value or PMX_API_* variable then fails before
+	// any context is resolved or any client is built, naming the flag or the
+	// variable, instead of being ignored. Deps.Conn caches the answer, so the
+	// client builders read the same overrides without parsing them again.
+	if _, err := deps.ConnectionOverrides(); err != nil {
+		return logCloser, err
 	}
 
 	// Resolve context — flag > env > config — and build the client for the
@@ -684,6 +813,84 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	}
 
 	return logCloser, nil
+}
+
+// refuseUnusedConnectionFlags fails when cmd is a noClient command that does
+// not carry AnnotationUsesConnection and the operator changed one of the
+// nine --api-* flags on its command line. Such a command builds no client
+// and resolves no connection, so the flag would have no effect. It names the
+// first changed flag in registration order, as
+// "--api-endpoint has no effect on pmx version client", and on context add
+// and context update it points each flag at the flag that stores the same
+// setting instead.
+//
+// Three cases pass through without a refusal. cobra's help command and the
+// completion subtree print text and never act on a connection, and an alias
+// that bakes in an --api-* flag must not break help, as --help already
+// accepts one. A grouping command given positional arguments is a mistyped
+// verb, and its own RunE reports the unknown command, which is the error the
+// operator needs.
+//
+// It reads only whether each flag was changed and never a value, so an
+// empty or malformed value is refused the same way. The PMX_API_* variables
+// are never consulted. It returns nil for every command that builds a root
+// client or resolves a connection itself.
+func refuseUnusedConnectionFlags(cmd *cobra.Command, args []string) error {
+	if cmd.Annotations["noClient"] != "true" || cmd.Annotations[AnnotationUsesConnection] == "true" {
+		return nil
+	}
+
+	if isHelpOrCompletion(cmd) || (cmd.Annotations[annotationGroupOnly] == "true" && len(args) > 0) {
+		return nil
+	}
+
+	for _, name := range connectionFlagNames {
+		f := lookupConnectionFlag(cmd, name)
+		if f == nil || !f.Changed {
+			continue
+		}
+
+		msg := fmt.Sprintf("--%s has no effect on %s", name, cmd.CommandPath())
+		if hint, ok := storedConnectionFlagHints[name]; ok && storesContextSettings(cmd) {
+			msg += "; " + hint
+		}
+
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
+// storesContextSettings reports whether cmd is context add or context
+// update, the two commands that write a context's stored connection
+// settings, under the context group or its hidden ctx alias on the root. It
+// matches the canonical names, so a verb alias such as "context create" is
+// covered too, and a same-named verb elsewhere in the tree, such as a lab's
+// context group, is not.
+func storesContextSettings(cmd *cobra.Command) bool {
+	parent := cmd.Parent()
+	if parent == nil || parent.Parent() != cmd.Root() {
+		return false
+	}
+
+	if parent.Name() != "context" && parent.Name() != "ctx" {
+		return false
+	}
+
+	return cmd.Name() == "add" || cmd.Name() == "update"
+}
+
+// isHelpOrCompletion reports whether cmd is cobra's help command or belongs
+// to the completion subtree, the built-in commands markBuiltinCommandsNoClient
+// installs on the root.
+func isHelpOrCompletion(cmd *cobra.Command) bool {
+	for c := cmd; c.HasParent(); c = c.Parent() {
+		if c.Parent() == c.Root() && (c.Name() == "help" || c.Name() == "completion") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ApplyTOFUOptions augments opts with Trust-On-First-Use (TOFU) certificate
@@ -1308,6 +1515,7 @@ func RequireSubcommands(cmd *cobra.Command) {
 		// commands themselves, and the unknown-command branch still exits
 		// non-zero.
 		setNoClient(cmd)
+		cmd.Annotations[annotationGroupOnly] = "true"
 	}
 }
 
