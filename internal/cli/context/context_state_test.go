@@ -1080,7 +1080,10 @@ func TestContextShow_HelpNamesRootFlags(t *testing.T) {
 // allShowFormats runs "show" against deps once per output format and hands
 // the rendered text to check, so a test covers table, JSON, and YAML with
 // one assertion body.
-func allShowFormats(t *testing.T, path string, cfg *config.Config, args []string, check func(t *testing.T, format output.Format, out string)) {
+func allShowFormats(
+	t *testing.T, path string, cfg *config.Config, args []string,
+	check func(t *testing.T, format output.Format, out string),
+) {
 	t.Helper()
 	for _, format := range []output.Format{output.FormatTable, output.FormatJSON, output.FormatYAML} {
 		deps := makeDeps(t, path, cfg)
@@ -1350,6 +1353,50 @@ func TestContextShow_RedactsProxyURLCredentials(t *testing.T) {
 	})
 }
 
+// TestContextShow_RedactsJumpPassword asserts a stored ssh.jump chain that
+// ValidateJumpChain rejects, because it carries a misused user:password hop,
+// never prints the password in show output, in table, JSON, or YAML form,
+// and that the redacted value equals apiclient.RedactJumpChain(jump)
+// exactly. A chain the validator accepts still shows the plain hop, so the
+// fixture (fullConnectionContext, covered by
+// TestContextShow_RendersConnectionFields) is left untouched by this fix.
+func TestContextShow_RedactsJumpPassword(t *testing.T) {
+	const rawJump = "admin:s3cret@bastion.example.com"
+	require.Error(t, apiclient.ValidateJumpChain(rawJump),
+		"test fixture sanity: chain must be one the validator rejects")
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				SSH:  config.SSHBlock{Jump: rawJump},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	wantJump := apiclient.RedactJumpChain(rawJump)
+	require.NotContains(t, wantJump, "s3cret", "test fixture sanity: redaction must actually mask")
+
+	allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+		t.Helper()
+		require.NotContains(t, out, "s3cret", "format %s must never carry the jump chain password", format)
+
+		if format == output.FormatTable {
+			require.Contains(t, out, wantJump)
+			return
+		}
+		var got map[string]any
+		switch format {
+		case output.FormatJSON:
+			require.NoError(t, json.Unmarshal([]byte(out), &got))
+		case output.FormatYAML:
+			require.NoError(t, yaml.Unmarshal([]byte(out), &got))
+		}
+		require.Equal(t, wantJump, got["jump"], "format %s must carry the redacted jump chain", format)
+	})
+}
+
 // TestContextShow_MasksUnsetDollarName asserts a $NAME proxy password
 // classifies as a reference (config.IsSecretReference) but renders as "***"
 // while NAME is unset in the environment, because config.ResolveSecret would
@@ -1489,7 +1536,8 @@ func TestContextShow_RendersTimeoutDefaults(t *testing.T) {
 			require.Equal(t, "5s (default)", got["timeout_connect"], "format %s", format)
 			require.Equal(t, "10s (default)", got["timeout_tls_handshake"], "format %s", format)
 			require.Equal(t, "30s (default)", got["timeout_request"], "format %s", format)
-			require.Equal(t, false, got["proxy_from_env"], "format %s: an absent from-env key must resolve to false", format)
+			require.Equal(t, false, got["proxy_from_env"],
+				"format %s: an absent from-env key must resolve to false", format)
 		})
 	})
 
@@ -1581,7 +1629,9 @@ func TestContextLs_RawCarriesJumpAndProxy(t *testing.T) {
 // renders as two space-separated tokens, same as any other column boundary.
 func requireExactLsHeaderRow(t *testing.T, out string) {
 	t.Helper()
-	wantFields := []string{"NAME", "HOST", "PORT", "PRODUCT", "AUTH", "TYPE", "USERNAME", "DEFAULT", "NODE", "DEFAULT", "OUTPUT"}
+	wantFields := []string{
+		"NAME", "HOST", "PORT", "PRODUCT", "AUTH", "TYPE", "USERNAME", "DEFAULT", "NODE", "DEFAULT", "OUTPUT",
+	}
 	lines := strings.Split(out, "\n")
 	require.GreaterOrEqual(t, len(lines), 2, "ls table output must have a border line and a header line")
 	headerLine := strings.ReplaceAll(lines[1], "│", " ")
@@ -1663,6 +1713,47 @@ func TestContextLs_RedactsProxyURL(t *testing.T) {
 				require.Equal(t, wantProxy, entries[0]["proxy"], "format %s must carry the redacted proxy url", format)
 			}
 		})
+	}
+}
+
+// TestContextLs_RedactsJumpPassword asserts a stored ssh.jump chain that
+// ValidateJumpChain rejects never prints the password in ls JSON or YAML
+// output, and that the redacted value equals apiclient.RedactJumpChain(jump)
+// exactly.
+func TestContextLs_RedactsJumpPassword(t *testing.T) {
+	const rawJump = "admin:s3cret@bastion.example.com"
+	require.Error(t, apiclient.ValidateJumpChain(rawJump),
+		"test fixture sanity: chain must be one the validator rejects")
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				SSH:  config.SSHBlock{Jump: rawJump},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	wantJump := apiclient.RedactJumpChain(rawJump)
+	require.NotContains(t, wantJump, "s3cret", "test fixture sanity: redaction must actually mask")
+
+	for _, format := range []output.Format{output.FormatJSON, output.FormatYAML} {
+		deps := makeDeps(t, path, cfg)
+		deps.Format = format
+		out, err := run(t, deps, "", "ls")
+		require.NoError(t, err, "format %s", format)
+		require.NotContains(t, out, "s3cret", "format %s must never carry the jump chain password", format)
+
+		var entries []map[string]any
+		switch format {
+		case output.FormatJSON:
+			require.NoError(t, json.Unmarshal([]byte(out), &entries))
+		case output.FormatYAML:
+			require.NoError(t, yaml.Unmarshal([]byte(out), &entries))
+		}
+		require.Len(t, entries, 1)
+		require.Equal(t, wantJump, entries[0]["jump"], "format %s must carry the redacted jump chain", format)
 	}
 }
 
@@ -1926,7 +2017,8 @@ func TestValidateConnect_RedactsProxyCredentials(t *testing.T) {
 		yamlEntry := parseValidateYAML(t, yamlOut)["lab"]
 		require.Equal(t, "proxy "+masked, yamlEntry.Via)
 		require.Len(t, yamlEntry.Errors, 1)
-		require.True(t, strings.HasPrefix(yamlEntry.Errors[0], "unreachable via proxy "+masked+": "), yamlEntry.Errors[0])
+		require.True(t,
+			strings.HasPrefix(yamlEntry.Errors[0], "unreachable via proxy "+masked+": "), yamlEntry.Errors[0])
 
 		for _, text := range []string{out, stderr, table, tableStderr, yamlOut, yamlStderr} {
 			require.NotContains(t, text, "u:p@", "the proxy password must never print")

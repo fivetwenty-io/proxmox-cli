@@ -33,7 +33,9 @@ func newShowCmd() *cobra.Command {
 			"keychain references are shown as they are, since a reference reveals nothing on " +
 			"its own. A $NAME reference whose variable is unset is also shown as \"***\", " +
 			"because pmx would use it as a literal password. A proxy URL's embedded password " +
-			"is always redacted, whether or not the URL parses.\n\n" +
+			"is always redacted, whether or not the URL parses. An ssh jump chain that " +
+			"ValidateJumpChain accepts prints as written; one it rejects has any embedded " +
+			"password masked the same way.\n\n" +
 			"Port, protocol, and realm render the stored value with pmx's defaults applied. " +
 			"SSH user, port, and identity render the stored value only, since their fallbacks " +
 			"belong to the ssh client, not to pmx. Each timeout renders the stored value, or " +
@@ -88,6 +90,12 @@ func newShowCmd() *cobra.Command {
 			// in logs, shell history, or shared terminal output.
 			redactedSecret := redactSecret(ctx.Auth.Secret)
 
+			// The jump chain goes through apiclient.RedactJumpChain, which is the
+			// identity for a chain ValidateJumpChain accepts, so a well-formed
+			// hop still shows as written. A rejected chain may carry an embedded
+			// password, so RedactJumpChain masks it here too.
+			jump := apiclient.RedactJumpChain(ctx.SSH.Jump)
+
 			// The proxy URL goes through redact.ProxyURL directly on the stored
 			// string, so an embedded password is masked even when the value does
 			// not parse as a URL at all.
@@ -100,7 +108,8 @@ func newShowCmd() *cobra.Command {
 
 			timeoutDefaults := apiclient.DefaultTimeoutSpec()
 			timeoutConnect := renderTimeoutRow("timeout.connect", ctx.Timeout.Connect, timeoutDefaults.Connect)
-			timeoutTLSHandshake := renderTimeoutRow("timeout.tls-handshake", ctx.Timeout.TLSHandshake, timeoutDefaults.TLSHandshake)
+			timeoutTLSHandshake := renderTimeoutRow(
+				"timeout.tls-handshake", ctx.Timeout.TLSHandshake, timeoutDefaults.TLSHandshake)
 			timeoutRequest := renderTimeoutRow("timeout.request", ctx.Timeout.Request, timeoutDefaults.Request)
 
 			single := map[string]string{
@@ -122,7 +131,7 @@ func newShowCmd() *cobra.Command {
 				"SSH USER":              ctx.SSH.User,
 				"SSH PORT":              fmt.Sprintf("%d", ctx.SSH.Port),
 				"SSH IDENTITY":          ctx.SSH.Identity,
-				"JUMP":                  ctx.SSH.Jump,
+				"JUMP":                  jump,
 				"PROXY":                 proxyURL,
 				"PROXY USERNAME":        ctx.Proxy.Username,
 				"PROXY PASSWORD":        redactedProxyPassword,
@@ -184,7 +193,7 @@ func newShowCmd() *cobra.Command {
 				SSHUser:             ctx.SSH.User,
 				SSHPort:             ctx.SSH.Port,
 				SSHIdentity:         ctx.SSH.Identity,
-				Jump:                ctx.SSH.Jump,
+				Jump:                jump,
 				Proxy:               proxyURL,
 				ProxyUsername:       ctx.Proxy.Username,
 				ProxyPassword:       redactedProxyPassword,

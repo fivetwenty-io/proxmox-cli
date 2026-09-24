@@ -154,6 +154,65 @@ func TestSSH_ContextSSHDefaults_ExplicitFlagWins(t *testing.T) {
 	require.Equal(t, []string{"-p", "22", "-i", "/home/user/.ssh/id", "root@192.168.1.10"}, c.Args)
 }
 
+// TestSSH_ContextSSHDefaults_JumpApplied asserts a context's ssh.jump, when
+// no --jump/-J flag is given, reaches ssh as -J, mirroring
+// TestSSH_ContextSSHDefaults_AppliedWhenFlagsNotSet for the other three
+// fields.
+func TestSSH_ContextSSHDefaults_JumpApplied(t *testing.T) {
+	_, ac := newFakeClient(t)
+	fr := exec.Fake()
+	deps := &cli.Deps{
+		API: ac, Runner: fr,
+		Ctx: &config.Context{SSH: config.SSHBlock{Jump: "bastion.example.com"}},
+	}
+
+	_, err := runSSH(deps, "pve1")
+	require.NoError(t, err)
+
+	c := lastCall(t, fr)
+	require.Equal(t, []string{"-p", "22", "-J", "bastion.example.com", "root@192.168.1.10"}, c.Args)
+}
+
+// TestSSH_ContextSSHDefaults_JumpNoneDialsDirect asserts a stored
+// ssh.jump: none never reaches ssh as "-J none", which ssh would read as a
+// jump host literally named none rather than as "no jump". The API
+// connection already reads this same literal as a direct dial
+// (cli.ResolveConnection); this keeps `pmx ssh` consistent with it.
+func TestSSH_ContextSSHDefaults_JumpNoneDialsDirect(t *testing.T) {
+	_, ac := newFakeClient(t)
+	fr := exec.Fake()
+	deps := &cli.Deps{
+		API: ac, Runner: fr,
+		Ctx: &config.Context{SSH: config.SSHBlock{Jump: "none"}},
+	}
+
+	_, err := runSSH(deps, "pve1")
+	require.NoError(t, err)
+
+	c := lastCall(t, fr)
+	require.Equal(t, []string{"-p", "22", "root@192.168.1.10"}, c.Args)
+	require.NotContains(t, c.Args, "-J")
+}
+
+// TestSSH_ContextSSHDefaults_ExplicitJumpFlagWinsOverNone asserts an
+// operator-supplied -J still reaches ssh verbatim, including the literal
+// "none", when the context's own ssh.jump is the "none" sentinel: a flag the
+// operator actually typed is never read as the sentinel.
+func TestSSH_ContextSSHDefaults_ExplicitJumpFlagWinsOverNone(t *testing.T) {
+	_, ac := newFakeClient(t)
+	fr := exec.Fake()
+	deps := &cli.Deps{
+		API: ac, Runner: fr,
+		Ctx: &config.Context{SSH: config.SSHBlock{Jump: "none"}},
+	}
+
+	_, err := runSSH(deps, "-J", "edge.example.com", "pve1")
+	require.NoError(t, err)
+
+	c := lastCall(t, fr)
+	require.Equal(t, []string{"-p", "22", "-J", "edge.example.com", "root@192.168.1.10"}, c.Args)
+}
+
 func TestSSH_ExitCodePropagation(t *testing.T) {
 	_, ac := newFakeClient(t)
 	fr := exec.Fake(exec.FakeResponse{ExitCode: 255})

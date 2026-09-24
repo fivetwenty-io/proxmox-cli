@@ -349,6 +349,25 @@ func TestRsync_ContextSSHDefaultsOverriddenByExplicitFlag(t *testing.T) {
 	require.Equal(t, "root@192.168.1.10:/etc", c.Args[2])
 }
 
+// TestRsync_ContextSSHJumpNoneDialsDirect asserts a stored ssh.jump: none
+// never reaches the rsync -e "ssh ..." string as "-J none", which ssh would
+// read as a jump host literally named none. The API connection already
+// reads this same literal as a direct dial (cli.ResolveConnection); this
+// keeps `pmx rsync` consistent with it.
+func TestRsync_ContextSSHJumpNoneDialsDirect(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	cfgPath := writeFakeConfig(t, f, config.SSHBlock{Jump: "none"})
+	runner := exec.Fake()
+	root, _, prefix := newRemoteRoot(t, cfgPath, runner)
+
+	root.SetArgs(append(prefix, "rsync", "pve1:/etc", "./dst"))
+	require.NoError(t, root.Execute())
+
+	c := runner.Calls[0]
+	require.Equal(t, "ssh -p 22", c.Args[1])
+	require.NotContains(t, c.Args[1], "-J")
+}
+
 func TestRsync_CrossNodeOperandsRejectedNoRunnerCall(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	cfgPath := writeFakeConfig(t, f, config.SSHBlock{})

@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -37,7 +38,7 @@ func newLsCmd() *cobra.Command {
 			"persona's with \"(mismatch)\". JSON and YAML output always report the plain " +
 			"product value instead.\n\n" +
 			"JSON and YAML output also carry each context's ssh jump host and proxy url, " +
-			"with any proxy password redacted; the table gains no columns for them, since " +
+			"with any embedded jump or proxy password redacted; the table gains no columns for them, since " +
 			"the eight it already has fill an eighty-column terminal. Use 'pmx context " +
 			"show' for the full per-context detail, including proxy credentials, timeouts, " +
 			"and the CA bundle.\n\n" +
@@ -132,7 +133,11 @@ func newLsCmd() *cobra.Command {
 					Username:      ctx.Auth.Username,
 					DefaultNode:   ctx.DefaultNode,
 					DefaultOutput: ctx.DefaultOutput,
-					Jump:          ctx.SSH.Jump,
+					// apiclient.RedactJumpChain is the identity for a chain
+					// ValidateJumpChain accepts, so a well-formed hop still shows
+					// as written; a rejected chain has any embedded password
+					// masked.
+					Jump: apiclient.RedactJumpChain(ctx.SSH.Jump),
 					// redact.ProxyURL runs on the stored string directly, so an
 					// embedded password never reaches JSON/YAML output, whether
 					// or not the value parses as a URL.

@@ -151,12 +151,22 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 	return nil
 }
 
+// sshJumpNone mirrors cli's connectionNone sentinel: the literal an operator
+// writes to ssh.jump, or passes to --api-jump, to say "no jump, dial
+// direct". The API side already treats it that way (resolveJump in
+// internal/cli/connection.go); ApplyContextSSHDefaults does the same here,
+// so a context that sets ssh.jump: none dials the target directly on
+// `pmx ssh` and `pmx rsync` too, rather than passing ssh a "-J none" that
+// ssh reads as a jump host literally named none.
+const sshJumpNone = "none"
+
 // ApplyContextSSHDefaults fills any of f's User/Port/Identity/Jump fields the
 // caller did not explicitly set (checked via cmd.Flags().Changed under the
 // given flag names) from the active context's SSH block. An explicit flag
 // always wins; a context value never overrides one the operator actually
 // passed. deps or deps.Ctx being nil (no active context, e.g. a noClient
-// command path) leaves f untouched.
+// command path) leaves f untouched. A stored ssh.jump of "none" is read as
+// no jump at all, matching sshJumpNone.
 func ApplyContextSSHDefaults(
 	cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, userFlag, portFlag, identityFlag, jumpFlag string,
 ) {
@@ -173,7 +183,7 @@ func ApplyContextSSHDefaults(
 	if block.Identity != "" && !cmd.Flags().Changed(identityFlag) {
 		f.Identity = block.Identity
 	}
-	if block.Jump != "" && !cmd.Flags().Changed(jumpFlag) {
+	if block.Jump != "" && block.Jump != sshJumpNone && !cmd.Flags().Changed(jumpFlag) {
 		f.Jump = block.Jump
 	}
 }

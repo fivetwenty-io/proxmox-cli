@@ -132,10 +132,10 @@ type Deps struct {
 	// Insecure is the raw --insecure persistent flag value, populated before
 	// the noClient early-return so that noClient commands (e.g. api auth,
 	// which builds its own API client outside PersistentPreRunE) can still
-	// honor the flag. It is NOT merged with any context's tls.insecure here;
-	// callers must OR it with the resolved context's TLS.Insecure themselves,
-	// mirroring the merge PersistentPreRunE performs for normal commands
-	// (see the "insecure := pf.insecure || ctx.TLS.Insecure" line below).
+	// honor the flag. It is also carried in the overrides that Deps.Conn
+	// returns, and cli.ResolveConnection ORs it with the context's
+	// tls.insecure; noClient callers that build their own client pass it
+	// through ContextOptions rather than merging it by hand.
 	Insecure bool
 
 	// Conn resolves this invocation's per-invocation connection overrides,

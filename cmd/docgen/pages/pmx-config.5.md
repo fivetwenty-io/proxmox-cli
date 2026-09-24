@@ -267,11 +267,13 @@ Each entry under **contexts** is a mapping with the following keys.
 **ssh.jump**
 : Default jump host to tunnel through, as **[user@]host[:port]**, or a
   comma-separated chain. Passed to ssh as **-J**. Unset by default, meaning a
-  direct connection. Set this when the context's nodes are not routable from
-  where **pmx** runs: every ssh-based command picks it up, including the
-  **pmx lab** verbs that reach lab guests on their own SDN mgmt IPs, which are
-  reachable only from inside the context's network. Override per invocation
-  with **-J/--jump** (**--ssh-jump** on **pmx rsync**).
+  direct connection; the literal **none** means the same, for the API
+  connection and for **pmx ssh** and **pmx rsync** alike. Set this when the
+  context's nodes are not routable from where **pmx** runs: every ssh-based
+  command picks it up, including the **pmx lab** verbs that reach lab guests
+  on their own SDN mgmt IPs, which are reachable only from inside the
+  context's network. Override per invocation with **-J/--jump**
+  (**--ssh-jump** on **pmx rsync**).
 
   The Proxmox API connection tunnels through it too, so a context whose **host** is reachable only from the bastion works without any further setup. **pmx** runs **ssh -W** for each API connection, which means the same keys, agent, **known_hosts**, and **~/.ssh/config** the ssh transport already uses apply unchanged. TLS is still negotiated against the context's **host** at the far end, so certificate verification, a pinned **fingerprint**, and **tofu** all behave exactly as they do on a direct connection.
 
