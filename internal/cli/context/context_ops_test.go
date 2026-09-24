@@ -754,16 +754,17 @@ func runJumpVerb(t *testing.T, verb, chain string) string {
 
 	var logs strings.Builder
 
-	walkErr := filepath.WalkDir(filepath.Join(home, ".pmx", "logs"), func(path string, d os.DirEntry, werr error) error {
-		if werr != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
-			return werr
-		}
+	walkErr := filepath.WalkDir(filepath.Join(home, ".pmx", "logs"),
+		func(path string, d os.DirEntry, werr error) error {
+			if werr != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+				return werr
+			}
 
-		raw, rerr := os.ReadFile(path) //nolint:gosec // G304: path is under this test's own temp HOME
-		logs.Write(raw)
+			raw, rerr := os.ReadFile(path) //nolint:gosec // G304: path is under this test's own temp HOME
+			logs.Write(raw)
 
-		return rerr
-	})
+			return rerr
+		})
 	require.NoError(t, walkErr)
 	require.Contains(t, logs.String(), `"msg":"exit"`, "%s must write its exit record", verb)
 	require.Contains(t, logs.String(), "is not valid", "the exit record must carry the error")

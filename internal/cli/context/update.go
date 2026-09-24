@@ -324,8 +324,10 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 		"proxy password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
 	cmd.Flags().BoolVar(&f.proxyFromEnv, "proxy-from-env", false,
 		"honour $HTTPS_PROXY (or $HTTP_PROXY) and $NO_PROXY for this context")
-	cmd.Flags().StringVar(&f.timeoutConnect, "timeout-connect", "", "bound TCP connection setup for this context, e.g. 5s")
-	cmd.Flags().StringVar(&f.timeoutTLSHandshake, "timeout-tls-handshake", "", "bound the TLS handshake for this context, e.g. 10s")
+	cmd.Flags().StringVar(&f.timeoutConnect, "timeout-connect", "",
+		"bound TCP connection setup for this context, e.g. 5s")
+	cmd.Flags().StringVar(&f.timeoutTLSHandshake, "timeout-tls-handshake", "",
+		"bound the TLS handshake for this context, e.g. 10s")
 	cmd.Flags().StringVar(&f.timeoutRequest, "timeout-request", "", "bound one API request for this context, e.g. 30s")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "",

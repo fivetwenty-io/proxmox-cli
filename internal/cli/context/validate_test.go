@@ -55,7 +55,8 @@ func TestValidate_ReportsMalformedJump(t *testing.T) {
 	for _, jump := range []string{"none", "  "} {
 		c.SSH.Jump = jump
 
-		path, cfg := makeConfig(t, &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}})
+		path, cfg := makeConfig(t,
+			&config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}})
 
 		_, err = run(t, makeDeps(t, path, cfg), "", "validate", "lab")
 		require.NoError(t, err, "ssh.jump %q", jump)

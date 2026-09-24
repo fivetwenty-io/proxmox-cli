@@ -338,7 +338,9 @@ func TestParseEndpoint(t *testing.T) {
 
 		for _, delim := range []string{"/", "?", "#", "://", " ", "@", ":", "[", "]", "%40"} {
 			for _, pw := range []string{delim + "s3cret", "pa" + delim + "s3cret", "s3cret" + delim + "zq9"} {
-				for _, form := range []string{"https://root:%s@pve1", "root:%s@pve1", "https://root@pam:%s@pve1:8006/x"} {
+				for _, form := range []string{
+					"https://root:%s@pve1", "root:%s@pve1", "https://root@pam:%s@pve1:8006/x",
+				} {
 					raw := fmt.Sprintf(form, pw)
 					requireNoSecret(t, raw, pw)
 				}

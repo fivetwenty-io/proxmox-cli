@@ -531,8 +531,16 @@ func TestStoredEndpointURL_AppliesDefaults(t *testing.T) {
 		want string
 	}{
 		{"pve defaults", config.Context{Host: "pve1.example.com"}, "https://pve1.example.com:8006"},
-		{"pbs port", config.Context{Host: "pbs1.example.com", Product: config.ProductPBS}, "https://pbs1.example.com:8007"},
-		{"pdm port", config.Context{Host: "pdm1.example.com", Product: config.ProductPDM}, "https://pdm1.example.com:8443"},
+		{
+			"pbs port",
+			config.Context{Host: "pbs1.example.com", Product: config.ProductPBS},
+			"https://pbs1.example.com:8007",
+		},
+		{
+			"pdm port",
+			config.Context{Host: "pdm1.example.com", Product: config.ProductPDM},
+			"https://pdm1.example.com:8443",
+		},
 		{"explicit values", config.Context{Host: "pve1", Port: 443, Protocol: "http"}, "http://pve1:443"},
 		{"bare ipv6", config.Context{Host: "::1"}, "https://[::1]:8006"},
 		{"bracketed ipv6", config.Context{Host: "[::1]"}, "https://[::1]:8006"},
@@ -876,7 +884,8 @@ func TestAuthContextOptions_MatchesRootBuilder(t *testing.T) {
 			cmd := testCmdWithConfigPath(path, "", &stderr)
 			isTTY := func() bool { return false }
 
-			_, _, rootConn, err := cli.BuildContextAnyClientConn(cmd, cfg, path, "lab", cli.ConnectionOverrides{}, isTTY)
+			_, _, rootConn, err := cli.BuildContextAnyClientConn(
+				cmd, cfg, path, "lab", cli.ConnectionOverrides{}, isTTY)
 			require.NoError(t, err)
 
 			resolved, _, err := config.ResolveContext(cfg, "lab")

@@ -50,7 +50,8 @@ const validateLong = "Validate one or all named contexts against structural rule
 	"checked for resolvability. " +
 	"The probe does not read the trust-on-first-use cache, so a context that trusts " +
 	"its host only through tls.tofu fails the probe with a certificate error and reads " +
-	"as unreachable; pin the certificate with tls.fingerprint to probe it. The VIA column names the route each probe took, and an " +
+	"as unreachable; pin the certificate with tls.fingerprint to probe it. " +
+	"The VIA column names the route each probe took, and an " +
 	"unreachable context names that route in its error, so a bastion or proxy " +
 	"failure is not mistaken for a dead host. " +
 	"The probe no longer honours $HTTPS_PROXY on its own; set proxy.from-env: true on the context, " +
@@ -67,7 +68,8 @@ const validateLong = "Validate one or all named contexts against structural rule
 	"each is refused, from the flag or from the environment.\n\n" +
 	"An unreachable context fails the command. A probe cut short by an interrupt " +
 	"such as Ctrl-C reads \"interrupted\" rather than unreachable, and the sweep " +
-	"stops there. A product mismatch is only a warning. Scripts that read the table by column position should use --output json.\n\n" +
+	"stops there. A product mismatch is only a warning. Scripts that read the table by " +
+	"column position should use --output json.\n\n" +
 	"The config file is also re-read strictly, and any key no setting matches is " +
 	"listed on stderr. Such a key is ignored when the config loads, so a misspelling " +
 	"costs you the setting silently. It does not affect the exit status: a config " +

@@ -9,7 +9,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 )
 
-// ── ParseTimeout ──────────────────────────────────────────────────────────────
+// ── ParseTimeout ─────────────────────────────
 
 func TestParseTimeout_Empty_ReturnsZeroNoError(t *testing.T) {
 	d, err := config.ParseTimeout("timeout.connect", "")
@@ -41,7 +41,7 @@ func TestParseTimeout_Negative_ReturnsGreaterThanZeroError(t *testing.T) {
 	require.Equal(t, "timeout.tls-handshake must be greater than zero", err.Error())
 }
 
-// ── (*Context).ParsedTimeouts ─────────────────────────────────────────────────
+// ── (*Context).ParsedTimeouts ────────────────────────
 
 func TestContextParsedTimeouts_AllSet_ParsesEachField(t *testing.T) {
 	c := &config.Context{

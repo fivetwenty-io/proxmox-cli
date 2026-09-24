@@ -96,7 +96,8 @@ func TestEveryRootDrivingTestPackageClearsAPIEnv(t *testing.T) {
 
 			if d.IsDir() {
 				name := d.Name()
-				if path != start && (name == "testdata" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
+				if path != start &&
+					(name == "testdata" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
 					return filepath.SkipDir
 				}
 

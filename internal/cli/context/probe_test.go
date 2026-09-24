@@ -426,7 +426,9 @@ func TestProbeBound(t *testing.T) {
 		{
 			name: "an explicit request bound wins",
 			conn: cli.Connection{
-				Timeouts:    apiclient.TimeoutSpec{Connect: time.Second, TLSHandshake: time.Second, Request: 200 * time.Millisecond},
+				Timeouts: apiclient.TimeoutSpec{
+					Connect: time.Second, TLSHandshake: time.Second, Request: 200 * time.Millisecond,
+				},
 				TimeoutsSet: cli.TimeoutsSet{Request: true},
 			},
 			want: 200 * time.Millisecond,
@@ -434,8 +436,10 @@ func TestProbeBound(t *testing.T) {
 		{
 			name: "an explicit request bound wins through a jump too",
 			conn: cli.Connection{
-				Jump:        apiclient.JumpSpec{Chain: "bastion"},
-				Timeouts:    apiclient.TimeoutSpec{Connect: 2 * time.Second, TLSHandshake: 3 * time.Second, Request: 7 * time.Second},
+				Jump: apiclient.JumpSpec{Chain: "bastion"},
+				Timeouts: apiclient.TimeoutSpec{
+					Connect: 2 * time.Second, TLSHandshake: 3 * time.Second, Request: 7 * time.Second,
+				},
 				TimeoutsSet: cli.TimeoutsSet{Request: true},
 			},
 			want: 7 * time.Second,
@@ -443,8 +447,10 @@ func TestProbeBound(t *testing.T) {
 		{
 			name: "a jump adds the connect and handshake bounds to five seconds",
 			conn: cli.Connection{
-				Jump:     apiclient.JumpSpec{Chain: "bastion"},
-				Timeouts: apiclient.TimeoutSpec{Connect: 2 * time.Second, TLSHandshake: 3 * time.Second, Request: 30 * time.Second},
+				Jump: apiclient.JumpSpec{Chain: "bastion"},
+				Timeouts: apiclient.TimeoutSpec{
+					Connect: 2 * time.Second, TLSHandshake: 3 * time.Second, Request: 30 * time.Second,
+				},
 			},
 			want: 10 * time.Second,
 		},
@@ -456,7 +462,9 @@ func TestProbeBound(t *testing.T) {
 		{
 			name: "a default request bound keeps the probe's five seconds",
 			conn: cli.Connection{
-				Timeouts: apiclient.TimeoutSpec{Connect: 5 * time.Second, TLSHandshake: 10 * time.Second, Request: 30 * time.Second},
+				Timeouts: apiclient.TimeoutSpec{
+					Connect: 5 * time.Second, TLSHandshake: 10 * time.Second, Request: 30 * time.Second,
+				},
 			},
 			want: 5 * time.Second,
 		},

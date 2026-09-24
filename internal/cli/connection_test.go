@@ -464,10 +464,13 @@ func TestResolveConnection(t *testing.T) {
 			{"environment", func(t *testing.T) {
 				t.Setenv("PMX_API_PROXY", "socks5://env-user:env-pw@proxy-env:1080")
 				conn := mustResolve(t, withContext(func(c *config.Context) {
-					c.Proxy = config.ProxyBlock{URL: "socks5://proxy-ctx:1080", Username: "ctx-user", Password: "ctx-pw"}
+					c.Proxy = config.ProxyBlock{
+						URL: "socks5://proxy-ctx:1080", Username: "ctx-user", Password: "ctx-pw",
+					}
 				}))
 				require.Equal(t, "env-user", conn.Proxy.URL.User.Username())
-				require.Empty(t, conn.Proxy.Username, "the context's credentials never join a URL the operator supplied")
+				require.Empty(
+					t, conn.Proxy.Username, "the context's credentials never join a URL the operator supplied")
 				require.Empty(t, conn.Proxy.PasswordRef)
 
 				creds, err := conn.ProxyCredentials()
@@ -547,7 +550,8 @@ func TestResolveConnection(t *testing.T) {
 			{"step 2 a URL with the toggle conflicts", func(t *testing.T) {
 				_, err := resolveArgs(t, labContext(), "--api-proxy", "socks5://p:1080", "--api-proxy-from-env")
 				require.EqualError(t, err,
-					"--api-proxy and --api-proxy-from-env conflict; pass a proxy URL or the environment toggle, not both")
+					"--api-proxy and --api-proxy-from-env conflict; pass a proxy URL or the "+
+						"environment toggle, not both")
 			}},
 			{"step 3 a URL is used as given", func(t *testing.T) {
 				conn := mustResolve(t, withContext(func(c *config.Context) {
@@ -924,7 +928,8 @@ func TestResolveConnection_TimeoutsSetOnlyWhenChosen(t *testing.T) {
 func TestResolveConnection_RefusesHTTPSDowngrade(t *testing.T) {
 	_, err := resolveArgs(t, labContext(), "--api-endpoint", "http://pve1")
 	require.EqualError(t, err,
-		`--api-endpoint would downgrade context "lab" from https to http; set protocol: http on the context to allow it`)
+		`--api-endpoint would downgrade context "lab" from https to http; `+
+			`set protocol: http on the context to allow it`)
 
 	defaulted := withContext(func(c *config.Context) { c.Protocol = "" })
 	_, err = resolveArgs(t, defaulted, "--api-endpoint", "http://pve1")
@@ -936,7 +941,8 @@ func TestResolveConnection_RefusesHTTPSDowngrade(t *testing.T) {
 	upper := withContext(func(c *config.Context) { c.Protocol = "HTTPS" })
 	_, err = resolveArgs(t, upper, "--api-endpoint", "http://pve1")
 	require.EqualError(t, err,
-		`--api-endpoint would downgrade context "lab" from https to http; set protocol: http on the context to allow it`,
+		`--api-endpoint would downgrade context "lab" from https to http; `+
+			`set protocol: http on the context to allow it`,
 		"a hand-edited protocol in upper case is protected too")
 
 	t.Setenv("PMX_API_ENDPOINT", "http://pve1")
@@ -1136,7 +1142,8 @@ func TestResolveConnection_EnvOverrideNotes(t *testing.T) {
 				name:   "fingerprint over " + mode.name,
 				env:    map[string]string{"PMX_API_FINGERPRINT": fpEnv},
 				stored: withContext(mode.setup),
-				want:   fmt.Sprintf(`note: $PMX_API_FINGERPRINT replaces the trust settings of context "lab" (%s)`, mode.name),
+				want: fmt.Sprintf(`note: $PMX_API_FINGERPRINT replaces the trust settings of context "lab" (%s)`,
+					mode.name),
 			})
 	}
 
@@ -1212,7 +1219,8 @@ func TestResolveConnection_EnvOverrideNotes(t *testing.T) {
 
 		notes := mustResolve(t, labContext()).Notes
 		require.Equal(t,
-			[]string{`note: $PMX_API_PROXY (socks5://u:<redacted>@proxy-env:1080) overrides the proxy of context "lab"`},
+			[]string{`note: $PMX_API_PROXY (socks5://u:<redacted>@proxy-env:1080) overrides the proxy of ` +
+				`context "lab"`},
 			notes)
 		require.NotContains(t, strings.Join(notes, "\n"), "s3cret")
 	})
@@ -1408,10 +1416,12 @@ func TestConnection_WrapPinMismatch(t *testing.T) {
 			require.Same(t, got, overridden.WrapPinMismatch(got), "a rewritten error is never rewritten again")
 
 			for label, conn := range map[string]cli.Connection{
-				"without an override":           mustResolve(t, pinned),
-				"on a context with no pin":      mustResolve(t, labContext(), "--api-endpoint", "pve9"),
-				"with a pin from the flag":      mustResolve(t, labContext(), "--api-endpoint", "pve9", "--api-fingerprint", fpFlag),
-				"with a pin and trust override": mustResolve(t, pinned, "--api-endpoint", "pve9", "--api-ca-cert", "/x.pem"),
+				"without an override":      mustResolve(t, pinned),
+				"on a context with no pin": mustResolve(t, labContext(), "--api-endpoint", "pve9"),
+				"with a pin from the flag": mustResolve(
+					t, labContext(), "--api-endpoint", "pve9", "--api-fingerprint", fpFlag),
+				"with a pin and trust override": mustResolve(
+					t, pinned, "--api-endpoint", "pve9", "--api-ca-cert", "/x.pem"),
 			} {
 				require.Equal(t, orig, conn.WrapPinMismatch(orig), label)
 			}
@@ -1801,8 +1811,9 @@ func TestOverridesFromCommand_SourcesAndParsing(t *testing.T) {
 			Proxy: "none", ProxySource: "$PMX_API_PROXY",
 			Fingerprint: fpEnv, FingerprintSource: "$PMX_API_FINGERPRINT",
 			Connect: 100 * time.Millisecond, ConnectRaw: "100ms", ConnectSource: "$PMX_API_CONNECT_TIMEOUT",
-			TLSHandshake: 200 * time.Millisecond, TLSHandshakeRaw: "200ms", TLSHandshakeSource: "$PMX_API_TLS_HANDSHAKE_TIMEOUT",
-			Request: time.Minute, RequestRaw: "1m", RequestSource: "$PMX_API_REQUEST_TIMEOUT",
+			TLSHandshake: 200 * time.Millisecond, TLSHandshakeRaw: "200ms",
+			TLSHandshakeSource: "$PMX_API_TLS_HANDSHAKE_TIMEOUT",
+			Request:            time.Minute, RequestRaw: "1m", RequestSource: "$PMX_API_REQUEST_TIMEOUT",
 		}, ov)
 	})
 
@@ -2130,16 +2141,27 @@ func TestResolveConnection_FirstByteTimeoutByRoute(t *testing.T) {
 		want   time.Duration
 	}{
 		{"https jump", route("https", none), nil, sum},
-		{"http jump through socks5h", route("http", func(c *config.Context) { c.Proxy.URL = "socks5h://p:1080" }), nil, sum},
-		{"http jump through socks5", route("http", func(c *config.Context) { c.Proxy.URL = "socks5://p:1080" }), nil, sum},
+		{"http jump through socks5h", route("http", func(c *config.Context) { c.Proxy.URL = "socks5h://p:1080" }),
+			nil, sum},
+		{"http jump through socks5", route("http", func(c *config.Context) { c.Proxy.URL = "socks5://p:1080" }),
+			nil, sum},
 		{"http jump", route("http", none), nil, 0},
-		{"http jump through an http proxy", route("http", func(c *config.Context) { c.Proxy.URL = "http://p:3128" }), nil, 0},
-		{"http jump under the environment toggle", route("http", func(c *config.Context) { c.Proxy.FromEnv = new(true) }), nil, 0},
-		{"https jump through an http proxy", route("https", func(c *config.Context) { c.Proxy.URL = "http://p:3128" }), nil, sum},
+		{"http jump through an http proxy", route("http", func(c *config.Context) { c.Proxy.URL = "http://p:3128" }),
+			nil, 0},
+		{
+			"http jump under the environment toggle",
+			route("http", func(c *config.Context) { c.Proxy.FromEnv = new(true) }),
+			nil, 0,
+		},
+		{"https jump through an http proxy", route("https", func(c *config.Context) { c.Proxy.URL = "http://p:3128" }),
+			nil, sum},
 		{"no jump", withContext(none), nil, 0},
-		{"a 5s request bound", route("https", func(c *config.Context) { c.Timeout.Request = "5s" }), nil, 4 * time.Second},
-		{"a 2s request bound", route("https", func(c *config.Context) { c.Timeout.Request = "2s" }), nil, 1500 * time.Millisecond},
-		{"a 1s request bound", route("https", func(c *config.Context) { c.Timeout.Request = "1s" }), nil, 750 * time.Millisecond},
+		{"a 5s request bound", route("https", func(c *config.Context) { c.Timeout.Request = "5s" }),
+			nil, 4 * time.Second},
+		{"a 2s request bound", route("https", func(c *config.Context) { c.Timeout.Request = "2s" }),
+			nil, 1500 * time.Millisecond},
+		{"a 1s request bound", route("https", func(c *config.Context) { c.Timeout.Request = "1s" }),
+			nil, 750 * time.Millisecond},
 		{"an uncapped sum below one second", route("https", none),
 			[]string{"--api-connect-timeout", "300ms", "--api-tls-handshake-timeout", "400ms"}, time.Second},
 		{"an uncapped sum", route("https", none),
@@ -2225,7 +2247,9 @@ func TestConnection_ApplyToOptions(t *testing.T) {
 	t.Setenv("PMX_TEST_PROXY_PASSWORD", "pw")
 
 	conn := mustResolve(t, withContext(func(c *config.Context) {
-		c.Proxy = config.ProxyBlock{URL: "socks5h://proxy:1080", Username: "pmx", Password: "${PMX_TEST_PROXY_PASSWORD}"}
+		c.Proxy = config.ProxyBlock{
+			URL: "socks5h://proxy:1080", Username: "pmx", Password: "${PMX_TEST_PROXY_PASSWORD}",
+		}
 		c.Timeout = config.TimeoutBlock{Connect: "1500ms", TLSHandshake: "2s", Request: "45s"}
 	}))
 

@@ -492,7 +492,7 @@ func TestResolveLabs_NFSExtraDatasets_Parses(t *testing.T) {
 	require.Equal(t, 300, config.EffectiveNFSQuotaGB(labs["wayneeseguin"]))
 }
 
-// ── ValidateProxyBlock / ValidateTimeoutBlock ──────────────────────────────
+// ── ValidateProxyBlock / ValidateTimeoutBlock ──────────────────────
 
 // validProxyContext returns a Context that passes StrictValidateContext with
 // an empty proxy and timeout block, so a test can set exactly the one field

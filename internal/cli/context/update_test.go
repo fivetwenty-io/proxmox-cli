@@ -121,7 +121,8 @@ func TestContextUpdate_NewConnectionFields(t *testing.T) {
 	_, err = run(t, deps, "", "update", "lab", "--ssh-port", "2222")
 	require.NoError(t, err)
 	require.Equal(t, 2222, reloadCfg(t, path).Contexts["lab"].SSH.Port)
-	require.Equal(t, "admin", reloadCfg(t, path).Contexts["lab"].SSH.User, "an earlier field must survive a later update")
+	require.Equal(t, "admin", reloadCfg(t, path).Contexts["lab"].SSH.User,
+		"an earlier field must survive a later update")
 
 	_, err = run(t, deps, "", "update", "lab", "--ssh-identity", "/home/admin/.ssh/id_ed25519")
 	require.NoError(t, err)

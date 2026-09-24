@@ -3409,7 +3409,8 @@ func TestBuildContextClient_BareContextOptionsUnchanged(t *testing.T) {
 	t.Run("no proxy, no jump, no timeout block", func(t *testing.T) {
 		cmd, _, _ := connectionLeaf(t)
 
-		opts, conn, err := cli.ContextOptions(cmd, bare, "lab", "", cli.ConnectionOverrides{}, cli.Credentials{}, neverTTY)
+		opts, conn, err := cli.ContextOptions(
+			cmd, bare, "lab", "", cli.ConnectionOverrides{}, cli.Credentials{}, neverTTY)
 		require.NoError(t, err)
 
 		require.Equal(t, 5, opts.DialTimeoutSec)
@@ -3433,10 +3434,12 @@ func TestBuildContextClient_BareContextOptionsUnchanged(t *testing.T) {
 		}
 		cmd, _, _ := connectionLeaf(t)
 
-		opts, conn, err := cli.ContextOptions(cmd, jumpy, "lab", "", cli.ConnectionOverrides{}, cli.Credentials{}, neverTTY)
+		opts, conn, err := cli.ContextOptions(
+			cmd, jumpy, "lab", "", cli.ConnectionOverrides{}, cli.Credentials{}, neverTTY)
 		require.NoError(t, err)
 
-		require.Equal(t, 5+10+1, opts.TLSHandshakeTimeoutSec, "the intended change: a jump adds the connect bound and one second")
+		require.Equal(t, 5+10+1, opts.TLSHandshakeTimeoutSec,
+			"the intended change: a jump adds the connect bound and one second")
 		require.NotNil(t, opts.DialContext, "the intended change: a jump installs a dialer")
 		require.Equal(t, "bastion.example.com", conn.Jump.Chain)
 	})
@@ -3819,7 +3822,8 @@ func TestBuildContextClientConn_ProductGuardAndResolveErrors(t *testing.T) {
 	downgrade := cli.ConnectionOverrides{Host: "pve9", Protocol: "http", EndpointSource: "--api-endpoint"}
 	_, _, conn, err = cli.BuildContextClientConn(cmd, cfg, "", "pve1", downgrade, neverTTY)
 	require.EqualError(t, err,
-		`--api-endpoint would downgrade context "pve1" from https to http; set protocol: http on the context to allow it`)
+		`--api-endpoint would downgrade context "pve1" from https to http; `+
+			`set protocol: http on the context to allow it`)
 	require.Zero(t, conn.Host)
 
 	_, _, _, err = cli.BuildContextAnyClientConn(cmd, nil, "/tmp/config.yml", "pve1", ov, neverTTY)
@@ -4398,7 +4402,9 @@ func TestExecute_ClosesKitClientsOnExit(t *testing.T) {
 				CurrentContext: "lab",
 				Contexts: map[string]*config.Context{"lab": {
 					Host: "127.0.0.1", Port: port, Protocol: "http", Product: config.ProductPVE,
-					Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "literal-secret"},
+					Auth: config.AuthBlock{
+						Type: "token", Username: "root@pam", TokenID: "tok", Secret: "literal-secret",
+					},
 				}},
 			}))
 
@@ -4440,7 +4446,8 @@ func TestExecute_ClosesKitClientsOnExit(t *testing.T) {
 				}
 
 				return len(states) == 1
-			}, 2*time.Second, 10*time.Millisecond, "the connection the command opened must be closed when Execute returns")
+			}, 2*time.Second, 10*time.Millisecond,
+				"the connection the command opened must be closed when Execute returns")
 
 			mu.Lock()
 			defer mu.Unlock()

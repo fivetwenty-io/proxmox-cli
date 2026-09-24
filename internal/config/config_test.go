@@ -1340,7 +1340,7 @@ func TestLogRetention_RoundTrip(t *testing.T) {
 	require.Equal(t, 45, loaded.Log.Retention)
 }
 
-// ── ProxyBlock / TimeoutBlock round-trip ──────────────────────────────────────
+// ── ProxyBlock / TimeoutBlock round-trip ────────────────────────
 
 // TestContextProxyBlock_RoundTrip verifies a fully populated proxy block and
 // timeout block survive a save/load cycle unchanged, and that re-saving the
@@ -1453,7 +1453,7 @@ func TestContextProxyBlock_FromEnvExplicitFalse_LoadsNonNilPointer(t *testing.T)
 	require.False(t, *loaded.Contexts["prod"].Proxy.FromEnv)
 }
 
-// ── ProxyBlock / TimeoutBlock scalar rejection ────────────────────────────────
+// ── ProxyBlock / TimeoutBlock scalar rejection ──────────────────────
 
 // proxyScalarConfig is the malformed shape most likely to be pasted in by an
 // operator used to setting HTTPS_PROXY: a bare proxy URL where a mapping
@@ -1595,7 +1595,7 @@ contexts:
 	require.Empty(t, loaded.Contexts["t"].Timeout.TLSHandshake)
 }
 
-// ── IsSecretReference ──────────────────────────────────────────────────────
+// ── IsSecretReference ──────────────────────────────
 
 // TestIsSecretReference classifies every syntax ResolveSecret dispatches on:
 // ${NAME} and a syntactically valid $NAME are references regardless of
@@ -1623,7 +1623,7 @@ func TestIsSecretReference(t *testing.T) {
 	}
 }
 
-// ── CloneContext ──────────────────────────────────────────────────────────────
+// ── CloneContext ─────────────────────────────
 
 // setNonZero sets field to a distinct non-zero value for its kind, recursing
 // into structs, allocating a fresh pointee for pointer fields, and building

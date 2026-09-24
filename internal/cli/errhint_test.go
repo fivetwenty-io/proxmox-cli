@@ -103,7 +103,8 @@ func TestPortConventionHint_NonStandardPort_Silent(t *testing.T) {
 }
 
 func TestPortConventionHint_NonConnectionError_Silent(t *testing.T) {
-	require.Empty(t, cli.PortConventionHint(errors.New("HTTP 500"), connCtx("pve", 8007), cli.Connection{}, "foo", "pmx"))
+	require.Empty(t,
+		cli.PortConventionHint(errors.New("HTTP 500"), connCtx("pve", 8007), cli.Connection{}, "foo", "pmx"))
 	require.Empty(t, cli.PortConventionHint(nil, connCtx("pve", 8007), cli.Connection{}, "foo", "pmx"))
 	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("refused")}
 	require.Empty(t, cli.PortConventionHint(dialErr, nil, cli.Connection{}, "foo", "pmx"))

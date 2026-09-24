@@ -255,7 +255,10 @@ func TestValidateJumpChain(t *testing.T) {
 		want  string
 	}{
 		{"x;id,h", `hop 1: host "x;id" is not a hostname, IPv4 address, or bracketed IPv6 literal`},
-		{"-oProxyCommand=id,h", `hop 1: host "-oProxyCommand=id" is not a hostname, IPv4 address, or bracketed IPv6 literal`},
+		{
+			"-oProxyCommand=id,h",
+			`hop 1: host "-oProxyCommand=id" is not a hostname, IPv4 address, or bracketed IPv6 literal`,
+		},
 		{"a$(id)@h", `hop 1: user "a$(id)" has a disallowed character`},
 		{"bas\ntion", `hop 1: host "bas\ntion" is not a hostname, IPv4 address, or bracketed IPv6 literal`},
 		{"bastion\n", `hop 1: host "bastion\n" is not a hostname, IPv4 address, or bracketed IPv6 literal`},
@@ -318,7 +321,11 @@ func TestJumpError_Detail(t *testing.T) {
 		err  JumpError
 		want string
 	}{
-		{"timer wins", JumpError{TimedOut: true, Timeout: 300 * time.Millisecond, Stderr: "x"}, "no response within 300ms"},
+		{
+			"timer wins",
+			JumpError{TimedOut: true, Timeout: 300 * time.Millisecond, Stderr: "x"},
+			"no response within 300ms",
+		},
 		{"stderr", JumpError{Stderr: "Permission denied (publickey).", Err: cause}, "Permission denied (publickey)."},
 		{"cause", JumpError{Err: cause, ExitStatus: -1}, "exec: boom"},
 		{"signal", JumpError{Signaled: true, ExitStatus: -1}, "ssh was ended by a signal and printed nothing"},
@@ -1518,10 +1525,11 @@ func TestValidateJumpChain_MasksQuotedValues(t *testing.T) {
 		"ssh://u%3Asecret@h":        `hop 1: user "u%3A<redacted>" has a disallowed character`,
 		"u:4242,Xk7b!Wm4c@h":        `hop 2: user "<redacted>" has a disallowed character`,
 		"admin@corp:pw@bastion":     `hop 1: user "admin@corp:<redacted>" has a disallowed character`,
-		"u:a:b,c@h":                 `hop 1: host "u:<redacted>" is not a hostname, IPv4 address, or bracketed IPv6 literal`,
-		"edge:22,x!y@h":             `hop 2: user "<redacted>" has a disallowed character`,
-		"bastion:0":                 `hop 1: port "0" is out of range [1, 65535]`,
-		"x;id,bastion:22,admin@b":   `hop 1: host "x;id" is not a hostname, IPv4 address, or bracketed IPv6 literal`,
+		"u:a:b,c@h": `hop 1: host "u:<redacted>" is not a hostname, IPv4 address, or bracketed IPv6 ` +
+			`literal`,
+		"edge:22,x!y@h":           `hop 2: user "<redacted>" has a disallowed character`,
+		"bastion:0":               `hop 1: port "0" is out of range [1, 65535]`,
+		"x;id,bastion:22,admin@b": `hop 1: host "x;id" is not a hostname, IPv4 address, or bracketed IPv6 literal`,
 	}
 
 	for chain, want := range cases {

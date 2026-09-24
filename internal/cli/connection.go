@@ -335,7 +335,8 @@ func resolveEndpoint(conn *Connection, name string, stored *config.Context, ov C
 	}
 
 	if storedProtocol == "https" && ovProtocol == "http" {
-		return fmt.Errorf("%s would downgrade context %q from https to http; set protocol: http on the context to allow it",
+		return fmt.Errorf(
+			"%s would downgrade context %q from https to http; set protocol: http on the context to allow it",
 			source, name)
 	}
 
@@ -634,7 +635,8 @@ func connectionNotes(name string, stored *config.Context, ov ConnectionOverrides
 	if isEnvSource(ov.JumpSource) && ov.Jump != "" {
 		if ov.Jump == connectionNone {
 			if strings.TrimSpace(stored.SSH.Jump) != "" && stored.SSH.Jump != connectionNone {
-				notes = append(notes, fmt.Sprintf("note: $%s=none disables the bastion of context %q", envAPIJump, name))
+				notes = append(notes, fmt.Sprintf("note: $%s=none disables the bastion of context %q",
+					envAPIJump, name))
 			}
 		} else {
 			notes = append(notes, fmt.Sprintf("note: $%s (%s) overrides the bastion of context %q",
@@ -1088,7 +1090,8 @@ func (c Connection) endpointURL() string {
 // String returns a form of c in which any proxy credential is redacted and
 // the stored proxy password reference never appears.
 func (c Connection) String() string {
-	return fmt.Sprintf("connection to %s for context %q via %s, trust %s, timeouts connect %s tls-handshake %s request %s",
+	return fmt.Sprintf(
+		"connection to %s for context %q via %s, trust %s, timeouts connect %s tls-handshake %s request %s",
 		c.endpointURL(), c.ContextName, c.route(), c.trust(),
 		c.Timeouts.Connect, c.Timeouts.TLSHandshake, c.Timeouts.Request)
 }
