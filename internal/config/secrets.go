@@ -58,6 +58,35 @@ func ResolveSecret(s string) (string, error) {
 	}
 }
 
+// IsSecretReference reports whether s is a secret reference rather than a
+// literal value, using the same syntax ResolveSecret dispatches on: ${NAME},
+// $NAME where NAME is a syntactically valid environment variable name, or
+// keychain:PATH. It classifies by shape alone — unlike ResolveSecret, it
+// never checks whether a named environment variable is actually set, so a
+// value such as "$Hunter2" classifies as a reference here even when
+// ResolveSecret would fall through and use it as a literal because Hunter2
+// is unset.
+func IsSecretReference(s string) bool {
+	switch {
+	case strings.HasPrefix(s, "${") && strings.HasSuffix(s, "}"):
+		// ${NAME} form — ResolveSecret treats any such value as an env
+		// reference attempt, regardless of whether NAME is well-formed.
+		return true
+
+	case strings.HasPrefix(s, "$") && !strings.HasPrefix(s, "${"):
+		// $NAME form — a reference only when the remainder is a
+		// syntactically valid variable name; otherwise it is a literal that
+		// happens to start with '$'.
+		return isValidEnvName(s[1:])
+
+	case strings.HasPrefix(s, "keychain:"):
+		return true
+
+	default:
+		return false
+	}
+}
+
 // literalSecret returns s unchanged after emitting the one-time inline-secret
 // warning to stderr.
 func literalSecret(s string) string {

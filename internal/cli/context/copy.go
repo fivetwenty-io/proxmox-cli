@@ -73,10 +73,9 @@ func newCopyCmd() *cobra.Command {
 				)
 			}
 
-			// Deep copy the Context struct.  TLSBlock and AuthBlock are values
-			// (not pointers) so a struct literal copy is sufficient for most
-			// fields.  The only pointer field inside Context is Auth.Session.
-			copied := deepCopyContext(srcCtx)
+			// Deep copy the Context struct so later edits to either context
+			// leave the other alone.
+			copied := config.CloneContext(srcCtx)
 
 			cfg.Contexts[dst] = copied
 
@@ -107,41 +106,4 @@ func newCopyCmd() *cobra.Command {
 	cmd.ValidArgsFunction = cli.FirstArgContextNames
 
 	return cmd
-}
-
-// deepCopyContext returns a deep copy of src such that mutating the copy does
-// not affect the original.  The only heap-allocated sub-field is Auth.Session
-// (*Session); all other fields are value types (string, int, bool, struct).
-func deepCopyContext(src *config.Context) *config.Context {
-	if src == nil {
-		return nil
-	}
-	c := &config.Context{
-		Host:          src.Host,
-		Port:          src.Port,
-		Protocol:      src.Protocol,
-		Realm:         src.Realm,
-		DefaultNode:   src.DefaultNode,
-		DefaultOutput: src.DefaultOutput,
-		Product:       src.Product,
-		Auth: config.AuthBlock{
-			Type:     src.Auth.Type,
-			Username: src.Auth.Username,
-			TokenID:  src.Auth.TokenID,
-			Secret:   src.Auth.Secret,
-			// Session is a pointer — deep copy the pointed-at struct if present.
-			Session: nil,
-		},
-		TLS: config.TLSBlock{
-			Insecure:    src.TLS.Insecure,
-			Fingerprint: src.TLS.Fingerprint,
-			CACert:      src.TLS.CACert,
-			Tofu:        src.TLS.Tofu,
-		},
-	}
-	if src.Auth.Session != nil {
-		sess := *src.Auth.Session // copy the Session value
-		c.Auth.Session = &sess
-	}
-	return c
 }

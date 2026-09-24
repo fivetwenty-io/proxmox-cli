@@ -131,6 +131,35 @@ contexts:
 	require.Empty(t, keys)
 }
 
+// TestUnknownKeys_ProxyAndTimeoutAreKnown pins that the proxy and timeout
+// blocks (and every field inside them) are registered fields of
+// config.Context via reflection, with no manual edit to collectUnknown or
+// yamlFields needed: neither block, nor any of their keys, is reported.
+func TestUnknownKeys_ProxyAndTimeoutAreKnown(t *testing.T) {
+	path := writeUnknownKeysConfig(t, `
+current-context: lab
+contexts:
+  lab:
+    host: pve.example.com
+    auth:
+      type: token
+      secret: s
+    proxy:
+      url: socks5h://proxy.example.com:1080
+      username: pmx
+      password: ${PMX_PROXY_PASSWORD}
+      from-env: false
+    timeout:
+      connect: 5s
+      tls-handshake: 10s
+      request: 30s
+`)
+
+	keys, err := config.UnknownKeys(path)
+	require.NoError(t, err)
+	require.Empty(t, keys, "proxy and timeout, and every field inside them, must be recognised")
+}
+
 // TestUnknownKeys_DescendsIntoLists covers the sequence case, where a bad key
 // sits inside one element of a list and the path has to name which one.
 func TestUnknownKeys_DescendsIntoLists(t *testing.T) {

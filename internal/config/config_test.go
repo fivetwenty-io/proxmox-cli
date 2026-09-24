@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -1337,4 +1338,435 @@ func TestLogRetention_RoundTrip(t *testing.T) {
 	loaded, err := config.Load(path)
 	require.NoError(t, err)
 	require.Equal(t, 45, loaded.Log.Retention)
+}
+
+// ── ProxyBlock / TimeoutBlock round-trip ──────────────────────────────────────
+
+// TestContextProxyBlock_RoundTrip verifies a fully populated proxy block and
+// timeout block survive a save/load cycle unchanged, and that re-saving the
+// loaded config reproduces the exact same bytes as the original save.
+func TestContextProxyBlock_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := sampleConfig()
+	cfg.Contexts["prod"].Proxy = config.ProxyBlock{
+		URL:      "socks5h://proxy.example.com:1080",
+		Username: "pmx",
+		Password: "${PMX_PROXY_PASSWORD}",
+		FromEnv:  new(true),
+	}
+	cfg.Contexts["prod"].Timeout = config.TimeoutBlock{
+		Connect:      "5s",
+		TLSHandshake: "10s",
+		Request:      "30s",
+	}
+	require.NoError(t, config.Save(path, cfg))
+	raw1, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	ctx := loaded.Contexts["prod"]
+	require.Equal(t, "socks5h://proxy.example.com:1080", ctx.Proxy.URL)
+	require.Equal(t, "pmx", ctx.Proxy.Username)
+	require.Equal(t, "${PMX_PROXY_PASSWORD}", ctx.Proxy.Password)
+	require.NotNil(t, ctx.Proxy.FromEnv)
+	require.True(t, *ctx.Proxy.FromEnv)
+	require.Equal(t, "5s", ctx.Timeout.Connect)
+	require.Equal(t, "10s", ctx.Timeout.TLSHandshake)
+	require.Equal(t, "30s", ctx.Timeout.Request)
+
+	// Re-saving the loaded config must reproduce byte-identical output.
+	require.NoError(t, config.Save(path, loaded))
+	raw2, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, raw1, raw2, "round trip must be byte-identical")
+}
+
+// TestContextTimeoutBlock_ZeroValue_RoundTrip verifies an unset timeout block
+// round-trips as all-zero values and emits no "timeout:" key, mirroring
+// TestSSHBlock_ZeroValue_RoundTrip.
+func TestContextTimeoutBlock_ZeroValue_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := sampleConfig()
+	require.NoError(t, config.Save(path, cfg))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "timeout:")
+	require.NotContains(t, string(raw), "proxy:")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	ctx := loaded.Contexts["prod"]
+	require.Empty(t, ctx.Timeout.Connect)
+	require.Empty(t, ctx.Timeout.TLSHandshake)
+	require.Empty(t, ctx.Timeout.Request)
+	require.Empty(t, ctx.Proxy.URL)
+	require.Nil(t, ctx.Proxy.FromEnv)
+}
+
+// TestContextProxyBlock_FromEnvAbsent_LoadsNilPointer verifies that a proxy
+// block with no from-env key loads FromEnv as a nil pointer, distinct from an
+// explicit false.
+func TestContextProxyBlock_FromEnvAbsent_LoadsNilPointer(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := sampleConfig()
+	cfg.Contexts["prod"].Proxy = config.ProxyBlock{URL: "socks5h://proxy.example.com:1080"}
+	require.NoError(t, config.Save(path, cfg))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "from-env:")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Nil(t, loaded.Contexts["prod"].Proxy.FromEnv)
+}
+
+// TestContextProxyBlock_FromEnvExplicitFalse_LoadsNonNilPointer verifies an
+// explicit "from-env: false" round-trips as a non-nil pointer to false,
+// distinct from an absent key (which loads as nil).
+func TestContextProxyBlock_FromEnvExplicitFalse_LoadsNonNilPointer(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	cfg := sampleConfig()
+	cfg.Contexts["prod"].Proxy = config.ProxyBlock{
+		URL:     "socks5h://proxy.example.com:1080",
+		FromEnv: new(false),
+	}
+	require.NoError(t, config.Save(path, cfg))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "from-env: false")
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.NotNil(t, loaded.Contexts["prod"].Proxy.FromEnv)
+	require.False(t, *loaded.Contexts["prod"].Proxy.FromEnv)
+}
+
+// ── ProxyBlock / TimeoutBlock scalar rejection ────────────────────────────────
+
+// proxyScalarConfig is the malformed shape most likely to be pasted in by an
+// operator used to setting HTTPS_PROXY: a bare proxy URL where a mapping
+// belongs.
+const proxyScalarConfig = `current-context: t
+contexts:
+  t:
+    host: host.example.com
+    auth:
+      type: token
+      secret: s
+    proxy: socks5h://proxy:1080
+`
+
+// timeoutScalarConfig is the malformed shape most likely to be pasted in by
+// an operator used to setting a single request timeout: a bare duration
+// where a mapping belongs.
+const timeoutScalarConfig = `current-context: t
+contexts:
+  t:
+    host: host.example.com
+    auth:
+      type: token
+      secret: s
+    timeout: 30s
+`
+
+// TestProxyBlock_RejectsScalar verifies a scalar proxy value fails the load
+// with the pointed mapping message rather than goccy's generic
+// "string was used where mapping is expected".
+func TestProxyBlock_RejectsScalar(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(proxyScalarConfig), 0o600))
+
+	_, err := config.Load(path)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "proxy must be a mapping, e.g. proxy: {url: socks5h://host:1080}")
+}
+
+// TestProxyBlock_AcceptsNull verifies an explicit "proxy: ~" loads as a
+// zero-value ProxyBlock rather than erroring.
+func TestProxyBlock_AcceptsNull(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	yml := `current-context: t
+contexts:
+  t:
+    host: host.example.com
+    auth:
+      type: token
+      secret: s
+    proxy: ~
+`
+	require.NoError(t, os.WriteFile(path, []byte(yml), 0o600))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, config.ProxyBlock{}, loaded.Contexts["t"].Proxy)
+}
+
+// TestProxyBlock_AcceptsMapping verifies a proper mapping decodes normally.
+func TestProxyBlock_AcceptsMapping(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	yml := `current-context: t
+contexts:
+  t:
+    host: host.example.com
+    auth:
+      type: token
+      secret: s
+    proxy:
+      url: socks5h://proxy.example.com:1080
+      username: pmx
+`
+	require.NoError(t, os.WriteFile(path, []byte(yml), 0o600))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, "socks5h://proxy.example.com:1080", loaded.Contexts["t"].Proxy.URL)
+	require.Equal(t, "pmx", loaded.Contexts["t"].Proxy.Username)
+}
+
+// TestTimeoutBlock_RejectsScalar verifies a scalar timeout value fails the
+// load with the pointed mapping message.
+func TestTimeoutBlock_RejectsScalar(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(timeoutScalarConfig), 0o600))
+
+	_, err := config.Load(path)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "timeout must be a mapping, e.g. timeout: {connect: 5s}")
+}
+
+// TestTimeoutBlock_AcceptsNull verifies an explicit "timeout: ~" loads as a
+// zero-value TimeoutBlock rather than erroring.
+func TestTimeoutBlock_AcceptsNull(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	yml := `current-context: t
+contexts:
+  t:
+    host: host.example.com
+    auth:
+      type: token
+      secret: s
+    timeout: ~
+`
+	require.NoError(t, os.WriteFile(path, []byte(yml), 0o600))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, config.TimeoutBlock{}, loaded.Contexts["t"].Timeout)
+}
+
+// TestTimeoutBlock_AcceptsMapping verifies a proper mapping decodes normally.
+func TestTimeoutBlock_AcceptsMapping(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	yml := `current-context: t
+contexts:
+  t:
+    host: host.example.com
+    auth:
+      type: token
+      secret: s
+    timeout:
+      connect: 5s
+      request: 30s
+`
+	require.NoError(t, os.WriteFile(path, []byte(yml), 0o600))
+
+	loaded, err := config.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, "5s", loaded.Contexts["t"].Timeout.Connect)
+	require.Equal(t, "30s", loaded.Contexts["t"].Timeout.Request)
+	require.Empty(t, loaded.Contexts["t"].Timeout.TLSHandshake)
+}
+
+// ── IsSecretReference ──────────────────────────────────────────────────────
+
+// TestIsSecretReference classifies every syntax ResolveSecret dispatches on:
+// ${NAME} and a syntactically valid $NAME are references regardless of
+// whether the variable is set, keychain:PATH is a reference, and everything
+// else — including a value that merely starts with '$' — is a literal.
+func TestIsSecretReference(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"brace form is a reference", "${PMX_TOKEN}", true},
+		{"valid dollar form is a reference", "$PMX_TOKEN", true},
+		{"keychain form is a reference", "keychain:pmx/prod", true},
+		{"dollar-dollar is a literal", "$uper$ecret", false},
+		{"dollar-digit-start is a literal", "$1abc", false},
+		{"plain word is a literal", "hunter2", false},
+		{"bare dollar is a literal", "$", false},
+		{"empty string is a literal", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, config.IsSecretReference(tc.in))
+		})
+	}
+}
+
+// ── CloneContext ──────────────────────────────────────────────────────────────
+
+// setNonZero sets field to a distinct non-zero value for its kind, recursing
+// into structs, allocating a fresh pointee for pointer fields, and building
+// a one-element slice or a one-entry map for those kinds. It exists so
+// TestCloneContext_CopiesEveryExportedField can fill an entire Context tree
+// without hand-listing every current field, and it fails loudly (via
+// t.Fatalf) on a kind it does not yet handle rather than silently leaving a
+// field at zero, so a future field of an unsupported kind cannot slip past
+// the guard unnoticed.
+func setNonZero(t *testing.T, field reflect.Value) {
+	t.Helper()
+	switch field.Kind() {
+	case reflect.String:
+		field.SetString("x")
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		field.SetInt(1)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		field.SetUint(1)
+	case reflect.Bool:
+		field.SetBool(true)
+	case reflect.Struct:
+		fillNonZero(t, field)
+	case reflect.Pointer:
+		elem := reflect.New(field.Type().Elem())
+		if elem.Elem().Kind() == reflect.Struct {
+			fillNonZero(t, elem.Elem())
+		} else {
+			setNonZero(t, elem.Elem())
+		}
+		field.Set(elem)
+	case reflect.Slice:
+		s := reflect.MakeSlice(field.Type(), 1, 1)
+		setNonZero(t, s.Index(0))
+		field.Set(s)
+	case reflect.Map:
+		m := reflect.MakeMapWithSize(field.Type(), 1)
+		key := reflect.New(field.Type().Key()).Elem()
+		setNonZero(t, key)
+		val := reflect.New(field.Type().Elem()).Elem()
+		setNonZero(t, val)
+		m.SetMapIndex(key, val)
+		field.Set(m)
+	default:
+		t.Fatalf("setNonZero: unsupported kind %s for field type %s; extend the test helper",
+			field.Kind(), field.Type())
+	}
+}
+
+// fillNonZero sets every exported field of the struct value v to a non-zero
+// value, recursively.
+func fillNonZero(t *testing.T, v reflect.Value) {
+	t.Helper()
+	typ := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		if typ.Field(i).PkgPath != "" { // unexported
+			continue
+		}
+		setNonZero(t, v.Field(i))
+	}
+}
+
+// assertClonedFields recursively walks every exported field of src and
+// clone together and asserts both promises CloneContext's doc comment
+// makes: no field of clone is left at its zero value, naming the dotted
+// path of the first zero field it finds, and every pointer, slice, or map
+// clone reaches is backed by memory distinct from the matching field of
+// src, not merely a copy of the same header — so a future pointer, slice,
+// or map field CloneContext forgets to deep-copy fails here even though a
+// shared non-nil pointer or slice header is never itself the zero value.
+func assertClonedFields(t *testing.T, src, clone reflect.Value, path string) {
+	t.Helper()
+	typ := clone.Type()
+	for i := 0; i < clone.NumField(); i++ {
+		sf := typ.Field(i)
+		if sf.PkgPath != "" { // unexported
+			continue
+		}
+		srcField := src.Field(i)
+		cloneField := clone.Field(i)
+		fieldPath := path + "." + sf.Name
+
+		switch cloneField.Kind() {
+		case reflect.Struct:
+			assertClonedFields(t, srcField, cloneField, fieldPath)
+		case reflect.Pointer:
+			require.False(t, cloneField.IsNil(), "%s must not be nil after CloneContext", fieldPath)
+			require.NotSame(t, srcField.Interface(), cloneField.Interface(),
+				"%s must point at memory distinct from the source after CloneContext", fieldPath)
+			if cloneField.Elem().Kind() == reflect.Struct {
+				assertClonedFields(t, srcField.Elem(), cloneField.Elem(), fieldPath)
+			} else {
+				require.False(t, cloneField.Elem().IsZero(), "%s must not be zero after CloneContext", fieldPath)
+			}
+		case reflect.Slice:
+			require.False(t, cloneField.IsNil(), "%s must not be nil after CloneContext", fieldPath)
+			require.NotEqual(t, srcField.Pointer(), cloneField.Pointer(),
+				"%s must have backing storage distinct from the source after CloneContext", fieldPath)
+		case reflect.Map:
+			require.False(t, cloneField.IsNil(), "%s must not be nil after CloneContext", fieldPath)
+			require.NotEqual(t, srcField.Pointer(), cloneField.Pointer(),
+				"%s must have backing storage distinct from the source after CloneContext", fieldPath)
+		default:
+			require.False(t, cloneField.IsZero(), "%s must not be zero after CloneContext", fieldPath)
+		}
+	}
+}
+
+// TestCloneContext_CopiesEveryExportedField walks every exported field of
+// config.Context (recursively, through every nested block) with reflection,
+// filling each with a non-zero value, and fails when CloneContext leaves any
+// field at its zero value — so adding a block to Context without updating
+// CloneContext to carry it fails this test. It also asserts, for every
+// pointer, slice, and map field the walk reaches, that the clone is backed
+// by memory distinct from the source's, so a future pointer field
+// CloneContext shares rather than deep-copies fails here too, not only the
+// two pointer fields Context has today.
+func TestCloneContext_CopiesEveryExportedField(t *testing.T) {
+	src := &config.Context{}
+	fillNonZero(t, reflect.ValueOf(src).Elem())
+
+	clone := config.CloneContext(src)
+	require.NotNil(t, clone)
+
+	assertClonedFields(t, reflect.ValueOf(src).Elem(), reflect.ValueOf(clone).Elem(), "Context")
+
+	srcSessionTicket := src.Auth.Session.Ticket
+	srcFromEnv := *src.Proxy.FromEnv
+	srcHost := src.Host
+
+	clone.Host = "mutated-host"
+	clone.Auth.Session.Ticket = "mutated-ticket"
+	*clone.Proxy.FromEnv = !*clone.Proxy.FromEnv
+
+	require.Equal(t, srcHost, src.Host, "mutating the clone must not affect the source")
+	require.Equal(t, srcSessionTicket, src.Auth.Session.Ticket,
+		"mutating the clone's Auth.Session must not affect the source's")
+	require.Equal(t, srcFromEnv, *src.Proxy.FromEnv,
+		"mutating the clone's Proxy.FromEnv must not affect the source's")
+}
+
+// TestCloneContext_NilContext_ReturnsNil verifies CloneContext handles a nil
+// input without panicking, matching every other Clone-style helper in this
+// codebase.
+func TestCloneContext_NilContext_ReturnsNil(t *testing.T) {
+	require.Nil(t, config.CloneContext(nil))
 }

@@ -3,6 +3,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -226,6 +227,99 @@ type Context struct {
 	// "pbs", or "pdm". Empty means "pve" (backward compatible with configs
 	// written before Product existed).
 	Product string `yaml:"product,omitempty"`
+
+	// Proxy routes this context's API connections through an outbound proxy.
+	Proxy ProxyBlock `yaml:"proxy,omitempty"`
+
+	// Timeout bounds this context's API transport.
+	Timeout TimeoutBlock `yaml:"timeout,omitempty"`
+}
+
+// ProxyBlock routes a context's API traffic through an outbound proxy.
+type ProxyBlock struct {
+	// URL is the proxy endpoint: socks5://, socks5h://, or http://. It must
+	// not carry userinfo, because credentials belong in Username and Password.
+	URL string `yaml:"url,omitempty"`
+
+	// Username authenticates to the proxy. Connection.ProxyCredentials builds
+	// the proxy URL's userinfo from it and the resolved Password with
+	// url.UserPassword when the transport is built, never during a resolve.
+	Username string `yaml:"username,omitempty"`
+
+	// Password is a secret reference resolved by ResolveSecret: ${VAR},
+	// $VAR, keychain:path, or a literal.
+	Password string `yaml:"password,omitempty"`
+
+	// FromEnv honours HTTPS_PROXY (or HTTP_PROXY for an http:// endpoint)
+	// and NO_PROXY for this context, as Go's http.ProxyFromEnvironment reads
+	// them, and ALL_PROXY is not honoured. It is ignored when URL is set, and
+	// a nil pointer means the operator said nothing, which resolves to false.
+	// The field is a pointer so that an explicit "from-env: false" can be
+	// told apart from an absent key, which is what lets the resolution ladder
+	// rank the four sources honestly.
+	FromEnv *bool `yaml:"from-env,omitempty"`
+}
+
+// UnmarshalYAML rejects a scalar proxy block with a pointed message and
+// otherwise decodes the mapping as usual. proxy's likeliest malformed shape
+// is a bare URL such as "proxy: socks5h://proxy:1080" (mirroring
+// HTTPS_PROXY), which without this guard would fail the whole config load
+// with goccy's generic "string was used where mapping is expected".
+func (p *ProxyBlock) UnmarshalYAML(unmarshal func(any) error) error {
+	var probe any
+	if err := unmarshal(&probe); err != nil {
+		return err
+	}
+	if probe == nil {
+		return nil
+	}
+	if _, ok := probe.(map[string]any); !ok {
+		return errors.New("proxy must be a mapping, e.g. proxy: {url: socks5h://host:1080}")
+	}
+
+	// Decode into a local alias type (which does not implement
+	// UnmarshalYAML) so the decoder falls back to ordinary struct decoding
+	// instead of recursing into this method.
+	type proxyBlockAlias ProxyBlock
+	var alias proxyBlockAlias
+	if err := unmarshal(&alias); err != nil {
+		return err
+	}
+	*p = ProxyBlock(alias)
+	return nil
+}
+
+// TimeoutBlock bounds a context's API transport. Every field is a Go duration
+// string such as "5s" or "1m30s", and an empty field means "use the product
+// default".
+type TimeoutBlock struct {
+	Connect      string `yaml:"connect,omitempty"`
+	TLSHandshake string `yaml:"tls-handshake,omitempty"`
+	Request      string `yaml:"request,omitempty"`
+}
+
+// UnmarshalYAML does the same for the timeout block: it rejects a scalar
+// such as "timeout: 30s" with a pointed message and otherwise decodes the
+// mapping as usual.
+func (t *TimeoutBlock) UnmarshalYAML(unmarshal func(any) error) error {
+	var probe any
+	if err := unmarshal(&probe); err != nil {
+		return err
+	}
+	if probe == nil {
+		return nil
+	}
+	if _, ok := probe.(map[string]any); !ok {
+		return errors.New("timeout must be a mapping, e.g. timeout: {connect: 5s}")
+	}
+
+	type timeoutBlockAlias TimeoutBlock
+	var alias timeoutBlockAlias
+	if err := unmarshal(&alias); err != nil {
+		return err
+	}
+	*t = TimeoutBlock(alias)
+	return nil
 }
 
 // IsPBS reports whether c targets Proxmox Backup Server. Empty Product
