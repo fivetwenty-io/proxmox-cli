@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -489,4 +490,266 @@ func TestResolveLabs_NFSExtraDatasets_Parses(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "agents", labs["wayneeseguin"].Storage.NFSExtraDatasets)
 	require.Equal(t, 300, config.EffectiveNFSQuotaGB(labs["wayneeseguin"]))
+}
+
+// ── ValidateProxyBlock / ValidateTimeoutBlock ──────────────────────────────
+
+// validProxyContext returns a Context that passes StrictValidateContext with
+// an empty proxy and timeout block, so a test can set exactly the one field
+// it means to exercise without any unrelated error showing up in errs.
+func validProxyContext() *config.Context {
+	return &config.Context{
+		Host:     "host.example.com",
+		Port:     8006,
+		Protocol: "https",
+		Auth:     config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "deploy", Secret: "s"},
+	}
+}
+
+func TestStrictValidateContext_ProxyURL(t *testing.T) {
+	for _, scheme := range []string{"socks5", "socks5h", "http"} {
+		c := validProxyContext()
+		c.Proxy.URL = scheme + "://proxy.example.com:1080"
+		errs := config.StrictValidateContext(c)
+		require.Empty(t, errs, "scheme %s should pass", scheme)
+	}
+
+	c := validProxyContext()
+	c.Proxy.URL = "https://proxy.example.com:1080"
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.url https://proxy.example.com:1080 must use scheme socks5, socks5h, or http")
+
+	c = validProxyContext()
+	c.Proxy.URL = "ftp://proxy.example.com:21"
+	errs = config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.url ftp://proxy.example.com:21 must use scheme socks5, socks5h, or http")
+
+	// "socks5://host:port" fails url.Parse itself (a non-numeric port), so it
+	// exercises the does-not-parse rule rather than the scheme rule.
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://host:port"
+	errs = config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.url socks5://<redacted> is not a valid URL")
+
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://"
+	errs = config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.url socks5:// must include a host")
+
+	// A port with no hostname is not a host: dialling ":1080" would silently
+	// reach whatever listens on localhost.
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://:1080"
+	errs = config.StrictValidateContext(c)
+	require.Equal(t, []string{"proxy.url socks5://:1080 must include a host"}, errs)
+
+	// Passing case: an IPv6 literal is a hostname even though it is bracketed.
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://[::1]:1080"
+	errs = config.StrictValidateContext(c)
+	require.Empty(t, errs)
+}
+
+func TestStrictValidateContext_ProxyCredentialsNeedURL(t *testing.T) {
+	c := validProxyContext()
+	c.Proxy.Username = "pmx"
+	errs := config.StrictValidateContext(c)
+	require.Equal(t, []string{"proxy.username is set but proxy.url is empty"}, errs)
+
+	// A context setting only proxy.password produces exactly the one
+	// proxy.url-is-empty message, and never also the
+	// "without proxy.username" message that would fire if proxy.url were set.
+	c = validProxyContext()
+	c.Proxy.Password = "${PMX_PROXY_PASSWORD}"
+	errs = config.StrictValidateContext(c)
+	require.Equal(t, []string{"proxy.password is set but proxy.url is empty"}, errs)
+
+	// With proxy.url set, the same unaccompanied proxy.password instead
+	// triggers the "without proxy.username" rule.
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://proxy.example.com:1080"
+	c.Proxy.Password = "${PMX_PROXY_PASSWORD}"
+	errs = config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.password is set without proxy.username")
+
+	// Passing case for all three credential rules: a URL, a username, and a
+	// password together produce no message at all.
+	c = validProxyContext()
+	c.Proxy = config.ProxyBlock{
+		URL:      "socks5://proxy.example.com:1080",
+		Username: "pmx",
+		Password: "${PMX_PROXY_PASSWORD}",
+	}
+	errs = config.StrictValidateContext(c)
+	require.Empty(t, errs)
+}
+
+func TestStrictValidateContext_ProxyURLAndFromEnvConflict(t *testing.T) {
+	trueVal := true
+
+	c := validProxyContext()
+	c.Proxy.URL = "socks5://proxy.example.com:1080"
+	c.Proxy.FromEnv = &trueVal
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs, "proxy.url and proxy.from-env are both set; use one or the other")
+
+	// Passing case: from-env alone, with proxy.url empty, is not a conflict.
+	c = validProxyContext()
+	c.Proxy.FromEnv = &trueVal
+	errs = config.StrictValidateContext(c)
+	require.Empty(t, errs)
+}
+
+func TestStrictValidateContext_ProxyURLRejectsUserinfo(t *testing.T) {
+	c := validProxyContext()
+	c.Proxy.URL = "socks5://user:pass@proxy.example.com:1080"
+	errs := config.StrictValidateContext(c)
+	require.Contains(t, errs,
+		"proxy.url socks5://<redacted>@proxy.example.com:1080 must not embed credentials; "+
+			"use proxy.username and proxy.password")
+
+	// A bare username is a credential too: several proxy vendors authenticate
+	// with an API key in the username position, so the message that rejects
+	// embedded credentials masks the whole userinfo rather than echoing it.
+	for _, raw := range []string{
+		"socks5://SEKRIT@proxy.example.com:1080",
+		"socks5://SEKRIT@proxy.example.com:1080/some/path?q=1#frag",
+		"socks5://SEKRIT@other@proxy.example.com:1080",
+	} {
+		c = validProxyContext()
+		c.Proxy.URL = raw
+		errs = config.StrictValidateContext(c)
+		require.NotEmpty(t, errs, "url %s should fail strict validation", raw)
+		for _, m := range errs {
+			require.NotContains(t, m, "SEKRIT", "StrictValidateContext echoed the username for %s", raw)
+		}
+
+		err := config.ValidateContext(c)
+		require.Error(t, err, "url %s should fail lenient validation", raw)
+		require.NotContains(t, err.Error(), "SEKRIT", "ValidateContext echoed the username for %s", raw)
+	}
+
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://SEKRIT@proxy.example.com:1080/some/path?q=1#frag"
+	errs = config.StrictValidateContext(c)
+	require.Equal(t, []string{
+		"proxy.url socks5://<redacted>@proxy.example.com:1080/some/path?q=1#frag must not embed credentials; " +
+			"use proxy.username and proxy.password",
+	}, errs)
+
+	// Passing case: the same host with no userinfo at all.
+	c = validProxyContext()
+	c.Proxy.URL = "socks5://proxy.example.com:1080"
+	errs = config.StrictValidateContext(c)
+	require.Empty(t, errs)
+}
+
+// TestValidateProxyBlock_NeverPrintsPassword runs three URLs whose password
+// url.Parse cannot make sense of through every validation path that checks a
+// proxy block — ValidateProxyBlock directly, StrictValidateContext, the
+// lenient ValidateContext, and ResolveContext, which wraps the lenient check
+// for CLI startup — and checks that not one produced message
+// contains the password substring. url.Parse quotes its whole input in its
+// own error text, and for a password containing "/" or "%" it quotes the
+// password a second time in the reason, which is exactly why no message here
+// may ever append a raw url.Parse error.
+func TestValidateProxyBlock_NeverPrintsPassword(t *testing.T) {
+	cases := []struct {
+		url      string
+		password string
+	}{
+		{"socks5://pmx:s3cr3t/x@proxy:1080", "s3cr3t"},
+		{"socks5://pmx:s3%zzt@proxy:1080", "s3%zzt"},
+		{"socks5://u:s3cret@[::1", "s3cret"},
+	}
+
+	for _, tc := range cases {
+		msgs := config.ValidateProxyBlock(&config.ProxyBlock{URL: tc.url})
+		require.NotEmpty(t, msgs, "url %s should fail validation", tc.url)
+		for _, m := range msgs {
+			require.NotContains(t, m, tc.password, "ValidateProxyBlock leaked password for %s", tc.url)
+		}
+
+		strictCtx := validProxyContext()
+		strictCtx.Proxy.URL = tc.url
+		strictErrs := config.StrictValidateContext(strictCtx)
+		require.NotEmpty(t, strictErrs, "url %s should fail strict validation", tc.url)
+		for _, m := range strictErrs {
+			require.NotContains(t, m, tc.password, "StrictValidateContext leaked password for %s", tc.url)
+		}
+
+		lenientCtx := validProxyContext()
+		lenientCtx.Proxy.URL = tc.url
+		err := config.ValidateContext(lenientCtx)
+		require.Error(t, err, "url %s should fail lenient validation", tc.url)
+		require.NotContains(t, err.Error(), tc.password, "ValidateContext leaked password for %s", tc.url)
+
+		resolveCtx := validProxyContext()
+		resolveCtx.Proxy.URL = tc.url
+		cfg := &config.Config{
+			CurrentContext: "proxied",
+			Contexts:       map[string]*config.Context{"proxied": resolveCtx},
+		}
+		_, _, err = config.ResolveContext(cfg, "")
+		require.Error(t, err, "url %s should fail ResolveContext", tc.url)
+		require.NotContains(t, err.Error(), tc.password, "ResolveContext leaked password for %s", tc.url)
+	}
+}
+
+func TestStrictValidateContext_Timeouts(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		set   func(c *config.Context, v string)
+		valid string
+	}{
+		{"connect", func(c *config.Context, v string) { c.Timeout.Connect = v }, "5s"},
+		{"tls-handshake", func(c *config.Context, v string) { c.Timeout.TLSHandshake = v }, "10s"},
+		{"request", func(c *config.Context, v string) { c.Timeout.Request = v }, "30s"},
+	} {
+		c := validProxyContext()
+		tc.set(c, tc.valid)
+		errs := config.StrictValidateContext(c)
+		require.Empty(t, errs, "valid timeout.%s should pass", tc.field)
+
+		c = validProxyContext()
+		tc.set(c, "not-a-duration")
+		errs = config.StrictValidateContext(c)
+		require.Contains(t, errs,
+			fmt.Sprintf("timeout.%s %q is not a duration (e.g. 5s, 500ms)", tc.field, "not-a-duration"))
+
+		c = validProxyContext()
+		tc.set(c, "0s")
+		errs = config.StrictValidateContext(c)
+		require.Contains(t, errs, fmt.Sprintf("timeout.%s must be greater than zero", tc.field))
+
+		c = validProxyContext()
+		tc.set(c, "-1s")
+		errs = config.StrictValidateContext(c)
+		require.Contains(t, errs, fmt.Sprintf("timeout.%s must be greater than zero", tc.field))
+	}
+}
+
+// TestValidateContext_JoinsProxyAndTimeoutMessages pins the join order and
+// separator: the lenient ValidateContext appends ValidateProxyBlock's
+// messages before ValidateTimeoutBlock's and joins the combined list with
+// "; ", so a caller printing err.Error() sees every structural defect in one
+// line rather than only the first.
+func TestValidateContext_JoinsProxyAndTimeoutMessages(t *testing.T) {
+	c := validProxyContext()
+	c.Proxy.Username = "pmx"
+	c.Timeout.Connect = "0s"
+
+	err := config.ValidateContext(c)
+	require.Error(t, err)
+	require.Equal(t,
+		"proxy.username is set but proxy.url is empty; timeout.connect must be greater than zero",
+		err.Error())
+}
+
+func TestValidateProxyBlock_NilPointer_ReturnsNil(t *testing.T) {
+	require.Nil(t, config.ValidateProxyBlock(nil))
+}
+
+func TestValidateTimeoutBlock_NilPointer_ReturnsNil(t *testing.T) {
+	require.Nil(t, config.ValidateTimeoutBlock(nil))
 }

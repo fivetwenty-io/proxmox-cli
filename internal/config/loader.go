@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,6 +11,8 @@ import (
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 )
 
 // strictFingerprintRE matches a colon-separated hex SHA-256 fingerprint as
@@ -134,6 +137,10 @@ func applyDefaults(c *Context) {
 // (ResolveContext) does not hard-fail on existing configs written before
 // token-id became mandatory on write paths.
 //
+// The leniency covers auth only. A malformed proxy or timeout block is
+// rejected here too, through ValidateProxyBlock and ValidateTimeoutBlock,
+// with every message they report joined by "; " into the one error.
+//
 // Write paths (add, edit) and the validate verb call StrictValidateContext
 // instead to enforce the fuller rule set.
 func ValidateContext(c *Context) error {
@@ -150,6 +157,12 @@ func ValidateContext(c *Context) error {
 //   - port, if non-zero, must be in [1, 65535].
 //   - protocol, if non-empty, must be "https" or "http".
 //   - ssh.port, if non-zero, must be in [1, 65535].
+//   - the proxy block must pass ValidateProxyBlock.
+//   - the timeout block must pass ValidateTimeoutBlock.
+//
+// The last two also run in validateContext, so they are not strict-only
+// rules; they are listed here because this function reports every one of
+// their messages rather than a single joined error.
 //
 // Keeping this separate from validateContext preserves load-time leniency:
 // tightening validateContext would break CLI startup for contexts written
@@ -237,14 +250,172 @@ func StrictValidateContext(c *Context) []string {
 		errs = append(errs, fmt.Sprintf("ssh.port %d is out of range [1, 65535]", c.SSH.Port))
 	}
 
+	errs = append(errs, ValidateProxyBlock(&c.Proxy)...)
+	errs = append(errs, ValidateTimeoutBlock(&c.Timeout)...)
+
+	return errs
+}
+
+// validProxySchemes are the URL schemes proxy.url may use. An https proxy is
+// not supported: its handshake would need TLS trust decisions of its own for
+// the proxy's certificate, separate from the ones the context makes for the
+// Proxmox API.
+var validProxySchemes = map[string]bool{
+	"socks5":  true,
+	"socks5h": true,
+	"http":    true,
+}
+
+// ValidateProxyBlock checks p against the rules a context's proxy block must
+// satisfy and returns one message per violation, in the house style
+// StrictValidateContext uses. A nil p (no proxy configured at all) returns
+// nil.
+//
+// Every message that echoes p.URL runs it through redact.ProxyURL first, so
+// a stored password can never reach a message, including one produced for a
+// URL that fails to parse: the underlying url.Parse error is never appended,
+// because it quotes its whole input — and, for a password containing "/" or
+// "%", the password a second time in its reason — verbatim.
+//
+// The message that rejects userinfo embedded in proxy.url masks the whole
+// userinfo, username included, because a bare username can itself be a
+// credential: several proxy vendors authenticate with an API key in the
+// username position.
+//
+// When proxy.url is empty, only the two "is set but proxy.url is empty"
+// messages (for proxy.username and proxy.password) can fire, and the walk
+// stops there: a context that sets only proxy.password reports exactly one
+// message rather than also reporting "proxy.password is set without
+// proxy.username", which requires proxy.url to be set to mean anything.
+// When proxy.url is set, the from-env conflict is checked first, then the
+// URL itself, then the password-without-username rule.
+func ValidateProxyBlock(p *ProxyBlock) []string {
+	if p == nil {
+		return nil
+	}
+
+	var errs []string
+
+	if p.URL == "" {
+		if p.Username != "" {
+			errs = append(errs, "proxy.username is set but proxy.url is empty")
+		}
+		if p.Password != "" {
+			errs = append(errs, "proxy.password is set but proxy.url is empty")
+		}
+		return errs
+	}
+
+	redactedURL := redact.ProxyURL(p.URL)
+
+	if p.FromEnv != nil && *p.FromEnv {
+		errs = append(errs, "proxy.url and proxy.from-env are both set; use one or the other")
+	}
+
+	parsed, err := url.Parse(p.URL)
+	if err != nil {
+		errs = append(errs, fmt.Sprintf("proxy.url %s is not a valid URL", redactedURL))
+	} else {
+		if !validProxySchemes[parsed.Scheme] {
+			errs = append(errs, fmt.Sprintf("proxy.url %s must use scheme socks5, socks5h, or http", redactedURL))
+		}
+		// Hostname, not Host: "socks5://:1080" has Host ":1080" but no
+		// hostname, and dialling it would silently reach localhost.
+		if parsed.Hostname() == "" {
+			errs = append(errs, fmt.Sprintf("proxy.url %s must include a host", redactedURL))
+		}
+		if parsed.User != nil {
+			errs = append(errs, fmt.Sprintf(
+				"proxy.url %s must not embed credentials; use proxy.username and proxy.password",
+				maskProxyUserinfo(parsed, redactedURL)))
+		}
+	}
+
+	if p.Password != "" && p.Username == "" {
+		errs = append(errs, "proxy.password is set without proxy.username")
+	}
+
+	return errs
+}
+
+// maskProxyUserinfo renders a proxy URL that carries userinfo with the whole
+// userinfo replaced by redact.Placeholder, as "scheme://<redacted>@host:port"
+// followed by any path, query, and fragment. redact.ProxyURL keeps a bare
+// username, which is right for display in general but wrong in the message
+// that exists to reject embedded credentials.
+//
+// redacted is the value redact.ProxyURL returned for the same input. When
+// the path, query, or fragment holds an "@", redact.ProxyURL has already
+// reduced the value to "scheme://<redacted>", because a stray "@" cannot be
+// told apart from one that opens a password url.Parse missed; that form
+// carries no userinfo at all, so it is returned as it is.
+func maskProxyUserinfo(u *url.URL, redacted string) string {
+	if strings.Contains(u.Path, "@") || strings.Contains(u.RawQuery, "@") || strings.Contains(u.Fragment, "@") {
+		return redacted
+	}
+
+	var b strings.Builder
+
+	if u.Scheme != "" {
+		b.WriteString(u.Scheme)
+		b.WriteString("://")
+	}
+
+	b.WriteString(redact.Placeholder)
+	b.WriteByte('@')
+	b.WriteString(u.Host)
+	b.WriteString(u.EscapedPath())
+
+	if u.RawQuery != "" {
+		b.WriteByte('?')
+		b.WriteString(u.RawQuery)
+	}
+
+	if u.Fragment != "" {
+		b.WriteByte('#')
+		b.WriteString(u.EscapedFragment())
+	}
+
+	return b.String()
+}
+
+// ValidateTimeoutBlock checks t against the rule every timeout obeys: it
+// must parse as a Go duration and be greater than zero. It returns one
+// message per violated field, reusing ParseTimeout so the file, the
+// --timeout-* flags, and the root --api-*-timeout flags can never drift
+// apart on wording. A nil t (no timeout block configured) returns nil.
+func ValidateTimeoutBlock(t *TimeoutBlock) []string {
+	if t == nil {
+		return nil
+	}
+
+	var errs []string
+
+	if _, err := ParseTimeout("timeout.connect", t.Connect); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := ParseTimeout("timeout.tls-handshake", t.TLSHandshake); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := ParseTimeout("timeout.request", t.Request); err != nil {
+		errs = append(errs, err.Error())
+	}
+
 	return errs
 }
 
 // validateContext checks that mandatory fields are present and auth type is
-// recognised.  It is intentionally lenient: token auth requires only a secret,
-// not a token-id.  This leniency preserves CLI startup compatibility for
-// configs written before token-id was required on write paths.  Write paths
-// call StrictValidateContext instead.
+// recognised.  It is intentionally lenient about authentication: token auth
+// requires only a secret, not a token-id.  This leniency preserves CLI
+// startup compatibility for configs written before token-id was required on
+// write paths.  Write paths call StrictValidateContext instead.
+//
+// It also runs ValidateProxyBlock and ValidateTimeoutBlock: a malformed
+// proxy URL or an unparseable timeout is a structural defect rather than a
+// credential the operator has not filled in yet, so leniency does not
+// extend to these two blocks. Because either checker can report more than
+// one message, their combined output is joined with "; " into the single
+// error this function returns.
 func validateContext(c *Context) error {
 	if c.Host == "" {
 		return errors.New("host is required")
@@ -264,6 +435,13 @@ func validateContext(c *Context) error {
 		}
 	default:
 		return fmt.Errorf("auth.type must be \"token\" or \"password\", got %q", c.Auth.Type)
+	}
+
+	var msgs []string
+	msgs = append(msgs, ValidateProxyBlock(&c.Proxy)...)
+	msgs = append(msgs, ValidateTimeoutBlock(&c.Timeout)...)
+	if len(msgs) > 0 {
+		return errors.New(strings.Join(msgs, "; "))
 	}
 
 	return nil

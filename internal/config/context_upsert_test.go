@@ -73,6 +73,71 @@ func TestUpsertLabContext_UpdatesCredsPreservesUserEdits(t *testing.T) {
 	assert.True(t, ctx.TLS.Tofu)
 }
 
+func TestUpsertLabContext_UpdatesHostAndSecretPreservesProxyAndTimeout(t *testing.T) {
+	fromEnv := false
+	proxy := ProxyBlock{
+		URL:      "socks5h://proxy.example.com:1080",
+		Username: "pmx-proxy",
+		Password: "${PMX_PROXY_PASSWORD}",
+		FromEnv:  &fromEnv,
+	}
+	timeout := TimeoutBlock{Connect: "5s", TLSHandshake: "10s", Request: "45s"}
+
+	cfg := &Config{Contexts: map[string]*Context{
+		"lab-demo": {
+			Host:    "10.10.1.10",
+			Port:    8006,
+			Product: ProductPVE,
+			Auth:    AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx", Secret: "old"},
+			Proxy:   proxy,
+			Timeout: timeout,
+		},
+	}}
+
+	in := baseInput()
+	in.Host = "10.10.1.20"
+	in.Secret = "keychain:pmx-lab-demo/pmx@pve!pmx"
+	changed, err := UpsertLabContext(cfg, "lab-demo", in)
+	require.NoError(t, err)
+
+	ctx := cfg.Contexts["lab-demo"]
+	// Overwritten: host and secret changed as requested.
+	assert.Equal(t, "10.10.1.20", ctx.Host)
+	assert.Equal(t, "keychain:pmx-lab-demo/pmx@pve!pmx", ctx.Auth.Secret)
+	assert.Contains(t, changed, "host")
+	assert.Contains(t, changed, "secret")
+	// Preserved: every field of the operator's proxy and timeout blocks
+	// survives the upsert, including the explicit from-env: false.
+	require.Equal(t, proxy, ctx.Proxy)
+	require.Equal(t, timeout, ctx.Timeout)
+	require.NotNil(t, ctx.Proxy.FromEnv)
+	assert.False(t, *ctx.Proxy.FromEnv)
+}
+
+// An owned lab context whose preserved timeout block was hand-edited into an
+// invalid state fails the refresh with a message naming the key, rather than
+// being silently rewritten or saved as it is.
+func TestUpsertLabContext_RejectsInvalidPreservedTimeout(t *testing.T) {
+	cfg := &Config{Contexts: map[string]*Context{
+		"lab-demo": {
+			Host:    "10.10.1.10",
+			Port:    8006,
+			Product: ProductPVE,
+			Auth:    AuthBlock{Type: "token", Username: "pmx@pve", TokenID: "pmx", Secret: "old"},
+			Timeout: TimeoutBlock{Connect: "0s"},
+		},
+	}}
+
+	changed, err := UpsertLabContext(cfg, "lab-demo", baseInput())
+	require.Error(t, err)
+	assert.Nil(t, changed)
+	assert.Equal(t,
+		`invalid lab context "lab-demo" after update: timeout.connect must be greater than zero`,
+		err.Error())
+	// The operator's value is not rewritten to make the refresh pass.
+	assert.Equal(t, "0s", cfg.Contexts["lab-demo"].Timeout.Connect)
+}
+
 func TestUpsertLabContext_OwnershipGuardRefusesUnrelated(t *testing.T) {
 	cfg := &Config{Contexts: map[string]*Context{
 		"lab-demo": {

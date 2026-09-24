@@ -46,9 +46,10 @@ type LabContextInput struct {
 // unrelated user context that merely happens to share the lab-<name> name is
 // never clobbered. When owned, the credential triple, host/port, and TLS
 // fingerprint are overwritten while every field the operator may have
-// hand-edited (DefaultNode, DefaultOutput, SSH, TLS.Tofu/Insecure/CACert) is
-// preserved. The fingerprint is left untouched when the context opts into a
-// different trust model (TLS.Insecure or a TLS.CACert path).
+// hand-edited (DefaultNode, DefaultOutput, SSH, TLS.Tofu/Insecure/CACert,
+// Proxy, Timeout) is preserved. The fingerprint is left untouched when the
+// context opts into a different trust model (TLS.Insecure or a TLS.CACert
+// path).
 func UpsertLabContext(cfg *Config, name string, in LabContextInput) ([]string, error) {
 	if cfg.Contexts == nil {
 		cfg.Contexts = map[string]*Context{}
