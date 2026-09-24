@@ -191,14 +191,6 @@ func ApplyJumpSpec(opts pve.Options, j JumpSpec) pve.Options {
 	return opts
 }
 
-// ApplyJumpOptions is the string-shaped entry point, kept as a thin wrapper
-// that calls ApplyJumpSpec with a five-second connect bound and no
-// first-byte timer, so its callers keep their existing timing until they
-// pass a resolved JumpSpec themselves.
-func ApplyJumpOptions(opts pve.Options, jump string) pve.Options {
-	return ApplyJumpSpec(opts, JumpSpec{Chain: jump, ConnectTimeout: 5 * time.Second})
-}
-
 // JumpDialContext returns the dial function ApplyJumpSpec installs, for
 // callers that build an http.Transport directly, such as the probe. It
 // reaches addr through the chain by running `ssh -W <addr> <hop>`, the same

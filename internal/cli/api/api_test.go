@@ -1245,8 +1245,7 @@ func TestAuthLogin_OIDC_RealmRequired(t *testing.T) {
 		"auth", "login", "--context", "c",
 		"--oidc", "--code", "x", "--state", "y",
 	)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "realm")
+	require.EqualError(t, err, `OIDC login requires --realm or a realm configured in context "c"`)
 }
 
 func TestAuthLogin_OIDC_PasswordConflict(t *testing.T) {

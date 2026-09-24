@@ -37,52 +37,62 @@ type authClient interface {
 	Logout() error
 }
 
-// newAuthClientForContext builds the product-appropriate client for ctx and
-// wraps it in the matching authClient adapter. Exactly one of
+// newAuthClientForContext builds the product-appropriate client for stored
+// and wraps it in the matching authClient adapter. Exactly one of
 // (user+realm+password), (ticket+csrf), or token should be non-empty,
 // mirroring the old clientForContext contract; contextOptions decides which
 // of those BuildOptions embeds.
 //
-// contextName is the resolved context name (see resolveContextName), used
-// only to derive the per-context TOFU fingerprint cache path (see
-// contextOptions).
+// stored is the raw context lookupContext returned. An empty realm falls
+// back to stored.Realm, which carries no default, so an empty stored realm
+// stays empty here rather than becoming "pam". contextName is the resolved
+// context name (see resolveContextName), used for the per-context TOFU
+// fingerprint cache path and in error text.
+//
+// It returns the connection contextOptions resolved, also when building the
+// client fails, so the caller can name the host that was dialled and pass
+// its errors through the connection's WrapPinMismatch. cli.ContextOptions
+// has already warned about disabled TLS verification by then, once.
 func newAuthClientForContext(
 	cmd *cobra.Command,
-	ctx *config.Context,
+	stored *config.Context,
 	contextName, user, realm, password, token, ticket, csrf string,
-) (authClient, error) {
-	flagInsecure := cli.GetDeps(cmd).Insecure
-	if flagInsecure || ctx.TLS.Insecure {
-		cli.WarnInsecureTLS(cmd.ErrOrStderr())
+) (authClient, cli.Connection, error) {
+	if stored == nil {
+		return nil, cli.Connection{}, fmt.Errorf("context %q not found", contextName)
 	}
 
 	rlm := realm
 	if rlm == "" {
-		rlm = ctx.Realm
+		rlm = stored.Realm
 	}
-	opts := contextOptions(cmd, ctx, flagInsecure, contextName, user, rlm, token, password, ticket, csrf)
+	opts, conn, err := contextOptions(cmd, stored, cli.GetDeps(cmd).Insecure,
+		contextName, user, rlm, token, password, ticket, csrf)
+	if err != nil {
+		return nil, conn, err
+	}
 
-	switch ctx.Product {
+	switch stored.Product {
 	case config.ProductPVE, "":
 		ac, err := apiclient.NewAPIClient(opts)
 		if err != nil {
-			return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return nil, conn, fmt.Errorf("connect to %s: %w", conn.Host, err)
 		}
-		return &pveAuthClient{ac: ac}, nil
+		return &pveAuthClient{ac: ac}, conn, nil
 	case config.ProductPBS:
 		ac, err := apiclient.NewPBSClient(opts)
 		if err != nil {
-			return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return nil, conn, fmt.Errorf("connect to %s: %w", conn.Host, err)
 		}
-		return &pbsAuthClient{ac: ac}, nil
+		return &pbsAuthClient{ac: ac}, conn, nil
 	case config.ProductPDM:
 		ac, err := apiclient.NewPDMClient(opts)
 		if err != nil {
-			return nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return nil, conn, fmt.Errorf("connect to %s: %w", conn.Host, err)
 		}
-		return &pdmAuthClient{ac: ac}, nil
+		return &pdmAuthClient{ac: ac}, conn, nil
 	default:
-		return nil, fmt.Errorf("unsupported product %q", ctx.Product)
+		return nil, conn, fmt.Errorf("unsupported product %q", stored.Product)
 	}
 }
 

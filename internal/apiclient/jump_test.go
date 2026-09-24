@@ -35,30 +35,24 @@ var assertChildExitedNormally = func(t *testing.T, ps *os.ProcessState) {
 // forwards, so their messages are fixed strings.
 const testJumpAddr = "10.0.0.5:8006"
 
-// TestApplyJumpOptions_EmptyJumpLeavesDirectDial pins the opt-in: a context
+// TestApplyJumpSpec_EmptyChainLeavesDirectDial pins the opt-in: a context
 // with no jump host configured must dial exactly as it did before this
 // existed, which for the SDK means leaving DialContext nil so its own
 // DialTimeoutSec still governs.
-func TestApplyJumpOptions_EmptyJumpLeavesDirectDial(t *testing.T) {
+func TestApplyJumpSpec_EmptyChainLeavesDirectDial(t *testing.T) {
 	for _, jump := range []string{"", "   "} {
-		opts := ApplyJumpOptions(pve.Options{Host: "pve", DialTimeoutSec: 5}, jump)
+		opts := ApplyJumpSpec(pve.Options{Host: "pve", DialTimeoutSec: 5},
+			JumpSpec{Chain: jump, ConnectTimeout: 5 * time.Second})
 
-		assert.Nil(t, opts.DialContext, "jump %q must not install a dialer", jump)
+		assert.Nil(t, opts.DialContext, "chain %q must not install a dialer", jump)
 		assert.Equal(t, 5, opts.DialTimeoutSec, "the direct dial timeout must survive untouched")
-
-		opts = ApplyJumpSpec(pve.Options{Host: "pve", DialTimeoutSec: 5}, JumpSpec{Chain: jump})
-		assert.Nil(t, opts.DialContext, "spec chain %q must not install a dialer", jump)
 	}
 }
 
-// TestApplyJumpOptions_InstallsDialer covers the other half: a configured jump
+// TestApplyJumpSpec_InstallsDialer covers the other half: a configured jump
 // host is what makes the API reachable at all, so the dialer has to be there.
-func TestApplyJumpOptions_InstallsDialer(t *testing.T) {
-	opts := ApplyJumpOptions(pve.Options{Host: "pve"}, "admin@bastion")
-
-	require.NotNil(t, opts.DialContext)
-
-	opts = ApplyJumpSpec(pve.Options{Host: "pve"}, JumpSpec{Chain: "admin@bastion", ConnectTimeout: time.Second})
+func TestApplyJumpSpec_InstallsDialer(t *testing.T) {
+	opts := ApplyJumpSpec(pve.Options{Host: "pve"}, JumpSpec{Chain: "admin@bastion", ConnectTimeout: time.Second})
 	require.NotNil(t, opts.DialContext)
 }
 

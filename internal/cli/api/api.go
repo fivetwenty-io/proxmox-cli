@@ -55,9 +55,15 @@ func NewCommand() *cobra.Command {
 
 // noClient marks a command so the root PersistentPreRunE skips building an API
 // client (auth commands resolve everything from local config, building their
-// own client on demand for login/refresh/whoami).
+// own client on demand for login/refresh/logout). It adds the marker to the
+// command's existing annotations rather than replacing them, so an
+// annotation the command's literal already set, such as
+// cli.AnnotationUsesConnection, survives.
 func noClient(cmd *cobra.Command) *cobra.Command {
-	cmd.Annotations = map[string]string{"noClient": "true"}
+	if cmd.Annotations == nil {
+		cmd.Annotations = map[string]string{}
+	}
+	cmd.Annotations["noClient"] = "true"
 	return cmd
 }
 
