@@ -325,16 +325,21 @@ contexts:
       user: root                   # default -l/--user for `pmx ssh`/`pmx rsync`
       port: 22                     # default -p/--port
       identity: ~/.ssh/id_ed25519  # default -i/--identity
-      jump: admin@bastion:22       # default -J/--jump, ssh and API alike
+      jump: admin@bastion:22       # bastion for ssh and the API; -J and --api-jump override it
+    proxy:
+      url: socks5h://proxy.example.com:1080  # socks5, socks5h, or http, with no credentials in the URL
+      username: pmx                # user name presented to the proxy
+      password: ${PMX_PROXY_PASSWORD}  # resolved like auth.secret
+      from-env: false              # true honours $HTTPS_PROXY or $HTTP_PROXY and $NO_PROXY instead of url
+    timeout:
+      connect: 5s                  # TCP connect, to the proxy when one is set
+      tls-handshake: 10s           # TLS handshake
+      request: 30s                 # each attempt of one API request, including an upload's body
 ```
 
-`ssh.jump` tunnels every command through a bastion, both the ssh-based ones
-(including the `pmx lab` verbs that reach lab guests on their SDN mgmt IPs)
-and the Proxmox API connection, so a `host:` reachable only from the bastion
-needs no further setup. API connections go through `ssh -W`, so they reuse the
-keys, agent, `known_hosts`, and `~/.ssh/config` you already have. TLS is still
-negotiated against `host:` itself, leaving fingerprint pinning and TOFU
-unchanged.
+`ssh.jump` tunnels every command through a bastion, both the ssh-based ones (including the `pmx lab` verbs that reach lab guests on their SDN mgmt IPs) and the Proxmox API connection, so a `host:` reachable only from the bastion needs no further setup. API connections go through `ssh -W`, so they reuse the keys, agent, `known_hosts`, and `~/.ssh/config` you already have. TLS is still negotiated against `host:` itself, leaving fingerprint pinning and TOFU unchanged. For one invocation, `-J/--jump` (`--ssh-jump` on `pmx rsync`) overrides the bastion of the ssh-based commands, and `--api-jump` overrides the bastion of the API connection. `ssh.user`, `ssh.port`, and `ssh.identity` configure the node login only. The bastion takes its user and port from the hop string and its key from `~/.ssh/config` or the agent.
+
+The example above sets every key to show its shape. Because it sets both `ssh.jump` and `proxy`, its context would reach the proxy through the bastion. Most contexts need only one of `ssh.jump` and `proxy`, and [Bastions, proxies, and timeouts](#bastions-proxies-and-timeouts) below walks through each case.
 
 Configs written by an earlier version of `pmx` use `targets:` and
 `current-target:`. Run `scripts/migrate-config.py` (or
@@ -381,6 +386,104 @@ The `auth.secret` value is resolved in three tiers:
 Password login stores a live `session` (ticket + CSRF + expiry) back into the
 target; `pmx auth logout` wipes it.
 
+A context's `proxy.password` resolves through the same three tiers, and `pmx context show` redacts it the same way it redacts `auth.secret`.
+
+### Bastions, proxies, and timeouts
+
+A context can reach its API through an ssh bastion, an outbound proxy, or both. The bastion's user and port come from the `ssh.jump` hop string, written as `[user@]host[:port]` or `ssh://[user@]host[:port]`, and its key comes from `~/.ssh/config` or the agent, exactly as it does for `pmx ssh -J`. The API hop runs with `BatchMode=yes` and without a terminal, so it cannot answer a prompt. Run `ssh <bastion>` once to accept the bastion's host key before the first API command, and set `BatchMode` and `ConnectTimeout` in `~/.ssh/config` for every intermediate hop of a chain.
+
+A context behind a bastion only needs the hop:
+
+```yaml
+contexts:
+  behind-bastion:
+    host: pve1.internal
+    auth:
+      type: token
+      username: automation@pve
+      token-id: cli
+      secret: ${PVE_TOKEN}
+    ssh:
+      jump: admin@bastion.example.com
+```
+
+A context behind a SOCKS5 proxy that asks for credentials keeps the password out of the URL:
+
+```yaml
+contexts:
+  behind-socks:
+    host: pve1.internal
+    auth:
+      type: token
+      username: automation@pve
+      token-id: cli
+      secret: ${PVE_TOKEN}
+    proxy:
+      url: socks5h://proxy.example.com:1080
+      username: pmx
+      password: keychain:pmx-proxy/behind-socks
+```
+
+A context can use both, and then the bastion reaches the proxy and the proxy reaches the target. The bastion dials the proxy's address from its own side, so the proxy has to be reachable from the bastion. A `socks5h://` URL also lets the proxy resolve the context's `host` itself, as in this example:
+
+```yaml
+contexts:
+  double-hop:
+    host: pve1.internal
+    auth:
+      type: token
+      username: automation@pve
+      token-id: cli
+      secret: ${PVE_TOKEN}
+    ssh:
+      jump: admin@bastion.example.com
+    proxy:
+      url: socks5h://proxy.dmz.example.com:1080
+    timeout:
+      connect: 10s
+      request: 60s
+```
+
+`proxy.url` accepts `socks5://`, `socks5h://`, and `http://`, and pmx does not accept an `https://` proxy yet. `proxy.from-env: true` honours `HTTPS_PROXY` (or `HTTP_PROXY`) and `NO_PROXY` instead of a fixed URL, and pmx never honours `ALL_PROXY`. Without that setting, pmx ignores the proxy variables your shell exports. The proxy password crosses the network in clear text to a `socks5` or `http` proxy. An `http://` proxy carries an `https` context's traffic through a CONNECT tunnel, so TLS still runs end to end. A `protocol: http` context has no TLS to protect it. An `http://` proxy then receives every API request in clear text, including the API credentials in its headers, and a SOCKS5 proxy can read the same clear text as it relays it.
+
+The `timeout` block bounds the API transport, with defaults of `5s` for `connect`, `10s` for `tls-handshake`, and `30s` for `request`. The connect and handshake bounds round up to whole seconds. The request bound applies to each attempt and covers an upload's whole body, so raise it for large transfers over a slow link.
+
+Nine root flags override these settings for one invocation without touching the file:
+
+- `--api-endpoint`
+
+- `--api-jump`
+
+- `--api-proxy`
+
+- `--api-proxy-from-env`
+
+- `--api-ca-cert`
+
+- `--api-fingerprint`
+
+- `--api-connect-timeout`
+
+- `--api-tls-handshake-timeout`
+
+- `--api-request-timeout`
+
+Every flag except `--api-proxy-from-env` has a matching environment variable, such as `PMX_API_JUMP` for `--api-jump`, and a variable that overrides a context prints a `note:` line on standard error. A flag outranks its environment variable, the variable outranks the context's config, and the config outranks the built-in default. `man 5 pmx-config` gives the full rules and their limits.
+
+```bash
+# Skip the context's bastion for one command.
+pmx --api-jump none pve cluster status
+
+# Send one command through a different proxy. Unlike --api-proxy, the variable
+# may carry the proxy's credentials, here read from another variable. The
+# password must be percent-encoded if it contains reserved characters.
+PMX_API_PROXY="socks5h://pmx:${PROXY_PASSWORD}@other-proxy.example.com:1080" pmx pve node list
+
+# Reach a context that pins its certificate through a local tunnel to the same
+# node, skipping any bastion the context sets.
+pmx --api-endpoint localhost:18006 --api-jump none pve node list
+```
+
 ## Contexts
 
 `pmx context` (alias: `pmx ctx`) manages the named Proxmox contexts stored in
@@ -397,6 +500,13 @@ reachability checks, see [Managing Proxmox Endpoints With pmx Contexts](https://
 pmx context add lab \
   --host pve.example.com --username root@pam \
   --token-id automation --secret '${PMX_TOKEN}' --select
+
+# Add a context reached through a bastion and then a SOCKS5 proxy.
+pmx context add remote \
+  --host pve1.internal --username automation@pve \
+  --token-id cli --secret '${REMOTE_PVE_TOKEN}' \
+  --ssh-jump admin@bastion.example.com \
+  --proxy-url socks5h://proxy.dmz.example.com:1080
 
 # List all contexts (* marks the active one).
 pmx context ls

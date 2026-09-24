@@ -7,6 +7,39 @@ ENVIRONMENT / FILES / EXIT STATUS sections into each root page.
 
 # ENVIRONMENT
 
+**PMX_API_CA_CERT**
+: Path to a PEM CA certificate file that replaces the context's trust settings
+  (see **--api-ca-cert**).
+
+**PMX_API_CONNECT_TIMEOUT**
+: Bound on TCP connection setup, such as **5s** (see
+  **--api-connect-timeout**).
+
+**PMX_API_ENDPOINT**
+: API endpoint override for one invocation, as **[scheme://]host[:port]**
+  (see **--api-endpoint**).
+
+**PMX_API_FINGERPRINT**
+: SHA-256 certificate pin that replaces the context's trust settings (see
+  **--api-fingerprint**).
+
+**PMX_API_JUMP**
+: ssh bastion chain for the API connection, or **none** to dial direct (see
+  **--api-jump**).
+
+**PMX_API_PROXY**
+: Proxy URL for the API connection, or **none** to disable a configured
+  proxy. Unlike the flag, it may carry the proxy's user name and password
+  (see **--api-proxy**).
+
+**PMX_API_REQUEST_TIMEOUT**
+: Bound on each attempt of an API request, such as **30s** (see
+  **--api-request-timeout**).
+
+**PMX_API_TLS_HANDSHAKE_TIMEOUT**
+: Bound on the TLS handshake, such as **10s** (see
+  **--api-tls-handshake-timeout**).
+
 **PMX_CONTEXT**
 : Context name override, taking precedence over current-context in the config
   file (see **--context**).
@@ -19,6 +52,11 @@ ENVIRONMENT / FILES / EXIT STATUS sections into each root page.
 
 **XDG_CONFIG_HOME**
 : Base directory for the configuration file; defaults to **~/.config** when unset.
+
+Each of the eight API connection variables above prints a **note:** line on
+standard error when it overrides the context. The flag named in each entry
+outranks its variable, and the variable outranks the context, as
+**pmx-config(5)** describes under CONNECTION OVERRIDES.
 
 # FILES
 

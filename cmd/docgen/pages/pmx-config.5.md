@@ -231,6 +231,7 @@ Each entry under **contexts** is a mapping with the following keys.
 : Path to a PEM-encoded CA certificate file used to verify the server
   instead of (or in addition to) the system trust store. Useful for an
   internal CA.
+  pmx auth now verifies a context's tls.ca-cert the way every other command does, so an authentication call against a server whose certificate chains only to a system root fails where it used to succeed.
 
 **tls.tofu**
 : When **true**, enables Trust-On-First-Use fingerprint pinning: on an
@@ -246,6 +247,11 @@ Each entry under **contexts** is a mapping with the following keys.
 : Per-context defaults for **pmx ssh** and **pmx rsync**. Optional; any
   field left unset falls back to that command's own compiled-in default
   rather than to a zero value.
+  **ssh.user**, **ssh.port**, and **ssh.identity** configure the Proxmox
+  node's ssh login only. The API bastion named by **ssh.jump** takes its user
+  and port from the hop string and its key from **~/.ssh/config** or the
+  agent, exactly as **pmx ssh -J** does, so none of the three reaches the
+  bastion.
 
 **ssh.user**
 : Default SSH login user for this context. Falls back to **root** when
@@ -267,25 +273,242 @@ Each entry under **contexts** is a mapping with the following keys.
   reachable only from inside the context's network. Override per invocation
   with **-J/--jump** (**--ssh-jump** on **pmx rsync**).
 
-  The Proxmox API connection tunnels through it too, so a context whose
-  **host** is reachable only from the bastion works without any further
-  setup. **pmx** runs **ssh -W** for each API connection, which means the
-  same keys, agent, **known_hosts**, and **~/.ssh/config** the ssh transport
-  already uses apply unchanged. TLS is still negotiated against the
-  context's **host** at the far end, so certificate verification, a pinned
-  **fingerprint**, and **tofu** all behave exactly as they do on a direct
-  connection.
+  The Proxmox API connection tunnels through it too, so a context whose **host** is reachable only from the bastion works without any further setup. **pmx** runs **ssh -W** for each API connection, which means the same keys, agent, **known_hosts**, and **~/.ssh/config** the ssh transport already uses apply unchanged. TLS is still negotiated against the context's **host** at the far end, so certificate verification, a pinned **fingerprint**, and **tofu** all behave exactly as they do on a direct connection.
 
-  The jump host resolves **host** itself, since it is the end that opens the
-  forwarded connection. A name that resolves only on your workstation (a
-  **/etc/hosts** entry, or a split-DNS or MagicDNS name the bastion does not
-  share) leaves the API hanging until the request times out, while ssh-based
-  commands to the same context still work. Give **host** an address the jump
-  host can reach when the two do not share a resolver.
+  Each hop is written as **[user@]host[:port]** or **ssh://[user@]host[:port]**, and whitespace around a hop is ignored. A host is a name, an IPv4 address, or a bracketed IPv6 literal such as **[2001:db8::1]:22**. A name may use letters, digits, **_**, **.**, and **-**, so **~/.ssh/config** aliases such as **my_bastion** work. A bare IPv6 literal without brackets is accepted only as the last plain hop, where no port can follow it. A user is made of letters, digits, **.**, **_**, **-**, and **@**. A plain hop splits at its last **@**, so **alice@corp.example@bastion** logs in to **bastion** as **alice@corp.example**. An **ssh://** hop splits at its first **@**, as OpenSSH's own parser does, so an **@** inside that form's user is written **%40**, as in **ssh://alice%40corp.example@bastion:2222**. pmx checks the chain without resolving or dialling anything, and it rejects a hop that carries a shell metacharacter, a control character, or a leading **-**, because OpenSSH releases before 10.3 run **-J** through **/bin/sh**. Every API command fails on a rejected chain, and **pmx context add**, **pmx context update**, and **pmx context edit** refuse to save one. Each of them reports the chain as **ssh.jump "<chain>" is not valid:** followed by the reason.
 
-  Per-invocation **-J/--jump** overrides the ssh transport only. The API
-  connection follows the context's configured **ssh.jump**, since it is
-  built before any command's flags are parsed.
+  The API bastion hop runs with BatchMode=yes and without a terminal, so it cannot prompt for a password, a second factor, or an unknown host key; run ssh <bastion> once to accept its host key before the first API command.
+
+  pmx passes **BatchMode=yes** and a **ConnectTimeout** taken from **timeout.connect** to the last hop only. Intermediate hops of a chain take **BatchMode** and **ConnectTimeout** from **~/.ssh/config** rather than from pmx, so set both there for every bastion. The ssh child runs without **DISPLAY** and **WAYLAND_DISPLAY** in its environment, so no OpenSSH version, including one older than 8.4, can open a graphical askpass for any hop. A security key on the bastion hop, such as an **ed25519-sk** key, gets no touch prompt under pmx, because the ssh child has no terminal and no display. Load such a key into **ssh-agent**, whose own notifier still works.
+
+  Every API connection starts its own ssh process, so a verb that fans out over many connections authenticates to the bastion once per connection. Setting **ControlMaster auto** with a **ControlPath** and a **ControlPersist** interval for the bastion host in **~/.ssh/config** turns that into one authentication per session.
+
+  A failing bastion costs one attempt per client wherever the first-byte timer is armed (see **timeout.tls-handshake**), because pmx blocks new dials through that client for ten seconds after the failure instead of starting ssh again. A **pmx context validate --all --connect** sweep through a bastion that rejects the key therefore makes one failed attempt per context.
+
+  The jump host resolves **host** itself, since it is the end that opens the forwarded connection. A name that resolves only on your workstation (a **/etc/hosts** entry, or a split-DNS or MagicDNS name the bastion does not share) leaves the API hanging until the request times out, while ssh-based commands to the same context still work. Give **host** an address the jump host can reach when the two do not share a resolver. A SOCKS5 proxy resolves the target name at the proxy instead, so a **socks5h://** URL in **proxy.url** is an alternative to giving **host** an address the bastion can resolve.
+
+  **-J/--jump** overrides the ssh transport for one invocation, and **--api-jump** overrides the API connection's bastion. When neither flag is given, both connections use **ssh.jump**. **--api-jump none** dials the API direct even when the context sets a bastion. See **CONNECTION OVERRIDES** below.
+
+**proxy**
+: Outbound proxy for this context's Proxmox API connection. Optional; omitting
+  it connects direct. The block covers the API connection only, and
+  **pmx ssh**, **pmx rsync**, and the other ssh-based commands never use it.
+  The block must be a mapping, so a scalar such as
+  **proxy: socks5h://proxy:1080** fails the load with **proxy must be a
+  mapping, e.g. proxy: {url: socks5h://host:1080}**. When **ssh.jump** is also
+  set, the bastion reaches the proxy and the proxy reaches **host**, so the
+  proxy must be reachable from the bastion.
+
+**proxy.url**
+: The proxy to send API requests through. pmx accepts three schemes, which are
+  **socks5://**, **socks5h://**, and **http://**, and an **https://** proxy is
+  not accepted in this release. The URL must include a host and must not carry
+  credentials, which belong in **proxy.username** and **proxy.password**.
+  Unset by default, meaning a direct connection. An **http://** proxy carries
+  an **https** connection through a CONNECT tunnel, so TLS still runs end to
+  end between pmx and **host**. A **protocol: http** context has no TLS to
+  protect it. An **http://** proxy then receives every API request in clear
+  text, including the API credentials in its headers, and a SOCKS5 proxy can
+  read the same clear text as it relays it. A bad value is reported with one
+  of these messages, in which the URL is shown with any credential masked:
+
+  - **proxy.url <url> is not a valid URL**
+  - **proxy.url <url> must use scheme socks5, socks5h, or http**
+  - **proxy.url <url> must include a host**
+  - **proxy.url <url> must use a port from 1 to 65535**
+  - **proxy.url <url> must not embed credentials; use proxy.username and
+    proxy.password**
+  - **proxy.url and proxy.from-env are both set; use one or the other**
+
+**proxy.username**
+: User name presented to the proxy, either for SOCKS5 username authentication
+  or in the **Proxy-Authorization** header that an **http://** proxy receives.
+  Unset by default. It requires **proxy.url**, and setting it without one
+  fails with **proxy.username is set but proxy.url is empty**.
+
+**proxy.password**
+: Password for **proxy.username**, resolved with the same precedence as
+  **auth.secret**, which accepts **${VAR}**, **$VAR**,
+  **keychain:service/account**, or a literal that triggers the same one-time
+  warning. pmx resolves it only when it builds the connection, never while it
+  reads the file. It requires **proxy.url** and **proxy.username**, and the
+  messages for a missing one are **proxy.password is set but proxy.url is
+  empty** and **proxy.password is set without proxy.username**. The credential
+  crosses the network in clear text to a **socks5** or **http** proxy, so
+  anyone who can watch the path between pmx and the proxy can read it.
+
+**proxy.from-env**
+: When **true**, pmx honours **HTTPS_PROXY** (or **HTTP_PROXY** for a
+  **protocol: http** context) and **NO_PROXY** for this context, as Go's
+  standard library reads them. **ALL_PROXY** is not honoured. Defaults to
+  **false**, and while it is off pmx ignores those variables whatever the
+  shell exports. It cannot be combined with **proxy.url**.
+  **--api-proxy-from-env** turns it on for one invocation, and
+  **--api-proxy-from-env=false** overrides a context that enables it.
+  pmx context validate --connect no longer honours HTTPS_PROXY on its own; set proxy.from-env: true on the context, or pass --api-proxy-from-env, to route the probe through the proxy environment.
+
+**timeout**
+: Bounds on this context's API transport. Optional; each key left unset uses
+  its built-in default. The block must be a mapping, so a scalar such as
+  **timeout: 30s** fails the load with **timeout must be a mapping, e.g.
+  timeout: {connect: 5s}**. Each value is a Go duration such as **5s**,
+  **500ms**, or **1m30s**, and it must be greater than zero. A bad value fails
+  with **timeout.connect "<value>" is not a duration (e.g. 5s, 500ms)** or
+  **timeout.connect must be greater than zero**, with the key's own name in
+  place of **timeout.connect**. To return a key to its default, remove it, or
+  pass an empty value to the matching
+  **--timeout-connect**, **--timeout-tls-handshake**, or **--timeout-request**
+  flag of **pmx context update**.
+
+**timeout.connect**
+: Bound on TCP connection setup. Defaults to **5s**. Behind a proxy it covers
+  only the connect to the proxy. Through a bastion it also becomes ssh's
+  **ConnectTimeout** for the last hop, and it is added to the handshake bound,
+  as **timeout.tls-handshake** describes. The client library's connect and
+  handshake bounds have one-second granularity, so pmx rounds both up to whole
+  seconds, and **500ms** behaves as **1s**.
+
+**timeout.tls-handshake**
+: Bound on the TLS handshake. Defaults to **10s**, and it rounds up to whole
+  seconds as **timeout.connect** does. When the API connection goes through a
+  bastion, pmx arms its own first-byte timer on every https route and on an
+  http route behind a SOCKS proxy. The timer runs for **timeout.connect** plus
+  this value, and pmx never lets that sum fall below one second. The request
+  bound then caps the timer at that bound minus the lesser of one second and a
+  quarter of it, and a capped timer can fall below one second. When the timer
+  fires before the first byte arrives, pmx ends the ssh child and reports the
+  bastion as unresponsive. The transport's own handshake bound through a
+  bastion is the uncapped sum plus one second, which keeps it past the timer.
+  A **protocol: http** jump route without a SOCKS proxy arms no timer, so a
+  slow response there is never cut off.
+
+**timeout.request**
+: Bound on one API request. Defaults to **30s**, and it is not rounded. The
+  bound applies per attempt, and it covers the whole body of an upload or a
+  file-restore download, so a large transfer over a slow link needs a larger
+  value. An idempotent request can take up to four attempts plus about six
+  seconds of backoff, so a SOCKS proxy that accepts the connection and then
+  stalls can hold one request for about two minutes at the thirty-second
+  default. Through a bastion the request bound also caps the first-byte timer,
+  so a short request bound shortens the bastion's time to answer. A request
+  bound of five seconds leaves the bastion four seconds, two seconds leaves it
+  one and a half, and one second leaves it 750 milliseconds.
+  **pmx context validate --connect** keeps its own five-second probe bound
+  unless this key, **--api-request-timeout**, or **PMX_API_REQUEST_TIMEOUT**
+  sets the value.
+
+# CONNECTION OVERRIDES
+
+Nine root flags override a context's API connection for one invocation, and
+eight environment variables mirror all of them except
+**--api-proxy-from-env**. They change only the API connection. **pmx ssh**,
+**pmx rsync**, and the other ssh-based commands keep reading the context's
+**ssh** block and their own **-J/--jump**. An override is never written to the
+configuration file, so use **pmx context update** to store a setting.
+
+Connection settings resolve flag > environment variable > context config > built-in default.
+
+On a command that connects, a flag or a variable given an empty value counts
+as unset. Every variable that overrides a context prints one **note:** line on
+standard error, once per invocation, such as **note: $PMX_API_JUMP
+(admin@bastion.example.com) overrides the bastion of context "lab"**. A flag
+prints no note, because a flag on the command line is never ambient. A command
+that never connects refuses these flags with a message such as **--api-jump
+has no effect on pmx context ls**, while the variables stay silent there.
+
+The live probe of **pmx context validate --connect** reports the route each context takes.
+pmx context validate --connect prints a VIA column between REACHABLE and PRODUCT, so a script that reads the table by column position should use --output json instead.
+
+**--api-endpoint**
+: Replaces the context's **host**, and its **port** and **protocol** when the
+  value carries them, as **[scheme://]host[:port]**. A component the value
+  omits keeps the context's value. The scheme must be **https** or **http**,
+  and the host may be a bracketed IPv6 literal such as **[2001:db8::1]:8006**.
+  The value must not carry credentials, a path, a query, or a fragment. An
+  override cannot turn an **https** context into **http**, so set **protocol:
+  http** on the context when that is intended. Its environment variable is
+  **PMX_API_ENDPOINT**.
+
+**--api-jump**
+: Replaces **ssh.jump** for the API connection, with the same hop grammar. The
+  value **none** dials direct even when the context sets a bastion. Its
+  environment variable is **PMX_API_JUMP**.
+
+**--api-proxy**
+: Replaces **proxy.url**, with the same scheme, host, and port rules. The
+  value **none** disables a configured proxy, including one that
+  **proxy.from-env** selects. The flag must not carry credentials, which would
+  show in the process list, so pmx refuses any userinfo in it, a bare user
+  name included. An override URL never picks up the context's
+  **proxy.username** and **proxy.password**, so a proxy that needs a password
+  for one invocation takes it from the flag's environment variable,
+  **PMX_API_PROXY**, whose URL may carry a user name and password.
+
+**--api-proxy-from-env**
+: Turns **proxy.from-env** on for one invocation, and
+  **--api-proxy-from-env=false** turns off a context's **proxy.from-env**. It
+  conflicts with a proxy URL from **--api-proxy** or **PMX_API_PROXY**. It has
+  no environment variable, so the environment alone can never switch on an
+  ambient proxy.
+
+**--api-ca-cert**
+: Verifies the server against the PEM CA certificate file at this path for one
+  invocation. It replaces the context's whole trust mode, meaning
+  **tls.insecure**, **tls.fingerprint**, **tls.ca-cert**, and **tls.tofu**,
+  and it cannot be combined with **--insecure** or **--api-fingerprint**. Its
+  environment variable is **PMX_API_CA_CERT**.
+
+**--api-fingerprint**
+: Pins the server's certificate to this SHA-256 fingerprint, written as 32
+  colon-separated hex pairs, for one invocation. It replaces the context's
+  whole trust mode, so it never prompts, and it cannot be combined with
+  **--insecure** or **--api-ca-cert**. Its environment variable is
+  **PMX_API_FINGERPRINT**.
+
+**--api-connect-timeout**
+: Replaces **timeout.connect**, under the same duration rules. Its environment
+  variable is **PMX_API_CONNECT_TIMEOUT**.
+
+**--api-tls-handshake-timeout**
+: Replaces **timeout.tls-handshake**, under the same duration rules. Its
+  environment variable is **PMX_API_TLS_HANDSHAKE_TIMEOUT**.
+
+**--api-request-timeout**
+: Replaces **timeout.request**, under the same duration rules. Its environment
+  variable is **PMX_API_REQUEST_TIMEOUT**.
+
+Five limits apply to the overrides and to the routes they select.
+
+When the client library cannot reach a proxy, it retries an idempotent
+request, which can then take up to four attempts and about six seconds of
+backoff before the command fails. A bastion failure ends after one attempt per
+client wherever the first-byte timer is armed, and it blocks new dials through
+that client for ten seconds, so a failing bastion sees one authentication per
+client rather than one per retry.
+
+Under **--api-endpoint**, the OpenID login of **pmx auth login --oidc** keeps
+the context's stored endpoint as its redirect URL, so a tunnelled login needs
+no extra flag, and **--redirect-url** still overrides it.
+
+On Windows the bastion needs the OpenSSH client, **ssh.exe**, on **PATH**. Its
+connection has no deadlines, and closing it waits for ssh to exit or be
+killed. An intermediate hop without **BatchMode** in **~/.ssh/config**
+can still stall on a prompt until the first-byte timer fires. When that timer
+fires, pmx ends **ssh.exe** at once, but an intermediate **ssh.exe** that a
+**-J** chain started survives until its own connection ends.
+
+A pinned **tls.fingerprint** keeps applying under **--api-endpoint**, so a
+tunnel to the same node works, and another node fails the handshake and needs
+**--api-fingerprint**. Trust on first use cannot accept anything new for that
+invocation, so a tunnel through another address to a **tls.tofu** context
+needs **--api-fingerprint** too. A certificate that the context already
+trusted for the same host name still verifies.
+
+A saving verb such as **pmx context select** or **pmx auth login**, run by an
+older pmx against a file this version wrote, drops the **proxy** and
+**timeout** blocks from every context, including any proxy credential
+reference. Upgrade every copy of pmx that shares one configuration file at the
+same time.
 
 # LAB CONFIGURATION
 
@@ -637,13 +860,24 @@ the configured value, and prints nothing about the password at all when
 **default_user_password** is unset or the target user already exists. No
 other lab command reads or displays this key.
 
+**proxy.password** is redacted the same way **auth.secret** is.
+**pmx context show** prints a literal value as a fixed mask and shows an
+environment-variable or keychain reference as it is, since a reference reveals
+nothing on its own. A **$NAME** reference whose variable is unset is masked
+too, because pmx would use it as a literal password. Every message, note, and
+log record that prints a proxy URL masks any credential embedded in it, and
+the resolved proxy password never appears in any of them.
+
 # EXAMPLE
 
-A config with two contexts: a PVE lab cluster reached over token auth with a
-pinned certificate fingerprint, and a PBS host reached over token auth with
-TLS Trust-On-First-Use enabled. Both secrets are environment-variable
-references; the variable names are chosen by the operator and are not fixed
-by pmx.
+A config with three contexts: a PVE lab cluster reached over token auth with a
+pinned certificate fingerprint, a PBS host reached over token auth with
+TLS Trust-On-First-Use enabled, and a remote PVE node that sits behind a
+bastion and a SOCKS5 proxy with raised timeouts. Every secret is an
+environment-variable or keychain reference; the variable names are chosen
+by the operator and are not fixed by pmx. Every auth block is written in
+block style, because a flow mapping such as **auth: {secret: ${TOKEN}}** is
+not valid YAML unless the reference is quoted.
 
 ```yaml
 current-context: lab
@@ -680,11 +914,38 @@ contexts:
       secret: ${BACKUP_PBS_TOKEN}
     tls:
       tofu: true
+
+  remote:
+    host: pve1.internal
+    product: pve
+    auth:
+      type: token
+      username: automation@pve
+      token-id: cli
+      secret: ${REMOTE_PVE_TOKEN}
+    ssh:
+      jump: admin@bastion.example.com
+    proxy:
+      url: socks5h://proxy.dmz.example.com:1080
+      username: pmx
+      password: keychain:pmx-proxy/remote
+    timeout:
+      connect: 10s
+      tls-handshake: 20s
+      request: 120s
 ```
 
 With this file, **pmx --context backup datastore ls** talks to the PBS host
 using **$BACKUP_PBS_TOKEN**, while a bare **pmx node ls** (no **--context**)
 uses **lab**, the value of **current-context**, over its pinned certificate.
+
+Context **remote** takes two hops. pmx runs **ssh -W** through
+**admin@bastion.example.com** to reach the proxy, and the proxy then connects
+to **pve1.internal**. The proxy must therefore be reachable from the bastion.
+Because the URL uses the **socks5h** scheme, the proxy resolves
+**pve1.internal** itself. The raised
+timeouts give the longer route more room, and they set the first-byte timer
+through the bastion to 30 seconds, the connect bound plus the handshake bound.
 
 A second example adds one inline lab, **wayne**, plus **labs_dir** for any
 further labs kept as separate files. **default_user_password** is set here
@@ -823,4 +1084,6 @@ other than that, such as the 24 shown above.
 **pmx(1)**, **pmx-context(1)**, **pmx-context-add(1)**, **pmx-init(1)**,
 **pmx-init-config(1)**, **pmx-auth(1)**, **pmx-lab(1)**,
 **pmx-lab-config(1)**, **pmx-lab-config-init(1)**, **pmx-lab-config-add(1)**,
-**pmx-lab-config-show(1)**, **pmx-lab-access-grant(1)**
+**pmx-lab-config-show(1)**, **pmx-lab-access-grant(1)**,
+**pmx-context-update(1)**, **pmx-context-validate(1)**, **ssh(1)**,
+**ssh_config(5)**, **ssh-agent(1)**
