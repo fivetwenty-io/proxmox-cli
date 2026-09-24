@@ -516,25 +516,97 @@ func TestJumpConn_CarriesBytesBothWays(t *testing.T) {
 	assert.Equal(t, []string{"-W", ln.Addr().String(), "--", "bastion"}, argv[0][len(argv[0])-4:])
 }
 
-// TestJumpConn_CloseTerminatesChild pins that Close returns at once and that
-// ssh, seeing end-of-file, exits on its own well inside the grace period.
+// TestJumpConn_CloseTerminatesChild pins that Close returns without waiting
+// on the child, and that ssh, seeing end-of-file, exits on its own rather
+// than on the grace period's signal.
+//
+// Every step is ordered by an event, not by the clock, so scheduler load
+// cannot fail it. The stand-in writes its marker on end-of-file and then
+// holds its exit until the test releases it, so the child provably still runs
+// when Close returns. The grace is raised past the sum of the waits that
+// follow Close, so no signal can reach the child while the test waits, and
+// any signal in its exit state is a regression.
+//
+// The bounds only stop a hang. The start bound is the widest because on a
+// loaded macOS host the first exec of a freshly written script can stall for
+// tens of seconds before bash runs its first line.
 func TestJumpConn_CloseTerminatesChild(t *testing.T) {
-	s := testhelper.SSHStandIn(t, testhelper.SSHStandInOptions{Mode: testhelper.SSHForward})
+	const (
+		startGuard = 2 * time.Minute
+		stepGuard  = time.Minute
+		grace      = 10 * time.Minute
+	)
+
+	s := testhelper.SSHStandIn(t, testhelper.SSHStandInOptions{Mode: testhelper.SSHForward, HoldExit: true})
 	ln := testServer(t, holdUntilClosed)
 
-	c := dialStandIn(t, standInSpec(s), ln.Addr().String())
-	testhelper.WaitPID(t, s.PIDFile, 5*time.Second)
+	d := &jumpDialer{spec: standInSpec(s), hooks: jumpHooks{closeGrace: grace}}
 
-	start := time.Now()
-	require.NoError(t, c.Close())
-	assert.Less(t, time.Since(start), 100*time.Millisecond, "Close must not block")
+	conn, err := d.dial(context.Background(), "tcp", ln.Addr().String())
+	require.NoError(t, err)
 
-	// Ten seconds is only a hang guard; the child must be reaped within one.
-	requireExited(t, c, 10*time.Second)
-	assert.Less(t, time.Since(start), time.Second, "the child must exit on end-of-file, not on a signal")
+	c, ok := conn.(*jumpConn)
+	require.True(t, ok)
 
-	_, err := os.Stat(s.MarkerFile)
-	require.NoError(t, err, "the stand-in must have seen end-of-file")
+	// Cleanups run last-in first-out, so on a failed run this one ends the
+	// held child before the test server waits for its connection to close,
+	// rather than leaving it to the raised grace.
+	t.Cleanup(func() {
+		_ = c.Close()
+		_ = os.WriteFile(s.ExitGate, nil, 0o600)
+
+		select {
+		case <-c.exited:
+		default:
+			killJumpChild(c.cmd.Process)
+		}
+	})
+
+	testhelper.WaitPID(t, s.PIDFile, startGuard)
+
+	closed := make(chan error, 1)
+	go func() { closed <- c.Close() }()
+
+	select {
+	case err := <-closed:
+		require.NoError(t, err)
+	case <-time.After(stepGuard):
+		t.Fatalf("Close did not return within %s, so it waits on the child", stepGuard)
+	}
+
+	select {
+	case <-c.exited:
+		t.Fatal("Close must not block: the held child had already exited when it returned")
+	default:
+	}
+
+	// The wait also ends when the child exits, so an early signal fails at
+	// once instead of after the whole bound.
+	require.Eventually(t, func() bool {
+		if _, serr := os.Stat(s.MarkerFile); serr == nil {
+			return true
+		}
+
+		select {
+		case <-c.exited:
+			return true
+		default:
+			return false
+		}
+	}, stepGuard, 10*time.Millisecond, "the stand-in neither saw end-of-file nor exited")
+
+	_, err = os.Stat(s.MarkerFile)
+	require.NoError(t, err, "the stand-in must see end-of-file once Close returns")
+
+	select {
+	case <-c.exited:
+		t.Fatalf("the child exited before the test released it: %v", c.cmd.ProcessState)
+	default:
+	}
+
+	s.ReleaseExit(t)
+
+	requireExited(t, c, stepGuard)
 	assertChildExitedNormally(t, c.cmd.ProcessState)
 }
 
@@ -1344,4 +1416,47 @@ func TestJumpError_QuotesARejectedChain(t *testing.T) {
 
 	assert.Equal(t, "edge,\tbastion", printableChain("edge,\tbastion"))
 	assert.Equal(t, `"bas\x1b[2Jtion"`, printableChain("bas\x1b[2Jtion"))
+}
+
+// TestRedactJumpChain pins the masking of a misused user:password hop in
+// both hop forms, whatever the password holds, and that every other hop
+// comes back unchanged.
+func TestRedactJumpChain(t *testing.T) {
+	cases := map[string]string{
+		"u:s3cret@bastion":             "u:<redacted>@bastion",
+		"ssh://u:s3cret@bastion:2222":  "ssh://u:<redacted>@bastion:2222",
+		"u:s3@cret@bastion":            "u:<redacted>@bastion",
+		"ssh://u:s3@cret@bastion":      "ssh://u:<redacted>@bastion",
+		"ok@edge, u:pw@inner":          "ok@edge, u:<redacted>@inner",
+		" ssh://u:pw@inner":            " ssh://u:<redacted>@inner",
+		"bastion":                      "bastion",
+		"alice@corp.example@bastion":   "alice@corp.example@bastion",
+		"root@[2001:db8::1]:2222":      "root@[2001:db8::1]:2222",
+		"bastion:2222,2001:db8::1":     "bastion:2222,2001:db8::1",
+		"ssh://alice%40corp@bastion:1": "ssh://alice%40corp@bastion:1",
+		"":                             "",
+	}
+
+	for chain, want := range cases {
+		assert.Equal(t, want, RedactJumpChain(chain), chain)
+	}
+}
+
+// TestJumpChainErrors_NeverEchoAPassword proves neither the validator's
+// reason nor a dial's JumpError quotes the password of a misused
+// user:password hop.
+func TestJumpChainErrors_NeverEchoAPassword(t *testing.T) {
+	for _, chain := range []string{"u:s3cret@bastion", "ssh://u:s3cret@bastion", "edge,u:s3@cret@bastion"} {
+		err := ValidateJumpChain(chain)
+		require.Error(t, err, chain)
+		assert.NotContains(t, err.Error(), "s3", chain)
+		assert.Contains(t, err.Error(), `user "u:<redacted>"`, chain)
+
+		_, err = JumpDialContext(JumpSpec{Chain: chain, ConnectTimeout: time.Second})(
+			context.Background(), "tcp", testJumpAddr)
+
+		je := requireTerminal(t, err)
+		assert.NotContains(t, je.Error(), "s3", chain)
+		assert.Contains(t, je.Error(), "u:<redacted>@bastion -> "+testJumpAddr, chain)
+	}
 }

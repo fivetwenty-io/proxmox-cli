@@ -1,6 +1,7 @@
 package testhelper
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -46,6 +47,11 @@ type SSHStandInOptions struct {
 	// end-of-file, as an ssh still authenticating does.
 	IgnoreEOF bool
 
+	// HoldExit makes SSHForward, once it has written MarkerFile on
+	// end-of-file, wait until ReleaseExit creates ExitGate before it exits,
+	// so a test decides when an otherwise well-behaved child goes away.
+	HoldExit bool
+
 	// Descendant spawns a child process that keeps standard error open and
 	// records its pid in DescendantPIDFile. It never exits on its own, so
 	// only a signal to the stand-in's process group ends it.
@@ -90,7 +96,19 @@ type SSHScript struct {
 
 	// DescendantPIDFile holds the most recent descendant's pid.
 	DescendantPIDFile string
+
+	// ExitGate is the file a HoldExit script waits for before it exits.
+	ExitGate string
 }
+
+// sshStandInWarmArg, as the only argument, makes a stand-in exit zero at
+// once, before it records anything.
+const sshStandInWarmArg = "--pmx-test-warm-up"
+
+// sshStandInWarmBound bounds the warm-up run SSHStandIn makes. It only stops
+// a hang: on a loaded macOS host the first exec of a freshly written script
+// can stall for tens of seconds before bash runs its first line.
+const sshStandInWarmBound = 2 * time.Minute
 
 // SSHStandIn writes a bash script that stands in for ssh: it finds its
 // -W host:port argument, appends its argv to ArgvFile, optionally delays,
@@ -98,6 +116,14 @@ type SSHScript struct {
 // opts.Mode says. It skips the test where bash is unavailable, which
 // includes Windows. A cleanup kills any invocation still alive when the test
 // ends, so a failed test cannot leave a process group behind.
+//
+// Before it returns, it runs the script once and waits for that run to
+// exit. On a loaded macOS host the first exec of a freshly written script
+// can stall for tens of seconds before bash runs its first line, while every
+// later exec of the same file starts in milliseconds, so paying that cost
+// here keeps it out of any timer a test starts against the stand-in. The
+// warm-up run exits before it records anything, so no file the stand-in
+// writes shows it.
 func SSHStandIn(t testing.TB, opts SSHStandInOptions) SSHScript {
 	t.Helper()
 
@@ -117,6 +143,7 @@ func SSHStandIn(t testing.TB, opts SSHStandInOptions) SSHScript {
 		MarkerFile:        filepath.Join(dir, "eof-marker"),
 		PIDFile:           filepath.Join(dir, "pid"),
 		DescendantPIDFile: filepath.Join(dir, "descendant-pid"),
+		ExitGate:          filepath.Join(dir, "exit-gate"),
 	}
 
 	script := []byte(standInScript(bash, s, opts))
@@ -126,7 +153,27 @@ func SSHStandIn(t testing.TB, opts SSHStandInOptions) SSHScript {
 
 	t.Cleanup(func() { killScriptProcesses(s.Program) })
 
+	warmStandIn(t, s.Program, sshStandInWarmBound)
+
 	return s
+}
+
+// warmStandIn runs program with the warm-up argument and waits up to bound
+// for it to exit zero, failing the test when it does not.
+func warmStandIn(t testing.TB, program string, bound time.Duration) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), bound)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, program, sshStandInWarmArg).CombinedOutput()
+
+	switch {
+	case ctx.Err() != nil:
+		t.Fatalf("the ssh stand-in's warm-up run did not exit within %s", bound)
+	case err != nil:
+		t.Fatalf("the ssh stand-in's warm-up run failed: %v: %s", err, out)
+	}
 }
 
 // standInScript renders the script. It sticks to bash 3.2, the version macOS
@@ -135,6 +182,7 @@ func standInScript(bash string, s SSHScript, opts SSHStandInOptions) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "#!%s\n", bash)
+	fmt.Fprintf(&b, "if [ \"$#\" = 1 ] && [ \"$1\" = %s ]; then exit 0; fi\n", shQuote(sshStandInWarmArg))
 
 	if opts.TermExitStatus != 0 {
 		// A foreground sleep defers the trap, but the group signal ends the
@@ -210,6 +258,11 @@ func standInScript(bash string, s SSHScript, opts SSHStandInOptions) string {
 			b.WriteString("    eof=1\n")
 		} else {
 			fmt.Fprintf(&b, "    : > %s\n", shQuote(s.MarkerFile))
+
+			if opts.HoldExit {
+				fmt.Fprintf(&b, "    while [ ! -e %s ]; do sleep 0.05; done\n", shQuote(s.ExitGate))
+			}
+
 			b.WriteString("    kill \"$reader\" 2>/dev/null\n")
 			b.WriteString("    exit 0\n")
 		}
@@ -273,6 +326,15 @@ func (s SSHScript) Invocations(t testing.TB) [][]string {
 	}
 
 	return out
+}
+
+// ReleaseExit lets a HoldExit script exit by creating its ExitGate.
+func (s SSHScript) ReleaseExit(t testing.TB) {
+	t.Helper()
+
+	if err := os.WriteFile(s.ExitGate, nil, 0o600); err != nil {
+		t.Fatalf("open ssh stand-in exit gate: %v", err)
+	}
 }
 
 // WaitPID polls path until it holds a pid, for up to bound, and fails the

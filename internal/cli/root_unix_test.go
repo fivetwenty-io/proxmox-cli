@@ -29,6 +29,28 @@ const (
 	jumpHelperDescendantEnv = "PMX_TEST_JUMP_DESCENDANT_PID_FILE"
 )
 
+// Every wait in these tests is for an event, and these bounds only stop a
+// hang, so scheduler load cannot fail a test that the product passes.
+const (
+	// helperStartGuard bounds a helper's start, including its dial and the
+	// stand-in's start inside it.
+	helperStartGuard = 3 * time.Minute
+
+	// standInStartGuard bounds the stand-in's start inside a helper. It is
+	// below helperStartGuard, so a stand-in that never starts fails the
+	// helper with its own message first.
+	standInStartGuard = 2 * time.Minute
+
+	// stepGuard bounds every later step: a line, an exit, or a process
+	// going away after the product ended it.
+	stepGuard = time.Minute
+
+	// helperOrphanGuard is how long a helper waits for the signal the test
+	// sends it before it gives up, so a helper whose test died never
+	// lingers. It is above the sum of every bound the test waits through.
+	helperOrphanGuard = 10 * time.Minute
+)
+
 // helperCommand re-executes this test binary as a helper that runs only
 // test, in role, with a home of its own so nothing it writes lands in the
 // operator's real config or log directories.
@@ -56,7 +78,13 @@ func helperCommand(t *testing.T, test, role string, s testhelper.SSHScript) *exe
 // would otherwise leak its disposition into the helper; registering a
 // handler for the moment of the fork makes the runtime reset it to the
 // default in the child.
-func startHelper(t *testing.T, cmd *exec.Cmd) {
+//
+// It waits for cmd in the background and returns a channel that closes once
+// Wait has returned, after which cmd.ProcessState is safe to read. The
+// cleanup kills a helper that still runs and waits for that channel, so a
+// failed test never leaves a helper behind and never reads the process
+// state while Wait is writing it.
+func startHelper(t *testing.T, cmd *exec.Cmd) <-chan struct{} {
 	t.Helper()
 
 	hup := make(chan os.Signal, 1)
@@ -66,11 +94,24 @@ func startHelper(t *testing.T, cmd *exec.Cmd) {
 
 	require.NoError(t, err)
 
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		_ = cmd.Wait()
+	}()
+
 	t.Cleanup(func() {
-		if cmd.ProcessState == nil {
+		select {
+		case <-done:
+		default:
 			_ = cmd.Process.Kill()
+			<-done
 		}
 	})
+
+	return done
 }
 
 // dialJumpHelper dials through the stand-in named in the environment and
@@ -96,7 +137,7 @@ func dialJumpHelper(t *testing.T) any {
 		os.Exit(90)
 	}
 
-	testhelper.WaitPID(t, os.Getenv(jumpHelperDescendantEnv), 10*time.Second)
+	testhelper.WaitPID(t, os.Getenv(jumpHelperDescendantEnv), standInStartGuard)
 
 	return conn
 }
@@ -143,7 +184,8 @@ func awaitLine(t *testing.T, ch <-chan string, want string, bound time.Duration)
 }
 
 // waitHelper waits up to bound for cmd to exit, and returns its wait status.
-func waitHelper(t *testing.T, cmd *exec.Cmd, done <-chan error, bound time.Duration) syscall.WaitStatus {
+// done is the channel startHelper returned.
+func waitHelper(t *testing.T, cmd *exec.Cmd, done <-chan struct{}, bound time.Duration) syscall.WaitStatus {
 	t.Helper()
 
 	select {
@@ -190,20 +232,22 @@ func TestExecute_ReapsJumpChildrenBeforeExit(t *testing.T) {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 
-	startHelper(t, cmd)
+	done := startHelper(t, cmd)
 
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-
-	ws := waitHelper(t, cmd, done, 30*time.Second)
+	ws := waitHelper(t, cmd, done, helperStartGuard)
 	require.True(t, ws.Exited(), "the helper must exit, not die")
 	require.Equal(t, 0, ws.ExitStatus(), "Main must succeed for --help")
 
-	self := testhelper.WaitPID(t, s.PIDFile, time.Second)
-	descendant := testhelper.WaitPID(t, s.DescendantPIDFile, time.Second)
+	// The helper waited for both pid files before it ran Main, so both are
+	// already written.
+	self := testhelper.WaitPID(t, s.PIDFile, stepGuard)
+	descendant := testhelper.WaitPID(t, s.DescendantPIDFile, stepGuard)
 
-	requireProcessGone(t, self, 3*time.Second, "the stand-in")
-	requireProcessGone(t, descendant, 3*time.Second, "the descendant")
+	// Neither process ever exits on its own and both run in a session of
+	// their own, so only Execute's reaping can end them, and a wait of any
+	// length still fails when it did not.
+	requireProcessGone(t, self, stepGuard, "the stand-in")
+	requireProcessGone(t, descendant, stepGuard, "the descendant")
 }
 
 // TestSignalContext_SecondSignalKillsJumpGroups pins the hangup and
@@ -230,7 +274,9 @@ func TestSignalContext_SecondSignalKillsJumpGroups(t *testing.T) {
 		<-ctx.Done()
 		fmt.Println("cancelled")
 
-		time.Sleep(30 * time.Second)
+		// The second signal must end this process. Reaching the exit below
+		// means it never came or never killed.
+		time.Sleep(helperOrphanGuard)
 
 		_ = conn
 		os.Exit(92)
@@ -243,13 +289,15 @@ func TestSignalContext_SecondSignalKillsJumpGroups(t *testing.T) {
 
 		fmt.Println("ready")
 
+		// The test kills this process once it has seen that the signal
+		// changed nothing.
 		select {
 		case <-ctx.Done():
 			fmt.Println("cancelled")
-		case <-time.After(30 * time.Second):
+		case <-time.After(helperOrphanGuard):
 		}
 
-		time.Sleep(30 * time.Second)
+		time.Sleep(helperOrphanGuard)
 		os.Exit(0)
 	}
 
@@ -263,28 +311,28 @@ func TestSignalContext_SecondSignalKillsJumpGroups(t *testing.T) {
 		cmd := helperCommand(t, "TestSignalContext_SecondSignalKillsJumpGroups", "second-signal", s)
 		out := lines(t, cmd)
 
-		startHelper(t, cmd)
+		done := startHelper(t, cmd)
 
-		done := make(chan error, 1)
-		go func() { done <- cmd.Wait() }()
+		awaitLine(t, out, "ready", helperStartGuard)
 
-		awaitLine(t, out, "ready", 30*time.Second)
-
-		self := testhelper.WaitPID(t, s.PIDFile, 5*time.Second)
-		descendant := testhelper.WaitPID(t, s.DescendantPIDFile, 5*time.Second)
+		// The helper printed ready only after both pid files were written.
+		self := testhelper.WaitPID(t, s.PIDFile, stepGuard)
+		descendant := testhelper.WaitPID(t, s.DescendantPIDFile, stepGuard)
 
 		require.NoError(t, cmd.Process.Signal(syscall.SIGHUP))
-		awaitLine(t, out, "cancelled", 5*time.Second)
+		awaitLine(t, out, "cancelled", stepGuard)
 		require.False(t, testhelper.ProcessGone(self), "the first signal only cancels; the child is left to Execute")
 
 		require.NoError(t, cmd.Process.Signal(syscall.SIGHUP))
 
-		ws := waitHelper(t, cmd, done, 5*time.Second)
+		ws := waitHelper(t, cmd, done, stepGuard)
 		require.True(t, ws.Signaled(), "the second signal must end the helper by that signal (status %v)", ws)
 		assert.Equal(t, syscall.SIGHUP, ws.Signal())
 
-		requireProcessGone(t, self, time.Second, "the stand-in")
-		requireProcessGone(t, descendant, time.Second, "the descendant")
+		// Neither process ever exits on its own, so only the kill that the
+		// second signal sent can end them.
+		requireProcessGone(t, self, stepGuard, "the stand-in")
+		requireProcessGone(t, descendant, stepGuard, "the descendant")
 	})
 
 	t.Run("a SIGHUP ignored at start stays ignored", func(t *testing.T) {
@@ -293,12 +341,9 @@ func TestSignalContext_SecondSignalKillsJumpGroups(t *testing.T) {
 		cmd := helperCommand(t, "TestSignalContext_SecondSignalKillsJumpGroups", "hup-ignored", s)
 		out := lines(t, cmd)
 
-		startHelper(t, cmd)
+		done := startHelper(t, cmd)
 
-		done := make(chan error, 1)
-		go func() { done <- cmd.Wait() }()
-
-		awaitLine(t, out, "ready", 30*time.Second)
+		awaitLine(t, out, "ready", helperStartGuard)
 		require.NoError(t, cmd.Process.Signal(syscall.SIGHUP))
 
 		select {
@@ -314,6 +359,6 @@ func TestSignalContext_SecondSignalKillsJumpGroups(t *testing.T) {
 		}
 
 		require.NoError(t, cmd.Process.Kill())
-		waitHelper(t, cmd, done, 5*time.Second)
+		waitHelper(t, cmd, done, stepGuard)
 	})
 }

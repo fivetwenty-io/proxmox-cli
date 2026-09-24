@@ -91,7 +91,8 @@ type JumpSpec struct {
 
 // JumpError is a bastion failure with the fields a caller needs to explain
 // it. Error() has a fixed format, "ssh jump <Chain> -> <Addr>: <detail>",
-// where the detail is what Detail returns. Stderr holds the most recent
+// where the detail is what Detail returns and the chain has any
+// user:password hop masked by RedactJumpChain. Stderr holds the most recent
 // standard-error line that contains "open failed:", then "; ", then ssh's
 // last standard-error line, and it holds the last line alone when no such
 // line exists or when that line is itself the last one. Each line has
@@ -124,7 +125,7 @@ type JumpError struct {
 }
 
 func (e *JumpError) Error() string {
-	return fmt.Sprintf("ssh jump %s -> %s: %s", printableChain(e.Chain), e.Addr, e.Detail())
+	return fmt.Sprintf("ssh jump %s -> %s: %s", printableChain(RedactJumpChain(e.Chain)), e.Addr, e.Detail())
 }
 
 // printableChain returns chain unchanged when it holds no control character
@@ -252,6 +253,11 @@ type jumpHooks struct {
 
 	// reaped is called when the reaper returns.
 	reaped func()
+
+	// closeGrace, when positive, replaces jumpCloseGrace for this dialer's
+	// connections, so a test can hold a child past Close for as long as it
+	// needs without the escalation racing the scheduler.
+	closeGrace time.Duration
 }
 
 // jumpFlight is one leader's pending verdict. done closes once the verdict is
@@ -499,6 +505,45 @@ func ValidateJumpChain(chain string) error {
 	return err
 }
 
+// jumpRedacted replaces the password part of a hop's user.
+const jumpRedacted = "<redacted>"
+
+// RedactJumpChain returns chain with the password part of every
+// user:password hop replaced by "<redacted>", for quoting a chain in an
+// error. ssh hops carry no password syntax, so only a misused hop has one,
+// and it is masked from its first ":" up to its last "@", which is where
+// both the plain and the ssh:// form end their userinfo whatever the
+// password holds. A hop with no "@", or whose user holds no ":", is returned
+// unchanged.
+func RedactJumpChain(chain string) string {
+	hops := strings.Split(chain, ",")
+
+	for i, hop := range hops {
+		prefix, rest := "", hop
+		if after, isURI := strings.CutPrefix(strings.TrimLeft(hop, " \t"), "ssh://"); isURI {
+			prefix, rest = hop[:len(hop)-len(after)], after
+		}
+
+		at := strings.LastIndex(rest, "@")
+		if at < 0 {
+			continue
+		}
+
+		hops[i] = prefix + redactJumpUser(rest[:at]) + rest[at:]
+	}
+
+	return strings.Join(hops, ",")
+}
+
+// redactJumpUser masks everything after the first ":" of a hop's user.
+func redactJumpUser(user string) string {
+	if colon := strings.IndexByte(user, ':'); colon >= 0 {
+		return user[:colon+1] + jumpRedacted
+	}
+
+	return user
+}
+
 // parseJumpChain validates and normalises every hop of chain. Hops are
 // numbered from one in its messages.
 func parseJumpChain(chain string) ([]jumpHop, error) {
@@ -539,7 +584,7 @@ func parseJumpHop(n int, raw string, final bool) (jumpHop, error) {
 		if user, hp, found := strings.Cut(rest, "@"); found {
 			decoded, err := url.PathUnescape(user)
 			if err != nil || !jumpUserRE.MatchString(decoded) {
-				return jumpHop{}, fmt.Errorf("hop %d: user %q has a disallowed character", n, user)
+				return jumpHop{}, fmt.Errorf("hop %d: user %q has a disallowed character", n, redactJumpUser(user))
 			}
 
 			h.user, hostport = decoded, hp
@@ -554,7 +599,7 @@ func parseJumpHop(n int, raw string, final bool) (jumpHop, error) {
 		if at := strings.LastIndex(hop, "@"); at >= 0 {
 			user := hop[:at]
 			if !jumpUserRE.MatchString(user) {
-				return jumpHop{}, fmt.Errorf("hop %d: user %q has a disallowed character", n, user)
+				return jumpHop{}, fmt.Errorf("hop %d: user %q has a disallowed character", n, redactJumpUser(user))
 			}
 
 			h.user, hostport = user, hop[at+1:]
@@ -1295,18 +1340,29 @@ func (c *jumpConn) Close() error {
 // kills. On Unix both go to the child's whole process group.
 func (c *jumpConn) end(immediate bool) {
 	c.endOnce.Do(func() {
-		if !immediate && c.waitGone(jumpCloseGrace) {
+		grace := c.closeGrace()
+
+		if !immediate && c.waitGone(grace) {
 			return
 		}
 
 		terminateJumpChild(c.cmd.Process)
 
-		if c.waitGone(jumpCloseGrace) {
+		if c.waitGone(grace) {
 			return
 		}
 
 		killJumpChild(c.cmd.Process)
 	})
+}
+
+// closeGrace is jumpCloseGrace unless the dialer's test hooks replace it.
+func (c *jumpConn) closeGrace() time.Duration {
+	if c.dialer != nil && c.dialer.hooks.closeGrace > 0 {
+		return c.dialer.hooks.closeGrace
+	}
+
+	return jumpCloseGrace
 }
 
 func (c *jumpConn) waitGone(d time.Duration) bool {
