@@ -1869,8 +1869,8 @@ func sshOnPath(t *testing.T, opts testhelper.SSHStandInOptions) testhelper.SSHSc
 	return script
 }
 
-// versionServer starts a TLS server answering the version endpoint as PVE
-// does, counting the requests it serves.
+// versionServer starts a TLS server that answers every path, the probe's
+// root page included, as PVE does, counting the requests it serves.
 func versionServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 
@@ -2121,7 +2121,7 @@ func TestValidateConnect_UnreachableMessages(t *testing.T) {
 
 		got := probeError(t, &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}})
 		require.True(t, strings.HasPrefix(got,
-			fmt.Sprintf(`unreachable: Get "https://127.0.0.1:%d/api2/json/version": `, c.Port)), got)
+			fmt.Sprintf(`unreachable: Get "https://127.0.0.1:%d/": `, c.Port)), got)
 	})
 
 	t.Run("a wrapped JumpError is found and formatted by its Detail", func(t *testing.T) {

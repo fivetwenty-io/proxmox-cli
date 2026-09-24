@@ -32,7 +32,7 @@ const probeCeiling = 5 * time.Second
 
 // probeResult carries the outcome of one live --connect probe.
 type probeResult struct {
-	// Reachable is true when the version endpoint answered over TLS/HTTP.
+	// Reachable is true when the root page answered over TLS/HTTP.
 	Reachable bool
 
 	// Err is the transport error when Reachable is false. Its text is raw,
@@ -51,11 +51,19 @@ type probeResult struct {
 }
 
 // probeContext performs the live half of `context validate --connect`: an
-// unauthenticated GET of /api2/json/version, which every Proxmox product
-// serves without credentials. It builds a bare http.Client from the resolved
-// connection rather than a product API client, so the validate verb keeps its
-// noClient annotation, and the probe takes exactly the jump, proxy, TLS
-// trust, and timeouts a real API call through conn would take.
+// unauthenticated GET of the web interface's root page, which every Proxmox
+// product serves without credentials. It probes the root rather than an API
+// path such as /api2/json/version because Proxmox holds every 401 response
+// for about three seconds, so an API path would cost each probe three
+// seconds and fail outright under a request bound shorter than that.
+//
+// It builds a bare http.Client from the resolved connection rather than a
+// product API client, so the validate verb keeps its noClient annotation,
+// and the probe takes exactly the jump, proxy, TLS trust, and timeouts a
+// real API call through conn would take. The client never follows a
+// redirect, because any answer from the configured host proves it
+// reachable, and following a front proxy's redirect to a login host would
+// dial a host the context never named and fail its pin there.
 //
 // ctx is the command's own context, so cancelling the command cancels an
 // in-flight probe. A nil ctx means context.Background.
@@ -118,10 +126,18 @@ func newProbeClient(conn cli.Connection) (*http.Client, *http.Transport, error) 
 		return nil, nil, err
 	}
 
-	return &http.Client{Timeout: probeBound(conn), Transport: tr}, tr, nil
+	client := &http.Client{
+		Timeout:   probeBound(conn),
+		Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	return client, tr, nil
 }
 
-// probeURL renders the version endpoint of conn. conn.Host already carries
+// probeURL renders the root page of conn. conn.Host already carries
 // the brackets of an IPv6 literal.
 func probeURL(conn cli.Connection) string {
 	protocol := conn.Protocol
@@ -129,7 +145,7 @@ func probeURL(conn cli.Connection) string {
 		protocol = "https"
 	}
 
-	return fmt.Sprintf("%s://%s:%d/api2/json/version", protocol, conn.Host, conn.Port)
+	return fmt.Sprintf("%s://%s:%d/", protocol, conn.Host, conn.Port)
 }
 
 // probeBound is the probe's whole-request bound. It is the resolved request

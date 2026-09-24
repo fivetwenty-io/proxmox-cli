@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -108,8 +109,59 @@ func TestProbeContext_Reachable_PVEServerHeader(t *testing.T) {
 	require.NoError(t, got.Err)
 	require.NoError(t, got.Err)
 	require.Equal(t, config.ProductPVE, got.ProductGuess)
-	require.Equal(t, "/api2/json/version", gotPath)
+	require.Equal(t, "/", gotPath)
 	require.Equal(t, "direct", got.Via)
+}
+
+// TestProbeContext_ReachableUnderShortBoundDespiteSlow401 models the Proxmox
+// daemons, which answer the root page at once and hold every 401 for about
+// three seconds. A request bound shorter than that hold must still find the
+// host reachable, which fails if the probe moves back onto an API path.
+func TestProbeContext_ReachableUnderShortBoundDespiteSlow401(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "pve-api-daemon/3.0")
+		if r.URL.Path != "/" {
+			select {
+			case <-time.After(3 * time.Second):
+			case <-r.Context().Done():
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+
+			return
+		}
+		_, _ = w.Write([]byte("<html></html>"))
+	}))
+	defer ts.Close()
+
+	c := probeTarget(t, ts, config.ProductPVE)
+	c.Timeout.Request = "1s"
+
+	got := mustProbe(t, resolveProbe(t, c))
+
+	require.True(t, got.Reachable, probeErrText(got))
+	require.Equal(t, config.ProductPVE, got.ProductGuess)
+}
+
+// TestProbeContext_DoesNotFollowRedirects covers a front proxy that sends
+// the root page to a login host. The redirect already proves the configured
+// host reachable, and following it would dial a host the context never named.
+func TestProbeContext_DoesNotFollowRedirects(t *testing.T) {
+	var followed atomic.Bool
+
+	login := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		followed.Store(true)
+	}))
+	defer login.Close()
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, login.URL+"/login", http.StatusFound)
+	}))
+	defer ts.Close()
+
+	got := mustProbe(t, resolveProbe(t, probeTarget(t, ts, config.ProductPVE)))
+
+	require.True(t, got.Reachable, probeErrText(got))
+	require.False(t, followed.Load(), "the probe must not follow a redirect")
 }
 
 func TestProbeContext_Reachable_PBSServerHeader(t *testing.T) {

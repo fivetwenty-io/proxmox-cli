@@ -42,7 +42,7 @@ const validateLong = "Validate one or all named contexts against structural rule
 	"product's own port (8006 pve, 8007 pbs, 8443 pdm), and an empty protocol means " +
 	"https.\n\n" +
 	"With --connect, every structurally valid context is also probed live. The " +
-	"version endpoint is fetched through the same ssh jump, proxy, and timeouts a real " +
+	"web interface's root page is fetched through the same ssh jump, proxy, and timeouts a real " +
 	"API call from that context would use, including any --api-* override and " +
 	"PMX_API_* variable, and it trusts the certificate the way that call does, through " +
 	"a pinned fingerprint, a CA bundle, or tls.insecure; the server's identification " +
@@ -128,7 +128,7 @@ func newValidateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&f.connect, "connect", false,
 		"probe each structurally valid context live through its jump, proxy, timeouts, and pinned, CA, "+
 			"or insecure TLS trust (not the tls.tofu cache): "+
-			"reachability of the version endpoint, plus a product sanity check from the server's "+
+			"reachability of the web interface's root page, plus a product sanity check from the server's "+
 			"identification header")
 
 	cmd.ValidArgsFunction = cli.FirstArgContextNames
