@@ -76,6 +76,69 @@ func wireQuotaDeps(cmd *cobra.Command, stdin string, stdout, stderr *bytes.Buffe
 	return fake
 }
 
+// TestLabQuota_RefusesOverriddenHost proves that quota set refuses, before
+// any ssh command or prompt, when an endpoint override aimed the
+// invocation's API at a host other than the one the context stores, and
+// that an override naming the stored host, in another case, still runs.
+func TestLabQuota_RefusesOverriddenHost(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+
+	route := func(t *testing.T, ctx *config.Context, host string) cli.Connection {
+		t.Helper()
+
+		conn, err := cli.ResolveConnection("sm", ctx, cli.ConnectionOverrides{
+			Host: host, Port: 8443, EndpointSource: "$PMX_API_ENDPOINT",
+		})
+		require.NoError(t, err)
+
+		return conn
+	}
+
+	t.Run("a different host is refused", func(t *testing.T) {
+		cmd := quotaTestCmd(t, path)
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(cmd, "y\n", &stdout, &stderr)
+		deps := cli.GetDeps(cmd)
+		deps.CtxName = "sm"
+		deps.Route = route(t, deps.Ctx, "pve9.lab.internal")
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		err := runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes)
+
+		require.EqualError(t, err, `lab quota set runs ssh against the stored host sm-0.lab.internal of context "sm", `+
+			`but this invocation's API endpoint is pve9.lab.internal; drop the endpoint override and retry`)
+		assert.Empty(t, fake.Calls, "the refusal must precede every ssh command")
+		assert.Empty(t, stdout.String(), "the refusal must precede the confirmation prompt")
+	})
+
+	t.Run("the stored host in another case still runs", func(t *testing.T) {
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+		deps := cli.GetDeps(cmd)
+		deps.CtxName = "sm"
+		deps.Route = route(t, deps.Ctx, "SM-0.lab.internal")
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
+		require.Len(t, fake.Calls, 1)
+		assert.Contains(t, fake.Calls[0].Args, "root@sm-0.lab.internal")
+	})
+
+	t.Run("no client route leaves the verb alone", func(t *testing.T) {
+		cmd := quotaTestCmd(t, path, "--yes")
+		var stdout, stderr bytes.Buffer
+		fake := wireQuotaDeps(cmd, "", &stdout, &stderr)
+
+		refquotaGB, dryRun, yes := quotaFlagValues(t, cmd)
+		require.NoError(t, runQuotaSet(cmd, "alpha", refquotaGB, dryRun, yes))
+		require.Len(t, fake.Calls, 1)
+	})
+}
+
 func TestQuotaSet_HappyPathWithYes_UsesConfigRefquota(t *testing.T) {
 	cfg := &config.Config{
 		Labs: map[string]*config.Lab{

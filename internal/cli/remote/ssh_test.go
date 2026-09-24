@@ -1,10 +1,12 @@
 package remote
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -344,4 +346,187 @@ func TestSSH_UnknownProductErrors(t *testing.T) {
 	_, err := runSSH(deps, "uptime")
 	require.ErrorContains(t, err, `unsupported product "bogus"`)
 	require.Empty(t, fr.Calls)
+}
+
+// closedLoopbackPort returns a loopback port that nothing listens on, so a
+// dial to it is refused at once rather than hanging.
+func closedLoopbackPort(t *testing.T) int {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	require.NoError(t, ln.Close())
+
+	return port
+}
+
+// TestCompletionHelper_UsesInvocationOverrides proves that node-name
+// completion builds its client from the invocation's full connection
+// overrides: --api-endpoint redirects it, and the root's persistent
+// --insecure reaches it. The stored context points at a closed port and the
+// listener presents a self-signed certificate, so completions appear only
+// when both reach the helper's client. A malformed $PMX_API_ENDPOINT counts
+// as no override at all, so the completion request still exits 0 and writes
+// nothing to standard error.
+func TestCompletionHelper_UsesInvocationOverrides(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_OUTPUT", "")
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/cluster/status" {
+			http.NotFound(w, r)
+			return
+		}
+
+		testhelper.WriteData(w, []any{
+			map[string]any{"type": "cluster", "name": "c", "online": 1},
+			map[string]any{"type": "node", "name": "pve1", "ip": "192.168.1.10", "online": 1},
+			map[string]any{"type": "node", "name": "pve2", "ip": "192.168.1.11", "online": 1},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{"lab": {
+			Host: "127.0.0.1", Port: closedLoopbackPort(t), Protocol: "https",
+			Auth: config.AuthBlock{
+				Type: "token", Username: "root@pam", TokenID: "test",
+				Secret: "00000000-0000-0000-0000-000000000000",
+			},
+		}},
+	}))
+
+	complete := func(t *testing.T, flags ...string) (string, string) {
+		t.Helper()
+
+		root, cleanup := cli.NewRootCmd("pmx")
+		t.Cleanup(cleanup)
+		root.SetContext(context.Background())
+
+		var stdout, stderr bytes.Buffer
+		root.SetOut(&stdout)
+		root.SetErr(&stderr)
+		cli.AddGroups(root, &cli.Deps{}, []cli.GroupFactory{Rsync, SSH})
+
+		args := append([]string{"__complete", "--config", cfgPath}, flags...)
+		root.SetArgs(append(args, "ssh", ""))
+		require.NoError(t, root.Execute(), "a completion request must exit 0")
+
+		return stdout.String(), stderr.String()
+	}
+
+	endpoint := srv.Listener.Addr().String()
+
+	t.Run("the endpoint override and the root insecure flag both reach the client", func(t *testing.T) {
+		stdout, _ := complete(t, "--api-endpoint", endpoint, "--insecure")
+		require.Contains(t, stdout, "pve1\n")
+		require.Contains(t, stdout, "pve2\n")
+	})
+
+	t.Run("without --insecure the self-signed listener is not trusted", func(t *testing.T) {
+		stdout, _ := complete(t, "--api-endpoint", endpoint)
+		require.NotContains(t, stdout, "pve1")
+	})
+
+	t.Run("without --api-endpoint the stored closed port is dialled", func(t *testing.T) {
+		stdout, _ := complete(t, "--insecure")
+		require.NotContains(t, stdout, "pve1")
+	})
+
+	t.Run("the environment endpoint reaches the client too", func(t *testing.T) {
+		t.Setenv("PMX_API_ENDPOINT", endpoint)
+
+		stdout, _ := complete(t, "--insecure")
+		require.Contains(t, stdout, "pve1\n")
+	})
+
+	t.Run("a malformed environment endpoint is ignored silently", func(t *testing.T) {
+		t.Setenv("PMX_API_ENDPOINT", "ftp://pve1")
+
+		stdout, stderr := complete(t)
+		require.NotContains(t, stdout, "pve1")
+		require.Contains(t, stdout, ":4\n", "cobra must still print the no-file-completion directive")
+		require.Equal(t, "Completion ended with directive: ShellCompDirectiveNoFileComp\n", stderr,
+			"only cobra's own directive trace may reach standard error; a malformed override must print nothing")
+	})
+
+	t.Run("a valid override prints no note and no warning", func(t *testing.T) {
+		t.Setenv("PMX_API_ENDPOINT", endpoint)
+
+		stdout, stderr := complete(t, "--insecure")
+		require.Contains(t, stdout, "pve1\n")
+		require.Equal(t, "Completion ended with directive: ShellCompDirectiveNoFileComp\n", stderr,
+			"completion must print neither the override note nor the insecure warning")
+	})
+
+	t.Run("a malformed environment endpoint keeps the root insecure flag", func(t *testing.T) {
+		host, port, err := net.SplitHostPort(endpoint)
+		require.NoError(t, err)
+
+		portNum, err := strconv.Atoi(port)
+		require.NoError(t, err)
+
+		// The stored context points at the self-signed listener, so the
+		// nodes are listed only when the fallback kept --insecure.
+		storedPath := filepath.Join(t.TempDir(), "config.yml")
+		require.NoError(t, config.SaveForce(storedPath, &config.Config{
+			CurrentContext: "lab",
+			Contexts: map[string]*config.Context{"lab": {
+				Host: host, Port: portNum, Protocol: "https",
+				Auth: config.AuthBlock{
+					Type: "token", Username: "root@pam", TokenID: "test",
+					Secret: "00000000-0000-0000-0000-000000000000",
+				},
+			}},
+		}))
+
+		t.Setenv("PMX_API_ENDPOINT", "ftp://pve1")
+
+		stdout, stderr := complete(t, "--config", storedPath, "--insecure")
+		require.Contains(t, stdout, "pve1\n", "the stored listener must be dialled with --insecure applied")
+		require.Equal(t, "Completion ended with directive: ShellCompDirectiveNoFileComp\n", stderr)
+	})
+}
+
+// TestSSH_SingleHostRefusesOverriddenEndpoint proves that a PBS or PDM
+// context, whose ssh target is the stored host, refuses to connect when an
+// endpoint override points the API somewhere else, before it runs ssh, and
+// that a routed host naming the stored one in another case or in brackets
+// connects as before.
+func TestSSH_SingleHostRefusesOverriddenEndpoint(t *testing.T) {
+	for _, product := range []string{config.ProductPBS, config.ProductPDM} {
+		t.Run(product+" override", func(t *testing.T) {
+			fr := exec.Fake()
+			deps := &cli.Deps{
+				Runner:  fr,
+				CtxName: "b",
+				Ctx:     &config.Context{Product: product, Host: "b1.example.com"},
+				Route:   cli.Connection{Host: "b2.example.com"},
+			}
+
+			_, err := runSSH(deps, "uptime")
+			require.EqualError(t, err, `pmx ssh runs ssh against the stored host b1.example.com of context "b", `+
+				`but this invocation's API endpoint is b2.example.com; drop the endpoint override and retry`)
+			require.Empty(t, fr.Calls)
+		})
+
+		t.Run(product+" same host", func(t *testing.T) {
+			fr := exec.Fake()
+			deps := &cli.Deps{
+				Runner: fr,
+				Ctx:    &config.Context{Product: product, Host: "fd00::1"},
+				Route:  cli.Connection{Host: "[FD00::1]"},
+			}
+
+			_, err := runSSH(deps, "uptime")
+			require.NoError(t, err)
+			require.Equal(t, []string{"-p", "22", "root@fd00::1", "uptime"}, lastCall(t, fr).Args)
+		})
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
@@ -283,18 +285,40 @@ var labProbeContextVersion = func(cmd *cobra.Command, deps *cli.Deps, ctxName st
 }
 
 // labProbeTransportFailed reports whether a context probe failed with a
-// transport-class error the client explicitly typed as a connection, SSL/TLS,
-// or timeout failure — as opposed to an authentication rejection. Such a
+// transport-class error — as opposed to an authentication rejection. Such a
 // failure is no evidence the stored token is invalid, so the reuse path must
-// not rotate on it. Note the client does not currently type every raw net/TLS
-// failure this way (many surface as an opaque wrapped error), so an untyped
-// transport failure conservatively falls through to rotation rather than
-// reuse; this guard only ever prevents an unnecessary rotation, never causes
-// one.
+// not rotate on it.
+//
+// It counts a failure the client explicitly typed as a connection, SSL/TLS,
+// or timeout failure, and three raw shapes the client passes through
+// untyped: any *net.OpError anywhere in the chain, which is how a refused or
+// unreachable dial and a dead proxy ("proxyconnect tcp: ...") surface; any
+// error wrapping apiclient.ErrJump, which is every ssh bastion failure; and
+// any net.Error whose Timeout reports true, which is how a hung proxy or
+// bastion surfaces. A dead or hung route therefore never rotates a lab
+// token. A transport failure that matches none of these conservatively
+// falls through to rotation rather than reuse; this guard only ever
+// prevents an unnecessary rotation, never causes one.
 func labProbeTransportFailed(err error) bool {
-	return pveerrors.IsConnectionError(err) ||
-		pveerrors.IsSSLError(err) ||
-		pveerrors.IsTimeoutError(err)
+	if err == nil {
+		return false
+	}
+
+	if pveerrors.IsConnectionError(err) || pveerrors.IsSSLError(err) || pveerrors.IsTimeoutError(err) {
+		return true
+	}
+
+	if _, ok := errors.AsType[*net.OpError](err); ok {
+		return true
+	}
+
+	if errors.Is(err, apiclient.ErrJump) {
+		return true
+	}
+
+	var netErr net.Error
+
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 // labStoreSecretFn persists the minted secret and returns the config secret

@@ -1,5 +1,7 @@
 package cli
 
+import "time"
+
 // RequiredProduct exposes the unexported requiredProduct for external test
 // packages (cli_test). internal/cli/pbs and internal/cli/pve both import
 // internal/cli, so an in-package (package cli) test file cannot import them
@@ -17,3 +19,13 @@ var RedactArgs = redactArgs
 // AnnotationPassthroughArgs annotation) without wiring a full rsync-style
 // delegating command.
 var InvocationArgs = invocationArgs
+
+// SetShutdownJumps replaces the function Execute calls to reap the ssh jump
+// children, so a test can see when the teardown reaches that step, and
+// returns a function that restores the original.
+func SetShutdownJumps(f func(time.Duration)) (restore func()) {
+	orig := shutdownJumps
+	shutdownJumps = f
+
+	return func() { shutdownJumps = orig }
+}

@@ -63,6 +63,9 @@ Proxmox VE has no API for ZFS dataset properties, so this verb runs "zfs
 set refquota" with the requested size (refquota=480G, for example) on the
 lab host directly over ssh. It targets the active context's host and the
 ssh connection settings configured on it: ssh.user, ssh.port, ssh.identity.
+It refuses to run when --api-endpoint or $PMX_API_ENDPOINT points the
+invocation's API at a different host, since the intended machine is then
+ambiguous.
 
 The effective refquota is --refquota-gb when given, else the lab's
 storage.refquota_gb. At least one of the two must yield a positive value.
@@ -113,6 +116,12 @@ func runQuotaSet(cmd *cobra.Command, name string, refquotaFlagGB int, dryRun, ye
 	if deps.Ctx == nil {
 		return fmt.Errorf(
 			"quota set requires an active pmx context to resolve an ssh target; select one with --context/-c")
+	}
+
+	// The quota is set over ssh to the stored host, so an endpoint override
+	// that aims the API elsewhere leaves the target ambiguous.
+	if err := deps.RefuseOverriddenSSHHost("lab quota set"); err != nil {
+		return err
 	}
 
 	f := sshcmd.Flags{User: "root", Port: 22}

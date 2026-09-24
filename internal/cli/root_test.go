@@ -4,13 +4,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"io/fs"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -3880,4 +3890,1058 @@ func TestBuildContextClient_LegacyIgnoresEnvironmentOverrides(t *testing.T) {
 	require.Zero(t, countLines(stderr.String(), "note:"), "stderr: %q", stderr.String())
 	require.Equal(t, 1, countLines(stderr.String(), "WARN: TLS certificate verification disabled"),
 		"only the insecure PBS build may warn; stderr: %q", stderr.String())
+}
+
+// ---------------------------------------------------------------------------
+// The root's own client path under the connection overrides
+// ---------------------------------------------------------------------------
+
+// rootRun is what runThroughRoot observed: the Deps persistentPreRunE built,
+// whether or not it failed, whether the command's RunE ran, the error, and
+// the root's standard error.
+type rootRun struct {
+	deps   *cli.Deps
+	ran    bool
+	err    error
+	stderr string
+}
+
+// runThroughRoot runs args through the real root with one command, "probe",
+// carrying annotations, whose RunE calls run. It captures the Deps
+// persistentPreRunE stashed on the command even when persistentPreRunE
+// failed, so a test can prove no client was built.
+func runThroughRoot(
+	t *testing.T, annotations map[string]string, run func(*cobra.Command, *cli.Deps) error, args ...string,
+) rootRun {
+	t.Helper()
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	t.Cleanup(cleanup)
+	root.SetContext(context.Background())
+
+	var res rootRun
+
+	root.AddCommand(&cobra.Command{
+		Use:         "probe",
+		Annotations: annotations,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res.ran = true
+			if run == nil {
+				return nil
+			}
+
+			return run(cmd, cli.GetDeps(cmd))
+		},
+	})
+
+	std := root.PersistentPreRunE
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		err := std(cmd, args)
+		res.deps = depsIfStashed(cmd)
+
+		return err
+	}
+
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetIn(strings.NewReader(""))
+	root.SetArgs(append([]string{"--no-log"}, args...))
+
+	res.err = root.Execute()
+	res.stderr = stderr.String()
+
+	return res
+}
+
+// depsIfStashed returns the Deps persistentPreRunE stashed on cmd, or nil
+// when it failed before stashing them, which cli.GetDeps reports by
+// panicking.
+func depsIfStashed(cmd *cobra.Command) (deps *cli.Deps) {
+	defer func() {
+		if recover() != nil {
+			deps = nil
+		}
+	}()
+
+	return cli.GetDeps(cmd)
+}
+
+// writeCAFile writes the certificate of a throwaway TLS listener as a PEM
+// file and returns its path, so a context or an override can name a CA
+// bundle the kit loads.
+func writeCAFile(t *testing.T, name string) string {
+	t.Helper()
+
+	srv := httptest.NewTLSServer(http.NotFoundHandler())
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), name)
+	block := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	require.NoError(t, os.WriteFile(path, block, 0o600))
+
+	return path
+}
+
+// precedenceContext is the stored context the precedence rows start from.
+func precedenceContext() *config.Context {
+	return &config.Context{
+		Host: "ctx-host.invalid", Protocol: "https", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "literal-secret"},
+	}
+}
+
+// TestAPIConnectionFlagPrecedence runs a client-building command through the
+// real root for every connection parameter at each of the four tiers, and
+// reads the answer off Deps.Route, the Connection the root's client dials.
+// At each tier every lower source is also set, so the tier wins only by
+// precedence: the flag beats the environment, the environment beats the
+// context, and the context beats the built-in default.
+func TestAPIConnectionFlagPrecedence(t *testing.T) {
+	defaults := apiclient.DefaultTimeoutSpec()
+	caFlag, caEnv, caCtx := writeCAFile(t, "flag.pem"), writeCAFile(t, "env.pem"), writeCAFile(t, "ctx.pem")
+	pinFlag := testPinA
+	pinEnv := testPinB
+	pinCtx := strings.TrimSuffix(strings.Repeat("CC:", 32), ":")
+
+	type tier struct {
+		flag     []string
+		env      string
+		ctx      func(*config.Context)
+		expected func(t *testing.T, conn cli.Connection)
+	}
+
+	type row struct {
+		name   string
+		envVar string
+		// tiers lists the flag, environment, context, and default tiers in
+		// that order; each tier's sources are applied together with every
+		// tier below it.
+		tiers [4]tier
+	}
+
+	timeoutRow := func(name, flag, envVar, ctxKey string, def time.Duration,
+		get func(cli.Connection) time.Duration) row {
+		setCtx := func(c *config.Context) {
+			switch ctxKey {
+			case "connect":
+				c.Timeout.Connect = "9s"
+			case "tls-handshake":
+				c.Timeout.TLSHandshake = "9s"
+			case "request":
+				c.Timeout.Request = "9s"
+			}
+		}
+		want := func(d time.Duration) func(*testing.T, cli.Connection) {
+			return func(t *testing.T, conn cli.Connection) {
+				t.Helper()
+				require.Equal(t, d, get(conn))
+			}
+		}
+
+		return row{name: name, envVar: envVar, tiers: [4]tier{
+			{flag: []string{flag, "7s"}, expected: want(7 * time.Second)},
+			{env: "8s", expected: want(8 * time.Second)},
+			{ctx: setCtx, expected: want(9 * time.Second)},
+			{expected: want(def)},
+		}}
+	}
+
+	rows := []row{
+		{name: "endpoint", envVar: "PMX_API_ENDPOINT", tiers: [4]tier{
+			{flag: []string{"--api-endpoint", "flag-host.invalid:1111"},
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, "flag-host.invalid", conn.Host)
+					require.Equal(t, 1111, conn.Port)
+					require.Equal(t, "--api-endpoint", conn.EndpointSource)
+				}},
+			{env: "env-host.invalid:2222",
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, "env-host.invalid", conn.Host)
+					require.Equal(t, 2222, conn.Port)
+					require.Equal(t, "$PMX_API_ENDPOINT", conn.EndpointSource)
+				}},
+			{ctx: func(c *config.Context) { c.Port = 3333 },
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, "ctx-host.invalid", conn.Host)
+					require.Equal(t, 3333, conn.Port)
+					require.Empty(t, conn.EndpointSource)
+				}},
+			{expected: func(t *testing.T, conn cli.Connection) {
+				require.Equal(t, "ctx-host.invalid", conn.Host)
+				require.Equal(t, 8006, conn.Port, "the product default port")
+			}},
+		}},
+		{name: "jump", envVar: "PMX_API_JUMP", tiers: [4]tier{
+			{flag: []string{"--api-jump", "flag-bastion.invalid"},
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, "flag-bastion.invalid", conn.Jump.Chain)
+				}},
+			{env: "env-bastion.invalid",
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, "env-bastion.invalid", conn.Jump.Chain)
+				}},
+			{ctx: func(c *config.Context) { c.SSH.Jump = "ctx-bastion.invalid" },
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, "ctx-bastion.invalid", conn.Jump.Chain)
+				}},
+			{expected: func(t *testing.T, conn cli.Connection) {
+				require.Empty(t, conn.Jump.Chain, "no bastion by default")
+			}},
+		}},
+		{name: "proxy", envVar: "PMX_API_PROXY", tiers: [4]tier{
+			{flag: []string{"--api-proxy", "socks5h://flag-proxy.invalid:1080"},
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.NotNil(t, conn.Proxy.URL)
+					require.Equal(t, "socks5h://flag-proxy.invalid:1080", conn.Proxy.URL.String())
+				}},
+			{env: "socks5h://env-proxy.invalid:1080",
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.NotNil(t, conn.Proxy.URL)
+					require.Equal(t, "socks5h://env-proxy.invalid:1080", conn.Proxy.URL.String())
+				}},
+			{ctx: func(c *config.Context) { c.Proxy.URL = "socks5h://ctx-proxy.invalid:1080" },
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.NotNil(t, conn.Proxy.URL)
+					require.Equal(t, "socks5h://ctx-proxy.invalid:1080", conn.Proxy.URL.String())
+				}},
+			{expected: func(t *testing.T, conn cli.Connection) {
+				require.Nil(t, conn.Proxy.URL, "no proxy by default")
+				require.False(t, conn.Proxy.FromEnv)
+			}},
+		}},
+		{name: "ca-cert", envVar: "PMX_API_CA_CERT", tiers: [4]tier{
+			{flag: []string{"--api-ca-cert", caFlag},
+				expected: func(t *testing.T, conn cli.Connection) { require.Equal(t, caFlag, conn.CACert) }},
+			{env: caEnv,
+				expected: func(t *testing.T, conn cli.Connection) { require.Equal(t, caEnv, conn.CACert) }},
+			{ctx: func(c *config.Context) { c.TLS.CACert = caCtx },
+				expected: func(t *testing.T, conn cli.Connection) { require.Equal(t, caCtx, conn.CACert) }},
+			{expected: func(t *testing.T, conn cli.Connection) { require.Empty(t, conn.CACert) }},
+		}},
+		{name: "fingerprint", envVar: "PMX_API_FINGERPRINT", tiers: [4]tier{
+			{flag: []string{"--api-fingerprint", pinFlag},
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, pinFlag, conn.Fingerprint)
+					require.Equal(t, "--api-fingerprint", conn.FingerprintSource)
+				}},
+			{env: pinEnv,
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, pinEnv, conn.Fingerprint)
+					require.Equal(t, "$PMX_API_FINGERPRINT", conn.FingerprintSource)
+				}},
+			{ctx: func(c *config.Context) { c.TLS.Fingerprint = pinCtx },
+				expected: func(t *testing.T, conn cli.Connection) {
+					require.Equal(t, pinCtx, conn.Fingerprint)
+					require.Equal(t, "tls.fingerprint", conn.FingerprintSource)
+				}},
+			{expected: func(t *testing.T, conn cli.Connection) {
+				require.Empty(t, conn.Fingerprint)
+				require.Empty(t, conn.FingerprintSource)
+			}},
+		}},
+		timeoutRow("connect timeout", "--api-connect-timeout", "PMX_API_CONNECT_TIMEOUT", "connect",
+			defaults.Connect, func(c cli.Connection) time.Duration { return c.Timeouts.Connect }),
+		timeoutRow("tls-handshake timeout", "--api-tls-handshake-timeout", "PMX_API_TLS_HANDSHAKE_TIMEOUT",
+			"tls-handshake", defaults.TLSHandshake,
+			func(c cli.Connection) time.Duration { return c.Timeouts.TLSHandshake }),
+		timeoutRow("request timeout", "--api-request-timeout", "PMX_API_REQUEST_TIMEOUT", "request",
+			defaults.Request, func(c cli.Connection) time.Duration { return c.Timeouts.Request }),
+	}
+
+	tierNames := [4]string{"flag", "environment", "context", "default"}
+
+	for _, r := range rows {
+		for i, name := range tierNames {
+			t.Run(r.name+" from "+name, func(t *testing.T) {
+				ctx := precedenceContext()
+				var flags []string
+
+				// Apply this tier's sources and every lower tier's, so the
+				// tier under test wins only because it outranks them.
+				for j := i; j < len(r.tiers); j++ {
+					below := r.tiers[j]
+					flags = append(flags, below.flag...)
+					if below.env != "" {
+						t.Setenv(r.envVar, below.env)
+					}
+					if below.ctx != nil {
+						below.ctx(ctx)
+					}
+				}
+
+				cfgPath := filepath.Join(t.TempDir(), "config.yml")
+				require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+					CurrentContext: "lab",
+					Contexts:       map[string]*config.Context{"lab": ctx},
+				}))
+
+				res := runThroughRoot(t, nil, nil, append([]string{"--config", cfgPath, "probe"}, flags...)...)
+				require.NoError(t, res.err, "stderr: %s", res.stderr)
+				require.True(t, res.ran)
+				require.NotNil(t, res.deps.API, "the root must build the client")
+				require.Equal(t, "lab", res.deps.Route.ContextName, "Deps.Route must carry the resolved connection")
+
+				r.tiers[i].expected(t, res.deps.Route)
+			})
+		}
+	}
+}
+
+// TestAPIEndpointOverride_PartialFallsBackToContext proves that an endpoint
+// override naming only a host keeps the context's product default port and
+// protocol, so --api-endpoint pve2 against a Proxmox Backup Server context
+// dials https://pve2:8007.
+func TestAPIEndpointOverride_PartialFallsBackToContext(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "backup",
+		Contexts: map[string]*config.Context{"backup": {
+			Host: "pbs1.invalid", Product: config.ProductPBS,
+			Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "literal-secret"},
+		}},
+	}))
+
+	res := runThroughRoot(t, map[string]string{cli.ProductAnnotation: config.ProductPBS}, nil,
+		"--config", cfgPath, "probe", "--api-endpoint", "pve2")
+	require.NoError(t, res.err, "stderr: %s", res.stderr)
+	require.NotNil(t, res.deps.PBS)
+	require.Equal(t, "pve2", res.deps.Route.Host)
+	require.Equal(t, 8007, res.deps.Route.Port)
+	require.Equal(t, "https", res.deps.Route.Protocol)
+	require.Equal(t, "pbs1.invalid", res.deps.Ctx.Host, "the stored host stays on Deps.Ctx")
+}
+
+// TestAPIConnectionFlags_MalformedFailInvocation proves that each malformed
+// override fails a client-building command naming its flag, before any
+// context is resolved or any client is built, against a context that would
+// otherwise build one.
+func TestAPIConnectionFlags_MalformedFailInvocation(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": precedenceContext()},
+	}))
+
+	control := runThroughRoot(t, nil, nil, "--config", cfgPath, "probe")
+	require.NoError(t, control.err, "the context must build a client when no override is malformed")
+
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"endpoint", []string{"--api-endpoint", "ftp://pve1"},
+			`invalid --api-endpoint "ftp://pve1": scheme must be https or http`},
+		{"zero connect timeout", []string{"--api-connect-timeout", "0s"},
+			"--api-connect-timeout must be greater than zero"},
+		{"negative connect timeout", []string{"--api-connect-timeout=-1s"},
+			"--api-connect-timeout must be greater than zero"},
+		{"connect timeout without a unit", []string{"--api-connect-timeout", "5"},
+			`--api-connect-timeout "5" is not a duration (e.g. 5s, 500ms)`},
+		{"fingerprint", []string{"--api-fingerprint", "garbage"},
+			`--api-fingerprint "garbage" must be a colon-separated hex SHA-256 (e.g. AA:BB:..., 32 pairs)`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := runThroughRoot(t, nil, nil, append([]string{"--config", cfgPath, "probe"}, tc.args...)...)
+
+			require.EqualError(t, res.err, tc.want)
+			require.False(t, res.ran, "the command must not run")
+			require.NotNil(t, res.deps, "persistentPreRunE stashes Deps before it parses the overrides")
+			require.Nil(t, res.deps.API, "no client may be built")
+			require.Nil(t, res.deps.Ctx, "no context may be resolved")
+			require.Zero(t, res.deps.Route.Host, "no connection may be published")
+		})
+	}
+}
+
+// TestAPIEndpointEnv_ReachesListener proves that $PMX_API_ENDPOINT reaches
+// the wire: the context points at a closed port, the variable points at a
+// listener on a dynamic port, and the command's request arrives there.
+func TestAPIEndpointEnv_ReachesListener(t *testing.T) {
+	var hits atomic.Int64
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api2/json/version" {
+			hits.Add(1)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"version":"8.2.4","release":"8.2","repoid":"faa83925"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	listenerPort := srv.Listener.Addr().(*net.TCPAddr).Port
+	t.Setenv("PMX_API_ENDPOINT", "127.0.0.1:"+strconv.Itoa(listenerPort))
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{"lab": {
+			Host: "127.0.0.1", Port: closedPort(t), Protocol: "http", Product: config.ProductPVE,
+			Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "literal-secret"},
+		}},
+	}))
+
+	res := runThroughRoot(t, nil, func(cmd *cobra.Command, deps *cli.Deps) error {
+		_, err := deps.API.Version.Get(pve.WithRetries(cmd.Context(), 0))
+		return err
+	}, "--config", cfgPath, "probe")
+
+	require.NoError(t, res.err, "stderr: %s", res.stderr)
+	require.Equal(t, int64(1), hits.Load(), "the request must reach the listener $PMX_API_ENDPOINT names")
+	require.Equal(t, listenerPort, res.deps.Route.Port)
+	require.Equal(t, "$PMX_API_ENDPOINT", res.deps.Route.EndpointSource)
+	require.Equal(t, 1, countLines(res.stderr, "note: $PMX_API_ENDPOINT"), "stderr: %s", res.stderr)
+}
+
+// closedPort returns a loopback port nothing listens on, so a dial to it is
+// refused at once.
+func closedPort(t *testing.T) int {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	require.NoError(t, ln.Close())
+
+	return port
+}
+
+// executeProbe runs cli.Execute with os.Args set to args and one factory,
+// and returns what reached the process's standard error and the error.
+func executeProbe(t *testing.T, factory cli.GroupFactory, args ...string) (string, error) {
+	t.Helper()
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+
+	oldArgs := os.Args
+	os.Args = append([]string{"pmx"}, args...)
+	defer func() { os.Args = oldArgs }()
+
+	var execErr error
+	stderr := captureStderr(t, func() {
+		execErr = cli.Execute("pmx", []cli.GroupFactory{factory})
+	})
+
+	return stderr, execErr
+}
+
+// probeFactory returns a group factory for one client-building command,
+// "probe", whose RunE calls run.
+func probeFactory(run func(*cobra.Command, *cli.Deps) error) cli.GroupFactory {
+	return func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use: "probe",
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return run(cmd, cli.GetDeps(cmd))
+			},
+		}
+	}
+}
+
+// TestExecute_ClosesKitClientsOnExit proves that Execute closes the client
+// the root built, on the success path and on the error path alike, so the
+// keep-alive connection a command left idle in the pool is closed with the
+// command rather than lingering until the kit's idle timeout, which is far
+// longer than the bound here. It also proves that the clients close before
+// the ssh jump children are reaped, so no idle connection is still parked on
+// a child when its pipes are closed.
+func TestExecute_ClosesKitClientsOnExit(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		failure error
+	}{
+		{"success", nil},
+		{"error", errors.New("the command failed after its request")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				mu     sync.Mutex
+				states = map[net.Conn]http.ConnState{}
+				events []string
+			)
+
+			record := func(event string) {
+				mu.Lock()
+				defer mu.Unlock()
+				events = append(events, event)
+			}
+
+			restore := cli.SetShutdownJumps(func(bound time.Duration) {
+				record("shutdown jumps")
+				apiclient.ShutdownJumps(bound)
+			})
+			t.Cleanup(restore)
+
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":{"version":"8.2.4","release":"8.2","repoid":"faa83925"}}`))
+			}))
+			srv.Config.ConnState = func(c net.Conn, s http.ConnState) {
+				mu.Lock()
+				defer mu.Unlock()
+				states[c] = s
+			}
+			srv.Start()
+			t.Cleanup(srv.Close)
+
+			port := srv.Listener.Addr().(*net.TCPAddr).Port
+			cfgPath := filepath.Join(t.TempDir(), "config.yml")
+			require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+				CurrentContext: "lab",
+				Contexts: map[string]*config.Context{"lab": {
+					Host: "127.0.0.1", Port: port, Protocol: "http", Product: config.ProductPVE,
+					Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "literal-secret"},
+				}},
+			}))
+
+			var opened int
+
+			stderr, err := executeProbe(t, probeFactory(func(cmd *cobra.Command, deps *cli.Deps) error {
+				if _, err := deps.API.Version.Get(pve.WithRetries(cmd.Context(), 0)); err != nil {
+					return err
+				}
+
+				deps.API.Raw = closeRecorder{Client: deps.API.Raw, record: record}
+
+				mu.Lock()
+				opened = len(states)
+				mu.Unlock()
+
+				return tc.failure
+			}), "--config", cfgPath, "--no-log", "probe")
+
+			if tc.failure == nil {
+				require.NoError(t, err, "stderr: %s", stderr)
+			} else {
+				require.ErrorIs(t, err, tc.failure)
+			}
+
+			require.Equal(t, 1, opened, "the command must have opened exactly one connection")
+
+			// The client closes its end inside Execute; the server's own
+			// goroutine sees the end of file a moment later and records
+			// the closed state.
+			require.Eventually(t, func() bool {
+				mu.Lock()
+				defer mu.Unlock()
+
+				for _, s := range states {
+					if s != http.StateClosed {
+						return false
+					}
+				}
+
+				return len(states) == 1
+			}, 2*time.Second, 10*time.Millisecond, "the connection the command opened must be closed when Execute returns")
+
+			mu.Lock()
+			defer mu.Unlock()
+			require.Equal(t, []string{"close client", "shutdown jumps"}, events,
+				"the clients must close before the jump children are reaped")
+		})
+	}
+}
+
+// closeRecorder wraps a kit client and records its Close before passing it
+// on, so a test can see when Execute closed the client.
+type closeRecorder struct {
+	pve.Client
+	record func(string)
+}
+
+func (c closeRecorder) Close() error {
+	c.record("close client")
+	return c.Client.Close()
+}
+
+// TestExecute_InterruptSuppressesConnectionHints proves that a connection
+// failure reaching the root after the command's context was cancelled is
+// reported as an interruption rather than diagnosed as an unreachable host,
+// and that the same failure without the cancellation still gets its hint.
+func TestExecute_InterruptSuppressesConnectionHints(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": precedenceContext()},
+	}))
+
+	dialFailure := func() error {
+		return fmt.Errorf("GET /version: %w",
+			&net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: connection refused")})
+	}
+
+	t.Run("an interrupted command", func(t *testing.T) {
+		stderr, err := executeProbe(t, probeFactory(func(cmd *cobra.Command, _ *cli.Deps) error {
+			ctx, cancel := context.WithCancel(cmd.Context())
+			cancel()
+			cmd.SetContext(ctx)
+
+			return dialFailure()
+		}), "--config", cfgPath, "--no-log", "probe")
+
+		require.Error(t, err)
+		require.Equal(t, "GET /version: dial tcp: connect: connection refused\ninterrupted\n", stderr)
+	})
+
+	t.Run("the same failure uninterrupted", func(t *testing.T) {
+		stderr, err := executeProbe(t, probeFactory(func(*cobra.Command, *cli.Deps) error {
+			return dialFailure()
+		}), "--config", cfgPath, "--no-log", "probe")
+
+		require.Error(t, err)
+		require.Contains(t, stderr, "hint: could not reach ctx-host.invalid:8006")
+		require.NotContains(t, stderr, "interrupted")
+	})
+}
+
+// TestExecute_PinMismatchUnderEndpointOverrideNamesSource proves that a
+// context that pins a certificate, reached through --api-endpoint at a TLS
+// listener presenting another certificate, fails with the explanation that
+// names the override, and that a context which also enables trust on first
+// use gets the same pin explanation rather than the read-only one.
+func TestExecute_PinMismatchUnderEndpointOverrideNamesSource(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"version":"8.2.4","release":"8.2","repoid":"faa83925"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	endpoint := srv.Listener.Addr().String()
+	want := fmt.Sprintf(`context "lab" pins a certificate that %s (from --api-endpoint) does not present; `+
+		"pass --api-fingerprint for that host\n", endpoint)
+
+	for _, tofu := range []bool{false, true} {
+		t.Run(fmt.Sprintf("tofu %v", tofu), func(t *testing.T) {
+			ctx := precedenceContext()
+			ctx.Host = "pve-stored.invalid"
+			ctx.TLS = config.TLSBlock{Fingerprint: testPinA, Tofu: tofu}
+
+			cfgPath := filepath.Join(t.TempDir(), "config.yml")
+			require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+				CurrentContext: "lab",
+				Contexts:       map[string]*config.Context{"lab": ctx},
+			}))
+
+			stderr, err := executeProbe(t, probeFactory(func(cmd *cobra.Command, deps *cli.Deps) error {
+				_, err := deps.API.Version.Get(pve.WithRetries(cmd.Context(), 0))
+				return err
+			}), "--config", cfgPath, "--no-log", "--api-endpoint", endpoint, "probe")
+
+			require.Error(t, err)
+			firstLine, _, _ := strings.Cut(stderr, "\n")
+			require.Equal(t, want, firstLine+"\n", "stderr: %s", stderr)
+			require.NotContains(t, stderr, "no trusted certificate", "the pin explanation outranks the read-only one")
+		})
+	}
+}
+
+// auditConfig writes a config holding one context, "lab", and returns its
+// path.
+func auditConfig(t *testing.T, ctx *config.Context) string {
+	t.Helper()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, config.SaveForce(cfgPath, &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": ctx},
+	}))
+
+	return cfgPath
+}
+
+// auditRun runs a noClient command that consumes the connection overrides
+// through cli.Execute with args, under a fresh HOME so the log lands in a
+// temporary directory, and returns every log record written, the Deps the
+// command saw, and the error.
+func auditRun(t *testing.T, cfgPath string, args ...string) ([]map[string]any, *cli.Deps, error) {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PMX_LOG_LAYOUT", "")
+	t.Setenv("PMX_LOG_LEVEL", "")
+
+	var seen *cli.Deps
+
+	factory := func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true", cli.AnnotationUsesConnection: "true"},
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				seen = cli.GetDeps(cmd)
+				return nil
+			},
+		}
+	}
+
+	_, err := executeProbe(t, factory, append([]string{"--config", cfgPath}, args...)...)
+
+	return readLogRecords(t, filepath.Join(home, ".pmx", "logs")), seen, err
+}
+
+// TestInvocationTargetAttrs_NamesProxyHostAndJump proves that the invocation
+// record names the effective target: the connection's host, port, bastion,
+// and proxy host after the overrides, with the stored context's product and
+// user, and the sources of the overrides but never their values. It also
+// proves that building the record reads no secret and writes nothing back
+// into the stored context, which is what calling config.ResolveContext did.
+func TestInvocationTargetAttrs_NamesProxyHostAndJump(t *testing.T) {
+	t.Run("the function resolves the connection, not the context", func(t *testing.T) {
+		file, err := parser.ParseFile(token.NewFileSet(), "root.go", nil, parser.SkipObjectResolution)
+		require.NoError(t, err)
+
+		calls := map[string]bool{}
+		found := false
+
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != "invocationTargetAttrs" {
+				continue
+			}
+
+			found = true
+			require.Len(t, fn.Type.Params.List, 3, "invocationTargetAttrs(cmd, cfg, name)")
+
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				if call, ok := n.(*ast.CallExpr); ok {
+					switch fun := call.Fun.(type) {
+					case *ast.Ident:
+						calls[fun.Name] = true
+					case *ast.SelectorExpr:
+						calls[fun.Sel.Name] = true
+					}
+				}
+
+				return true
+			})
+		}
+
+		require.True(t, found, "root.go must define invocationTargetAttrs")
+		require.True(t, calls["OverridesFromCommand"], "the record must read the invocation's overrides")
+		require.True(t, calls["ResolveConnection"], "the record must resolve the connection")
+		require.False(t, calls["ResolveContext"], "the record must not call config.ResolveContext")
+	})
+
+	stored := func() *config.Context {
+		return &config.Context{
+			Host: "pve1.example.test", Product: config.ProductPVE,
+			Auth: config.AuthBlock{Type: "token", Username: "auditor@pve", TokenID: "tok", Secret: "tok-secret"},
+			SSH:  config.SSHBlock{Jump: "admin@bastion.example.test"},
+		}
+	}
+
+	t.Run("an endpoint flag", func(t *testing.T) {
+		records, seen, err := auditRun(t, auditConfig(t, stored()), "--api-endpoint", "pve9:9999", "probe")
+		require.NoError(t, err)
+
+		inv := findRecord(records, "invocation")
+		require.NotNil(t, inv)
+		require.Equal(t, "pve9", inv["host"])
+		require.Equal(t, float64(9999), inv["port"])
+		require.Equal(t, "pve", inv["product"])
+		require.Equal(t, "auditor@pve", inv["user"])
+		require.Equal(t, "admin@bastion.example.test", inv["jump"])
+		require.NotContains(t, inv, "proxy_host")
+		require.Equal(t, []any{"api-endpoint=flag"}, inv["overrides"])
+
+		require.NotNil(t, seen)
+		require.Zero(t, seen.Cfg.Contexts["lab"].Port, "the record must not write defaults into the stored context")
+		require.Empty(t, seen.Cfg.Contexts["lab"].Realm, "the record must not write defaults into the stored context")
+	})
+
+	t.Run("a jump disabled from the environment", func(t *testing.T) {
+		t.Setenv("PMX_API_JUMP", "none")
+
+		records, _, err := auditRun(t, auditConfig(t, stored()), "probe")
+		require.NoError(t, err)
+
+		inv := findRecord(records, "invocation")
+		require.NotNil(t, inv)
+		require.Equal(t, "pve1.example.test", inv["host"])
+		require.Equal(t, float64(8006), inv["port"])
+		require.Equal(t, "none", inv["jump"])
+		require.Equal(t, []any{"api-jump=env"}, inv["overrides"])
+	})
+
+	t.Run("a proxy with a keychain password", func(t *testing.T) {
+		ctx := stored()
+		ctx.Proxy = config.ProxyBlock{
+			URL: "socks5h://proxy.example.test:1080", Username: "proxyuser",
+			Password: "keychain:pmx-audit-test-never-stored/proxyuser",
+		}
+
+		records, _, err := auditRun(t, auditConfig(t, ctx), "probe")
+		require.NoError(t, err, "the audit path must never read the keychain")
+
+		inv := findRecord(records, "invocation")
+		require.NotNil(t, inv)
+		require.Equal(t, "pve1.example.test", inv["host"])
+		require.Equal(t, float64(8006), inv["port"])
+		require.Equal(t, "pve", inv["product"])
+		require.Equal(t, "auditor@pve", inv["user"])
+		require.Equal(t, "proxy.example.test:1080", inv["proxy_host"])
+		require.NotContains(t, inv, "overrides", "no override was set")
+		require.NotNil(t, findRecord(records, "exit"))
+	})
+
+	t.Run("an environment proxy carrying credentials", func(t *testing.T) {
+		t.Setenv("PMX_API_PROXY", "socks5h://envuser:env-s3cret@env-proxy.example.test:1080")
+
+		records, _, err := auditRun(t, auditConfig(t, stored()), "probe")
+		require.NoError(t, err)
+
+		inv := findRecord(records, "invocation")
+		require.NotNil(t, inv)
+		require.Equal(t, "env-proxy.example.test:1080", inv["proxy_host"])
+		require.Equal(t, []any{"api-proxy=env"}, inv["overrides"])
+
+		for _, rec := range records {
+			raw, err := json.Marshal(rec)
+			require.NoError(t, err)
+			require.NotContains(t, string(raw), "env-s3cret", "the proxy password must never reach the log")
+			require.NotContains(t, string(raw), "envuser", "the overrides attribute must carry no proxy value")
+		}
+	})
+
+	t.Run("a stored proxy that does not parse", func(t *testing.T) {
+		ctx := stored()
+		ctx.Proxy = config.ProxyBlock{URL: "socks5://pmx:s3cr3t/x@proxy:1080"}
+
+		records, _, err := auditRun(t, auditConfig(t, ctx), "probe")
+		require.NoError(t, err)
+
+		inv := findRecord(records, "invocation")
+		require.NotNil(t, inv)
+		require.Equal(t, "pve1.example.test", inv["host"], "a connection that does not resolve falls back")
+		require.NotContains(t, inv, "proxy_host", "an unparseable proxy has no host to record")
+
+		raw, err := json.Marshal(inv)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), "s3cr3t")
+	})
+
+	// url.Parse accepts each of these, reading "pmx:4711" as the host and
+	// pushing the rest of the password past a "/", "?", or "#", so a record
+	// that trusted u.Host would carry the user and the password's digits.
+	numericPasswordForms := []string{
+		"socks5://pmx:4711/x@proxy.example.test:1080",
+		"socks5://pmx:4711?x@proxy.example.test:1080",
+		"socks5://pmx:4711#x@proxy.example.test:1080",
+	}
+
+	requireNoUserinfo := func(t *testing.T, records []map[string]any) {
+		t.Helper()
+
+		inv := findRecord(records, "invocation")
+		require.NotNil(t, inv)
+		require.NotContains(t, inv, "proxy_host", "a proxy URL with a stray \"@\" has no host to record")
+
+		for _, rec := range records {
+			raw, err := json.Marshal(rec)
+			require.NoError(t, err)
+			require.NotContains(t, string(raw), "4711", "record: %s", raw)
+			require.NotContains(t, string(raw), "pmx:", "record: %s", raw)
+		}
+	}
+
+	for _, form := range numericPasswordForms {
+		t.Run("stored "+form, func(t *testing.T) {
+			ctx := stored()
+			ctx.Proxy = config.ProxyBlock{URL: form}
+
+			records, _, err := auditRun(t, auditConfig(t, ctx), "probe")
+			require.NoError(t, err)
+			requireNoUserinfo(t, records)
+		})
+
+		t.Run("environment "+form, func(t *testing.T) {
+			t.Setenv("PMX_API_PROXY", form)
+
+			records, _, err := auditRun(t, auditConfig(t, stored()), "probe")
+			require.NoError(t, err)
+			requireNoUserinfo(t, records)
+		})
+	}
+}
+
+// TestLogInvocationExit_MasksURLUserinfo proves that the exit record and the
+// terminal both mask a URL's userinfo as well as its query parameters, and
+// that none of the three proxy URL forms url.Parse rejects leaves its
+// password in the invocation record or the exit record, whether it comes
+// from the stored context, from $PMX_API_PROXY, or quoted whole in an error.
+func TestLogInvocationExit_MasksURLUserinfo(t *testing.T) {
+	forms := []struct{ url, password string }{
+		{"socks5://pmx:s3cr3t/x@proxy:1080", "s3cr3t"},
+		{"socks5://pmx:s3%zzt@proxy:1080", "s3%zzt"},
+		{"socks5://u:s3cret@[::1", "s3cret"},
+		{"socks5://pmx:4711/x@proxy:1080", "4711"},
+		{"socks5://pmx:4711?x@proxy:1080", "4711"},
+		{"socks5://pmx:4711#x@proxy:1080", "4711"},
+	}
+
+	requireAbsent := func(t *testing.T, records []map[string]any, password string) {
+		t.Helper()
+
+		require.NotNil(t, findRecord(records, "invocation"))
+		require.NotNil(t, findRecord(records, "exit"))
+
+		for _, rec := range records {
+			raw, err := json.Marshal(rec)
+			require.NoError(t, err)
+			require.NotContains(t, string(raw), password, "record: %s", raw)
+		}
+	}
+
+	runLogged := func(t *testing.T, cfgPath string, run func(*cobra.Command, *cli.Deps) error, args ...string) (
+		[]map[string]any, string,
+	) {
+		t.Helper()
+
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("PMX_LOG_LAYOUT", "")
+		t.Setenv("PMX_LOG_LEVEL", "")
+
+		// A stored or exported form url.Parse rejects fails the client
+		// build, while a form it misreads as host "pmx:4711" builds a
+		// client and lets the command succeed, so only the records and
+		// the terminal are checked here.
+		stderr, _ := executeProbe(t, probeFactory(run), append([]string{"--config", cfgPath}, args...)...)
+
+		return readLogRecords(t, filepath.Join(home, ".pmx", "logs")), stderr
+	}
+
+	noop := func(*cobra.Command, *cli.Deps) error { return nil }
+
+	for _, form := range forms {
+		t.Run(form.url, func(t *testing.T) {
+			t.Run("stored", func(t *testing.T) {
+				ctx := precedenceContext()
+				ctx.Proxy.URL = form.url
+
+				records, stderr := runLogged(t, auditConfig(t, ctx), noop, "probe")
+				requireAbsent(t, records, form.password)
+				require.NotContains(t, stderr, form.password)
+			})
+
+			t.Run("environment", func(t *testing.T) {
+				t.Setenv("PMX_API_PROXY", form.url)
+
+				records, stderr := runLogged(t, auditConfig(t, precedenceContext()), noop, "probe")
+				requireAbsent(t, records, form.password)
+				require.NotContains(t, stderr, form.password)
+			})
+
+			t.Run("quoted in an error", func(t *testing.T) {
+				quoting := func(*cobra.Command, *cli.Deps) error {
+					return fmt.Errorf("proxyconnect tcp: dial %s: connection refused (retry with ?password=hunter2)",
+						form.url)
+				}
+
+				records, stderr := runLogged(t, auditConfig(t, precedenceContext()), quoting, "probe")
+				requireAbsent(t, records, form.password)
+				require.NotContains(t, stderr, form.password)
+
+				exit := findRecord(records, "exit")
+				require.NotContains(t, exit["error"], "hunter2", "query parameters stay masked")
+				require.Contains(t, exit["error"], "<redacted>@")
+			})
+		})
+	}
+}
+
+// TestExecute_ErrorTextKeepsAPIURLs proves that an API URL quoted in an
+// error reaches the terminal and the exit record exactly as written when its
+// path or query holds a user ID, whose "@" must not be read as the end of a
+// URL password.
+func TestExecute_ErrorTextKeepsAPIURLs(t *testing.T) {
+	for _, text := range []string{
+		`Get "https://127.0.0.1:9/api2/json/access/users/alice@pve": dial tcp 127.0.0.1:9: connect: connection refused`,
+		`Delete "https://h:8006/api2/json/access/users/root@pam/token/x": EOF`,
+		`Get "https://h:8006/api2/json/access/acl?userid=alice@pve": EOF`,
+	} {
+		t.Run(text, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("PMX_LOG_LAYOUT", "")
+			t.Setenv("PMX_LOG_LEVEL", "")
+
+			stderr, err := executeProbe(t, noClientProbe(errors.New(text)),
+				"--config", auditConfig(t, precedenceContext()), "probe")
+			require.Error(t, err)
+
+			firstLine, _, _ := strings.Cut(stderr, "\n")
+			require.Equal(t, text, firstLine)
+
+			exit := findRecord(readLogRecords(t, filepath.Join(home, ".pmx", "logs")), "exit")
+			require.NotNil(t, exit)
+			require.Equal(t, text, exit["error"])
+		})
+	}
+}
+
+// TestExecute_ErrorTextMasksConfiguredProxyURL proves that the proxy URL
+// this invocation was configured with is masked wherever an error quotes it,
+// even in the http form whose numeric password followed by "/" has the
+// shape of an API URL and so escapes the free-text userinfo mask.
+func TestExecute_ErrorTextMasksConfiguredProxyURL(t *testing.T) {
+	const proxyURL = "http://pmx:4711/x@proxy.example.test:3128"
+
+	quoting := noClientProbe(fmt.Errorf("proxyconnect tcp: dial %s: connection refused", proxyURL))
+
+	run := func(t *testing.T, cfgPath string) {
+		t.Helper()
+
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("PMX_LOG_LAYOUT", "")
+		t.Setenv("PMX_LOG_LEVEL", "")
+
+		stderr, err := executeProbe(t, quoting, "--config", cfgPath, "probe")
+		require.Error(t, err)
+		require.NotContains(t, stderr, "4711")
+		require.Contains(t, stderr, "http://<redacted>")
+
+		for _, rec := range readLogRecords(t, filepath.Join(home, ".pmx", "logs")) {
+			raw, err := json.Marshal(rec)
+			require.NoError(t, err)
+			require.NotContains(t, string(raw), "4711", "record: %s", raw)
+		}
+	}
+
+	t.Run("stored", func(t *testing.T) {
+		ctx := precedenceContext()
+		ctx.Proxy.URL = proxyURL
+
+		run(t, auditConfig(t, ctx))
+	})
+
+	t.Run("environment", func(t *testing.T) {
+		t.Setenv("PMX_API_PROXY", proxyURL)
+
+		run(t, auditConfig(t, precedenceContext()))
+	})
+}
+
+// noClientProbe returns a group factory for "probe", a noClient command that
+// consumes the connection overrides and fails with err, so a test can hand
+// the root an error text without building a client first.
+func noClientProbe(err error) cli.GroupFactory {
+	return func(*cli.Deps) *cobra.Command {
+		return &cobra.Command{
+			Use:         "probe",
+			Annotations: map[string]string{"noClient": "true", cli.AnnotationUsesConnection: "true"},
+			RunE: func(*cobra.Command, []string) error {
+				return err
+			},
+		}
+	}
 }

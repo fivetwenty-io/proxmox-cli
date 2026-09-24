@@ -50,7 +50,9 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 			"its management address, so all remote operands have to name that same node. " +
 			"Against a PBS or PDM context there is a single endpoint host and every remote " +
 			"operand is rewritten to it; the host portion you type is never looked up, so " +
-			"any label works, `pbs:/path` included.\n\n" +
+			"any label works, `pbs:/path` included. That endpoint host is the one the context " +
+			"stores, so a PBS or PDM transfer is refused when --api-endpoint or " +
+			"$PMX_API_ENDPOINT points the API at a different host.\n\n" +
 			"rsync owns most short flags, so pmx's own connection flags are long-only and " +
 			"must precede the rsync arguments: --ssh-user, --ssh-port, --ssh-identity, " +
 			"--ssh-jump, --ssh-agent, and --no-strict. -c/--context, --config, --insecure, and --debug " +
@@ -129,7 +131,8 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 // Target resolution branches on the active context's product: a PBS or PDM
 // context rewrites every remote operand to deps.Ctx.Host directly — the host
 // label classifyRsyncArgs extracted from the operand is not looked up —
-// performing no cluster lookup; a PVE (or empty-product) context resolves
+// performing no cluster lookup, and refuses to copy when an endpoint
+// override aimed the API at another host; a PVE (or empty-product) context resolves
 // the agreed node to its cluster management address via nodeaddr.Resolve;
 // any other product is rejected.
 func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []string) error {
@@ -148,6 +151,10 @@ func runRsync(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, rsyncArgs []s
 	var host string
 	switch product {
 	case config.ProductPBS, config.ProductPDM:
+		if err := deps.RefuseOverriddenSSHHost("pmx rsync"); err != nil {
+			return err
+		}
+
 		host = deps.Ctx.Host
 	case config.ProductPVE, "":
 		host, err = nodeaddr.Resolve(cmd.Context(), deps.API.Cluster, node, deps.Log)

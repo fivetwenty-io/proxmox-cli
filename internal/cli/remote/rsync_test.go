@@ -445,3 +445,47 @@ func TestRsync_SSHJumpHelpNamesAPIJump(t *testing.T) {
 	require.True(t, strings.HasSuffix(jump.Usage, "; the API connection uses --api-jump"),
 		"ssh-jump flag usage must end with the --api-jump pointer, got %q", jump.Usage)
 }
+
+// TestRunRsync_SingleHostRefusesOverriddenEndpoint proves that a PBS or PDM
+// context, whose rsync target is the stored host, refuses to copy when an
+// endpoint override points the API somewhere else, before it runs rsync,
+// and that a routed host naming the stored one in another case copies as
+// before.
+func TestRunRsync_SingleHostRefusesOverriddenEndpoint(t *testing.T) {
+	for _, product := range []string{config.ProductPBS, config.ProductPDM} {
+		t.Run(product+" override", func(t *testing.T) {
+			runner := exec.Fake()
+			deps := &cli.Deps{
+				Runner:  runner,
+				CtxName: "b",
+				Ctx:     &config.Context{Product: product, Host: "b1.example.com"},
+				Route:   cli.Connection{Host: "b2.example.com"},
+			}
+			f := sshcmd.Flags{User: "root", Port: 22}
+
+			cmd := &cobra.Command{}
+			cmd.SetContext(context.Background())
+
+			err := runRsync(cmd, deps, &f, []string{"b:/etc", "./dst"})
+			require.EqualError(t, err, `pmx rsync runs ssh against the stored host b1.example.com of context "b", `+
+				`but this invocation's API endpoint is b2.example.com; drop the endpoint override and retry`)
+			require.Empty(t, runner.Calls)
+		})
+
+		t.Run(product+" same host", func(t *testing.T) {
+			runner := exec.Fake()
+			deps := &cli.Deps{
+				Runner: runner,
+				Ctx:    &config.Context{Product: product, Host: "b1.example.com"},
+				Route:  cli.Connection{Host: "B1.EXAMPLE.COM"},
+			}
+			f := sshcmd.Flags{User: "root", Port: 22}
+
+			cmd := &cobra.Command{}
+			cmd.SetContext(context.Background())
+
+			require.NoError(t, runRsync(cmd, deps, &f, []string{"b:/etc", "./dst"}))
+			require.Len(t, runner.Calls, 1)
+		})
+	}
+}

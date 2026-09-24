@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -857,6 +858,74 @@ func TestDestroy_PurgeDataset_NoContext_Errors(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "context host is required")
+}
+
+// TestLabDestroy_RefusesOverriddenHost proves that --purge-dataset refuses,
+// before any API call or ssh command, when an endpoint override aimed the
+// invocation's API at a host other than the one the context stores, since
+// the dataset would be destroyed over ssh on the stored host. Plain --purge
+// runs no ssh and is unaffected.
+func TestLabDestroy_RefusesOverriddenHost(t *testing.T) {
+	cfg := &config.Config{
+		Labs: map[string]*config.Lab{"alpha": cleanLab("alpha")},
+	}
+	path := writeConfig(t, cfg)
+
+	t.Run("purge-dataset refuses", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
+
+		var apiCalls atomic.Int64
+		f.HandleFunc("GET /api2/json/cluster/resources", func(w http.ResponseWriter, _ *http.Request) {
+			apiCalls.Add(1)
+			testhelper.WriteData(w, []any{})
+		})
+
+		cmd := destroyTestCmd(t, path, ac, "pve1")
+		deps, fake := destroyWireSSH(t, cmd)
+		deps.CtxName = "sm"
+		deps.Route = overriddenLabRoute(t, deps.Ctx, "pve9")
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge-dataset")
+
+		require.EqualError(t, err, `lab destroy --purge-dataset runs ssh against the stored host sm-0.lab.internal `+
+			`of context "sm", but this invocation's API endpoint is pve9; drop the endpoint override and retry`)
+		assert.Zero(t, apiCalls.Load(), "the refusal must precede every API call")
+		assert.Empty(t, fake.Calls, "the refusal must precede every ssh command")
+	})
+
+	t.Run("plain purge is unaffected", func(t *testing.T) {
+		f, ac := destroyFakeClient(t)
+
+		destroyHandleClusterResources(f)
+		f.HandleFunc("DELETE /api2/json/pools", func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, nil)
+		})
+		f.HandleFunc("DELETE /api2/json/storage/tank-lab-alpha", func(w http.ResponseWriter, _ *http.Request) {
+			testhelper.WriteData(w, nil)
+		})
+
+		cmd := destroyTestCmd(t, path, ac, "pve1")
+		deps, fake := destroyWireSSH(t, cmd)
+		deps.CtxName = "sm"
+		deps.Route = overriddenLabRoute(t, deps.Ctx, "pve9")
+
+		_, _, err := destroyRun(t, cmd, "alpha", "--yes", "--purge")
+		require.NoError(t, err)
+		assert.Empty(t, fake.Calls)
+	})
+}
+
+// overriddenLabRoute resolves the connection ctx takes under an endpoint
+// override naming host, as persistentPreRunE publishes it on Deps.Route.
+func overriddenLabRoute(t *testing.T, ctx *config.Context, host string) cli.Connection {
+	t.Helper()
+
+	conn, err := cli.ResolveConnection("sm", ctx, cli.ConnectionOverrides{
+		Host: host, EndpointSource: "--api-endpoint",
+	})
+	require.NoError(t, err)
+
+	return conn
 }
 
 // TestDestroy_WithoutPurgeDataset_NoRunnerCalls is a regression check: plain

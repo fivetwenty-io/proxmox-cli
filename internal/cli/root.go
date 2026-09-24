@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -154,6 +155,17 @@ type Deps struct {
 	// Callers use ConnectionOverrides, which tolerates a nil Conn, rather
 	// than calling the field directly.
 	Conn func() (ConnectionOverrides, error)
+
+	// Route is the Connection the root's client dials: the resolved
+	// endpoint, trust settings, bastion, proxy, and timeouts after every
+	// --api-* flag and PMX_API_* variable has been applied to Ctx.
+	// persistentPreRunE assigns it where it assigns Ctx, so it is the zero
+	// Connection, with an empty Host, whenever Ctx is nil: for a noClient
+	// command, and when the client build failed. The error hints read the
+	// host, the port, and the route from it, and the lab verbs that ssh to
+	// the context's host compare Route.Host with Ctx.Host to catch an
+	// endpoint override that points somewhere else.
+	Route Connection
 }
 
 // ConnectionOverrides returns this invocation's connection overrides by
@@ -166,6 +178,31 @@ func (d *Deps) ConnectionOverrides() (ConnectionOverrides, error) {
 	}
 
 	return d.Conn()
+}
+
+// RefuseOverriddenSSHHost fails when an endpoint override pointed this
+// invocation's API connection at a host other than the one the active
+// context stores. verb names the command, such as "lab quota set" or
+// "pmx ssh". The caller is about to run ssh against the stored host, and
+// with the API aimed elsewhere there is no telling which machine the
+// operator meant, so it refuses rather than guesses. It returns nil when d
+// is nil, when no client was built, when Route carries no host, and when the
+// two hosts match, ignoring the brackets of an IPv6 literal and the case of
+// a name.
+func (d *Deps) RefuseOverriddenSSHHost(verb string) error {
+	if d == nil || d.Ctx == nil || d.Route.Host == "" {
+		return nil
+	}
+
+	stored, routed := d.Ctx.Host, d.Route.Host
+	if strings.EqualFold(UnbracketHost(stored), UnbracketHost(routed)) {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"%s runs ssh against the stored host %s of context %q, but this invocation's API endpoint is %s; "+
+			"drop the endpoint override and retry",
+		verb, stored, d.CtxName, routed)
 }
 
 // GetDeps retrieves *Deps from cmd's context. It panics if called before
@@ -539,7 +576,9 @@ func resolveOutputDefault() string {
 //  2. Initialises the slog logger via logx.Init.
 //  3. Skips client construction for commands annotated with Annotations["noClient"],
 //     after refusing an --api-* flag such a command would ignore.
-//  4. Resolves the context and constructs the *apiclient.APIClient via BuildContextClient.
+//  4. Parses the connection overrides, resolves the context, and constructs the
+//     product's client via the BuildContext*ClientConn builders, publishing the
+//     Connection it dials on Deps.Route.
 //  5. Injects the logger into the client.
 //  6. Builds and stashes *Deps in cmd context.
 //
@@ -631,7 +670,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		slog.String("context", ctxName),
 		slog.String("version", version.Version),
 	}
-	attrs = append(attrs, invocationTargetAttrs(cfg, ctxName)...)
+	attrs = append(attrs, invocationTargetAttrs(cmd, cfg, ctxName)...)
 	logger.Info("invocation", attrs...)
 
 	renderer := output.NewWidth(resolveMaxWidth(pf.wide, cfg))
@@ -731,37 +770,42 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 	// Every command past this point dials, so parse the connection overrides
 	// now. A malformed --api-* value or PMX_API_* variable then fails before
 	// any context is resolved or any client is built, naming the flag or the
-	// variable, instead of being ignored. Deps.Conn caches the answer, so the
-	// client builders read the same overrides without parsing them again.
-	if _, err := deps.ConnectionOverrides(); err != nil {
+	// variable, instead of being ignored. Deps.Conn caches the answer, so a
+	// command that reads the overrides later gets the same value. The
+	// overrides carry the root's --insecure as well, so the builders below
+	// need no separate insecure argument.
+	ov, err := deps.ConnectionOverrides()
+	if err != nil {
 		return logCloser, err
 	}
 
 	// Resolve context — flag > env > config — and build the client for the
 	// product this command requires (see ProductAnnotation): PVE commands
 	// get Deps.API, 'pmx pbs' commands get Deps.PBS, and the builders
-	// reject a context whose product does not match. See
-	// BuildContextClient's doc comment for why this is factored out.
+	// reject a context whose product does not match. Each builder applies
+	// the overrides to the resolved context and returns the Connection its
+	// client dials, which becomes Deps.Route.
 	isTTY := func() bool { return isInteractiveInput(cmd.InOrStdin()) }
 
 	var (
-		ac  *apiclient.APIClient
-		pc  *apiclient.PBSClient
-		dc  *apiclient.PDMClient
-		ctx *config.Context
+		ac   *apiclient.APIClient
+		pc   *apiclient.PBSClient
+		dc   *apiclient.PDMClient
+		ctx  *config.Context
+		conn Connection
 	)
 
 	switch requiredProduct(cmd) {
 	case config.ProductPBS:
-		pc, ctx, err = BuildContextPBSClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+		pc, ctx, conn, err = BuildContextPBSClientConn(cmd, cfg, pf.config, pf.context, ov, isTTY)
 	case config.ProductPDM:
-		dc, ctx, err = BuildContextPDMClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+		dc, ctx, conn, err = BuildContextPDMClientConn(cmd, cfg, pf.config, pf.context, ov, isTTY)
 	case ProductFromContext:
 		var clients Clients
-		clients, ctx, err = BuildContextAnyClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+		clients, ctx, conn, err = BuildContextAnyClientConn(cmd, cfg, pf.config, pf.context, ov, isTTY)
 		ac, pc, dc = clients.API, clients.PBS, clients.PDM
 	case config.ProductPVE:
-		ac, ctx, err = BuildContextClient(cmd, cfg, pf.config, pf.context, pf.insecure, isTTY)
+		ac, ctx, conn, err = BuildContextClientConn(cmd, cfg, pf.config, pf.context, ov, isTTY)
 	default:
 		err = fmt.Errorf("unsupported product %q", requiredProduct(cmd))
 	}
@@ -770,6 +814,7 @@ func persistentPreRunE(cmd *cobra.Command, args []string, pf *persistentFlags) (
 		return logCloser, err
 	}
 	deps.Ctx = ctx
+	deps.Route = conn
 
 	// Apply per-context defaults for --node and --output.
 	// Precedence: explicit flag > context default > existing global default.
@@ -1481,34 +1526,177 @@ func invocationArgs(cmd *cobra.Command, args []string) []string {
 	return redactArgs(args)
 }
 
+// connectionFlagEnv maps each --api-* flag to the PMX_API_* variable that
+// mirrors it. --api-proxy-from-env has no mirror, so it is absent.
+var connectionFlagEnv = map[string]string{
+	flagAPIEndpoint:            envAPIEndpoint,
+	flagAPIJump:                envAPIJump,
+	flagAPIProxy:               envAPIProxy,
+	flagAPICACert:              envAPICACert,
+	flagAPIFingerprint:         envAPIFingerprint,
+	flagAPIConnectTimeout:      envAPIConnectTimeout,
+	flagAPITLSHandshakeTimeout: envAPITLSHandshakeTimeout,
+	flagAPIRequestTimeout:      envAPIRequestTimeout,
+}
+
 // invocationTargetAttrs returns the audit attributes naming what an
-// invocation was pointed at: the host, its product, and the authenticated
-// user. The context name alone does not answer "which machine did this
-// mutation hit" — contexts get renamed, repointed at a different host, and
-// copied between machines, so a log read months later cannot resolve one back
-// to a target.
+// invocation was pointed at: the effective host and port, the bastion and
+// the proxy host the connection goes through, the stored context's product
+// and authenticated user, and which connection overrides were set. The
+// context name alone does not answer "which machine did this mutation hit" —
+// contexts get renamed, repointed at a different host, and copied between
+// machines, and an --api-endpoint or a PMX_API_* variable can send one
+// invocation somewhere its context does not name, so a log read months
+// later cannot resolve one back to a target.
 //
-// Resolution is config-only (no network, no secret lookup), and a context that
-// does not resolve simply contributes nothing: enriching an audit record must
-// never be able to fail a command. The secret itself is never recorded.
-func invocationTargetAttrs(cfg *config.Config, name string) []any {
+// It reads the stored context straight from cfg and never writes to it. It
+// resolves the connection with OverridesFromCommand and ResolveConnection,
+// both of which are pure, so it touches no network, reads no keychain, and
+// resolves no secret, not even a proxy password. Enriching an audit record
+// must never be able to fail a command, so it ignores both errors. An
+// override that does not parse counts as no override here, because the
+// command itself fails on it before it builds a client, and a connection
+// that does not resolve falls back to the stored endpoint with its defaults
+// applied. A context that does not exist contributes nothing.
+//
+// No secret is recorded. The overrides attribute names each override's flag
+// and whether a flag or the environment set it, never its value. The proxy
+// is recorded as proxy_host alone, taken from the effective proxy's raw
+// string: it is the host and port of the parsed URL, which never includes
+// userinfo, and it is omitted when the string does not parse or names no
+// host. A bastion chain passes through apiclient.RedactJumpChain, which
+// leaves an accepted chain as written and masks a rejected one.
+func invocationTargetAttrs(cmd *cobra.Command, cfg *config.Config, name string) []any {
 	if cfg == nil || name == "" {
 		return nil
 	}
-	ctx, _, err := config.ResolveContext(cfg, name)
-	if err != nil || ctx == nil {
+
+	stored, ok := cfg.Contexts[name]
+	if !ok || stored == nil {
 		return nil
 	}
 
+	ov, err := OverridesFromCommand(cmd)
+	if err != nil {
+		ov = ConnectionOverrides{}
+	}
+
+	var (
+		host string
+		port int
+	)
+
+	if conn, err := ResolveConnection(name, stored, ov); err == nil {
+		host, port = conn.Host, conn.Port
+	} else {
+		defaulted := config.CloneContext(stored)
+		config.ApplyDefaults(defaulted)
+		host, port = defaulted.Host, defaulted.Port
+	}
+
 	attrs := []any{
-		slog.String("host", ctx.Host),
-		slog.Int("port", ctx.Port),
-		slog.String("product", ctx.Product),
+		slog.String("host", host),
+		slog.Int("port", port),
+		slog.String("product", stored.ProductOrDefault()),
 	}
-	if ctx.Auth.Username != "" {
-		attrs = append(attrs, slog.String("user", ctx.Auth.Username))
+
+	if stored.Auth.Username != "" {
+		attrs = append(attrs, slog.String("user", stored.Auth.Username))
 	}
+
+	if jump := effectiveJump(stored, ov); jump != "" {
+		attrs = append(attrs, slog.String("jump", jump))
+	}
+
+	if proxyHost := effectiveProxyHost(stored, ov); proxyHost != "" {
+		attrs = append(attrs, slog.String("proxy_host", proxyHost))
+	}
+
+	if sources := connectionOverrideSources(cmd); len(sources) > 0 {
+		attrs = append(attrs, slog.Any("overrides", sources))
+	}
+
 	return attrs
+}
+
+// effectiveJump returns the bastion chain the resolver picks: the override
+// when one is set, and otherwise the stored ssh.jump. It returns "none" for
+// that literal, which dials direct, "" when neither names a bastion, and any
+// other chain through apiclient.RedactJumpChain, so a chain the resolver
+// accepted is recorded as written and one it rejected is masked. It reads
+// the raw strings rather than the resolved Connection, so a record whose
+// connection did not resolve still names the bastion it was meant to use.
+func effectiveJump(stored *config.Context, ov ConnectionOverrides) string {
+	chain := stored.SSH.Jump
+	if ov.Jump != "" {
+		chain = ov.Jump
+	}
+
+	switch {
+	case chain == connectionNone:
+		return connectionNone
+	case strings.TrimSpace(chain) == "":
+		return ""
+	default:
+		return apiclient.RedactJumpChain(chain)
+	}
+}
+
+// effectiveProxyHost returns the host and port of the proxy the resolver
+// would pick, in its order: an --api-proxy or $PMX_API_PROXY value, "none"
+// from either, the --api-proxy-from-env toggle, and then the stored
+// proxy.url. It returns "" when no proxy applies, when the proxy comes from
+// the process environment and so has no configured string, and whenever
+// redact.ProxyHost finds no host it can trust: when the string does not
+// parse, when it names no host, and when it holds an "@" its userinfo does
+// not account for, because url.Parse then reads the start of the password
+// as the host. It reads only the raw configured string, so it never
+// resolves the proxy password.
+func effectiveProxyHost(stored *config.Context, ov ConnectionOverrides) string {
+	var raw string
+
+	switch {
+	case ov.Proxy == connectionNone:
+		return ""
+	case ov.Proxy != "":
+		raw = ov.Proxy
+	case ov.ProxyFromEnvSet && ov.ProxyFromEnv:
+		return ""
+	default:
+		raw = stored.Proxy.URL
+	}
+
+	return redact.ProxyHost(raw)
+}
+
+// connectionOverrideSources lists every connection override the invocation
+// set, as "<flag>=flag" or "<flag>=env", such as "api-endpoint=flag" or
+// "api-jump=env", in the order the root registers the flags. It follows the
+// precedence OverridesFromCommand applies, where a flag that is changed and
+// not empty wins over its variable and a variable counts only when it is not
+// empty, and it records no value at all. It reads the flags and the
+// variables directly, so an override that fails to parse is still listed.
+func connectionOverrideSources(cmd *cobra.Command) []string {
+	if cmd == nil {
+		return nil
+	}
+
+	var sources []string
+
+	for _, name := range connectionFlagNames {
+		if f := lookupConnectionFlag(cmd, name); f != nil && f.Changed &&
+			(name == flagAPIProxyFromEnv || f.Value.String() != "") {
+			sources = append(sources, name+"=flag")
+
+			continue
+		}
+
+		if env, ok := connectionFlagEnv[name]; ok && os.Getenv(env) != "" {
+			sources = append(sources, name+"=env")
+		}
+	}
+
+	return sources
 }
 
 // logInvocationExit writes the exit audit record matching the invocation
@@ -1527,13 +1715,110 @@ func logInvocationExit(c *cobra.Command, err error) {
 	}
 
 	if err != nil {
-		// The error text routinely quotes the failing request URL, whose
-		// query string carries GET/DELETE parameters — including a
-		// --password on the commands that take one.
-		deps.Log.Error("exit", append(attrs, slog.String("error", redact.QueryParams(err.Error())))...)
+		deps.Log.Error("exit", append(attrs, slog.String("error", redactErrorText(deps, err)))...)
 		return
 	}
 	deps.Log.Info("exit", attrs...)
+}
+
+// redactErrorText returns err's text with the credentials an error can
+// quote masked. The text routinely quotes the failing request URL, whose
+// query string carries GET/DELETE parameters, including a --password on the
+// commands that take one, and a transport failure can quote a proxy URL
+// whole, userinfo and all, so both redact.QueryParams and redact.URLUserinfo
+// apply. Before either, every proxy URL this invocation was configured with
+// is replaced wherever it appears by its redact.ProxyURL form, which masks
+// the one shape the free-text mask has to leave alone: an http proxy URL
+// whose password is digits followed by "/", "?", or "#" reads exactly like
+// an API URL with a user ID in its path. The exit record and the terminal
+// get the same text. deps may be nil.
+func redactErrorText(deps *Deps, err error) string {
+	text := err.Error()
+
+	for _, raw := range configuredProxyURLs(deps) {
+		if masked := redact.ProxyURL(raw); masked != raw {
+			text = strings.ReplaceAll(text, raw, masked)
+		}
+	}
+
+	return redact.URLUserinfo(redact.QueryParams(text))
+}
+
+// configuredProxyURLs returns every proxy URL string this invocation could
+// have been given: the selected context's stored proxy.url, the parsed
+// --api-proxy or $PMX_API_PROXY override, and the raw $PMX_API_PROXY value,
+// which is still worth masking when the override failed to parse. Empty
+// values and "none" are left out.
+func configuredProxyURLs(deps *Deps) []string {
+	var raws []string
+
+	add := func(raw string) {
+		if raw != "" && raw != connectionNone && !slices.Contains(raws, raw) {
+			raws = append(raws, raw)
+		}
+	}
+
+	if deps != nil && deps.Cfg != nil {
+		name := deps.CtxName
+		if name == "" {
+			name = deps.Cfg.CurrentContext
+		}
+
+		if stored := deps.Cfg.Contexts[name]; stored != nil {
+			add(stored.Proxy.URL)
+		}
+	}
+
+	if ov, err := deps.ConnectionOverrides(); err == nil {
+		add(ov.Proxy)
+	}
+
+	add(os.Getenv(envAPIProxy))
+
+	return raws
+}
+
+// closeKitClients closes every client persistentPreRunE built for c, through
+// the Close of the kit client each wrapper holds as Raw. Close releases the
+// transport's idle connections, which ends a parked connection through an
+// ssh jump child or a proxy with the command rather than with the process,
+// and it stops the kit's background cache cleanup. A failure is recorded in
+// the invocation log, because the command has already finished and its
+// result must not change.
+func closeKitClients(c *cobra.Command) {
+	deps := peekDeps(c)
+	if deps == nil {
+		return
+	}
+
+	var raws []productClient
+
+	if deps.API != nil && deps.API.Raw != nil {
+		raws = append(raws, productClient{config.ProductPVE, deps.API.Raw})
+	}
+
+	if deps.PBS != nil && deps.PBS.Raw != nil {
+		raws = append(raws, productClient{config.ProductPBS, deps.PBS.Raw})
+	}
+
+	if deps.PDM != nil && deps.PDM.Raw != nil {
+		raws = append(raws, productClient{config.ProductPDM, deps.PDM.Raw})
+	}
+
+	for _, r := range raws {
+		if err := r.client.Close(); err != nil && deps.Log != nil {
+			deps.Log.Warn("close API client",
+				slog.String("product", r.product),
+				slog.String("error", redactErrorText(deps, err)))
+		}
+	}
+}
+
+// productClient pairs a kit client with the product it serves, so a failed
+// close names which one it was.
+type productClient struct {
+	product string
+	client  pve.Client
 }
 
 // maybeAutoPrune runs the best-effort daily log prune when the loaded config
@@ -1774,6 +2059,10 @@ func redeliverSignal(sig os.Signal) {
 	}
 }
 
+// shutdownJumps reaps every ssh jump child at the end of Execute. It is a
+// variable so a test can observe when the teardown reaches this step.
+var shutdownJumps = apiclient.ShutdownJumps
+
 // Execute builds the root command, wires the provided group factories, and
 // executes cobra. It returns the first error encountered, or nil on success.
 //
@@ -1812,55 +2101,89 @@ func Execute(persona string, factories []GroupFactory) error {
 	logInvocationExit(c, err)
 	maybeAutoPrune(c)
 
-	// Reap every ssh jump child before pmx exits: a background goroutine
+	// Close every client the root built first, so their idle connections,
+	// including one parked on an ssh jump child, end with the command. Then
+	// reap every ssh jump child before pmx exits: a background goroutine
 	// dies with the process, and main calls os.Exit as soon as this returns.
-	// It runs after the exit record, so the audited duration excludes the
+	// Both run after the exit record, so the audited duration excludes the
 	// teardown, and before the error is printed, on both paths.
-	apiclient.ShutdownJumps(jumpShutdownBound)
+	closeKitClients(c)
+	shutdownJumps(jumpShutdownBound)
 
 	if err != nil {
-		// A child process (ssh, rsync) that had our real stdout/stderr wired
-		// to it directly (RunInteractive, or a Run call passed
-		// cmd.OutOrStdout()/cmd.ErrOrStderr()) has already written its own
-		// diagnostics to stderr; printing the wrapped *exec.ExitError here
-		// too would duplicate that output with a redundant second line.
-		//
-		// But a Run call that captured the child's stdout/stderr into its
-		// own in-memory buffers instead of passing them through (e.g.
-		// internal/cli/lab.runGuestSSH) has NOT shown the user anything —
-		// suppressing it here under the same assumption would silently
-		// swallow the entire error, captured stderr and all. Such callers
-		// mark their returned error with exec.CapturedError specifically so
-		// this path knows to print it after all, in full, rather than
-		// assume a captured-but-never-displayed diagnostic was already
-		// shown (see TestExecute_CapturedGuestSSHExitErrorIsPrinted for the
-		// exact silent-255-with-zero-output failure this fixes).
-		var captured *exec.CapturedError
-		isCaptured := errors.As(err, &captured)
-
-		var exitErr *exec.ExitError
-		if isCaptured || !errors.As(err, &exitErr) {
-			// Redacted for the same reason as the exit record above:
-			// terminal scrollback and CI job logs are no safer a home for a
-			// credential than the log file is.
-			fmt.Fprintln(os.Stderr, redact.QueryParams(err.Error()))
-			if hint := AuthHint(err); hint != "" {
-				fmt.Fprintln(os.Stderr, hint)
-			}
-			if deps := peekDeps(c); deps != nil && deps.Ctx != nil {
-				// Port convention is the more specific diagnosis ("right host,
-				// wrong product port"), so it wins; the unreachable hint covers
-				// every other connection failure.
-				if hint := PortConventionHint(err, deps.Ctx, deps.CtxName, CommandPrefix(c)); hint != "" {
-					fmt.Fprintln(os.Stderr, hint)
-				} else if hint := UnreachableHint(err, deps.Ctx, deps.CtxName, CommandPrefix(c)); hint != "" {
-					fmt.Fprintln(os.Stderr, hint)
-				}
-			}
-		}
+		printCommandError(c, err)
 		return err
 	}
 	return nil
+}
+
+// printCommandError writes a failed command's error to standard error,
+// followed by any hint that explains it.
+//
+// A child process (ssh, rsync) that had our real stdout/stderr wired to it
+// directly (RunInteractive, or a Run call passed cmd.OutOrStdout() and
+// cmd.ErrOrStderr()) has already written its own diagnostics to stderr;
+// printing the wrapped *exec.ExitError here too would duplicate that output
+// with a redundant second line.
+//
+// But a Run call that captured the child's stdout/stderr into its own
+// in-memory buffers instead of passing them through (e.g.
+// internal/cli/lab.runGuestSSH) has NOT shown the user anything —
+// suppressing it here under the same assumption would silently swallow the
+// entire error, captured stderr and all. Such callers mark their returned
+// error with exec.CapturedError specifically so this path knows to print it
+// after all, in full, rather than assume a captured-but-never-displayed
+// diagnostic was already shown (see
+// TestExecute_CapturedGuestSSHExitErrorIsPrinted for the exact
+// silent-255-with-zero-output failure this fixes).
+//
+// Before it prints, it passes the error through Deps.Route.WrapPinMismatch,
+// so a pinned context reached through an endpoint override explains the
+// failure in terms of the override. When the command's context was already
+// cancelled, the invocation was interrupted, so it prints "interrupted"
+// after the error and neither connection hint, because a signal that lands
+// during a dial would otherwise be diagnosed as an unreachable host or
+// bastion.
+func printCommandError(c *cobra.Command, err error) {
+	var captured *exec.CapturedError
+	isCaptured := errors.As(err, &captured)
+
+	var exitErr *exec.ExitError
+	if !isCaptured && errors.As(err, &exitErr) {
+		return
+	}
+
+	deps := peekDeps(c)
+	if deps != nil {
+		err = deps.Route.WrapPinMismatch(err)
+	}
+
+	// Redacted for the same reason as the exit record: terminal scrollback
+	// and CI job logs are no safer a home for a credential than the log file
+	// is.
+	fmt.Fprintln(os.Stderr, redactErrorText(deps, err))
+	if hint := AuthHint(err); hint != "" {
+		fmt.Fprintln(os.Stderr, hint)
+	}
+
+	if c != nil && c.Context() != nil && c.Context().Err() != nil {
+		fmt.Fprintln(os.Stderr, "interrupted")
+		return
+	}
+
+	if deps == nil || deps.Ctx == nil {
+		return
+	}
+
+	// Port convention is the more specific diagnosis ("right host, wrong
+	// product port"), so it wins; the unreachable hint covers every other
+	// connection failure.
+	prefix := CommandPrefix(c)
+	if hint := PortConventionHint(err, deps.Ctx, deps.Route, deps.CtxName, prefix); hint != "" {
+		fmt.Fprintln(os.Stderr, hint)
+	} else if hint := UnreachableHint(err, deps.Ctx, deps.Route, deps.CtxName, prefix); hint != "" {
+		fmt.Fprintln(os.Stderr, hint)
+	}
 }
 
 // Main is the entry point for cmd/pmx/main.go.

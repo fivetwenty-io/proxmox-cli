@@ -65,7 +65,10 @@ func newDestroyCmd() *cobra.Command {
 			"remove the lab's resource pool and storage definition as well, or --dry-run to " +
 			"preview what would be destroyed without mutating anything or prompting.\n\n" +
 			"Pass --purge-dataset to also destroy the lab's ZFS dataset on the context host " +
-			"(implies --purge; irreversible). Labs running Ceph should tear down the storage " +
+			"(implies --purge; irreversible). It refuses to run when --api-endpoint or " +
+			"$PMX_API_ENDPOINT points the invocation's API at a different host than the context " +
+			"stores, since the dataset is destroyed over ssh to the stored host. " +
+			"Labs running Ceph should tear down the storage " +
 			"layer first (see the lab repo's Ceph teardown script); the OSD data is destroyed " +
 			"with the VMs either way.",
 		Example: `  pmx lab destroy wayne --yes
@@ -83,6 +86,14 @@ func newDestroyCmd() *cobra.Command {
 			if purgeDataset && (deps.Ctx == nil || deps.Ctx.Host == "") {
 				return errors.New(
 					"lab destroy --purge-dataset: a context host is required; select an active pmx context with --context/-c")
+			}
+			// The dataset is destroyed over ssh to the stored host, so an
+			// endpoint override that aims the API elsewhere leaves the target
+			// ambiguous. Refuse before any VM is touched.
+			if purgeDataset {
+				if err := deps.RefuseOverriddenSSHHost("lab destroy --purge-dataset"); err != nil {
+					return err
+				}
 			}
 
 			lab, err := resolveLabForMutate(cmd, name)

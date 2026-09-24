@@ -1,12 +1,19 @@
 package lab
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +23,7 @@ import (
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/exec"
@@ -1205,3 +1213,160 @@ func TestSyncLabContext_ReuseFailuresDoNotClaimRotation(t *testing.T) {
 	assert.NotContains(t, err.Error(), "already removed",
 		"nothing was rotated, so the error must not say a token was removed")
 }
+
+// versionListener starts an HTTP listener that answers GET /version the way
+// Proxmox VE does and counts every request it receives, and returns it with
+// its loopback host and port.
+func versionListener(t *testing.T) (*httptest.Server, *atomic.Int64, string, int) {
+	t.Helper()
+
+	var hits atomic.Int64
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"version":"8.2.4","release":"8.2","repoid":"faa83925"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	host, portStr, err := net.SplitHostPort(srv.Listener.Addr().String())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+
+	return srv, &hits, host, port
+}
+
+// TestLabContextSync_IgnoresInvocationOverrides proves that the reuse probe of
+// `lab context sync` dials the lab context's own stored endpoint even when
+// $PMX_API_ENDPOINT is exported and the invocation's own overrides carry it.
+// An override meant for the outer context must never redirect the probe,
+// since a probe that failed against the wrong host would rotate a lab token
+// that is still valid.
+func TestLabContextSync_IgnoresInvocationOverrides(t *testing.T) {
+	realProbe := labProbeContextVersion
+
+	_, ownHits, ownHost, ownPort := versionListener(t)
+	_, decoyHits, decoyHost, decoyPort := versionListener(t)
+
+	t.Setenv("PMX_API_ENDPOINT", net.JoinHostPort(decoyHost, strconv.Itoa(decoyPort)))
+	t.Setenv("PMX_TEST_LAB_SYNC_SECRET", "11111111-2222-3333-4444-555555555555")
+
+	fp := "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+	fake := exec.Fake(
+		exec.FakeResponse{}, // ensure user
+		exec.FakeResponse{}, // ensure ACL
+		exec.FakeResponse{Stdout: "sha256 Fingerprint=" + fp + "\n"}, // fingerprint
+		exec.FakeResponse{Stdout: "lab-demo-0\n"},                    // hostname
+	)
+	cmd, deps := syncTestDeps(t, fake)
+
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+
+	// The invocation's own overrides carry the exported endpoint, exactly as
+	// persistentPreRunE would hand them to a command that dials.
+	deps.Conn = func() (cli.ConnectionOverrides, error) { return cli.OverridesFromCommand(cmd) }
+	ov, err := deps.ConnectionOverrides()
+	require.NoError(t, err)
+	require.Equal(t, "$PMX_API_ENDPOINT", ov.EndpointSource, "the fixture must export a live override")
+
+	deps.Cfg.Contexts["lab-demo"] = &config.Context{
+		Host: ownHost, Port: ownPort, Protocol: "http", Product: config.ProductPVE,
+		Auth: config.AuthBlock{Type: "token", Username: labCtxUser, TokenID: labCtxTokenName,
+			Secret: "${PMX_TEST_LAB_SYNC_SECRET}"},
+	}
+
+	// The reuse probe runs the production code against the stored context.
+	// The end-to-end probe after the upsert targets the lab's node address,
+	// which no test can reach, so it is stubbed.
+	probeCalls := 0
+	labProbeContextVersion = func(c *cobra.Command, d *cli.Deps, name string) error {
+		probeCalls++
+		if probeCalls == 1 {
+			return realProbe(c, d, name)
+		}
+
+		return nil
+	}
+
+	lab := multiNodeTestLab("demo", 1, "never")
+	lab.Name = "demo"
+
+	res, err := syncLabContext(cmd, deps, lab, labSyncOptions{WaitSSH: false})
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(1), ownHits.Load(), "the reuse probe must reach the lab context's own host")
+	assert.Zero(t, decoyHits.Load(), "the reuse probe must ignore $PMX_API_ENDPOINT")
+	assert.False(t, res.Rotated, "a probe that reached the lab's own host must reuse the stored secret")
+	assert.False(t, mintedAToken(fake))
+	assert.NotContains(t, stderr.String(), "note:", "no override applies to the lab probe, so none is announced")
+}
+
+// timeoutError is a net.Error whose Timeout reports true, the shape a hung
+// proxy or bastion takes when the transport gives up on it.
+type timeoutError struct{}
+
+func (timeoutError) Error() string   { return "i/o timeout" }
+func (timeoutError) Timeout() bool   { return true }
+func (timeoutError) Temporary() bool { return true }
+
+// TestLabProbeTransportFailed_ProxyAndJumpErrors proves that a dead or hung
+// proxy or bastion counts as a transport failure, so the reuse path never
+// rotates a lab token because the route to the lab failed, while an
+// authentication rejection and an unclassified error still do.
+func TestLabProbeTransportFailed_ProxyAndJumpErrors(t *testing.T) {
+	proxyRefused := &url.Error{
+		Op: "Get", URL: "https://10.10.1.10:8006/api2/json/version",
+		Err: &net.OpError{Op: "proxyconnect", Net: "tcp", Err: errors.New("connect: connection refused")},
+	}
+	jumpFailed := &apiclient.JumpError{
+		Chain: "admin@bastion.example.com", Addr: "10.10.1.10:8006", ExitStatus: 255,
+	}
+	jumpHung := &apiclient.JumpError{
+		Chain: "admin@bastion.example.com", Addr: "10.10.1.10:8006",
+		TimedOut: true, Timeout: 3 * time.Second, ExitStatus: -1,
+	}
+
+	transport := []struct {
+		name string
+		err  error
+	}{
+		{"a proxy that refused the connection", fmt.Errorf("probe: %w", proxyRefused)},
+		{"a bastion failure inside the dial error", fmt.Errorf("probe: %w",
+			&net.OpError{Op: "dial", Net: "tcp", Err: jumpFailed})},
+		{"a bastion failure on its own", fmt.Errorf("probe: %w", jumpFailed)},
+		{"a bastion that never answered", jumpHung},
+		{"a hung proxy", fmt.Errorf("probe: %w", &url.Error{Op: "Get", URL: "https://h", Err: timeoutError{}})},
+		{"a typed connection error", &pveerrors.ConnectionError{Host: "10.10.1.10", Port: 8006, Message: "refused"}},
+	}
+
+	for _, tc := range transport {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.True(t, labProbeTransportFailed(tc.err), "%v", tc.err)
+		})
+	}
+
+	notTransport := []struct {
+		name string
+		err  error
+	}{
+		{"no error", nil},
+		{"an authentication rejection", pveerrors.ErrUnauthorized},
+		{"an unclassified error", errors.New("boom")},
+		{"a network error that is not a timeout", fmt.Errorf("probe: %w", notTimeoutError{})},
+	}
+
+	for _, tc := range notTransport {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.False(t, labProbeTransportFailed(tc.err), "%v", tc.err)
+		})
+	}
+}
+
+// notTimeoutError is a net.Error whose Timeout reports false.
+type notTimeoutError struct{}
+
+func (notTimeoutError) Error() string   { return "network is down" }
+func (notTimeoutError) Timeout() bool   { return false }
+func (notTimeoutError) Temporary() bool { return false }

@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -43,7 +44,9 @@ func SSH(deps *cli.Deps) *cobra.Command {
 			"What the node argument means depends on the product. Against a PVE context it " +
 			"is required, and resolves to that node's cluster management address. Against a " +
 			"PBS or PDM context there is only one host, so no node argument is accepted at " +
-			"all and the first token is read as an ssh option or remote command.\n\n" +
+			"all and the first token is read as an ssh option or remote command. That host is " +
+			"the one the context stores, so a PBS or PDM connection is refused when " +
+			"--api-endpoint or $PMX_API_ENDPOINT points the API at a different host.\n\n" +
 			"The connection flags below (-l, -i, -p, -J, -A, --no-strict) must come before the " +
 			"node.\n\n" +
 			"Everything after the node goes to ssh verbatim. Options such as " +
@@ -99,7 +102,8 @@ func SSH(deps *cli.Deps) *cobra.Command {
 //
 // Target resolution branches on the active context's product: a PBS or PDM
 // context connects directly to deps.Ctx.Host, ignoring node (callers pass ""
-// in that case) and performing no cluster lookup; a PVE (or empty-product)
+// in that case) and performing no cluster lookup, and it refuses to connect
+// when an endpoint override aimed the API at another host; a PVE (or empty-product)
 // context requires a non-empty node and resolves it to its cluster
 // management address via nodeaddr.Resolve; any other product is rejected.
 func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, rest []string) error {
@@ -113,6 +117,10 @@ func RunSSH(cmd *cobra.Command, deps *cli.Deps, f *sshcmd.Flags, node string, re
 	var host, target string
 	switch product {
 	case config.ProductPBS, config.ProductPDM:
+		if err := deps.RefuseOverriddenSSHHost("pmx ssh"); err != nil {
+			return err
+		}
+
 		host = deps.Ctx.Host
 		target = host
 	case config.ProductPVE, "":
@@ -179,8 +187,8 @@ type clusterStatusEntry struct {
 
 // completeNodeNames completes PVE node names for the first positional
 // argument of `pmx ssh` only, querying /cluster/status via a client built at
-// completion time from cmd's already-parsed --config/--context/--insecure
-// flag values.
+// completion time from cmd's already-parsed --config, --context, --insecure,
+// and --api-* flag values and the PMX_API_* variables.
 //
 // The deps parameter captured by the SSH factory at command-tree
 // construction time is deliberately NOT used here: shell completion
@@ -189,11 +197,11 @@ type clusterStatusEntry struct {
 // client) — using it would make completion permanently dead. Cobra DOES
 // parse flags before calling ValidArgsFunction on every platform, so reading
 // them directly off cmd and building a fresh client via
-// cli.BuildContextClient (the same helper persistentPreRunE uses) gives
+// cli.BuildContextClientConn (the builder persistentPreRunE uses) gives
 // completion a real, independently-constructed client instead.
 //
 // It degrades silently — no completions, no file completion fallback, no
-// printed error — on ANY failure (flag read, config load, context
+// printed error, note, or warning — on ANY failure (flag read, config load, context
 // resolution, client construction, or the network request itself, which is
 // bounded by completeNodeNamesTimeout), since a stale, unreachable, or
 // misconfigured node list must never surface as a completion error or hang.
@@ -223,13 +231,36 @@ func completeNodeNames(cmd *cobra.Command, _ *cli.Deps, args []string) ([]string
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
+	// The completion targets the invocation's own context, so it takes the
+	// invocation's full connection overrides, which include the root's
+	// --insecure. A value that does not parse, such as a malformed
+	// $PMX_API_ENDPOINT left in the environment, counts as no override at
+	// all, so a completion request never prints an error; the root's
+	// --insecure still applies.
+	ov, err := cli.OverridesFromCommand(cmd)
+	if err != nil {
+		ov = cli.ConnectionOverrides{Insecure: insecureFlag}
+	}
+
+	// Building the client can print an override note and the insecure
+	// warning to the command's standard error. A completion request prints
+	// nothing but its candidates and cobra's own directive trace, which
+	// cobra writes through the __complete command, so both are discarded
+	// for the build and the request. The command's writer is reset to
+	// inherit from its parent afterwards, as it did before.
+	cmd.SetErr(io.Discard)
+	defer cmd.SetErr(nil)
+
 	// isTTY always false: completion must never block waiting on a TOFU
 	// trust-decision prompt, regardless of whether cmd's stdin happens to be
 	// a real terminal.
-	ac, _, err := cli.BuildContextClient(cmd, cfg, configPath, contextFlag, insecureFlag, func() bool { return false })
+	ac, _, _, err := cli.BuildContextClientConn(cmd, cfg, configPath, contextFlag, ov, func() bool { return false })
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	// Release the idle connection when completion ends. A close failure has
+	// nowhere to go, since completion prints nothing but its candidates.
+	defer func() { _ = ac.Raw.Close() }()
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), completeNodeNamesTimeout)
 	defer cancel()
