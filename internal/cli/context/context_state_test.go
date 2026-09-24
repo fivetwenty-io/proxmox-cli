@@ -3,6 +3,7 @@ package context
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,12 +14,14 @@ import (
 	"strings"
 	"testing"
 
+	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 )
 
 // ---------------------------------------------------------------------------
@@ -1052,4 +1055,597 @@ func TestContextVerbs_ActOnResolvedContextNotCurrent(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, out, "current.example.com")
 	})
+}
+
+// ---------------------------------------------------------------------------
+// show/ls — ssh, jump, proxy, timeout, and CA bundle rows
+// ---------------------------------------------------------------------------
+
+// allShowFormats runs "show" against deps once per output format and hands
+// the rendered text to check, so a test covers table, JSON, and YAML with
+// one assertion body.
+func allShowFormats(t *testing.T, path string, cfg *config.Config, args []string, check func(t *testing.T, format output.Format, out string)) {
+	t.Helper()
+	for _, format := range []output.Format{output.FormatTable, output.FormatJSON, output.FormatYAML} {
+		deps := makeDeps(t, path, cfg)
+		deps.Format = format
+		out, err := run(t, deps, "", args...)
+		require.NoError(t, err, "format %s", format)
+		check(t, format, out)
+	}
+}
+
+// fullConnectionContext returns a context with every ssh, proxy, and timeout
+// field populated, so a rendering test can assert on a known, non-default
+// value for each of the twelve rows.
+func fullConnectionContext() *config.Context {
+	fromEnv := true
+	return &config.Context{
+		Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t1", Secret: "${SECRET}"},
+		TLS:  config.TLSBlock{CACert: "/etc/pmx/ca.pem"},
+		SSH: config.SSHBlock{
+			User:     "admin",
+			Port:     2222,
+			Identity: "/home/op/.ssh/id_ed25519",
+			Jump:     "admin@bastion.example.com",
+		},
+		Proxy: config.ProxyBlock{
+			URL:      "socks5h://proxy.example.com:1080",
+			Username: "proxyuser",
+			Password: "hunter2literal",
+			FromEnv:  &fromEnv,
+		},
+		Timeout: config.TimeoutBlock{
+			Connect:      "2s",
+			TLSHandshake: "8s",
+			Request:      "45s",
+		},
+	}
+}
+
+// unparseableProxyURLs are the three proxy.url shapes url.Parse rejects (see
+// redact.ProxyURL), each carrying its password in a different unparseable
+// position. show and ls share this fixture so both redact the same shapes.
+var unparseableProxyURLs = []struct {
+	name   string
+	url    string
+	secret string
+}{
+	{name: "unescaped slash in password", url: "socks5://pmx:s3cr3t/x@proxy:1080", secret: "s3cr3t"},
+	{name: "invalid percent-escape in password", url: "socks5://pmx:s3%zzt@proxy:1080", secret: "s3%zzt"},
+	{name: "unterminated ipv6 literal", url: "socks5://u:s3cret@[::1", secret: "s3cret"},
+}
+
+// TestContextShow_RendersConnectionFields asserts all twelve connection rows
+// (ssh user/port/identity, jump, proxy url/username/password/from-env, the
+// three timeouts, and the CA bundle) render with the stored value, in table,
+// JSON, and YAML form, and that the literal proxy password never appears in
+// any of them.
+func TestContextShow_RendersConnectionFields(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": fullConnectionContext()},
+	}
+	path, cfg := makeConfig(t, cfg)
+
+	allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+		t.Helper()
+		require.NotContains(t, out, "hunter2literal", "format %s must never carry the literal proxy password", format)
+
+		if format == output.FormatTable {
+			for _, want := range []string{
+				"SSH USER", "admin",
+				"SSH PORT", "2222",
+				"SSH IDENTITY", "/home/op/.ssh/id_ed25519",
+				"JUMP", "admin@bastion.example.com",
+				"PROXY", "socks5h://proxy.example.com:1080",
+				"PROXY USERNAME", "proxyuser",
+				"PROXY PASSWORD", "***",
+				"PROXY FROM ENV", "true",
+				"TIMEOUT CONNECT", "2s",
+				"TIMEOUT TLS HANDSHAKE", "8s",
+				"TIMEOUT REQUEST", "45s",
+				"CA CERT", "/etc/pmx/ca.pem",
+			} {
+				require.Contains(t, out, want)
+			}
+			return
+		}
+
+		var got map[string]any
+		switch format {
+		case output.FormatJSON:
+			require.NoError(t, json.Unmarshal([]byte(out), &got))
+		case output.FormatYAML:
+			require.NoError(t, yaml.Unmarshal([]byte(out), &got))
+		}
+		require.Equal(t, "admin", got["ssh_user"])
+		// JSON decodes a number into float64 and YAML (goccy) into uint64, so
+		// the numeric comparison uses EqualValues rather than pinning a type.
+		require.EqualValues(t, 2222, got["ssh_port"])
+		require.Equal(t, "/home/op/.ssh/id_ed25519", got["ssh_identity"])
+		require.Equal(t, "admin@bastion.example.com", got["jump"])
+		require.Equal(t, "socks5h://proxy.example.com:1080", got["proxy"])
+		require.Equal(t, "proxyuser", got["proxy_username"])
+		require.Equal(t, "***", got["proxy_password"])
+		require.Equal(t, true, got["proxy_from_env"])
+		require.Equal(t, "2s", got["timeout_connect"])
+		require.Equal(t, "8s", got["timeout_tls_handshake"])
+		require.Equal(t, "45s", got["timeout_request"])
+		require.Equal(t, "/etc/pmx/ca.pem", got["ca_cert"])
+	})
+}
+
+// TestContextShow_RedactsProxyPassword asserts a proxy password never
+// survives to output, whether it is a syntactically-invalid literal such as
+// "$uper$ecret" or embedded in one of the three proxy.url shapes url.Parse
+// rejects, and that a ${VAR} or keychain: reference renders verbatim
+// instead, since a reference carries no secret of its own.
+func TestContextShow_RedactsProxyPassword(t *testing.T) {
+	t.Run("dollar-prefixed literal is masked", func(t *testing.T) {
+		cfg := &config.Config{
+			CurrentContext: "lab",
+			Contexts: map[string]*config.Context{
+				"lab": {
+					Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+					Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+					Proxy: config.ProxyBlock{URL: "socks5h://proxy.example.com:1080", Password: "$uper$ecret"},
+				},
+			},
+		}
+		path, cfg := makeConfig(t, cfg)
+
+		allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+			t.Helper()
+			require.Contains(t, out, "***")
+			require.NotContains(t, out, "$uper$ecret")
+		})
+	})
+
+	// requireProxyPasswordVerbatim runs show against a proxy.password of ref
+	// in all three formats and asserts the table cell and the decoded
+	// proxy_password field equal ref exactly, catching a guard that masks a
+	// reference it should show as-is.
+	requireProxyPasswordVerbatim := func(t *testing.T, ref string) {
+		t.Helper()
+		cfg := &config.Config{
+			CurrentContext: "lab",
+			Contexts: map[string]*config.Context{
+				"lab": {
+					Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+					Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+					Proxy: config.ProxyBlock{URL: "socks5h://proxy.example.com:1080", Password: ref},
+				},
+			},
+		}
+		path, cfg := makeConfig(t, cfg)
+
+		allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+			t.Helper()
+			if format == output.FormatTable {
+				require.Contains(t, out, ref)
+				return
+			}
+			var got map[string]any
+			switch format {
+			case output.FormatJSON:
+				require.NoError(t, json.Unmarshal([]byte(out), &got))
+			case output.FormatYAML:
+				require.NoError(t, yaml.Unmarshal([]byte(out), &got))
+			}
+			require.Equal(t, ref, got["proxy_password"], "format %s must show %q verbatim", format, ref)
+		})
+	}
+
+	t.Run("dollar-brace reference is shown verbatim, variable unset", func(t *testing.T) {
+		const varName = "PMX_TEST_PROXY_PW_UNSET"
+		t.Setenv(varName, "")
+		require.NoError(t, os.Unsetenv(varName))
+		requireProxyPasswordVerbatim(t, "${"+varName+"}")
+	})
+
+	t.Run("dollar-brace reference is shown verbatim, variable set", func(t *testing.T) {
+		const varName = "PMX_TEST_PROXY_PW_SET"
+		t.Setenv(varName, "irrelevant-value")
+		requireProxyPasswordVerbatim(t, "${"+varName+"}")
+	})
+
+	t.Run("keychain reference is shown verbatim", func(t *testing.T) {
+		requireProxyPasswordVerbatim(t, "keychain:pmx/proxy")
+	})
+
+	for _, tc := range unparseableProxyURLs {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				CurrentContext: "lab",
+				Contexts: map[string]*config.Context{
+					"lab": {
+						Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+						Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+						Proxy: config.ProxyBlock{URL: tc.url},
+					},
+				},
+			}
+			path, cfg := makeConfig(t, cfg)
+			wantProxy := redact.ProxyURL(tc.url)
+			require.Contains(t, wantProxy, redact.Placeholder, "test fixture sanity: url must actually mask")
+
+			allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+				t.Helper()
+				require.NotContains(t, out, tc.secret)
+
+				// JSON HTML-escapes "<" and ">", so the raw text check above
+				// (which the secret itself must pass regardless of escaping)
+				// is paired with a decoded-field check for the placeholder.
+				if format == output.FormatTable {
+					require.Contains(t, out, wantProxy)
+					return
+				}
+				var got map[string]any
+				switch format {
+				case output.FormatJSON:
+					require.NoError(t, json.Unmarshal([]byte(out), &got))
+				case output.FormatYAML:
+					require.NoError(t, yaml.Unmarshal([]byte(out), &got))
+				}
+				require.Equal(t, wantProxy, got["proxy"])
+			})
+		})
+	}
+}
+
+// TestContextShow_RedactsProxyURLCredentials asserts a proxy.url that
+// url.Parse accepts, and that carries userinfo, never prints its password in
+// show output, in table, JSON, or YAML form, and that the redacted value
+// equals redact.ProxyURL(url) exactly.
+func TestContextShow_RedactsProxyURLCredentials(t *testing.T) {
+	const rawURL = "socks5://proxyuser:sw0rdfish@proxy.example.com:1080"
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				Proxy: config.ProxyBlock{URL: rawURL},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	wantProxy := redact.ProxyURL(rawURL)
+	require.Contains(t, wantProxy, redact.Placeholder, "test fixture sanity: url must actually mask")
+
+	allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+		t.Helper()
+		require.NotContains(t, out, "sw0rdfish", "format %s must never carry the proxy url password", format)
+
+		if format == output.FormatTable {
+			require.Contains(t, out, wantProxy)
+			return
+		}
+		var got map[string]any
+		switch format {
+		case output.FormatJSON:
+			require.NoError(t, json.Unmarshal([]byte(out), &got))
+		case output.FormatYAML:
+			require.NoError(t, yaml.Unmarshal([]byte(out), &got))
+		}
+		require.Equal(t, wantProxy, got["proxy"], "format %s must carry the redacted proxy url", format)
+	})
+}
+
+// TestContextShow_MasksUnsetDollarName asserts a $NAME proxy password
+// classifies as a reference (config.IsSecretReference) but renders as "***"
+// while NAME is unset in the environment, because config.ResolveSecret would
+// fall through and use it as a literal, and renders verbatim once NAME is
+// set, because it would then resolve as the referenced variable's value.
+func TestContextShow_MasksUnsetDollarName(t *testing.T) {
+	const varName = "PMX_TEST_HUNTER2_VAR"
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				Proxy: config.ProxyBlock{Password: "$" + varName},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+
+	t.Run("unset", func(t *testing.T) {
+		// t.Setenv first, so its cleanup restores whatever the test process had
+		// before this test ran; the immediate Unsetenv then clears it for the
+		// duration of the subtest without leaking the removal past it.
+		t.Setenv(varName, "")
+		require.NoError(t, os.Unsetenv(varName))
+		deps := makeDeps(t, path, cfg)
+		out, err := run(t, deps, "", "show")
+		require.NoError(t, err)
+		require.Contains(t, out, "***")
+		require.NotContains(t, out, "$"+varName)
+	})
+
+	t.Run("set", func(t *testing.T) {
+		t.Setenv(varName, "irrelevant-value")
+		deps := makeDeps(t, path, cfg)
+		out, err := run(t, deps, "", "show")
+		require.NoError(t, err)
+		require.Contains(t, out, "$"+varName)
+	})
+}
+
+// TestContextShow_RendersEffectiveProtocolAndRealm asserts a context that
+// stores neither protocol nor realm renders "https" and "pam" — the values
+// the API connection would use — in all three output formats, whether or
+// not it is the current context, and that rendering never mutates the
+// stored context. It builds a fresh config for every format and asserts the
+// in-memory context right after each run, so a defaults-applied write that
+// only reaches cfg.Contexts (never the file on disk) cannot hide behind a
+// later run's correct read of the config it mutated, or behind a
+// disk-reload check that a purely in-memory write could never fail.
+func TestContextShow_RendersEffectiveProtocolAndRealm(t *testing.T) {
+	bareCtx := func() *config.Context {
+		return &config.Context{
+			Host: "bare.example.com",
+			Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+		}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		current string
+		show    []string
+	}{
+		{name: "current context", current: "bare", show: []string{"show"}},
+		{name: "named, not current", current: "other", show: []string{"show", "bare"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, format := range []output.Format{output.FormatTable, output.FormatJSON, output.FormatYAML} {
+				cfg := &config.Config{
+					CurrentContext: tc.current,
+					Contexts: map[string]*config.Context{
+						"bare":  bareCtx(),
+						"other": bareCtx(),
+					},
+				}
+				path, cfg := makeConfig(t, cfg)
+				deps := makeDeps(t, path, cfg)
+				deps.Format = format
+
+				out, err := run(t, deps, "", tc.show...)
+				require.NoError(t, err, "format %s", format)
+				require.Contains(t, out, "https", "format %s", format)
+				require.Contains(t, out, "pam", "format %s", format)
+
+				// The stored context must stay bare in memory: rendering builds
+				// a defaults-applied clone and must never write it back into
+				// cfg.Contexts.
+				stored := cfg.Contexts["bare"]
+				require.Empty(t, stored.Protocol, "format %s must not mutate the in-memory protocol", format)
+				require.Empty(t, stored.Realm, "format %s must not mutate the in-memory realm", format)
+				require.Zero(t, stored.Port, "format %s must not mutate the in-memory port", format)
+
+				// The stored context is unchanged on disk too: show never saves.
+				reloaded := reloadCfg(t, path)
+				require.Empty(t, reloaded.Contexts["bare"].Protocol, "format %s", format)
+				require.Empty(t, reloaded.Contexts["bare"].Realm, "format %s", format)
+			}
+		})
+	}
+}
+
+// TestContextShow_RendersTimeoutDefaults asserts an unset timeout.connect
+// renders the built-in default marked "(default)", and a stored one renders
+// verbatim with no suffix. It also asserts all three timeout defaults in the
+// decoded JSON and YAML fields, not just the table's "5s (default)"
+// substring, and that an absent from-env key resolves and renders as false.
+func TestContextShow_RendersTimeoutDefaults(t *testing.T) {
+	t.Run("unset renders default", func(t *testing.T) {
+		cfg := &config.Config{
+			CurrentContext: "lab",
+			Contexts: map[string]*config.Context{
+				"lab": {
+					Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+					Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				},
+			},
+		}
+		path, cfg := makeConfig(t, cfg)
+
+		allShowFormats(t, path, cfg, []string{"show"}, func(t *testing.T, format output.Format, out string) {
+			t.Helper()
+			if format == output.FormatTable {
+				require.Contains(t, out, "5s (default)")
+				require.Contains(t, out, "10s (default)")
+				require.Contains(t, out, "30s (default)")
+				require.Contains(t, out, "PROXY FROM ENV")
+				require.Contains(t, out, "false")
+				return
+			}
+			var got map[string]any
+			switch format {
+			case output.FormatJSON:
+				require.NoError(t, json.Unmarshal([]byte(out), &got))
+			case output.FormatYAML:
+				require.NoError(t, yaml.Unmarshal([]byte(out), &got))
+			}
+			require.Equal(t, "5s (default)", got["timeout_connect"], "format %s", format)
+			require.Equal(t, "10s (default)", got["timeout_tls_handshake"], "format %s", format)
+			require.Equal(t, "30s (default)", got["timeout_request"], "format %s", format)
+			require.Equal(t, false, got["proxy_from_env"], "format %s: an absent from-env key must resolve to false", format)
+		})
+	})
+
+	t.Run("stored value renders verbatim", func(t *testing.T) {
+		cfg := &config.Config{
+			CurrentContext: "lab",
+			Contexts: map[string]*config.Context{
+				"lab": {
+					Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+					Auth:    config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+					Timeout: config.TimeoutBlock{Connect: "2s"},
+				},
+			},
+		}
+		path, cfg := makeConfig(t, cfg)
+		deps := makeDeps(t, path, cfg)
+
+		out, err := run(t, deps, "", "show")
+		require.NoError(t, err)
+		require.Contains(t, out, "2s")
+		require.NotContains(t, out, "2s (default)")
+	})
+}
+
+// TestContextShow_RendersInvalidTimeout asserts an unparseable timeout
+// renders as its stored string followed by " (invalid)", and that `show`
+// still exits 0 — the verb an operator reaches for on a broken context must
+// survive a bad value rather than failing on it.
+func TestContextShow_RendersInvalidTimeout(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth:    config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+				Timeout: config.TimeoutBlock{Connect: "5 seconds"},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "show")
+	require.NoError(t, err, "an unparseable timeout must not fail context show")
+	require.Contains(t, out, "5 seconds (invalid)")
+}
+
+// TestContextLs_RawCarriesJumpAndProxy asserts the ls JSON entries carry the
+// jump and proxy keys even when both are unset, and that the table headers
+// gain no new columns for them.
+func TestContextLs_RawCarriesJumpAndProxy(t *testing.T) {
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab": {
+				Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+				Auth: config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+			},
+		},
+	}
+	path, cfg := makeConfig(t, cfg)
+
+	deps := makeDeps(t, path, cfg)
+	deps.Format = output.FormatJSON
+	out, err := run(t, deps, "", "ls")
+	require.NoError(t, err)
+
+	var entries []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &entries))
+	require.Len(t, entries, 1)
+	entry := entries[0]
+	require.Contains(t, entry, "jump")
+	require.Contains(t, entry, "proxy")
+	require.Equal(t, "", entry["jump"])
+	require.Equal(t, "", entry["proxy"])
+
+	deps = makeDeps(t, path, cfg)
+	out, err = run(t, deps, "", "ls")
+	require.NoError(t, err)
+	requireExactLsHeaderRow(t, out)
+}
+
+// requireExactLsHeaderRow asserts the ls table header line is exactly the
+// eight names ls has always carried, in order, so a new column or a
+// reordered header fails the test rather than passing on a partial match.
+// tablewriter draws a border line before the header, so the check reads the
+// second line, strips the column-separator glyph, and collapses whitespace
+// by splitting on fields, since a two-word header such as "AUTH TYPE"
+// renders as two space-separated tokens, same as any other column boundary.
+func requireExactLsHeaderRow(t *testing.T, out string) {
+	t.Helper()
+	wantFields := []string{"NAME", "HOST", "PORT", "PRODUCT", "AUTH", "TYPE", "USERNAME", "DEFAULT", "NODE", "DEFAULT", "OUTPUT"}
+	lines := strings.Split(out, "\n")
+	require.GreaterOrEqual(t, len(lines), 2, "ls table output must have a border line and a header line")
+	headerLine := strings.ReplaceAll(lines[1], "│", " ")
+	gotFields := strings.Fields(headerLine)
+	require.Equal(t, wantFields, gotFields, "ls table header row must carry exactly these columns, in order")
+}
+
+// TestContextLs_RedactsProxyURL asserts a context whose proxy.url carries
+// userinfo never prints the password in ls JSON or YAML output, whether the
+// URL parses or is one of the three unparseable forms redact.ProxyURL still
+// masks by inspecting the raw string.
+func TestContextLs_RedactsProxyURL(t *testing.T) {
+	t.Run("parseable url with credentials", func(t *testing.T) {
+		const rawURL = "socks5://proxyuser:sw0rdfish@proxy.example.com:1080"
+		cfg := &config.Config{
+			CurrentContext: "lab",
+			Contexts: map[string]*config.Context{
+				"lab": {
+					Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+					Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+					Proxy: config.ProxyBlock{URL: rawURL},
+				},
+			},
+		}
+		path, cfg := makeConfig(t, cfg)
+		wantProxy := redact.ProxyURL(rawURL)
+		require.Contains(t, wantProxy, redact.Placeholder, "test fixture sanity: url must actually mask")
+
+		for _, format := range []output.Format{output.FormatJSON, output.FormatYAML} {
+			deps := makeDeps(t, path, cfg)
+			deps.Format = format
+			out, err := run(t, deps, "", "ls")
+			require.NoError(t, err, "format %s", format)
+			require.NotContains(t, out, "sw0rdfish", "format %s must never carry the proxy password", format)
+
+			var entries []map[string]any
+			switch format {
+			case output.FormatJSON:
+				require.NoError(t, json.Unmarshal([]byte(out), &entries))
+			case output.FormatYAML:
+				require.NoError(t, yaml.Unmarshal([]byte(out), &entries))
+			}
+			require.Len(t, entries, 1)
+			require.Equal(t, wantProxy, entries[0]["proxy"], "format %s must carry the redacted proxy url", format)
+		}
+	})
+
+	for _, tc := range unparseableProxyURLs {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				CurrentContext: "lab",
+				Contexts: map[string]*config.Context{
+					"lab": {
+						Host: "pve.example.com", Port: 8006, Protocol: "https", Realm: "pam",
+						Auth:  config.AuthBlock{Type: "token", TokenID: "t1", Secret: "${S}"},
+						Proxy: config.ProxyBlock{URL: tc.url},
+					},
+				},
+			}
+			path, cfg := makeConfig(t, cfg)
+			wantProxy := redact.ProxyURL(tc.url)
+			require.Contains(t, wantProxy, redact.Placeholder, "test fixture sanity: url must actually mask")
+
+			for _, format := range []output.Format{output.FormatJSON, output.FormatYAML} {
+				deps := makeDeps(t, path, cfg)
+				deps.Format = format
+				out, err := run(t, deps, "", "ls")
+				require.NoError(t, err, "format %s", format)
+				require.NotContains(t, out, tc.secret, "format %s must never carry the proxy url password", format)
+
+				var entries []map[string]any
+				switch format {
+				case output.FormatJSON:
+					require.NoError(t, json.Unmarshal([]byte(out), &entries))
+				case output.FormatYAML:
+					require.NoError(t, yaml.Unmarshal([]byte(out), &entries))
+				}
+				require.Len(t, entries, 1)
+				require.Equal(t, wantProxy, entries[0]["proxy"], "format %s must carry the redacted proxy url", format)
+			}
+		})
+	}
 }

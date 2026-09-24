@@ -10,6 +10,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
+	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
 )
 
 // lsFlags holds the raw flag values for `pmx context ls`.
@@ -35,6 +36,11 @@ func newLsCmd() *cobra.Command {
 			"Under a persona binary, table output flags rows whose product differs from the " +
 			"persona's with \"(mismatch)\". JSON and YAML output always report the plain " +
 			"product value instead.\n\n" +
+			"JSON and YAML output also carry each context's ssh jump host and proxy url, " +
+			"with any proxy password redacted; the table gains no columns for them, since " +
+			"the eight it already has fill an eighty-column terminal. Use 'pmx context " +
+			"show' for the full per-context detail, including proxy credentials, timeouts, " +
+			"and the CA bundle.\n\n" +
 			"This reads the local config file only; no API calls are made.",
 		Example: `  pmx context ls
   pmx context ls --product pbs`,
@@ -60,7 +66,9 @@ func newLsCmd() *cobra.Command {
 			}
 			sort.Strings(names)
 
-			// Build table rows and raw map for json/yaml.
+			// Build table rows and raw map for json/yaml. Jump and Proxy carry no
+			// omitempty, like every other field here, so a script always finds
+			// both keys, even for a context that sets neither.
 			type rawEntry struct {
 				Name          string `json:"name"`
 				Active        bool   `json:"active"`
@@ -71,6 +79,8 @@ func newLsCmd() *cobra.Command {
 				Username      string `json:"username"`
 				DefaultNode   string `json:"default_node"`
 				DefaultOutput string `json:"default_output"`
+				Jump          string `json:"jump"`
+				Proxy         string `json:"proxy"`
 			}
 
 			rawEntries := make([]rawEntry, 0, len(names))
@@ -122,6 +132,11 @@ func newLsCmd() *cobra.Command {
 					Username:      ctx.Auth.Username,
 					DefaultNode:   ctx.DefaultNode,
 					DefaultOutput: ctx.DefaultOutput,
+					Jump:          ctx.SSH.Jump,
+					// redact.ProxyURL runs on the stored string directly, so an
+					// embedded password never reaches JSON/YAML output, whether
+					// or not the value parses as a URL.
+					Proxy: redact.ProxyURL(ctx.Proxy.URL),
 				})
 			}
 
