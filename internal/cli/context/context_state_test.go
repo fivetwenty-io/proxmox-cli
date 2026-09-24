@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,16 +15,20 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	yaml "github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fivetwenty-io/proxmox-cli/internal/apiclient"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/config"
 	"github.com/fivetwenty-io/proxmox-cli/internal/output"
 	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
+	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
 // ---------------------------------------------------------------------------
@@ -1657,4 +1664,752 @@ func TestContextLs_RedactsProxyURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// validate --connect — route, overrides, and failure reporting
+// ---------------------------------------------------------------------------
+
+// validateEntry is one entry of `context validate -o json`.
+type validateEntry struct {
+	Name      string   `json:"name"`
+	Status    string   `json:"status"`
+	Reachable string   `json:"reachable"`
+	Via       string   `json:"via"`
+	Product   string   `json:"product_check"`
+	Auth      string   `json:"auth_check"`
+	Errors    []string `json:"errors"`
+}
+
+// parseValidateJSON decodes `context validate -o json` output into entries
+// keyed by context name.
+func parseValidateJSON(t *testing.T, out string) map[string]validateEntry {
+	t.Helper()
+
+	var entries []validateEntry
+	require.NoError(t, json.Unmarshal([]byte(out), &entries), out)
+
+	byName := make(map[string]validateEntry, len(entries))
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+
+	return byName
+}
+
+// parseValidateYAML decodes `context validate -o yaml` output into entries
+// keyed by context name, through the same field names the JSON carries.
+func parseValidateYAML(t *testing.T, out string) map[string]validateEntry {
+	t.Helper()
+
+	var entries []validateEntry
+	require.NoError(t, yaml.Unmarshal([]byte(out), &entries), out)
+
+	byName := make(map[string]validateEntry, len(entries))
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+
+	return byName
+}
+
+// runWithConnectionFlags runs `context <args>` under a root that registers
+// the --api-* flags and --insecure as persistent flags, the way the real
+// root does, and points deps.Conn at cli.OverridesFromCommand, so a test
+// drives the overrides exactly as an operator would. ctx is the command's
+// context. It returns standard output and standard error separately.
+func runWithConnectionFlags(
+	t *testing.T, ctx context.Context, deps *cli.Deps, args ...string,
+) (string, string, error) {
+	t.Helper()
+
+	root := &cobra.Command{Use: "pmx", SilenceUsage: true, SilenceErrors: true}
+	cli.RegisterConnectionFlags(root.PersistentFlags())
+	root.PersistentFlags().Bool("insecure", false, "skip TLS verification")
+
+	group := Group(nil)
+	root.AddCommand(group)
+
+	deps.Conn = sync.OnceValues(func() (cli.ConnectionOverrides, error) {
+		return cli.OverridesFromCommand(group)
+	})
+
+	root.SetContext(cli.WithDeps(ctx, deps))
+
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs(append([]string{"context"}, args...))
+
+	err := root.Execute()
+
+	return stdout.String(), stderr.String(), err
+}
+
+// jsonDeps returns deps that render JSON.
+func jsonDeps(t *testing.T, cfg *config.Config) *cli.Deps {
+	t.Helper()
+
+	path, loaded := makeConfig(t, cfg)
+	deps := makeDeps(t, path, loaded)
+	deps.Format = output.FormatJSON
+
+	return deps
+}
+
+// sshOnPath puts an ssh stand-in first on PATH under the name "ssh", so a
+// probe that resolves its jump from the configuration, with no program of
+// its own, runs the stand-in. The link lives in a directory whose path
+// starts with the stand-in's own, so the stand-in's cleanup, which matches
+// processes by that path, still finds every invocation.
+func sshOnPath(t *testing.T, opts testhelper.SSHStandInOptions) testhelper.SSHScript {
+	t.Helper()
+
+	script := testhelper.SSHStandIn(t, opts)
+
+	dir := script.Program + "-bin"
+	require.NoError(t, os.Mkdir(dir, 0o700))
+	require.NoError(t, os.Symlink(script.Program, filepath.Join(dir, "ssh")))
+
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	apiclient.ReopenJumps()
+
+	return script
+}
+
+// versionServer starts a TLS server answering the version endpoint as PVE
+// does, counting the requests it serves.
+func versionServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+
+	var hits atomic.Int32
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Server", "pve-api-daemon/3.0")
+		_, _ = w.Write([]byte(`{"data":{}}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	return ts, &hits
+}
+
+// TestValidateConnect_RendersVIAColumn proves the VIA column sits between
+// REACHABLE and PRODUCT and that the JSON entries carry all six routes.
+func TestValidateConnect_RendersVIAColumn(t *testing.T) {
+	ts, _ := versionServer(t)
+	socks := testhelper.SOCKS5StandIn(t)
+	sshOnPath(t, testhelper.SSHStandInOptions{Mode: testhelper.SSHForward})
+
+	withTarget := func(edit func(c *config.Context)) *config.Context {
+		c := probeTarget(t, ts, config.ProductPVE)
+		c.Timeout = config.TimeoutBlock{Connect: "500ms", Request: "900ms"}
+		edit(c)
+
+		return c
+	}
+
+	cfg := &config.Config{
+		CurrentContext: "a-direct",
+		Contexts: map[string]*config.Context{
+			"a-direct": withTarget(func(*config.Context) {}),
+			"b-jump":   withTarget(func(c *config.Context) { c.SSH.Jump = "bastion" }),
+			"c-proxy":  withTarget(func(c *config.Context) { c.Proxy.URL = "socks5h://" + socks.Addr }),
+			"d-jump-proxy": withTarget(func(c *config.Context) {
+				c.SSH.Jump = "bastion"
+				c.Proxy.URL = "socks5h://" + socks.Addr
+			}),
+			"e-env": withTarget(func(c *config.Context) {
+				c.Host = "pve-env.test"
+				c.Proxy.FromEnv = new(true)
+			}),
+			// Go never proxies a loopback address, so the environment proxy
+			// does not apply to this one.
+			"f-env-not-applicable": withTarget(func(c *config.Context) { c.Proxy.FromEnv = new(true) }),
+		},
+	}
+
+	want := map[string]string{
+		"a-direct":             "direct",
+		"b-jump":               "jump bastion",
+		"c-proxy":              "proxy socks5h://" + socks.Addr,
+		"d-jump-proxy":         "jump bastion + proxy socks5h://" + socks.Addr,
+		"e-env":                "proxy " + redact.ProxyURL(testEnvHTTPSProxy) + " (from environment)",
+		"f-env-not-applicable": "direct (environment proxy not applicable)",
+	}
+
+	deps := jsonDeps(t, cfg)
+	out, _, _ := runWithConnectionFlags(t, context.Background(), deps, "validate", "--all", "--connect")
+
+	entries := parseValidateJSON(t, out)
+	require.Len(t, entries, len(want))
+
+	for name, via := range want {
+		require.Equal(t, via, entries[name].Via, "context %s", name)
+	}
+
+	require.Equal(t, "yes", entries["a-direct"].Reachable)
+	require.Equal(t, "yes", entries["c-proxy"].Reachable, entries["c-proxy"].Errors)
+	require.Equal(t, "yes", entries["f-env-not-applicable"].Reachable, entries["f-env-not-applicable"].Errors)
+	require.Equal(t, "no", entries["e-env"].Reachable, "the pinned environment proxy does not exist")
+	require.NotContains(t, out, "envs3cret", "the environment proxy's password must never print")
+
+	deps.Format = output.FormatYAML
+	out, _, _ = runWithConnectionFlags(t, context.Background(), deps, "validate", "--all", "--connect")
+	require.Contains(t, out, "via: direct\n")
+
+	yamlEntries := parseValidateYAML(t, out)
+	require.Len(t, yamlEntries, len(want))
+
+	for name, via := range want {
+		require.Equal(t, via, yamlEntries[name].Via, "yaml context %s", name)
+	}
+
+	require.NotContains(t, out, "envs3cret", "the environment proxy's password must never print")
+
+	deps.Format = output.FormatTable
+	deps.Out = output.NewWidth(output.WidthUnbounded)
+	out, _, _ = runWithConnectionFlags(t, context.Background(), deps, "validate", "a-direct", "--connect")
+
+	var header []string
+
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(line, "NAME") {
+			header = strings.Fields(strings.ReplaceAll(line, "│", " "))
+			break
+		}
+	}
+
+	require.Equal(t, []string{"NAME", "STATUS", "REACHABLE", "VIA", "PRODUCT", "AUTH", "ERRORS"}, header)
+}
+
+// TestValidateConnect_RedactsProxyCredentials proves a proxy URL carrying a
+// password never prints it: from $PMX_API_PROXY, the VIA cell, the via
+// field, the unreachable text, and the note all carry the placeholder, and a
+// stored proxy.url with credentials is rejected with the placeholder too.
+func TestValidateConnect_RedactsProxyCredentials(t *testing.T) {
+	const raw = "socks5://u:p@host:1080"
+
+	masked := redact.ProxyURL(raw)
+	require.Contains(t, masked, redact.Placeholder, "test fixture sanity: the url must mask")
+
+	t.Run("from the environment", func(t *testing.T) {
+		t.Setenv("PMX_API_PROXY", raw)
+
+		target := &config.Context{
+			Host: "127.0.0.1", Port: closedPort(t), Protocol: "https",
+			TLS:     config.TLSBlock{Insecure: true},
+			Auth:    config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t", Secret: "s"},
+			Timeout: config.TimeoutBlock{Connect: "200ms", Request: "200ms"},
+		}
+		cfg := &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": target}}
+
+		deps := jsonDeps(t, cfg)
+		out, stderr, err := runWithConnectionFlags(t, context.Background(), deps, "validate", "--connect")
+		require.Error(t, err)
+
+		entry := parseValidateJSON(t, out)["lab"]
+		require.Equal(t, "proxy "+masked, entry.Via)
+		require.Len(t, entry.Errors, 1)
+		require.True(t, strings.HasPrefix(entry.Errors[0], "unreachable via proxy "+masked+": "), entry.Errors[0])
+		require.Contains(t, stderr, "note: $PMX_API_PROXY ("+masked+")")
+
+		deps.Format = output.FormatTable
+		deps.Out = output.NewWidth(output.WidthUnbounded)
+		table, tableStderr, _ := runWithConnectionFlags(t, context.Background(), deps, "validate", "--connect")
+		require.Contains(t, table, "proxy "+masked)
+
+		deps.Format = output.FormatYAML
+		yamlOut, yamlStderr, _ := runWithConnectionFlags(t, context.Background(), deps, "validate", "--connect")
+
+		yamlEntry := parseValidateYAML(t, yamlOut)["lab"]
+		require.Equal(t, "proxy "+masked, yamlEntry.Via)
+		require.Len(t, yamlEntry.Errors, 1)
+		require.True(t, strings.HasPrefix(yamlEntry.Errors[0], "unreachable via proxy "+masked+": "), yamlEntry.Errors[0])
+
+		for _, text := range []string{out, stderr, table, tableStderr, yamlOut, yamlStderr} {
+			require.NotContains(t, text, "u:p@", "the proxy password must never print")
+		}
+	})
+
+	t.Run("stored in proxy.url", func(t *testing.T) {
+		target := &config.Context{
+			Host: "127.0.0.1", Port: 8006, Protocol: "https",
+			Auth:  config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t", Secret: "s"},
+			Proxy: config.ProxyBlock{URL: raw},
+		}
+		cfg := &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": target}}
+
+		out, stderr, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg), "validate", "--connect")
+		require.Error(t, err)
+
+		entry := parseValidateJSON(t, out)["lab"]
+		require.Equal(t, "INVALID", entry.Status)
+		require.Empty(t, entry.Via, "a context that fails validation is never probed")
+		require.Contains(t, strings.Join(entry.Errors, "; "), redact.Placeholder)
+		require.NotContains(t, out+stderr, "u:p@")
+	})
+}
+
+// TestValidateConnect_UnreachableMessages proves each unreachable route is
+// named once: a bastion failure by the JumpError's Detail, whatever the
+// transport wrapped around it, a refused proxy by its proxyconnect error,
+// and a direct failure in the form it always had.
+func TestValidateConnect_UnreachableMessages(t *testing.T) {
+	ts, _ := versionServer(t)
+
+	jumpTarget := func(request string) *config.Config {
+		c := probeTarget(t, ts, config.ProductPVE)
+		c.SSH.Jump = "admin@bastion.example.com"
+		c.Timeout.Request = request
+
+		return &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}}
+	}
+
+	probeError := func(t *testing.T, cfg *config.Config) string {
+		t.Helper()
+
+		out, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg), "validate", "--connect")
+		require.Error(t, err)
+
+		entry := parseValidateJSON(t, out)["lab"]
+		require.Equal(t, "no", entry.Reachable)
+		require.Len(t, entry.Errors, 1)
+
+		return entry.Errors[0]
+	}
+
+	t.Run("a bastion that refused", func(t *testing.T) {
+		sshOnPath(t, testhelper.SSHStandInOptions{
+			Mode:       testhelper.SSHFail,
+			Stderr:     []string{"ssh: connect to host bastion.example.com port 22: Connection refused"},
+			ExitStatus: 255,
+		})
+
+		require.Equal(t,
+			"unreachable via jump admin@bastion.example.com: "+
+				"ssh: connect to host bastion.example.com port 22: Connection refused",
+			probeError(t, jumpTarget("900ms")))
+	})
+
+	t.Run("a bastion that printed nothing", func(t *testing.T) {
+		sshOnPath(t, testhelper.SSHStandInOptions{Mode: testhelper.SSHFail, ExitStatus: 255})
+
+		require.Equal(t,
+			"unreachable via jump admin@bastion.example.com: ssh exited with status 255 and printed nothing",
+			probeError(t, jumpTarget("900ms")))
+	})
+
+	t.Run("a bastion that timed out", func(t *testing.T) {
+		sshOnPath(t, testhelper.SSHStandInOptions{Mode: testhelper.SSHHang, IgnoreEOF: true})
+
+		// The first-byte timer is the request bound less a quarter of it:
+		// 900ms - 225ms.
+		require.Equal(t,
+			"unreachable via jump admin@bastion.example.com: no response within 675ms",
+			probeError(t, jumpTarget("900ms")))
+	})
+
+	t.Run("a refused proxy", func(t *testing.T) {
+		proxyAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(closedPort(t)))
+
+		c := probeTarget(t, ts, config.ProductPVE)
+		c.Proxy.URL = "socks5://" + proxyAddr
+		c.Timeout.Request = "900ms"
+
+		got := probeError(t, &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}})
+		require.True(t, strings.HasPrefix(got, "unreachable via proxy socks5://"+proxyAddr+": proxyconnect tcp: "), got)
+	})
+
+	t.Run("a direct failure", func(t *testing.T) {
+		c := probeTarget(t, ts, config.ProductPVE)
+		c.Port = closedPort(t)
+		c.Timeout.Request = "900ms"
+
+		got := probeError(t, &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}})
+		require.True(t, strings.HasPrefix(got,
+			fmt.Sprintf(`unreachable: Get "https://127.0.0.1:%d/api2/json/version": `, c.Port)), got)
+	})
+
+	t.Run("a wrapped JumpError is found and formatted by its Detail", func(t *testing.T) {
+		conn, err := cli.ResolveConnection("lab", &config.Context{
+			Host: "pve.example.com", Port: 8006, Protocol: "https",
+			SSH:   config.SSHBlock{Jump: "admin@bastion.example.com"},
+			Proxy: config.ProxyBlock{URL: "socks5h://proxy.example.com:1080"},
+		}, cli.ConnectionOverrides{})
+		require.NoError(t, err)
+
+		signalled := &apiclient.JumpError{
+			Chain: "admin@bastion.example.com", Addr: "proxy.example.com:1080", ExitStatus: -1, Signaled: true,
+		}
+		wrapped := &url.Error{Op: "Get", URL: "https://pve.example.com:8006/api2/json/version",
+			Err: &net.OpError{Op: "proxyconnect", Net: "tcp", Err: signalled}}
+
+		require.Equal(t,
+			"unreachable via jump admin@bastion.example.com: ssh was ended by a signal and printed nothing",
+			unreachableText(conn, wrapped))
+
+		refused := &url.Error{Op: "Get", URL: "https://pve.example.com:8006/api2/json/version",
+			Err: &net.OpError{Op: "proxyconnect", Net: "tcp", Err: errors.New("connection refused")}}
+		require.Equal(t,
+			"unreachable via jump admin@bastion.example.com + proxy socks5h://proxy.example.com:1080: "+
+				"proxyconnect tcp: connection refused",
+			unreachableText(conn, refused))
+	})
+
+	t.Run("a multi-hop chain is shown as written", func(t *testing.T) {
+		for _, chain := range []string{
+			"ssh://admin@bastion:2222,ssh://root@inner",
+			"admin@[fd00::1]:22,root@inner",
+			"ssh://a@[fd00::1]:22,ssh://b@host",
+			"ssh://admin@bastion:2222,root@inner",
+		} {
+			t.Run(chain, func(t *testing.T) {
+				conn, err := cli.ResolveConnection("lab", &config.Context{
+					Host: "pve.example.com", Port: 8006, Protocol: "https",
+					SSH: config.SSHBlock{Jump: chain},
+				}, cli.ConnectionOverrides{})
+				require.NoError(t, err, "the validator must accept the chain")
+				require.Equal(t, "jump "+chain, conn.Via())
+
+				failed := &apiclient.JumpError{Chain: chain, Addr: "pve.example.com:8006", Stderr: "boom"}
+				require.Equal(t, "unreachable via jump "+chain+": boom", unreachableText(conn, failed))
+			})
+		}
+	})
+
+	t.Run("the cause is still masked", func(t *testing.T) {
+		const chain = "ssh://admin@bastion:2222,ssh://root@inner"
+
+		conn, err := cli.ResolveConnection("lab", &config.Context{
+			Host: "pve.example.com", Port: 8006, Protocol: "https",
+			SSH: config.SSHBlock{Jump: chain},
+		}, cli.ConnectionOverrides{})
+		require.NoError(t, err)
+
+		failed := &apiclient.JumpError{
+			Chain: chain, Addr: "pve.example.com:8006",
+			Stderr: "proxyconnect socks5://u:s3cret@proxy.example.com:1080 refused",
+		}
+		require.Equal(t,
+			"unreachable via jump "+chain+": proxyconnect socks5://u:<redacted>@proxy.example.com:1080 refused",
+			unreachableText(conn, failed))
+
+		direct := &url.Error{Op: "Get", URL: "https://pve.example.com:8006/api2/json/version",
+			Err: errors.New("dial socks5://u:s3cret@proxy.example.com:1080: refused")}
+		require.Equal(t,
+			`unreachable: Get "https://pve.example.com:8006/api2/json/version": `+
+				"dial socks5://u:<redacted>@proxy.example.com:1080: refused",
+			unreachableText(cli.Connection{Host: "pve.example.com", Port: 8006}, direct))
+	})
+}
+
+// TestValidateConnect_AllRejectsAPIOverrides proves an override that names
+// one host is refused under --all, from the flag or the environment, while
+// jump, proxy, and timeout overrides sweep every context.
+func TestValidateConnect_AllRejectsAPIOverrides(t *testing.T) {
+	tsA, _ := versionServer(t)
+	tsB, _ := versionServer(t)
+
+	cfg := func() *config.Config {
+		return &config.Config{
+			CurrentContext: "a",
+			Contexts: map[string]*config.Context{
+				"a": probeTarget(t, tsA, config.ProductPVE),
+				"b": probeTarget(t, tsB, config.ProductPVE),
+			},
+		}
+	}
+
+	const tail = " cannot be combined with --all; unset it or validate one context by name"
+
+	refused := []struct {
+		name   string
+		env    string
+		value  string
+		source string
+	}{
+		{name: "endpoint", env: "PMX_API_ENDPOINT", value: "h", source: "api-endpoint"},
+		{name: "fingerprint", env: "PMX_API_FINGERPRINT", value: wrongFingerprint, source: "api-fingerprint"},
+		{name: "CA bundle", env: "PMX_API_CA_CERT", value: "/etc/pmx/ca.pem", source: "api-ca-cert"},
+	}
+
+	for _, tc := range refused {
+		t.Run(tc.name+" from the flag", func(t *testing.T) {
+			_, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg()),
+				"validate", "--all", "--connect", "--"+tc.source, tc.value)
+			require.EqualError(t, err, "--"+tc.source+tail)
+		})
+
+		t.Run(tc.name+" from the environment", func(t *testing.T) {
+			t.Setenv(tc.env, tc.value)
+
+			_, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg()),
+				"validate", "--all", "--connect")
+			require.EqualError(t, err, "$"+tc.env+tail)
+		})
+	}
+
+	for _, args := range [][]string{
+		{"--api-jump", "none"},
+		{"--api-connect-timeout", "2s"},
+		{"--api-proxy", "none"},
+	} {
+		t.Run("sweeps with "+args[0], func(t *testing.T) {
+			out, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg()),
+				append([]string{"validate", "--all", "--connect"}, args...)...)
+			require.NoError(t, err)
+
+			entries := parseValidateJSON(t, out)
+			require.Len(t, entries, 2)
+			require.Equal(t, "yes", entries["a"].Reachable)
+			require.Equal(t, "yes", entries["b"].Reachable)
+		})
+	}
+}
+
+// TestValidateConnect_ResolveFailureMarksInvalid proves a connection that
+// cannot be resolved or set up is reported as invalid with its reason, and
+// is never probed.
+func TestValidateConnect_ResolveFailureMarksInvalid(t *testing.T) {
+	t.Run("a rejected jump chain", func(t *testing.T) {
+		ts, hits := versionServer(t)
+		cfg := &config.Config{
+			CurrentContext: "lab",
+			Contexts:       map[string]*config.Context{"lab": probeTarget(t, ts, config.ProductPVE)},
+		}
+
+		out, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg),
+			"validate", "--connect", "--api-jump", "bad;host")
+		require.Error(t, err)
+
+		entry := parseValidateJSON(t, out)["lab"]
+		require.Equal(t, "INVALID", entry.Status)
+		require.Len(t, entry.Errors, 1)
+		require.True(t, strings.HasPrefix(entry.Errors[0], `connection: --api-jump "bad;host" is not valid: `),
+			entry.Errors[0])
+		require.Empty(t, entry.Reachable)
+		require.Zero(t, hits.Load(), "a context whose connection does not resolve is never probed")
+	})
+
+	t.Run("an unresolvable proxy password", func(t *testing.T) {
+		t.Setenv("PMX_TEST_VALIDATE_UNSET_PASSWORD", "")
+		require.NoError(t, os.Unsetenv("PMX_TEST_VALIDATE_UNSET_PASSWORD"))
+
+		socks := testhelper.SOCKS5StandIn(t)
+		ts, hits := versionServer(t)
+
+		c := probeTarget(t, ts, config.ProductPVE)
+		c.Proxy = config.ProxyBlock{
+			URL:      "socks5h://" + socks.Addr,
+			Username: "pmx",
+			Password: "${PMX_TEST_VALIDATE_UNSET_PASSWORD}",
+		}
+		cfg := &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}}
+
+		out, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg), "validate", "--connect")
+		require.Error(t, err)
+
+		entry := parseValidateJSON(t, out)["lab"]
+		require.Equal(t, "INVALID", entry.Status)
+		require.Len(t, entry.Errors, 1)
+		require.True(t, strings.HasPrefix(entry.Errors[0], `connection: resolve proxy.password for context "lab": `),
+			entry.Errors[0])
+		require.Empty(t, entry.Reachable)
+		require.Zero(t, hits.Load())
+		require.Empty(t, socks.Connections(), "nothing is dialled when the proxy cannot be set up")
+	})
+}
+
+// TestValidateConnect_ToleratesBareDeps proves validate --connect never
+// panics on a hand-built Deps with nothing filled in.
+func TestValidateConnect_ToleratesBareDeps(t *testing.T) {
+	for _, args := range [][]string{
+		{"validate", "--connect"},
+		{"validate", "--connect", "--all"},
+		{"validate", "--connect", "lab"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			require.NotPanics(t, func() {
+				_, _ = run(t, &cli.Deps{}, "", args...)
+			})
+		})
+	}
+}
+
+// TestValidateConnect_SweepPrintsEachNoteOnce proves an exported PMX_API_*
+// variable is announced once for a whole sweep, and that a single-context
+// run prints that context's own note once.
+func TestValidateConnect_SweepPrintsEachNoteOnce(t *testing.T) {
+	t.Setenv("PMX_API_JUMP", "none")
+
+	tsA, _ := versionServer(t)
+	tsB, _ := versionServer(t)
+
+	withJump := func(ts *httptest.Server) *config.Context {
+		c := probeTarget(t, ts, config.ProductPVE)
+		c.SSH.Jump = "bastion"
+
+		return c
+	}
+
+	cfg := &config.Config{
+		CurrentContext: "a",
+		Contexts:       map[string]*config.Context{"a": withJump(tsA), "b": withJump(tsB)},
+	}
+
+	out, stderr, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg),
+		"validate", "--all", "--connect")
+	require.NoError(t, err, stderr)
+	require.Len(t, parseValidateJSON(t, out), 2)
+
+	require.Equal(t, 1, strings.Count(stderr, "note: $PMX_API_JUMP (none) applies to every context in this sweep"),
+		stderr)
+	require.Equal(t, 1, strings.Count(stderr, "note:"), "a sweep prints no per-context note: %s", stderr)
+
+	_, stderr, err = runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg), "validate", "a", "--connect")
+	require.NoError(t, err, stderr)
+	require.Equal(t, 1, strings.Count(stderr, `note: $PMX_API_JUMP=none disables the bastion of context "a"`), stderr)
+	require.Equal(t, 1, strings.Count(stderr, "note:"), stderr)
+	require.NotContains(t, stderr, "applies to every context")
+}
+
+// TestValidateConnect_WarnsFromResolvedInsecure proves the insecure warning
+// follows the resolved trust: a fingerprint override replaces an insecure
+// context's settings and prints none, while an insecure context without an
+// override prints exactly one, even across a sweep.
+func TestValidateConnect_WarnsFromResolvedInsecure(t *testing.T) {
+	const warning = "WARN: TLS certificate verification disabled"
+
+	ts, _ := versionServer(t)
+
+	cfg := &config.Config{
+		CurrentContext: "lab",
+		Contexts: map[string]*config.Context{
+			"lab":   probeTarget(t, ts, config.ProductPVE),
+			"other": probeTarget(t, ts, config.ProductPVE),
+		},
+	}
+
+	out, stderr, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg),
+		"validate", "lab", "--connect", "--api-fingerprint", serverCertFingerprint(t, ts))
+	require.NoError(t, err, stderr)
+	require.Equal(t, "yes", parseValidateJSON(t, out)["lab"].Reachable)
+	require.NotContains(t, stderr, warning)
+
+	_, stderr, err = runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg), "validate", "lab", "--connect")
+	require.NoError(t, err, stderr)
+	require.Equal(t, 1, strings.Count(stderr, warning), stderr)
+
+	_, stderr, err = runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg), "validate", "--all", "--connect")
+	require.NoError(t, err, stderr)
+	require.Equal(t, 1, strings.Count(stderr, warning), "a sweep warns once: %s", stderr)
+}
+
+// TestValidateConnect_StopsSweepOnCancel proves a cancelled command stops
+// the sweep: only the context already probed is rendered, and the context
+// error is returned rather than a table blaming contexts never reached.
+func TestValidateConnect_StopsSweepOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	first := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		cancel()
+		w.Header().Set("Server", "pve-api-daemon/3.0")
+		_, _ = w.Write([]byte(`{"data":{}}`))
+	}))
+	t.Cleanup(first.Close)
+
+	second, secondHits := versionServer(t)
+
+	cfg := &config.Config{
+		CurrentContext: "a",
+		Contexts: map[string]*config.Context{
+			"a": probeTarget(t, first, config.ProductPVE),
+			"b": probeTarget(t, second, config.ProductPVE),
+		},
+	}
+
+	out, _, err := runWithConnectionFlags(t, ctx, jsonDeps(t, cfg), "validate", "--all", "--connect")
+	require.ErrorIs(t, err, context.Canceled)
+
+	entries := parseValidateJSON(t, out)
+	require.Len(t, entries, 1, "only the context probed before the cancel is rendered")
+	require.Contains(t, entries, "a")
+	require.Zero(t, secondHits.Load(), "the sweep must not probe past a cancel")
+}
+
+// TestValidateConnect_CancelInFlightIsNotUnreachable proves that a probe the
+// operator cancels while it waits on the server is reported as interrupted,
+// never as an unreachable context, so a script reading the JSON does not
+// blame the context for a Ctrl-C.
+func TestValidateConnect_CancelInFlightIsNotUnreachable(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	hanging := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		cancel()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(hanging.Close)
+
+	second, secondHits := versionServer(t)
+
+	cfg := &config.Config{
+		CurrentContext: "a",
+		Contexts: map[string]*config.Context{
+			"a": probeTarget(t, hanging, config.ProductPVE),
+			"b": probeTarget(t, second, config.ProductPVE),
+		},
+	}
+
+	out, _, err := runWithConnectionFlags(t, ctx, jsonDeps(t, cfg), "validate", "--all", "--connect")
+	require.ErrorIs(t, err, context.Canceled)
+
+	entries := parseValidateJSON(t, out)
+	require.Contains(t, entries, "a")
+	require.Equal(t, "interrupted", entries["a"].Reachable)
+	require.Empty(t, entries["a"].Errors, "an interrupted probe blames nothing")
+	require.Equal(t, "OK", entries["a"].Status)
+
+	for name, entry := range entries {
+		require.NotEqual(t, "no", entry.Reachable, "context %s must not read as unreachable", name)
+	}
+
+	require.Zero(t, secondHits.Load(), "the sweep must not probe past a cancel")
+}
+
+// TestValidateConnect_PinMismatchUnderEndpointOverride proves a pinned
+// context is probed under an endpoint override rather than refused, and
+// that a server presenting another certificate is explained in the terms of
+// the override.
+func TestValidateConnect_PinMismatchUnderEndpointOverride(t *testing.T) {
+	ts, _ := versionServer(t)
+
+	cfg := &config.Config{
+		CurrentContext: "pinned",
+		Contexts: map[string]*config.Context{
+			"pinned": {
+				Host: "pve-pinned.invalid", Port: 8006, Protocol: "https",
+				TLS:  config.TLSBlock{Fingerprint: wrongFingerprint},
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "t", Secret: "s"},
+			},
+		},
+	}
+
+	endpoint := net.JoinHostPort("127.0.0.1", strconv.Itoa(serverPort(t, ts)))
+
+	out, _, err := runWithConnectionFlags(t, context.Background(), jsonDeps(t, cfg),
+		"validate", "pinned", "--connect", "--api-endpoint", endpoint)
+	require.Error(t, err)
+
+	entry := parseValidateJSON(t, out)["pinned"]
+	require.Equal(t, "OK", entry.Status, "the override is probed, not refused")
+	require.Equal(t, "no", entry.Reachable)
+	require.Len(t, entry.Errors, 1)
+	require.Equal(t,
+		fmt.Sprintf(`unreachable: context "pinned" pins a certificate that %s (from --api-endpoint) does not present; `+
+			"pass --api-fingerprint for that host", endpoint),
+		entry.Errors[0])
 }
