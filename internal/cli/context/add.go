@@ -1,6 +1,7 @@
 package context
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,27 +15,34 @@ import (
 
 // addFlags holds the raw flag values for `pmx context add`.
 type addFlags struct {
-	host          string
-	port          int
-	protocol      string
-	realm         string
-	authType      string
-	username      string
-	tokenID       string
-	secret        string
-	insecure      bool
-	fingerprint   string
-	caCert        string
-	tofu          bool
-	defaultNode   string
-	defaultOutput string
-	product       string
-	sshUser       string
-	sshPort       int
-	sshIdentity   string
-	sshJump       string
-	selectCtx     bool
-	force         bool
+	host                string
+	port                int
+	protocol            string
+	realm               string
+	authType            string
+	username            string
+	tokenID             string
+	secret              string
+	insecure            bool
+	fingerprint         string
+	caCert              string
+	tofu                bool
+	defaultNode         string
+	defaultOutput       string
+	product             string
+	sshUser             string
+	sshPort             int
+	sshIdentity         string
+	sshJump             string
+	proxyURL            string
+	proxyUsername       string
+	proxyPassword       string
+	proxyFromEnv        bool
+	timeoutConnect      string
+	timeoutTLSHandshake string
+	timeoutRequest      string
+	selectCtx           bool
+	force               bool
 }
 
 // newAddCmd builds `pmx context add <name>` (alias: create).
@@ -149,9 +157,35 @@ unless --port is also given, its default API port.`,
 				return fmt.Errorf("ssh.port %d is out of range [1, 65535]", f.sshPort)
 			}
 			if f.sshJump != "" {
-				if err := apiclient.ValidateJumpChain(f.sshJump); err != nil {
-					return fmt.Errorf("ssh.jump %q is not valid: %v", f.sshJump, err)
+				if err := apiclient.CheckJumpChain("ssh.jump", f.sshJump); err != nil {
+					return err
 				}
+			}
+
+			// Build the proxy and timeout blocks and validate them with the
+			// same checkers StrictValidateContext uses. add runs no strict
+			// validation of its own, so these two calls are its only defense
+			// against a malformed proxy URL or timeout ever reaching the
+			// saved config.
+			proxyBlock := config.ProxyBlock{
+				URL:      f.proxyURL,
+				Username: f.proxyUsername,
+				Password: f.proxyPassword,
+			}
+			if cmd.Flags().Changed("proxy-from-env") {
+				fromEnv := f.proxyFromEnv
+				proxyBlock.FromEnv = &fromEnv
+			}
+			timeoutBlock := config.TimeoutBlock{
+				Connect:      f.timeoutConnect,
+				TLSHandshake: f.timeoutTLSHandshake,
+				Request:      f.timeoutRequest,
+			}
+			var blockErrs []string
+			blockErrs = append(blockErrs, config.ValidateProxyBlock(&proxyBlock)...)
+			blockErrs = append(blockErrs, config.ValidateTimeoutBlock(&timeoutBlock)...)
+			if len(blockErrs) > 0 {
+				return errors.New(strings.Join(blockErrs, "; "))
 			}
 
 			deps := cli.GetDeps(cmd)
@@ -174,9 +208,13 @@ unless --port is also given, its default API port.`,
 			// Warn to stderr if the secret looks like a literal (not an env ref or
 			// keychain: prefix). This mirrors config.ResolveSecret's inline-literal
 			// detection without resolving the secret here.
-			if f.secret != "" && !isSecretRef(f.secret) {
+			if f.secret != "" && !config.IsSecretReference(f.secret) {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
 					"WARN: --secret looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
+			}
+			if f.proxyPassword != "" && !config.IsSecretReference(f.proxyPassword) {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
+					"WARN: --proxy-password looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
 			}
 
 			// Build the new Context.
@@ -206,6 +244,8 @@ unless --port is also given, its default API port.`,
 					Identity: f.sshIdentity,
 					Jump:     f.sshJump,
 				},
+				Proxy:   proxyBlock,
+				Timeout: timeoutBlock,
 			}
 
 			// Ensure the contexts map exists.
@@ -256,6 +296,16 @@ unless --port is also given, its default API port.`,
 	cmd.Flags().StringVar(&f.sshIdentity, "ssh-identity", "", "path to the SSH private key used by pmx ssh/rsync")
 	cmd.Flags().StringVar(&f.sshJump, "ssh-jump", "",
 		"jump host for ssh, rsync, and the API connection, as [user@]host[:port] (comma-separated for a chain)")
+	cmd.Flags().StringVar(&f.proxyURL, "proxy-url", "",
+		"proxy for API requests: socks5, socks5h, or http URL, without credentials")
+	cmd.Flags().StringVar(&f.proxyUsername, "proxy-username", "", "username presented to the proxy")
+	cmd.Flags().StringVar(&f.proxyPassword, "proxy-password", "",
+		"proxy password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
+	cmd.Flags().BoolVar(&f.proxyFromEnv, "proxy-from-env", false,
+		"honour $HTTPS_PROXY (or $HTTP_PROXY) and $NO_PROXY for this context")
+	cmd.Flags().StringVar(&f.timeoutConnect, "timeout-connect", "", "bound TCP connection setup for this context, e.g. 5s")
+	cmd.Flags().StringVar(&f.timeoutTLSHandshake, "timeout-tls-handshake", "", "bound the TLS handshake for this context, e.g. 10s")
+	cmd.Flags().StringVar(&f.timeoutRequest, "timeout-request", "", "bound one API request for this context, e.g. 30s")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "", "default output format for this context: table|ascii|plain|json|yaml")
 	cmd.Flags().StringVar(&f.product, "product", config.ProductPVE,
@@ -317,13 +367,4 @@ func splitTokenID(username, tokenID string) (user, token string, err error) {
 	}
 
 	return user, token, nil
-}
-
-// isSecretRef reports whether s is an environment-variable reference
-// (${NAME} or $NAME) or a keychain reference (keychain:PATH). Literals
-// trigger an inline-secret warning in the add verb.
-func isSecretRef(s string) bool {
-	return strings.HasPrefix(s, "${") ||
-		strings.HasPrefix(s, "$") ||
-		strings.HasPrefix(s, "keychain:")
 }

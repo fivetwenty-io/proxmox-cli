@@ -39,8 +39,8 @@ func newShowCmd() *cobra.Command {
 			"belong to the ssh client, not to pmx. Each timeout renders the stored value, or " +
 			"the built-in default marked \"(default)\", or the stored value marked " +
 			"\"(invalid)\" when it does not parse; an invalid timeout never fails this command. " +
-			"Every row reflects the stored context only; root flags such as --api-endpoint " +
-			"and the --timeout-* flags, and PMX_API_* environment variables, are not applied " +
+			"Every row reflects the stored context only. Root flags such as --api-endpoint " +
+			"and --api-connect-timeout, and PMX_API_* environment variables, are not applied " +
 			"here.",
 		Example: `  pmx context show
   pmx context show lab`,

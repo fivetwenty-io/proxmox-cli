@@ -15,25 +15,32 @@ import (
 
 // updateFlags holds the raw flag values for `pmx context update`.
 type updateFlags struct {
-	host          string
-	port          int
-	protocol      string
-	realm         string
-	authType      string
-	username      string
-	tokenID       string
-	secret        string
-	insecure      bool
-	fingerprint   string
-	caCert        string
-	tofu          bool
-	defaultNode   string
-	defaultOutput string
-	product       string
-	sshUser       string
-	sshPort       int
-	sshIdentity   string
-	sshJump       string
+	host                string
+	port                int
+	protocol            string
+	realm               string
+	authType            string
+	username            string
+	tokenID             string
+	secret              string
+	insecure            bool
+	fingerprint         string
+	caCert              string
+	tofu                bool
+	defaultNode         string
+	defaultOutput       string
+	product             string
+	sshUser             string
+	sshPort             int
+	sshIdentity         string
+	sshJump             string
+	proxyURL            string
+	proxyUsername       string
+	proxyPassword       string
+	proxyFromEnv        bool
+	timeoutConnect      string
+	timeoutTLSHandshake string
+	timeoutRequest      string
 }
 
 // updateFieldFlags lists every flag on `context update` that maps to a
@@ -43,6 +50,8 @@ var updateFieldFlags = []string{
 	"host", "port", "protocol", "realm", "auth-type", "username", "token-id",
 	"secret", "insecure", "fingerprint", "ca-cert", "tofu", "default-node",
 	"default-output", "product", "ssh-user", "ssh-port", "ssh-identity", "ssh-jump",
+	"proxy-url", "proxy-username", "proxy-password", "proxy-from-env",
+	"timeout-connect", "timeout-tls-handshake", "timeout-request",
 }
 
 // newUpdateCmd builds `pmx context update [<name>]`: change individual fields
@@ -111,6 +120,11 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 			// untouched.
 			updated := *ctx
 
+			// Inline-literal warnings are collected here and printed only after
+			// strict validation passes, so a rejected update never warns about a
+			// value it never saved.
+			var warnings []string
+
 			// Product first: its port re-default rule must see the old port
 			// before an explicit --port (applied below) overrides it.
 			if flags.Changed("product") {
@@ -175,8 +189,8 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 			}
 			if flags.Changed("secret") {
 				updated.Auth.Secret = f.secret
-				if f.secret != "" && !isSecretRef(f.secret) {
-					_, _ = fmt.Fprintln(cmd.ErrOrStderr(),
+				if f.secret != "" && !config.IsSecretReference(f.secret) {
+					warnings = append(warnings,
 						"WARN: --secret looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
 				}
 			}
@@ -207,6 +221,44 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 				updated.SSH.Jump = f.sshJump
 			}
 
+			if flags.Changed("proxy-url") {
+				updated.Proxy.URL = f.proxyURL
+				if f.proxyURL == "" {
+					// Clearing the URL also clears the credentials tied to
+					// it, because leaving them would fail validation with
+					// "proxy.username is set but proxy.url is empty".
+					updated.Proxy.Username = ""
+					updated.Proxy.Password = ""
+				}
+			}
+			if flags.Changed("proxy-username") {
+				updated.Proxy.Username = f.proxyUsername
+			}
+			if flags.Changed("proxy-password") {
+				updated.Proxy.Password = f.proxyPassword
+				if f.proxyPassword != "" && !config.IsSecretReference(f.proxyPassword) {
+					warnings = append(warnings,
+						"WARN: --proxy-password looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
+				}
+			}
+			if flags.Changed("proxy-from-env") {
+				// A fresh pointer is assigned rather than writing through the
+				// stored one, so a context loaded before this update cannot
+				// have its from-env value mutated by reference elsewhere.
+				fromEnv := f.proxyFromEnv
+				updated.Proxy.FromEnv = &fromEnv
+			}
+
+			if flags.Changed("timeout-connect") {
+				updated.Timeout.Connect = f.timeoutConnect
+			}
+			if flags.Changed("timeout-tls-handshake") {
+				updated.Timeout.TLSHandshake = f.timeoutTLSHandshake
+			}
+			if flags.Changed("timeout-request") {
+				updated.Timeout.Request = f.timeoutRequest
+			}
+
 			// Same write-time rule set as add/edit/validate.
 			config.ApplyDefaults(&updated)
 			strictErrs := config.StrictValidateContext(&updated)
@@ -215,14 +267,17 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 			// changed --ssh-jump is checked here and its message joins the
 			// strict ones, so one run reports every problem under one prefix.
 			if flags.Changed("ssh-jump") && updated.SSH.Jump != "" {
-				if err := apiclient.ValidateJumpChain(updated.SSH.Jump); err != nil {
-					strictErrs = append(strictErrs,
-						fmt.Sprintf("ssh.jump %q is not valid: %v", updated.SSH.Jump, err))
+				if err := apiclient.CheckJumpChain("ssh.jump", updated.SSH.Jump); err != nil {
+					strictErrs = append(strictErrs, err.Error())
 				}
 			}
 			if len(strictErrs) > 0 {
 				return fmt.Errorf("context %q fails validation after update: %s",
 					name, strings.Join(strictErrs, "; "))
+			}
+
+			for _, w := range warnings {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
 			}
 
 			cfg.Contexts[name] = &updated
@@ -256,6 +311,16 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
 	cmd.Flags().StringVar(&f.sshIdentity, "ssh-identity", "", "path to the SSH private key used by pmx ssh/rsync")
 	cmd.Flags().StringVar(&f.sshJump, "ssh-jump", "",
 		"jump host for ssh, rsync, and the API connection, as [user@]host[:port] (comma-separated for a chain)")
+	cmd.Flags().StringVar(&f.proxyURL, "proxy-url", "",
+		"proxy for API requests: socks5, socks5h, or http URL, without credentials")
+	cmd.Flags().StringVar(&f.proxyUsername, "proxy-username", "", "username presented to the proxy")
+	cmd.Flags().StringVar(&f.proxyPassword, "proxy-password", "",
+		"proxy password; use ${ENV_VAR} or keychain:PATH to avoid inline literals")
+	cmd.Flags().BoolVar(&f.proxyFromEnv, "proxy-from-env", false,
+		"honour $HTTPS_PROXY (or $HTTP_PROXY) and $NO_PROXY for this context")
+	cmd.Flags().StringVar(&f.timeoutConnect, "timeout-connect", "", "bound TCP connection setup for this context, e.g. 5s")
+	cmd.Flags().StringVar(&f.timeoutTLSHandshake, "timeout-tls-handshake", "", "bound the TLS handshake for this context, e.g. 10s")
+	cmd.Flags().StringVar(&f.timeoutRequest, "timeout-request", "", "bound one API request for this context, e.g. 30s")
 	cmd.Flags().StringVar(&f.defaultNode, "default-node", "", "default Proxmox node for this context")
 	cmd.Flags().StringVar(&f.defaultOutput, "default-output", "",
 		"default output format for this context: table|ascii|plain|json|yaml")

@@ -182,12 +182,12 @@ func newEditCmd() *cobra.Command {
 			// preserving the temp file exactly as an invalid YAML or a failed
 			// strict validation does above.
 			if updated.SSH.Jump != "" {
-				if err := apiclient.ValidateJumpChain(updated.SSH.Jump); err != nil {
+				// The preserved file holds the chain as written, but the
+				// message quotes it masked, because it also reaches the
+				// terminal and the audit log.
+				if err := apiclient.CheckJumpChain("ssh.jump", updated.SSH.Jump); err != nil {
 					removeOnExit = false
-					return fmt.Errorf(
-						"ssh.jump %q is not valid: %v; temp file preserved at %s",
-						updated.SSH.Jump, err, tmpPath,
-					)
+					return fmt.Errorf("%w; temp file preserved at %s", err, tmpPath)
 				}
 			}
 

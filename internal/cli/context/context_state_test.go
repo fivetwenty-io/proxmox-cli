@@ -1061,6 +1061,15 @@ func TestContextVerbs_ActOnResolvedContextNotCurrent(t *testing.T) {
 // show/ls — ssh, jump, proxy, timeout, and CA bundle rows
 // ---------------------------------------------------------------------------
 
+// TestContextShow_HelpNamesRootFlags pins that the help names real root
+// flags when it says which overrides show ignores. The --timeout-* flags
+// belong to add and update, and a saved value does change what show prints.
+func TestContextShow_HelpNamesRootFlags(t *testing.T) {
+	long := newShowCmd().Long
+	require.Contains(t, long, "--api-endpoint and --api-connect-timeout, and PMX_API_* environment variables")
+	require.NotContains(t, long, "--timeout-")
+}
+
 // allShowFormats runs "show" against deps once per output format and hands
 // the rendered text to check, so a test covers table, JSON, and YAML with
 // one assertion body.

@@ -19,7 +19,7 @@ import (
 // struct field (which in turn maps 1:1 to a yaml key via that field's yaml
 // tag), rather than checking a request body/query param.
 //
-// Flag inventory covered here: add (18 persisted-field flags + --select/
+// Flag inventory covered here: add (25 persisted-field flags + --select/
 // --force behavior flags), copy (--force, --select), rm (--force, --yes/-y),
 // validate (--all), ls (--product, a display filter — it narrows which
 // contexts are printed and never persists to config.yml, unlike add's and
@@ -58,6 +58,12 @@ func TestContextAudit_Add_AllFlags(t *testing.T) {
 		"--ssh-port", "2222",
 		"--ssh-identity", "/home/admin/.ssh/id_ed25519",
 		"--ssh-jump", "bastion.example.com",
+		"--proxy-url", "socks5h://proxy.example.com:1080",
+		"--proxy-username", "proxyuser",
+		"--proxy-password", "${PROXY_SECRET}",
+		"--timeout-connect", "5s",
+		"--timeout-tls-handshake", "10s",
+		"--timeout-request", "30s",
 	)
 	require.NoError(t, err)
 
@@ -83,6 +89,35 @@ func TestContextAudit_Add_AllFlags(t *testing.T) {
 	require.Equal(t, 2222, ctx.SSH.Port)
 	require.Equal(t, "/home/admin/.ssh/id_ed25519", ctx.SSH.Identity)
 	require.Equal(t, "bastion.example.com", ctx.SSH.Jump)
+	require.Equal(t, "socks5h://proxy.example.com:1080", ctx.Proxy.URL)
+	require.Equal(t, "proxyuser", ctx.Proxy.Username)
+	require.Equal(t, "${PROXY_SECRET}", ctx.Proxy.Password)
+	require.Equal(t, "5s", ctx.Timeout.Connect)
+	require.Equal(t, "10s", ctx.Timeout.TLSHandshake)
+	require.Equal(t, "30s", ctx.Timeout.Request)
+}
+
+// TestContextAudit_Add_ProxyFromEnvFlag asserts --proxy-from-env persists a
+// fresh non-nil *bool onto proxy.from-env, tested on its own because
+// proxy.url and proxy.from-env cannot both be set (config.ValidateProxyBlock
+// rejects that combination).
+func TestContextAudit_Add_ProxyFromEnvFlag(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "fromenv",
+		"--host", "10.1.2.10",
+		"--auth-type", "token",
+		"--username", "root@pam",
+		"--token-id", "tok",
+		"--secret", "${SECRET}",
+		"--proxy-from-env",
+	)
+	require.NoError(t, err)
+
+	ctx := reloadCfg(t, path).Contexts["fromenv"]
+	require.NotNil(t, ctx.Proxy.FromEnv, "--proxy-from-env must persist a non-nil pointer")
+	require.True(t, *ctx.Proxy.FromEnv)
 }
 
 // TestContextAudit_Add_OmitsUnsetFlags verifies unset optional flags persist
@@ -120,6 +155,14 @@ func TestContextAudit_Add_OmitsUnsetFlags(t *testing.T) {
 	require.Equal(t, 0, ctx.SSH.Port, "unset --ssh-port must persist zero")
 	require.Equal(t, "", ctx.SSH.Identity, "unset --ssh-identity must persist empty")
 	require.Equal(t, "", ctx.SSH.Jump, "unset --ssh-jump must persist empty")
+	require.Equal(t, "", ctx.Proxy.URL, "unset --proxy-url must persist empty")
+	require.Equal(t, "", ctx.Proxy.Username, "unset --proxy-username must persist empty")
+	require.Equal(t, "", ctx.Proxy.Password, "unset --proxy-password must persist empty")
+	require.Nil(t, ctx.Proxy.FromEnv,
+		"add must write proxy.from-env only when --proxy-from-env was given, not a false default")
+	require.Equal(t, "", ctx.Timeout.Connect, "unset --timeout-connect must persist empty")
+	require.Equal(t, "", ctx.Timeout.TLSHandshake, "unset --timeout-tls-handshake must persist empty")
+	require.Equal(t, "", ctx.Timeout.Request, "unset --timeout-request must persist empty")
 }
 
 // TestContextAudit_Add_SelectFlag asserts --select promotes the new context

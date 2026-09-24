@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -94,7 +97,7 @@ func TestContextCopy_Happy(t *testing.T) {
 }
 
 // TestContextCopy_PreservesTLSFields guards against a copy verb silently
-// dropping a TLSBlock field added after deepCopyContext was first written
+// dropping a TLSBlock field added after config.CloneContext was first written
 // (Tofu is one such later field, and it must survive a copy).
 func TestContextCopy_PreservesTLSFields(t *testing.T) {
 	src := labContext()
@@ -272,6 +275,151 @@ func TestContextAdd_RejectsInvalidSSHPortAndJump(t *testing.T) {
 	updated = reloadCfg(t, path)
 	require.NotContains(t, updated.Contexts, "badjump",
 		"an unparseable --ssh-jump must not write a context")
+}
+
+// TestContextAdd_RejectsInvalidProxyURL verifies that add runs
+// config.ValidateProxyBlock and config.ValidateTimeoutBlock after its
+// auth-flag checks and before config.Save, so a malformed --proxy-url or
+// --timeout-* is rejected with the exact validator text and never reaches
+// the saved config.
+func TestContextAdd_RejectsInvalidProxyURL(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "add", "badproxy",
+		"--host", "10.1.3.3",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "00000000-0000-0000-0000-000000000000",
+		"--proxy-url", "ftp://nope",
+	)
+	require.Error(t, err)
+	require.Equal(t, "proxy.url ftp://nope must use scheme socks5, socks5h, or http", err.Error())
+
+	updated := reloadCfg(t, path)
+	require.NotContains(t, updated.Contexts, "badproxy",
+		"a rejected --proxy-url must not write a context")
+
+	_, err = run(t, deps, "", "add", "badtimeout",
+		"--host", "10.1.3.4",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "00000000-0000-0000-0000-000000000000",
+		"--timeout-connect", "0s",
+	)
+	require.Error(t, err)
+	require.Equal(t, "timeout.connect must be greater than zero", err.Error())
+
+	updated = reloadCfg(t, path)
+	require.NotContains(t, updated.Contexts, "badtimeout",
+		"a rejected --timeout-connect must not write a context")
+}
+
+// TestContextAdd_RejectsProxyURLCredentials verifies a --proxy-url carrying
+// userinfo is rejected outright, with the password nowhere in the output, so
+// a credential embedded in the URL cannot bypass config.ResolveSecret, its
+// literal warning, and the keychain.
+func TestContextAdd_RejectsProxyURLCredentials(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "add", "badcreds",
+		"--host", "10.1.3.5",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "00000000-0000-0000-0000-000000000000",
+		"--proxy-url", "socks5://u:p@h:1080",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"proxy.url socks5://<redacted>@h:1080 must not embed credentials; use proxy.username and proxy.password")
+	require.NotContains(t, out, "p@h", "the embedded password must never reach the output")
+	require.NotContains(t, err.Error(), "p@h", "the embedded password must never reach the error text")
+
+	updated := reloadCfg(t, path)
+	require.NotContains(t, updated.Contexts, "badcreds",
+		"a --proxy-url carrying credentials must not write a context")
+}
+
+// TestContextAdd_WarnsOnInlineProxyPassword verifies --proxy-password emits
+// the same inline-literal warning as --secret, classifying with
+// config.IsSecretReference so a value such as "$uper$ecret" (which merely
+// starts with "$" without naming a valid environment variable) warns too.
+func TestContextAdd_WarnsOnInlineProxyPassword(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "add", "proxywarn",
+		"--host", "10.1.3.6",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "${SECRET}",
+		"--proxy-url", "socks5h://127.0.0.1:1080",
+		"--proxy-username", "pmx",
+		"--proxy-password", "$uper$ecret",
+	)
+	require.NoError(t, err, "an inline-literal --proxy-password must warn, not fail, the add")
+	require.Contains(t, out,
+		"WARN: --proxy-password looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
+
+	updated := reloadCfg(t, path)
+	require.Contains(t, updated.Contexts, "proxywarn", "a warned-but-valid add must still persist")
+}
+
+// TestContextAdd_NoWarnOnReferenceProxyPassword verifies a --proxy-password
+// that already names an env reference or a keychain path never warns,
+// pinning config.IsSecretReference's classification against a mutant that
+// would warn on every non-empty password.
+func TestContextAdd_NoWarnOnReferenceProxyPassword(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "add", "envref",
+		"--host", "10.1.3.7",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "${SECRET}",
+		"--proxy-url", "socks5h://127.0.0.1:1080",
+		"--proxy-username", "pmx",
+		"--proxy-password", "${PROXY_SECRET}",
+	)
+	require.NoError(t, err)
+	require.NotContains(t, out, "WARN: --proxy-password", "an env-var reference must never warn")
+
+	out, err = run(t, deps, "", "add", "keychainref",
+		"--host", "10.1.3.8",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "${SECRET}",
+		"--proxy-url", "socks5h://127.0.0.1:1080",
+		"--proxy-username", "pmx",
+		"--proxy-password", "keychain:pmx/proxy",
+	)
+	require.NoError(t, err)
+	require.NotContains(t, out, "WARN: --proxy-password", "a keychain reference must never warn")
+}
+
+// TestContextAdd_WarnsOnInlineSecret verifies --secret classifies with
+// config.IsSecretReference, not the old "$" prefix check, so a value such as
+// "$uper$ecret" (which merely starts with "$" without naming a valid
+// environment variable) warns as an inline literal.
+func TestContextAdd_WarnsOnInlineSecret(t *testing.T) {
+	path, cfg := makeConfig(t, &config.Config{})
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "add", "secretwarn",
+		"--host", "10.1.3.9",
+		"--username", "root@pam",
+		"--token-id", "e2e",
+		"--secret", "$uper$ecret",
+	)
+	require.NoError(t, err, "an inline-literal --secret must warn, not fail, the add")
+	require.Contains(t, out,
+		"WARN: --secret looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
+
+	updated := reloadCfg(t, path)
+	require.Equal(t, "$uper$ecret", updated.Contexts["secretwarn"].Auth.Secret,
+		"a warned-but-valid add must still persist")
 }
 
 // ---- edit tests -------------------------------------------------------------
@@ -483,6 +631,146 @@ func TestContextEdit_RejectsInvalidSSHJump(t *testing.T) {
 	loaded, err2 := config.Load(p)
 	require.NoError(t, err2)
 	require.Equal(t, "", loaded.Contexts["lab"].SSH.Jump, "a rejected edit must not persist")
+}
+
+// misusedSSHJumps are ssh.jump values that carry a password ssh has no
+// syntax for, each mapped to the distinctive runs of that password. The
+// shapes cover the plain and ssh:// forms, a comma that splits the password
+// across hops, a percent-encoded colon, an "@" inside the password, a
+// password whose first part also parses as a port, and a directory login in
+// front of the colon.
+var misusedSSHJumps = map[string][]string{
+	"ssh://admin:Hunter2secret@bastion":              {"Hunter2secret"},
+	"admin:Zq9alpha,Xk7bravo@bastion":                {"Zq9alpha", "Xk7bravo"},
+	"ssh://admin:Zq9alpha,Xk7bravo@bastion":          {"Zq9alpha", "Xk7bravo"},
+	"bastion,ssh://u:Zq9alpha,Xk7bravo,Wm4charlie@h": {"Zq9alpha", "Xk7bravo", "Wm4charlie"},
+	"ssh://u%3AZq9alpha@h":                           {"Zq9alpha"},
+	"ssh://u%3aZq9alpha,Xk7bravo@h":                  {"Zq9alpha", "Xk7bravo"},
+	"u:Zq9alpha%3AXk7bravo@h":                        {"Zq9alpha", "Xk7bravo"},
+	"u:Zq9alpha@Xk7bravo@bastion":                    {"Zq9alpha", "Xk7bravo"},
+	"ssh://u:Zq9alpha@Xk7bravo,Wm4charlie@bastion":   {"Zq9alpha", "Xk7bravo", "Wm4charlie"},
+	"u:4242,Xk7b!Wm4c@h":                             {"4242", "Xk7b", "Wm4c"},
+	"admin@Zq9alpha:Xk7bravo@bastion":                {"Xk7bravo"},
+	"edge:22,admin:Zq9alpha,Xk7bravo@inner":          {"Zq9alpha", "Xk7bravo"},
+	"u:Zq9alpha,,Xk7bravo@h":                         {"Zq9alpha", "Xk7bravo"},
+}
+
+// runJumpVerb runs `pmx context <verb>` through cli.Execute with chain as
+// the context's ssh.jump, so the error, both standard streams, and the
+// audit log under a throwaway HOME are exactly what an operator's run would
+// produce. It returns all of that text joined, after checking that the
+// command failed on the chain and that the exit record was written.
+func runJumpVerb(t *testing.T, verb, chain string) string {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PMX_OUTPUT", "table")
+	t.Setenv("PMX_NODE", "")
+	t.Setenv("PMX_CONTEXT", "")
+	t.Setenv("PMX_LOG_LAYOUT", "")
+	t.Setenv("PMX_LOG_LEVEL", "")
+
+	cfgPath := scratchConfig(t, &config.Config{
+		CurrentContext: "lab",
+		Contexts:       map[string]*config.Context{"lab": labContext()},
+	})
+
+	args := []string{"pmx", "--config", cfgPath, "context"}
+
+	switch verb {
+	case "add":
+		args = append(args, "add", "jumped", "--host", "10.1.3.2", "--auth-type", "token",
+			"--username", "root@pam", "--token-id", "tok", "--secret", "${SECRET}", "--ssh-jump", chain)
+	case "update":
+		args = append(args, "update", "lab", "--ssh-jump", chain)
+	case "edit":
+		snippet := filepath.Join(t.TempDir(), "jump.yml")
+		require.NoError(t, os.WriteFile(snippet, []byte("\nssh:\n  jump: "+strconv.Quote(chain)+"\n"), 0o600))
+
+		editor := filepath.Join(t.TempDir(), "jump-editor.sh")
+		script := "#!/bin/sh\ncat " + strconv.Quote(snippet) + " >> \"$1\"\n"
+		require.NoError(t, os.WriteFile(editor, []byte(script), 0o700))
+		t.Setenv("EDITOR", editor)
+
+		args = append(args, "edit", "lab")
+	default:
+		t.Fatalf("unknown verb %q", verb)
+	}
+
+	stdout, err := os.CreateTemp(t.TempDir(), "stdout")
+	require.NoError(t, err)
+	stderr, err := os.CreateTemp(t.TempDir(), "stderr")
+	require.NoError(t, err)
+
+	oldArgs, oldStdout, oldStderr := os.Args, os.Stdout, os.Stderr
+	os.Args, os.Stdout, os.Stderr = args, stdout, stderr
+	execErr := cli.Execute("pmx", []cli.GroupFactory{Group})
+	os.Args, os.Stdout, os.Stderr = oldArgs, oldStdout, oldStderr
+
+	require.NoError(t, stdout.Close())
+	require.NoError(t, stderr.Close())
+	require.Error(t, execErr, "%s must reject %q", verb, chain)
+	require.Contains(t, execErr.Error(), "is not valid")
+
+	var b strings.Builder
+	b.WriteString(execErr.Error())
+
+	for _, f := range []*os.File{stdout, stderr} {
+		raw, rerr := os.ReadFile(f.Name())
+		require.NoError(t, rerr)
+		b.Write(raw)
+	}
+
+	var logs strings.Builder
+
+	walkErr := filepath.WalkDir(filepath.Join(home, ".pmx", "logs"), func(path string, d os.DirEntry, werr error) error {
+		if werr != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+			return werr
+		}
+
+		raw, rerr := os.ReadFile(path) //nolint:gosec // G304: path is under this test's own temp HOME
+		logs.Write(raw)
+
+		return rerr
+	})
+	require.NoError(t, walkErr)
+	require.Contains(t, logs.String(), `"msg":"exit"`, "%s must write its exit record", verb)
+	require.Contains(t, logs.String(), "is not valid", "the exit record must carry the error")
+	b.WriteString(logs.String())
+
+	return b.String()
+}
+
+// TestContextJump_NeverEchoesAPassword proves that no run of a password
+// misused in ssh.jump reaches the error, the terminal, or the audit log of
+// `context add`, `context update`, or `context edit`, whatever the
+// password holds.
+func TestContextJump_NeverEchoesAPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake shell script not portable on Windows")
+	}
+
+	chains := slices.Sorted(maps.Keys(misusedSSHJumps))
+
+	for i, chain := range chains {
+		runs := misusedSSHJumps[chain]
+
+		for _, verb := range []string{"add", "update", "edit"} {
+			// The subtest name reaches every t.TempDir path, and edit's
+			// message names a temp file, so it must not carry the chain.
+			t.Run(fmt.Sprintf("%s chain %d", verb, i), func(t *testing.T) {
+				t.Logf("chain %q", chain)
+
+				text := runJumpVerb(t, verb, chain)
+				require.Contains(t, text, "<redacted>", "the quoted chain must show where it was masked")
+
+				for _, run := range runs {
+					require.NotContains(t, text, run, "%s leaked part of the password in %q", verb, chain)
+				}
+			})
+		}
+	}
 }
 
 // ---- edit --product tests -----------------------------------------------------

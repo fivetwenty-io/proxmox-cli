@@ -38,6 +38,11 @@ func TestContextUpdate_SingleField(t *testing.T) {
 
 // TestContextUpdate_AllFieldFlags audits every persisted-field flag on
 // `context update`, mirroring TestContextAudit_Add_AllFlags.
+//
+// --proxy-from-env is exercised separately by
+// TestContextUpdate_NewConnectionFields, not here, because
+// config.ValidateProxyBlock rejects proxy.url and proxy.from-env being set
+// together, and this test also sets --proxy-url.
 func TestContextUpdate_AllFieldFlags(t *testing.T) {
 	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
 	path, cfg := makeConfig(t, seed)
@@ -63,6 +68,12 @@ func TestContextUpdate_AllFieldFlags(t *testing.T) {
 		"--ssh-port", "2222",
 		"--ssh-identity", "/home/admin/.ssh/id_ed25519",
 		"--ssh-jump", "bastion.example.com",
+		"--proxy-url", "socks5h://proxy.example.com:1080",
+		"--proxy-username", "proxyuser",
+		"--proxy-password", "${PROXY_SECRET}",
+		"--timeout-connect", "5s",
+		"--timeout-tls-handshake", "10s",
+		"--timeout-request", "30s",
 	)
 	require.NoError(t, err)
 
@@ -86,13 +97,19 @@ func TestContextUpdate_AllFieldFlags(t *testing.T) {
 	require.Equal(t, 2222, ctx.SSH.Port)
 	require.Equal(t, "/home/admin/.ssh/id_ed25519", ctx.SSH.Identity)
 	require.Equal(t, "bastion.example.com", ctx.SSH.Jump)
+	require.Equal(t, "socks5h://proxy.example.com:1080", ctx.Proxy.URL)
+	require.Equal(t, "proxyuser", ctx.Proxy.Username)
+	require.Equal(t, "${PROXY_SECRET}", ctx.Proxy.Password)
+	require.Equal(t, "5s", ctx.Timeout.Connect)
+	require.Equal(t, "10s", ctx.Timeout.TLSHandshake)
+	require.Equal(t, "30s", ctx.Timeout.Request)
 }
 
-// TestContextUpdate_NewConnectionFields verifies each new ssh.* flag
-// persists independently, with every other field preserved, mirroring
-// TestContextUpdate_SingleField's one-flag-at-a-time style.
+// TestContextUpdate_NewConnectionFields verifies each new ssh.*, proxy.*, and
+// timeout.* flag persists independently, with every other field preserved,
+// mirroring TestContextUpdate_SingleField's one-flag-at-a-time style.
 func TestContextUpdate_NewConnectionFields(t *testing.T) {
-	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext(), "lab2": labContext()}}
 	path, cfg := makeConfig(t, seed)
 	deps := makeDeps(t, path, cfg)
 
@@ -118,6 +135,60 @@ func TestContextUpdate_NewConnectionFields(t *testing.T) {
 	require.Equal(t, 2222, final.SSH.Port)
 	require.Equal(t, "/home/admin/.ssh/id_ed25519", final.SSH.Identity)
 	require.Equal(t, "bastion.example.com", final.SSH.Jump)
+
+	// proxy.from-env is exercised on "lab" too, since it never sets
+	// proxy.url and config.ValidateProxyBlock rejects the two being set
+	// together.
+	_, err = run(t, deps, "", "update", "lab", "--proxy-from-env")
+	require.NoError(t, err)
+	fromEnvCtx := reloadCfg(t, path).Contexts["lab"]
+	require.NotNil(t, fromEnvCtx.Proxy.FromEnv, "--proxy-from-env must persist a non-nil pointer")
+	require.True(t, *fromEnvCtx.Proxy.FromEnv)
+	require.Equal(t, "bastion.example.com", fromEnvCtx.SSH.Jump, "an earlier field must survive a later update")
+
+	// proxy.url, proxy.username, proxy.password, and the three timeouts are
+	// exercised on "lab2", which never sets proxy.from-env. Each step reloads
+	// the whole context and compares it against an expected value that
+	// accumulates one field at a time, so a step that clobbers a field it was
+	// never asked to touch (not just the one field a later step legitimately
+	// overwrites) is caught, e.g. --timeout-tls-handshake also clearing
+	// timeout.request.
+	want2 := labContext()
+	want2.Product = config.ProductPVE // config.ApplyDefaults runs on every update call
+
+	want2.Proxy.URL = "socks5h://proxy.example.com:1080"
+	_, err = run(t, deps, "", "update", "lab2", "--proxy-url", "socks5h://proxy.example.com:1080")
+	require.NoError(t, err)
+	require.Equal(t, want2, reloadCfg(t, path).Contexts["lab2"])
+
+	want2.Proxy.Username = "proxyuser"
+	_, err = run(t, deps, "", "update", "lab2", "--proxy-username", "proxyuser")
+	require.NoError(t, err)
+	require.Equal(t, want2, reloadCfg(t, path).Contexts["lab2"])
+
+	want2.Proxy.Password = "${PROXY_PASS}"
+	_, err = run(t, deps, "", "update", "lab2", "--proxy-password", "${PROXY_PASS}")
+	require.NoError(t, err)
+	require.Equal(t, want2, reloadCfg(t, path).Contexts["lab2"])
+
+	want2.Timeout.Connect = "5s"
+	_, err = run(t, deps, "", "update", "lab2", "--timeout-connect", "5s")
+	require.NoError(t, err)
+	require.Equal(t, want2, reloadCfg(t, path).Contexts["lab2"])
+
+	// timeout-request is set before timeout-tls-handshake, on purpose: a
+	// mutant in which --timeout-tls-handshake also blanks timeout.request is
+	// only observable if timeout.request already holds a non-empty value when
+	// that step runs.
+	want2.Timeout.Request = "30s"
+	_, err = run(t, deps, "", "update", "lab2", "--timeout-request", "30s")
+	require.NoError(t, err)
+	require.Equal(t, want2, reloadCfg(t, path).Contexts["lab2"])
+
+	want2.Timeout.TLSHandshake = "10s"
+	_, err = run(t, deps, "", "update", "lab2", "--timeout-tls-handshake", "10s")
+	require.NoError(t, err)
+	require.Equal(t, want2, reloadCfg(t, path).Contexts["lab2"])
 }
 
 // TestContextUpdate_NewFlagsCountAsFields verifies the new ssh-* flags count
@@ -131,6 +202,157 @@ func TestContextUpdate_NewFlagsCountAsFields(t *testing.T) {
 	_, err := run(t, deps, "", "update", "lab", "--ssh-jump", "h")
 	require.NoError(t, err, "--ssh-jump alone must count as a field to update")
 	require.Equal(t, "h", reloadCfg(t, path).Contexts["lab"].SSH.Jump)
+}
+
+// TestContextUpdate_EmptyTimeoutDeletesKey verifies an empty --timeout-*
+// value deletes the corresponding key, which is how an operator returns a
+// timeout to its default: TimeoutBlock's fields carry "omitempty", so an
+// empty string stops the key from being written on the next save.
+func TestContextUpdate_EmptyTimeoutDeletesKey(t *testing.T) {
+	seeded := labContext()
+	seeded.Timeout = config.TimeoutBlock{Connect: "5s", TLSHandshake: "10s", Request: "30s"}
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": seeded}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "update", "lab", "--timeout-connect", "")
+	require.NoError(t, err)
+
+	ctx := reloadCfg(t, path).Contexts["lab"]
+	require.Equal(t, "", ctx.Timeout.Connect, "an empty --timeout-connect must delete the key")
+	require.Equal(t, "10s", ctx.Timeout.TLSHandshake, "an untouched timeout must be preserved")
+	require.Equal(t, "30s", ctx.Timeout.Request, "an untouched timeout must be preserved")
+
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: path is the test's own scratch config
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "connect:", "the deleted key must not round-trip back into the file")
+}
+
+// TestContextUpdate_EmptyProxyURLClearsCredentials verifies that
+// --proxy-url "" clears proxy.url, proxy.username, and proxy.password
+// together, because leaving the credentials behind would fail validation
+// with "proxy.username is set but proxy.url is empty", and leaves
+// proxy.from-env untouched. The seed context is built directly with
+// config.Save (which performs no validation of its own) so it can carry
+// both proxy.url and a "true" proxy.from-env at once — a combination no CLI
+// command can write, but one an operator's hand-edited or older config file
+// could still contain.
+func TestContextUpdate_EmptyProxyURLClearsCredentials(t *testing.T) {
+	fromEnv := true
+	seeded := labContext()
+	seeded.Proxy = config.ProxyBlock{
+		URL:      "socks5h://proxy.example.com:1080",
+		Username: "proxyuser",
+		Password: "${PROXY_PASS}",
+		FromEnv:  &fromEnv,
+	}
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": seeded}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	_, err := run(t, deps, "", "update", "lab", "--proxy-url", "")
+	require.NoError(t, err)
+
+	ctx := reloadCfg(t, path).Contexts["lab"]
+	require.Equal(t, "", ctx.Proxy.URL)
+	require.Equal(t, "", ctx.Proxy.Username, "clearing proxy.url must also clear proxy.username")
+	require.Equal(t, "", ctx.Proxy.Password, "clearing proxy.url must also clear proxy.password")
+	require.NotNil(t, ctx.Proxy.FromEnv, "proxy.from-env must be left alone")
+	require.True(t, *ctx.Proxy.FromEnv)
+}
+
+// TestContextUpdate_WarnsOnInlineProxyPassword verifies --proxy-password
+// emits the same inline-literal warning as --secret, classifying with
+// config.IsSecretReference so a value such as "$uper$ecret" warns too.
+func TestContextUpdate_WarnsOnInlineProxyPassword(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "update", "lab",
+		"--proxy-url", "socks5h://127.0.0.1:1080",
+		"--proxy-username", "pmx",
+		"--proxy-password", "$uper$ecret",
+	)
+	require.NoError(t, err, "an inline-literal --proxy-password must warn, not fail, the update")
+	require.Contains(t, out,
+		"WARN: --proxy-password looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
+
+	ctx := reloadCfg(t, path).Contexts["lab"]
+	require.Equal(t, "$uper$ecret", ctx.Proxy.Password, "a warned-but-valid update must still persist")
+}
+
+// TestContextUpdate_NoWarnOnReferenceProxyPassword verifies a --proxy-password
+// that already names an env reference or a keychain path never warns, pinning
+// config.IsSecretReference's classification against a mutant that would warn
+// on every non-empty password.
+func TestContextUpdate_NoWarnOnReferenceProxyPassword(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext(), "lab2": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "update", "lab",
+		"--proxy-url", "socks5h://127.0.0.1:1080",
+		"--proxy-username", "pmx",
+		"--proxy-password", "${PROXY_SECRET}",
+	)
+	require.NoError(t, err)
+	require.NotContains(t, out, "WARN: --proxy-password", "an env-var reference must never warn")
+
+	out, err = run(t, deps, "", "update", "lab2",
+		"--proxy-url", "socks5h://127.0.0.1:1080",
+		"--proxy-username", "pmx",
+		"--proxy-password", "keychain:pmx/proxy",
+	)
+	require.NoError(t, err)
+	require.NotContains(t, out, "WARN: --proxy-password", "a keychain reference must never warn")
+}
+
+// TestContextUpdate_WarnsOnInlineSecret verifies --secret classifies with
+// config.IsSecretReference, not the old "$" prefix check, so a value such as
+// "$uper$ecret" (which merely starts with "$" without naming a valid
+// environment variable) warns as an inline literal.
+func TestContextUpdate_WarnsOnInlineSecret(t *testing.T) {
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": labContext()}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	out, err := run(t, deps, "", "update", "lab", "--secret", "$uper$ecret")
+	require.NoError(t, err, "an inline-literal --secret must warn, not fail, the update")
+	require.Contains(t, out,
+		"WARN: --secret looks like an inline literal; prefer ${ENV_VAR} or keychain:PATH")
+
+	ctx := reloadCfg(t, path).Contexts["lab"]
+	require.Equal(t, "$uper$ecret", ctx.Auth.Secret, "a warned-but-valid update must still persist")
+}
+
+// TestContextUpdate_ProxyFromEnvNeverWritesThroughStoredPointer verifies a
+// rejected update never mutates the stored context's proxy.from-env pointer
+// by writing through it: --proxy-from-env must assign a fresh pointer onto
+// the copy under mutation, not the address the stored context already holds.
+func TestContextUpdate_ProxyFromEnvNeverWritesThroughStoredPointer(t *testing.T) {
+	seedFromEnv := false
+	seeded := labContext()
+	seeded.Proxy = config.ProxyBlock{FromEnv: &seedFromEnv}
+	seed := &config.Config{Contexts: map[string]*config.Context{"lab": seeded}}
+	path, cfg := makeConfig(t, seed)
+	deps := makeDeps(t, path, cfg)
+
+	orig := deps.Cfg.Contexts["lab"]
+	require.NotNil(t, orig.Proxy.FromEnv)
+	require.False(t, *orig.Proxy.FromEnv)
+
+	// --proxy-url together with --proxy-from-env fails ValidateProxyBlock
+	// ("both set"), so this update never reaches config.Save.
+	_, err := run(t, deps, "", "update", "lab",
+		"--proxy-from-env",
+		"--proxy-url", "socks5h://h:1080",
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "proxy.url and proxy.from-env are both set; use one or the other")
+
+	require.False(t, *orig.Proxy.FromEnv,
+		"a rejected update must never write through the stored proxy.from-env pointer")
 }
 
 // TestContextUpdate_RejectsInvalidSSHJump verifies a chain no ssh-based
