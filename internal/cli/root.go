@@ -933,99 +933,152 @@ func ApplyTOFUOptions(
 
 // BuildContextClient resolves the active *config.Context from cfg (flag >
 // env > config current-context) and constructs the corresponding
-// *apiclient.APIClient: secret resolution, TLS/TOFU option wiring, and
-// apiclient.NewAPIClient — exactly the tail of persistentPreRunE's
-// context/client construction. A context whose product is "pbs" is
-// rejected: PVE commands must never talk to a Proxmox Backup Server host
-// (BuildContextPBSClient is the PBS counterpart, applying the inverse
-// guard). It is factored out (and exported) so a
-// caller that needs a client without running the rest of persistentPreRunE
-// (logger init, Deps construction, noClient handling) — e.g. a
-// ValidArgsFunction shell-completion helper — builds one identically instead
-// of duplicating this logic; see internal/cli/remote/ssh.go's
-// completeNodeNames for that use.
+// *apiclient.APIClient, applying no per-invocation connection override
+// except insecureFlag. It is BuildContextClientConn with
+// ConnectionOverrides{Insecure: insecureFlag}, without the resolved
+// Connection. A context whose product is "pbs" or "pdm" is rejected, because
+// PVE commands must never talk to a Proxmox Backup Server or Datacenter
+// Manager host.
 //
-// contextFlag, configPath, and insecureFlag are the raw --context/--config/
-// --insecure flag values. cmd supplies ErrOrStderr/InOrStdin for the
-// WarnInsecureTLS write and TOFU prompting. isTTY decides whether the TOFU
+// It is meant for callers that target a context other than the invocation's
+// own, such as the lab verbs that probe a nested lab's context. Those callers
+// must not inherit an --api-* flag or a PMX_API_* variable meant for the
+// outer context, so they pass only the insecure setting. A caller that builds
+// a client for the invocation's own context should use BuildContextClientConn
+// with the full overrides instead.
+//
+// contextFlag, configPath, and insecureFlag are the raw --context, --config,
+// and --insecure flag values. cmd supplies ErrOrStderr and InOrStdin for the
+// WarnInsecureTLS write and the TOFU prompt. isTTY decides whether the TOFU
 // manual-verify callback may prompt interactively; callers that must never
-// block (completion) should pass a func that always returns false rather
-// than isInteractiveInput, regardless of the caller's actual stdin.
+// block, such as a completion helper, pass a func that always returns false.
 func BuildContextClient(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
 ) (*apiclient.APIClient, *config.Context, error) {
-	opts, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	ac, ctx, _, err := BuildContextClientConn(
+		cmd, cfg, configPath, contextFlag, ConnectionOverrides{Insecure: insecureFlag}, isTTY)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	return ac, ctx, nil
+}
+
+// BuildContextClientConn resolves the active context, applies the
+// per-invocation connection overrides ov to it, and constructs the Proxmox VE
+// client, returning the client, the resolved context, and the Connection the
+// client dials. It rejects a context whose product is "pbs" or "pdm". A
+// client construction failure names the host that was dialled, which is the
+// overridden host under an endpoint override.
+func BuildContextClientConn(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, ov ConnectionOverrides, isTTY func() bool,
+) (*apiclient.APIClient, *config.Context, Connection, error) {
+	opts, conn, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, ov, isTTY)
+	if err != nil {
+		return nil, nil, Connection{}, err
 	}
 
 	switch ctx.Product {
 	case config.ProductPVE, "":
 		// ok
 	case config.ProductPBS, config.ProductPDM:
-		return nil, nil, productMismatchError(cmd, contextName, ctx.Product, config.ProductPVE)
+		return nil, nil, Connection{}, productMismatchError(cmd, contextName, ctx.Product, config.ProductPVE)
 	default:
-		return nil, nil, fmt.Errorf("unsupported product %q", ctx.Product)
+		return nil, nil, Connection{}, fmt.Errorf("unsupported product %q", ctx.Product)
 	}
 
 	ac, err := apiclient.NewAPIClient(opts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+		return nil, nil, Connection{}, fmt.Errorf("connect to %s: %w", conn.Host, err)
 	}
 
-	return ac, ctx, nil
+	return ac, ctx, conn, nil
 }
 
 // BuildContextPBSClient is BuildContextClient's Proxmox Backup Server
-// counterpart: identical context resolution, secret handling, and TLS/TOFU
-// wiring, but it requires the resolved context to declare product "pbs" and
-// constructs an *apiclient.PBSClient. apiclient.NewPBSClient fills the
-// PBS-specific option defaults (port 8007, PBSAPIToken, PBSAuthCookie) for
-// any of those fields still zero-valued after context resolution.
+// counterpart. It is BuildContextPBSClientConn with
+// ConnectionOverrides{Insecure: insecureFlag}, without the resolved
+// Connection.
 func BuildContextPBSClient(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
 ) (*apiclient.PBSClient, *config.Context, error) {
-	opts, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	pc, ctx, _, err := BuildContextPBSClientConn(
+		cmd, cfg, configPath, contextFlag, ConnectionOverrides{Insecure: insecureFlag}, isTTY)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	if ctx.Product != config.ProductPBS {
-		return nil, nil, productMismatchError(cmd, contextName, ctx.Product, config.ProductPBS)
-	}
-
-	pc, err := apiclient.NewPBSClient(opts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
 	}
 
 	return pc, ctx, nil
 }
 
+// BuildContextPBSClientConn is BuildContextClientConn's Proxmox Backup Server
+// counterpart: identical context resolution, override handling, secret
+// handling, and TLS/TOFU wiring, but it requires the resolved context to
+// declare product "pbs" and constructs an *apiclient.PBSClient.
+// apiclient.NewPBSClient fills the PBS-specific option defaults (port 8007,
+// PBSAPIToken, PBSAuthCookie) for any of those fields still zero-valued after
+// context resolution.
+func BuildContextPBSClientConn(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, ov ConnectionOverrides, isTTY func() bool,
+) (*apiclient.PBSClient, *config.Context, Connection, error) {
+	opts, conn, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, ov, isTTY)
+	if err != nil {
+		return nil, nil, Connection{}, err
+	}
+
+	if ctx.Product != config.ProductPBS {
+		return nil, nil, Connection{}, productMismatchError(cmd, contextName, ctx.Product, config.ProductPBS)
+	}
+
+	pc, err := apiclient.NewPBSClient(opts)
+	if err != nil {
+		return nil, nil, Connection{}, fmt.Errorf("connect to %s: %w", conn.Host, err)
+	}
+
+	return pc, ctx, conn, nil
+}
+
 // BuildContextPDMClient is BuildContextClient's Proxmox Datacenter Manager
-// counterpart: identical context resolution, secret handling, and TLS/TOFU
-// wiring, but it requires the resolved context to declare product "pdm" and
-// constructs an *apiclient.PDMClient. apiclient.NewPDMClient fills the
-// PDM-specific option defaults (port 8443, PDMAPIToken, PDMAuthCookie) for
-// any of those fields still zero-valued after context resolution.
+// counterpart. It is BuildContextPDMClientConn with
+// ConnectionOverrides{Insecure: insecureFlag}, without the resolved
+// Connection.
 func BuildContextPDMClient(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
 ) (*apiclient.PDMClient, *config.Context, error) {
-	opts, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	dc, ctx, _, err := BuildContextPDMClientConn(
+		cmd, cfg, configPath, contextFlag, ConnectionOverrides{Insecure: insecureFlag}, isTTY)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	return dc, ctx, nil
+}
+
+// BuildContextPDMClientConn is BuildContextClientConn's Proxmox Datacenter
+// Manager counterpart: identical context resolution, override handling,
+// secret handling, and TLS/TOFU wiring, but it requires the resolved context
+// to declare product "pdm" and constructs an *apiclient.PDMClient.
+// apiclient.NewPDMClient fills the PDM-specific option defaults (port 8443,
+// PDMAPIToken, PDMAuthCookie) for any of those fields still zero-valued after
+// context resolution.
+func BuildContextPDMClientConn(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, ov ConnectionOverrides, isTTY func() bool,
+) (*apiclient.PDMClient, *config.Context, Connection, error) {
+	opts, conn, ctx, contextName, err := buildContextOptions(cmd, cfg, configPath, contextFlag, ov, isTTY)
+	if err != nil {
+		return nil, nil, Connection{}, err
+	}
+
 	if ctx.Product != config.ProductPDM {
-		return nil, nil, productMismatchError(cmd, contextName, ctx.Product, config.ProductPDM)
+		return nil, nil, Connection{}, productMismatchError(cmd, contextName, ctx.Product, config.ProductPDM)
 	}
 
 	dc, err := apiclient.NewPDMClient(opts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+		return nil, nil, Connection{}, fmt.Errorf("connect to %s: %w", conn.Host, err)
 	}
 
-	return dc, ctx, nil
+	return dc, ctx, conn, nil
 }
 
 // productMismatchError builds the cross-product guard error for a command
@@ -1093,59 +1146,83 @@ type Clients struct {
 }
 
 // BuildContextAnyClient resolves the active context product-agnostically and
-// builds the client matching its product. Exactly one field of the returned
-// Clients is non-nil. Unlike BuildContextClient / BuildContextPBSClient /
-// BuildContextPDMClient it applies no cross-product guard: it is used only by
-// shared commands annotated ProductFromContext, which are valid against any
-// product. An unrecognized ctx.Product errors rather than silently falling
-// back to a PVE client (see the Global Constraints "no silent PVE fallthrough"
-// rule).
+// builds the client matching its product, applying no per-invocation
+// connection override except insecureFlag. It is BuildContextAnyClientConn
+// with ConnectionOverrides{Insecure: insecureFlag}, without the resolved
+// Connection.
 func BuildContextAnyClient(
 	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
 ) (Clients, *config.Context, error) {
-	opts, ctx, _, err := buildContextOptions(cmd, cfg, configPath, contextFlag, insecureFlag, isTTY)
+	clients, ctx, _, err := BuildContextAnyClientConn(
+		cmd, cfg, configPath, contextFlag, ConnectionOverrides{Insecure: insecureFlag}, isTTY)
 	if err != nil {
 		return Clients{}, nil, err
+	}
+
+	return clients, ctx, nil
+}
+
+// BuildContextAnyClientConn resolves the active context product-agnostically,
+// applies the per-invocation connection overrides ov, and builds the client
+// matching its product, returning it with the resolved context and the
+// Connection the client dials. Exactly one field of the returned Clients is
+// non-nil. Unlike the per-product builders it applies no cross-product guard:
+// it is used only by shared commands annotated ProductFromContext, which are
+// valid against any product. An unrecognized ctx.Product errors rather than
+// silently falling back to a PVE client.
+func BuildContextAnyClientConn(
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, ov ConnectionOverrides, isTTY func() bool,
+) (Clients, *config.Context, Connection, error) {
+	opts, conn, ctx, _, err := buildContextOptions(cmd, cfg, configPath, contextFlag, ov, isTTY)
+	if err != nil {
+		return Clients{}, nil, Connection{}, err
 	}
 
 	switch ctx.Product {
 	case config.ProductPBS:
 		pc, err := apiclient.NewPBSClient(opts)
 		if err != nil {
-			return Clients{}, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return Clients{}, nil, Connection{}, fmt.Errorf("connect to %s: %w", conn.Host, err)
 		}
-		return Clients{PBS: pc}, ctx, nil
+
+		return Clients{PBS: pc}, ctx, conn, nil
 	case config.ProductPDM:
 		dc, err := apiclient.NewPDMClient(opts)
 		if err != nil {
-			return Clients{}, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return Clients{}, nil, Connection{}, fmt.Errorf("connect to %s: %w", conn.Host, err)
 		}
-		return Clients{PDM: dc}, ctx, nil
+
+		return Clients{PDM: dc}, ctx, conn, nil
 	case config.ProductPVE, "":
 		ac, err := apiclient.NewAPIClient(opts)
 		if err != nil {
-			return Clients{}, nil, fmt.Errorf("connect to %s: %w", ctx.Host, err)
+			return Clients{}, nil, Connection{}, fmt.Errorf("connect to %s: %w", conn.Host, err)
 		}
-		return Clients{API: ac}, ctx, nil
+
+		return Clients{API: ac}, ctx, conn, nil
 	default:
-		return Clients{}, nil, fmt.Errorf("unsupported product %q", ctx.Product)
+		return Clients{}, nil, Connection{}, fmt.Errorf("unsupported product %q", ctx.Product)
 	}
 }
 
-// buildContextOptions performs the context-and-options resolution shared by
-// BuildContextClient and BuildContextPBSClient: active-context selection
-// (flag > env > config current-context), secret resolution, the insecure-TLS
-// merge/warning, credential selection by auth type, and TLS/TOFU option
-// wiring. It returns the fully wired pve.Options alongside the resolved
-// context and its name so the callers can apply their product guard and
-// construct the product-appropriate client.
+// buildContextOptions resolves the active context in flag, environment, and
+// current-context order, resolves its secret and credentials, resolves its
+// connection, and returns the fully wired pve.Options that every product
+// client is built from, together with the Connection it resolved, the
+// resolved context, and its name, so the callers can apply their product
+// guard and construct the product-appropriate client.
 func buildContextOptions(
-	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string, insecureFlag bool, isTTY func() bool,
-) (pve.Options, *config.Context, string, error) {
+	cmd *cobra.Command, cfg *config.Config, configPath, contextFlag string,
+	ov ConnectionOverrides, isTTY func() bool,
+) (pve.Options, Connection, *config.Context, string, error) {
+	if cfg == nil {
+		return pve.Options{}, Connection{}, nil, "", fmt.Errorf("no configuration is loaded (config: %s)", configPath)
+	}
+
 	contextName := config.Resolve(contextFlag, "PMX_CONTEXT", cfg.CurrentContext, "")
 	if contextName == "" {
 		prefix := CommandPrefix(cmd)
-		return pve.Options{}, nil, "", fmt.Errorf(
+		return pve.Options{}, Connection{}, nil, "", fmt.Errorf(
 			"no context specified: use --context/-c, set $PMX_CONTEXT, or run '%s context select' (config: %s)",
 			prefix, configPath,
 		)
@@ -1153,86 +1230,178 @@ func buildContextOptions(
 
 	ctx, _, err := config.ResolveContext(cfg, contextName)
 	if err != nil {
-		return pve.Options{}, nil, "", fmt.Errorf("resolve context %q: %w", contextName, err)
+		return pve.Options{}, Connection{}, nil, "", fmt.Errorf("resolve context %q: %w", contextName, err)
 	}
 
-	// Resolve the secret (env ref, keychain ref, or literal).
-	secret, err := config.ResolveSecret(ctx.Auth.Secret)
+	opts, conn, err := ContextOptions(cmd, ctx, contextName, configPath, ov, Credentials{}, isTTY)
 	if err != nil {
-		return pve.Options{}, nil, "", fmt.Errorf("resolve secret for context %q: %w", contextName, err)
+		return pve.Options{}, Connection{}, nil, "", err
 	}
 
-	// Determine TLS flag: --insecure flag overrides config.
-	insecure := insecureFlag || ctx.TLS.Insecure
-	if insecure {
-		WarnInsecureTLS(cmd.ErrOrStderr())
+	return opts, conn, ctx, contextName, nil
+}
+
+// Credentials selects which credential BuildOptions embeds, overriding what
+// ctx.Auth would produce. The auth verbs use it, because they authenticate
+// with values typed on the command line rather than stored ones.
+//
+// When Override is false the other fields are ignored and ContextOptions
+// derives the credential from the context. When it is true the fields are
+// embedded exactly as given, including an empty Realm, so the caller decides
+// every value. BuildOptions picks the token first, then the ticket with its
+// CSRF token, then the username and password pair.
+type Credentials struct {
+	Override                                       bool
+	Username, Realm, Token, Password, Ticket, CSRF string
+}
+
+// ContextOptions is buildContextOptions for a context the caller already
+// looked up, with an explicit credential selection. The caller may pass the
+// raw context stored in cfg.Contexts, because ResolveConnection clones it
+// before applying defaults, and the credential is derived from a separate
+// defaults-applied clone, so nothing ContextOptions does can write to it.
+// It returns the Connection it resolved alongside the options, so a caller
+// resolves once and reads the endpoint and the route from that one result.
+// A zero creds value means "derive the credential from ctx.Auth", which is
+// what every command outside the auth group wants.
+//
+// It runs in this order. It resolves the connection with ResolveConnection,
+// so a malformed override fails before any secret is read. It derives the
+// credential, resolving ctx.Auth.Secret unless creds overrides it. It warns
+// on standard error when TLS verification is off and prints each of the
+// connection's notes there, once per call. It builds the options for the
+// resolved endpoint and trust settings, wires a CA bundle when the
+// connection is not insecure, and wires trust on first use through
+// ApplyTOFUOptions. When an endpoint override left the context's
+// fingerprint cache read-only, it points the kit at that cache with no
+// manual-verify callback, so a certificate the context already trusts
+// verifies and no new one is ever written. Last, Connection.ApplyToOptions
+// installs the proxy, the timeouts, and the jump dialer, and a proxy
+// password that does not resolve fails there.
+func ContextOptions(
+	cmd *cobra.Command, ctx *config.Context, contextName, configPath string,
+	ov ConnectionOverrides, creds Credentials, isTTY func() bool,
+) (pve.Options, Connection, error) {
+	if cmd == nil {
+		return pve.Options{}, Connection{}, fmt.Errorf("build options for context %q: the command is nil", contextName)
 	}
 
-	// Select the credential BuildOptions embeds by auth type.
-	var ticket, csrf, password string
-	switch ctx.Auth.Type {
-	case "password":
-		if ctx.Auth.Session != nil && ctx.Auth.Session.Ticket != "" {
-			ticket = ctx.Auth.Session.Ticket
-			csrf = ctx.Auth.Session.CSRF
-		} else {
-			password = secret
+	if contextName == "" {
+		return pve.Options{}, Connection{}, errors.New("build options: the context name is empty")
+	}
+
+	conn, err := ResolveConnection(contextName, ctx, ov)
+	if err != nil {
+		return pve.Options{}, Connection{}, err
+	}
+
+	if !creds.Override {
+		creds, err = contextCredentials(ctx, contextName)
+		if err != nil {
+			return pve.Options{}, Connection{}, err
 		}
 	}
 
-	var token string
-	if ctx.Auth.Type == "token" {
-		// secret may be just the value; token-id comes from TokenID field.
-		// Format expected by BuildOptions: "tokenid=secret" or just secret.
-		if ctx.Auth.TokenID != "" {
-			token = ctx.Auth.TokenID + "=" + secret
-		} else {
-			token = secret
-		}
+	stderr := cmd.ErrOrStderr()
+
+	if conn.Insecure {
+		WarnInsecureTLS(stderr)
+	}
+
+	for _, note := range conn.Notes {
+		_, _ = fmt.Fprintln(stderr, note)
 	}
 
 	opts := apiclient.BuildOptions(
-		ctx.Host,
-		ctx.Port,
-		ctx.Protocol,
-		ctx.Auth.Username,
-		ctx.Realm,
-		token,
-		password,
-		ticket,
-		csrf,
-		insecure,
-		ctx.TLS.Fingerprint,
+		conn.Host,
+		conn.Port,
+		conn.Protocol,
+		creds.Username,
+		creds.Realm,
+		creds.Token,
+		creds.Password,
+		creds.Ticket,
+		creds.CSRF,
+		conn.Insecure,
+		conn.Fingerprint,
 	)
-	if ctx.TLS.CACert != "" && !insecure {
+
+	if conn.CACert != "" && !conn.Insecure {
 		// A declared CA bundle replaces system roots and enables hostname
 		// verification. Explicit fingerprint or TOFU policies retain their
 		// existing precedence over CA verification in the SDK.
 		opts.SSLOptions = &pve.SSLOptions{
 			VerifyMode:     pve.SSLVerifyPeer,
 			VerifyHostname: true,
-			CACert:         ctx.TLS.CACert,
+			CACert:         conn.CACert,
 		}
 	}
 
 	opts = ApplyTOFUOptions(
 		opts,
-		ctx.TLS.Tofu,
-		insecure,
+		conn.TOFU,
+		conn.Insecure,
 		configPath,
 		contextName,
-		cmd.ErrOrStderr(),
+		stderr,
 		cmd.InOrStdin(),
 		isTTY,
 	)
 
-	// Routing the connection through the context's ssh jump host is the last
-	// step deliberately: it changes only where the TCP connection originates,
-	// and every TLS decision above still applies against ctx.Host at the far
-	// end.
-	opts = apiclient.ApplyJumpOptions(opts, ctx.SSH.Jump)
+	if conn.TOFUReadOnly && !conn.Insecure {
+		// The kit reads the cache and, with no callback to ask, rejects a
+		// certificate it does not hold instead of recording it, so an
+		// overridden host can never be trusted into this context's cache.
+		opts.FingerprintCachePath = apiclient.FingerprintCachePath(configPath, contextName)
+		opts.ManualVerifyCallback = nil
+	}
 
-	return opts, ctx, contextName, nil
+	// The transport comes last deliberately: the proxy and the jump change
+	// only where the TCP connection originates, and every TLS decision above
+	// still applies against conn.Host at the far end.
+	opts, err = conn.ApplyToOptions(opts)
+	if err != nil {
+		return pve.Options{}, Connection{}, err
+	}
+
+	return opts, conn, nil
+}
+
+// contextCredentials derives the credential BuildOptions embeds from ctx's
+// auth block, on a defaults-applied clone so a context that omits its realm
+// still authenticates against "pam" without that default being written back.
+// It resolves the secret whatever the auth type, as the root always has, so
+// a secret reference that does not resolve fails every client build. A
+// password context with a stored session uses the session's ticket and CSRF
+// token instead of the password, and a token context embeds the token as
+// "tokenid=secret", or the bare secret when no token ID is stored.
+func contextCredentials(ctx *config.Context, contextName string) (Credentials, error) {
+	resolved := config.CloneContext(ctx)
+	config.ApplyDefaults(resolved)
+
+	secret, err := config.ResolveSecret(resolved.Auth.Secret)
+	if err != nil {
+		return Credentials{}, fmt.Errorf("resolve secret for context %q: %w", contextName, err)
+	}
+
+	creds := Credentials{Username: resolved.Auth.Username, Realm: resolved.Realm}
+
+	switch resolved.Auth.Type {
+	case "password":
+		if session := resolved.Auth.Session; session != nil && session.Ticket != "" {
+			creds.Ticket, creds.CSRF = session.Ticket, session.CSRF
+		} else {
+			creds.Password = secret
+		}
+	case "token":
+		if resolved.Auth.TokenID != "" {
+			creds.Token = resolved.Auth.TokenID + "=" + secret
+		} else {
+			creds.Token = secret
+		}
+	}
+
+	return creds, nil
 }
 
 // isInteractiveInput reports whether in is an interactive terminal, used to

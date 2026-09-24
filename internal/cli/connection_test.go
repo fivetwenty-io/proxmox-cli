@@ -737,7 +737,7 @@ func TestResolveConnection_ProxyFromEnvTriState(t *testing.T) {
 	require.Equal(t, "socks5://proxy-ctx:1080", proxyURL(mustResolve(t, withURL(new(false)))))
 
 	_, err := resolveArgs(t, withURL(new(true)))
-	require.EqualError(t, err, "proxy.url and proxy.from-env are both set; use one or the other")
+	require.EqualError(t, err, `context "lab": proxy.url and proxy.from-env are both set; use one or the other`)
 }
 
 // TestResolveConnection_ProxyConflictNamesItsSource proves the conflict
@@ -806,7 +806,7 @@ func TestResolveConnection_JumpLadder(t *testing.T) {
 
 	t.Run("a rejected ssh.jump", func(t *testing.T) {
 		_, err := resolveArgs(t, withContext(func(c *config.Context) { c.SSH.Jump = "x;id" }))
-		require.EqualError(t, err, fmt.Sprintf("ssh.jump %q is not valid: %v", "x;id", chainErr))
+		require.EqualError(t, err, fmt.Sprintf("context %q: ssh.jump %q is not valid: %v", "lab", "x;id", chainErr))
 	})
 
 	t.Run("a rejected --api-jump", func(t *testing.T) {
@@ -1004,8 +1004,8 @@ func TestResolveConnection_PerformsNoSecretIO(t *testing.T) {
 
 // TestResolveConnection_StoredProxyURLNeverLeaks proves a stored proxy.url
 // that does not parse, or that embeds credentials, fails through the
-// resolver with exactly the block checker's text and never with the
-// password.
+// resolver with the block checker's text, named to the context it came
+// from, and never with the password.
 func TestResolveConnection_StoredProxyURLNeverLeaks(t *testing.T) {
 	cases := []struct {
 		raw      string
@@ -1041,8 +1041,10 @@ func TestResolveConnection_StoredProxyURLNeverLeaks(t *testing.T) {
 
 			_, err := cli.ResolveConnection("lab", stored, cli.ConnectionOverrides{})
 			require.Error(t, err)
-			require.Equal(t, tc.want, err.Error())
-			require.Equal(t, strings.Join(config.ValidateProxyBlock(&stored.Proxy), "; "), err.Error())
+			require.Equal(t, fmt.Sprintf("context %q: %s", "lab", tc.want), err.Error())
+			require.Equal(t,
+				fmt.Sprintf("context %q: %s", "lab", strings.Join(config.ValidateProxyBlock(&stored.Proxy), "; ")),
+				err.Error())
 			require.NotContains(t, err.Error(), tc.password)
 			require.NotContains(t, err.Error(), "pmx:", "the embed-credentials message masks the whole userinfo")
 		})
@@ -1617,7 +1619,7 @@ func TestOverridesFromCommand_RejectsMalformedProxy(t *testing.T) {
 				withContext(func(c *config.Context) {
 					c.Proxy = config.ProxyBlock{URL: raw, Username: "pmx", Password: "literal-s3cret"}
 				}), cli.ConnectionOverrides{})
-			require.EqualError(t, err, "proxy.url "+raw+" must use a port from 1 to 65535")
+			require.EqualError(t, err, `context "lab": proxy.url `+raw+" must use a port from 1 to 65535")
 			require.NotContains(t, err.Error(), "s3cret")
 		}
 	})

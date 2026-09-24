@@ -3278,3 +3278,606 @@ func writeTwoContextConfig(t *testing.T) string {
 	}))
 	return cfgPath
 }
+
+// ---------------------------------------------------------------------------
+// ContextOptions and the override-aware client builders
+// ---------------------------------------------------------------------------
+
+// testPinA and testPinB are two distinct, well-formed SHA-256 pins.
+var (
+	testPinA = strings.TrimSuffix(strings.Repeat("AA:", 32), ":")
+	testPinB = strings.TrimSuffix(strings.Repeat("BB:", 32), ":")
+)
+
+// connectionLeaf parses args with the real root's flag set onto a bare leaf
+// command and returns the leaf, the overrides OverridesFromCommand reads off
+// it, and the buffer the root writes standard error to. It fails the test
+// when the overrides do not parse.
+func connectionLeaf(t *testing.T, args ...string) (*cobra.Command, cli.ConnectionOverrides, *bytes.Buffer) {
+	t.Helper()
+
+	root, cleanup := cli.NewRootCmd("pmx")
+	t.Cleanup(cleanup)
+	root.AddCommand(&cobra.Command{Use: "leaf", RunE: func(*cobra.Command, []string) error { return nil }})
+
+	var stderr bytes.Buffer
+	root.SetErr(&stderr)
+	root.SetIn(strings.NewReader(""))
+
+	leaf, rest, err := root.Find(append([]string{"leaf"}, args...))
+	require.NoError(t, err)
+	require.NoError(t, leaf.ParseFlags(rest))
+
+	ov, err := cli.OverridesFromCommand(leaf)
+	require.NoError(t, err)
+
+	return leaf, ov, &stderr
+}
+
+// rawLabContext returns a context as it would sit in cfg.Contexts straight
+// from the file, with no port, protocol, or realm, so any default written
+// back into it would show. Each call returns a fresh value, so a test can
+// compare the one it passed in against an untouched twin.
+func rawLabContext() *config.Context {
+	fromEnv := false
+
+	return &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{
+			Type: "token", Username: "root", TokenID: "tok", Secret: "s3cret",
+			Session: &config.Session{Ticket: "old-ticket", CSRF: "old-csrf", ExpiresAt: 1},
+		},
+		TLS: config.TLSBlock{Tofu: true, Fingerprint: testPinA},
+		SSH: config.SSHBlock{Jump: "bastion.example.com"},
+		Proxy: config.ProxyBlock{
+			URL: "socks5h://proxy.test:1080", Username: "proxyuser", Password: "proxypass", FromEnv: &fromEnv,
+		},
+		Timeout: config.TimeoutBlock{Connect: "3s", TLSHandshake: "4s", Request: "45s"},
+	}
+}
+
+// countLines returns how many lines of s contain substr.
+func countLines(s, substr string) int {
+	n := 0
+
+	for line := range strings.SplitSeq(s, "\n") {
+		if strings.Contains(line, substr) {
+			n++
+		}
+	}
+
+	return n
+}
+
+// TestContextOptions_LeavesStoredContextUnchanged passes the raw stored
+// context and proves that ContextOptions writes nothing back into it, while
+// the options it returns still carry the product defaults, the derived
+// credential, and the whole transport.
+func TestContextOptions_LeavesStoredContextUnchanged(t *testing.T) {
+	cmd, ov, _ := connectionLeaf(t)
+	stored := rawLabContext()
+
+	before, err := json.Marshal(stored)
+	require.NoError(t, err)
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	opts, conn, err := cli.ContextOptions(cmd, stored, "lab", cfgPath, ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+
+	after, err := json.Marshal(stored)
+	require.NoError(t, err)
+	require.Equal(t, string(before), string(after), "the stored context must stay byte-for-byte unchanged")
+	require.Equal(t, rawLabContext(), stored)
+
+	require.Equal(t, "pve1.example.com", opts.Host)
+	require.Equal(t, 8006, opts.Port, "the product default port must reach the options")
+	require.Equal(t, "https", opts.Protocol)
+	require.Equal(t, "root@pam!tok=s3cret", opts.APIToken, "the default realm must qualify the token user")
+
+	require.Equal(t, 3, opts.DialTimeoutSec)
+	require.Equal(t, 3+4+1, opts.TLSHandshakeTimeoutSec, "through a jump the handshake bound adds the connect bound")
+	require.Equal(t, 45*time.Second, opts.Timeout)
+	require.NotNil(t, opts.Proxy, "the stored proxy must be installed")
+	require.NotNil(t, opts.DialContext, "the stored jump must be installed")
+
+	require.Equal(t, "lab", conn.ContextName)
+	require.Equal(t, "pve1.example.com", conn.Host)
+	require.Equal(t, "bastion.example.com", conn.Jump.Chain)
+	require.Equal(t, "proxypass", conn.Proxy.PasswordRef, "the connection keeps the stored value unresolved")
+}
+
+// TestBuildContextClient_BareContextOptionsUnchanged pins the pve.Options a
+// context with no proxy, ssh.jump, or timeout block produces, so a future
+// change to ApplyToOptions or resolvedTimeouts fails this test instead of
+// silently changing a bare context's transport.
+func TestBuildContextClient_BareContextOptionsUnchanged(t *testing.T) {
+	bare := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root", TokenID: "tok", Secret: "s3cret"},
+	}
+
+	t.Run("no proxy, no jump, no timeout block", func(t *testing.T) {
+		cmd, _, _ := connectionLeaf(t)
+
+		opts, conn, err := cli.ContextOptions(cmd, bare, "lab", "", cli.ConnectionOverrides{}, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+
+		require.Equal(t, 5, opts.DialTimeoutSec)
+		require.Equal(t, 10, opts.TLSHandshakeTimeoutSec)
+		require.Equal(t, 30*time.Second, opts.Timeout)
+		require.Nil(t, opts.Proxy)
+		require.Nil(t, opts.DialContext)
+		require.Empty(t, opts.FingerprintCachePath)
+		require.Nil(t, opts.ManualVerifyCallback)
+		require.Nil(t, opts.SSLOptions)
+		require.Equal(t, "root@pam!tok=s3cret", opts.APIToken)
+
+		require.Empty(t, conn.Jump.Chain)
+	})
+
+	t.Run("ssh.jump set", func(t *testing.T) {
+		jumpy := &config.Context{
+			Host: "pve1.example.com",
+			Auth: config.AuthBlock{Type: "token", Username: "root", TokenID: "tok", Secret: "s3cret"},
+			SSH:  config.SSHBlock{Jump: "bastion.example.com"},
+		}
+		cmd, _, _ := connectionLeaf(t)
+
+		opts, conn, err := cli.ContextOptions(cmd, jumpy, "lab", "", cli.ConnectionOverrides{}, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+
+		require.Equal(t, 5+10+1, opts.TLSHandshakeTimeoutSec, "the intended change: a jump adds the connect bound and one second")
+		require.NotNil(t, opts.DialContext, "the intended change: a jump installs a dialer")
+		require.Equal(t, "bastion.example.com", conn.Jump.Chain)
+	})
+}
+
+// TestContextOptions_WiresCACert proves that a stored CA bundle reaches the
+// kit as peer verification with hostname checks, and that an insecure
+// connection keeps verification off instead.
+func TestContextOptions_WiresCACert(t *testing.T) {
+	cmd, ov, _ := connectionLeaf(t)
+
+	ctx := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+		TLS:  config.TLSBlock{CACert: "/etc/pmx/ca.pem"},
+	}
+
+	opts, conn, err := cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, opts.SSLOptions)
+	require.Equal(t, "/etc/pmx/ca.pem", opts.SSLOptions.CACert)
+	require.Equal(t, pve.SSLVerifyPeer, opts.SSLOptions.VerifyMode)
+	require.True(t, opts.SSLOptions.VerifyHostname)
+	require.Equal(t, "/etc/pmx/ca.pem", conn.CACert)
+
+	ctx.TLS.Insecure = true
+	opts, _, err = cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, opts.SSLOptions)
+	require.Equal(t, pve.SSLVerifyNone, opts.SSLOptions.VerifyMode, "insecure must win over the CA bundle")
+	require.Empty(t, opts.SSLOptions.CACert)
+}
+
+// TestContextOptions_StoredPinKeepsTOFUPrompt proves that a context which
+// pins a fingerprint and also enables trust on first use keeps both the
+// cache path and the manual-verify callback, exactly as it always has.
+func TestContextOptions_StoredPinKeepsTOFUPrompt(t *testing.T) {
+	cmd, ov, _ := connectionLeaf(t)
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+
+	opts, conn, err := cli.ContextOptions(cmd, rawLabContext(), "lab", cfgPath, ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.Equal(t, apiclient.FingerprintCachePath(cfgPath, "lab"), opts.FingerprintCachePath)
+	require.NotNil(t, opts.ManualVerifyCallback)
+	require.True(t, opts.CachedFingerprints[testPinA])
+	require.True(t, conn.TOFU)
+}
+
+// TestContextOptions_FingerprintOverrideIsExclusive proves that a
+// per-invocation pin replaces the context's whole trust mode: no trust-on-
+// first-use cache, no prompt, and only the override's pin.
+func TestContextOptions_FingerprintOverrideIsExclusive(t *testing.T) {
+	cmd, ov, _ := connectionLeaf(t, "--api-fingerprint", testPinB)
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+
+	opts, conn, err := cli.ContextOptions(cmd, rawLabContext(), "lab", cfgPath, ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.Empty(t, opts.FingerprintCachePath, "a per-invocation pin must not read or write the TOFU cache")
+	require.Nil(t, opts.ManualVerifyCallback, "a per-invocation pin must never prompt")
+	require.Equal(t, map[string]bool{testPinB: true}, opts.CachedFingerprints,
+		"only the override's pin may be trusted")
+	require.False(t, conn.TOFU)
+	require.False(t, conn.TOFUReadOnly)
+	require.Equal(t, "--api-fingerprint", conn.FingerprintSource)
+}
+
+// TestContextOptions_EndpointOverrideReadsTOFUCache proves that an endpoint
+// override on a trust-on-first-use context reads the context's cache with no
+// callback, so nothing new can be trusted, and that an insecure connection
+// gets neither.
+func TestContextOptions_EndpointOverrideReadsTOFUCache(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+
+	newCtx := func() *config.Context {
+		return &config.Context{
+			Host: "pve1.example.com",
+			Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+			TLS:  config.TLSBlock{Tofu: true},
+		}
+	}
+
+	t.Run("verifying", func(t *testing.T) {
+		cmd, ov, _ := connectionLeaf(t, "--api-endpoint", "pve9:9999")
+
+		opts, conn, err := cli.ContextOptions(cmd, newCtx(), "lab", cfgPath, ov, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+		require.Equal(t, "pve9", opts.Host)
+		require.Equal(t, 9999, opts.Port)
+		require.Equal(t, apiclient.FingerprintCachePath(cfgPath, "lab"), opts.FingerprintCachePath)
+		require.Nil(t, opts.ManualVerifyCallback, "an endpoint override must never write the TOFU cache")
+		require.False(t, conn.TOFU)
+		require.True(t, conn.TOFUReadOnly)
+	})
+
+	t.Run("insecure", func(t *testing.T) {
+		cmd, ov, _ := connectionLeaf(t, "--api-endpoint", "pve9:9999")
+		ctx := newCtx()
+		ctx.TLS.Insecure = true
+
+		opts, conn, err := cli.ContextOptions(cmd, ctx, "lab", cfgPath, ov, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+		require.Empty(t, opts.FingerprintCachePath, "insecure outranks trust on first use")
+		require.Nil(t, opts.ManualVerifyCallback)
+		require.False(t, conn.TOFUReadOnly)
+	})
+
+	t.Run("root insecure", func(t *testing.T) {
+		cmd, ov, _ := connectionLeaf(t, "--insecure", "--api-endpoint", "pve9:9999")
+
+		opts, _, err := cli.ContextOptions(cmd, newCtx(), "lab", cfgPath, ov, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+		require.Empty(t, opts.FingerprintCachePath)
+		require.Nil(t, opts.ManualVerifyCallback)
+	})
+}
+
+// TestContextOptions_InsecureWarnsOnce proves that an insecure connection
+// prints the warning exactly once per build, whether the context, the root's
+// --insecure, or both turned verification off.
+func TestContextOptions_InsecureWarnsOnce(t *testing.T) {
+	const warning = "WARN: TLS certificate verification disabled"
+
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		ctxInsecure bool
+		wantWarning int
+	}{
+		{"context", nil, true, 1},
+		{"flag", []string{"--insecure"}, false, 1},
+		{"both", []string{"--insecure"}, true, 1},
+		{"neither", nil, false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, ov, stderr := connectionLeaf(t, tc.args...)
+			ctx := &config.Context{
+				Host: "pve1.example.com",
+				Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+				TLS:  config.TLSBlock{Insecure: tc.ctxInsecure},
+			}
+
+			_, _, err := cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantWarning, countLines(stderr.String(), warning), "stderr: %q", stderr.String())
+		})
+	}
+}
+
+// TestContextOptions_PrintsEnvOverrideNoteOnce proves that an endpoint from
+// $PMX_API_ENDPOINT is announced exactly once on standard error, and that the
+// same endpoint typed as --api-endpoint is not announced at all.
+func TestContextOptions_PrintsEnvOverrideNoteOnce(t *testing.T) {
+	newCtx := func() *config.Context {
+		return &config.Context{
+			Host: "pve1.example.com",
+			Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+		}
+	}
+
+	t.Run("environment", func(t *testing.T) {
+		t.Setenv("PMX_API_ENDPOINT", "pve9:9999")
+		cmd, ov, stderr := connectionLeaf(t)
+
+		_, conn, err := cli.ContextOptions(cmd, newCtx(), "lab", "", ov, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+		require.Equal(t, "pve9", conn.Host)
+		require.Equal(t, 1, countLines(stderr.String(), "note:"), "stderr: %q", stderr.String())
+		require.Equal(t, 1, countLines(stderr.String(),
+			`note: $PMX_API_ENDPOINT (pve9:9999) overrides the endpoint of context "lab"`),
+			"stderr: %q", stderr.String())
+	})
+
+	t.Run("flag", func(t *testing.T) {
+		cmd, ov, stderr := connectionLeaf(t, "--api-endpoint", "pve9:9999")
+
+		_, conn, err := cli.ContextOptions(cmd, newCtx(), "lab", "", ov, cli.Credentials{}, neverTTY)
+		require.NoError(t, err)
+		require.Equal(t, "pve9", conn.Host)
+		require.Equal(t, "--api-endpoint", conn.EndpointSource)
+		require.Zero(t, countLines(stderr.String(), "note:"), "stderr: %q", stderr.String())
+	})
+}
+
+// TestContextOptions_UnresolvableProxyPassword proves that a proxy password
+// naming an unset variable fails the build with the context named, rather
+// than building a client that skips the proxy or sends no credential.
+func TestContextOptions_UnresolvableProxyPassword(t *testing.T) {
+	t.Setenv("PMX_TEST_UNSET_PROXY_PASSWORD", "")
+	require.NoError(t, os.Unsetenv("PMX_TEST_UNSET_PROXY_PASSWORD"))
+
+	cmd, ov, _ := connectionLeaf(t)
+	ctx := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+		Proxy: config.ProxyBlock{
+			URL: "socks5h://proxy.test:1080", Username: "proxyuser", Password: "${PMX_TEST_UNSET_PROXY_PASSWORD}",
+		},
+	}
+
+	opts, conn, err := cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.Error(t, err)
+	require.True(t, strings.HasPrefix(err.Error(), `resolve proxy.password for context "lab": `), err.Error())
+	require.Zero(t, opts.Host, "a failed build must return zero options")
+	require.Nil(t, opts.Proxy)
+	require.Zero(t, conn.Host, "a failed build must return a zero connection")
+}
+
+// TestContextOptions_CredentialsOverride proves that an explicit credential
+// replaces the one ctx.Auth would produce, without resolving the stored
+// secret, and that a zero value derives it from the context.
+func TestContextOptions_CredentialsOverride(t *testing.T) {
+	t.Setenv("PMX_TEST_UNSET_SECRET", "")
+	require.NoError(t, os.Unsetenv("PMX_TEST_UNSET_SECRET"))
+
+	cmd, ov, _ := connectionLeaf(t)
+	ctx := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{Type: "password", Username: "root", Secret: "${PMX_TEST_UNSET_SECRET}"},
+	}
+
+	opts, _, err := cli.ContextOptions(cmd, ctx, "lab", "", ov,
+		cli.Credentials{Override: true, Username: "alice", Realm: "pve", Password: "typed"}, neverTTY)
+	require.NoError(t, err, "an explicit credential must not resolve the stored secret")
+	require.Equal(t, "alice@pve", opts.Username)
+	require.Equal(t, "typed", opts.Password)
+	require.Empty(t, opts.APIToken)
+
+	opts, _, err = cli.ContextOptions(cmd, ctx, "lab", "", ov,
+		cli.Credentials{Override: true, Ticket: "PVE:t", CSRF: "c"}, neverTTY)
+	require.NoError(t, err)
+	require.Equal(t, "PVE:t", opts.Ticket)
+	require.Equal(t, "c", opts.CSRFToken)
+	require.Empty(t, opts.Password)
+
+	_, _, err = cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.Error(t, err)
+	require.True(t, strings.HasPrefix(err.Error(), `resolve secret for context "lab": `), err.Error())
+
+	ctx.Auth.Secret = "stored"
+	opts, _, err = cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.Equal(t, "root@pam", opts.Username, "the default realm must qualify the stored user")
+	require.Equal(t, "stored", opts.Password)
+
+	ctx.Auth.Session = &config.Session{Ticket: "PVE:session", CSRF: "session-csrf"}
+	opts, _, err = cli.ContextOptions(cmd, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.Equal(t, "PVE:session", opts.Ticket, "a stored session outranks the password")
+	require.Equal(t, "session-csrf", opts.CSRFToken)
+	require.Empty(t, opts.Password)
+}
+
+// TestContextOptions_OverridesReachTransport proves that the jump, proxy, and
+// timeout overrides reach the options, and that "none" drops the stored jump
+// and the stored proxy.
+func TestContextOptions_OverridesReachTransport(t *testing.T) {
+	cmd, ov, _ := connectionLeaf(t, "--api-jump", "none", "--api-proxy", "none",
+		"--api-connect-timeout", "7s", "--api-request-timeout", "90s")
+
+	opts, conn, err := cli.ContextOptions(cmd, rawLabContext(), "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.NoError(t, err)
+	require.Nil(t, opts.DialContext, "--api-jump none must dial direct")
+	require.Nil(t, opts.Proxy, "--api-proxy none must drop the stored proxy")
+	require.Equal(t, 7, opts.DialTimeoutSec)
+	require.Equal(t, 4, opts.TLSHandshakeTimeoutSec, "a direct dial keeps the stored handshake bound")
+	require.Equal(t, 90*time.Second, opts.Timeout)
+	require.Equal(t, "direct", conn.Via())
+}
+
+// TestContextOptions_RejectsInvalidInputs proves that a nil command, an empty
+// context name, a nil context, and an override the resolver refuses each fail
+// before anything is printed or built.
+func TestContextOptions_RejectsInvalidInputs(t *testing.T) {
+	cmd, ov, stderr := connectionLeaf(t)
+	ctx := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+		TLS:  config.TLSBlock{Insecure: true},
+	}
+
+	_, _, err := cli.ContextOptions(nil, ctx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.EqualError(t, err, `build options for context "lab": the command is nil`)
+
+	_, _, err = cli.ContextOptions(cmd, ctx, "", "", ov, cli.Credentials{}, neverTTY)
+	require.EqualError(t, err, "build options: the context name is empty")
+
+	_, _, err = cli.ContextOptions(cmd, nil, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.EqualError(t, err, `context "lab" is not defined`)
+
+	// A stored field that fails validation names the context it came from,
+	// so a caller that targets another context's connection, such as the
+	// lab family, never reads the failure as if it were its own context.
+	badJumpCtx := &config.Context{
+		Host: "pve1.example.com",
+		Auth: config.AuthBlock{Type: "token", Username: "root@pam", TokenID: "tok", Secret: "s"},
+		SSH:  config.SSHBlock{Jump: "bad host!"},
+	}
+	_, _, err = cli.ContextOptions(cmd, badJumpCtx, "lab", "", ov, cli.Credentials{}, neverTTY)
+	require.ErrorContains(t, err, `context "lab": ssh.jump "bad host!" is not valid`)
+
+	fpCmd, fpOv, fpStderr := connectionLeaf(t, "--api-fingerprint", testPinB)
+	_, _, err = cli.ContextOptions(fpCmd, ctx, "lab", "", fpOv, cli.Credentials{}, neverTTY)
+	require.NoError(t, err, "a trust override replaces the context's insecure setting")
+	require.Empty(t, fpStderr.String(), "a pinned connection is not insecure and must not warn")
+
+	insecureCmd, insecureOv, insecureStderr := connectionLeaf(t, "--insecure", "--api-fingerprint", testPinB)
+	_, _, err = cli.ContextOptions(insecureCmd, ctx, "lab", "", insecureOv, cli.Credentials{}, neverTTY)
+	require.EqualError(t, err, "--api-fingerprint cannot be combined with --insecure")
+	require.Empty(t, insecureStderr.String(), "a refused override must print nothing")
+
+	require.Empty(t, stderr.String())
+}
+
+// TestBuildContextClientConn_ReturnsResolvedConnection runs each of the four
+// override-aware builders under an endpoint override and proves that each
+// returns its client, the stored context, and the connection it dials.
+func TestBuildContextClientConn_ReturnsResolvedConnection(t *testing.T) {
+	cfg := newThreeContextConfig(t)
+	cmd, ov, _ := connectionLeaf(t, "--api-endpoint", "pve9:9999")
+
+	check := func(t *testing.T, ctx *config.Context, conn cli.Connection, wantProduct string) {
+		t.Helper()
+		require.Equal(t, wantProduct, ctx.Product)
+		require.Equal(t, "pve9", conn.Host)
+		require.Equal(t, 9999, conn.Port)
+		require.Equal(t, "--api-endpoint", conn.EndpointSource)
+	}
+
+	ac, ctx, conn, err := cli.BuildContextClientConn(cmd, cfg, "", "pve1", ov, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	check(t, ctx, conn, config.ProductPVE)
+	require.Equal(t, "pve1", conn.ContextName)
+
+	pc, ctx, conn, err := cli.BuildContextPBSClientConn(cmd, cfg, "", "pbs1", ov, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, pc)
+	check(t, ctx, conn, config.ProductPBS)
+
+	dc, ctx, conn, err := cli.BuildContextPDMClientConn(cmd, cfg, "", "pdm1", ov, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, dc)
+	check(t, ctx, conn, config.ProductPDM)
+
+	for _, name := range []string{"pve1", "pbs1", "pdm1"} {
+		clients, ctx, conn, err := cli.BuildContextAnyClientConn(cmd, cfg, "", name, ov, neverTTY)
+		require.NoError(t, err, name)
+		check(t, ctx, conn, cfg.Contexts[name].Product)
+		require.Equal(t, name, conn.ContextName)
+		require.True(t, clients.API != nil || clients.PBS != nil || clients.PDM != nil)
+	}
+
+	// Without an override the connection carries the stored endpoint.
+	_, _, conn, err = cli.BuildContextPBSClientConn(cmd, cfg, "", "pbs1", cli.ConnectionOverrides{}, neverTTY)
+	require.NoError(t, err)
+	require.Equal(t, "10.0.0.2", conn.Host)
+	require.Equal(t, 8007, conn.Port)
+	require.Empty(t, conn.EndpointSource)
+}
+
+// TestBuildContextClientConn_ProductGuardAndResolveErrors proves that each
+// product builder still rejects another product's context, and that a
+// refused override fails the build, each with a zero connection.
+func TestBuildContextClientConn_ProductGuardAndResolveErrors(t *testing.T) {
+	cfg := newThreeContextConfig(t)
+	cmd, ov, _ := connectionLeaf(t)
+
+	_, _, conn, err := cli.BuildContextClientConn(cmd, cfg, "", "pbs1", ov, neverTTY)
+	require.ErrorContains(t, err, "this command requires a PVE context")
+	require.Zero(t, conn.Host)
+
+	_, _, conn, err = cli.BuildContextPBSClientConn(cmd, cfg, "", "pve1", ov, neverTTY)
+	require.ErrorContains(t, err, "this command requires a PBS context")
+	require.Zero(t, conn.Host)
+
+	_, _, conn, err = cli.BuildContextPDMClientConn(cmd, cfg, "", "pve1", ov, neverTTY)
+	require.ErrorContains(t, err, "this command requires a PDM context")
+	require.Zero(t, conn.Host)
+
+	downgrade := cli.ConnectionOverrides{Host: "pve9", Protocol: "http", EndpointSource: "--api-endpoint"}
+	_, _, conn, err = cli.BuildContextClientConn(cmd, cfg, "", "pve1", downgrade, neverTTY)
+	require.EqualError(t, err,
+		`--api-endpoint would downgrade context "pve1" from https to http; set protocol: http on the context to allow it`)
+	require.Zero(t, conn.Host)
+
+	_, _, _, err = cli.BuildContextAnyClientConn(cmd, nil, "/tmp/config.yml", "pve1", ov, neverTTY)
+	require.EqualError(t, err, "no configuration is loaded (config: /tmp/config.yml)")
+}
+
+// TestBuildContextClientConn_ConnectErrorNamesResolvedHost proves that a
+// client construction failure names the host that was dialled, which under an
+// endpoint override is the overridden host rather than the stored one.
+func TestBuildContextClientConn_ConnectErrorNamesResolvedHost(t *testing.T) {
+	cfg := newThreeContextConfig(t)
+	missingCA := filepath.Join(t.TempDir(), "missing-ca.pem")
+
+	for _, name := range []string{"pve1", "pbs1", "pdm1"} {
+		cfg.Contexts[name].TLS.CACert = missingCA
+	}
+
+	cmd, ov, _ := connectionLeaf(t, "--api-endpoint", "pve9")
+	const want = "connect to pve9: "
+
+	_, _, _, err := cli.BuildContextClientConn(cmd, cfg, "", "pve1", ov, neverTTY)
+	require.ErrorContains(t, err, want)
+
+	_, _, _, err = cli.BuildContextPBSClientConn(cmd, cfg, "", "pbs1", ov, neverTTY)
+	require.ErrorContains(t, err, want)
+
+	_, _, _, err = cli.BuildContextPDMClientConn(cmd, cfg, "", "pdm1", ov, neverTTY)
+	require.ErrorContains(t, err, want)
+
+	for _, name := range []string{"pve1", "pbs1", "pdm1"} {
+		_, _, _, err = cli.BuildContextAnyClientConn(cmd, cfg, "", name, ov, neverTTY)
+		require.ErrorContains(t, err, want, name)
+	}
+}
+
+// TestBuildContextClient_LegacyIgnoresEnvironmentOverrides proves that the
+// legacy builders apply only the insecure flag they are handed, so a
+// PMX_API_* variable meant for the invocation's own context can never
+// redirect a caller that targets another context.
+func TestBuildContextClient_LegacyIgnoresEnvironmentOverrides(t *testing.T) {
+	t.Setenv("PMX_API_ENDPOINT", "ftp://malformed")
+	t.Setenv("PMX_API_JUMP", "bastion.example.com")
+
+	cfg := newThreeContextConfig(t)
+	root, cleanup := cli.NewRootCmd("pmx")
+	defer cleanup()
+
+	var stderr bytes.Buffer
+	root.SetErr(&stderr)
+
+	ac, ctx, err := cli.BuildContextClient(root, cfg, "", "pve1", false, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, ac)
+	require.Equal(t, "10.0.0.1", ctx.Host)
+
+	pc, _, err := cli.BuildContextPBSClient(root, cfg, "", "pbs1", true, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, pc)
+
+	dc, _, err := cli.BuildContextPDMClient(root, cfg, "", "pdm1", false, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, dc)
+
+	clients, _, err := cli.BuildContextAnyClient(root, cfg, "", "pdm1", false, neverTTY)
+	require.NoError(t, err)
+	require.NotNil(t, clients.PDM)
+
+	require.Zero(t, countLines(stderr.String(), "note:"), "stderr: %q", stderr.String())
+	require.Equal(t, 1, countLines(stderr.String(), "WARN: TLS certificate verification disabled"),
+		"only the insecure PBS build may warn; stderr: %q", stderr.String())
+}

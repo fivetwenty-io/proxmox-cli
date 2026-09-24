@@ -255,12 +255,12 @@ func ResolveConnection(name string, ctx *config.Context, ov ConnectionOverrides)
 	config.ApplyDefaults(stored)
 
 	if msgs := config.ValidateProxyBlock(&stored.Proxy); len(msgs) > 0 {
-		return Connection{}, errors.New(strings.Join(msgs, "; "))
+		return Connection{}, fmt.Errorf("context %q: %s", name, strings.Join(msgs, "; "))
 	}
 
 	storedTimeouts, err := stored.ParsedTimeouts()
 	if err != nil {
-		return Connection{}, err
+		return Connection{}, fmt.Errorf("context %q: %w", name, err)
 	}
 
 	conn := Connection{ContextName: name}
@@ -278,6 +278,12 @@ func ResolveConnection(name string, ctx *config.Context, ov ConnectionOverrides)
 	}
 
 	if err := resolveJump(&conn, stored, ov); err != nil {
+		if ov.Jump == "" {
+			// The chain came from the context's own ssh.jump, not from an
+			// override that already names its flag or variable.
+			return Connection{}, fmt.Errorf("context %q: %w", name, err)
+		}
+
 		return Connection{}, err
 	}
 
