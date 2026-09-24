@@ -110,16 +110,8 @@ func QueryParams(s string) string {
 // brackets into "%3Credacted%3E" and defeat the point of a human-readable
 // placeholder.
 func ProxyURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return maskUnparseableProxyURL(raw)
-	}
-
-	if u.Opaque != "" ||
-		(u.User == nil && strings.Contains(raw, "@")) ||
-		strings.Contains(u.Path, "@") ||
-		strings.Contains(u.RawQuery, "@") ||
-		strings.Contains(u.Fragment, "@") {
+	u, ok := parseProxyURL(raw)
+	if !ok {
 		return maskUnparseableProxyURL(raw)
 	}
 
@@ -169,6 +161,46 @@ func ProxyURL(raw string) string {
 	return b.String()
 }
 
+// ProxyHost returns the host and port a proxy URL names, such as
+// "proxy.example:1080", for a record that identifies the proxy without its
+// credentials. It returns "" for an empty value, for a URL that names no
+// host, and whenever ProxyURL would mask the value whole: when url.Parse
+// rejects it, or when it holds an "@" that its userinfo does not account
+// for. In that second case the parsed host can itself be the start of the
+// credential, as in "socks5://pmx:4711/x@proxy:1080", which url.Parse reads
+// as host "pmx:4711" with the rest of the password in the path.
+func ProxyHost(raw string) string {
+	u, ok := parseProxyURL(raw)
+	if !ok {
+		return ""
+	}
+
+	return u.Host
+}
+
+// parseProxyURL parses raw and reports whether the result can be trusted to
+// hold any credential in u.User. It fails when url.Parse fails, when the
+// value is opaque because the "//" is missing, and when an "@" that u.User
+// does not account for sits anywhere in the value, because that "@" can be
+// the end of a password url.Parse misread as a host, a path, a query, or a
+// fragment.
+func parseProxyURL(raw string) (*url.URL, bool) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, false
+	}
+
+	if u.Opaque != "" ||
+		(u.User == nil && strings.Contains(raw, "@")) ||
+		strings.Contains(u.Path, "@") ||
+		strings.Contains(u.RawQuery, "@") ||
+		strings.Contains(u.Fragment, "@") {
+		return nil, false
+	}
+
+	return u, true
+}
+
 // maskUnparseableProxyURL handles a value url.Parse rejects. It recovers
 // whatever comes before the first "://" by hand, so a caller still sees
 // which scheme was configured, as "scheme://<redacted>". When no such prefix
@@ -203,15 +235,17 @@ func isURLScheme(s string) bool {
 	return true
 }
 
-// urlUserinfoRE matches a "scheme://user:pass@" prefix embedded anywhere in
-// free text, capturing "scheme://user" and "pass" separately. The "//" is
-// optional, so the "socks5:user:pass@host" typo is caught too. The username
-// group may be empty (a URL may have a password with no user) and may itself
-// contain "@" or "/", and the password group runs greedily to the last "@"
-// in the run of non-whitespace characters that follows, which is where the
-// userinfo of a real URL ends (RFC 3986 section 3.2.1), not the first "@",
-// which would stop short of a password that itself contains one.
-var urlUserinfoRE = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*:(?://)?[^\s:]*):(\S*)@`)
+// urlUserinfoRE matches a "scheme://user:pass@" candidate embedded anywhere
+// in free text, capturing the scheme, the "//user" part, and the password
+// separately. The "//" is optional, so the "socks5:user:pass@host" typo is
+// caught too. The username group may be empty (a URL may have a password
+// with no user) and may itself contain "@" or "/", and the password group
+// runs greedily to the last "@" in the run of non-whitespace characters that
+// follows, which is where the userinfo of a real URL ends (RFC 3986 section
+// 3.2.1), not the first "@", which would stop short of a password that
+// itself contains one. URLUserinfo then rejects or shortens each candidate
+// that is not userinfo at all.
+var urlUserinfoRE = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*):((?://)?[^\s:]*):(\S*)@`)
 
 // URLUserinfo returns s with every "scheme://user:pass@" it contains
 // rewritten as "scheme://user:<redacted>@", leaving everything else alone.
@@ -219,16 +253,140 @@ var urlUserinfoRE = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*:(?://)?[^\s:]*)
 // credential to redact is not known ahead of time as a discrete secret
 // value.
 //
-// Because it cannot know where a URL ends in free text, it may mask text
-// that only looks like "word:word:more@", and it cannot mask a password
+// Text that only resembles userinfo is left as written:
+//
+//   - An http, https, ws, or wss URL whose "password" is a port followed by
+//     "/", "?", or "#", as in "https://h:8006/access/users/alice@pve", is a
+//     host, a port, and a path that holds a user ID.
+//
+//   - An ssh URL whose "password" is a port followed by "," or "/", as in
+//     "ssh://admin@bastion:2222,root@inner", is a jump chain.
+//
+//   - A "scheme" of hexadecimal digits right after "[" or ":", as in
+//     "admin@[fd00::1]:22,root@inner", is part of an IPv6 literal, and so is
+//     a "username" that holds "[" or "]".
+//
+//   - A "password" that holds "://" runs into the next URL, so it is cut
+//     back to the last "@" before that URL, and the candidate is dropped
+//     when no "@" is left.
+//
+// Because it cannot know where a URL ends in free text, it may still mask
+// text that only looks like "word:word:more@", and it cannot mask a password
 // that contains whitespace: the password match stops at the first space, so
-// in "socks5://u:pa s3cret@h" nothing is masked. A caller that holds the
-// raw URL as a discrete value must use ProxyURL instead.
+// in "socks5://u:pa s3cret@h" nothing is masked. Nor can it mask an http or
+// https proxy URL whose password is all digits followed by "/", "?", or "#",
+// such as "http://pmx:4711/x@proxy:3128", because that text is the same
+// shape as an API URL with a user ID in its path. A caller that holds the
+// raw URL as a discrete value must mask it with ProxyURL instead.
 //
 // It does not cover the text of a url.Parse error, which can itself quote a
 // password verbatim (for example "invalid port %q after host" on a
 // malformed proxy URL); callers must not append that text to a message this
 // function is expected to clean.
 func URLUserinfo(s string) string {
-	return urlUserinfoRE.ReplaceAllString(s, "${1}:"+Placeholder+"@")
+	var b strings.Builder
+
+	copied, pos := 0, 0
+
+	for pos < len(s) {
+		loc := urlUserinfoRE.FindStringSubmatchIndex(s[pos:])
+		if loc == nil {
+			break
+		}
+
+		start := pos + loc[0]
+		scheme := s[pos+loc[2] : pos+loc[3]]
+		user := s[pos+loc[4] : pos+loc[5]]
+		passStart := pos + loc[6]
+		pass := s[passStart : pos+loc[7]]
+
+		n, ok := userinfoPasswordLen(s, start, scheme, user, pass)
+		if !ok {
+			// Resume inside the rejected candidate, so a real URL that
+			// its greedy password swallowed is still found.
+			pos = passStart
+
+			continue
+		}
+
+		b.WriteString(s[copied:passStart])
+		b.WriteString(Placeholder)
+		b.WriteByte('@')
+
+		copied = passStart + n + 1
+		pos = copied
+	}
+
+	if copied == 0 {
+		return s
+	}
+
+	b.WriteString(s[copied:])
+
+	return b.String()
+}
+
+// userinfoPasswordLen decides whether one urlUserinfoRE candidate is a
+// password, given the whole text s, the offset where the candidate starts,
+// and its scheme, "//user", and password groups. It returns the length of
+// the password to mask, which is shorter than pass when pass runs into a
+// second URL, and false when the candidate is not userinfo.
+func userinfoPasswordLen(s string, start int, scheme, user, pass string) (int, bool) {
+	if start > 0 && (s[start-1] == '[' || s[start-1] == ':') && isHex(scheme) {
+		return 0, false
+	}
+
+	if strings.ContainsAny(user, "[]") {
+		return 0, false
+	}
+
+	if i := strings.Index(pass, "://"); i >= 0 {
+		j := strings.LastIndexByte(pass[:i], '@')
+		if j < 0 {
+			return 0, false
+		}
+
+		pass = pass[:j]
+	}
+
+	switch strings.ToLower(scheme) {
+	case "http", "https", "ws", "wss":
+		if isPortThen(pass, "/?#") {
+			return 0, false
+		}
+	case "ssh":
+		if isPortThen(pass, ",/") {
+			return 0, false
+		}
+	}
+
+	return len(pass), true
+}
+
+// isPortThen reports whether s starts with one to five decimal digits
+// followed by one of the bytes in ends, which is the shape of a port
+// followed by the character that ends an authority.
+func isPortThen(s, ends string) bool {
+	digits := 0
+	for digits < len(s) && digits < 6 && s[digits] >= '0' && s[digits] <= '9' {
+		digits++
+	}
+
+	return digits >= 1 && digits <= 5 && digits < len(s) && strings.IndexByte(ends, s[digits]) >= 0
+}
+
+// isHex reports whether s is non-empty and made only of hexadecimal digits.
+func isHex(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+
+	return true
 }

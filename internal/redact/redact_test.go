@@ -1,6 +1,7 @@
 package redact_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/redact"
@@ -333,6 +334,30 @@ func TestURLUserinfo(t *testing.T) {
 			in:   "socks5:/u:s3cret@h",
 			want: "socks5:/u:<redacted>@h",
 		},
+		{
+			// A password made only of digits is still a password when
+			// nothing follows it but the "@".
+			name: "numeric password",
+			in:   "http://pmx:4711@proxy.example:3128 refused",
+			want: "http://pmx:<redacted>@proxy.example:3128 refused",
+		},
+		{
+			// A SOCKS URL has no path, so digits followed by "/" are a
+			// password with a slash in it, not a port.
+			name: "numeric password with a slash on a socks url",
+			in:   "socks5://pmx:4711/x@proxy:1080",
+			want: "socks5://pmx:<redacted>@proxy:1080",
+		},
+		{
+			name: "numeric password with a question mark on a socks url",
+			in:   "socks5h://pmx:4711?x@p.example:1080",
+			want: "socks5h://pmx:<redacted>@p.example:1080",
+		},
+		{
+			name: "numeric password with a hash on a socks url",
+			in:   "socks5://pmx:4711#x@p.example:1080",
+			want: "socks5://pmx:<redacted>@p.example:1080",
+		},
 	}
 
 	for _, tc := range tests {
@@ -341,6 +366,79 @@ func TestURLUserinfo(t *testing.T) {
 
 			got := redact.URLUserinfo(tc.in)
 			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// TestURLUserinfo_LeavesAPIURLsAndJumpChainsAlone proves that an "@" inside
+// the path or query of an API URL, such as a Proxmox user ID, and the "@"
+// of a later hop in an ssh jump chain are not read as the end of a
+// userinfo password.
+func TestURLUserinfo_LeavesAPIURLsAndJumpChainsAlone(t *testing.T) {
+	t.Parallel()
+
+	for _, in := range []string{
+		`Get "https://127.0.0.1:9/api2/json/access/users/alice@pve": dial tcp 127.0.0.1:9: connect: connection refused`,
+		`Get "https://h:8006/api2/json/access/users/alice@pve"`,
+		`Delete "https://pve.example:8006/api2/json/access/users/root@pam/token/x": EOF`,
+		`Get "https://pve.example:8006/api2/json/access/acl?userid=alice@pve": EOF`,
+		`Get "http://pve.example:8006/api2/json/access/users#alice@pve": EOF`,
+		`Get "https://[fd00::1]:8006/api2/json/access/users/alice@pve": EOF`,
+		`wss://pve.example:8006/api2/json/nodes/n1/qemu/100/vncwebsocket?user=root@pam`,
+		"ssh://admin@bastion:2222,ssh://root@inner",
+		"ssh://admin@bastion:2222,root@inner",
+		"admin@[fd00::1]:22,root@inner",
+		"ssh://a@[fd00::1]:22,ssh://b@host",
+		"a@[fe80::1]:22,b@host",
+		"jump a@[2001:db8:a:b::1]:22,b@host failed",
+	} {
+		t.Run(in, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, in, redact.URLUserinfo(in))
+		})
+	}
+}
+
+// TestURLUserinfo_MasksEveryURLInOneRun proves that two URLs with no
+// whitespace between them both lose their password, although the first
+// one's greedy match would otherwise run into the second.
+func TestURLUserinfo_MasksEveryURLInOneRun(t *testing.T) {
+	t.Parallel()
+
+	got := redact.URLUserinfo("tried socks5://a:p1-secret@proxy1:1080,socks5://b:p2-secret@proxy2:1080 twice")
+	require.NotContains(t, got, "p1-secret")
+	require.NotContains(t, got, "p2-secret")
+	require.True(t, strings.HasPrefix(got, "tried socks5://a:<redacted>@proxy1:1080,"), "got %q", got)
+	require.True(t, strings.HasSuffix(got, "@proxy2:1080 twice"), "got %q", got)
+}
+
+// TestProxyHost covers the host and port a proxy URL names, which is empty
+// whenever ProxyURL would mask the value whole, so a record that carries it
+// can never carry part of a password.
+func TestProxyHost(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name, in, want string
+	}{
+		{"plain", "socks5h://proxy.example:1080", "proxy.example:1080"},
+		{"userinfo is dropped", "socks5://u:s3cret@proxy.example:1080", "proxy.example:1080"},
+		{"ipv6 host", "http://[fd00::1]:3128", "[fd00::1]:3128"},
+		{"empty", "", ""},
+		{"does not parse", "socks5://pmx:s3cr3t/x@proxy:1080", ""},
+		{"numeric password before a slash", "socks5://pmx:4711/x@proxy:1080", ""},
+		{"numeric password before a question mark", "socks5://pmx:4711?x@p.example:1080", ""},
+		{"numeric password before a hash", "socks5://pmx:4711#x@p.example:1080", ""},
+		{"opaque", "socks5:pmx:4711@proxy:1080", ""},
+		{"no host", "socks5://", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tc.want, redact.ProxyHost(tc.in))
 		})
 	}
 }
