@@ -54,7 +54,10 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 			"rsync owns most short flags, so pmx's own connection flags are long-only and " +
 			"must precede the rsync arguments: --ssh-user, --ssh-port, --ssh-identity, " +
 			"--ssh-jump, --ssh-agent, and --no-strict. -c/--context, --config, --insecure, and --debug " +
-			"are recognised in that same leading position.\n\n" +
+			"are recognised in that same leading position, and so are the nine --api-* flags that " +
+			"override the API connection for this invocation: --api-endpoint, --api-jump, --api-proxy, " +
+			"--api-proxy-from-env, --api-ca-cert, --api-fingerprint, --api-connect-timeout, " +
+			"--api-tls-handshake-timeout, and --api-request-timeout.\n\n" +
 			"Supplying your own -e/--rsh is rejected, since pmx always injects its own.",
 		Example: `  pmx rsync ./backup.tar pve1:/var/tmp/
   pmx rsync -av pve1:/etc/pve/ ./pve-etc/
@@ -73,7 +76,8 @@ func Rsync(_ *cli.Deps) *cobra.Command {
 	cmd.Flags().StringVar(&f.Identity, "ssh-identity", "", "path to SSH identity (private key) file")
 	cmd.Flags().IntVar(&f.Port, "ssh-port", 22, "SSH port")
 	cmd.Flags().StringVar(&f.Jump, "ssh-jump", "",
-		"jump host to tunnel through, as [user@]host[:port] (comma-separated for a chain)")
+		"jump host to tunnel through, as [user@]host[:port] (comma-separated for a chain); "+
+			"the API connection uses --api-jump")
 	cmd.Flags().BoolVar(&f.Agent, "ssh-agent", false, "enable SSH agent forwarding")
 	cmd.Flags().BoolVar(&f.NoStrict, "no-strict", false, "disable strict host key checking")
 

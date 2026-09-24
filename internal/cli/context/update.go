@@ -79,7 +79,13 @@ old product's default to the new product's port (8006 pve, 8007 pbs,
   pmx context update backup --token-id 'pmx@pbs!admin'
 
   # Move a context to another host and pin its certificate
-  pmx context update lab --host pve2.example.com --fingerprint AA:BB:...`,
+  pmx context update lab --host pve2.example.com --fingerprint AA:BB:...
+
+  # Route this context through a bastion
+  pmx context update lab --ssh-jump admin@bastion.example.com
+
+  # Remove a stored proxy URL and its credentials
+  pmx context update lab --proxy-url ""`,
 		Args:        cobra.MaximumNArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {

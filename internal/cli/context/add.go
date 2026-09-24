@@ -67,7 +67,18 @@ unless --port is also given, its default API port.`,
 
   # Proxmox Datacenter Manager (port 8443)
   pmx context add dcmgr --product pdm --host pdm.example.com \
-  --username root@pam --token-id automation --secret '${PDM_TOKEN}'`,
+  --username root@pam --token-id automation --secret '${PDM_TOKEN}'
+
+  # Behind a bastion: ssh, rsync, and the API connection all tunnel through it
+  pmx context add lab --host pve.example.com \
+  --username root@pam --token-id automation --secret '${PVE_TOKEN}' \
+  --ssh-jump admin@bastion.example.com
+
+  # Through a proxy, with credentials kept out of the stored URL
+  pmx context add lab --host pve.example.com \
+  --username root@pam --token-id automation --secret '${PVE_TOKEN}' \
+  --proxy-url socks5://proxy.example.com:1080 \
+  --proxy-username relay --proxy-password '${PROXY_PASSWORD}'`,
 		Args:        cobra.ExactArgs(1),
 		Annotations: map[string]string{"noClient": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {

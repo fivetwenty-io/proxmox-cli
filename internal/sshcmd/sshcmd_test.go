@@ -1,6 +1,7 @@
 package sshcmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -370,6 +371,19 @@ func TestRemoteShell(t *testing.T) {
 			require.Equal(t, tc.want, RemoteShell(&tc.f))
 		})
 	}
+}
+
+// TestRegisterFlags_JumpHelpNamesAPIJump verifies the -J flag's help text
+// points an operator who wants the jump host to cover the API connection too
+// at --api-jump, the separate flag that actually does that.
+func TestRegisterFlags_JumpHelpNamesAPIJump(t *testing.T) {
+	var f Flags
+	cmd := newTestCmd(&f)
+
+	jump := cmd.Flags().Lookup("jump")
+	require.NotNil(t, jump, "jump flag must be registered")
+	require.True(t, strings.HasSuffix(jump.Usage, "; the API connection uses --api-jump"),
+		"jump flag usage must end with the --api-jump pointer, got %q", jump.Usage)
 }
 
 // TestOptionArgs_JumpEmitsProxyJump verifies a configured jump host reaches

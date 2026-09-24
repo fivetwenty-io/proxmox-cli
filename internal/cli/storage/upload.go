@@ -49,6 +49,9 @@ func newUploadCmd() *cobra.Command {
 			"verified.\n\n" +
 			"The upload runs as an asynchronous task, and the command blocks until it " +
 			"finishes unless --async is set. " + cli.WaitBoundHelp + "\n\n" +
+			"The file streams as the body of one API request, so --api-request-timeout's " +
+			"per-attempt bound has to cover the whole upload, not only the response; raise " +
+			"it for a large file, e.g. --api-request-timeout 10m.\n\n" +
 			"--content snippets works differently. PVE's upload endpoint accepts only iso, " +
 			"vztmpl, and import; snippets have been a gap for years (Proxmox Bugzilla #2208, " +
 			"https://bugzilla.proxmox.com/show_bug.cgi?id=2208). So the file goes over SSH " +

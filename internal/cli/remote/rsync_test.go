@@ -7,6 +7,7 @@ import (
 	"net"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -430,4 +431,17 @@ func TestRsync_NegativeWaitTimeoutGetsTheRootsValidationMessage(t *testing.T) {
 		require.NotContains(t, err.Error(), "expects a value")
 	}
 	require.Empty(t, runner.Calls, "rsync must not run under a rejected wait bound")
+}
+
+// TestRsync_SSHJumpHelpNamesAPIJump verifies the --ssh-jump flag's help text
+// points an operator who wants the jump host to cover the API connection too
+// at --api-jump, the separate flag that actually does that. --ssh-jump only
+// routes the ssh transfer; the node lookup that precedes it goes over the API.
+func TestRsync_SSHJumpHelpNamesAPIJump(t *testing.T) {
+	cmd := Rsync(nil)
+
+	jump := cmd.Flags().Lookup("ssh-jump")
+	require.NotNil(t, jump, "ssh-jump flag must be registered")
+	require.True(t, strings.HasSuffix(jump.Usage, "; the API connection uses --api-jump"),
+		"ssh-jump flag usage must end with the --api-jump pointer, got %q", jump.Usage)
 }
