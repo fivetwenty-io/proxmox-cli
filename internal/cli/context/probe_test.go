@@ -319,8 +319,8 @@ func TestProbeContext_UsesJumpDialer(t *testing.T) {
 }
 
 // TestProbeContext_UsesConfiguredProxy proves the probe honours proxy.url:
-// the transport carries the proxy function, the SOCKS5 stand-in sees the
-// target by name, and Via names the proxy.
+// the transport leaves SOCKS5 to pmx's own dial rather than to net/http, the
+// SOCKS5 stand-in sees the target by name, and Via names the proxy.
 func TestProbeContext_UsesConfiguredProxy(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Server", "pve-api-daemon/3.0")
@@ -341,7 +341,8 @@ func TestProbeContext_UsesConfiguredProxy(t *testing.T) {
 
 	_, tr, err := newProbeClient(conn)
 	require.NoError(t, err)
-	require.NotNil(t, tr.Proxy, "a proxy context must route through its proxy")
+	require.Nil(t, tr.Proxy, "net/http must not run its own SOCKS negotiation")
+	require.NotNil(t, tr.DialContext)
 
 	got := mustProbe(t, conn)
 	require.True(t, got.Reachable, probeErrText(got))

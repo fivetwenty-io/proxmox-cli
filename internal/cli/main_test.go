@@ -38,7 +38,12 @@ const (
 var connectionEnvVars = testhelper.APIEnvNames()
 
 func TestMain(m *testing.M) {
-	if err := testhelper.PinProxyEnv(testEnvHTTPSProxy, testEnvHTTPProxy, testEnvNoProxy); err != nil {
+	httpsProxy, httpProxy := testEnvHTTPSProxy, testEnvHTTPProxy
+	if v := os.Getenv(envSOCKSVar); v != "" {
+		httpsProxy, httpProxy = v, v
+	}
+
+	if err := testhelper.PinProxyEnv(httpsProxy, httpProxy, testEnvNoProxy); err != nil {
 		fmt.Fprintf(os.Stderr, "pin the test environment: %v\n", err)
 		os.Exit(1)
 	}

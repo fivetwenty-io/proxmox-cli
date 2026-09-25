@@ -2046,7 +2046,7 @@ func TestValidateConnect_RedactsProxyCredentials(t *testing.T) {
 
 // TestValidateConnect_UnreachableMessages proves each unreachable route is
 // named once: a bastion failure by the JumpError's Detail, whatever the
-// transport wrapped around it, a refused proxy by its proxyconnect error,
+// transport wrapped around it, a refused proxy by the SOCKS dial's error,
 // and a direct failure in the form it always had.
 func TestValidateConnect_UnreachableMessages(t *testing.T) {
 	ts, _ := versionServer(t)
@@ -2111,7 +2111,8 @@ func TestValidateConnect_UnreachableMessages(t *testing.T) {
 		c.Timeout.Request = "900ms"
 
 		got := probeError(t, &config.Config{CurrentContext: "lab", Contexts: map[string]*config.Context{"lab": c}})
-		require.True(t, strings.HasPrefix(got, "unreachable via proxy socks5://"+proxyAddr+": proxyconnect tcp: "), got)
+		require.True(t, strings.HasPrefix(got, "unreachable via proxy socks5://"+proxyAddr+
+			": dial tcp 127.0.0.1:"+strconv.Itoa(c.Port)+": socks5 proxy "+proxyAddr+" is unreachable: "), got)
 	})
 
 	t.Run("a direct failure", func(t *testing.T) {

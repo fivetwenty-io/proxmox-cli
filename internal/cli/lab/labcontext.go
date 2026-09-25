@@ -292,11 +292,11 @@ var labProbeContextVersion = func(cmd *cobra.Command, deps *cli.Deps, ctxName st
 // It counts a failure the client explicitly typed as a connection, SSL/TLS,
 // or timeout failure, and three raw shapes the client passes through
 // untyped: any *net.OpError anywhere in the chain, which is how a refused or
-// unreachable dial and a dead proxy ("proxyconnect tcp: ...") surface; any
-// error wrapping apiclient.ErrJump, which is every ssh bastion failure; and
-// any net.Error whose Timeout reports true, which is how a hung proxy or
-// bastion surfaces. A dead or hung route therefore never rotates a lab
-// token. A transport failure that matches none of these conservatively
+// unreachable dial and a dead proxy (a proxyconnect or SOCKS dial error)
+// surface; any error wrapping apiclient.ErrJump, which is every ssh bastion
+// failure; and any net.Error whose Timeout reports true, which is how a hung
+// proxy or bastion surfaces. A dead or hung route therefore never rotates a
+// lab token. A transport failure that matches none of these conservatively
 // falls through to rotation rather than reuse; this guard only ever
 // prevents an unnecessary rotation, never causes one.
 func labProbeTransportFailed(err error) bool {

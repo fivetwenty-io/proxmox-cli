@@ -3387,8 +3387,8 @@ func TestContextOptions_LeavesStoredContextUnchanged(t *testing.T) {
 	require.Equal(t, 3, opts.DialTimeoutSec)
 	require.Equal(t, 3+4+1, opts.TLSHandshakeTimeoutSec, "through a jump the handshake bound adds the connect bound")
 	require.Equal(t, 45*time.Second, opts.Timeout)
-	require.NotNil(t, opts.Proxy, "the stored proxy must be installed")
-	require.NotNil(t, opts.DialContext, "the stored jump must be installed")
+	require.Nil(t, opts.Proxy, "a SOCKS5 proxy is negotiated by pmx's own dial, not by net/http")
+	require.NotNil(t, opts.DialContext, "the stored jump, wrapped by the stored proxy, must be installed")
 
 	require.Equal(t, "lab", conn.ContextName)
 	require.Equal(t, "pve1.example.com", conn.Host)

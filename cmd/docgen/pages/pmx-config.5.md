@@ -368,12 +368,21 @@ Each entry under **contexts** is a mapping with the following keys.
   flag of **pmx context update**.
 
 **timeout.connect**
-: Bound on TCP connection setup. Defaults to **5s**. Behind a proxy it covers
-  only the connect to the proxy. Through a bastion it also becomes ssh's
-  **ConnectTimeout** for the last hop, and it is added to the handshake bound,
-  as **timeout.tls-handshake** describes. The client library's connect and
-  handshake bounds have one-second granularity, so pmx rounds both up to whole
-  seconds, and **500ms** behaves as **1s**.
+: Bound on TCP connection setup. Defaults to **5s**. Behind an **http://**
+  proxy it covers only the connect to the proxy. Behind a SOCKS5 proxy,
+  whether **proxy.url** names it or **proxy.from-env** finds it, it covers the
+  connect to the proxy, the SOCKS negotiation, and the proxy's own connect to
+  **host**, all together. A proxy that cannot reach **host** therefore fails
+  the request within this bound, and pmx does not retry it. Through a bastion
+  it also becomes ssh's **ConnectTimeout** for the last hop, and it is added
+  to the handshake bound, as **timeout.tls-handshake** describes. A SOCKS5
+  proxy behind a bastion gets the connect bound plus the handshake bound plus
+  one second, because the bastion's own setup runs inside that negotiation.
+  That clock starts when pmx starts ssh, so time spent waiting behind another
+  connection to the same bastion does not count against it.
+  The client library's connect and handshake bounds have one-second
+  granularity, so pmx rounds both up to whole seconds, and **500ms** behaves
+  as **1s**. pmx applies the SOCKS5 bound itself, so that one is not rounded.
 
 **timeout.tls-handshake**
 : Bound on the TLS handshake. Defaults to **10s**, and it rounds up to whole
@@ -394,9 +403,9 @@ Each entry under **contexts** is a mapping with the following keys.
   bound applies per attempt, and it covers the whole body of an upload or a
   file-restore download, so a large transfer over a slow link needs a larger
   value. An idempotent request can take up to four attempts plus about six
-  seconds of backoff, so a SOCKS proxy that accepts the connection and then
-  stalls can hold one request for about two minutes at the thirty-second
-  default. Through a bastion the request bound also caps the first-byte timer,
+  seconds of backoff, so a server or an **http://** proxy that accepts the
+  connection and then stalls can hold one request for about two minutes at
+  the thirty-second default. Through a bastion the request bound also caps the first-byte timer,
   so a short request bound shortens the bastion's time to answer. A request
   bound of five seconds leaves the bastion four seconds, two seconds leaves it
   one and a half, and one second leaves it 750 milliseconds.

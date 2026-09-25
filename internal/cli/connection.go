@@ -292,7 +292,7 @@ func ResolveConnection(name string, ctx *config.Context, ov ConnectionOverrides)
 		return Connection{}, err
 	}
 
-	if conn.Jump.Chain != "" && firstByteTimerArmed(conn.Protocol, conn.Proxy) {
+	if conn.Jump.Chain != "" && firstByteTimerArmed(conn.Protocol, conn.socksProxy() != nil) {
 		conn.Jump.FirstByteTimeout = firstByteTimeout(conn.Timeouts)
 	}
 
@@ -577,12 +577,8 @@ func checkProxyPort(source, shown string, u *url.URL) error {
 // route through a SOCKS proxy, where the SOCKS negotiation comes first. On
 // any other http route the first byte is the server's response, which may
 // legitimately come late.
-func firstByteTimerArmed(protocol string, p apiclient.ProxySpec) bool {
-	if protocol == "https" {
-		return true
-	}
-
-	return p.URL != nil && (p.URL.Scheme == "socks5" || p.URL.Scheme == "socks5h")
+func firstByteTimerArmed(protocol string, socks bool) bool {
+	return protocol == "https" || socks
 }
 
 // firstByteTimeout is the connect bound plus the handshake bound, raised to
@@ -818,7 +814,9 @@ func (c Connection) ProxyCredentials() (*url.Userinfo, error) {
 
 // transportProxy returns c's proxy with the context's credentials joined
 // onto a copy of its URL, ready for apiclient.ProxyFunc. The copy keeps the
-// stored ProxySpec free of any resolved secret.
+// stored ProxySpec free of any resolved secret. With proxy.from-env, a
+// SOCKS5 proxy the environment names for the API URL is returned as that
+// URL, so pmx negotiates it itself, as it does a SOCKS5 proxy.url.
 func (c Connection) transportProxy() (apiclient.ProxySpec, error) {
 	creds, err := c.ProxyCredentials()
 	if err != nil {
@@ -826,6 +824,16 @@ func (c Connection) transportProxy() (apiclient.ProxySpec, error) {
 	}
 
 	spec := apiclient.ProxySpec{URL: c.Proxy.URL, FromEnv: c.Proxy.FromEnv}
+
+	if c.Proxy.URL == nil && c.Proxy.FromEnv {
+		if u := c.socksProxy(); u != nil {
+			spec = apiclient.ProxySpec{URL: u}
+
+			if _, err := apiclient.ProxyFunc(spec); err != nil {
+				return apiclient.ProxySpec{}, fmt.Errorf("the environment's proxy for the API URL: %w", err)
+			}
+		}
+	}
 
 	if creds != nil {
 		u := *c.Proxy.URL
@@ -867,6 +875,45 @@ func (c Connection) jumpSpec() apiclient.JumpSpec {
 	}
 
 	return j
+}
+
+// socksProxy returns the SOCKS5 proxy c's API traffic goes through, or nil
+// when it goes through none: proxy.url when that is a SOCKS5 URL, and with
+// proxy.from-env the environment's proxy for the API URL when that is one.
+// The URL carries no context credentials; transportProxy joins those.
+func (c Connection) socksProxy() *url.URL {
+	if c.Proxy.URL != nil {
+		if apiclient.IsSOCKSProxy(c.Proxy.URL) {
+			return c.Proxy.URL
+		}
+
+		return nil
+	}
+
+	if !c.Proxy.FromEnv {
+		return nil
+	}
+
+	if u, err := c.environmentProxy(); err == nil && apiclient.IsSOCKSProxy(u) {
+		return u
+	}
+
+	return nil
+}
+
+// socksBound bounds a dial through a SOCKS5 proxy, which covers the connect
+// to the proxy, the SOCKS negotiation, and the proxy's own connect to the
+// API host together. On a direct route it is the connect bound. Through a
+// bastion, whose connect, key exchange, and authentication all run inside
+// the dial, it is the effective handshake bound there, which also keeps it
+// past the jump's first-byte timer, so a silent bastion is still reported
+// as the bastion.
+func (c Connection) socksBound() time.Duration {
+	if c.hasJump() {
+		return c.effectiveTLSHandshake()
+	}
+
+	return c.resolvedTimeouts().Connect
 }
 
 // hasJump reports whether c routes through an ssh bastion.
@@ -913,22 +960,17 @@ func (c Connection) effectiveTLSHandshake() time.Duration {
 	return saturatingAdd(saturatingAdd(t.Connect, t.TLSHandshake), time.Second)
 }
 
-// ApplyToOptions wires c's transport onto opts in proxy, timeout, and jump
-// order. It calls ProxyCredentials before it installs the proxy and returns
+// ApplyToOptions wires c's transport onto opts in timeout, jump, and proxy
+// order. It calls ProxyCredentials before it installs anything and returns
 // its error unchanged, with zero options, so a caller that ignored the error
-// could not build a client that silently skips the proxy. The jump stays
-// last for the reason ApplyJumpSpec documents, and when a jump is set the
-// TLS-handshake bound it writes is the connect bound plus the handshake
-// bound plus one second, summed first and then rounded up. The endpoint and
-// TLS-trust fields of c are not applied here; ContextOptions passes them to
-// apiclient.BuildOptions.
+// could not build a client that silently skips the proxy. When a jump is set
+// the TLS-handshake bound it writes is the connect bound plus the handshake
+// bound plus one second, summed first and then rounded up. The proxy comes
+// after the jump, because a SOCKS5 proxy wraps the jump's dial, and the
+// bastion then reaches the proxy. The endpoint and TLS-trust fields of c are
+// not applied here; ContextOptions passes them to apiclient.BuildOptions.
 func (c Connection) ApplyToOptions(opts pve.Options) (pve.Options, error) {
 	spec, err := c.transportProxy()
-	if err != nil {
-		return pve.Options{}, err
-	}
-
-	opts, err = apiclient.ApplyProxyOptions(opts, spec)
 	if err != nil {
 		return pve.Options{}, err
 	}
@@ -939,6 +981,11 @@ func (c Connection) ApplyToOptions(opts pve.Options) (pve.Options, error) {
 
 	if c.hasJump() {
 		opts = apiclient.ApplyJumpSpec(opts, c.jumpSpec())
+	}
+
+	opts, err = apiclient.ApplyProxyOptions(opts, spec, c.socksBound())
+	if err != nil {
+		return pve.Options{}, err
 	}
 
 	return opts, nil
@@ -962,19 +1009,19 @@ func (c Connection) ApplyToHTTPTransport(tr *http.Transport) (*http.Transport, e
 		return nil, err
 	}
 
-	proxy, err := apiclient.ProxyFunc(spec)
-	if err != nil {
+	staged := &http.Transport{}
+	if c.hasJump() {
+		staged.DialContext = apiclient.JumpDialContext(c.jumpSpec())
+	} else {
+		staged.DialContext = (&net.Dialer{Timeout: c.resolvedTimeouts().Connect}).DialContext
+	}
+
+	if err := apiclient.ApplyProxyTransport(staged, spec, c.socksBound()); err != nil {
 		return nil, err
 	}
 
-	tr.Proxy = proxy
-
-	if c.hasJump() {
-		tr.DialContext = apiclient.JumpDialContext(c.jumpSpec())
-	} else {
-		tr.DialContext = (&net.Dialer{Timeout: c.resolvedTimeouts().Connect}).DialContext
-	}
-
+	tr.Proxy = staged.Proxy
+	tr.DialContext = staged.DialContext
 	tr.TLSHandshakeTimeout = c.effectiveTLSHandshake()
 
 	return tr, nil

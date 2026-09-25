@@ -172,7 +172,9 @@ func (e *JumpError) Unwrap() []error {
 }
 
 // ApplyJumpSpec routes opts' connections through j, and returns opts
-// unchanged when j.Chain is blank.
+// unchanged when j.Chain is blank. It replaces opts.DialContext outright, so
+// a SOCKS5 proxy, which wraps the dial it finds, must be applied after it
+// with ApplyProxyOptions, or the bastion would reach the API host directly.
 //
 // The Proxmox API is plain HTTPS, so reaching a host that is not directly
 // routable is purely a matter of where the TCP connection comes from. That

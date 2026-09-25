@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -23,18 +24,21 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/testhelper"
 )
 
-// newProxiedClient builds an *http.Client that dials only through fn,
+// newProxiedClient builds an *http.Client routed through spec by
+// apiclient.ApplyProxyTransport, the way pmx's own transports are,
 // disabling keep-alives so a test's connections close as soon as the
 // response has been read, which is what lets the stand-ins' relay
 // goroutines return promptly during t.Cleanup.
-func newProxiedClient(fn func(*http.Request) (*url.URL, error)) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			Proxy:             fn,
-			DisableKeepAlives: true,
-			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // test-only origin cert
-		},
+func newProxiedClient(t *testing.T, spec apiclient.ProxySpec) *http.Client {
+	t.Helper()
+
+	tr := &http.Transport{
+		DisableKeepAlives: true,
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // test-only origin cert
 	}
+	require.NoError(t, apiclient.ApplyProxyTransport(tr, spec, 5*time.Second))
+
+	return &http.Client{Transport: tr}
 }
 
 // unresolvableOriginURL builds a request URL pointing at host, whose name is
@@ -74,11 +78,7 @@ func TestProxyOptions_SOCKS5ReachesServer(t *testing.T) {
 			proxyURL, err := url.Parse(scheme + "://" + proxy.Addr)
 			require.NoError(t, err)
 
-			fn, err := apiclient.ProxyFunc(apiclient.ProxySpec{URL: proxyURL})
-			require.NoError(t, err)
-			require.NotNil(t, fn)
-
-			client := newProxiedClient(fn)
+			client := newProxiedClient(t, apiclient.ProxySpec{URL: proxyURL})
 
 			reqURL := unresolvableOriginURL(t, origin, "pmx-proxy-test.invalid")
 
@@ -114,10 +114,7 @@ func TestProxyOptions_SOCKS5SendsUsernamePassword(t *testing.T) {
 	require.NoError(t, err)
 	proxyURL.User = url.UserPassword("pmxuser", "pmxpass")
 
-	fn, err := apiclient.ProxyFunc(apiclient.ProxySpec{URL: proxyURL})
-	require.NoError(t, err)
-
-	client := newProxiedClient(fn)
+	client := newProxiedClient(t, apiclient.ProxySpec{URL: proxyURL})
 
 	resp, err := client.Get(unresolvableOriginURL(t, origin, "pmx-auth-test.invalid"))
 	require.NoError(t, err)
@@ -163,10 +160,7 @@ func TestProxySpec_SpecialCharacterPasswords(t *testing.T) {
 
 			spec := apiclient.ProxySpec{URL: proxyURL, PasswordRef: "unused-in-this-test"}
 
-			fn, err := apiclient.ProxyFunc(spec)
-			require.NoError(t, err)
-
-			client := newProxiedClient(fn)
+			client := newProxiedClient(t, spec)
 
 			resp, err := client.Get(unresolvableOriginURL(t, origin, "pmx-special-test.invalid"))
 			require.NoError(t, err)
@@ -231,7 +225,7 @@ func TestProxyOptions_HTTPProxyReceivesConnect(t *testing.T) {
 
 	spec := apiclient.ProxySpec{URL: proxyURL}
 
-	opts, err := apiclient.ApplyProxyOptions(pve.Options{}, spec)
+	opts, err := apiclient.ApplyProxyOptions(pve.Options{}, spec, time.Second)
 	require.NoError(t, err)
 	require.NotNil(t, opts.Proxy)
 
@@ -239,7 +233,7 @@ func TestProxyOptions_HTTPProxyReceivesConnect(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, proxyURL.String(), got.String())
 
-	client := newProxiedClient(opts.Proxy)
+	client := newProxiedClient(t, spec)
 
 	resp, err := client.Get(origin.URL)
 	require.NoError(t, err)
@@ -257,11 +251,11 @@ func TestProxyOptions_HTTPProxyReceivesConnect(t *testing.T) {
 func TestProxyOptions_EnvIgnoredUnlessOptedIn(t *testing.T) {
 	t.Parallel()
 
-	off, err := apiclient.ApplyProxyOptions(pve.Options{}, apiclient.ProxySpec{FromEnv: false})
+	off, err := apiclient.ApplyProxyOptions(pve.Options{}, apiclient.ProxySpec{FromEnv: false}, time.Second)
 	require.NoError(t, err)
 	require.Nil(t, off.Proxy)
 
-	on, err := apiclient.ApplyProxyOptions(pve.Options{}, apiclient.ProxySpec{FromEnv: true})
+	on, err := apiclient.ApplyProxyOptions(pve.Options{}, apiclient.ProxySpec{FromEnv: true}, time.Second)
 	require.NoError(t, err)
 	require.NotNil(t, on.Proxy)
 	require.Equal(t,
@@ -280,7 +274,8 @@ func TestProxyOptions_DirectLeavesProxyNil(t *testing.T) {
 
 	existing := func(*http.Request) (*url.URL, error) { return nil, nil }
 
-	opts, err := apiclient.ApplyProxyOptions(pve.Options{Host: "pve", Proxy: existing}, apiclient.ProxySpec{})
+	opts, err := apiclient.ApplyProxyOptions(pve.Options{Host: "pve", Proxy: existing}, apiclient.ProxySpec{},
+		time.Second)
 	require.NoError(t, err)
 	require.NotNil(t, opts.Proxy, "a direct spec must leave an existing opts.Proxy in place")
 	require.Equal(t,

@@ -287,7 +287,7 @@ func fingerprintVerifier(want string) func(tls.ConnectionState) error {
 // JumpError's own Detail, whatever wrapping the transport added around it.
 // A failure on any other route that is not direct reads
 // "unreachable via <route>: <cause>", where the cause drops the transport's
-// `Get "<url>": ` prefix, so a refused proxy shows its proxyconnect error. A
+// `Get "<url>": ` prefix, so a refused proxy shows the proxy's own error. A
 // direct failure keeps the transport's whole text after "unreachable: ".
 //
 // Only the cause passes through redact.URLUserinfo. The route is left as

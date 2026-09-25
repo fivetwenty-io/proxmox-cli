@@ -38,10 +38,44 @@ type SOCKS5Proxy struct {
 	// "socks5://" or "socks5h://" proxy URL.
 	Addr string
 
-	t testing.TB
+	t    testing.TB
+	opts SOCKS5Options
 
 	mu          sync.Mutex
 	connections []SOCKS5Connection
+}
+
+// SOCKS5Options makes SOCKS5StandInWith misbehave the way a real proxy can.
+// The zero value is the well-behaved stand-in SOCKS5StandIn returns.
+type SOCKS5Options struct {
+	// ConnectReply, when non-zero, is the RFC 1928 reply code the stand-in
+	// answers every CONNECT with in place of success, such as 0x04 for
+	// "host unreachable". It then closes the connection and relays nothing.
+	ConnectReply byte
+
+	// CloseOnConnect makes the stand-in read the CONNECT request and close
+	// the connection without a reply, as OpenSSH's -D proxy does when its
+	// own connect to the target fails.
+	CloseOnConnect bool
+
+	// StallConnect makes the stand-in read the CONNECT request and never
+	// answer it, as a proxy does while its own connect to a blackholed
+	// target is still pending. It holds the connection until the client
+	// closes it.
+	StallConnect bool
+
+	// RequireAuth makes the stand-in answer a greeting that offers no
+	// username/password method with "no acceptable methods".
+	RequireAuth bool
+
+	// RejectAuth makes the stand-in fail every username/password
+	// subnegotiation.
+	RejectAuth bool
+
+	// ReplyAddrType is the address type of the bound address in a success
+	// reply: 1 for IPv4, which is the default, 3 for a domain name, or 4 for
+	// IPv6.
+	ReplyAddrType byte
 }
 
 // SOCKS5StandIn starts an in-process SOCKS5 proxy listening on loopback and
@@ -55,12 +89,21 @@ type SOCKS5Proxy struct {
 func SOCKS5StandIn(t testing.TB) *SOCKS5Proxy {
 	t.Helper()
 
+	return SOCKS5StandInWith(t, SOCKS5Options{})
+}
+
+// SOCKS5StandInWith starts the stand-in SOCKS5StandIn describes, changed by
+// opts. A connection whose CONNECT it refuses or stalls is still recorded,
+// with its target, before the stand-in answers or stalls.
+func SOCKS5StandInWith(t testing.TB, opts SOCKS5Options) *SOCKS5Proxy {
+	t.Helper()
+
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("testhelper.SOCKS5StandIn: listen: %v", err)
 	}
 
-	p := &SOCKS5Proxy{Addr: listener.Addr().String(), t: t}
+	p := &SOCKS5Proxy{Addr: listener.Addr().String(), t: t, opts: opts}
 
 	var wg sync.WaitGroup
 
@@ -130,11 +173,38 @@ func (p *SOCKS5Proxy) serve(conn net.Conn) {
 
 	rec.Target = target
 
-	// A minimal success reply: VER=5, REP=0 (succeeded), RSV=0, ATYP=1
-	// (IPv4), followed by an all-zero bound address and port. Real clients,
-	// including net/http's own SOCKS5 dialer, do not validate the bound
-	// address of a CONNECT reply, so a fixed placeholder is enough.
-	if _, err := conn.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+	switch {
+	case p.opts.StallConnect:
+		p.record(rec)
+		_, _ = io.Copy(io.Discard, conn)
+
+		return
+	case p.opts.CloseOnConnect:
+		p.record(rec)
+
+		return
+	case p.opts.ConnectReply != 0:
+		p.record(rec)
+		_, _ = conn.Write([]byte{5, p.opts.ConnectReply, 0, 1, 0, 0, 0, 0, 0, 0})
+
+		return
+	}
+
+	// A minimal success reply: VER=5, REP=0 (succeeded), RSV=0, and ATYP
+	// (IPv4 unless ReplyAddrType says otherwise), followed by a placeholder
+	// bound address and a zero port. Real clients, including net/http's own
+	// SOCKS5 dialer, do not validate the bound address of a CONNECT reply,
+	// but they must read past all of it before the target's first byte.
+	reply := []byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}
+
+	switch p.opts.ReplyAddrType {
+	case 3:
+		reply = []byte{5, 0, 0, 3, 9, 'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't', 0, 0}
+	case 4:
+		reply = append([]byte{5, 0, 0, 4}, make([]byte, net.IPv6len+2)...)
+	}
+
+	if _, err := conn.Write(reply); err != nil {
 		p.t.Logf("testhelper.SOCKS5StandIn: connect reply: %v", err)
 
 		return
@@ -177,14 +247,24 @@ func (p *SOCKS5Proxy) negotiate(conn net.Conn) (SOCKS5Connection, bool) {
 		authUsernamePassword = 0x02
 	)
 
+	const authNoAcceptable = 0xff
+
 	selected := byte(authNotRequired)
-	if slices.Contains(methods, byte(authUsernamePassword)) {
+
+	switch {
+	case slices.Contains(methods, byte(authUsernamePassword)):
 		selected = authUsernamePassword
+	case p.opts.RequireAuth:
+		selected = authNoAcceptable
 	}
 
 	if _, err := conn.Write([]byte{socksVersion5, selected}); err != nil {
 		p.t.Logf("testhelper.SOCKS5StandIn: write method selection: %v", err)
 
+		return SOCKS5Connection{}, false
+	}
+
+	if selected == authNoAcceptable {
 		return SOCKS5Connection{}, false
 	}
 
@@ -196,9 +276,9 @@ func (p *SOCKS5Proxy) negotiate(conn net.Conn) (SOCKS5Connection, bool) {
 }
 
 // subnegotiateAuth reads and accepts an RFC 1929 username/password exchange:
-// VER, ULEN, UNAME, PLEN, PASSWD, unconditionally replying with success so
-// the calling test controls acceptance by inspecting what was recorded
-// rather than by the stand-in rejecting anything.
+// VER, ULEN, UNAME, PLEN, PASSWD, replying with success unless RejectAuth
+// is set, so the calling test controls acceptance by inspecting what was
+// recorded rather than by the stand-in rejecting anything.
 func (p *SOCKS5Proxy) subnegotiateAuth(conn net.Conn) (SOCKS5Connection, bool) {
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(conn, header); err != nil {
@@ -229,6 +309,13 @@ func (p *SOCKS5Proxy) subnegotiateAuth(conn net.Conn) (SOCKS5Connection, bool) {
 	}
 
 	const authVersion1 = 1
+
+	if p.opts.RejectAuth {
+		_, _ = conn.Write([]byte{authVersion1, 1})
+
+		return SOCKS5Connection{}, false
+	}
+
 	if _, err := conn.Write([]byte{authVersion1, 0}); err != nil {
 		p.t.Logf("testhelper.SOCKS5StandIn: write auth reply: %v", err)
 

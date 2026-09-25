@@ -736,14 +736,23 @@ func TestAuthContextOptions_OverridesReachTransport(t *testing.T) {
 	opts, conn, err = contextOptions(cmd, sampleAuthContext(false, false), false,
 		"prod", "admin@pam", "pam", "", "secretpw", "", "")
 	require.NoError(t, err)
-	require.NotNil(t, opts.Proxy, "--api-proxy must install the proxy function")
+	require.Nil(t, opts.Proxy, "a SOCKS5 proxy is negotiated by pmx's own dial, not by net/http")
+	require.NotNil(t, opts.DialContext, "--api-proxy must install the SOCKS5 dial")
 	require.Equal(t, "--api-proxy", conn.ProxySource)
+	require.Equal(t, "socks5h://proxy.example.com:1080", conn.Proxy.URL.String())
+
+	cmd = cmdWithOverrides("/home/user/.config/pmx/config.yml",
+		cli.ConnectionOverrides{Proxy: "http://proxy.example.com:3128", ProxySource: "--api-proxy"}, &stderr)
+	opts, _, err = contextOptions(cmd, sampleAuthContext(false, false), false,
+		"prod", "admin@pam", "pam", "", "secretpw", "", "")
+	require.NoError(t, err)
+	require.NotNil(t, opts.Proxy, "an http --api-proxy must install the proxy function")
 
 	req, err := http.NewRequest(http.MethodGet, "https://pve.example.com:8006/api2/json/version", nil)
 	require.NoError(t, err)
 	proxyURL, err := opts.Proxy(req)
 	require.NoError(t, err)
-	require.Equal(t, "socks5h://proxy.example.com:1080", proxyURL.String())
+	require.Equal(t, "http://proxy.example.com:3128", proxyURL.String())
 }
 
 // TestAuthContextOptions_EndpointOverride covers --api-endpoint on the auth

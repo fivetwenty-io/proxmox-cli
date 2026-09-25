@@ -15,10 +15,12 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2242,13 +2244,17 @@ func TestResolveConnection_NilContext(t *testing.T) {
 
 // TestConnection_ApplyToOptions proves the proxy, the timeouts, and the jump
 // all land on the kit's options, and that a direct connection leaves a
-// caller's own proxy function alone.
+// caller's own proxy function alone. A SOCKS5 proxy lands on the dial rather
+// than on the proxy function, so pmx negotiates it itself, and the joined
+// credential reaches the proxy.
 func TestConnection_ApplyToOptions(t *testing.T) {
 	t.Setenv("PMX_TEST_PROXY_PASSWORD", "pw")
 
+	socks := testhelper.SOCKS5StandInWith(t, testhelper.SOCKS5Options{ConnectReply: 0x04})
+
 	conn := mustResolve(t, withContext(func(c *config.Context) {
 		c.Proxy = config.ProxyBlock{
-			URL: "socks5h://proxy:1080", Username: "pmx", Password: "${PMX_TEST_PROXY_PASSWORD}",
+			URL: "socks5h://" + socks.Addr, Username: "pmx", Password: "${PMX_TEST_PROXY_PASSWORD}",
 		}
 		c.Timeout = config.TimeoutBlock{Connect: "1500ms", TLSHandshake: "2s", Request: "45s"}
 	}))
@@ -2258,14 +2264,17 @@ func TestConnection_ApplyToOptions(t *testing.T) {
 	require.Equal(t, 2, opts.DialTimeoutSec)
 	require.Equal(t, 2, opts.TLSHandshakeTimeoutSec)
 	require.Equal(t, 45*time.Second, opts.Timeout)
-	require.Nil(t, opts.DialContext)
-	require.NotNil(t, opts.Proxy)
+	require.Nil(t, opts.Proxy, "net/http must not run its own SOCKS negotiation")
+	require.NotNil(t, opts.DialContext)
 
-	req := httptest.NewRequest(http.MethodGet, "https://pve1:8006/api2/json/version", nil)
+	_, err = opts.DialContext(context.Background(), "tcp", "pve1:8006")
+	require.ErrorContains(t, err, "could not connect to the target: host unreachable")
 
-	proxy, err := opts.Proxy(req)
-	require.NoError(t, err)
-	require.Equal(t, "socks5h://pmx:pw@proxy:1080", proxy.String())
+	connections := socks.Connections()
+	require.Len(t, connections, 1)
+	require.Equal(t, "pve1:8006", connections[0].Target)
+	require.Equal(t, "pmx", connections[0].Username)
+	require.Equal(t, "pw", connections[0].Password)
 	require.Nil(t, conn.Proxy.URL.User, "the credential join never writes back to the connection")
 
 	direct := mustResolve(t, labContext())
@@ -2274,6 +2283,7 @@ func TestConnection_ApplyToOptions(t *testing.T) {
 	opts, err = direct.ApplyToOptions(pve.Options{Proxy: callerProxy})
 	require.NoError(t, err)
 	require.NotNil(t, opts.Proxy)
+	require.Nil(t, opts.DialContext)
 	require.Equal(t, 5, opts.DialTimeoutSec)
 	require.Equal(t, 10, opts.TLSHandshakeTimeoutSec)
 	require.Equal(t, 30*time.Second, opts.Timeout)
@@ -2498,4 +2508,129 @@ func TestJumpAndProxy_DialerReceivesProxyAddress(t *testing.T) {
 	connects := socks.Connections()
 	require.Len(t, connects, 1)
 	require.Equal(t, net.JoinHostPort(target, originPort), connects[0].Target)
+}
+
+// TestSOCKSProxy_StalledTargetFailsAtTheConnectBound proves a SOCKS5 proxy
+// that never finishes its own connect to the API host fails at the connect
+// bound, on a direct route, and at the connect bound plus the handshake
+// bound plus one second through a bastion, whose own setup runs inside the
+// dial there.
+func TestSOCKSProxy_StalledTargetFailsAtTheConnectBound(t *testing.T) {
+	t.Run("direct", func(t *testing.T) {
+		socks := testhelper.SOCKS5StandInWith(t, testhelper.SOCKS5Options{StallConnect: true})
+
+		conn := mustResolve(t, labContext(), "--api-proxy", "socks5h://"+socks.Addr,
+			"--api-connect-timeout", "300ms")
+
+		opts, err := conn.ApplyToOptions(pve.Options{})
+		require.NoError(t, err)
+
+		start := time.Now()
+		_, err = opts.DialContext(context.Background(), "tcp", "pve-target.invalid:8006")
+
+		require.ErrorContains(t, err, "socks5h proxy "+socks.Addr+" did not connect to the target within 300ms")
+		require.Less(t, time.Since(start), 3*time.Second)
+	})
+
+	t.Run("through a bastion", func(t *testing.T) {
+		socks := testhelper.SOCKS5StandInWith(t, testhelper.SOCKS5Options{StallConnect: true})
+		script := testhelper.SSHStandIn(t, testhelper.SSHStandInOptions{Mode: testhelper.SSHForward})
+
+		conn := mustResolve(t, labContext(), "--api-jump", "bastion", "--api-proxy", "socks5h://"+socks.Addr,
+			"--api-connect-timeout", "500ms", "--api-tls-handshake-timeout", "500ms")
+		conn.Jump.Program = script.Program
+
+		apiclient.ReopenJumps()
+
+		tr, err := conn.ApplyToHTTPTransport(&http.Transport{DisableKeepAlives: true})
+		require.NoError(t, err)
+
+		_, err = tr.DialContext(context.Background(), "tcp", "pve-target.invalid:8006")
+
+		require.ErrorContains(t, err, "socks5h proxy "+socks.Addr+" did not connect to the target within 2s")
+		require.Len(t, socks.Connections(), 1, "the bastion reached the proxy, and the proxy took the CONNECT")
+	})
+}
+
+// TestSOCKSProxy_BastionWaitIsNotCharged proves the SOCKS bound starts once
+// the bastion's dial returns. Concurrent dials through one bastion wait for
+// the first one's ssh to answer before they start their own, and that wait
+// must not count against their SOCKS bound, or every dial after the first
+// would fail and blame the proxy for a slow bastion.
+func TestSOCKSProxy_BastionWaitIsNotCharged(t *testing.T) {
+	socks := testhelper.SOCKS5StandInWith(t, testhelper.SOCKS5Options{ConnectReply: 0x04})
+	script := testhelper.SSHStandIn(t, testhelper.SSHStandInOptions{
+		Mode: testhelper.SSHForward, StartDelay: 700 * time.Millisecond,
+	})
+
+	// The first-byte timer is one second, the floor, and the SOCKS bound is
+	// 100ms + 100ms + 1s. Each ssh takes 700ms to answer, so a waiter that
+	// started its clock with the first dial would run out at 1.2s.
+	conn := mustResolve(t, labContext(), "--api-jump", "bastion", "--api-proxy", "socks5h://"+socks.Addr,
+		"--api-connect-timeout", "100ms", "--api-tls-handshake-timeout", "100ms")
+	conn.Jump.Program = script.Program
+
+	apiclient.ReopenJumps()
+
+	tr, err := conn.ApplyToHTTPTransport(&http.Transport{DisableKeepAlives: true})
+	require.NoError(t, err)
+
+	errs := make([]error, 3)
+
+	var wg sync.WaitGroup
+
+	for i := range errs {
+		wg.Go(func() {
+			_, errs[i] = tr.DialContext(context.Background(), "tcp", "pve-target.invalid:8006")
+		})
+	}
+
+	wg.Wait()
+
+	for i, err := range errs {
+		require.ErrorContains(t, err, "could not connect to the target: host unreachable", "dial %d", i)
+	}
+
+	require.Len(t, socks.Connections(), len(errs))
+}
+
+// envSOCKSVar carries the SOCKS5 proxy URL into the child process that
+// TestSOCKSProxy_FromEnvironment starts. TestMain pins HTTPS_PROXY to it
+// and HTTP_PROXY to it when it is set, because Go reads the proxy
+// environment once per process.
+const envSOCKSVar = "PMX_TEST_ENV_SOCKS_PROXY"
+
+// TestSOCKSProxy_FromEnvironment proves proxy.from-env hands a SOCKS5 proxy
+// the environment names to pmx's own dial, bounded like any other, and that
+// it arms the bastion's first-byte timer on an http route as a SOCKS5
+// proxy.url does. It runs its checks in a child process with HTTPS_PROXY and
+// HTTP_PROXY set to a SOCKS5 URL.
+func TestSOCKSProxy_FromEnvironment(t *testing.T) {
+	if os.Getenv(envSOCKSVar) != "" {
+		conn := mustResolve(t, labContext(), "--api-proxy-from-env", "--api-connect-timeout", "300ms")
+		require.Equal(t, "proxy "+os.Getenv(envSOCKSVar)+" (from environment)", conn.Via())
+
+		opts, err := conn.ApplyToOptions(pve.Options{})
+		require.NoError(t, err)
+		require.Nil(t, opts.Proxy, "net/http must not run its own SOCKS negotiation")
+
+		_, err = opts.DialContext(context.Background(), "tcp", "pve-target.invalid:8006")
+		require.ErrorContains(t, err, "did not connect to the target within 300ms")
+
+		jumped := mustResolve(t, withContext(func(c *config.Context) { c.Protocol = "http" }),
+			"--api-proxy-from-env", "--api-jump", "bastion")
+		require.Positive(t, jumped.Jump.FirstByteTimeout, "SOCKS negotiation comes first, so the timer is armed")
+
+		return
+	}
+
+	socks := testhelper.SOCKS5StandInWith(t, testhelper.SOCKS5Options{StallConnect: true})
+
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestSOCKSProxy_FromEnvironment$", "-test.count=1")
+	cmd.Env = append(os.Environ(), envSOCKSVar+"=socks5h://"+socks.Addr)
+
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.Contains(t, string(out), "PASS")
+	require.Len(t, socks.Connections(), 1)
 }

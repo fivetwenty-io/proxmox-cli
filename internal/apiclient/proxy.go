@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	pve "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/client"
 
@@ -89,7 +90,10 @@ var proxySchemes = map[string]bool{
 // ready to reach ProxyFunc. A URL whose scheme is not socks5, socks5h, or
 // http, that carries no host, or whose port is not a number from 1 to
 // 65535, is rejected here rather than left to fail the first time a
-// request tries to dial through it.
+// request tries to dial through it. A SOCKS5 URL gets net/http's own
+// negotiation this way, bounded only by the request, so pmx's transports
+// install a proxy through ApplyProxyOptions or ApplyProxyTransport instead,
+// which negotiate SOCKS5 themselves.
 func ProxyFunc(p ProxySpec) (func(*http.Request) (*url.URL, error), error) {
 	switch {
 	case p.URL != nil:
@@ -145,22 +149,69 @@ func validateProxyHost(u *url.URL) error {
 	return nil
 }
 
-// ApplyProxyOptions sets opts.Proxy from p and returns the updated options.
+// ApplyProxyOptions routes opts through p and returns the updated options.
 // It returns opts unchanged, with a nil error, when p selects a direct
 // connection, so a caller's own proxy function — set before a ProxySpec is
 // resolved, or left over from an earlier call — survives untouched rather
 // than being cleared to nil.
-func ApplyProxyOptions(opts pve.Options, p ProxySpec) (pve.Options, error) {
-	fn, err := ProxyFunc(p)
+//
+// An http proxy, and proxy.from-env, land on opts.Proxy for net/http to use.
+// A SOCKS5 URL instead clears opts.Proxy and wraps opts.DialContext in
+// SOCKSDialContext, bounded by socksBound, so it must run after anything
+// else that sets DialContext, such as ApplyJumpSpec: the dial it finds
+// there is the one that reaches the proxy.
+func ApplyProxyOptions(opts pve.Options, p ProxySpec, socksBound time.Duration) (pve.Options, error) {
+	proxy, dial, err := proxyRoute(p, opts.DialContext, socksBound)
 	if err != nil {
 		return opts, err
 	}
 
-	if fn == nil {
-		return opts, nil
+	switch {
+	case dial != nil:
+		opts.Proxy = nil
+		opts.DialContext = dial
+	case proxy != nil:
+		opts.Proxy = proxy
 	}
 
-	opts.Proxy = fn
-
 	return opts, nil
+}
+
+// ApplyProxyTransport routes tr through p, as ApplyProxyOptions does for a
+// client's options, for callers that build a bare http.Transport. It always
+// sets tr.Proxy, to nil for a direct or SOCKS5 route, so an ambient proxy
+// environment never applies unless p chose it, and a SOCKS5 route wraps the
+// tr.DialContext already installed. On failure it leaves tr untouched.
+func ApplyProxyTransport(tr *http.Transport, p ProxySpec, socksBound time.Duration) error {
+	proxy, dial, err := proxyRoute(p, tr.DialContext, socksBound)
+	if err != nil {
+		return err
+	}
+
+	tr.Proxy = proxy
+
+	if dial != nil {
+		tr.DialContext = dial
+	}
+
+	return nil
+}
+
+// proxyRoute returns the proxy function and the dial function for p. A
+// SOCKS5 URL yields only a dial function, which reaches the proxy through
+// forward; an http URL or proxy.from-env yields only a proxy function; and a
+// direct route yields neither.
+func proxyRoute(p ProxySpec, forward DialFunc, socksBound time.Duration) (
+	func(*http.Request) (*url.URL, error), DialFunc, error,
+) {
+	proxy, err := ProxyFunc(p)
+	if err != nil || proxy == nil {
+		return nil, nil, err
+	}
+
+	if IsSOCKSProxy(p.URL) {
+		return nil, SOCKSDialContext(p.URL, socksBound, forward), nil
+	}
+
+	return proxy, nil, nil
 }
