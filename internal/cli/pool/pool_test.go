@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -176,6 +177,151 @@ func TestPoolListError(t *testing.T) {
 
 	_, err := run(t, f, "", "list")
 	require.Error(t, err)
+}
+
+// handlePoolsLikePVE serves GET /pools the way PVE 9 does. Without a poolid the
+// reply lists poolid and comment only, with no members. With a poolid it adds
+// that pool's members, limited to the type filter when one is passed, and a
+// type without a poolid is refused. Every request is recorded.
+func handlePoolsLikePVE(f *testhelper.FakePVE, rec *[]recordedRequest, members map[string][]map[string]any) {
+	f.HandleFunc("GET /api2/json/pools", func(w http.ResponseWriter, r *http.Request) {
+		*rec = append(*rec, recordedRequest{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery})
+		q := r.URL.Query()
+		poolid, typ := q.Get("poolid"), q.Get("type")
+		if typ != "" && poolid == "" {
+			testhelper.WriteError(w, http.StatusBadRequest, "poolid: missing property required by 'type'")
+			return
+		}
+		ids := make([]string, 0, len(members))
+		for id := range members {
+			if poolid == "" || poolid == id {
+				ids = append(ids, id)
+			}
+		}
+		sort.Strings(ids)
+		out := make([]any, 0, len(ids))
+		for _, id := range ids {
+			entry := map[string]any{"poolid": id, "comment": "pool " + id}
+			if poolid != "" {
+				kept := make([]any, 0)
+				for _, m := range members[id] {
+					if typ == "" || m["type"] == typ {
+						kept = append(kept, m)
+					}
+				}
+				entry["members"] = kept
+			}
+			out = append(out, entry)
+		}
+		testhelper.WriteData(w, out)
+	})
+}
+
+// TestPoolList_CountsMembersLikePVE is the regression case for every pool
+// showing 0 members. PVE leaves members out of the bare list, so the command
+// must read each pool by its poolid to count them.
+func TestPoolList_CountsMembersLikePVE(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	handlePoolsLikePVE(f, &rec, map[string][]map[string]any{
+		"bosh-templates": {
+			{"id": "qemu/30531", "type": "qemu"},
+			{"id": "qemu/30709", "type": "qemu"},
+			{"id": "qemu/30772", "type": "qemu"},
+		},
+		"cpitest-parker": {{"id": "qemu/90548", "type": "qemu"}, {"id": "qemu/90821", "type": "qemu"}},
+		"empty":          {},
+	})
+
+	out, err := run(t, f, "", "list")
+	require.NoError(t, err)
+	require.Regexp(t, `bosh-templates\s+\S.*\s3\s`, out)
+	require.Regexp(t, `cpitest-parker\s+\S.*\s2\s`, out)
+	require.Regexp(t, `empty\s+\S.*\s0\s`, out)
+	require.Len(t, rec, 4, "one bare list plus one read per pool")
+	require.Empty(t, rec[0].query, "the first request is the bare list")
+}
+
+// TestPoolList_JSONCarriesMembers verifies -o json reports the member entries,
+// not null, for a pool whose members come from the per-pool read.
+func TestPoolList_JSONCarriesMembers(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	handlePoolsLikePVE(f, &rec, map[string][]map[string]any{
+		"prod": {{"id": "qemu/100", "type": "qemu"}},
+	})
+
+	stdout, _, err := runSplit(t, f, "", "json", "list")
+	require.NoError(t, err)
+	var got []struct {
+		Poolid  string           `json:"poolid"`
+		Members []map[string]any `json:"members"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Len(t, got, 1)
+	require.Equal(t, "prod", got[0].Poolid)
+	require.Len(t, got[0].Members, 1)
+	require.Equal(t, "qemu/100", got[0].Members[0]["id"])
+}
+
+// TestPoolList_TypeFilterWithoutPoolid is the regression case for `list --type`
+// failing on PVE 9, which refuses a type without a poolid. The command must
+// filter per pool and leave out pools holding no member of that type.
+func TestPoolList_TypeFilterWithoutPoolid(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	handlePoolsLikePVE(f, &rec, map[string][]map[string]any{
+		"vms":     {{"id": "qemu/100", "type": "qemu"}, {"id": "lxc/200", "type": "lxc"}},
+		"cts":     {{"id": "lxc/201", "type": "lxc"}},
+		"storage": {{"id": "storage/local", "type": "storage"}},
+	})
+
+	out, err := run(t, f, "", "list", "--type", "qemu")
+	require.NoError(t, err)
+	require.Contains(t, out, "vms")
+	require.NotContains(t, out, "cts")
+	require.NotContains(t, out, "storage")
+	require.Regexp(t, `vms\s+\S.*\s1\s`, out, "only the qemu member is counted")
+	require.Len(t, rec, 4, "one bare list plus one typed read per pool")
+	require.Empty(t, rec[0].query, "the bare list must not carry type")
+	for _, r := range rec[1:] {
+		require.Contains(t, r.query, "type=qemu")
+		require.Contains(t, r.query, "poolid=")
+	}
+}
+
+// TestPoolList_PoolidSingleRequest verifies --poolid is answered by one request,
+// since the poolid read already reports the members.
+func TestPoolList_PoolidSingleRequest(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	handlePoolsLikePVE(f, &rec, map[string][]map[string]any{
+		"prod": {{"id": "qemu/100", "type": "qemu"}, {"id": "qemu/101", "type": "qemu"}},
+		"dev":  {},
+	})
+
+	out, err := run(t, f, "", "list", "--poolid", "prod")
+	require.NoError(t, err)
+	require.Regexp(t, `prod\s+\S.*\s2\s`, out)
+	require.NotContains(t, out, "dev")
+	require.Len(t, rec, 1)
+}
+
+// TestPoolList_MemberReadError verifies a failure on the per-pool read is
+// surfaced rather than printing a wrong count.
+func TestPoolList_MemberReadError(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	f.HandleFunc("GET /api2/json/pools", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("poolid") != "" {
+			testhelper.WriteError(w, http.StatusInternalServerError, "boom")
+			return
+		}
+		testhelper.WriteData(w, []any{map[string]any{"poolid": "prod", "comment": "production"}})
+	})
+
+	_, err := run(t, f, "", "list")
+	require.Error(t, err)
+	require.ErrorContains(t, err, `members of pool "prod"`)
 }
 
 // TestPoolGet verifies pool get uses GET /pools?poolid=<id> (non-deprecated endpoint).

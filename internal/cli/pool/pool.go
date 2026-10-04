@@ -2,6 +2,7 @@ package pool
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -70,11 +71,11 @@ func newListCmd() *cobra.Command {
 			deps := cli.GetDeps(cmd)
 
 			params := &pools.ListPoolsParams{}
-			if poolType != "" {
-				params.Type = &poolType
-			}
 			if poolid != "" {
 				params.Poolid = &poolid
+				if poolType != "" {
+					params.Type = &poolType
+				}
 			}
 
 			resp, err := deps.API.Pools.ListPools(cmd.Context(), params)
@@ -92,6 +93,15 @@ func newListCmd() *cobra.Command {
 					entries = append(entries, e)
 				}
 			}
+
+			// The bare list carries no members, and PVE rejects --type without a poolid, so
+			// each pool is read again by its poolid to learn its members.
+			if poolid == "" {
+				entries, err = fillMembers(cmd.Context(), deps.API.Pools, entries, poolType)
+				if err != nil {
+					return err
+				}
+			}
 			sort.Slice(entries, func(i, j int) bool { return entries[i].Poolid < entries[j].Poolid })
 
 			res := output.Result{
@@ -107,6 +117,47 @@ func newListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&poolType, "type", "", "filter by member type: qemu|lxc|storage")
 	cmd.Flags().StringVar(&poolid, "poolid", "", "show only the pool with this identifier")
 	return cmd
+}
+
+// fillMembers reads each listed pool again through GET /pools?poolid=<id>, the
+// only form of the pools endpoint that reports members, and returns the entries
+// with their members filled in. When poolType is set, the members are limited to
+// that kind and pools with no such member are left out. A list that already
+// carries members is kept as it is unless a type filter needs applying.
+func fillMembers(
+	ctx context.Context, api pools.Service, entries []poolListEntry, poolType string,
+) ([]poolListEntry, error) {
+	filled := make([]poolListEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.Members == nil || poolType != "" {
+			params := &pools.ListPoolsParams{Poolid: &e.Poolid}
+			if poolType != "" {
+				params.Type = &poolType
+			}
+			resp, err := api.ListPools(ctx, params)
+			if err != nil {
+				return nil, fmt.Errorf("list members of pool %q: %w", e.Poolid, err)
+			}
+			e.Members = nil
+			if resp != nil {
+				for _, raw := range *resp {
+					var detail poolListEntry
+					if err := json.Unmarshal(raw, &detail); err != nil {
+						return nil, fmt.Errorf("decode pool %q: %w", e.Poolid, err)
+					}
+					if detail.Poolid == e.Poolid {
+						e.Members = detail.Members
+						break
+					}
+				}
+			}
+		}
+		if poolType != "" && len(e.Members) == 0 {
+			continue
+		}
+		filled = append(filled, e)
+	}
+	return filled, nil
 }
 
 // poolGetEntry is the shape of a single element returned by GET /pools?poolid=<id>.
