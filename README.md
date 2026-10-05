@@ -1206,6 +1206,12 @@ staging a bond against interfaces that do not exist yet. `pmx lab status`
 shows each target's IPv6 beside its IPv4, live from the guest agent when
 the VM is running.
 
+The lab's IPv4 subnet gets SNAT by default when the zone is `simple`, so
+the lab has IPv4 egress from the start, and `pmx lab net apply` turns it
+on for an existing subnet that lacks it. Set `network.snat: false` to opt
+out. pmx only ever sets the flag and never clears it, and an explicit
+`network.snat: true` on any other zone type fails validation.
+
 Set `network.ipv6: false` to keep a lab IPv4-only; turning it off later
 stops further IPv6 provisioning but never deletes what already exists.
 Set `network.snat6: true` for egress: `pmx lab create`/`pmx lab net
@@ -1270,6 +1276,13 @@ cluster is formed (`pmx lab cluster init`/`join`), `pmx lab ceph
 install|init|mon|mgr|osd|pool|status <lab>` orchestrates Ceph across it:
 `install` bootstraps packages over guest SSH, since PVE has no REST
 endpoint for that step, and the rest talk to the nested cluster's own API.
+
+When a nested cluster loses quorum and only one node survives, `pmx lab
+cluster expected <lab> <votes>` runs `pvecm expected` on that node over
+guest SSH so `/etc/pve` accepts writes again. It only lowers the count,
+corosync resets it once quorum returns, and without `--node` it uses the
+first node that answers. `--dry-run` shows the node and the command
+without changing anything.
 
 ### Command walkthrough
 
