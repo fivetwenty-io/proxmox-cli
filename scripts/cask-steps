@@ -6,9 +6,10 @@
 """Inject pmx's Homebrew install steps into the cask GoReleaser generates.
 
 GoReleaser writes dist/homebrew/Casks/pmx.rb during a release, and that cask
-needs three things Homebrew artifact stanzas cannot give it: the pve/pbs/pdm
-persona aliases in bin, a silent bulk link of the ~3,000 staged man pages, and
-a link for each persona's shell completions. GoReleaser's own `hooks:` express
+needs four things Homebrew artifact stanzas cannot give it: a pmx binary that
+macOS launches without a Gatekeeper prompt, the pve/pbs/pdm persona aliases in
+bin, a silent bulk link of the ~3,000 staged man pages, and a link for each
+persona's shell completions. GoReleaser's own `hooks:` express
 all of that, but it emits them as `postflight`/`uninstall_postflight`, the
 arbitrary-Ruby blocks Homebrew 6 deprecated in favour of the declarative
 `postflight_steps`/`uninstall_postflight_steps`. Its cask template has no way
@@ -48,6 +49,21 @@ ANCHOR_PREFIX = '  binary "'
 
 STEPS = '''
   postflight_steps do
+    # Homebrew copies the download's quarantine flag onto the staged binary,
+    # and macOS 26 answers the first launch of a quarantined CLI binary with a
+    # confirmation prompt even though pmx is signed and notarized. Until that
+    # prompt is answered the process sits in dyld, so `pmx --version` looks
+    # hung, and over SSH or on a headless Mac nobody can answer it. Homebrew
+    # has already checked the download against the cask's sha256, and the
+    # binary carries our Developer ID signature and notarization, so dropping
+    # the flag gives up only the prompt. xattr exits non-zero when the flag is
+    # already gone, which is fine.
+    on_macos do
+      run "/usr/bin/xattr", args: ["-d", "com.apple.quarantine", "{{staged_path}}/pmx"],
+          must_succeed: false, print_stderr: false,
+          writable_paths: ["pmx"], writable_base: :staged_path
+    end
+
     # pve, pbs, and pdm are pmx under a different argv[0] — internal/cli.Persona
     # reads it to pick the command tree — so each one has to be a link to the
     # binary rather than a copy of it.
@@ -207,6 +223,14 @@ def self_test() -> None:
         (
             "persona aliases covered",
             all(f'"bin/{p}"' in injected for p in ("pve", "pbs", "pdm")),
+        )
+    )
+    checks.append(
+        (
+            "quarantine is stripped from the staged binary on macOS",
+            'run "/usr/bin/xattr", args: ["-d", "com.apple.quarantine", "{{staged_path}}/pmx"]'
+            in injected
+            and injected.index("on_macos do") < injected.index('run "/usr/bin/xattr"'),
         )
     )
     checks.append(

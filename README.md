@@ -60,7 +60,7 @@ collect all published feature guides and operational walkthroughs.
 brew install --cask fivetwenty-io/tap/pmx
 ```
 
-This installs `pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages for every command tree, and bash, zsh, and fish completions for `pmx` and for each persona. The macOS binaries are signed with an Apple Developer ID and notarized, so Gatekeeper accepts them on first launch even though Homebrew quarantines cask artifacts. For maintainers, the tap lives in the separate [`fivetwenty-io/homebrew-tap`](https://github.com/fivetwenty-io/homebrew-tap) GitHub repository. GoReleaser generates the cask during a release. The release workflow then adds the install steps that link the personas, the man pages, and the completions, and it pushes the finished cask to the tap with the `HOMEBREW_TAP_GITHUB_TOKEN` repository secret on `proxmox-cli`.
+This installs `pmx`, the `pve`/`pbs`/`pdm` persona symlinks, man pages for every command tree, and bash, zsh, and fish completions for `pmx` and for each persona. The macOS binaries are signed with an Apple Developer ID and notarized. Homebrew quarantines cask artifacts, and macOS 26 would otherwise hold the first launch of a quarantined command-line binary at a confirmation prompt, so the cask clears the quarantine flag from `pmx` when it installs. For maintainers, the tap lives in the separate [`fivetwenty-io/homebrew-tap`](https://github.com/fivetwenty-io/homebrew-tap) GitHub repository. GoReleaser generates the cask during a release. The release workflow then adds the install steps that link the personas, the man pages, and the completions, and it pushes the finished cask to the tap with the `HOMEBREW_TAP_GITHUB_TOKEN` repository secret on `proxmox-cli`.
 
 ### Download a release archive
 

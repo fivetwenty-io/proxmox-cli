@@ -180,9 +180,11 @@ nfpms:
       - src: LICENSE
         dst: /usr/share/doc/pmx/LICENSE
 
-# Sign + notarize the darwin binaries so Gatekeeper accepts them on first
-# launch (Homebrew quarantines cask artifacts; an unsigned binary is blocked
-# with an "Apple could not verify" dialog). Runs via quill, so it works on
+# Sign + notarize the darwin binaries so Gatekeeper accepts them (an unsigned
+# binary is blocked with an "Apple could not verify" dialog). Homebrew
+# quarantines cask artifacts, and macOS 26 still prompts before the first
+# launch of a quarantined notarized CLI binary, so scripts/cask-steps also
+# strips the flag from the staged pmx at install time. Runs via quill, so it works on
 # the Linux release runner — no macOS runner needed. All values come from
 # secrets; when MACOS_SIGN_P12 is unset/empty the step is skipped entirely,
 # so local snapshots and releases without the Apple secrets still succeed
