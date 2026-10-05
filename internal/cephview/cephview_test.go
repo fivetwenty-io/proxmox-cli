@@ -393,8 +393,8 @@ func TestReleases_EmptyListRendersAnEmptyTable(t *testing.T) {
 }
 
 // TestHealthMute_OneRowPerMutedCheckSortedByCode covers the muted-check list.
-// The fixture is written by hand from the apidoc, not captured, because no
-// live payload exists yet, so the ttl shape is the documented one.
+// The fixture follows the payload captured from pve-manager 9.2.21, where ttl
+// is the absolute expiry with microseconds and sticky is 0 or 1.
 func TestHealthMute_OneRowPerMutedCheckSortedByCode(t *testing.T) {
 	res, err := HealthMute(captured(t, "health_mute.json"))
 	require.NoError(t, err)
@@ -402,7 +402,7 @@ func TestHealthMute_OneRowPerMutedCheckSortedByCode(t *testing.T) {
 	assert.Equal(t, healthMuteHeaders, res.Headers)
 	require.Len(t, res.Rows, 2)
 	assert.Equal(t, []string{"OSD_DOWN", "yes", "", "1 osds down"}, res.Rows[0])
-	assert.Equal(t, []string{"POOL_NO_REDUNDANCY", "no", "2026-10-06T12:00:00+0000",
+	assert.Equal(t, []string{"POOL_NO_REDUNDANCY", "no", "2026-10-06 12:00:00 +0000",
 		"1 pool(s) have no replicas configured"}, res.Rows[1])
 
 	raw, ok := res.Raw.([]any)
@@ -437,6 +437,22 @@ func TestHealthMute_NumericTTLDoesNotBreakTheTable(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 1)
 	assert.Equal(t, "7200", res.Rows[0][2])
+}
+
+// TestHealthMute_ExpiryKeepsTheServerOffset covers an expiry in a non-UTC
+// offset and one without fractional seconds, and a ttl that is not a
+// timestamp, which renders unchanged.
+func TestHealthMute_ExpiryKeepsTheServerOffset(t *testing.T) {
+	for ttl, want := range map[string]string{
+		`"2026-10-05T14:40:46.223595-0400"`: "2026-10-05 14:40:46 -0400",
+		`"2026-10-05T14:40:46-0400"`:        "2026-10-05 14:40:46 -0400",
+		`"2h"`:                              "2h",
+	} {
+		res, err := HealthMute(json.RawMessage(`[{"code":"OSD_DOWN","sticky":0,"ttl":` + ttl + `}]`))
+		require.NoError(t, err, ttl)
+		require.Len(t, res.Rows, 1, ttl)
+		assert.Equal(t, want, res.Rows[0][2], ttl)
+	}
 }
 
 // TestHealthMute_EmptyListRendersAnEmptyTable covers a cluster with nothing

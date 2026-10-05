@@ -44,7 +44,7 @@ func TestCephHealthMute_List(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "CODE")
 	require.Contains(t, out, "EXPIRES")
-	require.Contains(t, out, "2026-10-06T12:00:00+0000")
+	require.Contains(t, out, "2026-10-06 12:00:00 +0000")
 	require.Contains(t, out, "POOL_NO_REDUNDANCY")
 	require.Contains(t, out, "OSD_DOWN")
 	require.Contains(t, out, "1 pool has no replicas")
@@ -136,7 +136,9 @@ func TestCephHealthMute_CreateOmitsUnsetFlags(t *testing.T) {
 }
 
 // TestCephHealthMute_DeleteSendsValueZero verifies delete issues a PUT with
-// value=0 and nothing else.
+// value=0 and nothing else. The fake serves no list of mutes, which is the
+// case of a token that may unmute but not audit, so the unmute goes out
+// unchecked.
 func TestCephHealthMute_DeleteSendsValueZero(t *testing.T) {
 	f, ac := newFakeClient(t)
 	var form url.Values
@@ -151,6 +153,79 @@ func TestCephHealthMute_DeleteSendsValueZero(t *testing.T) {
 	require.False(t, form.Has("ttl"))
 	require.False(t, form.Has("sticky"))
 	require.Contains(t, buf.String(), "ceph health check OSD_DOWN unmuted.")
+}
+
+// serveHealthMutes answers GET /cluster/ceph/health-mute with one mute per
+// code.
+func serveHealthMutes(f *testhelper.FakePVE, codes ...string) {
+	f.HandleFunc("GET /api2/json/cluster/ceph/health-mute", func(w http.ResponseWriter, _ *http.Request) {
+		mutes := make([]any, 0, len(codes))
+		for _, c := range codes {
+			mutes = append(mutes, map[string]any{"code": c, "sticky": 0, "summary": ""})
+		}
+		testhelper.WriteData(w, mutes)
+	})
+}
+
+// TestCephHealthMute_DeleteUnmutesAListedCode verifies delete sends the unmute
+// when the list shows the code is muted.
+func TestCephHealthMute_DeleteUnmutesAListedCode(t *testing.T) {
+	f, ac := newFakeClient(t)
+	serveHealthMutes(f, "OSDMAP_FLAGS", "OSD_DOWN")
+	var form url.Values
+	var called bool
+	recordHealthMutePut(f, "OSD_DOWN", &form, &called)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "ceph", "health-mute", "delete", "OSD_DOWN"))
+	require.True(t, called)
+	require.Equal(t, "0", form.Get("value"))
+	require.Contains(t, buf.String(), "ceph health check OSD_DOWN unmuted.")
+}
+
+// TestCephHealthMute_DeleteSaysWhenNotMuted verifies delete of a code the list
+// does not show sends nothing and says the check is not muted, rather than
+// claiming an unmute that did not happen.
+func TestCephHealthMute_DeleteSaysWhenNotMuted(t *testing.T) {
+	f, ac := newFakeClient(t)
+	serveHealthMutes(f, "OSDMAP_FLAGS")
+	var form url.Values
+	var called bool
+	recordHealthMutePut(f, "OSD_DOWN", &form, &called)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "ceph", "health-mute", "delete", "OSD_DOWN"))
+	require.False(t, called, "no unmute is sent for a code that is not muted")
+	require.Contains(t, buf.String(), "ceph health check OSD_DOWN is not muted.")
+	require.NotContains(t, buf.String(), "unmuted")
+}
+
+// TestCephHealthMute_NotImplementedNamesTheRelease verifies a server older
+// than the endpoint gets an error naming the pve-manager release that serves
+// it, on every verb.
+func TestCephHealthMute_NotImplementedNamesTheRelease(t *testing.T) {
+	f, ac := newFakeClient(t)
+	notImplemented := func(w http.ResponseWriter, r *http.Request) {
+		testhelper.WriteErrorText(w, http.StatusNotImplemented,
+			"Method '"+r.Method+" /cluster/ceph/health-mute' not implemented")
+	}
+	f.HandleFunc("GET /api2/json/cluster/ceph/health-mute", notImplemented)
+	f.HandleFunc("PUT /api2/json/cluster/ceph/health-mute/OSD_DOWN", notImplemented)
+	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}
+
+	for _, verb := range []string{"list", "create", "delete"} {
+		args := []string{"ceph", "health-mute", verb}
+		if verb != "list" {
+			args = append(args, "OSD_DOWN")
+		}
+		var buf bytes.Buffer
+		err := run(deps, &buf, args...)
+		require.Errorf(t, err, verb)
+		require.Containsf(t, err.Error(), "pve-manager "+cephHealthMuteMinPVE+" or newer", verb)
+		require.Containsf(t, err.Error(), "not implemented", "%s keeps the server's message", verb)
+	}
 }
 
 // TestCephHealthMute_RejectsMalformedCode verifies a lowercase or malformed
@@ -245,4 +320,8 @@ func TestCephHealthMute_HelpStatesPermissions(t *testing.T) {
 		require.Containsf(t, buf.String(), want, "%s help", verb)
 		require.NotContainsf(t, buf.String(), "--async", "%s help", verb)
 	}
+
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "ceph", "health-mute", "--help"))
+	require.Contains(t, buf.String(), "pve-manager "+cephHealthMuteMinPVE+" or newer")
 }

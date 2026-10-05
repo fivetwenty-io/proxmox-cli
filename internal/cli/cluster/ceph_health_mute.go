@@ -1,13 +1,17 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	pvecluster "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/api/cluster"
+	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
 	"github.com/fivetwenty-io/proxmox-cli/internal/cephview"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
@@ -19,6 +23,23 @@ import (
 // with the server's 64 character bound, so a typo is rejected before a request.
 var cephHealthCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,63}$`)
 
+// cephHealthMuteMinPVE is the first pve-manager release that serves
+// /cluster/ceph/health-mute. Older servers answer every call with 501.
+const cephHealthMuteMinPVE = "9.2.12"
+
+// healthMuteError wraps a failed health-mute call. When the server does not
+// implement the endpoint at all, it says which pve-manager release does,
+// because the server's own "not implemented" reads like a pmx defect.
+func healthMuteError(action string, err error) error {
+	var apiErr *pveerrors.APIError
+	if errors.As(err, &apiErr) &&
+		(apiErr.HTTPCode == http.StatusNotImplemented || strings.Contains(apiErr.Message, "not implemented")) {
+		return fmt.Errorf("%s: this server does not serve ceph health mutes, which need pve-manager %s "+
+			"or newer: %w", action, cephHealthMuteMinPVE, err)
+	}
+	return fmt.Errorf("%s: %w", action, err)
+}
+
 // newCephHealthMuteCmd builds the `pmx pve cluster ceph health-mute` sub-tree:
 // list the muted Ceph health checks, mute one, and unmute one. A mute is a
 // listable resource, so the verbs are list, create, and delete, with the
@@ -29,7 +50,7 @@ func newCephHealthMuteCmd() *cobra.Command {
 		Short: "List, create, and delete Ceph health check mutes",
 		Long: "Manage the Ceph health checks that are muted cluster-wide. A muted check no longer " +
 			"counts towards the cluster status, but it stays visible and Ceph keeps evaluating it. " +
-			"Requires a configured Ceph cluster.",
+			"Requires a configured Ceph cluster and pve-manager " + cephHealthMuteMinPVE + " or newer.",
 	}
 	cmd.AddCommand(
 		newCephHealthMuteListCmd(),
@@ -57,14 +78,15 @@ func newCephHealthMuteListCmd() *cobra.Command {
 		Short: "List the muted Ceph health checks",
 		Long: "List the Ceph health checks that are currently muted, with whether each mute is sticky, " +
 			"when it expires, and what the check reports. Reading the list needs Sys.Audit or " +
-			"Datastore.Audit on /. Requires a configured Ceph cluster.",
+			"Datastore.Audit on /. Requires a configured Ceph cluster and pve-manager " +
+			cephHealthMuteMinPVE + " or newer.",
 		Example: `  pmx pve cluster ceph health-mute list`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			resp, err := deps.API.Cluster.ListCephHealthMute(cmd.Context())
 			if err != nil {
-				return fmt.Errorf("list ceph health mutes: %w", err)
+				return healthMuteError("list ceph health mutes", err)
 			}
 			res, err := cephview.HealthMute(resp)
 			if err != nil {
@@ -122,7 +144,7 @@ func newCephHealthMuteCreateCmd() *cobra.Command {
 				}
 			}
 			if err := deps.API.Cluster.UpdateCephHealthMute(cmd.Context(), code, params); err != nil {
-				return fmt.Errorf("mute ceph health check %q: %w", code, err)
+				return healthMuteError(fmt.Sprintf("mute ceph health check %q", code), err)
 			}
 			msg := fmt.Sprintf("ceph health check %s muted", code)
 			if len(terms) > 0 {
@@ -145,7 +167,8 @@ func newCephHealthMuteDeleteCmd() *cobra.Command {
 		Aliases: []string{"unmute"},
 		Short:   "Unmute a Ceph health check",
 		Long: "Unmute one Ceph health check, named by its code as 'ceph health' reports it, so it counts " +
-			"towards the cluster status again. Unmuting needs Sys.Modify on /.",
+			"towards the cluster status again. Unmuting needs Sys.Modify on /. When the list of mutes " +
+			"shows the check is not muted, nothing is sent and the command says so.",
 		Example: `  pmx pve cluster ceph health-mute delete POOL_NO_REDUNDANCY`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -154,12 +177,33 @@ func newCephHealthMuteDeleteCmd() *cobra.Command {
 			if err := validateCephHealthCode(code); err != nil {
 				return err
 			}
+			if muted, known := cephHealthCodeMuted(cmd, deps, code); known && !muted {
+				return deps.Out.Render(cmd.OutOrStdout(),
+					output.Result{Message: fmt.Sprintf("ceph health check %s is not muted.", code)}, deps.Format)
+			}
 			params := &pvecluster.UpdateCephHealthMuteParams{Value: false}
 			if err := deps.API.Cluster.UpdateCephHealthMute(cmd.Context(), code, params); err != nil {
-				return fmt.Errorf("unmute ceph health check %q: %w", code, err)
+				return healthMuteError(fmt.Sprintf("unmute ceph health check %q", code), err)
 			}
 			return deps.Out.Render(cmd.OutOrStdout(),
 				output.Result{Message: fmt.Sprintf("ceph health check %s unmuted.", code)}, deps.Format)
 		},
 	}
+}
+
+// cephHealthCodeMuted reports whether code is in the list of mutes. The server
+// unmutes a code that was never muted without complaint, so this lookup is
+// what lets delete say so. known is false when the list cannot be read, for
+// example under a token with Sys.Modify but no audit privilege, and the caller
+// then sends the unmute anyway.
+func cephHealthCodeMuted(cmd *cobra.Command, deps *cli.Deps, code string) (muted, known bool) {
+	resp, err := deps.API.Cluster.ListCephHealthMute(cmd.Context())
+	if err != nil {
+		return false, false
+	}
+	res, err := cephview.HealthMute(resp)
+	if err != nil {
+		return false, false
+	}
+	return slices.ContainsFunc(res.Rows, func(row []string) bool { return row[0] == code }), true
 }

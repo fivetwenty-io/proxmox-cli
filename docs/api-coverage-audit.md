@@ -144,7 +144,7 @@ These three commands cover Proxmox VE API endpoints that arrived with the `proxm
 
 | Area | Command added | What it exposes |
 |---|---|---|
-| Cluster Ceph | `pmx pve cluster ceph health-mute list` | The muted Ceph health checks, with whether each mute is sticky, when it expires, and what the check reports |
+| Cluster Ceph | `pmx pve cluster ceph health-mute list` | The muted Ceph health checks, with whether each mute is sticky, when it expires, and what the check reports, on servers running pve-manager 9.2.12 or newer |
 | Cluster Ceph | `pmx pve cluster ceph health-mute create` | Mutes one health check by code, with --ttl for an expiry and --sticky to keep the mute when the check gets worse, and it is also reachable as `mute` |
 | Cluster Ceph | `pmx pve cluster ceph health-mute delete` | Unmutes one health check by code so it counts towards the cluster status again, and it is also reachable as `unmute` |
 
