@@ -76,6 +76,29 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "amd-sev",
 		Type:        "string",
 		Description: "Secure Encrypted Virtualization (SEV) features by AMD CPUs",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "allow-smt",
+				Type: "boolean",
+			},
+			{
+				Name: "kernel-hashes",
+				Type: "boolean",
+			},
+			{
+				Name: "no-debug",
+				Type: "boolean",
+			},
+			{
+				Name: "no-key-sharing",
+				Type: "boolean",
+			},
+			{
+				Name:     "type",
+				Type:     "string",
+				Required: true,
+			},
+		},
 	},
 	{
 		Name:        "arch",
@@ -139,6 +162,16 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "boot",
 		Type:        "string",
 		Description: "Specify guest boot order. Use the 'order=' sub-property as usage with no key or 'legacy=' is deprecated.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "legacy",
+				Type: "string",
+			},
+			{
+				Name: "order",
+				Type: "string",
+			},
+		},
 	},
 	{
 		Name:        "bootdisk",
@@ -157,6 +190,24 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "cicustom",
 		Type:        "string",
 		Description: "cloud-init: Specify custom files to replace the automatically generated ones at start.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "meta",
+				Type: "string",
+			},
+			{
+				Name: "network",
+				Type: "string",
+			},
+			{
+				Name: "user",
+				Type: "string",
+			},
+			{
+				Name: "vendor",
+				Type: "string",
+			},
+		},
 	},
 	{
 		Name:        "cipassword",
@@ -197,6 +248,40 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "cpu",
 		Type:        "string",
 		Description: "Emulated CPU type.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "cputype",
+				Type: "string",
+			},
+			{
+				Name: "flags",
+				Type: "string",
+			},
+			{
+				Name: "guest-phys-bits",
+				Type: "integer",
+			},
+			{
+				Name: "hidden",
+				Type: "boolean",
+			},
+			{
+				Name: "hv-vendor-id",
+				Type: "string",
+			},
+			{
+				Name: "level",
+				Type: "integer",
+			},
+			{
+				Name: "phys-bits",
+				Type: "string",
+			},
+			{
+				Name: "reported-model",
+				Type: "string",
+			},
+		},
 	},
 	{
 		Name:        "cpulimit",
@@ -295,6 +380,61 @@ var configSchemas = []optionschema.Schema{
 		Type:        "string",
 		Description: "Map host PCI devices into guest.",
 		Indexed:     true,
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "device-id",
+				Type: "string",
+			},
+			{
+				Name: "driver",
+				Type: "string",
+				Enum: []string{"vfio", "keep"},
+			},
+			{
+				Name: "host",
+				Type: "string",
+			},
+			{
+				Name: "legacy-igd",
+				Type: "boolean",
+			},
+			{
+				Name: "mapping",
+				Type: "string",
+			},
+			{
+				Name: "mdev",
+				Type: "string",
+			},
+			{
+				Name: "pcie",
+				Type: "boolean",
+			},
+			{
+				Name: "rombar",
+				Type: "boolean",
+			},
+			{
+				Name: "romfile",
+				Type: "string",
+			},
+			{
+				Name: "sub-device-id",
+				Type: "string",
+			},
+			{
+				Name: "sub-vendor-id",
+				Type: "string",
+			},
+			{
+				Name: "vendor-id",
+				Type: "string",
+			},
+			{
+				Name: "x-vga",
+				Type: "boolean",
+			},
+		},
 	},
 	{
 		Name:        "hotplug",
@@ -566,6 +706,26 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "intel-tdx",
 		Type:        "string",
 		Description: "Trusted Domain Extension (TDX) features by Intel CPUs",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name:     "attestation",
+				Type:     "boolean",
+				Required: true,
+			},
+			{
+				Name:     "type",
+				Type:     "string",
+				Required: true,
+			},
+			{
+				Name: "vsock-cid",
+				Type: "integer",
+			},
+			{
+				Name: "vsock-port",
+				Type: "integer",
+			},
+		},
 	},
 	{
 		Name:        "ipconfig[n]",
@@ -573,6 +733,24 @@ var configSchemas = []optionschema.Schema{
 		Type:        "string",
 		Description: "cloud-init: Specify IP addresses and gateways for the corresponding interface. IP addresses use CIDR notation, gateways are optional but need an IP of the same type specified. The special string 'dhcp' can be used for IP addresses to use DHCP, in which case no explicit gateway should be provided. For IPv6 the special string 'auto' can be used to use stateless autoconfiguration. This requires cloud-init 19.4 or newer. If cloud-init is enabled and neither an IPv4 nor an IPv6 address is specified, it defaults to using dhcp on IPv4.",
 		Indexed:     true,
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "gw",
+				Type: "string",
+			},
+			{
+				Name: "gw6",
+				Type: "string",
+			},
+			{
+				Name: "ip",
+				Type: "string",
+			},
+			{
+				Name: "ip6",
+				Type: "string",
+			},
+		},
 	},
 	{
 		Name:        "ivshmem",
@@ -930,6 +1108,22 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "rng0",
 		Type:        "string",
 		Description: "Configure a VirtIO-based Random Number Generator.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "max_bytes",
+				Type: "integer",
+			},
+			{
+				Name: "period",
+				Type: "integer",
+			},
+			{
+				Name:     "source",
+				Type:     "string",
+				Enum:     []string{"/dev/urandom", "/dev/random", "/dev/hwrng"},
+				Required: true,
+			},
+		},
 	},
 	{
 		Name:        "sata[n]",
@@ -1490,6 +1684,40 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "smbios1",
 		Type:        "string",
 		Description: "Specify SMBIOS type 1 fields.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "base64",
+				Type: "boolean",
+			},
+			{
+				Name: "family",
+				Type: "string",
+			},
+			{
+				Name: "manufacturer",
+				Type: "string",
+			},
+			{
+				Name: "product",
+				Type: "string",
+			},
+			{
+				Name: "serial",
+				Type: "string",
+			},
+			{
+				Name: "sku",
+				Type: "string",
+			},
+			{
+				Name: "uuid",
+				Type: "string",
+			},
+			{
+				Name: "version",
+				Type: "string",
+			},
+		},
 	},
 	{
 		Name:        "smp",
@@ -1546,6 +1774,20 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "startup",
 		Type:        "string",
 		Description: "Startup and shutdown behavior. Order is a non-negative number defining the general startup order. Shutdown in done with reverse ordering. Additionally you can set the 'up' or 'down' delay in seconds, which specifies a delay to wait before the next VM is started or stopped.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "down",
+				Type: "integer",
+			},
+			{
+				Name: "order",
+				Type: "integer",
+			},
+			{
+				Name: "up",
+				Type: "integer",
+			},
+		},
 	},
 	{
 		Name:        "tablet",
@@ -2001,5 +2243,16 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "watchdog",
 		Type:        "string",
 		Description: "Create a virtual hardware watchdog device.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "action",
+				Type: "string",
+			},
+			{
+				Name: "model",
+				Type: "string",
+				Enum: []string{"i6300esb", "ib700"},
+			},
+		},
 	},
 }

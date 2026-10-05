@@ -118,13 +118,19 @@ type property struct {
 	Default     json.RawMessage `json:"default"`
 	Optional    json.RawMessage `json:"optional"`
 	Format      json.RawMessage `json:"format"`
+	Typetext    string          `json:"typetext"`
 	Minimum     json.RawMessage `json:"minimum"`
 	Maximum     json.RawMessage `json:"maximum"`
 }
 
-// subKeys decodes p.Format as a dict of sub-key properties, returning nil when
-// the format is a plain string alias (e.g. "mac-prefix") or absent.
+// subKeys decodes p.Format as a dict of sub-key properties. When the format is
+// instead a string naming a registered format (e.g. "pve-node-location"), the
+// sub-keys come from the property's typetext summary, if that has any. It
+// returns nil when the format is absent or a plain alias without sub-keys.
 func (p property) subKeys() map[string]property {
+	if len(p.Format) > 0 && p.Format[0] == '"' {
+		return typetextSubKeys(p.Typetext)
+	}
 	if len(p.Format) == 0 || p.Format[0] != '{' {
 		return nil
 	}

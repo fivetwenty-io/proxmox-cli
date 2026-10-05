@@ -303,6 +303,36 @@ var storageOptionSchemas = []optionschema.Schema{
 		Flag:        "prune-backups",
 		Type:        "string",
 		Description: "The retention options with shorter intervals are processed first with --keep-last being the very first one. Each option covers a specific period of time. We say that backups within this period are covered by this option. The next option does not take care of already covered backups and only considers older backups.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "keep-all",
+				Type: "boolean",
+			},
+			{
+				Name: "keep-daily",
+				Type: "integer",
+			},
+			{
+				Name: "keep-hourly",
+				Type: "integer",
+			},
+			{
+				Name: "keep-last",
+				Type: "integer",
+			},
+			{
+				Name: "keep-monthly",
+				Type: "integer",
+			},
+			{
+				Name: "keep-weekly",
+				Type: "integer",
+			},
+			{
+				Name: "keep-yearly",
+				Type: "integer",
+			},
+		},
 	},
 	{
 		Name:        "saferemove",

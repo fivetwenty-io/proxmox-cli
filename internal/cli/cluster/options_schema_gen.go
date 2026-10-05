@@ -176,6 +176,22 @@ var optionSchemas = []optionschema.Schema{
 		Flag:        "location",
 		Type:        "string",
 		Description: "The location of the cluster.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name:     "latitude",
+				Type:     "number",
+				Required: true,
+			},
+			{
+				Name:     "longitude",
+				Type:     "number",
+				Required: true,
+			},
+			{
+				Name: "name",
+				Type: "string",
+			},
+		},
 	},
 	{
 		Name:        "mac_prefix",

@@ -1,0 +1,58 @@
+[
+  {
+    "path": "/sites",
+    "children": [
+      {
+        "path": "/sites/options",
+        "info": {
+          "PUT": {
+            "parameters": {
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "description": "Where the site is.",
+                  "optional": 1,
+                  "format": "pve-node-location",
+                  "typetext": "latitude=<number> ,longitude=<number> [,name=<name>]"
+                },
+                "watchdog": {
+                  "type": "string",
+                  "description": "A watchdog device.",
+                  "optional": 1,
+                  "format": "pve-qm-watchdog",
+                  "typetext": "[[model=]<i6300esb|ib700>] [,action=<enum>]"
+                },
+                "inline": {
+                  "type": "string",
+                  "description": "A dict option whose inline format wins over the typetext.",
+                  "optional": 1,
+                  "format": {
+                    "mode": {
+                      "type": "string",
+                      "description": "The mode.",
+                      "optional": 1
+                    }
+                  },
+                  "typetext": "other=<integer>"
+                },
+                "alias": {
+                  "type": "string",
+                  "description": "A named format with no sub-keys in its typetext.",
+                  "optional": 1,
+                  "format": "pve-configid",
+                  "typetext": "<storage ID>"
+                },
+                "untyped": {
+                  "type": "string",
+                  "description": "No format at all.",
+                  "optional": 1,
+                  "typetext": "key=<integer>"
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+]

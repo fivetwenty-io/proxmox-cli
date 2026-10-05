@@ -447,6 +447,20 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "startup",
 		Type:        "string",
 		Description: "Startup and shutdown behavior. Order is a non-negative number defining the general startup order. Shutdown in done with reverse ordering. Additionally you can set the 'up' or 'down' delay in seconds, which specifies a delay to wait before the next VM is started or stopped.",
+		SubKeys: []optionschema.SubKey{
+			{
+				Name: "down",
+				Type: "integer",
+			},
+			{
+				Name: "order",
+				Type: "integer",
+			},
+			{
+				Name: "up",
+				Type: "integer",
+			},
+		},
 	},
 	{
 		Name:        "swap",
