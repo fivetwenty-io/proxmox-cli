@@ -302,15 +302,17 @@ func newVnetListCmd() *cobra.Command {
 	var (
 		pending bool
 		running bool
+		zone    string
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List SDN vnets",
 		Long: "List SDN vnets with their zone, VLAN tag/VXLAN VNI, and alias. Pass --pending " +
 			"or --running to view the staged or active configuration instead of the merged " +
-			"default view.",
-		Example: `  pmx pve sdn vnet list`,
-		Args:    cobra.NoArgs,
+			"default view. Pass --zone to keep only the vnets that belong to one zone.",
+		Example: `  pmx pve sdn vnet list
+  pmx pve sdn vnet list --zone clivlan`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps := cli.GetDeps(cmd)
 			params := &cluster.ListSdnVnetsParams{}
@@ -333,6 +335,9 @@ func newVnetListCmd() *cobra.Command {
 					if err := json.Unmarshal(raw, &e); err != nil {
 						return fmt.Errorf("decode vnet entry: %w", err)
 					}
+					if fl.Changed("zone") && e.Zone != zone {
+						continue
+					}
 					entries = append(entries, e)
 				}
 			}
@@ -350,6 +355,7 @@ func newVnetListCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVar(&pending, "pending", false, "display the pending configuration")
 	f.BoolVar(&running, "running", false, "display the running configuration")
+	f.StringVar(&zone, "zone", "", "only list vnets in this zone")
 	return cmd
 }
 

@@ -54,3 +54,53 @@ func TestVnetShowNotFound(t *testing.T) {
 	require.ErrorContains(t, err, "get SDN vnet")
 	require.Len(t, rec, 1)
 }
+
+// vnetZonePayload returns vnets spread across two zones.
+func vnetZonePayload() []any {
+	return []any{
+		map[string]any{"vnet": "vnetA", "zone": "zoneA", "tag": 100},
+		map[string]any{"vnet": "vnetB", "zone": "zoneB", "tag": 200},
+	}
+}
+
+// TestVnetListZoneFilter verifies --zone filters client-side in table output
+// and sends no zone query parameter.
+func TestVnetListZoneFilter(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets", vnetZonePayload(), 200)
+
+	out, err := run(t, f, "", "vnet", "list", "--zone", "zoneA")
+	require.NoError(t, err)
+	require.Contains(t, out, "vnetA")
+	require.NotContains(t, out, "vnetB")
+	require.Len(t, rec, 1)
+	require.False(t, rec[0].query.Has("zone"))
+}
+
+// TestVnetListZoneFilterJSON verifies the raw JSON output is filtered too.
+func TestVnetListZoneFilterJSON(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets", vnetZonePayload(), 200)
+
+	out, err := run(t, f, "", "vnet", "list", "--zone", "zoneB", "-o", "json")
+	require.NoError(t, err)
+	require.Contains(t, out, "vnetB")
+	require.NotContains(t, out, "vnetA")
+	require.Len(t, rec, 1)
+	require.False(t, rec[0].query.Has("zone"))
+}
+
+// TestVnetListZoneUnknown verifies an unknown zone yields an empty result, not an error.
+func TestVnetListZoneUnknown(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	var rec []recordedRequest
+	record(f, &rec, "GET /api2/json/cluster/sdn/vnets", vnetZonePayload(), 200)
+
+	out, err := run(t, f, "", "vnet", "list", "--zone", "nope")
+	require.NoError(t, err)
+	require.NotContains(t, out, "vnetA")
+	require.NotContains(t, out, "vnetB")
+	require.Len(t, rec, 1)
+}

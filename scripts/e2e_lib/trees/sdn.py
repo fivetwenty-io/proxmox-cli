@@ -56,6 +56,16 @@ def run(ctx: Ctx) -> None:
     if vnet:
         ctx.check("vnet show", "pve", "sdn", "vnet", "show", str(vnet))
 
+        # vnet list --zone: client-side filter; read-only.
+        vnet_zone = None
+        if vnets.rc == 0:
+            for entry in vnets.json():
+                if isinstance(entry, dict) and str(entry.get("vnet", "")) == vnet:
+                    vnet_zone = entry.get("zone")
+        if vnet_zone:
+            ctx.check("vnet list --zone", "pve", "sdn", "vnet", "list", "--zone",
+                      str(vnet_zone), validate=is_list)
+
         # vnet permissions: ACL entries scoped to the vnet's derived
         # /sdn/zones/{zone}/{vnet} path. The plain checks below omit --zone, so
         # they exercise the auto-resolve lookup (GET /cluster/sdn/vnets/{vnet});
