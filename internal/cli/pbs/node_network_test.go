@@ -203,3 +203,13 @@ func TestNodeNetworkApply_Applies(t *testing.T) {
 	require.Equal(t, nodeAPIBase+"/network", rec.path)
 	require.Contains(t, buf.String(), "reloaded")
 }
+
+func TestNodeNetworkCreate_HelpListsTheAcceptedMethods(t *testing.T) {
+	_, pc := newFakeClient(t)
+	deps := depsFor(t, pc, output.FormatTable, false)
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, newNodeCmd(), "node", "network", "create", "--help"))
+	help := buf.String()
+	require.Contains(t, help, "IPv4 configuration method: manual, static, dhcp, loopback, or auto")
+	require.Contains(t, help, "IPv6 configuration method: manual, static, dhcp, loopback, or auto")
+}

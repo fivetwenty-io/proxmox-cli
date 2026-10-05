@@ -474,6 +474,7 @@ def run(ctx: Ctx) -> None:
     if flags.rc != 0 and "ceph" in flags_err:
         ctx.skip("ceph flags list", "Ceph is not configured on the lab node")
         ctx.skip("ceph flags get", "Ceph is not configured on the lab node")
+        ctx.skip("ceph health-mute list", "Ceph is not configured on the lab node")
         ctx.skip("ceph metadata", "Ceph is not configured on the lab node")
         ctx.skip("ceph status", "Ceph is not configured on the lab node")
     else:
@@ -482,12 +483,31 @@ def run(ctx: Ctx) -> None:
         # built-in flag that always exists once Ceph is configured, so it is safe
         # to query here inside the ceph-present branch.
         ctx.check("ceph flags get", "pve", "cluster", "ceph", "flags", "get", "noout")
+        # ceph health-mute list: the muted Ceph health checks; read-only, and an
+        # empty list on a cluster with nothing muted.
+        ctx.check("ceph health-mute list", "pve", "cluster", "ceph", "health-mute", "list", validate=is_list)
         # ceph metadata: cluster-wide OSD/mon/mgr/mds daemon metadata; read-only.
         ctx.check("ceph metadata", "pve", "cluster", "ceph", "metadata")
         # ceph status: cluster-wide Ceph health/capacity summary; read-only.
         ctx.check("ceph status", "pve", "cluster", "ceph", "status")
     ctx.check("ceph flags set --help", "pve", "cluster", "ceph", "flags", "set", "--help", fmt="")
     ctx.check("ceph flags set-all --help", "pve", "cluster", "ceph", "flags", "set-all", "--help", fmt="")
+    ctx.check("ceph health-mute create --help", "pve", "cluster", "ceph", "health-mute", "create", "--help", fmt="")
+    ctx.check("ceph health-mute delete --help", "pve", "cluster", "ceph", "health-mute", "delete", "--help", fmt="")
+    ctx.defer(
+        "ceph health-mute create",
+        "mutes a Ceph health check, which changes how the cluster reports its status; reversible, "
+        "but not exercised live; covered by unit tests",
+        "pmx pve cluster ceph health-mute create POOL_NO_REDUNDANCY --ttl 1h --sticky",
+        isolation=False, live_covered=False,
+    )
+    ctx.defer(
+        "ceph health-mute delete",
+        "unmutes a Ceph health check, which changes how the cluster reports its status; "
+        "not exercised live; covered by unit tests",
+        "pmx pve cluster ceph health-mute delete POOL_NO_REDUNDANCY",
+        isolation=False, live_covered=False,
+    )
     ctx.defer(
         "ceph flags set",
         "toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live",

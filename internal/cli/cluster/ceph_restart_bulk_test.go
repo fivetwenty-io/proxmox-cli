@@ -37,6 +37,20 @@ func TestClusterCephRestartBulk_HelpNamesTheServerRefusal(t *testing.T) {
 	require.Contains(t, buf.String(), "ceph-osd version cannot be read")
 }
 
+func TestClusterCephRestartBulk_HelpDescribesWhatForceDoesNotOverride(t *testing.T) {
+	deps := &cli.Deps{API: nil, Out: output.New(), Format: output.FormatPlain}
+	var buf bytes.Buffer
+	require.NoError(t, run(deps, &buf, "ceph", "restart-bulk", "--help"))
+	help := buf.String()
+	require.Contains(t, help, "A blocking HEALTH_ERR is fatal either way")
+	require.Contains(t, help, "muted")
+	require.Contains(t, help, "named in the task log")
+	require.Contains(t, help, "pmx pve cluster ceph health-mute create")
+	require.Contains(t, help, "--sticky --ttl")
+	require.Contains(t, help, "OSD map flags are evaluated only for OSD restarts")
+	require.NotContains(t, help, "always fatal")
+}
+
 func TestClusterCephRestartBulk_RequiresServiceType(t *testing.T) {
 	_, ac := newFakeClient(t)
 	deps := &cli.Deps{API: ac, Out: output.New(), Format: output.FormatPlain}

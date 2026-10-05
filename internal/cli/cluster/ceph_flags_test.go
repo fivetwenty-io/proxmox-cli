@@ -92,7 +92,7 @@ func TestCephCommandTree(t *testing.T) {
 	require.NotNil(t, ceph, "cluster must have a ceph command")
 
 	verbs := childCommands(ceph)
-	for _, v := range []string{"flags", "metadata", "status", "restart-bulk"} {
+	for _, v := range []string{"flags", "health-mute", "metadata", "status", "restart-bulk"} {
 		require.Containsf(t, verbs, v, "ceph must have a %s command", v)
 	}
 
@@ -102,5 +102,13 @@ func TestCephCommandTree(t *testing.T) {
 	flagVerbs := childCommands(flags)
 	for _, v := range []string{"list", "get", "set"} {
 		require.Containsf(t, flagVerbs, v, "ceph flags must have a %s command", v)
+	}
+
+	mute := verbs["health-mute"]
+	require.NotNil(t, mute, "ceph must have a health-mute command")
+
+	muteVerbs := childCommands(mute)
+	for _, v := range []string{"list", "create", "delete"} {
+		require.Containsf(t, muteVerbs, v, "ceph health-mute must have a %s command", v)
 	}
 }

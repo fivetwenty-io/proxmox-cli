@@ -37,8 +37,14 @@ func newCephRestartBulkCmd() *cobra.Command {
 			"--only-outdated applies to OSDs only and restarts just those whose running version differs " +
 			"from the ceph-osd binary installed on their host, for a post-upgrade roll. The server refuses " +
 			"--only-outdated on any node where the installed ceph-osd version cannot be read. --force " +
-			"proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED, SLOW_OPS, or MON_DOWN; " +
-			"HEALTH_ERR is always fatal.\n\n" +
+			"proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED, SLOW_OPS, or MON_DOWN. " +
+			"A blocking HEALTH_ERR is fatal either way. Checks that Ceph reports as muted, and checks known " +
+			"to be harmless for a rolling restart, never block the roll and are named in the task log. " +
+			"To keep a known warning from blocking the roll, mute it first with " +
+			"'pmx pve cluster ceph health-mute create <code> --sticky --ttl <span>'. A mute without " +
+			"--sticky lifts itself when the affected count grows, which happens during a roll. The cluster-wide OSD map flags are evaluated only " +
+			"for OSD restarts, since they govern nothing a monitor, manager, or metadata server restart " +
+			"touches.\n\n" +
 			"--dry-run logs the plan (which daemons, in what order) to the worker task without restarting " +
 			"anything, and this command prints that log even when the worker refuses; it does not require " +
 			"--yes. Every other invocation refuses to run without --yes/-y.\n\n" +
@@ -108,7 +114,8 @@ func newCephRestartBulkCmd() *cobra.Command {
 	f.StringVar(&serviceType, "service-type", "", "Ceph daemon type to restart cluster-wide: mon, mgr, mds, or osd")
 	f.BoolVar(&dryRun, "dry-run", false, "log the plan to the task without restarting anything, then print it")
 	f.BoolVar(&force, "force", false,
-		"proceed past a HEALTH_WARN with non-benign checks such as PG_DEGRADED or MON_DOWN (HEALTH_ERR is fatal)")
+		"proceed past a HEALTH_WARN with non-benign checks such as PG_DEGRADED or MON_DOWN; "+
+			"a blocking HEALTH_ERR stays fatal, and muted or harmless checks never block")
 	f.BoolVar(&onlyOutdated, "only-outdated", false,
 		"OSDs only: restart only OSDs whose running version differs from the installed ceph-osd binary")
 	f.Int64Var(&timeout, "timeout", 0,

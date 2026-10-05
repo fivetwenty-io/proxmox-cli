@@ -14,19 +14,22 @@ import (
 )
 
 // newCephCmd builds the `pmx pve cluster ceph` sub-tree: the cluster-wide
-// Ceph OSD flags (noout, noscrub, pause, and so on), status and metadata
-// summaries, and a rolling restart of one daemon type across the cluster.
+// Ceph OSD flags (noout, noscrub, pause, and so on), muted health checks,
+// status and metadata summaries, and a rolling restart of one daemon type
+// across the cluster.
 // These commands require a configured Ceph cluster; on nodes without Ceph the
 // API returns an error which is surfaced verbatim.
 func newCephCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ceph",
 		Short: "Manage cluster-wide Ceph settings and rolling daemon restarts",
-		Long: "Manage cluster-wide Ceph settings: OSD flags, status and per-node daemon metadata, " +
-			"and a rolling restart of one daemon type across the cluster. Requires a configured Ceph cluster.",
+		Long: "Manage cluster-wide Ceph settings: OSD flags, muted health checks, status and per-node " +
+			"daemon metadata, and a rolling restart of one daemon type across the cluster. " +
+			"Requires a configured Ceph cluster.",
 	}
 	cmd.AddCommand(
 		newCephFlagsCmd(),
+		newCephHealthMuteCmd(),
 		newCephMetadataCmd(),
 		newCephStatusCmd(),
 		newCephRestartBulkCmd(),

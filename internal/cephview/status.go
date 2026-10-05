@@ -19,7 +19,10 @@ type statusPayload struct {
 		Status string `json:"status"`
 		Checks map[string]struct {
 			Severity string `json:"severity"`
-			Summary  struct {
+			// Muted is set by Ceph on a check an operator muted. The field
+			// is absent from older payloads, and reads as not muted there.
+			Muted   pve.PVEBool `json:"muted"`
+			Summary struct {
 				Message string `json:"message"`
 			} `json:"summary"`
 		} `json:"checks"`
@@ -110,7 +113,8 @@ func Status(resp any) (output.Result, error) {
 // healthCheckRows renders one row per failing health check, which is the part
 // of the payload an operator reading "HEALTH_WARN" actually needs. The map is
 // keyed by check code (POOL_NO_REDUNDANCY, OSD_DOWN) and empty on a healthy
-// cluster.
+// cluster. A muted check keeps its row, marked so it does not read as a live
+// warning.
 func healthCheckRows(st statusPayload) [][]string {
 	codes := make([]string, 0, len(st.Health.Checks))
 	for code := range st.Health.Checks {
@@ -124,6 +128,9 @@ func healthCheckRows(st statusPayload) [][]string {
 		value := check.Summary.Message
 		if check.Severity != "" {
 			value = check.Severity + ": " + value
+		}
+		if check.Muted.Bool() {
+			value += " (muted)"
 		}
 		rows = append(rows, []string{"  " + code, value})
 	}

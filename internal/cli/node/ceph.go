@@ -585,8 +585,11 @@ func newCephRestartBulkCmd() *cobra.Command {
 			"--resume replays the saved plan, so --set-noout and --only-outdated are ignored when resuming. " +
 			"Without --resume the server refuses to start while a checkpoint from an aborted run exists, " +
 			"and --only-outdated refuses when the installed ceph-osd version cannot be read. --force " +
-			"proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS; " +
-			"HEALTH_ERR is always fatal.\n\n" +
+			"proceeds past HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS. " +
+			"A blocking HEALTH_ERR is fatal either way. Checks that Ceph reports as muted, and checks known " +
+			"to be harmless for a rolling restart, never block the roll and are named in the task log. " +
+			"The cluster-wide OSD map flags are evaluated here because this command always restarts " +
+			"OSDs.\n\n" +
 			"--dry-run logs the plan (which OSDs, in what order) to the worker task without restarting " +
 			"anything, and this command prints that log even when the worker refuses; it does not require " +
 			"--yes. Every other invocation refuses to run without --yes/-y.\n\n" +
@@ -667,7 +670,8 @@ func newCephRestartBulkCmd() *cobra.Command {
 	f.StringVar(&serviceType, "service-type", "osd", "Ceph daemon type to restart; only osd is valid per node")
 	f.BoolVar(&dryRun, "dry-run", false, "log the plan to the task without restarting anything, then print it")
 	f.BoolVar(&force, "force", false,
-		"proceed past a HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS (HEALTH_ERR is fatal)")
+		"proceed past a HEALTH_WARN with non-benign checks such as PG_DEGRADED or SLOW_OPS; "+
+			"a blocking HEALTH_ERR stays fatal, and muted or harmless checks never block")
 	f.BoolVar(&onlyOutdated, "only-outdated", false,
 		"restart only OSDs whose running version differs from the installed ceph-osd binary (ignored with --resume)")
 	f.BoolVar(&resume, "resume", false,

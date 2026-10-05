@@ -158,3 +158,15 @@ func TestNodeVzdump_NoLocalTargetFlag(t *testing.T) {
 	}
 	walk(nodeCmd)
 }
+
+// TestNodeVzdump_HelpNamesTheStopFlagPermission verifies the --stop help says
+// what stopping a running backup job needs, and that --mode help stays plain.
+func TestNodeVzdump_HelpNamesTheStopFlagPermission(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "vzdump", "--help"))
+
+	require.NoError(t, root.Execute())
+	require.Contains(t, buf.String(), "before starting this one; needs Sys.Modify on /nodes/{node}")
+	require.NotContains(t, buf.String(), "stop needs Sys.Modify")
+}

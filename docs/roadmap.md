@@ -82,7 +82,7 @@ Administrative depth across guests, nodes, storage, and software-defined network
 | Node replication | `pmx node replication` | Per-node replication view and on-demand runs | Shipped |
 | Metrics and notifications | `pmx cluster metrics`, `pmx cluster notifications` | External metric targets and alert routing | Shipped |
 | Device mapping and jobs | `pmx cluster mapping`, `pmx cluster jobs` | PCI, USB, and directory mappings, and scheduled realm sync | Shipped |
-| ACME and Ceph flags | `pmx cluster acme`, `pmx cluster ceph flags` | ACME accounts and plugins, global Ceph flags | Shipped |
+| ACME and Ceph flags | `pmx cluster acme`, `pmx cluster ceph flags\|health-mute` | ACME accounts and plugins, global Ceph flags, muted health checks | Shipped |
 | Ceph management | `pmx node ceph` | Status, configuration, OSD, pool, monitor, MDS, MGR, and filesystem control | Shipped |
 | SDN extensions | `pmx sdn controller\|ipam\|dns`, `pmx sdn vnet set\|firewall` | Routing controllers, IPAM backends, DNS providers, VNet updates, and per-VNet firewalls | Shipped |
 | Cluster storage | `pmx storage create\|set\|get` | Datacenter-wide storage definitions with full per-backend attributes (dir, NFS, CIFS, LVM, ZFS, Ceph, PBS, iSCSI) and credential scrubbing on read | Shipped |

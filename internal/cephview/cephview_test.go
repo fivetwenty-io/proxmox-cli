@@ -391,3 +391,78 @@ func TestReleases_EmptyListRendersAnEmptyTable(t *testing.T) {
 	assert.Equal(t, releasesHeaders, res.Headers)
 	assert.Empty(t, res.Rows)
 }
+
+// TestHealthMute_OneRowPerMutedCheckSortedByCode covers the muted-check list.
+// The fixture is written by hand from the apidoc, not captured, because no
+// live payload exists yet, so the ttl shape is the documented one.
+func TestHealthMute_OneRowPerMutedCheckSortedByCode(t *testing.T) {
+	res, err := HealthMute(captured(t, "health_mute.json"))
+	require.NoError(t, err)
+
+	assert.Equal(t, healthMuteHeaders, res.Headers)
+	require.Len(t, res.Rows, 2)
+	assert.Equal(t, []string{"OSD_DOWN", "yes", "", "1 osds down"}, res.Rows[0])
+	assert.Equal(t, []string{"POOL_NO_REDUNDANCY", "no", "2026-10-06T12:00:00+0000",
+		"1 pool(s) have no replicas configured"}, res.Rows[1])
+
+	raw, ok := res.Raw.([]any)
+	require.True(t, ok, "Raw carries the decoded document")
+	assert.Len(t, raw, 2)
+}
+
+// TestHealthMute_AbsentFieldsRenderBlank covers a mute with neither a ttl nor
+// a summary, which is how the API reports a permanent mute of a quiet check.
+func TestHealthMute_AbsentFieldsRenderBlank(t *testing.T) {
+	res, err := HealthMute(json.RawMessage(`[{"code":"OSD_DOWN","sticky":false}]`))
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	assert.Equal(t, []string{"OSD_DOWN", "no", "", ""}, res.Rows[0])
+}
+
+// TestHealthMute_AcceptsEveryStickySpelling covers the booleans PVE emits as
+// 0/1 integers, as quoted strings, and as JSON literals.
+func TestHealthMute_AcceptsEveryStickySpelling(t *testing.T) {
+	for _, sticky := range []string{`1`, `true`, `"1"`} {
+		res, err := HealthMute(json.RawMessage(`[{"code":"OSD_DOWN","sticky":` + sticky + `}]`))
+		require.NoError(t, err, sticky)
+		require.Len(t, res.Rows, 1, sticky)
+		assert.Equal(t, "yes", res.Rows[0][1], sticky)
+	}
+}
+
+// TestHealthMute_NumericTTLDoesNotBreakTheTable covers a ttl that arrives as a
+// number, which the apidoc does not promise it never will.
+func TestHealthMute_NumericTTLDoesNotBreakTheTable(t *testing.T) {
+	res, err := HealthMute(json.RawMessage(`[{"code":"OSD_DOWN","sticky":0,"ttl":7200}]`))
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+	assert.Equal(t, "7200", res.Rows[0][2])
+}
+
+// TestHealthMute_EmptyListRendersAnEmptyTable covers a cluster with nothing
+// muted.
+func TestHealthMute_EmptyListRendersAnEmptyTable(t *testing.T) {
+	res, err := HealthMute(json.RawMessage(`[]`))
+	require.NoError(t, err)
+	assert.Equal(t, healthMuteHeaders, res.Headers)
+	assert.Empty(t, res.Rows)
+}
+
+// TestStatus_MarksMutedHealthChecks covers a check Ceph reports as muted,
+// which stays in the payload but no longer counts towards the status.
+func TestStatus_MarksMutedHealthChecks(t *testing.T) {
+	res, err := Status(json.RawMessage(`{
+		"health": {"status": "HEALTH_OK", "checks": {
+			"POOL_NO_REDUNDANCY": {"severity": "HEALTH_WARN", "muted": true,
+				"summary": {"message": "1 pool(s) have no replicas configured"}},
+			"OSD_DOWN": {"severity": "HEALTH_WARN", "muted": false,
+				"summary": {"message": "1 osds down"}},
+			"MON_DISK_LOW": {"severity": "HEALTH_WARN", "muted": "1",
+				"summary": {"message": "mon a is low on available space"}}}}}`))
+	require.NoError(t, err)
+
+	assert.Equal(t, "HEALTH_WARN: 1 pool(s) have no replicas configured (muted)",
+		cell(t, res, "  POOL_NO_REDUNDANCY"))
+	assert.Equal(t, "HEALTH_WARN: 1 osds down", cell(t, res, "  OSD_DOWN"))
+	assert.Equal(t, "HEALTH_WARN: mon a is low on available space (muted)", cell(t, res, "  MON_DISK_LOW"))
+}

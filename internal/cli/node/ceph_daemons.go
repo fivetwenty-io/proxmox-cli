@@ -151,9 +151,11 @@ func newCephMdsCreateCmd() *cobra.Command {
 		yes        bool
 	)
 	cmd := &cobra.Command{
-		Use:     "create <name>",
-		Short:   "Create a Ceph metadata server (destructive)",
-		Long:    "Create a Ceph metadata server (MDS) daemon with the given name on the resolved node.",
+		Use:   "create <name>",
+		Short: "Create a Ceph metadata server (destructive)",
+		Long: "Create a Ceph metadata server (MDS) daemon with the given name on the resolved node. " +
+			"The --hotstandby setting is deprecated, because Ceph removed it in 14.1.1, but PVE still " +
+			"accepts it and this command still forwards it.",
 		Example: `  pmx pve node ceph mds create pve1 --yes`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -177,7 +179,9 @@ func newCephMdsCreateCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.BoolVar(&hotstandby, "hotstandby", false, "poll and replay the active MDS log for faster failover")
+	f.BoolVar(&hotstandby, "hotstandby", false,
+		"poll and replay the active MDS log for faster failover (deprecated, because Ceph removed the setting in 14.1.1, "+
+			"though PVE still accepts it)")
 	f.BoolVarP(&yes, "yes", "y", false, "confirm the destructive operation without prompting")
 	return cmd
 }

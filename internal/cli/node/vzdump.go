@@ -253,7 +253,8 @@ func newVzdumpCmd() *cobra.Command {
 	fl.StringVar(&jobID, "job-id", "", "job ID to attribute this backup to (informational)")
 	fl.StringVar(&pruneBackups, "prune-backups", "",
 		"retention policy, for example keep-last=3,keep-daily=7 (implies --remove)")
-	fl.BoolVar(&stop, "stop", false, "stop any running backup job before starting this one")
+	fl.BoolVar(&stop, "stop", false,
+		"stop any running backup job before starting this one; needs Sys.Modify on /nodes/{node}")
 	fl.BoolVar(&quiet, "quiet", false, "run quietly, only logging warnings and errors")
 
 	cmd.AddCommand(

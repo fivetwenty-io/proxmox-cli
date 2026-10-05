@@ -93,13 +93,13 @@ swept clean before the next provisions.
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 279 | 0 | 126 | 104 | 42 | 7 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
-| `pve` | 680 | 80 | 182 | 442 | 1 | 60 | 7 | 0 |
+| `pve` | 683 | 80 | 183 | 442 | 1 | 62 | 7 | 0 |
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1281** | **101** | **457** | **613** | **97** | **96** | **9** | **0** |
+| **Total** | **1284** | **101** | **458** | **613** | **97** | **98** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1281** leaves, **1176** are exercised by at least one live suite, **96** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1284** leaves, **1177** are exercised by at least one live suite, **98** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -807,6 +807,9 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `pve cluster ceph flags list` | ◑ | — |  |
 | `pve cluster ceph flags set` | — | — | deferred — toggles a cluster-wide Ceph OSD flag (e.g. noout/pause) — cluster-disruptive, not run live |
 | `pve cluster ceph flags set-all` | — | — | deferred — toggles several cluster-wide Ceph OSD flags atomically (e.g. noout, norebalance) in one request during maintenance — cluster-disruptive; not exercised live; covered by unit tests |
+| `pve cluster ceph health-mute create` | — | — | deferred — mutes a Ceph health check, which changes how the cluster reports its status; reversible, but not exercised live; covered by unit tests |
+| `pve cluster ceph health-mute delete` | — | — | deferred — unmutes a Ceph health check, which changes how the cluster reports its status; not exercised live; covered by unit tests |
+| `pve cluster ceph health-mute list` | ◑ | — |  |
 | `pve cluster ceph metadata` | ◑ | — |  |
 | `pve cluster ceph restart-bulk` | — | — | deferred — rolling-restarts a daemon class across the whole Ceph cluster; the dry-run plan is exercised by unit tests; not exercised live |
 | `pve cluster ceph status` | ◑ | — |  |

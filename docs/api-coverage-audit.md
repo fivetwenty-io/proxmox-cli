@@ -138,6 +138,16 @@ These three commands cover Proxmox VE API endpoints that did not exist at the ti
 | Node Ceph | `pmx pve node ceph restart-bulk` | Rolling restart of the node's OSDs one at a time, with --dry-run printing the worker's plan, --only-outdated, --resume, and --set-noout=false |
 | Cluster Ceph | `pmx pve cluster ceph restart-bulk` | Rolling restart of one Ceph daemon type (mon, mgr, mds, or osd) across the cluster, with --dry-run printing the worker's plan and --only-outdated for OSDs |
 
+### Endpoints added by the SDK 3.11 client bump
+
+These three commands cover Proxmox VE API endpoints that arrived with the `proxmox-apiclient-go` v3.11 client. They manage the Ceph health checks an operator has muted, and like the 3.10 additions they are not part of the ten-gap count. Muting needs `Sys.Modify` on `/`, and reading the list needs `Sys.Audit` or `Datastore.Audit` on `/`.
+
+| Area | Command added | What it exposes |
+|---|---|---|
+| Cluster Ceph | `pmx pve cluster ceph health-mute list` | The muted Ceph health checks, with whether each mute is sticky, when it expires, and what the check reports |
+| Cluster Ceph | `pmx pve cluster ceph health-mute create` | Mutes one health check by code, with --ttl for an expiry and --sticky to keep the mute when the check gets worse, and it is also reachable as `mute` |
+| Cluster Ceph | `pmx pve cluster ceph health-mute delete` | Unmutes one health check by code so it counts towards the cluster status again, and it is also reachable as `unmute` |
+
 ## High-severity gaps (historical, resolved)
 
 These three blocked real operator workflows at audit time; each has since been

@@ -1322,3 +1322,29 @@ func TestNodeCeph_CfgRaw_ScalarBodyRendersAsJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeCeph_RestartBulk_HelpDescribesWhatForceDoesNotOverride(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "ceph", "restart-bulk", "--help"))
+
+	require.NoError(t, root.Execute())
+	help := buf.String()
+	require.Contains(t, help, "A blocking HEALTH_ERR is fatal either way")
+	require.Contains(t, help, "muted")
+	require.Contains(t, help, "named in the task log")
+	require.Contains(t, help, "OSD map flags are evaluated here")
+	require.NotContains(t, help, "always fatal")
+}
+
+func TestNodeCephMds_Create_HelpMarksHotstandbyDeprecatedButVisible(t *testing.T) {
+	f := testhelper.NewFakePVE(t)
+	root, buf, prefix := newNodeRoot(t, f, output.FormatTable, exec.Fake())
+	root.SetArgs(append(prefix, "node", "ceph", "mds", "create", "--help"))
+
+	require.NoError(t, root.Execute())
+	help := buf.String()
+	require.Contains(t, help, "--hotstandby")
+	require.Contains(t, help, "deprecated, because Ceph removed the setting in 14.1.1")
+	require.Contains(t, help, "PVE still accepts it")
+}
