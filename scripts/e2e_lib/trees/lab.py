@@ -150,6 +150,8 @@ def _mutating_error_contracts(ctx: Ctx) -> None:
                     must_contain="not found")
     ctx.expect_fail("cluster status (unknown lab)", "lab", "cluster", "status", ABSENT,
                     must_contain="not found")
+    ctx.expect_fail("cluster expected (unknown lab)", "lab", "cluster", "expected", ABSENT, "1",
+                    must_contain="not found")
     ctx.expect_fail("ceph install (unknown lab)", "lab", "ceph", "install", ABSENT,
                     must_contain="not found")
     ctx.expect_fail("ceph init (unknown lab)", "lab", "ceph", "init", ABSENT,
@@ -269,6 +271,14 @@ def _deferred_mutations(ctx: Ctx) -> None:
         "needs a provisioned and running lab; needs the dedicated lab-pmx "
         "destructive test lab as the standing target",
         "pmx lab cluster status pmx",
+        isolation=True,
+    )
+    ctx.defer(
+        "cluster expected",
+        "runs `pvecm expected` over ssh on a surviving lab node to restore "
+        "quorum; needs the dedicated lab-pmx destructive test lab as the "
+        "standing target",
+        "pmx lab cluster expected pmx 1",
         isolation=True,
     )
     ctx.defer(

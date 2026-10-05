@@ -89,7 +89,7 @@ swept clean before the next provisions.
 | `auth` | 7 | 3 | 1 | 3 | 0 | 0 | 0 | 0 |
 | `context` | 11 | 10 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `init` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `lab` | 33 | 4 | 1 | 0 | 0 | 27 | 1 | 0 |
+| `lab` | 34 | 4 | 1 | 0 | 0 | 28 | 1 | 0 |
 | `logs` | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `pbs` | 279 | 0 | 126 | 104 | 42 | 7 | 0 | 0 |
 | `pdm` | 260 | 0 | 145 | 59 | 54 | 2 | 0 | 0 |
@@ -97,9 +97,9 @@ swept clean before the next provisions.
 | `rsync` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `ssh` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |
 | `version` | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **1284** | **101** | **458** | **613** | **97** | **98** | **9** | **0** |
+| **Total** | **1285** | **101** | **458** | **613** | **97** | **99** | **9** | **0** |
 
-Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1284** leaves, **1177** are exercised by at least one live suite, **98** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
+Leaf commands are counted from a walk of the built command tree (`pmx <tree> … --help`); each `create`/`delete` and `get`/`set` verb is its own leaf. Of **1285** leaves, **1177** are exercised by at least one live suite, **99** are deferred from the live suites (irreversible, interactive, or environment-bound — covered by unit tests), **9** are n/a by design, and **0** are not yet exercised by either suite — see [Uncovered leaves](#uncovered-leaves).
 
 ## `api`
 
@@ -156,6 +156,7 @@ Leaf commands are counted from a walk of the built command tree (`pmx <tree> …
 | `lab ceph osd` | — | — | deferred — creates Ceph OSDs on a lab's per-node OSD disks, wiping them when asked; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab ceph pool` | — | — | deferred — creates the lab's replicated Ceph pool and wires it up as VM/CT storage on the nested cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab ceph status` | — | — | deferred — reads `ceph status` from a lab's node 0 through the nested cluster's own API context, so it needs a provisioned lab with Ceph running; needs the dedicated lab-pmx destructive test lab as the standing target |
+| `lab cluster expected` | — | — | deferred — runs `pvecm expected` over ssh on a surviving lab node to restore quorum; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab cluster init` | — | — | deferred — runs `pvecm create` over ssh on a lab's node 0, forming a corosync cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab cluster join` | — | — | deferred — runs `pvecm add` over ssh on each non-zero lab node, joining it to node 0's cluster; needs the dedicated lab-pmx destructive test lab as the standing target |
 | `lab cluster status` | — | — | deferred — reads corosync quorum and link state over ssh on a lab's nodes, so it needs a provisioned and running lab; needs the dedicated lab-pmx destructive test lab as the standing target |

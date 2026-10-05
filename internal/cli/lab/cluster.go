@@ -58,11 +58,12 @@ func newClusterCmd() *cobra.Command {
 		Long: "Form and inspect the nested Proxmox VE cluster inside a multi-node lab:\n\n" +
 			"  * init     create the cluster on node 0\n" +
 			"  * join     add one node at a time, never two at once per lab\n" +
-			"  * status   report quorum and corosync link health\n\n" +
+			"  * status   report quorum and corosync link health\n" +
+			"  * expected lower the expected vote count on a surviving node to restore quorum\n\n" +
 			"Every mutating verb runs entirely over ssh into the lab guest's own mgmt IP, " +
 			"never against the outer Proxmox VE API.",
 	}
-	cmd.AddCommand(newClusterInitCmd(), newClusterJoinCmd(), newClusterStatusCmd())
+	cmd.AddCommand(newClusterInitCmd(), newClusterJoinCmd(), newClusterStatusCmd(), newClusterExpectedCmd())
 	return cmd
 }
 
