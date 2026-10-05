@@ -18,6 +18,12 @@
 // handles the rare name that needs a hand-picked flag (numa[n]=numa-node).
 // The package name defaults to $GOPACKAGE, which go generate sets.
 //
+// Composite parameter schemas (allOf members, oneOf variants with a
+// discriminator, nested to any depth) are flattened into one parameter map
+// with the same merge rules as the SDK's own pvegen generator, so PBS 4.2's
+// allOf-wrapped create/update schemas and PVE's HA rule schemas generate the
+// same way as plain ones.
+//
 // The apidoc.json location defaults to the proxmox-apiclient-go module directory
 // reported by `go list -m`; pass -apidoc to point at another copy. -source
 // picks a different file within that module's _data directory without
@@ -32,9 +38,11 @@ import (
 	"fmt"
 	"go/format"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -74,10 +82,32 @@ type node struct {
 
 // verb holds one HTTP method's schema inside a node's info map.
 type verb struct {
-	Parameters struct {
-		Properties map[string]property `json:"properties"`
-	} `json:"parameters"`
+	Parameters paramSchema `json:"parameters"`
 }
+
+// paramSchema is an endpoint's parameter object schema. Most endpoints list
+// their parameters directly in Properties. Composite endpoints split them
+// across AllOf members and OneOf variants instead: PBS 4.2 wraps every create
+// and update schema in an allOf (identity parameters plus the shared config
+// properties, sometimes nested further), and PVE 9.2's HA rule endpoints add a
+// oneOf with one variant per rule type, selected by the TypeProperty
+// discriminator. compositeProperties merges all of them back into one map.
+type paramSchema struct {
+	Properties map[string]property `json:"properties"`
+	AllOf      []paramSchema       `json:"allOf"`
+	OneOf      []paramSchema       `json:"oneOf"`
+	// TypeProperty names the discriminator parameter selecting a OneOf
+	// variant ("type" for HA rules); TypePropertySchema is its schema.
+	TypeProperty       string    `json:"type-property"`
+	TypePropertySchema *property `json:"type-property-schema"`
+	// InstanceType is a OneOf variant's discriminator value, used to label
+	// variant-specific descriptions.
+	InstanceType string `json:"instance-type"`
+}
+
+// optionalTrue is the optional marker written onto a property that the
+// oneOf merge relaxes from required to optional.
+var optionalTrue = json.RawMessage("1")
 
 // property is one parameter schema entry; Format is either a string alias or a
 // map of sub-key properties for dict-encoded options.
@@ -215,10 +245,134 @@ func loadProperties(raw []byte, path, verbName string) (map[string]property, err
 		return nil, fmt.Errorf("apidoc node %q not found", path)
 	}
 	v, ok := n.Info[verbName]
-	if !ok || len(v.Parameters.Properties) == 0 {
+	if !ok {
 		return nil, fmt.Errorf("apidoc node %q has no %s parameter schema", path, verbName)
 	}
-	return v.Parameters.Properties, nil
+	props := compositeProperties(v.Parameters)
+	if len(props) == 0 {
+		return nil, fmt.Errorf("apidoc node %q has no %s parameter schema", path, verbName)
+	}
+	return props, nil
+}
+
+// compositeProperties resolves the full parameter set of a schema that may
+// combine plain Properties with AllOf members and OneOf variants, recursing
+// into nested compositions. The merge rules match the SDK's pvegen generator
+// and what the API server enforces on the wire:
+//
+//   - allOf: every member's properties apply. Members are merged in order
+//     after the plain Properties; when two declare the same parameter, the
+//     later one wins unless that would relax a required declaration to an
+//     optional one, because the server enforces the stricter rule.
+//   - oneOf: a request carries exactly one variant, so the result is the union
+//     of every variant's properties. A parameter is required only when every
+//     variant declares it required; the first variant declaring a parameter
+//     supplies its schema, and differing variant descriptions are joined (see
+//     variantDescriptions).
+//   - The TypeProperty discriminator is taken from TypePropertySchema and
+//     forced required, replacing any variant's own declaration of it.
+//
+// The input is never mutated; adjusted properties are copies.
+func compositeProperties(s paramSchema) map[string]property {
+	props := make(map[string]property, len(s.Properties))
+	maps.Copy(props, s.Properties)
+	for _, member := range s.AllOf {
+		for name, p := range compositeProperties(member) {
+			mergeRequiredWins(props, name, p)
+		}
+	}
+	if len(s.OneOf) > 0 {
+		for name, p := range oneOfUnion(s.OneOf, s.TypeProperty) {
+			mergeRequiredWins(props, name, p)
+		}
+	}
+	if s.TypeProperty != "" && s.TypePropertySchema != nil {
+		discriminator := *s.TypePropertySchema
+		discriminator.Optional = nil
+		props[s.TypeProperty] = discriminator
+	}
+	return props
+}
+
+// mergeRequiredWins stores p under name unless an existing entry is required
+// while p is optional: the stricter declaration is the one the server
+// enforces when both apply.
+func mergeRequiredWins(props map[string]property, name string, p property) {
+	if existing, ok := props[name]; ok && !isOptional(existing) && isOptional(p) {
+		return
+	}
+	props[name] = p
+}
+
+// oneOfUnion returns the union of every variant's properties with optionality
+// recomputed: a property stays required only when it is present and required
+// in every variant. The first variant declaring a property supplies its schema.
+// typeProperty labels merged descriptions with each variant's InstanceType.
+func oneOfUnion(variants []paramSchema, typeProperty string) map[string]property {
+	resolved := make([]map[string]property, 0, len(variants))
+	for _, v := range variants {
+		resolved = append(resolved, compositeProperties(v))
+	}
+	union := make(map[string]property)
+	for _, variantProps := range resolved {
+		for name, p := range variantProps {
+			if _, seen := union[name]; seen {
+				continue
+			}
+			if !isOptional(p) && !requiredInAll(resolved, name) {
+				p.Optional = optionalTrue
+			}
+			union[name] = p
+		}
+	}
+	for name, p := range union {
+		p.Description = variantDescriptions(variants, resolved, name, typeProperty)
+		union[name] = p
+	}
+	return union
+}
+
+// requiredInAll reports whether every resolved variant declares name and
+// marks it required.
+func requiredInAll(resolved []map[string]property, name string) bool {
+	for _, variantProps := range resolved {
+		p, ok := variantProps[name]
+		if !ok || isOptional(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// variantDescriptions returns the description of property name across the
+// oneOf variants: the single shared description when every variant agrees,
+// otherwise each distinct description in variant order, prefixed with
+// "With <typeProperty>=<instance-type>:" where the variant is labelled.
+func variantDescriptions(variants []paramSchema, resolved []map[string]property, name, typeProperty string) string {
+	var distinct, labelled []string
+	for i, variantProps := range resolved {
+		p, ok := variantProps[name]
+		if !ok {
+			continue
+		}
+		desc := strings.TrimSpace(p.Description)
+		if desc == "" || slices.Contains(distinct, desc) {
+			continue
+		}
+		distinct = append(distinct, desc)
+		if typeProperty != "" && variants[i].InstanceType != "" {
+			desc = "With " + typeProperty + "=" + variants[i].InstanceType + ": " + desc
+		}
+		labelled = append(labelled, desc)
+	}
+	switch len(distinct) {
+	case 0:
+		return ""
+	case 1:
+		return distinct[0]
+	default:
+		return strings.Join(labelled, " ")
+	}
 }
 
 // findNode depth-first searches the apidoc tree for the node with the given path.
@@ -403,11 +557,27 @@ func rawScalar(raw json.RawMessage) string {
 	}
 }
 
-// isOptional reports whether a sub-key is marked optional in the schema
-// (encoded as the number 1 or boolean true).
+// isOptional reports whether a property is marked optional in the schema. The
+// apidocs encode the marker as the number 1, the string "1" or "true", or the
+// boolean true; anything else, including an absent marker, means required.
 func isOptional(p property) bool {
-	s := strings.TrimSpace(string(p.Optional))
-	return s == "1" || s == "true" || s == `"1"`
+	if len(p.Optional) == 0 {
+		return false
+	}
+	var v any
+	if err := json.Unmarshal(p.Optional, &v); err != nil {
+		return false
+	}
+	switch t := v.(type) {
+	case float64:
+		return t == 1
+	case string:
+		return t == "1" || strings.EqualFold(t, "true")
+	case bool:
+		return t
+	default:
+		return false
+	}
 }
 
 // cleanDescription collapses runs of whitespace (including newlines) in a

@@ -72,29 +72,6 @@ var configSchemas = []optionschema.Schema{
 		Flag:        "location",
 		Type:        "string",
 		Description: "The location of the node. Overrides the default from the datacenter config.",
-		SubKeys: []optionschema.SubKey{
-			{
-				Name:        "latitude",
-				Type:        "number",
-				Minimum:     "-90",
-				Maximum:     "90",
-				Description: "The latitude of the nodes location in degrees.",
-				Required:    true,
-			},
-			{
-				Name:        "longitude",
-				Type:        "number",
-				Minimum:     "-180",
-				Maximum:     "180",
-				Description: "The longitude of the nodes location in degrees.",
-				Required:    true,
-			},
-			{
-				Name:        "name",
-				Type:        "string",
-				Description: "The name of the location of this node",
-			},
-		},
 	},
 	{
 		Name:        "startall-onboot-delay",

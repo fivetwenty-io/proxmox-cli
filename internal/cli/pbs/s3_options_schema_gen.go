@@ -74,7 +74,7 @@ var s3OptionSchemas = []optionschema.Schema{
 		Name:        "put-rate-limit",
 		Flag:        "put-rate-limit",
 		Type:        "integer",
-		Description: "Rate limit for put requests given as #request/s (deprecated: use active-rate-limit instead).",
+		Description: "Rate limit for put requests given as #request/s (deprecated: use limit-active-requests instead).",
 	},
 	{
 		Name:        "rate-in",

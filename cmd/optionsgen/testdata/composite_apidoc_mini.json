@@ -1,0 +1,193 @@
+[
+  {
+    "path": "/",
+    "children": [
+      {
+        "path": "/config/widget",
+        "info": {
+          "POST": {
+            "parameters": {
+              "type": "object",
+              "description": "Create a widget.",
+              "properties": {
+                "plain": {
+                  "type": "string",
+                  "description": "Declared next to the composition.",
+                  "optional": 1
+                }
+              },
+              "allOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Widget ID."
+                    },
+                    "strict-first": {
+                      "type": "string",
+                      "description": "Required declaration seen first."
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "description": "Nested composition, as PBS 4.2 emits for datastore and job configs.",
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "strict-first": {
+                          "type": "string",
+                          "description": "Optional redeclaration that must not relax it.",
+                          "optional": 1
+                        },
+                        "strict-later": {
+                          "type": "string",
+                          "description": "Optional declaration seen first.",
+                          "optional": 1
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "description": "Deeply nested bounded option.",
+                          "minimum": 1,
+                          "maximum": 64,
+                          "default": 8,
+                          "optional": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "strict-later": {
+                          "type": "string",
+                          "description": "Required redeclaration that tightens it."
+                        },
+                        "tuning": {
+                          "type": "string",
+                          "description": "Dict option from a nested member.",
+                          "optional": 1,
+                          "format": {
+                            "mode": {
+                              "type": "string",
+                              "enum": ["fast", "safe"],
+                              "default": "safe",
+                              "optional": 1
+                            },
+                            "level": {
+                              "type": "integer",
+                              "description": "Required sub-key."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "PUT": {
+            "parameters": {
+              "type": "object",
+              "allOf": [
+                {
+                  "type": "object",
+                  "allOf": [
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "path": "/cluster/rules",
+        "info": {
+          "POST": {
+            "parameters": {
+              "type": "object",
+              "allOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "rule": {
+                      "type": "string",
+                      "description": "Rule ID."
+                    },
+                    "comment": {
+                      "type": "string",
+                      "description": "Rule comment.",
+                      "optional": 1
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "type-property": "type",
+                  "type-property-schema": {
+                    "type": "string",
+                    "description": "Rule type.",
+                    "enum": ["node-affinity", "resource-affinity"],
+                    "optional": 1
+                  },
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "instance-type": "node-affinity",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "description": "Variant-local discriminator that must be replaced.",
+                          "optional": 1
+                        },
+                        "resources": {
+                          "type": "string",
+                          "description": "HA resources."
+                        },
+                        "nodes": {
+                          "type": "string",
+                          "description": "Preferred nodes."
+                        },
+                        "strict": {
+                          "type": "boolean",
+                          "description": "Restrict to listed nodes.",
+                          "default": 0,
+                          "optional": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "instance-type": "resource-affinity",
+                      "properties": {
+                        "resources": {
+                          "type": "string",
+                          "description": "HA resources."
+                        },
+                        "affinity": {
+                          "type": "string",
+                          "description": "Keep together or apart.",
+                          "enum": ["positive", "negative"]
+                        },
+                        "strict": {
+                          "type": "boolean",
+                          "description": "Unused for resource rules.",
+                          "optional": 1
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+]

@@ -751,6 +751,11 @@ var configSchemas = []optionschema.Schema{
 				Description: "Whether this interface should be protected by the firewall.",
 			},
 			{
+				Name:        "host-tunnel",
+				Type:        "boolean",
+				Description: "Enable host GSO over UDP tunnel offload. (VirtIO only).",
+			},
+			{
 				Name:     "i82551",
 				Type:     "",
 				Required: true,
