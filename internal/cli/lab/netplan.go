@@ -22,6 +22,7 @@ func labNetworkPlanIssues(n config.LabNetwork) []string {
 	// IPv6 checks run before the CIDR early-return below: an ipv6/cidr6
 	// contradiction is worth surfacing even on a partially-authored lab
 	// whose IPv4 plan is still empty.
+	issues = append(issues, labSnatPlanIssues(n)...)
 	issues = append(issues, labIPv6PlanIssues(n)...)
 
 	if n.CIDR == "" {
@@ -80,6 +81,23 @@ func labNetworkPlanIssues(n config.LabNetwork) []string {
 	issues = append(issues, labHostNICsPlanIssues(n)...)
 
 	return issues
+}
+
+// labSnatPlanIssues refuses an explicit network.snat: true on any zone type
+// but "simple". PVE renders a subnet's snat flag as masquerade rules on the
+// outer node only for a Simple zone (and for an EVPN zone's exit nodes, which
+// labs never provision), so on any other zone type the flag would be accepted
+// by the API and then silently do nothing. An unset network.snat is never an
+// issue: it resolves to off on those zone types (EffectiveSnat), and an
+// explicit false is the opt-out.
+func labSnatPlanIssues(n config.LabNetwork) []string {
+	if n.Snat == nil || !*n.Snat || n.EffectiveZoneType() == config.DefaultZoneType {
+		return nil
+	}
+	return []string{fmt.Sprintf(
+		"network.snat: true is set but network.zone_type is %q; PVE only renders subnet SNAT on a "+
+			"%q zone, so the flag would be silently inert; drop snat or move the lab to a %q zone",
+		n.EffectiveZoneType(), config.DefaultZoneType, config.DefaultZoneType)}
 }
 
 // labIPv6PlanIssues checks a lab's IPv6 address plan for internal coherence:

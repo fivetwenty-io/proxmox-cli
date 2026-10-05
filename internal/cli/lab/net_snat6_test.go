@@ -24,12 +24,13 @@ func snat6TestLab() config.LabNetwork {
 }
 
 // TestEnsureLabSdnVnets_Snat6_SetOnIPv6SubnetOnly covers the SNAT66 render:
-// with network.snat6, the lab's IPv6 subnet is created with masquerade —
-// and the IPv4 subnet beside it is NOT, since a lab's IPv4 egress belongs to
-// the outer platform, not to this command.
+// with network.snat6 and the IPv4 masquerade explicitly opted out
+// (network.snat: false), only the lab's IPv6 subnet is created with
+// masquerade and the IPv4 subnet beside it is not.
 func TestEnsureLabSdnVnets_Snat6_SetOnIPv6SubnetOnly(t *testing.T) {
 	f := testhelper.NewFakePVE(t)
 	n := snat6TestLab()
+	n.Snat = new(false)
 
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne", "zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{})
@@ -41,7 +42,7 @@ func TestEnsureLabSdnVnets_Snat6_SetOnIPv6SubnetOnly(t *testing.T) {
 	require.NoError(t, ensureLabSdnVnets(context.Background(), api, n, "simple"))
 
 	require.Len(t, created, 2, "the IPv4 subnet, then the IPv6 one")
-	assert.NotContains(t, created[0].body, "snat", "the IPv4 subnet is never masqueraded by this command")
+	assert.NotContains(t, created[0].body, "snat", "network.snat: false leaves the IPv4 subnet unmasqueraded")
 	assert.Equal(t, "1", created[1].body["snat"], "the IPv6 subnet carries the requested masquerade")
 
 	cidr6, _, err := labPrimaryV6Subnet(n)
@@ -61,7 +62,7 @@ func TestEnsureLabSdnVnets_Snat6_SetOnDriftedExistingSubnet(t *testing.T) {
 
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne", "zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1"},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "snat": 1},
 		map[string]any{"subnet": "labwayne-v6", "cidr": cidr6, "gateway": gw6},
 	})
 	var updated []hostnetRecordedRequest
@@ -87,7 +88,7 @@ func TestEnsureLabSdnVnets_Snat6_NeverClearsExistingFlag(t *testing.T) {
 
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne", "zone": "labs"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1"},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "snat": 1},
 		map[string]any{"subnet": "labwayne-v6", "cidr": cidr6, "gateway": gw6, "snat": 1},
 	})
 	var updated []hostnetRecordedRequest

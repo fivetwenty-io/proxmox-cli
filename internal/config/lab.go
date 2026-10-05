@@ -95,6 +95,19 @@ type LabNetwork struct {
 	// when EffectiveIPv6 is false (validation refuses the combination).
 	CIDR6 string `yaml:"cidr6,omitempty" json:"cidr6,omitempty"`
 
+	// Snat selects source NAT (masquerade) on every IPv4 subnet the lab
+	// provisions, giving its guests IPv4 egress through the outer node's own
+	// outgoing interface. Nil (the key absent from the lab file) means the
+	// zone-dependent default — ENABLED on a "simple" zone, disabled on any
+	// other zone type — so callers must read EffectiveSnat rather than this
+	// field directly. Write `snat: false` to opt a lab out. PVE only honors
+	// the flag on a "simple" zone (and on an EVPN zone's exit nodes, which
+	// labs do not use), so validation refuses an explicit `snat: true` on any
+	// other ZoneType. Reconciliation only ever SETS the flag: opting out
+	// stops further provisioning rather than stripping what is already
+	// applied.
+	Snat *bool `yaml:"snat,omitempty" json:"snat,omitempty"`
+
 	// Snat6 requests source NAT (masquerade) on every IPv6 subnet the lab
 	// provisions, giving its ULA addresses egress through the outer node's
 	// own outgoing interface. Off by default: a lab's IPv6 is ULA-internal
@@ -458,6 +471,18 @@ func (n LabNetwork) EffectiveIPv6() bool {
 		return *n.IPv6
 	}
 	return true
+}
+
+// EffectiveSnat reports whether the lab's IPv4 subnets are provisioned with
+// source NAT: n.Snat when the operator set it, else true on a "simple" zone
+// and false on any other zone type, where PVE would accept the flag and then
+// render nothing from it. Every reader of the IPv4 SNAT policy must go
+// through this accessor rather than the field.
+func (n LabNetwork) EffectiveSnat() bool {
+	if n.Snat != nil {
+		return *n.Snat
+	}
+	return n.EffectiveZoneType() == DefaultZoneType
 }
 
 // EffectiveZoneName returns n.ZoneName, defaulting to DefaultZoneName when

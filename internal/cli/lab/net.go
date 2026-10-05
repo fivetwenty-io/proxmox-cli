@@ -111,13 +111,16 @@ func newNetApplyCmd() *cobra.Command {
 				return fmt.Errorf("no node specified: use --node, set PMX_NODE, or configure a default node")
 			}
 
-			// The IPv6 half of the plan is checked here, not only where a
-			// lab is written (`lab config add`) or first built (`lab
-			// create`): a hand-edited labs.d file reaches this verb without
-			// passing either, and this is the verb that renders the IPv6
-			// subnets, so a contradiction — snat6 on a zone type PVE renders
-			// no SNAT from, snat6 with IPv6 off — must refuse here rather
-			// than apply as a silent no-op.
+			// The SNAT and IPv6 halves of the plan are checked here, not
+			// only where a lab is written (`lab config add`) or first built
+			// (`lab create`): a hand-edited labs.d file reaches this verb
+			// without passing either, and this is the verb that renders the
+			// subnets, so a contradiction — snat or snat6 on a zone type PVE
+			// renders no SNAT from, snat6 with IPv6 off — must refuse here
+			// rather than apply as a silent no-op.
+			if issues := labSnatPlanIssues(lab.Network); len(issues) > 0 {
+				return fmt.Errorf("lab %q: IPv4 plan is incoherent:\n  %s", name, strings.Join(issues, "\n  "))
+			}
 			if issues := labIPv6PlanIssues(lab.Network); len(issues) > 0 {
 				return fmt.Errorf("lab %q: IPv6 plan is incoherent:\n  %s", name, strings.Join(issues, "\n  "))
 			}
@@ -429,16 +432,17 @@ func sdnZoneAllowsVnetTag(zoneType string) bool {
 // skips the IPv6 sub-step — either the lab opted out (network.ipv6: false)
 // or this vnet has no subnets at all. The caller (ensureLabSdnVnets, or
 // create's plan builder) resolves both values via the lab's IPv6 address
-// plan (ipv6.go); this function never derives anything itself. snat6
-// requests masquerade on that IPv6 subnet (network.snat6); the IPv4 subnet
-// is never given the flag, since a lab's IPv4 egress is the outer
-// platform's business, not this command's.
+// plan (ipv6.go); this function never derives anything itself. snat
+// requests masquerade on the IPv4 subnet (network.snat, resolved through
+// config.LabNetwork.EffectiveSnat) and snat6 on the IPv6 one
+// (network.snat6); both are only ever set on an existing subnet, never
+// cleared.
 //
 // This is the vnet-agnostic body shared by every vnet a lab's network
 // declares: ensureLabSdnVnets calls it once for the primary VnetID/CIDR pair
 // and once per Network.Vnets[] entry, so there is exactly one code path that
 // can create or update an outer vnet+subnet pair.
-func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneName, vnetID, alias string, tag int, cidr, gateway, cidr6, gateway6 string, tagAllowed, snat6 bool) error {
+func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneName, vnetID, alias string, tag int, cidr, gateway, cidr6, gateway6 string, tagAllowed, snat, snat6 bool) error {
 	if vnetID == "" {
 		return fmt.Errorf("vnet id is empty; cannot ensure an SDN vnet")
 	}
@@ -492,7 +496,7 @@ func ensureLabSdnVnetSubnet(ctx context.Context, api *apiclient.APIClient, zoneN
 	if cidr == "" {
 		return nil
 	}
-	if err := ensureLabSdnSubnetOn(ctx, api, vnetID, cidr, gateway, false); err != nil {
+	if err := ensureLabSdnSubnetOn(ctx, api, vnetID, cidr, gateway, snat); err != nil {
 		return err
 	}
 
@@ -582,8 +586,8 @@ func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID,
 		params.Gateway = new(gateway)
 		changed = true
 	}
-	// snat is only ever SET, never cleared: config.LabNetwork.Snat6's
-	// contract mirrors network.ipv6's, where switching the feature off
+	// snat is only ever SET, never cleared: config.LabNetwork.Snat and
+	// Snat6 follow network.ipv6's contract, where switching the feature off
 	// stops further provisioning instead of tearing down what a previous
 	// run (or the operator, by hand) already applied.
 	if snat && !existing.Snat.Bool() {
@@ -600,20 +604,6 @@ func ensureLabSdnSubnetOn(ctx context.Context, api *apiclient.APIClient, vnetID,
 	return nil
 }
 
-// ensureLabSdnVnets ensures every outer SDN vnet a lab's network declares:
-// first the primary VnetID/CIDR pair (n.VnetID/.VnetAlias/.VxlanTag/.CIDR/
-// .Mgmt.Gateway — today's single-vnet shape, unchanged), then each
-// Network.Vnets[] entry in declaration order, each via
-// ensureLabSdnVnetSubnet. zoneType is the lab's zone's resolved plugin type
-// (from ensureLabSdnZone's return value — no independent lookup here, so the
-// zone is probed at most once per apply regardless of how many vnets the lab
-// declares); it is converted once, via sdnZoneAllowsVnetTag, into the
-// tagAllowed flag passed to every ensureLabSdnVnetSubnet call below, so a
-// "simple"-type zone (which rejects the tag parameter) never has one sent
-// for any of its vnets. An empty n.VnetID is a caller/config error, not
-// silently skipped, since every lab must name a primary vnet; an empty
-// Vnets[] entry id is likewise refused, so a malformed extra-vnet entry
-// cannot silently no-op instead of failing loud.
 // labSnat6EgressWarning reports when a lab asks for network.snat6 on a host
 // that looks unable to render it, as the empty string when there is nothing
 // to say.
@@ -656,6 +646,21 @@ func labSnat6EgressWarning(
 			"subnet flagged for SNAT with nothing masquerading it.", node)
 }
 
+// ensureLabSdnVnets ensures every outer SDN vnet a lab's network declares:
+// first the primary VnetID/CIDR pair (n.VnetID/.VnetAlias/.VxlanTag/.CIDR/
+// .Mgmt.Gateway — today's single-vnet shape, unchanged), then each
+// Network.Vnets[] entry in declaration order, each via
+// ensureLabSdnVnetSubnet. zoneType is the lab's zone's resolved plugin type
+// (from ensureLabSdnZone's return value — no independent lookup here, so the
+// zone is probed at most once per apply regardless of how many vnets the lab
+// declares); it is converted once, via sdnZoneAllowsVnetTag, into the
+// tagAllowed flag passed to every ensureLabSdnVnetSubnet call below, so a
+// "simple"-type zone (which rejects the tag parameter) never has one sent
+// for any of its vnets. An empty n.VnetID is a caller/config error, not
+// silently skipped, since every lab must name a primary vnet; an empty
+// Vnets[] entry id is likewise refused, so a malformed extra-vnet entry
+// cannot silently no-op instead of failing loud. The IPv4 masquerade policy is
+// the lab config's (EffectiveSnat), applied to every vnet's IPv4 subnet.
 func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.LabNetwork, zoneType string) error {
 	if n.VnetID == "" {
 		return fmt.Errorf("lab network vnet_id is empty; cannot ensure an SDN vnet")
@@ -663,13 +668,14 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 
 	zoneName := labZoneName(n)
 	tagAllowed := sdnZoneAllowsVnetTag(zoneType)
+	snat := n.EffectiveSnat()
 
 	primaryCIDR6, primaryGw6, err := labPrimaryV6Subnet(n)
 	if err != nil {
 		return err
 	}
 	if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, n.VnetID, n.VnetAlias, n.VxlanTag,
-		n.CIDR, n.Mgmt.Gateway, primaryCIDR6, primaryGw6, tagAllowed, n.Snat6); err != nil {
+		n.CIDR, n.Mgmt.Gateway, primaryCIDR6, primaryGw6, tagAllowed, snat, n.Snat6); err != nil {
 		return err
 	}
 
@@ -682,7 +688,7 @@ func ensureLabSdnVnets(ctx context.Context, api *apiclient.APIClient, n config.L
 			return err
 		}
 		if err := ensureLabSdnVnetSubnet(ctx, api, zoneName, v.ID, v.Alias, v.Tag,
-			v.CIDR, v.Gateway, cidr6, gw6, tagAllowed, n.Snat6); err != nil {
+			v.CIDR, v.Gateway, cidr6, gw6, tagAllowed, snat, n.Snat6); err != nil {
 			return err
 		}
 	}

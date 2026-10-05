@@ -289,6 +289,38 @@ func TestWriteLabFile_ZoneKeysRoundTripThroughResolveLabs(t *testing.T) {
 	require.Equal(t, want, labs["wayne"])
 }
 
+// TestLabFileTemplate_Snat_RenderedOnlyWhenSet documents network.snat with a
+// comment always and writes the key only when the lab sets it, so a lab left
+// at the default round-trips with the key absent.
+func TestLabFileTemplate_Snat_RenderedOnlyWhenSet(t *testing.T) {
+	lab := fullLab()
+	lab.Network.Snat = nil
+	out := string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "# snat: masquerade the lab's IPv4 subnets")
+	require.NotContains(t, out, "\n  snat:")
+
+	off := false
+	lab.Network.Snat = &off
+	out = string(config.LabFileTemplate(lab))
+	require.Contains(t, out, "\n  snat: false\n")
+}
+
+func TestWriteLabFile_SnatRoundTripsThroughResolveLabs(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := writeConfigFile(t, configDir, "config.yml", 0o600)
+
+	want := fullLab()
+	off := false
+	want.Network.Snat = &off
+
+	_, err := config.WriteLabFile(filepath.Join(configDir, "labs.d"), want, false)
+	require.NoError(t, err)
+
+	labs, err := config.ResolveLabs(&config.Config{LabsDir: "labs.d"}, configPath)
+	require.NoError(t, err)
+	require.Equal(t, want, labs["wayne"])
+}
+
 func TestLabFileTemplate_NeverContainsPasswordSubstring(t *testing.T) {
 	template := config.LabFileTemplate(fullLab())
 	require.NotContains(t, strings.ToLower(string(template)), "password")

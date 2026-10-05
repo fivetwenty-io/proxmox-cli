@@ -794,7 +794,7 @@ func scaleGrowFixture(t *testing.T, f *testhelper.FakePVE, lab *config.Lab, exis
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	// A realistic fleet-shaped zfspool storage: nested under the base pool
@@ -1491,7 +1491,7 @@ func scaleGrowMultiNICFixture(t *testing.T, f *testhelper.FakePVE, lab *config.L
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "pvecpi"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
 		[]any{
-			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"},
+			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16", "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets", []any{})

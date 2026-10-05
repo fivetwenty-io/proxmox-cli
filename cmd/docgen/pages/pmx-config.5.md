@@ -671,12 +671,22 @@ those are documented on **pmx-lab-config-add(1)**, not repeated here.
   rejects more while IPv6 is enabled. Rejected when **network.ipv6** is
   **false**.
 
+**network.snat**
+: Whether the lab's IPv4 subnet is masqueraded for egress. On by default
+  when **network.zone_type** is **simple** and off for every other zone
+  type. With it on, **pmx lab create** and **pmx lab net apply** set the
+  SDN subnet's **snat** flag on the lab's IPv4 subnet. Set it to **false**
+  to turn it off. pmx only ever sets the flag and never clears it from a
+  subnet that already carries it. PVE only renders subnet SNAT on a
+  **simple** zone, so an explicit **true** on any other zone type is
+  refused.
+
 **network.snat6**
 : Whether the lab's IPv6 subnets are masqueraded for egress. Defaults to
   **false**: a lab's IPv6 is ULA-internal unless egress is asked for.
   With **true**, **pmx lab create** and **pmx lab net apply** set the
-  SDN subnet's **snat** flag on every IPv6 subnet they ensure (never on
-  the IPv4 one). PVE only renders subnet SNAT on a **simple** zone, so
+  SDN subnet's **snat** flag on every IPv6 subnet they ensure, independent
+  of **network.snat**, which governs the IPv4 subnet. PVE only renders subnet SNAT on a **simple** zone, so
   validation rejects the combination with any other **network.zone_type**,
   and **pmx lab net apply** re-checks it even for a hand-edited lab file
   that never passed through **pmx lab config add**. Rendering further

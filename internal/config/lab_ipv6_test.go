@@ -62,3 +62,37 @@ network:
 	require.Len(t, lab.Network.Vnets, 1)
 	assert.Equal(t, "fd10:9:0:20::/64", lab.Network.Vnets[0].CIDR6)
 }
+
+// TestLabNetwork_EffectiveSnat pins the IPv4 masquerade default: an absent
+// network.snat key stays nil at load and resolves to on for a simple zone and
+// off for any other zone type, while an explicit value always wins.
+func TestLabNetwork_EffectiveSnat(t *testing.T) {
+	var lab config.Lab
+	require.NoError(t, yaml.UnmarshalWithOptions([]byte(todaysShapeLabYAML), &lab, yaml.Strict()))
+	assert.Nil(t, lab.Network.Snat, "absent key must stay nil, not be defaulted at load time")
+	assert.True(t, lab.Network.EffectiveSnat(), "absent snat key on the default simple zone means enabled")
+
+	on, off := true, false
+	assert.False(t, config.LabNetwork{ZoneType: "vxlan"}.EffectiveSnat())
+	assert.True(t, config.LabNetwork{ZoneType: "simple"}.EffectiveSnat())
+	assert.False(t, config.LabNetwork{Snat: &off}.EffectiveSnat())
+	assert.True(t, config.LabNetwork{ZoneType: "vxlan", Snat: &on}.EffectiveSnat())
+}
+
+// TestLabNetwork_Snat_StrictParse pins the YAML spelling of network.snat.
+func TestLabNetwork_Snat_StrictParse(t *testing.T) {
+	const labYAML = `
+name: krutten
+mode: nested
+owner: krutten@pve
+network:
+  vnet_id: krutten
+  cidr: 10.109.0.0/16
+  snat: false
+`
+	var lab config.Lab
+	require.NoError(t, yaml.UnmarshalWithOptions([]byte(labYAML), &lab, yaml.Strict()))
+	require.NotNil(t, lab.Network.Snat)
+	assert.False(t, *lab.Network.Snat)
+	assert.False(t, lab.Network.EffectiveSnat())
+}

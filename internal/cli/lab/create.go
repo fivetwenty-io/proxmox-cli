@@ -1290,18 +1290,33 @@ func buildCreatePlan(
 	if err != nil {
 		return nil, err
 	}
-	_, subnetExists, err := findSdnSubnet(subnets, eff.Network.CIDR)
+	existing4, subnetExists, err := findSdnSubnet(subnets, eff.Network.CIDR)
 	if err != nil {
 		return nil, fmt.Errorf("decode subnet list for vnet %q: %w", eff.Network.VnetID, err)
 	}
+	snat := eff.Network.EffectiveSnat()
+	desc4 := fmt.Sprintf("sdn subnet %q on vnet %q", eff.Network.CIDR, eff.Network.VnetID)
+	if snat {
+		desc4 += " with snat"
+	}
 	plan.steps = append(plan.steps, createStep{
-		desc:       fmt.Sprintf("sdn subnet %q on vnet %q", eff.Network.CIDR, eff.Network.VnetID),
-		skip:       subnetExists,
+		desc: desc4,
+		// A subnet that exists but still lacks the requested snat flag is
+		// not "already ensured": the apply below is what sets it, which is
+		// how re-running create or `lab net apply` turns SNAT on for a lab
+		// built before the flag defaulted on.
+		skip:       createSubnetSkip(subnetExists, snat, existing4),
 		skipReason: "already exists",
 		apply: func(ctx context.Context) error {
+			if subnetExists {
+				return ensureLabSdnSubnetOn(ctx, ac, eff.Network.VnetID, eff.Network.CIDR, eff.Network.Mgmt.Gateway, snat)
+			}
 			params := &cluster.CreateSdnVnetsSubnetsParams{Subnet: eff.Network.CIDR, Type: createSubnetType}
 			if eff.Network.Mgmt.Gateway != "" {
 				params.Gateway = new(eff.Network.Mgmt.Gateway)
+			}
+			if snat {
+				params.Snat = new(true)
 			}
 			return ac.Cluster.CreateSdnVnetsSubnets(ctx, eff.Network.VnetID, params)
 		},
@@ -1333,7 +1348,7 @@ func buildCreatePlan(
 			desc: desc6,
 			// A subnet that exists but still lacks the requested snat flag
 			// is not "already ensured": the apply below is what sets it.
-			skip:       subnet6Exists && (!snat6 || existing6.Snat.Bool()),
+			skip:       createSubnetSkip(subnet6Exists, snat6, existing6),
 			skipReason: "already exists",
 			apply: func(ctx context.Context) error {
 				return ensureLabSdnSubnetOn(ctx, ac, eff.Network.VnetID, primaryCIDR6, primaryGw6, snat6)
@@ -1377,10 +1392,13 @@ func buildCreatePlan(
 			if serr != nil {
 				return nil, serr
 			}
-			_, extraSubnetExists, serr = findSdnSubnet(extraSubnets, v.CIDR)
+			var existing4 sdnSubnetState
+			existing4, extraSubnetExists, serr = findSdnSubnet(extraSubnets, v.CIDR)
 			if serr != nil {
 				return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 			}
+			// Same snat-drift rule as the primary vnet's IPv4 subnet above.
+			extraSubnetExists = createSubnetSkip(extraSubnetExists, snat, existing4)
 			if cidr6 != "" {
 				var existing6 sdnSubnetState
 				existing6, extraSubnet6Exists, serr = findSdnSubnet(extraSubnets, cidr6)
@@ -1388,15 +1406,17 @@ func buildCreatePlan(
 					return nil, fmt.Errorf("decode subnet list for vnet %q: %w", v.ID, serr)
 				}
 				// Same snat-drift rule as the primary vnet's subnet above.
-				extraSubnet6Exists = extraSubnet6Exists && (!eff.Network.Snat6 || existing6.Snat.Bool())
+				extraSubnet6Exists = createSubnetSkip(extraSubnet6Exists, eff.Network.Snat6, existing6)
 			}
 		}
 
 		desc := fmt.Sprintf("sdn vnet %q (zone %q, tag %d)", v.ID, zoneName, v.Tag)
 		switch {
-		case v.CIDR != "" && cidr6 != "" && eff.Network.Snat6:
+		case v.CIDR != "" && cidr6 != "" && (snat || eff.Network.Snat6):
 			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q (snat)",
 				v.ID, zoneName, v.Tag, v.CIDR, cidr6)
+		case v.CIDR != "" && snat:
+			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnet %q (snat)", v.ID, zoneName, v.Tag, v.CIDR)
 		case v.CIDR != "" && cidr6 != "":
 			desc = fmt.Sprintf("sdn vnet %q (zone %q, tag %d) + subnets %q, %q", v.ID, zoneName, v.Tag, v.CIDR, cidr6)
 		case v.CIDR != "":
@@ -1408,7 +1428,7 @@ func buildCreatePlan(
 			skipReason: "already exists",
 			apply: func(ctx context.Context) error {
 				return ensureLabSdnVnetSubnet(
-					ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, cidr6, gw6, tagAllowed, eff.Network.Snat6)
+					ctx, ac, zoneName, v.ID, v.Alias, v.Tag, v.CIDR, v.Gateway, cidr6, gw6, tagAllowed, snat, eff.Network.Snat6)
 			},
 		})
 	}
@@ -2243,6 +2263,16 @@ func createRawList(resp any) ([]json.RawMessage, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// createSubnetSkip reports whether a plan step that ensures one SDN subnet
+// has nothing to do: the subnet already exists AND, when snat is requested,
+// already carries the flag. A subnet that exists but lacks a requested snat
+// flag is drift the step's apply (ensureLabSdnSubnetOn) repairs, so it must
+// not be skipped as "already exists". The flag is only ever set, never
+// cleared, so an existing flagged subnet is left alone when snat is off.
+func createSubnetSkip(exists, snat bool, existing sdnSubnetState) bool {
+	return exists && (!snat || existing.Snat.Bool())
 }
 
 // createListVnetSubnets lists vnetID's SDN subnets, or returns an empty list

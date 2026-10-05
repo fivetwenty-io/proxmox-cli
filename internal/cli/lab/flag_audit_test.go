@@ -148,7 +148,7 @@ func TestCreateAuditFields_StartInvokesLifecycleStart(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
@@ -200,7 +200,7 @@ func TestCreateAuditFields_CloneFromForwardsToCloneAndConfigUpdate(t *testing.T)
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -282,7 +282,7 @@ func TestCreate_OSDDiskFlags_OverrideConfig(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})

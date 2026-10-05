@@ -216,7 +216,7 @@ func TestNetApplyIdempotentSkipsCreatesAndSkipsApplyWhenNoPendingChanges(t *test
 	netRecord(f, &vnetRec, &order, "vnet-update", "PUT /api2/json/cluster/sdn/vnets/labwayne", map[string]any{}, 200)
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "snat": 1, "zone": lab.Network.EffectiveZoneName()},
 		createPrimaryV6SubnetRow(t, lab.Network),
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-create",
@@ -298,7 +298,7 @@ func TestNetApplyDriftUpdatesVnetNotCreate(t *testing.T) {
 	netRecord(f, &vnetRec, &order, "vnet-update", "PUT /api2/json/cluster/sdn/vnets/labwayne", map[string]any{}, 200)
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "snat": 1, "zone": lab.Network.EffectiveZoneName()},
 		createPrimaryV6SubnetRow(t, lab.Network),
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-update",
@@ -387,7 +387,7 @@ func TestNetApplySimpleZoneTagDriftNeverUpdates(t *testing.T) {
 	netRecord(f, &vnetRec, &order, "vnet-update", "PUT /api2/json/cluster/sdn/vnets/labwayne", map[string]any{}, 200)
 
 	netRecord(f, &subnetRec, &order, "subnet-list", "GET /api2/json/cluster/sdn/vnets/labwayne/subnets", []any{
-		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName()},
+		map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": "10.10.1.0/24", "gateway": "10.10.1.1", "snat": 1, "zone": lab.Network.EffectiveZoneName()},
 		createPrimaryV6SubnetRow(t, lab.Network),
 	}, 200)
 	netRecord(f, &subnetRec, &order, "subnet-update",

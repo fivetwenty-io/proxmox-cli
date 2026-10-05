@@ -652,7 +652,7 @@ func TestCreateIdempotent_SkipsSubnetOnRealPVESubnetShape(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
 			map[string]any{
-				"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName(),
+				"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1, "gateway": "10.10.1.1", "zone": lab.Network.EffectiveZoneName(),
 			},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
@@ -692,7 +692,7 @@ func TestCreateIdempotent_FindsExistingVMViaPoolMembership(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
@@ -739,7 +739,7 @@ func TestCreateStart_TargetsExistingVMsOwnNode(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -792,7 +792,7 @@ func TestCreateIdempotent_FallsBackToNameMatchWhenPoolAbsent(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/labwayne/subnets")
@@ -900,7 +900,7 @@ func TestCreateFlagOverride_VCPUAndMemory(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -943,7 +943,7 @@ func TestCreateZoneSpecMatchesNetApply(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -988,7 +988,7 @@ func TestCreateDerivesStorageAndPoolFromNonDefaultConfig(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 
@@ -1048,7 +1048,7 @@ func TestCreateCloneFrom_PeppiGuardRefusesProtectedSourceVMID(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -1084,7 +1084,7 @@ func TestCreateCloneFrom_PeppiGuardRefusesProtectedSourceName(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -1120,7 +1120,7 @@ func TestCreateCloneFrom_OSDDisksAppliedViaFollowUpConfigUpdate(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": "labwayne"}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/labwayne/subnets",
 		[]any{
-			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": "labwayne-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{map[string]any{"storage": "tank-lab-wayne", "type": "zfspool", "pool": "tank/labs/wayne"}})
@@ -1235,7 +1235,7 @@ func createSharedResourcesExist(f *testhelper.FakePVE, t *testing.T, lab *config
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{
-			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets")
@@ -1967,7 +1967,7 @@ func TestCreateCapacityGate_IgnoresNestedPerLabStorage_UsesZfsPoolFallback(t *te
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{
-			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{
@@ -2023,7 +2023,7 @@ func TestCreateCapacityGate_PrefersRootedStorageOverZfsPoolFallback(t *testing.T
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{
-			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{
@@ -2066,7 +2066,7 @@ func TestCreateCapacityGate_SkipsNodeRestrictedRootedStorage(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{
-			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{
@@ -2106,7 +2106,7 @@ func TestCreateCapacityGate_NoMatchingStorage_RefusesLoudly(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{
-			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/storage", []any{
@@ -2152,7 +2152,7 @@ func TestCreateCapacityGate_CapacityStorageIDOverride(t *testing.T) {
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets", []any{map[string]any{"vnet": lab.Network.VnetID}})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/"+lab.Network.VnetID+"/subnets",
 		[]any{
-			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR},
+			map[string]any{"subnet": lab.Network.VnetID + "-10.10.1.0-24", "cidr": lab.Network.CIDR, "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	// The storage step (unaffected by the capacity-gate override) still
@@ -2233,7 +2233,7 @@ func TestCreateFreshLab_MultiNIC_BuildsFullNetMap(t *testing.T) {
 	})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets",
 		[]any{
-			map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24"},
+			map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24", "snat": 1},
 			createVnetV6SubnetRow(t, lab.Network, 0),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpist/subnets")
@@ -2283,12 +2283,12 @@ func TestCreateIdempotent_ReconcilesMissingHostNICs(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
 		[]any{
-			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"},
+			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16", "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets",
 		[]any{
-			map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24"},
+			map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24", "snat": 1},
 			createVnetV6SubnetRow(t, lab.Network, 0),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpi/subnets")
@@ -2357,12 +2357,12 @@ func TestCreateIdempotent_HostNICsFullyConverged_NoReconcileStep(t *testing.T) {
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets")
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpi/subnets",
 		[]any{
-			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16"},
+			map[string]any{"subnet": "pvecpi-10.254.0.0-16", "cidr": "10.254.0.0/16", "snat": 1},
 			createPrimaryV6SubnetRow(t, lab.Network),
 		})
 	f.HandleJSON("GET /api2/json/cluster/sdn/vnets/pvecpist/subnets",
 		[]any{
-			map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24"},
+			map[string]any{"subnet": "pvecpist-10.254.32.0-24", "cidr": "10.254.32.0/24", "snat": 1},
 			createVnetV6SubnetRow(t, lab.Network, 0),
 		})
 	createForbid(f, t, "POST /api2/json/cluster/sdn/vnets/pvecpi/subnets")
