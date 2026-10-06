@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	pveerrors "github.com/fivetwenty-io/proxmox-apiclient-go/v3/pkg/errors"
 
@@ -40,6 +41,9 @@ type inventoryClient interface {
 	// vmsPermissions returns this principal's privileges on /vms, which may
 	// be empty, or nil and the reason when the read failed.
 	vmsPermissions(ctx context.Context) (map[string]any, string)
+	// listPools returns the object rows of GET /pools, which carry each
+	// pool's comment.
+	listPools(ctx context.Context) ([]map[string]any, error)
 }
 
 // rawGetter is the one method of the SDK's raw client the audit needs. The
@@ -259,6 +263,20 @@ func (r *pveReader) vmsPermissions(ctx context.Context) (map[string]any, string)
 	return privs, ""
 }
 
+func (r *pveReader) listPools(ctx context.Context) ([]map[string]any, error) {
+	data, err := r.get(ctx, "/pools", nil)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, nil
+	}
+	if _, ok := data.([]any); !ok {
+		return nil, fmt.Errorf("GET /pools: expected a list of pools, got %s", jsonTypeName(data))
+	}
+	return objectRows(data), nil
+}
+
 // auditOptions is the resolved configuration of one audit run.
 type auditOptions struct {
 	diskStart, diskEnd     int
@@ -269,6 +287,17 @@ type auditOptions struct {
 	strategy string
 	// parkerPools are the pools named on --parker-pool.
 	parkerPools []string
+	// now is the clock the lock-pool expiry check reads; nil means the wall
+	// clock. Tests pin it.
+	now func() time.Time
+}
+
+// clock returns the current time for the lock-pool expiry check.
+func (o auditOptions) clock() time.Time {
+	if o.now != nil {
+		return o.now()
+	}
+	return time.Now()
 }
 
 func (o auditOptions) inParkerBand(vmid int) bool {
@@ -437,6 +466,11 @@ type inventory struct {
 	intruders []poolIntruder
 	multiRef  multiRefReport
 	skipped   []skippedStorage
+	// outOfBandParkers and locks feed warnings only. Neither reaches the
+	// JSON or YAML document, and neither changes a classification or the
+	// exit code.
+	outOfBandParkers []outOfBandParker
+	locks            lockPoolReport
 }
 
 // parkerPoolNames decides which pools count as parker pools: every pool a
@@ -648,7 +682,11 @@ func softReadAll(ctx context.Context, client inventoryClient, guests []*vmInfo) 
 //  5. Classify each volume by the guest whose bus slot holds it.
 //  6. Inventory the parker VMs, empty ones included.
 //  7. Find the workload VMs in a parker pool.
-//  8. Find the volumes more than one guest names, cluster-wide.
+//  8. Find the volumes more than one guest names, cluster-wide, and read
+//     the pool list for the CPI's lock pools in the same fan-out.
+//
+// Step 6 also notes the VMs that carry the bosh-parker tag outside the
+// parker band. They are not parkers, and only a warning mentions them.
 func collectInventory(
 	ctx context.Context, client inventoryClient, opts auditOptions, warnOut io.Writer,
 ) (*inventory, error) {
@@ -901,9 +939,21 @@ func collectInventory(
 		}
 		unread = append(unread, info)
 	})
-	step8 := softReadAll(ctx, client, unread)
+	// The pool list is one more soft read, so it rides the same fan-out as
+	// the guest reads. Index 0 is the pool list and the rest are the guests.
+	step8 := make([]*pendingViews, len(unread))
+	var poolRows []map[string]any
+	var poolErr error
+	cli.ForEachIndex(ctx, len(unread)+1, cli.DefaultFanout, func(ctx context.Context, i int) {
+		if i == 0 {
+			poolRows, poolErr = client.listPools(ctx)
+			return
+		}
+		step8[i-1] = client.vmViewsSoft(ctx, unread[i-1].node, unread[i-1].vmid)
+	})
 	// A soft read swallows its failure, so a cancelled context would
-	// otherwise mark every remaining guest unreadable and report clean.
+	// otherwise mark every remaining guest unreadable, or the lock pools
+	// unreadable, and report clean.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -913,6 +963,10 @@ func collectInventory(
 		} else {
 			cache.configs[unread[i].vmid] = mergeViews(views)
 		}
+	}
+	locks := lockPoolReport{pools: lockPoolsFromRows(poolRows)}
+	if poolErr != nil {
+		locks = lockPoolReport{readError: softReason(poolErr)}
 	}
 	records, unreadable := findMultiplyReferenced(vms, cache.configs, opts)
 	visibility, visErr := referenceVisibility(ctx, client)
@@ -927,7 +981,9 @@ func collectInventory(
 		multiRef: multiRefReport{
 			records: records, unreadableVMIDs: unreadable, visibility: visibility, visibilityError: visErr,
 		},
-		skipped: skipped,
+		skipped:          skipped,
+		outOfBandParkers: findOutOfBandParkers(vms, opts),
+		locks:            locks,
 	}, nil
 }
 

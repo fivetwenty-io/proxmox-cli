@@ -28,11 +28,14 @@ type stubClient struct {
 	hardFail    map[int]bool
 	privs       map[string]any
 	permErr     string
+	pools       []map[string]any
+	poolErr     error
 
 	// cancelOnSoft and cancelOnPerms cancel the run's context from inside the
 	// matching read, the way ^C lands mid-audit.
 	cancelOnSoft  context.CancelFunc
 	cancelOnPerms context.CancelFunc
+	cancelOnPools context.CancelFunc
 
 	mu           sync.Mutex
 	reads        []string
@@ -114,6 +117,17 @@ func (s *stubClient) vmsPermissions(context.Context) (map[string]any, string) {
 		return nil, s.permErr
 	}
 	return s.privs, ""
+}
+
+func (s *stubClient) listPools(context.Context) ([]map[string]any, error) {
+	if s.cancelOnPools != nil {
+		s.cancelOnPools()
+		return nil, errStubRead
+	}
+	if s.poolErr != nil {
+		return nil, s.poolErr
+	}
+	return s.pools, nil
 }
 
 func (s *stubClient) hardReadCount(vmid int) int {

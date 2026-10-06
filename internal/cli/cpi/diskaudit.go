@@ -56,7 +56,12 @@ Warnings go to stderr, prefixed WARN:, when
   - more than one guest names a volume, on an active slot or an unused entry
   - a guest config could not be read, or this token lacks VM.Audit on /vms,
     so the multiply-referenced report may be incomplete
+  - a VM carries the bosh-parker tag but has a VMID outside --parker-band
+  - a CPI lock pool (bosh-lock-) has passed its expiry, has no readable
+    expiry, or could not be checked because the pool list did not come back
 A line starting SKIPPED: names each storage the audit did not read.
+
+The last two warnings are advice only. The audit does not count a tagged VM outside --parker-band as a parker, and it lists each one with its VMID, node, and pool so we can widen --parker-band when they are real parkers. The CPI takes a per-VMID lock as a pool named bosh-lock-vm-<vmid> whose comment holds the owner and an expiry. A lock pool past its expiry usually means a CPI process died while holding it, and the warning names the pool, its owner, the expiry in UTC, and the pmx pve pool delete command that removes it. We check that no CPI operation is still running for that VMID before we run it. A lock pool whose expiry is missing or unreadable is reported separately and is never treated as expired. Neither warning changes the exit status or the -o json and -o yaml documents.
 
 --node limits the storage scan to one node when it is passed on the command
 line; an ambient default node does not. Guest configs are read cluster-wide in

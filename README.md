@@ -830,6 +830,8 @@ parkers holding `unusedN` references, workload VMs in a parker pool, a
 guest names. The bands and the detached-disk strategy default to the CPI's
 own defaults, so pass the flags when the CPI's job properties change them.
 
+Two more warnings are text only, so the `-o json` and `-o yaml` documents and the exit code do not change. The first lists VMs that carry the `bosh-parker` tag but have a VMID outside `--parker-band`, which the audit does not count as parkers, and it suggests widening the band when they are real parkers. The second names each CPI lock pool (`bosh-lock-vm-<vmid>`) whose expiry has passed, with its owner and a `pmx pve pool delete` command that removes it. Before we run that command, we make sure no CPI operation is still running for that VMID. A lock pool whose expiry cannot be read gets its own warning and is never treated as expired.
+
 ```bash
 # Audit every node and keep the JSON; exit 9 means free-floating disks.
 pmx cpi disk-audit -o json > audit.json || [ $? -eq 9 ]

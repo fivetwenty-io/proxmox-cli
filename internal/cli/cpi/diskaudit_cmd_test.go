@@ -55,6 +55,7 @@ func newFakeCluster(t *testing.T) *fakeCluster {
 			"/nodes":              []any{map[string]any{"node": "pve1", "status": "online"}},
 			"/cluster/resources":  []any{},
 			"/access/permissions": map[string]any{"/vms": map[string]any{"VM.Audit": 1}},
+			"/pools":              []any{},
 		},
 		statuses: map[string]int{},
 	}
@@ -232,7 +233,7 @@ func TestDiskAuditCmd_OnlyIssuesGETsToTheDocumentedEndpoints(t *testing.T) {
 	require.Equal(t, exitcode.AuditFindings, res.code(), res.stderr)
 
 	allowed := []string{"/nodes", "/cluster/resources", "/nodes/pve1/storage", "/nodes/pve1/storage/a/content",
-		"/access/permissions", "/version", "/cluster/status"}
+		"/access/permissions", "/pools", "/version", "/cluster/status"}
 	for _, r := range c.requests {
 		method, path, _ := strings.Cut(r, " ")
 		assert.Equal(t, http.MethodGet, method, r)
@@ -243,7 +244,7 @@ func TestDiskAuditCmd_OnlyIssuesGETsToTheDocumentedEndpoints(t *testing.T) {
 		assert.Contains(t, allowed, path, r)
 	}
 	for _, p := range []string{"/cluster/resources", "/nodes/pve1/storage", "/nodes/pve1/storage/a/content",
-		"/access/permissions", "/nodes/pve1/qemu/777/pending"} {
+		"/access/permissions", "/pools", "/nodes/pve1/qemu/777/pending"} {
 		assert.True(t, c.requested(p), p)
 	}
 }

@@ -365,6 +365,11 @@ func emitWarnings(w io.Writer, inv *inventory, opts auditOptions) {
 		warn(w, "could not read this token's permissions on /vms (%s), so the coverage of the report of "+
 			"volumes named by more than one guest is unknown", inv.multiRef.visibilityError)
 	}
+
+	// These two warnings are text only. They never reach the JSON or YAML
+	// document, and they never change a classification or the exit code.
+	emitOutOfBandParkerWarning(w, inv.outOfBandParkers, opts)
+	emitLockWarnings(w, inv.locks, opts.clock())
 }
 
 // findingsError returns the error that makes the run exit with
