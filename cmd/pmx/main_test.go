@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -132,6 +133,71 @@ func TestMain_ExitCodes(t *testing.T) {
 			require.Equal(t, tc.want, code)
 		})
 	}
+}
+
+// TestMain_DiskAuditExitCodes pins the audit's codes as a shell sees them:
+// 0 for a clean cluster, 9 for free-floating disks, 2 for a bad flag value,
+// and pmx's usual 3 when the API cannot be reached.
+func TestMain_DiskAuditExitCodes(t *testing.T) {
+	audit := func(t *testing.T, cfg string, extra ...string) (string, int) {
+		t.Helper()
+		args := append([]string{"--config", cfg, "--no-log", "cpi", "disk-audit"}, extra...)
+		_, stderr, code := runPMX(t, "pmx", args...)
+		return stderr, code
+	}
+
+	t.Run("clean cluster exits 0", func(t *testing.T) {
+		f := diskAuditFake(t)
+		stderr, code := audit(t, fakeConfig(t, f))
+		require.Equal(t, 0, code, stderr)
+	})
+	t.Run("free-floating disk exits 9", func(t *testing.T) {
+		f := diskAuditFake(t, "a:vm-9001-disk-0")
+		stderr, code := audit(t, fakeConfig(t, f))
+		require.Equal(t, 9, code, stderr)
+		require.Contains(t, stderr, "EXIT 9: 1 free-floating disk(s) found.")
+	})
+	t.Run("bad band exits 2", func(t *testing.T) {
+		f := diskAuditFake(t)
+		stderr, code := audit(t, fakeConfig(t, f), "--disk-band", "29999-9000")
+		require.Equal(t, 2, code, stderr)
+		require.Contains(t, stderr, "invalid --disk-band")
+	})
+	t.Run("unreachable API exits 3", func(t *testing.T) {
+		f := diskAuditFake(t)
+		cfg := fakeConfig(t, f)
+		f.Server.Close()
+		stderr, code := audit(t, cfg)
+		require.Equal(t, 3, code, stderr)
+	})
+}
+
+// diskAuditFake serves one online node with one images storage holding
+// volumes, and no guests.
+func diskAuditFake(t *testing.T, volumes ...string) *testhelper.FakePVE {
+	t.Helper()
+	f := testhelper.NewFakePVE(t)
+	content := []any{}
+	for _, v := range volumes {
+		content = append(content, map[string]any{"volid": v, "size": 1 << 30})
+	}
+	f.HandleJSON("GET /api2/json/nodes/pve1/storage", []any{map[string]any{"storage": "a", "content": "images"}})
+	f.HandleJSON("GET /api2/json/nodes/pve1/storage/a/content", content)
+	f.HandleJSON("GET /api2/json/access/permissions", map[string]any{"/vms": map[string]any{"VM.Audit": 1}})
+	return f
+}
+
+// fakeConfig writes a token-auth config pointing at f and returns its path.
+func fakeConfig(t *testing.T, f *testhelper.FakePVE) string {
+	t.Helper()
+	host, port, err := net.SplitHostPort(f.Server.Listener.Addr().String())
+	require.NoError(t, err)
+	cfg := "current-context: fake\ncontexts:\n  fake:\n    host: " + host + "\n    port: " + port +
+		"\n    protocol: http\n    realm: pam\n    auth:\n      type: token\n      username: root\n" +
+		"      token-id: test\n      secret: 00000000-0000-0000-0000-000000000000\n"
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, []byte(cfg), 0o600))
+	return path
 }
 
 // TestMain_PersonaComesFromArgv0 covers the other half of main: the binary

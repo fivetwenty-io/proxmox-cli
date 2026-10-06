@@ -269,6 +269,7 @@ Two commands are outside all of this. `pmx pve task wait` and `pmx pve node task
 | 6 | Conflict (resource locked) |
 | 7 | Two-factor authentication required |
 | 8 | Task finished with warnings (only with `--warnings-as-errors`) |
+| 9 | Audit found something to act on (`pmx cpi disk-audit` found free-floating disks) |
 
 A Proxmox task can reach a terminal state with a `WARNINGS: N` exit status —
 a vzdump that skipped an unreachable guest, for example. The task did run, so
@@ -280,3 +281,8 @@ changed default: `--warnings-as-errors`, `PMX_WARNINGS_AS_ERRORS=1`, or
 code is distinct from the generic error so a script can tell "the task ran and
 warned" from "the command failed" — retrying is the wrong remedy for the
 first.
+
+Code 9 follows the same reasoning for an audit. `pmx cpi disk-audit`
+exits 9 when the audit finished and found free-floating disks, so a pipeline
+can gate on the finding without mistaking it for a failed read. A read that
+fails ends the audit with the code that failure gets everywhere else.

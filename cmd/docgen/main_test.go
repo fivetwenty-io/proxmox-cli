@@ -153,6 +153,7 @@ func TestExitStatus_MatchesExitcodeConsts(t *testing.T) {
 	for _, code := range []int{
 		exitcode.OK, exitcode.Generic, exitcode.BadArgs, exitcode.Infra,
 		exitcode.Auth, exitcode.NotFound, exitcode.Conflict, exitcode.TFARequired,
+		exitcode.TaskWarned, exitcode.AuditFindings,
 	} {
 		require.Contains(t, page, "\\fB"+strconv.Itoa(code)+"\\fP", "EXIT STATUS omits code %d", code)
 	}

@@ -50,6 +50,13 @@ func TestFactories_PmxHasLab(t *testing.T) {
 	require.Equal(t, "lab", c.Name(), "pmx persona must expose the lab group")
 }
 
+func TestFactories_PmxHasCPI(t *testing.T) {
+	root := buildRoot(t, "pmx")
+	c, _, err := root.Find([]string{"cpi"})
+	require.NoError(t, err)
+	require.Equal(t, "cpi", c.Name(), "pmx persona must expose the cpi group")
+}
+
 func TestFactories_ProductPersonasLackLab(t *testing.T) {
 	for _, name := range []string{"pve", "pbs", "pdm"} {
 		root := buildRoot(t, name)

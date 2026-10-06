@@ -98,3 +98,10 @@ outranks its variable, and the variable outranks the context, as
 
 **7**
 : Two-factor authentication required.
+
+**8**
+: A task finished with warnings, when **--warnings-as-errors** is set.
+
+**9**
+: An audit finished and found something to act on, such as the free-floating
+  disks the BOSH disk audit (**cpi disk-audit**) reports.

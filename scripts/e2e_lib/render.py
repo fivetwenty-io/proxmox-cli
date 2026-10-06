@@ -135,6 +135,8 @@ READ_VERBS = frozenset({
     # be re-run.
     "pending", "bridges", "ip-vrf", "mac-vrf", "interfaces", "neighbors",
     "routes", "releases", "buckets",
+    # An audit only reads; `cpi disk-audit` issues GET requests alone.
+    "disk-audit",
 })
 
 

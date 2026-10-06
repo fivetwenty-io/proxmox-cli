@@ -108,12 +108,16 @@ class Ctx:
         validate: Callable[[CmdResult], str | None] | None = None,
         skip_on: dict[str, str] | None = None,
         audit_render: bool = True,
+        ok_rcs: tuple[int, ...] = (0,),
     ) -> CmdResult:
         """Run a command, record PASS/FAIL.
 
-        Default assertion: exit code 0. An optional `validate` returns an error
-        string to fail the check, or None to accept. JSON output is parsed and,
-        when `fmt=json`, malformed JSON fails the check.
+        Default assertion: exit code 0. `ok_rcs` widens the accepted codes for
+        a command whose non-zero exit is a verdict rather than a failure, such
+        as an audit that exits 9 when it finds something. An optional
+        `validate` returns an error string to fail the check, or None to
+        accept. JSON output is parsed and, when `fmt=json`, malformed JSON
+        fails the check.
 
         `skip_on` maps stderr substrings to skip reasons: a failure whose
         stderr contains a key records SKIP with that reason instead of FAIL.
@@ -136,7 +140,7 @@ class Ctx:
         detail = ""
         status = Status.PASS
 
-        if res.rc != 0:
+        if res.rc not in ok_rcs:
             for needle, reason in (skip_on or {}).items():
                 if needle in res.stderr or needle in res.stdout:
                     self.skip(name, reason)
@@ -155,13 +159,14 @@ class Ctx:
                 status = Status.FAIL
                 detail = err
         if status is Status.PASS and audit_render:
-            err = self.audit_render(*args, node=node, with_context=with_context)
+            err = self.audit_render(*args, node=node, with_context=with_context,
+                                    ok_rcs=ok_rcs)
             if err:
                 status = Status.FAIL
                 detail = err
         if status is Status.PASS and audit_render and fmt == "json":
             err = self.audit_yaml(*args, json_out=res.stdout, node=node,
-                                  with_context=with_context)
+                                  with_context=with_context, ok_rcs=ok_rcs)
             if err:
                 status = Status.FAIL
                 detail = err
@@ -172,7 +177,7 @@ class Ctx:
         return res
 
     def audit_render(self, *args: str, node: str | None = None,
-                     with_context: bool = True) -> str:
+                     with_context: bool = True, ok_rcs: tuple[int, ...] = (0,)) -> str:
         """Render args as a table and return a rendering defect, or "".
 
         Only a read-only command path is re-run, so a check that drove a
@@ -185,12 +190,12 @@ class Ctx:
         if not render.is_read_only(leaf):
             return ""
         res = self.run(*args, node=node, fmt="table", with_context=with_context)
-        if res.rc != 0 or not res.stdout.strip():
+        if res.rc not in ok_rcs or not res.stdout.strip():
             return ""
         return render.audit(leaf, res.stdout)
 
     def audit_yaml(self, *args: str, json_out: str, node: str | None = None,
-                   with_context: bool = True) -> str:
+                   with_context: bool = True, ok_rcs: tuple[int, ...] = (0,)) -> str:
         """Render args as yaml and return how it diverges from json_out, or "".
 
         Gated and tolerant the same way audit_render is: only a read-only
@@ -201,7 +206,7 @@ class Ctx:
         if not render.is_read_only(leaf) or not json_out.strip():
             return ""
         res = self.run(*args, node=node, fmt="yaml", with_context=with_context)
-        if res.rc != 0 or not res.stdout.strip():
+        if res.rc not in ok_rcs or not res.stdout.strip():
             return ""
         return render.yaml_mismatch(json_out, res.stdout)
 

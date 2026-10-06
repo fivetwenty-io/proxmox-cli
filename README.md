@@ -50,7 +50,11 @@ collect all published feature guides and operational walkthroughs.
 - Config-driven nested Proxmox VE labs with `pmx lab`, including networking,
   storage, and scoped access (see [Lab environments](#lab-environments-pmx-lab)).
 
-- Semantic exit codes (0–7) for scripting.
+- Read-only audits of the Proxmox VE BOSH CPI's resources with `pmx cpi`, such as
+  `pmx cpi disk-audit` for persistent disks (see
+  [Auditing BOSH persistent disks](#auditing-bosh-persistent-disks)).
+
+- Semantic exit codes (0–9) for scripting.
 
 ## Installation
 
@@ -806,6 +810,35 @@ pmx pve --node pve1 qemu cloudinit update 100
 transfer is a plain SSH stream. Once the upstream API grows a snippets content
 type, the SSH path can be retired in favor of the normal upload endpoint.
 
+### Auditing BOSH persistent disks
+
+`pmx cpi disk-audit` classifies every persistent disk the BOSH Proxmox
+VE CPI manages as attached, parked, or free-floating. It counts a volume as
+the CPI's when the VMID in its name falls in the disk band, when a guest's
+drive line carries its `bpd-` serial, when a sentinel in a guest's
+description names it, or when it sits on a parker VM's bus slot. The audit
+only issues GET requests, so it is safe to run against a production cluster.
+The `cpi` group runs under the `pmx` persona against a PVE context.
+
+A free-floating disk is a potential orphan, and the audit exits 9 when it
+finds one. The report marks a disk that a guest still names on an `unusedN`
+entry as DO NOT DELETE. It also notes a disk found only by a sentinel note,
+because that note can be stale, and tells the operator to verify the disk with
+`bosh disks --orphaned` before deleting it. Warnings on stderr cover empty parkers,
+parkers holding `unusedN` references, workload VMs in a parker pool, a
+`bpd-` serial cloned onto a second volume, and volumes that more than one
+guest names. The bands and the detached-disk strategy default to the CPI's
+own defaults, so pass the flags when the CPI's job properties change them.
+
+```bash
+# Audit every node and keep the JSON; exit 9 means free-floating disks.
+pmx cpi disk-audit -o json > audit.json || [ $? -eq 9 ]
+
+# Match a CPI configured with custom bands, and scan one node's storages.
+pmx --node pve1 cpi disk-audit \
+  --disk-band 10000-19999 --parker-band 95000-95999
+```
+
 ## Proxmox Backup Server (`pmx pbs`)
 
 `pmx pbs` manages a Proxmox Backup Server through its own API. It requires the
@@ -1358,13 +1391,17 @@ row when an in-CIDR interface is narrower than the lab CIDR.
 | 5 | Not found |
 | 6 | Conflict (e.g. resource locked) |
 | 7 | Two-factor authentication required |
+| 8 | Task finished with warnings (only with `--warnings-as-errors`) |
+| 9 | Audit findings (`pmx cpi disk-audit` found free-floating disks) |
 
 Once `pmx ssh`/`pmx rsync` (or `pmx pve node ssh`/`pmx pve node rsync`) hands
 off to the child process, `pmx` exits with that child's own exit code, verbatim,
 instead of one of the codes above: `ssh` uses 255 for a connection/auth
 failure, `rsync` uses 23/24 for a partial transfer, and so on. A child exit
-code of 2 is indistinguishable from this table's `Bad arguments` (2): the
-child's code always wins once it has actually run.
+code of 2 is indistinguishable from this table's `Bad arguments` (2), and a
+child code of 8 or 9, such as one `ssh` or `rsync` passes through, is just as
+indistinguishable from `Task finished with warnings` (8) or `Audit findings`
+(9). The child's code always wins once it has actually run.
 
 ## Development
 

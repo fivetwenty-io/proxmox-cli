@@ -8,6 +8,7 @@ import (
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/api"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/context"
+	"github.com/fivetwenty-io/proxmox-cli/internal/cli/cpi"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/initcmd"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/lab"
 	"github.com/fivetwenty-io/proxmox-cli/internal/cli/logs"
@@ -38,7 +39,7 @@ func Factories(name string) []cli.GroupFactory {
 	case "pdm":
 		return append(f, pdm.ChildFactories()...)
 	default:
-		return append(f, pve.Group, lab.Group, pbs.Group, pdm.Group)
+		return append(f, pve.Group, lab.Group, cpi.Group, pbs.Group, pdm.Group)
 	}
 }
 
