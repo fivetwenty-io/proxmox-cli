@@ -297,7 +297,7 @@ func emitWarnings(w io.Writer, inv *inventory, opts auditOptions) {
 	for _, pr := range inv.parkers {
 		if pr.empty() {
 			warn(w, "parker VM %d (%s, pool %s) on node %s is empty (0 disks) — teardown candidate: "+
-				"qm set %d --protection 0 && qm destroy %d --purge",
+				"pmx pve qemu security protection disable %d && pmx pve qemu delete %d --purge --yes",
 				pr.vmid, pr.name, poolOrNone(pr.pool), pr.node, pr.vmid, pr.vmid)
 		}
 	}
@@ -307,8 +307,8 @@ func emitWarnings(w io.Writer, inv *inventory, opts auditOptions) {
 	for _, pr := range inv.parkers {
 		if pr.unusedCount > 0 {
 			warn(w, "parker VM %d (%s, pool %s) on node %s carries %d unusedN reference(s) to a live "+
-				"volume; do NOT destroy it. Clear each with: qm set %d --protection 0 && "+
-				"qm unlink %d --idlist <unusedN> && qm set %d --protection 1",
+				"volume; do NOT destroy it. Clear each with: pmx pve qemu security protection disable %d && "+
+				"pmx pve qemu disk unlink %d --disk <unusedN> && pmx pve qemu security protection enable %d",
 				pr.vmid, pr.name, poolOrNone(pr.pool), pr.node, pr.unusedCount, pr.vmid, pr.vmid, pr.vmid)
 		}
 	}

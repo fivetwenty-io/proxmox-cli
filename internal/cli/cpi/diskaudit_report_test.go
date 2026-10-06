@@ -295,10 +295,10 @@ func TestWarnings_Parkers(t *testing.T) {
 	}}
 	assert.Equal(t,
 		"WARN: parker VM 90001 (p-empty, pool none) on node pve1 is empty (0 disks) — teardown candidate: "+
-			"qm set 90001 --protection 0 && qm destroy 90001 --purge\n"+
+			"pmx pve qemu security protection disable 90001 && pmx pve qemu delete 90001 --purge --yes\n"+
 			"WARN: parker VM 90002 (p-unused, pool bosh-parker) on node pve1 carries 2 unusedN reference(s) to a "+
-			"live volume; do NOT destroy it. Clear each with: qm set 90002 --protection 0 && "+
-			"qm unlink 90002 --idlist <unusedN> && qm set 90002 --protection 1\n"+
+			"live volume; do NOT destroy it. Clear each with: pmx pve qemu security protection disable 90002 && "+
+			"pmx pve qemu disk unlink 90002 --disk <unusedN> && pmx pve qemu security protection enable 90002\n"+
 			"WARN: parker VM 90003 (p-gone, pool none) on node pve2 config was not returned (vanished during the "+
 			"scan, HTTP 404/501); its contents are unknown and it is not reported as empty\n",
 		warnings(inv, defaultOpts()))
