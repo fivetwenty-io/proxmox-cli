@@ -45,19 +45,24 @@ jobs:
           cache: false
 
       - name: gofmt
-        run: |
-          out="$(gofmt -l .)"; [ -z "$out" ] || { echo "unformatted:"; echo "$out"; exit 1; }
+        run: make fmt-check
 
       - name: Vet
-        run: go vet ./...
+        run: make vet
 
-      - name: Lint
+      # The action only installs the pinned golangci-lint; the make target
+      # runs it, so CI and a local `make lint-check` execute the same command.
+      - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13.1
+          install-only: true
+
+      - name: Lint
+        run: make lint-check
 
       - name: Unit tests
-        run: go test ./...
+        run: make test-go
 
       # The race detector is the only gate that catches concurrent misuse of
       # the signal-relay and log-writer paths, and the repo already ships a
@@ -66,7 +71,7 @@ jobs:
         env:
           # The self-hosted runner's Go defaults cgo off; -race requires it.
           CGO_ENABLED: "1"
-        run: go test -race ./...
+        run: make test-go-race
 
       # This job runs on Linux, so every //go:build darwin file — notably
       # internal/config/secrets_keychain_darwin.go, the entire macOS keychain
@@ -75,19 +80,17 @@ jobs:
       # otherwise reach a release before anything noticed. Cross-compiling
       # costs seconds and needs no macOS runner.
       - name: Build and vet the darwin-only code paths
-        run: |
-          GOOS=darwin GOARCH=arm64 go build ./...
-          GOOS=darwin GOARCH=arm64 go vet ./...
+        run: make check-darwin
 
       - name: Man generation smoke
-        run: go run ./cmd/docgen -out "${RUNNER_TEMP}/man" -version dev -date 1970-01-01
+        run: make check-docs
 
       # The release workflow injects the Homebrew install steps into the cask
       # GoReleaser generates, anchored on that cask's `binary` stanza. If the
       # anchor or the stanzas ever stop matching, the failure belongs here and
       # not in the middle of a release.
       - name: Cask install steps
-        run: python3 scripts/cask-steps --self-test
+        run: make check-cask-steps
 
       # docs/test-coverage-matrix.md is generated from the built command tree
       # and the e2e tree definitions, so a new leaf that nobody classified
@@ -139,16 +142,20 @@ jobs:
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
-          govulncheck ./...
+          make govulncheck
 
       # Dependency CVEs (go.mod/go.sum), committed secrets, and workflow
       # misconfigurations. Fails the build on anything it finds — triage by
       # fixing or by a reviewed .trivyignore entry, never by loosening this.
-      - name: Trivy scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      #
+      # The scan options live in `make trivy`, so CI and a local run execute
+      # the same command. setup-trivy is the action trivy-action itself uses
+      # to install the binary, pinned to the same commit and to the Trivy
+      # version that trivy-action v0.36.0 defaults to.
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          exit-code: "1"
-          ignore-unfixed: true
+          version: v0.70.0
+
+      - name: Trivy scan
+        run: make trivy

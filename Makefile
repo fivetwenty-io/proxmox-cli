@@ -200,6 +200,88 @@ staticcheck: ## Run staticcheck static analysis
 .PHONY: check
 check: fmt vet lint test ## Run fmt + vet + lint + unit tests (full quality gate)
 
+##@ CI
+
+# Every command a CI job runs lives in one of the targets below, and the
+# workflow calls the target, so a local `make ci` and the CI run cannot drift
+# apart. Stages run in workflow order: the check job, then the attribution job,
+# then the security job's scans, which are skipped here when their tool is not
+# installed.
+CI_STAGES   := fmt-check vet lint-check test-go test-go-race check-darwin check-docs check-cask-steps \
+               check-coverage-matrix check-commit-attribution
+CI_OPTIONAL := govulncheck trivy
+
+.PHONY: fmt-check
+fmt-check: ## Fail if any Go file is not gofmt-formatted (check only; `fmt` rewrites files)
+	@out="$$(git ls-files -z '*.go' | xargs -0 gofmt -l)"; [ -z "$$out" ] || { echo "unformatted:"; echo "$$out"; exit 1; }
+	@echo "fmt-check: all files properly formatted"
+
+.PHONY: lint-check
+lint-check: ## Run golangci-lint exactly as CI does (fails when it is not installed; `lint` falls back to go vet)
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "lint-check: golangci-lint not found — install: https://golangci-lint.run/welcome/install/"; \
+		exit 1; \
+	}
+	@golangci-lint run ./...
+
+.PHONY: test-go
+test-go: ## Run unit tests with plain go test, the command CI runs
+	@go test ./...
+
+.PHONY: test-go-race
+test-go-race: ## Run unit tests under the race detector with cgo on, the command CI runs
+	@CGO_ENABLED=1 go test -race ./...
+
+.PHONY: check-darwin
+check-darwin: ## Cross-build and vet the //go:build darwin code paths for darwin/arm64 (CI gate)
+	@GOOS=darwin GOARCH=arm64 go build ./...
+	@GOOS=darwin GOARCH=arm64 go vet ./...
+	@echo "check-darwin: darwin/arm64 build and vet ok"
+
+.PHONY: check-cask-steps
+check-cask-steps: ## Self-test the Homebrew cask step injection that the release workflow runs (CI gate)
+	@python3 scripts/cask-steps --self-test
+
+.PHONY: govulncheck
+govulncheck: ## Scan the module graph for reachable vulnerabilities with govulncheck (CI gate)
+	@command -v govulncheck >/dev/null 2>&1 || { \
+		echo "govulncheck: not found — install: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0"; \
+		exit 1; \
+	}
+	@govulncheck ./...
+
+.PHONY: trivy
+trivy: ## Scan dependencies, committed secrets, and misconfigurations with trivy (CI gate)
+	@command -v trivy >/dev/null 2>&1 || { \
+		echo "trivy: not found — install: https://trivy.dev/latest/getting-started/installation/"; \
+		exit 1; \
+	}
+	@trivy fs --scanners vuln,secret,misconfig --exit-code 1 --ignore-unfixed .
+
+.PHONY: ci
+ci: ## Run every CI check in workflow order and stop at the first failure (govulncheck and trivy only if installed)
+	@total_start=$$(date +%s); summary=""; \
+	finish() { \
+		printf '\nci: stage timings\n%b' "$$summary"; \
+		printf 'ci: total %ss\n' "$$(( $$(date +%s) - total_start ))"; \
+	}; \
+	run() { \
+		stage_start=$$(date +%s); \
+		echo "ci: ==> $$1"; \
+		if $(MAKE) --no-print-directory "$$1"; then status=ok; else status=FAILED; fi; \
+		summary="$$summary$$(printf '  %-26s %4ss  %s' "$$1" "$$(( $$(date +%s) - stage_start ))" "$$status")\n"; \
+		if [ "$$status" != ok ]; then finish; echo "ci: stopped at $$1"; exit 1; fi; \
+	}; \
+	for stage in $(CI_STAGES); do run "$$stage"; done; \
+	for stage in $(CI_OPTIONAL); do \
+		if command -v "$$stage" >/dev/null 2>&1; then \
+			run "$$stage"; \
+		else \
+			echo "ci: $$stage not installed, skipping"; \
+		fi; \
+	done; \
+	finish; echo "ci: all checks passed"
+
 ##@ Test
 
 .PHONY: test
