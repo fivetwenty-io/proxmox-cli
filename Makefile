@@ -116,6 +116,10 @@ check-commit-attribution: ## Fail if any commit reachable from HEAD carries AI a
 	fi
 	@echo "check-commit-attribution: clean"
 
+.PHONY: attribution-re
+attribution-re: ## Print the AI-attribution pattern commit messages must not match (the commit-msg hook reads it from here)
+	@printf '%s\n' '$(ATTRIBUTION_RE)'
+
 .PHONY: install
 install: build man completions ## Install pmx + personas, man pages, completions under $(DESTDIR)$(PREFIX) (default /usr/local; may need sudo)
 	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
@@ -281,6 +285,13 @@ ci: ## Run every CI check in workflow order and stop at the first failure (govul
 		fi; \
 	done; \
 	finish; echo "ci: all checks passed"
+
+##@ Git hooks
+
+.PHONY: hooks
+hooks: ## Point git at the versioned hooks in .githooks (pre-push runs `make ci`, commit-msg rejects AI attribution)
+	@git config core.hooksPath .githooks
+	@echo "hooks: core.hooksPath -> .githooks"
 
 ##@ Test
 

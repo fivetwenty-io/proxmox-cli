@@ -1409,6 +1409,8 @@ indistinguishable from `Task finished with warnings` (8) or `Audit findings`
 
 ```bash
 make check            # fmt + vet + lint + unit tests (full quality gate)
+make ci               # every check CI runs, in CI order (run before pushing)
+make hooks            # enable the versioned git hooks in .githooks/
 make test             # unit tests
 make test-race        # unit tests with the race detector
 make coverage         # HTML + console coverage report
@@ -1419,6 +1421,12 @@ make help             # list all targets
 
 Each Makefile category delegates to a script under `scripts/` (`build`, `test`,
 `fmt`, `lint`, `release`, `package`, `e2e`).
+
+### Before pushing
+
+Run `make ci` before you push. It runs every check the CI workflow runs, in the same order and through the same Makefile targets, and it stops at the first failure, so a push that would fail CI fails on your machine first. It also runs `govulncheck` and `trivy` when they are installed and prints a one-line notice when they are not. Expect a couple of minutes with a warm Go cache, since the race-detector tests and the coverage-matrix check take the longest.
+
+Run `make hooks` once per clone to turn this into a habit. It points git at the versioned hooks in `.githooks/`. The pre-push hook runs `make ci` for you, and the commit-msg hook rejects any commit message that carries AI attribution, using the same pattern as the CI attribution job. In an emergency you can skip the pre-push hook with `git push --no-verify`, but CI will still run the same checks on the pull request.
 
 `scripts/e2e` is a live, read-only happy-path sweep of every command tree
 against a configured context (default: `lab`). It runs the trees in parallel and

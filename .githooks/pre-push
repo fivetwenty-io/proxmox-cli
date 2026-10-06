@@ -1,0 +1,34 @@
+#!/bin/sh
+# pre-push hook: run the same checks CI runs before anything leaves this
+# machine. `make ci` stops at the first failing stage, so a push that would
+# fail CI fails here instead.
+#
+# A push that only deletes remote refs sends no commits, so it skips the run.
+# In an emergency, bypass the hook with: git push --no-verify
+#
+# Enable the hooks with: make hooks
+
+sending=
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+	# An all-zero object name marks a deletion, whatever the hash length.
+	case $local_sha in
+	*[!0]*) sending=yes ;;
+	esac
+done
+
+if [ -z "$sending" ]; then
+	exit 0
+fi
+
+if ! command -v make >/dev/null 2>&1; then
+	echo "pre-push: make is not installed, so the CI checks cannot run" >&2
+	echo "pre-push: to push anyway, use: git push --no-verify" >&2
+	exit 1
+fi
+
+echo "pre-push: running make ci (to skip it in an emergency, use: git push --no-verify)" >&2
+
+if ! make ci; then
+	echo "pre-push: make ci failed, push aborted (emergency bypass: git push --no-verify)" >&2
+	exit 1
+fi
