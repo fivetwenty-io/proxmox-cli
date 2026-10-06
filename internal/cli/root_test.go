@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2337,6 +2338,52 @@ func readLogRecords(t *testing.T, logDir string) []map[string]any {
 	return records
 }
 
+// volatileLogFields are the keys of an audit record that derive from the
+// clock or the process rather than from anything a command put there. Their
+// digits are arbitrary, so a check that a short digit sentinel is absent
+// from a record has to leave them out or it fails whenever the sentinel
+// shows up inside a nanosecond timestamp or a pid.
+var volatileLogFields = []string{"time", "pid", "duration_ms"}
+
+// auditRecordText renders a log record as JSON without its volatile fields,
+// for asserting that a secret appears nowhere in what the command recorded.
+func auditRecordText(t *testing.T, rec map[string]any) string {
+	t.Helper()
+
+	stable := make(map[string]any, len(rec))
+	for k, v := range rec {
+		if !slices.Contains(volatileLogFields, k) {
+			stable[k] = v
+		}
+	}
+
+	raw, err := json.Marshal(stable)
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+// TestAuditRecordText_DropsVolatileFields proves the rendering a secret-absence
+// check runs on carries the fields a command recorded and none of the clock or
+// process fields, so a digit sentinel inside a nanosecond timestamp, a pid, or
+// a duration cannot trip it.
+func TestAuditRecordText_DropsVolatileFields(t *testing.T) {
+	rec := map[string]any{
+		"time":        "2026-10-06T22:20:37.370471152Z",
+		"pid":         float64(4711),
+		"duration_ms": float64(4711),
+		"msg":         "exit",
+		"context":     "prod",
+	}
+
+	text := auditRecordText(t, rec)
+
+	require.NotContains(t, text, "4711")
+	require.NotContains(t, text, "2026-10-06")
+	require.JSONEq(t, `{"msg":"exit","context":"prod"}`, text)
+	require.Contains(t, rec, "time", "the record itself is left untouched")
+}
+
 // findRecord returns the first record whose msg equals want, or nil.
 func findRecord(records []map[string]any, want string) map[string]any {
 	for _, r := range records {
@@ -2457,9 +2504,8 @@ func TestInvocationAuditRecord_NamesTheTarget(t *testing.T) {
 	require.Equal(t, "auditor@pve", inv["user"])
 
 	for _, rec := range records {
-		raw, err := json.Marshal(rec)
-		require.NoError(t, err)
-		require.NotContains(t, string(raw), secret, "the secret must never reach any log record")
+		raw := auditRecordText(t, rec)
+		require.NotContains(t, raw, secret, "the secret must never reach any log record")
 	}
 }
 
@@ -3112,9 +3158,8 @@ func TestExitRecord_RedactsCredentialsInErrorURLs(t *testing.T) {
 	require.Error(t, cli.Execute("pmx", []cli.GroupFactory{factory}))
 
 	for _, rec := range readLogRecords(t, filepath.Join(tmpDir, ".pmx", "logs")) {
-		raw, err := json.Marshal(rec)
-		require.NoError(t, err)
-		require.NotContains(t, string(raw), password,
+		raw := auditRecordText(t, rec)
+		require.NotContains(t, raw, password,
 			"a credential in a request URL must never reach the audit log")
 	}
 
@@ -4711,10 +4756,9 @@ func TestInvocationTargetAttrs_NamesProxyHostAndJump(t *testing.T) {
 		require.Equal(t, []any{"api-proxy=env"}, inv["overrides"])
 
 		for _, rec := range records {
-			raw, err := json.Marshal(rec)
-			require.NoError(t, err)
-			require.NotContains(t, string(raw), "env-s3cret", "the proxy password must never reach the log")
-			require.NotContains(t, string(raw), "envuser", "the overrides attribute must carry no proxy value")
+			raw := auditRecordText(t, rec)
+			require.NotContains(t, raw, "env-s3cret", "the proxy password must never reach the log")
+			require.NotContains(t, raw, "envuser", "the overrides attribute must carry no proxy value")
 		}
 	})
 
@@ -4730,9 +4774,8 @@ func TestInvocationTargetAttrs_NamesProxyHostAndJump(t *testing.T) {
 		require.Equal(t, "pve1.example.test", inv["host"], "a connection that does not resolve falls back")
 		require.NotContains(t, inv, "proxy_host", "an unparseable proxy has no host to record")
 
-		raw, err := json.Marshal(inv)
-		require.NoError(t, err)
-		require.NotContains(t, string(raw), "s3cr3t")
+		raw := auditRecordText(t, inv)
+		require.NotContains(t, raw, "s3cr3t")
 	})
 
 	// url.Parse accepts each of these, reading "pmx:4711" as the host and
@@ -4752,10 +4795,9 @@ func TestInvocationTargetAttrs_NamesProxyHostAndJump(t *testing.T) {
 		require.NotContains(t, inv, "proxy_host", "a proxy URL with a stray \"@\" has no host to record")
 
 		for _, rec := range records {
-			raw, err := json.Marshal(rec)
-			require.NoError(t, err)
-			require.NotContains(t, string(raw), "4711", "record: %s", raw)
-			require.NotContains(t, string(raw), "pmx:", "record: %s", raw)
+			raw := auditRecordText(t, rec)
+			require.NotContains(t, raw, "4711", "record: %s", raw)
+			require.NotContains(t, raw, "pmx:", "record: %s", raw)
 		}
 	}
 
@@ -4801,9 +4843,8 @@ func TestLogInvocationExit_MasksURLUserinfo(t *testing.T) {
 		require.NotNil(t, findRecord(records, "exit"))
 
 		for _, rec := range records {
-			raw, err := json.Marshal(rec)
-			require.NoError(t, err)
-			require.NotContains(t, string(raw), password, "record: %s", raw)
+			raw := auditRecordText(t, rec)
+			require.NotContains(t, raw, password, "record: %s", raw)
 		}
 	}
 
@@ -4918,9 +4959,8 @@ func TestExecute_ErrorTextMasksConfiguredProxyURL(t *testing.T) {
 		require.Contains(t, stderr, "http://<redacted>")
 
 		for _, rec := range readLogRecords(t, filepath.Join(home, ".pmx", "logs")) {
-			raw, err := json.Marshal(rec)
-			require.NoError(t, err)
-			require.NotContains(t, string(raw), "4711", "record: %s", raw)
+			raw := auditRecordText(t, rec)
+			require.NotContains(t, raw, "4711", "record: %s", raw)
 		}
 	}
 
