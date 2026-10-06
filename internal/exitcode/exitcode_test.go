@@ -252,6 +252,8 @@ func TestFromError_Constants(t *testing.T) {
 	require.Equal(t, 5, exitcode.NotFound)
 	require.Equal(t, 6, exitcode.Conflict)
 	require.Equal(t, 7, exitcode.TFARequired)
+	require.Equal(t, 8, exitcode.TaskWarned)
+	require.Equal(t, 9, exitcode.AuditFindings)
 }
 
 // TestFromError_TaskWarned verifies that a task which finished with warnings
@@ -281,4 +283,31 @@ func TestFromError_ExitErrorBeatsTaskWarned(t *testing.T) {
 	ee := &exec.ExitError{Code: 23, Err: warned}
 
 	require.Equal(t, 23, exitcode.FromError(ee))
+}
+
+// TestFromError_AuditFindings verifies that an audit which found work maps to
+// its own code, through any amount of wrapping, so a CI gate can tell it from
+// an audit that could not run at all.
+func TestFromError_AuditFindings(t *testing.T) {
+	t.Parallel()
+
+	found := &exitcode.AuditFindingsError{Message: "EXIT 9: 2 free-floating disk(s) found."}
+
+	require.Equal(t, exitcode.AuditFindings, exitcode.FromError(found), "direct")
+	require.Equal(t, exitcode.AuditFindings, exitcode.FromError(wrap(found)), "wrapped once")
+	require.Equal(t, "EXIT 9: 2 free-floating disk(s) found.", found.Error())
+}
+
+// TestFromError_UsageError verifies that a flag value pmx rejected itself maps
+// to BadArgs rather than Generic, and that the wrapped text is unchanged.
+func TestFromError_UsageError(t *testing.T) {
+	t.Parallel()
+
+	inner := errors.New(`--disk-band "9-x": END must be an integer`)
+	usage := &exitcode.UsageError{Err: inner}
+
+	require.Equal(t, exitcode.BadArgs, exitcode.FromError(usage), "direct")
+	require.Equal(t, exitcode.BadArgs, exitcode.FromError(wrap(usage)), "wrapped once")
+	require.Equal(t, inner.Error(), usage.Error())
+	require.ErrorIs(t, usage, inner)
 }
