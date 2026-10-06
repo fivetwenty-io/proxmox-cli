@@ -95,6 +95,22 @@ jobs:
       - name: Coverage matrix up to date
         run: make check-coverage-matrix
 
+  # Commit messages here never carry AI attribution. The check reads every
+  # commit reachable from the tip, so it needs the full history, and it runs
+  # as its own job so a failure is named for what it is.
+  attribution:
+    name: attribution
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: No AI attribution in commit messages
+        run: make check-commit-attribution
+
   security:
     name: security
     runs-on: self-hosted

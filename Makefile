@@ -97,6 +97,25 @@ check-coverage-matrix: ## Fail if docs/test-coverage-matrix.md is stale (CI gate
 	@rm -f docs/.test-coverage-matrix.stamp
 	@echo "check-coverage-matrix: up to date"
 
+# Commit messages in this repository never carry AI attribution. The pattern
+# matches any trailer or footer line that names Claude or Anthropic, so a
+# human co-author line passes and an AI one fails.
+ATTRIBUTION_RE := co-authored-by:.*(claude|anthropic)|noreply@anthropic\.com|generated (with|by) \[?claude
+
+.PHONY: check-commit-attribution
+check-commit-attribution: ## Fail if any commit reachable from HEAD carries AI attribution (CI gate; needs full history)
+	@if [ "$$(git rev-parse --is-shallow-repository)" = "true" ]; then \
+		echo "check-commit-attribution: shallow clone — fetch full history first"; \
+		exit 1; \
+	fi
+	@found=$$(git log -i -E --grep='$(ATTRIBUTION_RE)' --format='%h %s' HEAD); \
+	if [ -n "$$found" ]; then \
+		echo "check-commit-attribution: these commits carry AI attribution — reword them:"; \
+		echo "$$found"; \
+		exit 1; \
+	fi
+	@echo "check-commit-attribution: clean"
+
 .PHONY: install
 install: build man completions ## Install pmx + personas, man pages, completions under $(DESTDIR)$(PREFIX) (default /usr/local; may need sudo)
 	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
