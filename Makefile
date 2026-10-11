@@ -226,6 +226,13 @@ lint-check: ## Run golangci-lint exactly as CI does (fails when it is not instal
 		echo "lint-check: golangci-lint not found — install: https://golangci-lint.run/welcome/install/"; \
 		exit 1; \
 	}
+	@want="$$(awk '/golangci-lint-action@/{f=1} f&&/version:/{print $$2; exit}' .github/workflows/ci.yml)"; \
+	have="v$$(golangci-lint version --short 2>/dev/null)"; \
+	[ -n "$$want" ] || { echo "lint-check: no golangci-lint version pin found in .github/workflows/ci.yml"; exit 1; }; \
+	[ "$$have" = "$$want" ] || { \
+		echo "lint-check: golangci-lint is $$have but CI pins $$want — install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$$want"; \
+		exit 1; \
+	}
 	@golangci-lint run ./...
 
 .PHONY: test-go
